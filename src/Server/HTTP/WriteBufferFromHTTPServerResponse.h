@@ -17,6 +17,12 @@
 namespace DB
 {
 
+enum class SendProgressMode {
+    progress_none,
+    progress_via_header,
+    progress_via_body
+};
+
 /// The difference from WriteBufferFromOStream is that this buffer gets the underlying std::ostream
 /// (using response.send()) only after data is flushed for the first time. This is needed in HTTP
 /// servers to change some HTTP headers (e.g. response code) before any data is sent to the client
@@ -103,6 +109,11 @@ private:
     CompressionMethod compression_method;
     int compression_level = 1;
 
+    /// proton: starts
+    /// 0, disable, 1: send via HTTP header, 2: send via HTTP body
+    SendProgressMode send_progress_mode = SendProgressMode::progress_none;
+    /// proton: starts
+
     std::shared_ptr<std::ostream> response_body_ostr;
     std::shared_ptr<std::ostream> response_header_ostr;
 
@@ -117,6 +128,14 @@ private:
     Stopwatch progress_watch;
 
     std::mutex mutex;    /// progress callback could be called from different threads.
+
+    /// proton: starts
+    /// Setup progress sending mode
+    void setSendProgressMode(SendProgressMode mode)
+    {
+        send_progress_mode = mode;
+    }
+    /// proton: ends
 };
 
 }
