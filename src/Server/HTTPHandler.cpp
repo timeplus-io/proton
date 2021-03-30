@@ -984,6 +984,19 @@ bool DynamicQueryHandler::customizeQueryParam(ContextMutablePtr context, const s
         return true;
     }
 
+    /// Daisy : starts. Add time param into context
+    if (key == "time_start")
+    {
+        context.setTimeParamStart(value);
+        return true;
+    }
+    if (key == "time_end")
+    {
+        context.setTimeParamEnd(value);
+        return true;
+    }
+    /// Daisy : ends.
+
     return false;
 }
 

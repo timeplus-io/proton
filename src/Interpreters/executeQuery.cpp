@@ -45,6 +45,9 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
+#include <Interpreters/InterpreterSetQuery.h>
+#include <Interpreters/AddTimeParamVisitor.h>
+#include <Interpreters/ApplyWithGlobalVisitor.h>
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/executeQuery.h>
@@ -544,6 +547,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             NormalizeSelectWithUnionQueryVisitor::Data data{context->getSettingsRef().union_default_mode};
             NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
         }
+
+        /// Daisy : starts. Add time param into AST
+        if (!context.getTimeParam().empty())
+        {
+            AddTimeParamVisitor visitor(context);
+            visitor.visit(ast);
+            query = serializeAST(*ast);
+        }
+        /// Daisy : ends.
 
         /// Check the limits.
         checkASTSizeLimits(*ast, settings);
