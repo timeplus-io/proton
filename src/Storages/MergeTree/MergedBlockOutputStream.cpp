@@ -209,6 +209,16 @@ void MergedBlockOutputStream::finalizePartOnDisk(
         if (sync)
             out->sync();
     }
+
+    /// Daisy : starts
+    if (new_part->seq_info)
+    {
+        auto out = volume->getDisk()->writeFile(part_path + "sn.txt", 4096);
+        new_part->seq_info->write(*out);
+        if (sync)
+            out->sync();
+    }
+    /// Daisy : ends
 }
 
 void MergedBlockOutputStream::writeImpl(const Block & block, const IColumn::Permutation * permutation)

@@ -260,6 +260,11 @@ private:
     static constexpr size_t reschedule_time_ms = 100;
     static constexpr time_t drop_error_cooldown_sec = 5;
 
+    /// Daisy : starts
+    DatabaseAndTable tryGetByUUIDFromCatalogService(const UUID & uuid) const;
+    /// Daisy : ends
+
+private:
     using UUIDToDatabaseMap = std::unordered_map<UUID, DatabasePtr>;
 
     mutable std::mutex databases_mutex;

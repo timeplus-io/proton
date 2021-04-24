@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/IInterpreter.h>
+#include <Parsers/ASTAlterQuery.h>
 #include <Parsers/IAST_fwd.h>
 
 
@@ -34,6 +35,9 @@ private:
     BlockIO executeToDatabase(const ASTAlterQuery & alter);
 
     ASTPtr query_ptr;
+    /// Daisy : start
+    bool alterTableDistributed(const ASTAlterQuery & query);
+    /// Daisy : end
 };
 
 }

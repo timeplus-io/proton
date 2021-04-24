@@ -89,7 +89,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     /// WITH expr_list
     {
-        if (s_with.ignore(pos, expected))
+        if (!pipe_mode && s_with.ignore(pos, expected))
         {
             if (!ParserList(std::make_unique<ParserWithElement>(), std::make_unique<ParserToken>(TokenType::Comma))
                      .parse(pos, with_expression_list, expected))
@@ -157,11 +157,24 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
     /// FROM database.table or FROM table or FROM (subquery) or FROM tableFunction(...)
-    if (s_from.ignore(pos, expected))
+    /// Daisy : starts
+    if (!pipe_mode)
     {
-        if (!ParserTablesInSelectQuery().parse(pos, tables, expected))
-            return false;
+        if (s_from.ignore(pos, expected))
+        {
+            if (!ParserTablesInSelectQuery().parse(pos, tables, expected))
+                return false;
+        }
     }
+    else
+    {
+        if (s_from.ignore(pos, expected))
+        {
+            /// In pipe mode, we are not expecting `FROM`
+            return false;
+        }
+    }
+    /// Daisy : ends
 
     /// PREWHERE expr
     if (s_prewhere.ignore(pos, expected))

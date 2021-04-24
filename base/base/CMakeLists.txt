@@ -7,6 +7,7 @@ set (SRCS
     getPageSize.cpp
     getThreadId.cpp
     JSON.cpp
+    SimpleJSON.cpp
     LineReader.cpp
     mremap.cpp
     phdr_cache.cpp

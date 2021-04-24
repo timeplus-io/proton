@@ -12,6 +12,12 @@
 
 #include <Core/Defines.h>
 #include <Core/Settings.h>
+#include <Core/ColumnWithTypeAndName.h>
+
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeString.h>
 
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -26,9 +32,15 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/StorageDistributedMergeTree.h>
+
+#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
+#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
@@ -65,10 +77,12 @@
 #include <Interpreters/addTypeConversionToAST.h>
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
+#include <Interpreters/BlockUtils.h>
 
 #include <TableFunctions/TableFunctionFactory.h>
 #include <base/logger_useful.h>
 
+#include <common/ClockUtils.h>
 
 namespace DB
 {
@@ -91,6 +105,10 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
     extern const int PATH_ACCESS_DENIED;
     extern const int NOT_IMPLEMENTED;
+    /// Daisy : starts
+    extern const int UNKNOWN_TABLE;
+    extern const int CONFIG_ERROR;
+    /// Daisy : ends
 }
 
 namespace fs = std::filesystem;
@@ -103,6 +121,13 @@ InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Contex
 
 BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
+    /// Daisy : start
+    if (createDatabaseDistributed(create))
+    {
+        return {};
+    }
+    /// Daisy : end
+
     String database_name = create.getDatabase();
 
     auto guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
@@ -843,6 +868,150 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
     }
 }
 
+/// Daisy : starts
+bool InterpreterCreateQuery::createTableDistributed(const String & current_database, ASTCreateQuery & create)
+{
+    auto ctx = getContext();
+    if (!create.storage || !create.storage->engine || create.storage->engine->name != "DistributedMergeTree")
+    {
+        /// We only support `DistributedMergeTree` table engine for now
+        return false;
+    }
+
+    if (!ctx->isDistributed())
+    {
+        if (create.storage->engine->name == "DistributedMergeTree")
+        {
+            throw Exception(
+                    "Distributed environment is not setup. Unable to create table with DistributedMergeTree engine", ErrorCodes::CONFIG_ERROR);
+        }
+        return false;
+    }
+
+    assert(!ctx->getCurrentQueryId().empty());
+
+    auto * log = &Poco::Logger::get("InterpreterCreateQuery");
+
+    TableProperties properties = setProperties(create);
+
+    if (create.database.empty())
+    {
+        create.database = current_database;
+    }
+
+    /// More verification happened in storage engine creation
+    /// `relative_data_path = ""` means the table is virtual which doesn't
+    /// bind to any file system data / metadata
+    auto res = StorageFactory::instance().get(
+        create, "" /* virtual */, ctx, ctx->getGlobalContext(), properties.columns, properties.constraints, false);
+
+    auto storage = static_cast<StorageDistributedMergeTree *>(res.get());
+    if (storage->currentShard() >= 0)
+    {
+        LOG_INFO(log, "Local DistributedMergeTree table creation with shard assigned");
+
+        return false;
+    }
+
+    auto query = queryToString(create);
+    LOG_INFO(log, "Creating DistributedMergeTree query={} query_id={}", query, ctx->getCurrentQueryId());
+
+
+    if (!ctx->getQueryParameters().contains("_payload"))
+    {
+        /// FIXME:
+        /// Build json payload here from SQL statement
+        /// context.setDistributedDDLOperation(true);
+        return false;
+    }
+
+    if (!ctx->isDistributedDDLOperation())
+    {
+        return false;
+    }
+
+    std::vector<std::pair<String, String>> string_cols
+        = {{"payload", ctx->getQueryParameters().at("_payload")},
+           {"database", current_database},
+           {"table", create.table},
+           {"query_id", ctx->getCurrentQueryId()},
+           {"user", ctx->getUserName()}};
+
+    Int32 shards = storage->getShards();
+    Int32 replication_factor = storage->getReplicationFactor();
+    std::vector<std::pair<String, Int32>> int32_cols = {
+        {"shards", shards},
+        {"replication_factor", replication_factor}};
+
+    /// Milliseconds since epoch
+    std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
+
+    /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor)
+    Block  block = buildBlock(string_cols, int32_cols, uint64_cols);
+
+    appendBlock(std::move(block), ctx, IDistributedWriteAheadLog::OpCode::CREATE_TABLE, log);
+
+    LOG_INFO(log, "Request of creating DistributedMergeTree query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
+
+    /// FIXME, project tasks status
+    return true;
+}
+
+bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
+{
+    auto ctx = getContext();
+    if (!ctx->isDistributed())
+    {
+        return false;
+    }
+
+    if (!ctx->getQueryParameters().contains("_payload"))
+    {
+        /// FIXME:
+        /// Build json payload here from SQL statement
+        /// context.setDistributedDDLOperation(true);
+        return false;
+    }
+
+    if (ctx->isDistributedDDLOperation())
+    {
+        const auto & database = DatabaseCatalog::instance().tryGetDatabase(create.database);
+        if (database)
+        {
+            throw Exception(fmt::format("Database {} already exists.", create.database), ErrorCodes::DATABASE_ALREADY_EXISTS);
+        }
+
+        auto * log = &Poco::Logger::get("InterpreterCreateQuery");
+
+        auto query_str = queryToString(create);
+        LOG_INFO(log, "Create database query={} query_id={}", query_str, ctx->getCurrentQueryId());
+
+        std::vector<std::pair<String, String>> string_cols = {
+            {"payload", ctx->getQueryParameters().at("_payload")},
+            {"database", create.database},
+            {"query_id", ctx->getCurrentQueryId()},
+            {"user", ctx->getUserName()}
+        };
+
+        std::vector<std::pair<String, Int32>> int32_cols;
+
+        /// Milliseconds since epoch
+        std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
+
+        Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+        /// Schema: (payload, database, timestamp, query_id, user)
+
+        appendBlock(std::move(block), ctx, IDistributedWriteAheadLog::OpCode::CREATE_DATABASE, log);
+
+        LOG_INFO(
+            log, "Request of create database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+
+        /// FIXME, project tasks status
+        return true;
+    }
+    return false;
+}
+/// Daisy : ends
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
@@ -853,6 +1022,13 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     String current_database = getContext()->getCurrentDatabase();
     auto database_name = create.database ? create.getDatabase() : current_database;
+
+    /// Daisy : start
+    if (createTableDistributed(database_name, create))
+    {
+        return {};
+    }
+    /// Daisy : end
 
     // If this is a stub ATTACH query, read the query definition from the database
     if (create.attach && !create.storage && !create.columns_list)

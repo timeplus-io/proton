@@ -782,11 +782,30 @@ ExecuteTTLType MergeTreeDataMergerMutator::shouldExecuteTTL(const StorageMetadat
     return has_ttl_expression ? ExecuteTTLType::RECALCULATE : ExecuteTTLType::NONE;
 }
 
-
 bool MergeTreeDataMergerMutator::hasTemporaryPart(const std::string & basename) const
 {
     std::lock_guard lock(tmp_parts_lock);
     return tmp_parts.contains(basename);
 }
 
+/// Daisy : starts
+/// Merge sequence info from parts in a partition to new part
+SequenceInfoPtr MergeTreeDataMergerMutator::mergeSequenceInfo(const MergeTreeData::DataPartsVector & parts, ContextPtr context)
+{
+    std::vector<SequenceInfoPtr> sequences;
+
+    for (const auto & part : parts)
+    {
+        if (part->seq_info)
+        {
+            if (!part->seq_info->sequence_ranges.empty() || (part->seq_info->idempotent_keys && !part->seq_info->idempotent_keys->empty()))
+            {
+                sequences.push_back(part->seq_info);
+            }
+        }
+    }
+
+    return DB::mergeSequenceInfo(sequences, data.committedSN(), context->getSettingsRef().max_idempotent_ids, log);
+}
+/// Daisy : ends
 }

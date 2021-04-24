@@ -633,7 +633,7 @@ ConfigProcessor::LoadedConfig ConfigProcessor::loadConfigWithZooKeeperIncludes(
     {
         config_xml = processConfig(&has_zk_includes, &zk_node_cache, zk_changed_event);
         zk_server_setting_node = config_xml->getNodeByPath("yandex/server_settings");
-        if(zk_server_setting_node)
+        if (zk_server_setting_node)
         {
             mergeRecursive(config_xml, getRootNode(config_xml), zk_server_setting_node);
         }

@@ -825,6 +825,25 @@ struct RewriteShardNum
 };
 using RewriteShardNumVisitor = InDepthNodeVisitor<RewriteShardNum, true>;
 
+/// Daisy : starts
+void collectRequiredColumns(ConstStoragePtr & storage, const NameSet & required, ContextPtr context)
+{
+    StorageID id = storage->getStorageID();
+    auto & tableColumns = storage->getInMemoryMetadataPtr()->getColumns();
+    auto ctx = context->getQueryContext();
+
+    for (const auto & name: required)
+    {
+        /// FIXME: NestedColumn ?
+        if (!tableColumns.has(name))
+            continue;
+
+        auto & column = tableColumns.get(name);
+        ctx->addRequiredColumns(
+            std::make_tuple(id.getDatabaseName(), id.getTableName(), storage->isView(), column.name, column.type->getName()));
+    }
+}
+/// Daisy : ends
 }
 
 TreeRewriterResult::TreeRewriterResult(
@@ -867,7 +886,7 @@ void TreeRewriterResult::collectSourceColumns(bool add_special)
 /// Calculate which columns are required to execute the expression.
 /// Then, delete all other columns from the list of available columns.
 /// After execution, columns will only contain the list of columns needed to read from the table.
-void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select)
+void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select, ContextPtr context)
 {
     /// We calculate required_source_columns with source_columns modifications and swap them on exit
     required_source_columns = source_columns;
@@ -983,6 +1002,11 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     }
 
     NameSet unknown_required_source_columns = required;
+
+    /// Daisy : starts
+    if (context->collectRequiredColumns() && storage && is_select)
+        collectRequiredColumns(storage, required, context);
+    /// Daisy : ends
 
     for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end();)
     {
@@ -1184,7 +1208,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
 
     result.aggregates = getAggregates(query, *select_query);
     result.window_function_asts = getWindowFunctions(query, *select_query);
-    result.collectUsedColumns(query, true);
+    result.collectUsedColumns(query, true, getContext());
     result.required_source_columns_before_expanding_alias_columns = result.required_source_columns.getNames();
 
     /// rewrite filters for select query, must go after getArrayJoinedColumns
@@ -1269,7 +1293,7 @@ TreeRewriterResultPtr TreeRewriter::analyze(
     else
         assertNoAggregates(query, "in wrong place");
 
-    result.collectUsedColumns(query, false);
+    result.collectUsedColumns(query, false, getContext());
     return std::make_shared<const TreeRewriterResult>(result);
 }
 

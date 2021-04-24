@@ -1,16 +1,8 @@
-Changelog category (leave one):
-- New Feature
-- Improvement
-- Bug Fix (user-visible misbehaviour in official stable or prestable release)
-- Performance Improvement
-- Backward Incompatible Change
-- Build/Testing/Packaging Improvement
-- Documentation (changelog entry is not required)
-- Not for changelog (changelog entry is not required)
+PR checklist:
+- Did you run ClangFormat ?
+- Did you run CheckStyle ?
+- Did you check the comment / log / exception conventions in Engineering code process wiki page ?
+- Did you import unncessary headers ?
+- Did you surround `Daisy : starts/ends` for new code in existing ClickHouse code base ?
 
-
-Changelog entry (a user-readable short description of the changes that goes to CHANGELOG.md):
-...
-
-
-> Information about CI checks: https://clickhouse.tech/docs/en/development/continuous-integration/
+Please write user-readable short description of the changes:

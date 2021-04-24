@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Processors/Sinks/SinkToStorage.h>
+#include "SequenceInfo.h"
+
 #include <Storages/StorageInMemoryMetadata.h>
 
 
@@ -31,12 +33,20 @@ public:
     void consume(Chunk chunk) override;
     void onStart() override;
 
+    /// Daisy : starts
+    void setSequenceInfo(const SequenceInfoPtr & seq_info_) { seq_info = seq_info_; }
+    /// Daisy : ends
+
 private:
     StorageMergeTree & storage;
     StorageMetadataPtr metadata_snapshot;
     size_t max_parts_per_block;
     ContextPtr context;
     uint64_t chunk_dedup_seqnum = 0; /// input chunk ordinal number in case of dedup token
+
+    /// Daisy : starts
+    SequenceInfoPtr seq_info;
+    /// Daisy : ends
 };
 
 }

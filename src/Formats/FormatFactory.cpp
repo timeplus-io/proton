@@ -131,6 +131,11 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.msgpack.number_of_columns = settings.input_format_msgpack_number_of_columns;
     format_settings.max_rows_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
 
+    /// Daisy : starts
+    format_settings.rawstore.rawstore_time_extraction_type = settings.rawstore_time_extraction_type;
+    format_settings.rawstore.rawstore_time_extraction_rule = settings.rawstore_time_extraction_rule;
+    /// Daisy : ends
+
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)
     {

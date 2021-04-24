@@ -15,6 +15,10 @@
 #include <Storages/MergeTree/KeyCondition.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
 
+/// proton: starts
+#include <Storages/MergeTree/SequenceInfo.h>
+/// proton: ends
+
 #include <shared_mutex>
 
 namespace zkutil
@@ -319,6 +323,10 @@ public:
 
     CompressionCodecPtr default_codec;
 
+    /// Daisy : starts
+    SequenceInfoPtr seq_info;
+    /// Daisy : ends
+
     /// For data in RAM ('index')
     UInt64 getIndexSizeInBytes() const;
     UInt64 getIndexSizeInAllocatedBytes() const;
@@ -501,6 +509,10 @@ private:
     /// Found column without specific compression and return codec
     /// for this column with default parameters.
     CompressionCodecPtr detectDefaultCompressionCodec() const;
+
+    /// Daisy : starts
+    void loadSequenceInfo();
+    /// Daisy : ends
 
     mutable State state{State::Temporary};
 };

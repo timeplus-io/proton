@@ -161,6 +161,8 @@ void writeCommonErrorMessage(
     }
 }
 
+}
+
 
 std::string getSyntaxErrorMessage(
     const char * begin,
@@ -218,8 +220,6 @@ std::string getUnmatchedParenthesesErrorMessage(
         out << *paren.begin;
 
     return out.str();
-}
-
 }
 
 
@@ -423,6 +423,5 @@ std::pair<const char *, bool> splitMultipartQuery(
 
     return std::make_pair(begin, pos == end);
 }
-
 
 }

@@ -180,7 +180,7 @@
 
 
     <!-- Same for hosts without support for IPv6: -->
-    <!-- <listen_host>0.0.0.0</listen_host> -->
+    <listen_host>0.0.0.0</listen_host>
 
     <!-- Default values - try listen localhost on IPv4 and IPv6. -->
     <!--
@@ -1290,5 +1290,81 @@
             </table>
         </tables>
     </rocksdb>
+    -->
+    <!-- Multiple clusters of streaming storage are supported -->
+    <!--
+    <cluster_settings>
+        <streaming_storage>
+            <kafka>
+                <default>true</default>
+                <cluster_name>default-sys-kafka-cluster-name</cluster_name>
+                <cluster_id>default-sys-kafka-cluster-id</cluster_id>
+                <security_protocol>PLAINTEXT</security_protocol>
+                <brokers>localhost:9092</brokers>
+                <replication_factor>1</replication_factor>
+
+                <topic_metadata_refresh_interval_ms>300000</topic_metadata_refresh_interval_ms>
+                <message_max_bytes>1000000</message_max_bytes>
+                <statistic_internal_ms>30000</statistic_internal_ms>
+                <debug></debug>
+
+                <enable_idempotence>true</enable_idempotence>
+                <queue_buffering_max_messages>100000</queue_buffering_max_messages>
+                <queue_buffering_max_kbytes>1048576</queue_buffering_max_kbytes>
+                <queue_buffering_max_ms>5</queue_buffering_max_ms>
+                <message_send_max_retries>2</message_send_max_retries>
+                <retry_backoff_ms>100</retry_backoff_ms>
+                <compression_codec>snappy</compression_codec>
+
+                <message_timeout_ms>40000</message_timeout_ms>
+                <message_delivery_async_poll_ms>100</message_delivery_async_poll_ms>
+                <message_delivery_sync_poll_ms>10</message_delivery_sync_poll_ms>
+
+                <group_id>daisy</group_id>
+                <message_max_bytes>1000000</message_max_bytes>
+                <enable_auto_commit>true</enable_auto_commit>
+                <check_crcs>false</check_crcs>
+                <auto_commit_interval_ms>5000</auto_commit_interval_ms>
+                <fetch_message_max_bytes>1048576</fetch_message_max_bytes>
+
+                <queued_min_messages>1000000</queued_min_messages>
+                <queued_max_messages_kbytes>65536</queued_max_messages_kbytes>
+
+                <internal_pool_size>2</internal_pool_size>
+            </kafka>
+        </streaming_storage>
+
+        <system_ddls>
+            <name>__system_ddls</name>
+            <replication_factor>1</replication_factor>
+            <data_retention>168</data_retention>
+        </system_ddls>
+
+        <system_catalogs>
+            <name>__system_catalogs</name>
+            <replication_factor>1</replication_factor>
+        </system_catalogs>
+
+        <system_node_metrics>
+            <name>__system_node_metrics</name>
+            <replication_factor>1</replication_factor>
+        </system_node_metrics>
+
+        <system_tasks>
+            <name>__system_tasks</name>
+            <replication_factor>1</replication_factor>
+            <data_retention>24</data_retention>
+        </system_tasks>
+
+        <node_identity>localhost:8123</node_identity>
+
+        <node_roles>
+            <role>placement</role>
+            <role>catalog</role>
+            <role>ddl</role>
+            <role>task</role>
+        </node_roles>
+
+    </cluster_settings>
     -->
 </clickhouse>

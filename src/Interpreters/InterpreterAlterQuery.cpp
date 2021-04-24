@@ -10,10 +10,12 @@
 #include <Interpreters/MutationsInterpreter.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
+#include <Interpreters/BlockUtils.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTIdentifier_fwd.h>
 #include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/IStorage.h>
 #include <Storages/LiveView/LiveViewCommands.h>
@@ -21,6 +23,8 @@
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
 #include <Common/typeid_cast.h>
+
+#include <DistributedMetadata/CatalogService.h>
 
 #include <boost/range/algorithm_ext/push_back.hpp>
 
@@ -36,6 +40,9 @@ namespace ErrorCodes
     extern const int INCORRECT_QUERY;
     extern const int NOT_IMPLEMENTED;
     extern const int TABLE_IS_READ_ONLY;
+    /// Daisy : start
+    extern const int UNKNOWN_TABLE;
+    /// Daisy : end
 }
 
 
@@ -173,12 +180,88 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         alter_commands.validate(metadata, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
+
+        /// Daisy : start
+        if (alterTableDistributed(alter))
+        {
+            return {};
+        }
+        /// Daisy : end
+
         table->alter(alter_commands, getContext(), alter_lock);
     }
 
     return res;
 }
 
+/// Daisy : start
+bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
+{
+    auto ctx = getContext();
+    if (!ctx->isDistributed())
+    {
+        return false;
+    }
+
+    if (!ctx->getQueryParameters().contains("_payload"))
+    {
+        /// FIXME:
+        /// Build json payload here from SQL statement
+        /// context.setDistributedDDLOperation(true);
+        return false;
+    }
+
+    if (ctx->isDistributedDDLOperation())
+    {
+        const auto & catalog_service = CatalogService::instance(ctx);
+        auto tables = catalog_service.findTableByName(query.database, query.table);
+        if (tables.empty())
+        {
+            throw Exception(fmt::format("Table {}.{} does not exist.", query.database, query.table), ErrorCodes::UNKNOWN_TABLE);
+        }
+
+        if (tables[0]->engine != "DistributedMergeTree")
+        {
+            /// FIXME: We only support `DistributedMergeTree` table engine for now
+            return false;
+        }
+
+        assert(!ctx->getCurrentQueryId().empty());
+
+        auto * log = &Poco::Logger::get("InterpreterAlterQuery");
+
+        auto query_str = queryToString(query);
+        LOG_INFO(log, "Altering DistributedMergeTree query={} query_id={}", query_str, ctx->getCurrentQueryId());
+
+        std::vector<std::pair<String, String>> string_cols
+            = {{"payload", ctx->getQueryParameters().at("_payload")},
+               {"database", query.database},
+               {"table", query.table},
+               {"query_id", ctx->getCurrentQueryId()},
+               {"user", ctx->getUserName()}};
+
+        std::vector<std::pair<String, Int32>> int32_cols;
+
+        auto now = std::chrono::system_clock::now().time_since_epoch();
+        std::vector<std::pair<String, UInt64>> uint64_cols = {
+            /// Milliseconds since epoch
+            std::make_pair("timestamp", std::chrono::duration_cast<std::chrono::milliseconds>(now).count()),
+        };
+
+        /// Schema: (payload, database, table, timestamp, query_id, user)
+        Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+
+        appendBlock(std::move(block), ctx, IDistributedWriteAheadLog::OpCode::ALTER_TABLE, log);
+
+        LOG_INFO(
+            log, "Request of altering DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+
+        /// FIXME, project tasks status
+        return true;
+    }
+    return false;
+}
+/// Daisy : end
 
 BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
 {

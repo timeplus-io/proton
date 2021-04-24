@@ -38,6 +38,8 @@ public:
         GET     = 1,
         POST    = 2,
         OPTIONS = 3
+        PATCH = 4,
+        DELETE = 5,
     };
 
     enum class QueryKind : uint8_t

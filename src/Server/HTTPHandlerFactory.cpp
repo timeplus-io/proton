@@ -13,6 +13,7 @@
 #include "ReplicasStatusHandler.h"
 #include "InterserverIOHTTPHandler.h"
 #include "PrometheusRequestHandler.h"
+#include "RestHTTPRequestHandler.h"
 #include "WebUIRequestHandler.h"
 
 
@@ -178,6 +179,12 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
 void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics)
 {
     addCommonDefaultHandlersFactory(factory, server);
+
+    /// Daisy: start. Add rest request process handler
+    auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "dae");
+    rest_handler->attachNonStrictPath("/dae");
+    factory.addHandler(rest_handler);
+    /// Daisy: end.
 
     auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, "query");
     query_handler->allowPostAndGetParamsAndOptionsRequest();

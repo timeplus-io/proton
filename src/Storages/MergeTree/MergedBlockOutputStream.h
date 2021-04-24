@@ -7,6 +7,8 @@
 namespace DB
 {
 
+struct SequenceCheckpoint;
+
 /** To write one part.
   * The data refers to one partition, and is written in one part.
   */

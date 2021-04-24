@@ -52,7 +52,6 @@ ASTPtr parseQuery(
     size_t max_query_size,
     size_t max_parser_depth);
 
-
 /** Split queries separated by ; on to list of single queries
   * Returns pointer to the end of last successfully parsed query (first), and true if all queries are successfully parsed (second)
   * NOTE: INSERT's data should be placed in single line.
@@ -62,5 +61,29 @@ std::pair<const char *, bool> splitMultipartQuery(
     std::vector<std::string> & queries_list,
     size_t max_query_size,
     size_t max_parser_depth);
+
+/// Daisy : starts
+String getSyntaxErrorMessage(
+    const char * begin,
+    const char * end,
+    Token last_token,
+    const Expected & expected,
+    bool hilite,
+    const String & query_description);
+
+String getLexicalErrorMessage(
+    const char * begin,
+    const char * end,
+    Token last_token,
+    bool hilite,
+    const String & query_description);
+
+String getUnmatchedParenthesesErrorMessage(
+    const char * begin,
+    const char * end,
+    const UnmatchedParentheses & unmatched_parens,
+    bool hilite,
+    const String & query_description);
+/// Daisy : ends
 
 }

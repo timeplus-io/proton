@@ -242,6 +242,22 @@ private:
     friend class MergePlainMergeTreeTask;
     friend class MutatePlainMergeTreeTask;
 
+    /// Daisy : starts
+    friend class StorageDistributedMergeTree;
+    void commitSN(Int64 sn);
+    Int64 loadSN() const;
+    const SequenceRanges & missingSequenceRanges() const { return missing_sequence_ranges; }
+    const std::deque<std::shared_ptr<String>> & lastIdempotentKeys() const { return last_idempotent_keys; }
+
+private:
+    void locateSNFile();
+    void populateCommittedSNFromParts();
+
+private:
+    PathWithDisk sn_file;
+    std::deque<std::shared_ptr<String>> last_idempotent_keys;
+    SequenceRanges missing_sequence_ranges;
+    /// Daisy : ends
 
 protected:
 

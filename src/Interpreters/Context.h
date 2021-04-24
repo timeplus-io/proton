@@ -227,6 +227,15 @@ private:
     /// some ranges from some part and initiator will tell the replica about whether it is accepted or denied.
     std::optional<MergeTreeReadTaskCallback> merge_tree_read_task_callback;
 
+    /// Daisy : starts
+    String node_identity;
+    String channel_id;
+    String query_status_poll_id;
+    String idempotent_key;
+    String ingest_mode;
+    bool distributed_ddl_operation = false;
+    /// Daisy : ends
+
     /// Record entities accessed by current query, and store this information in system.query_log.
     struct QueryAccessInfo
     {
@@ -302,6 +311,15 @@ private:
     bool is_internal_query = false;
 
 
+    /// Daisy: begin
+    /// (database, table, is_view, column name, column type) tuple
+    using RequiredColumnTuple = std::tuple<std::string, std::string, bool, std::string, std::string>;
+    /// We don't need hold a lock to access required_columns as the required column
+    /// is collected in a single thread
+    std::set<RequiredColumnTuple> required_columns;
+    mutable bool collect_required_columns = false;
+    /// Daisy: end
+
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -327,7 +345,7 @@ private:
                                                     /// to DatabaseOnDisk::commitCreateTable(...) or IStorage::alter(...) without changing
                                                     /// thousands of signatures.
                                                     /// And I hope it will be replaced with more common Transaction sometime.
-    
+
     /// Daisy : starts. Parameters for time predicates of main table
     TimeParam time_param;
     /// Daisy : end.
@@ -346,6 +364,14 @@ public:
 
     ~Context();
 
+    /// Daisy: start
+    bool collectRequiredColumns() const { return collect_required_columns; }
+    void setCollectRequiredColumns(bool collect) { collect_required_columns = collect; }
+
+    const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
+    void addRequiredColumns(RequiredColumnTuple && columnTuple) { required_columns.insert(std::move(columnTuple)); }
+    /// Daisy: end
+
     String getPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
@@ -356,6 +382,7 @@ public:
     Strings getWarnings() const;
 
     VolumePtr getTemporaryVolume() const;
+
 
     void setPath(const String & path);
     void setFlagsPath(const String & path);
@@ -518,6 +545,18 @@ public:
 
     String getCurrentDatabase() const;
     String getCurrentQueryId() const { return client_info.current_query_id; }
+    /// Daisy : starts
+    String getQueryStatusPollId() const { return query_status_poll_id; }
+    /// Parse poll id and return `host` in ID, throws if poll_id is invalid or validations didn't pass
+    std::vector<String> parseQueryStatusPollId(const String & poll_id) const;
+    String getNodeIdentity() const { return node_identity; }
+    String getChannel() const { return channel_id; }
+    const String & getIdempotentKey() const { return idempotent_key; }
+    const String & getIngestMode() const { return ingest_mode; }
+    bool isDistributed() const;
+    bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
+    ThreadPool & getPartCommitPool() const;
+    /// Daisy : ends
 
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
     String getInitialQueryId() const;
@@ -527,6 +566,14 @@ public:
     /// exists because it should be set before databases loading.
     void setCurrentDatabaseNameInGlobalContext(const String & name);
     void setCurrentQueryId(const String & query_id);
+    /// Daisy : starts
+    void setupNodeIdentity();
+    void setupQueryStatusPollId();
+    void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
+    void setIngestMode(const String & ingest_mode_) { ingest_mode = ingest_mode_; }
+    /// Kinda hacky
+    void setDistributedDDLOperation(bool distributed) { distributed_ddl_operation = distributed; }
+    /// Daisy : ends
 
     void killCurrentQuery();
 
@@ -791,6 +838,7 @@ public:
 
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
+    const MergeTreeSettings & getDistributedMergeTreeSettings() const;
     const StorageS3Settings & getStorageS3Settings() const;
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)

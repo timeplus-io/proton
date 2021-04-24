@@ -485,6 +485,7 @@ class IColumn;
     M(Bool, async_socket_for_remote, true, "Asynchronously read from socket executing remote query", 0) \
     M(Bool, insert_null_as_default, true, "Insert DEFAULT values instead of NULL in INSERT SELECT (UNION ALL)", 0) \
     M(Bool, describe_include_subcolumns, false, "If true, subcolumns of all table columns will be included into result of DESCRIBE query", 0) \
+    M(Bool, enable_query_pipe, false, "Enable query pipe", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
@@ -677,7 +678,11 @@ class IColumn;
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
     \
     M(EnumComparingMode, format_capn_proto_enum_comparising_mode, FormatSettings::EnumComparingMode::BY_VALUES, "How to map ClickHouse Enum and CapnProto Enum", 0)\
-
+    M(Bool, disable_distributed, false, "If setting is enabled and distributed mode will be disabled for debug and test only", 0) \
+    M(UInt64, part_commit_pool_size, 8, "Total shared thread pool size for building and committing parts for DistributedMergeTree table engine", 0) \
+    M(UInt64, max_idempotent_ids, 1000, "Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion", 0) \
+    M(String, rawstore_time_extraction_type, "", "_time extraction type (string, json, regex)", 0) \
+    M(String, rawstore_time_extraction_rule, "", "_time extraction rule (string, json, regex)", 0) \
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

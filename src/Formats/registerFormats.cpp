@@ -15,6 +15,10 @@ void registerFileSegmentationEngineRegexp(FormatFactory & factory);
 void registerFileSegmentationEngineJSONAsString(FormatFactory & factory);
 void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory);
 
+/// Daisy : starts
+void registerFileSegmentationEngineRawStoreEachRow(FormatFactory & factory);
+/// Daisy : ends
+
 /// Formats for both input/output.
 
 void registerInputFormatNative(FormatFactory & factory);
@@ -81,6 +85,10 @@ void registerInputFormatCapnProto(FormatFactory & factory);
 void registerInputFormatHiveText(FormatFactory & factory);
 #endif
 
+/// Daisy : starts
+void registerInputFormatProcessorRawStoreEachRow(FormatFactory & factory);
+/// Daisy : ends
+
 /// Non trivial prefix and suffix checkers for disabling parallel parsing.
 void registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(FormatFactory & factory);
 void registerNonTrivialPrefixAndSuffixCheckerJSONAsString(FormatFactory & factory);
@@ -119,6 +127,10 @@ void registerFormats()
     registerFileSegmentationEngineRegexp(factory);
     registerFileSegmentationEngineJSONAsString(factory);
     registerFileSegmentationEngineJSONCompactEachRow(factory);
+
+    /// Daisy : starts
+    registerFileSegmentationEngineRawStoreEachRow(factory);
+    /// Daisy : ends
 
     registerInputFormatNative(factory);
     registerOutputFormatNative(factory);
@@ -166,6 +178,11 @@ void registerFormats()
     registerOutputFormatJSONEachRowWithProgress(factory);
     registerOutputFormatXML(factory);
     registerOutputFormatODBCDriver2(factory);
+
+    /// Daisy : starts
+    registerInputFormatProcessorRawStoreEachRow(factory);
+    /// Daisy : ends
+
     registerOutputFormatNull(factory);
     registerOutputFormatMySQLWire(factory);
     registerOutputFormatMarkdown(factory);

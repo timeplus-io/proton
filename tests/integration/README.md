@@ -24,6 +24,7 @@ sudo -H pip install \
     cassandra-driver \
     confluent-kafka \
     dicttoxml \
+    dict2xml \
     docker \
     docker-compose \
     grpcio \
@@ -31,6 +32,7 @@ sudo -H pip install \
     kafka-python \
     kazoo \
     minio \
+    pika \
     protobuf \
     psycopg2-binary \
     pymongo \

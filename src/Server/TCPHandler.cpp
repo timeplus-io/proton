@@ -34,6 +34,7 @@
 #include <Interpreters/ProfileEventsExt.h>
 #include <Server/TCPServer.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageDistributedMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
 #include <Core/ExternalTable.h>
@@ -754,6 +755,19 @@ void TCPHandler::processTablesStatusRequest()
         {
             status.is_replicated = true;
             status.absolute_delay = replicated_table->getAbsoluteDelay();
+        }
+        else if (auto * distributed_merge_tree = dynamic_cast<StorageDistributedMergeTree *>(table.get()))
+        {
+            /// If it is just a virtual table, no table status
+            if (distributed_merge_tree->isRemote())
+            {
+                continue;
+            }
+
+            /// Please note for DistributedMergeTree, the absolute delay means the last 32 bits
+            /// of the last sequence number it commits
+            status.is_replicated = true;
+            status.absolute_delay = distributed_merge_tree->lastSequenceNumber() & 0XFFFFFFFF;
         }
         else
             status.is_replicated = false; //-V1048

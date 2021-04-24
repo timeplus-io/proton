@@ -235,6 +235,14 @@ struct FormatSettings
     {
         UInt64 number_of_columns = 0;
     } msgpack;
+
+    /// Daisy : starts
+    struct
+    {
+        String rawstore_time_extraction_type;
+        String rawstore_time_extraction_rule;
+    } rawstore;
+    /// Daisy : ends
 };
 
 }

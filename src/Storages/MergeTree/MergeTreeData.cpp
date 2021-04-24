@@ -215,9 +215,6 @@ MergeTreeData::MergeTreeData(
     const auto settings = getSettings();
     allow_nullable_key = attach || settings->allow_nullable_key;
 
-    if (relative_data_path.empty())
-        throw Exception("MergeTree storages require data path", ErrorCodes::INCORRECT_FILE_NAME);
-
     /// Check sanity of MergeTreeSettings. Only when table is created.
     if (!attach)
         settings->sanityCheck(getContext()->getSettingsRef());
@@ -258,6 +255,11 @@ MergeTreeData::MergeTreeData(
     }
 
     checkTTLExpressions(metadata_, metadata_);
+
+    /// Daisy: start. If relative_data_path is empty, it is a virtual table
+    if (relative_data_path.empty())
+        return;
+    /// Daisy: end.
 
     /// format_file always contained on any data path
     PathWithDisk version_file;

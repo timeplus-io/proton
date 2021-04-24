@@ -280,7 +280,7 @@ JSON::Pos JSON::skipNumber() const
         ++pos;
     if (pos < ptr_end && *pos == '-')
         ++pos;
-     while (pos < ptr_end && *pos >= '0' && *pos <= '9')
+    while (pos < ptr_end && *pos >= '0' && *pos <= '9')
         ++pos;
 
     return pos;
@@ -513,8 +513,8 @@ bool JSON::hasSpecialChars() const
 {
     Pos pos = ptr_begin + 1;
     while (pos < ptr_end && *pos != '"'
-        && *pos != '\\' && *pos != '\r' && *pos != '\n' && *pos != '\t'
-        && *pos != '\f' && *pos != '\b' && *pos != '\0' && *pos != '\'')
+           && *pos != '\\' && *pos != '\r' && *pos != '\n' && *pos != '\t'
+           && *pos != '\f' && *pos != '\b' && *pos != '\0' && *pos != '\'')
         ++pos;
 
     if (*pos == '"')
@@ -635,10 +635,10 @@ std::string JSON::getString() const
                         }
                         buf.resize(buf.size() + 6);    /// максимальный размер UTF8 многобайтовой последовательности
                         int res = utf8.convert(unicode,
-                            reinterpret_cast<unsigned char *>(const_cast<char*>(buf.data())) + buf.size() - 6, 6);
+                                               reinterpret_cast<unsigned char *>(const_cast<char*>(buf.data())) + buf.size() - 6, 6);
                         if (!res)
                             throw JSONException("JSON: cannot convert unicode " + std::to_string(unicode)
-                                + " to UTF8.");
+                                                + " to UTF8.");
                         buf.resize(buf.size() - 6 + res);
                         break;
                     }
@@ -839,4 +839,3 @@ bool JSON::isType<bool>() const
 {
     return isBool();
 }
-

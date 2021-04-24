@@ -16,7 +16,7 @@
 
 namespace DB
 {
-bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, Context & context)
+bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, ContextPtr & context)
 {
     if (!node->as<ASTIdentifier>())
     {
@@ -25,7 +25,7 @@ bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, Context & context)
 
     ASTIdentifier * table_identifier_node = node->as<ASTIdentifier>();
     auto storage_id(*table_identifier_node);
-    auto table_id = context.resolveStorageID(storage_id);
+    auto table_id = context->resolveStorageID(storage_id);
     auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
     auto table = db->tryGetTable(table_id.table_name, context);
 
@@ -39,7 +39,7 @@ bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, Context & context)
     return col_desc.has("_time") && col_desc.get("_time").type->getTypeId() == TypeIndex::DateTime64;
 }
 
-void AddTimeVisitorMatcher::visitSelectQuery(ASTPtr & ast, Context & context)
+void AddTimeVisitorMatcher::visitSelectQuery(ASTPtr & ast, ContextPtr & context)
 {
     if (!ast->as<ASTSelectQuery>())
     {
@@ -81,7 +81,7 @@ void AddTimeVisitorMatcher::visitSelectQuery(ASTPtr & ast, Context & context)
     }
 }
 
-void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr & table_name, Context & context)
+void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr & table_name, ContextPtr & context)
 {
     ParserExpressionWithOptionalAlias elem_parser(false);
     if (!containTimeField(table_name, context))
@@ -93,23 +93,23 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
     /// BE Careful: where_statement may be null, when the sql doesn't contain where expression
     ASTPtr where_statement = select->where();
     ASTPtr new_node;
-    if (!context.getTimeParam().getStart().empty())
+    if (!context->getTimeParam().getStart().empty())
     {
         new_node = parseQuery(
             elem_parser,
-            context.getTimeParam().getStart(),
-            context.getSettingsRef().max_query_size,
-            context.getSettingsRef().max_parser_depth);
+            context->getTimeParam().getStart(),
+            context->getSettingsRef().max_query_size,
+            context->getSettingsRef().max_parser_depth);
         new_node = makeASTFunction("greaterOrEquals", std::make_shared<ASTIdentifier>("_time"), new_node);
     }
 
-    if (!context.getTimeParam().getEnd().empty())
+    if (!context->getTimeParam().getEnd().empty())
     {
         ASTPtr less = parseQuery(
             elem_parser,
-            context.getTimeParam().getEnd(),
-            context.getSettingsRef().max_query_size,
-            context.getSettingsRef().max_parser_depth);
+            context->getTimeParam().getEnd(),
+            context->getSettingsRef().max_query_size,
+            context->getSettingsRef().max_parser_depth);
         less = makeASTFunction("less", std::make_shared<ASTIdentifier>("_time"), less);
         new_node = new_node ? makeASTFunction("and", less, new_node) : less;
     }
@@ -118,7 +118,7 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
     select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_statement));
 }
 
-void AddTimeVisitorMatcher::visitSelectWithUnionQuery(ASTPtr & ast, Context & context)
+void AddTimeVisitorMatcher::visitSelectWithUnionQuery(ASTPtr & ast, ContextPtr & context)
 {
     if (!ast->as<ASTSelectWithUnionQuery>())
     {
@@ -140,7 +140,7 @@ void AddTimeVisitorMatcher::visitSelectWithUnionQuery(ASTPtr & ast, Context & co
     }
 }
 
-void AddTimeVisitorMatcher::visit(ASTPtr & ast, Context & context)
+void AddTimeVisitorMatcher::visit(ASTPtr & ast, ContextPtr context)
 {
     if (ast->as<ASTSelectQuery>())
     {
