@@ -327,9 +327,9 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
             for (Int32 j = 0; j < shards; ++j)
             {
                 /// FIXME, check table engine, grammar check
-                target_hosts[i * replication_factor + j].setQueryParameters(
+                target_hosts[i * shards + j].setQueryParameters(
                     Poco::URI::QueryParameters{{"distributed_ddl", "false"}, {"shard", std::to_string(j)}});
-                auto err = doDDL(payload, target_hosts[i * replication_factor + j], Poco::Net::HTTPRequest::HTTP_POST, query_id);
+                auto err = doDDL(payload, target_hosts[i * shards + j], Poco::Net::HTTPRequest::HTTP_POST, query_id);
                 if (err == ErrorCodes::UNRETRIABLE_ERROR)
                 {
                     failDDL(query_id, user, payload, "Unable to fulfill the request due to unrecoverable failure");
