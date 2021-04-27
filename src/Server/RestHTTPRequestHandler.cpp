@@ -3,11 +3,19 @@
 #include "RestRouterHandlers/RestRouterFactory.h"
 #include "RestRouterHandlers/RestRouterHandler.h"
 
+#include <Access/Authentication.h>
+#include <Access/ExternalAuthenticators.h>
+#include <IO/HTTPCommon.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <Common/setThreadName.h>
-#include <IO/HTTPCommon.h>
 
+#include <Poco/Base64Decoder.h>
+#include <Poco/Base64Encoder.h>
+#include <Poco/MemoryStream.h>
+#include <Poco/Net/HTTPBasicCredentials.h>
+#include <Poco/StreamCopier.h>
+#include <Poco/Util/LayeredConfiguration.h>
 
 namespace DB
 {
@@ -54,12 +62,33 @@ namespace ErrorCodes
     extern const int UNKNOWN_USER;
     extern const int WRONG_PASSWORD;
     extern const int REQUIRED_PASSWORD;
+    extern const int AUTHENTICATION_FAILED;
 
     extern const int HTTP_LENGTH_REQUIRED;
 }
 
 namespace
 {
+    String base64Decode(const String & encoded)
+    {
+        String decoded;
+        Poco::MemoryInputStream istr(encoded.data(), encoded.size());
+        Poco::Base64Decoder decoder(istr);
+        Poco::StreamCopier::copyToString(decoder, decoded);
+        return decoded;
+    }
+
+    String base64Encode(const String & decoded)
+    {
+        std::ostringstream ostr; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        ostr.exceptions(std::ios::failbit);
+        Poco::Base64Encoder encoder(ostr);
+        encoder.rdbuf()->setLineLength(0);
+        encoder << decoded;
+        encoder.close();
+        return ostr.str();
+    }
+
     Poco::Net::HTTPResponse::HTTPStatus exceptionCodeToHTTPStatus(int exception_code)
     {
         using namespace Poco::Net;
@@ -111,23 +140,18 @@ namespace
     }
 }
 
-void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse & response)
+bool RestHTTPRequestHandler::authenticateUser(
+    ContextPtr context, HTTPServerRequest & request, HTMLForm & params, HTTPServerResponse & response)
 {
-    setThreadName("RestHandler");
-    ThreadStatus thread_status;
-
-    /// Should be initialized before anything,
-    /// For correct memory accounting.
-    auto context = Context::createCopy(server.context());
-
-    HTMLForm params(request);
-    LOG_TRACE(log, "Request uri: {}", request.getURI());
+    using namespace Poco::Net;
 
     /// The user and password can be passed by headers (similar to X-Auth-*),
     /// which is used by load balancers to pass authentication information.
-    String user = request.get("X-ClickHouse-User", "");
-    String password = request.get("X-ClickHouse-Key", "");
-    String quota_key = request.get("X-ClickHouse-Quota", "");
+    std::string user = request.get("X-ClickHouse-User", "");
+    std::string password = request.get("X-ClickHouse-Key", "");
+    std::string quota_key = request.get("X-ClickHouse-Quota", "");
+
+    std::string spnego_challenge;
 
     if (user.empty() && password.empty() && quota_key.empty())
     {
@@ -135,34 +159,98 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
         /// or using HTTP Basic auth (both methods are insecure).
         if (request.hasCredentials())
         {
-            Poco::Net::HTTPBasicCredentials credentials(request);
+            /// It is prohibited to mix different authorization schemes.
+            if (params.has("user") || params.has("password"))
+                throw Exception(
+                    "Invalid authentication: it is not allowed to use Authorization HTTP header and authentication via parameters "
+                    "simultaneously",
+                    ErrorCodes::AUTHENTICATION_FAILED);
 
-            user = credentials.getUsername();
-            password = credentials.getPassword();
+            std::string scheme;
+            std::string auth_info;
+            request.getCredentials(scheme, auth_info);
+
+            if (Poco::icompare(scheme, "Basic") == 0)
+            {
+                HTTPBasicCredentials credentials(auth_info);
+                user = credentials.getUsername();
+                password = credentials.getPassword();
+            }
+            else if (Poco::icompare(scheme, "Negotiate") == 0)
+            {
+                spnego_challenge = auth_info;
+
+                if (spnego_challenge.empty())
+                    throw Exception("Invalid authentication: SPNEGO challenge is empty", ErrorCodes::AUTHENTICATION_FAILED);
+            }
+            else
+            {
+                throw Exception(
+                    "Invalid authentication: '" + scheme + "' HTTP Authorization scheme is not supported",
+                    ErrorCodes::AUTHENTICATION_FAILED);
+            }
         }
         else
         {
             user = params.get("user", "default");
             password = params.get("password", "");
         }
+
         quota_key = params.get("quota_key", "");
     }
     else
     {
         /// It is prohibited to mix different authorization schemes.
         if (request.hasCredentials() || params.has("user") || params.has("password") || params.has("quota_key"))
-        {
-            trySendExceptionToClient(
+            throw Exception(
                 "Invalid authentication: it is not allowed to use X-ClickHouse HTTP headers and other authentication methods "
                 "simultaneously",
-                (ErrorCodes::REQUIRED_PASSWORD),
-                request,
-                response);
-            return;
+                ErrorCodes::AUTHENTICATION_FAILED);
+    }
+
+    if (spnego_challenge.empty()) // I.e., now using user name and password strings ("Basic").
+    {
+        if (!request_credentials)
+            request_credentials = std::make_unique<BasicCredentials>();
+
+        auto * basic_credentials = dynamic_cast<BasicCredentials *>(request_credentials.get());
+        if (!basic_credentials)
+            throw Exception("Invalid authentication: unexpected 'Basic' HTTP Authorization scheme", ErrorCodes::AUTHENTICATION_FAILED);
+
+        basic_credentials->setUserName(user);
+        basic_credentials->setPassword(password);
+    }
+    else
+    {
+        if (!request_credentials)
+            request_credentials = request_context->makeGSSAcceptorContext();
+
+        auto * gss_acceptor_context = dynamic_cast<GSSAcceptorContext *>(request_credentials.get());
+        if (!gss_acceptor_context)
+            throw Exception(
+                "Invalid authentication: unexpected 'Negotiate' HTTP Authorization scheme expected", ErrorCodes::AUTHENTICATION_FAILED);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunreachable-code"
+        const auto spnego_response = base64Encode(gss_acceptor_context->processToken(base64Decode(spnego_challenge), log));
+#pragma GCC diagnostic pop
+
+        if (!spnego_response.empty())
+            response.set("WWW-Authenticate", "Negotiate " + spnego_response);
+
+        if (!gss_acceptor_context->isFailed() && !gss_acceptor_context->isReady())
+        {
+            if (spnego_response.empty())
+                throw Exception("Invalid authentication: 'Negotiate' HTTP Authorization failure", ErrorCodes::AUTHENTICATION_FAILED);
+
+            response.setStatusAndReason(HTTPResponse::HTTP_UNAUTHORIZED);
+            response.send();
+            return false;
         }
     }
 
     /// Set client info. It will be used for quota accounting parameters in 'setUser' method.
+
     ClientInfo & client_info = context->getClientInfo();
     client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
     client_info.interface = ClientInfo::Interface::HTTP;
@@ -182,8 +270,39 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
     client_info.http_referer = request.get("Referer", "");
     client_info.forwarded_for = request.get("X-Forwarded-For", "");
 
-    /// This will also set client_info.current_user and current_address
-    context->setUser(user, password, request.clientAddress());
+    try
+    {
+        context->setUser(*request_credentials, request.clientAddress());
+    }
+    catch (const Authentication::Require<BasicCredentials> & required_credentials)
+    {
+        request_credentials = std::make_unique<BasicCredentials>();
+
+        if (required_credentials.getRealm().empty())
+            response.set("WWW-Authenticate", "Basic");
+        else
+            response.set("WWW-Authenticate", "Basic realm=\"" + required_credentials.getRealm() + "\"");
+
+        response.setStatusAndReason(HTTPResponse::HTTP_UNAUTHORIZED);
+        response.send();
+        return false;
+    }
+    catch (const Authentication::Require<GSSAcceptorContext> & required_credentials)
+    {
+        request_credentials = request_context->makeGSSAcceptorContext();
+
+        if (required_credentials.getRealm().empty())
+            response.set("WWW-Authenticate", "Negotiate");
+        else
+            response.set("WWW-Authenticate", "Negotiate realm=\"" + required_credentials.getRealm() + "\"");
+
+        response.setStatusAndReason(HTTPResponse::HTTP_UNAUTHORIZED);
+        response.send();
+        return false;
+    }
+
+    request_credentials.reset();
+
     if (!quota_key.empty())
         context->setQuotaKey(quota_key);
 
@@ -191,8 +310,35 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
     client_info.initial_user = client_info.current_user;
     client_info.initial_address = client_info.current_address;
 
+    return true;
+}
+
+void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse & response)
+{
+    setThreadName("RestHandler");
+    ThreadStatus thread_status;
+
+    SCOPE_EXIT({
+        // If there is no request_credentials instance waiting for the next round, then the request is processed,
+        // so no need to preserve request_context either.
+        // Needs to be performed with respect to the other destructors in the scope though.
+        if (!request_credentials)
+            request_context.reset();
+    });
+
+    if (!request_context)
+    {
+        // Context should be initialized before anything, for correct memory accounting.
+        request_context = Context::createCopy(server.context());
+        request_credentials.reset();
+    }
+
+    HTMLForm params(request);
+    LOG_TRACE(log, "Request uri: {}", request.getURI());
+
     /// Set the query id supplied by the user, if any, and also update the OpenTelemetry fields.
-    context->setCurrentQueryId(params.get("query_id", request.get("X-ClickHouse-Query-Id", "")));
+    ClientInfo & client_info = request_context->getClientInfo();
+    request_context->setCurrentQueryId(params.get("query_id", request.get("X-ClickHouse-Query-Id", "")));
     client_info.initial_query_id = client_info.current_query_id;
 
     /// Setup idemopotent key if it is passed by user
@@ -204,18 +350,26 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
 
     if (!idem_key.empty())
     {
-        context->setIdempotentKey(idem_key);
+        request_context->setIdempotentKey(idem_key);
     }
 
-    CurrentThread::QueryScope query_scope{context};
+    CurrentThread::QueryScope query_scope{request_context};
     /// Setup common response headers etc
     response.setContentType("application/json; charset=UTF-8");
-    response.add("X-ClickHouse-Query-Id", context->getCurrentQueryId());
+    response.add("X-ClickHouse-Query-Id", request_context->getCurrentQueryId());
+
+    /// Set keep alive timeout
+    const auto & config = server.config();
+    setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
+
     Int32 http_status = HTTPResponse::HTTP_OK;
 
     try
     {
-        auto router_handler = RestRouterFactory::instance().get(request.getURI(), request.getMethod(), context);
+        if (!authenticateUser(request_context, request, params, response))
+            return; // '401 Unauthorized' response with 'Negotiate' has been sent at this point.
+
+        auto router_handler = RestRouterFactory::instance().get(request.getURI(), request.getMethod(), request_context);
         if (router_handler == nullptr)
         {
             response.setStatusAndReason(HTTPResponse::HTTP_NOT_FOUND);
@@ -225,14 +379,14 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
             return;
         }
 
-        LOG_DEBUG(log, "Start processing query_id={} user={}", client_info.current_query_id, user);
+        LOG_DEBUG(log, "Start processing query_id={} user={}", client_info.current_query_id, client_info.current_user);
         auto response_payload{router_handler->execute(request, response, http_status)};
 
         /// Send back result
         response.setStatusAndReason(HTTPResponse::HTTPStatus(http_status));
         *response.send() << response_payload << std::endl;
 
-        LOG_DEBUG(log, "End of processing query_id={} user={}", client_info.current_query_id, user);
+        LOG_DEBUG(log, "End of processing query_id={} user={}", client_info.current_query_id, client_info.current_user);
     }
     catch (...)
     {
