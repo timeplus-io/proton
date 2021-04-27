@@ -1319,9 +1319,12 @@ if (ThreadFuzzer::instance().isEffective())
     LOG_DEBUG(log, "Loaded metadata.");
 
     /// Daisy : start.
-    DB::CatalogService::instance(global_context).broadcast();
-    DB::PlacementService::instance(global_context).scheduleBroadcast();
-    DB::TaskStatusService::instance(global_context).schedulePersistentTask();
+    if (global_context->isDistributed())
+    {
+        DB::CatalogService::instance(global_context).broadcast();
+        DB::PlacementService::instance(global_context).scheduleBroadcast();
+        DB::TaskStatusService::instance(global_context).schedulePersistentTask();
+    }
     /// Daisy : end.
 
     /// Init trace collector only after trace_log system table was created

@@ -39,6 +39,11 @@ DistributedWriteAheadLogPool::~DistributedWriteAheadLogPool()
 
 void DistributedWriteAheadLogPool::startup()
 {
+    if (!global_context->isDistributed())
+    {
+        return;
+    }
+
     if (inited.test_and_set())
     {
         LOG_ERROR(log, "Already started");
