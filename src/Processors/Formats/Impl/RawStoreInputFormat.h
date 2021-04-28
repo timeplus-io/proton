@@ -46,6 +46,7 @@ private:
 
     void extractTimeFromRawByJSON(IColumn & time_col, IColumn & raw_col);
     void extractTimeFromRawByRegex(IColumn & time_col, IColumn & raw_col);
+    void extractTimeFromRaw(IColumn & time_col, IColumn & raw_col);
 
     const FormatSettings format_settings;
 
@@ -79,7 +80,9 @@ private:
 
     bool yield_strings;
 
-    std::unique_ptr<re2::RE2> time_extraction_regex;
+    bool auto_extract = false;
+
+    std::shared_ptr<re2::RE2> time_extraction_regex;
     size_t time_group_idx = -1;
 
     size_t raw_col_idx = -1;

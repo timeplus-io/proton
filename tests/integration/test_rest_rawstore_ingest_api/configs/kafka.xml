@@ -1,0 +1,12 @@
+<yandex>
+    <system_settings>
+        <system_dwals>
+            <system_kafka>
+                <system_default>true</system_default>
+                <cluster_name>kafka-test-1</cluster_name>
+                <cluster_id>kafka-cluster-test-1</cluster_id>
+                <brokers>kafka1:9092</brokers>
+            </system_kafka>
+        </system_dwals>
+    </system_settings>
+</yandex>

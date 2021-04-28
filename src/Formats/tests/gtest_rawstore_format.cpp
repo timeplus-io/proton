@@ -49,7 +49,7 @@ void checkOutput(FormatSettings & format_, String & in, String exp)
     {
         ColumnWithTypeAndName col;
         col.name = "_time";
-        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
+        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"Asia/Shanghai"});
         sample.insert(std::move(col));
     }
 
@@ -73,7 +73,7 @@ void checkOutput(FormatSettings & format_, String & in, String exp)
 void checkException(Block & sample, FormatSettings & format_, String & in)
 {
     String out;
-    ReadBufferFromString in_buf {in};
+    ReadBufferFromString in_buf{in};
     WriteBufferFromString out_buf{out};
     std::pair<BlockInputStreamPtr, BlockOutputStreamPtr> streams = prepare(sample, format_, in_buf, out_buf);
 
@@ -92,9 +92,7 @@ void checkCtorException(Block & sample, FormatSettings & format_, String & in)
 
 TEST(RawStoreFormatTest, JSONExtract)
 {
-    String str = "{"
-                 "\"_raw\": \"{\\\"log\\\":{\\\"time\\\":\\\"2021-03-21 00:10:23\\\"}}\""
-                 "}";
+    String str = R"###({"_raw": "{\"log\":{\"time\":\"2021-03-21 00:10:23\"}}"})###";
 
     FormatSettings format_settings;
     format_settings.rawstore.rawstore_time_extraction_type = "json_path";
@@ -111,15 +109,191 @@ TEST(RawStoreFormatTest, JSONExtract)
 
 TEST(RawStoreFormatTest, RegexExtract)
 {
-    String str = "{"
-                 "\"_raw\": \"2021-03-21 00:10:23, [Apache] This is a error.\""
-                 "}";
+    String str = R"###({ "_raw": "2021-03-21 00:10:23, [Apache] This is a error."})###";
 
     FormatSettings format_settings;
     format_settings.rawstore.rawstore_time_extraction_type = "regex";
     format_settings.rawstore.rawstore_time_extraction_rule = R"(^(?P<_time>.+),\s+\[\w+\])";
 
     checkOutput(format_settings, str, "2021-03-21 00:10:23.000");
+}
+
+void checkISOFormat(std::vector<std::pair<String, String>> testcases)
+{
+    FormatSettings format_settings;
+    format_settings.date_time_input_format = FormatSettings::DateTimeInputFormat::BestEffort;
+    for (const auto & tc : testcases)
+    {
+        String str = "{\"_raw\": \"" + tc.first + ", [Apache] This is a error.\"}";
+        checkOutput(format_settings, str, tc.second);
+    }
+}
+
+TEST(RawStoreFormatTest, AutoExtractText)
+{
+    /// Extension format
+    checkISOFormat(
+        {{"2002-12-15 12:00:00.234+01:30", "2002-12-15 18:30:00.234"},
+         {"2002-12-15 12:00:00.234+01:30", "2002-12-15 18:30:00.234"},
+         {"2002-12-15T12:00:00.234+01:30", "2002-12-15 18:30:00.234"},
+         {"2002-12-15 12:00:00.234Z", "2002-12-15 20:00:00.234"},
+         {"2002-12-15T12:00:00.234Z", "2002-12-15 20:00:00.234"},
+         {"2002-12-15 12:00:00.234+0130", "2002-12-15 18:30:00.234"},
+         {"2002-12-15 12:00:00.234-0130", "2002-12-15 21:30:00.234"},
+         {"2011-03-17T01:00:00-04:00", "2011-03-17 13:00:00.000"},
+         {"2011-03-17T01:00:00+0400", "2011-03-17 05:00:00.000"},
+         {"2002-12-15 12:00:00Z", "2002-12-15 20:00:00.000"},
+         {"2002-12-15T12:00:00+04", "2002-12-15 16:00:00.000"},
+         {"2002-12-15T12:00+08:30", "2002-12-15 11:30:00.000"},
+         {"2002-12-15T12:00+0430", "2002-12-15 15:30:00.000"},
+         {"2022-12-15T12+04:30", "2022-12-15 15:30:00.000"},
+         {"2022-12-15 12+04:30", "2022-12-15 15:30:00.000"},
+         {"2022-12-15 12Z", "2022-12-15 20:00:00.000"},
+         {"2022-12-15T12Z", "2022-12-15 20:00:00.000"},
+         {"2002-12-15+04:30", "2002-12-15 03:30:00.000"},
+         {"2002-12-15+0430", "2002-12-15 03:30:00.000"},
+         {"2002-12-15Z", "2002-12-15 08:00:00.000"}});
+
+    /// Extension format: not match or partial match
+    checkISOFormat(
+        {{"2002", "1970-01-01 08:00:00.000"},
+         {"2002-12-15T12:00.123+0430", "2002-12-15 12:00:00.000"},
+         {"2022-12-15T12.123+04:30", "2022-12-15 12:00:00.000"},
+         {"2002-12-15+", "2002-12-15 00:00:00.000"}});
+
+    /// Basic format
+    checkISOFormat({
+        {"20210401T000000.123+08:00", "2021-04-01 00:00:00.123"},
+        {"20210401T000000.123+0830", "2021-03-31 23:30:00.123"},
+        {"20210401T000000.123-08:00", "2021-04-01 16:00:00.123"},
+        {"20210401T000000.123-08", "2021-04-01 16:00:00.123"},
+        {"20210401T000000.123Z", "2021-04-01 08:00:00.123"},
+        {"20210401T000000.123", "2021-04-01 00:00:00.123"},
+        {"20210401T000000+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401T000000+0830", "2021-03-31 23:30:00.000"},
+        {"20210401T000000-08:00", "2021-04-01 16:00:00.000"},
+        {"20210401T000000-08", "2021-04-01 16:00:00.000"},
+        {"20210401T000000Z", "2021-04-01 08:00:00.000"},
+        {"20210401T00+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401T00+0830", "2021-03-31 23:30:00.000"},
+        {"20210401T00Z", "2021-04-01 08:00:00.000"},
+        {"20210401T00", "2021-04-01 00:00:00.000"},
+        {"20210401000000.123+08:00", "2021-04-01 00:00:00.123"},
+        {"20210401000000.123+0830", "2021-03-31 23:30:00.123"},
+        {"20210401000000.123-08:00", "2021-04-01 16:00:00.123"},
+        {"20210401000000.123-08", "2021-04-01 16:00:00.123"},
+        {"20210401000000.123Z", "2021-04-01 08:00:00.123"},
+        {"20210401000000.123", "2021-04-01 00:00:00.123"},
+        {"20210401000000+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401000000+0830", "2021-03-31 23:30:00.000"},
+        {"20210401000000Z", "2021-04-01 08:00:00.000"},
+        {"20210401+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401+0830", "2021-03-31 23:30:00.000"},
+        {"20210401Z", "2021-04-01 08:00:00.000"},
+        {"20210401", "2021-04-01 00:00:00.000"},
+    });
+
+    /// Basic format: not match or partial match
+    checkISOFormat(
+        {{"20210401T0100.+08:00", "2021-04-01 01:00:00.000"},
+         {"20210401T0100.000Z", "2021-04-01 01:00:00.000"},
+         {"20210401T0100+08:00", "2021-04-01 01:00:00.000"},
+         {"20210401T0100+0830", "2021-04-01 01:00:00.000"},
+         {"20210401T0100Z", "2021-04-01 01:00:00.000"},
+         {"20210401T0100", "2021-04-01 01:00:00.000"},
+         {"20210401T01.001Z", "2021-04-01 01:00:00.000"},
+         {"202104010000.+08:00", "2021-04-01 00:00:00.000"},
+         {"202104010000.000Z", "2021-04-01 00:00:00.000"},
+         {"2021040101.001Z", "2021-04-01 00:00:00.000"},
+         {"2021040100Z", "2021-04-01 00:00:00.000"},
+         {"202104010000Z", "2021-04-01 00:00:00.000"},
+         {"202104", "1970-01-01 08:00:00.000"}});
+}
+
+TEST(RawStoreFormatTest, AutoExtractJSON)
+{
+    String str = R"###([
+"_raw": [{"prop1": "2002-12-15 12:00:00.234+01:30"}, {"propb": 123}]
+])###";
+
+
+    /// Extension format
+    checkISOFormat(
+        {{"2002-12-15 12:00:00.234+01:30", "2002-12-15 18:30:00.234"},
+         {"2002-12-15 12:00:00.234+01:30", "2002-12-15 18:30:00.234"},
+         {"2002-12-15T12:00:00.234+01:30", "2002-12-15 18:30:00.234"},
+         {"2002-12-15 12:00:00.234Z", "2002-12-15 20:00:00.234"},
+         {"2002-12-15T12:00:00.234Z", "2002-12-15 20:00:00.234"},
+         {"2002-12-15 12:00:00.234+0130", "2002-12-15 18:30:00.234"},
+         {"2002-12-15 12:00:00.234-0130", "2002-12-15 21:30:00.234"},
+         {"2011-03-17T01:00:00-04:00", "2011-03-17 13:00:00.000"},
+         {"2011-03-17T01:00:00+0400", "2011-03-17 05:00:00.000"},
+         {"2002-12-15 12:00:00Z", "2002-12-15 20:00:00.000"},
+         {"2002-12-15T12:00:00+04", "2002-12-15 16:00:00.000"},
+         {"2002-12-15T12:00+08:30", "2002-12-15 11:30:00.000"},
+         {"2002-12-15T12:00+0430", "2002-12-15 15:30:00.000"},
+         {"2022-12-15T12+04:30", "2022-12-15 15:30:00.000"},
+         {"2022-12-15 12+04:30", "2022-12-15 15:30:00.000"},
+         {"2022-12-15 12Z", "2022-12-15 20:00:00.000"},
+         {"2022-12-15T12Z", "2022-12-15 20:00:00.000"},
+         {"2002-12-15+04:30", "2002-12-15 03:30:00.000"},
+         {"2002-12-15+0430", "2002-12-15 03:30:00.000"},
+         {"2002-12-15Z", "2002-12-15 08:00:00.000"}});
+
+    /// Extension format: not match or partial match
+    checkISOFormat(
+        {{"2002", "1970-01-01 08:00:00.000"},
+         {"2002-12-15T12:00.123+0430", "2002-12-15 12:00:00.000"},
+         {"2022-12-15T12.123+04:30", "2022-12-15 12:00:00.000"},
+         {"2002-12-15+", "2002-12-15 00:00:00.000"}});
+
+    /// Basic format
+    checkISOFormat({
+        {"20210401T000000.123+08:00", "2021-04-01 00:00:00.123"},
+        {"20210401T000000.123+0830", "2021-03-31 23:30:00.123"},
+        {"20210401T000000.123-08:00", "2021-04-01 16:00:00.123"},
+        {"20210401T000000.123-08", "2021-04-01 16:00:00.123"},
+        {"20210401T000000.123Z", "2021-04-01 08:00:00.123"},
+        {"20210401T000000.123", "2021-04-01 00:00:00.123"},
+        {"20210401T000000+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401T000000+0830", "2021-03-31 23:30:00.000"},
+        {"20210401T000000-08:00", "2021-04-01 16:00:00.000"},
+        {"20210401T000000-08", "2021-04-01 16:00:00.000"},
+        {"20210401T000000Z", "2021-04-01 08:00:00.000"},
+        {"20210401T00+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401T00+0830", "2021-03-31 23:30:00.000"},
+        {"20210401T00Z", "2021-04-01 08:00:00.000"},
+        {"20210401T00", "2021-04-01 00:00:00.000"},
+        {"20210401000000.123+08:00", "2021-04-01 00:00:00.123"},
+        {"20210401000000.123+0830", "2021-03-31 23:30:00.123"},
+        {"20210401000000.123-08:00", "2021-04-01 16:00:00.123"},
+        {"20210401000000.123-08", "2021-04-01 16:00:00.123"},
+        {"20210401000000.123Z", "2021-04-01 08:00:00.123"},
+        {"20210401000000.123", "2021-04-01 00:00:00.123"},
+        {"20210401000000+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401000000+0830", "2021-03-31 23:30:00.000"},
+        {"20210401000000Z", "2021-04-01 08:00:00.000"},
+        {"20210401+08:00", "2021-04-01 00:00:00.000"},
+        {"20210401+0830", "2021-03-31 23:30:00.000"},
+        {"20210401Z", "2021-04-01 08:00:00.000"},
+        {"20210401", "2021-04-01 00:00:00.000"},
+    });
+
+    /// Basic format: not match or partial match
+    checkISOFormat(
+        {{"20210401T0100.+08:00", "2021-04-01 01:00:00.000"},
+         {"20210401T0100.000Z", "2021-04-01 01:00:00.000"},
+         {"20210401T0100+08:00", "2021-04-01 01:00:00.000"},
+         {"20210401T0100+0830", "2021-04-01 01:00:00.000"},
+         {"20210401T0100Z", "2021-04-01 01:00:00.000"},
+         {"20210401T0100", "2021-04-01 01:00:00.000"},
+         {"20210401T01.001Z", "2021-04-01 01:00:00.000"},
+         {"202104010000.+08:00", "2021-04-01 00:00:00.000"},
+         {"202104010000.000Z", "2021-04-01 00:00:00.000"},
+         {"2021040101.001Z", "2021-04-01 00:00:00.000"},
+         {"2021040100Z", "2021-04-01 00:00:00.000"},
+         {"202104010000Z", "2021-04-01 00:00:00.000"},
+         {"202104", "1970-01-01 08:00:00.000"}});
 }
 
 TEST(RawStoreFormatTest, Exceptions)
@@ -140,17 +314,15 @@ TEST(RawStoreFormatTest, Exceptions)
     {
         ColumnWithTypeAndName col;
         col.name = "_time";
-        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
+        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"Asia/Shanghai"});
         sample.insert(std::move(col));
     }
 
-    String str = "{"
-                 "\"_raw\": \"2021-03-21 00:10:23, [Apache] This is a error.\""
-                 "}";
+    String str = R"###({ "_raw": "2021-03-21 00:10:23, [Apache] This is a error."})###";
 
-    String json = "{"
-                  "\"_raw\": \"{\\\"log\\\":{\\\"time\\\":\\\"2021-03-21 00:10:23\\\"}}\""
-                  "}";
+    String json = R"###([
+                  "_raw": "{\"log\":{\"time\":\"2021-03-21 00:10:23\"}}"
+                  ])###";
 
     FormatSettings format_settings;
 
@@ -192,17 +364,13 @@ TEST(RawStoreFormatTest, ExceptionOfConstructor)
     {
         ColumnWithTypeAndName col;
         col.name = "_time";
-        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
+        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"Asia/Shanghai"});
         sample.insert(std::move(col));
     }
 
-    String str = "{"
-                 "\"_raw\": \"2021-03-21 00:10:23, [Apache] This is a error.\""
-                 "}";
+    String str = R"###({ "_raw": "2021-03-21 00:10:23, [Apache] This is a error."})###";
 
-    String json = "{"
-                  "\"_raw\": \"{\\\"log\\\":{\\\"time\\\":\\\"2021-03-21 00:10:23\\\"}}\""
-                  "}";
+    String json = R"###("[ "_raw": "{\"log\":{\"time\":\"2021-03-21 00:10:23\"}}"])###";
 
     FormatSettings format_settings;
 
@@ -232,14 +400,7 @@ TEST(RawStoreFormatTest, ExceptionOfConstructor)
 
 TEST(RawStoreFormatTest, InvalidBlock)
 {
-    String str = "{"
-                 "\"_raw\": \"2021-03-21 00:10:23, [Apache] This is a error.\""
-                 "}";
-
-    String json = "{"
-                  "\"_raw\": \"{\\\"log\\\":{\\\"time\\\":\\\"2021-03-21 00:10:23\\\"}}\""
-                  "}";
-
+    String str = R"###({ "_raw": "2021-03-21 00:10:23, [Apache] This is a error."})###";
     FormatSettings format_settings;
 
     /// No _raw column
@@ -259,7 +420,7 @@ TEST(RawStoreFormatTest, InvalidBlock)
     {
         ColumnWithTypeAndName col;
         col.name = "_time";
-        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
+        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"Asia/Shanghai"});
         sample1.insert(std::move(col));
     }
 
@@ -289,7 +450,7 @@ TEST(RawStoreFormatTest, InvalidBlock)
     {
         ColumnWithTypeAndName col;
         col.name = "time";
-        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
+        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"Asia/Shanghai"});
         sample2.insert(std::move(col));
     }
     format_settings.rawstore.rawstore_time_extraction_type = "regex";
@@ -317,7 +478,7 @@ TEST(RawStoreFormatTest, InvalidBlock)
     {
         ColumnWithTypeAndName col;
         col.name = "_time";
-        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
+        col.type = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"Asia/Shanghai"});
         sample3.insert(std::move(col));
     }
     String str1 = "{"
