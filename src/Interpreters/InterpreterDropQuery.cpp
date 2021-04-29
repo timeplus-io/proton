@@ -374,66 +374,6 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
     return {};
 }
 
-BlockIO InterpreterDropQuery::executeToDictionary(
-    const String & database_name_,
-    const String & dictionary_name,
-    ASTDropQuery::Kind kind,
-    bool if_exists,
-    bool is_temporary,
-    bool no_ddl_lock)
-{
-    if (is_temporary)
-        throw Exception("Temporary dictionaries are not possible.", ErrorCodes::SYNTAX_ERROR);
-
-    String database_name = getContext()->resolveDatabase(database_name_);
-
-    auto ddl_guard = (!no_ddl_lock ? DatabaseCatalog::instance().getDDLGuard(database_name, dictionary_name) : nullptr);
-    query_ptr->as<ASTDropQuery>()->database = database_name;
-    DatabasePtr database = tryGetDatabase(database_name, if_exists);
-
-    bool is_drop_or_detach_database = query_ptr->as<ASTDropQuery>()->table.empty();
-    bool is_replicated_ddl_query = typeid_cast<DatabaseReplicated *>(database.get()) &&
-                                   getContext()->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY &&
-                                   !is_drop_or_detach_database;
-    if (is_replicated_ddl_query)
-    {
-        if (kind == ASTDropQuery::Kind::Detach)
-            throw Exception(ErrorCodes::INCORRECT_QUERY, "DETACH DICTIONARY is not allowed for Replicated databases.");
-
-        getContext()->checkAccess(AccessType::DROP_DICTIONARY, database_name, dictionary_name);
-
-        ddl_guard->releaseTableLock();
-        return typeid_cast<DatabaseReplicated *>(database.get())->tryEnqueueReplicatedDDL(query_ptr, getContext());
-    }
-
-    if (!database || !database->isDictionaryExist(dictionary_name))
-    {
-        if (!if_exists)
-            throw Exception(
-                "Dictionary " + backQuoteIfNeed(database_name) + "." + backQuoteIfNeed(dictionary_name) + " doesn't exist.",
-                ErrorCodes::UNKNOWN_DICTIONARY);
-        else
-            return {};
-    }
-
-    if (kind == ASTDropQuery::Kind::Detach)
-    {
-        /// Drop dictionary from memory, don't touch data and metadata
-        getContext()->checkAccess(AccessType::DROP_DICTIONARY, database_name, dictionary_name);
-        database->detachDictionary(dictionary_name);
-    }
-    else if (kind == ASTDropQuery::Kind::Truncate)
-    {
-        throw Exception("Cannot TRUNCATE dictionary", ErrorCodes::SYNTAX_ERROR);
-    }
-    else if (kind == ASTDropQuery::Kind::Drop)
-    {
-        getContext()->checkAccess(AccessType::DROP_DICTIONARY, database_name, dictionary_name);
-        database->removeDictionary(getContext(), dictionary_name);
-    }
-    return {};
-}
-
 BlockIO InterpreterDropQuery::executeToTemporaryTable(const String & table_name, ASTDropQuery::Kind kind)
 {
     if (kind == ASTDropQuery::Kind::Detach)
