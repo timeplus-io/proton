@@ -1,12 +1,21 @@
 #include "RawstoreTableRestRouterHandler.h"
 #include "SchemaValidator.h"
 
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/queryToString.h>
+
 #include <boost/algorithm/string/join.hpp>
 
 #include <vector>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int UNKNOWN_DATABASE;
+}
+
 std::map<String, std::map<String, String> > RawstoreTableRestRouterHandler::create_schema = {
     {"required",{
                         {"name","string"}
@@ -21,6 +30,39 @@ std::map<String, std::map<String, String> > RawstoreTableRestRouterHandler::crea
                 }
     }
 };
+
+void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const
+{
+    Poco::JSON::Array tables_mapping_json;
+
+    for (const auto & table : tables)
+    {
+        /// FIXME : Later based on engin seting distinguish rawstore
+        if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") == String::npos)
+        {
+            continue;
+        }
+
+        const String & query = table->create_table_query;
+        const auto & query_ptr = parseQuerySyntax(query);
+        const auto & create = query_ptr->as<const ASTCreateQuery &>();
+
+        Poco::JSON::Object table_mapping_json;
+        table_mapping_json.set("name", table->name);
+        table_mapping_json.set("engine", table->engine);
+        table_mapping_json.set("order_by_expression", table->sorting_key);
+        table_mapping_json.set("partition_by_expression", table->partition_key);
+
+        if (create.storage->ttl_table)
+        {
+            table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
+        }
+
+        tables_mapping_json.add(table_mapping_json);
+    }
+
+    resp.set("data", tables_mapping_json);
+}
 
 bool RawstoreTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {

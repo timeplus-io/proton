@@ -2,8 +2,19 @@
 #include "SchemaValidator.h"
 
 #include <Core/Block.h>
-#include <DistributedMetadata/CatalogService.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/executeQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
+#include <Storages/ColumnsDescription.h>
+
+#if !defined(ARCADIA_BUILD)
+#    include <Parsers/New/parseQuery.h> // Y_IGNORE
+#endif
 
 #include <boost/algorithm/string/join.hpp>
 
@@ -15,137 +26,6 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNKNOWN_DATABASE;
-}
-
-namespace
-{
-
-void buildColumnsJSON(Poco::JSON::Object & resp_table, const String & create_table_info)
-{
-    Poco::JSON::Array columns_mapping_json;
-
-    String::size_type create_pos = String::npos;
-    String::size_type engine_pos = String::npos;
-    create_pos = create_table_info.find_first_of("(");
-    engine_pos = create_table_info.find(") ENGINE");
-
-    if (create_pos != String::npos && engine_pos != String::npos)
-    {
-        const String & columns_info = create_table_info.substr(create_pos + 1, engine_pos - create_pos - 1);
-
-        Strings columns;
-        boost::split(columns, columns_info, boost::is_any_of(","));
-        for (auto & column : columns)
-        {
-            Poco::JSON::Object cloumn_mapping_json;
-
-            int index = 0;
-            Strings column_elements;
-            boost::trim(column);
-            boost::split(column_elements, column, boost::is_any_of(" "));
-            cloumn_mapping_json.set("name", boost::algorithm::erase_all_copy(column_elements[index], "`"));
-
-            int size = column_elements.size();
-
-            /// extract type
-            if (++index < size)
-            {
-                const String & type = column_elements[index];
-                if (type.find("Nullable") != String::npos)
-                {
-                    cloumn_mapping_json.set("type", type.substr(type.find("(") + 1, type.find(")") - type.find("(") - 1));
-                    cloumn_mapping_json.set("nullable", true);
-                }
-                else
-                {
-                    cloumn_mapping_json.set("type", type);
-                    cloumn_mapping_json.set("nullable", false);
-                }
-            }
-
-            /// extract default or alias
-            if (++index < size)
-            {
-                const String & element = column_elements[index];
-                if (element == "DEFAULT")
-                {
-                    cloumn_mapping_json.set("default", column_elements[++index]);
-                }
-                else if (element == "ALIAS")
-                {
-                    cloumn_mapping_json.set("alias", column_elements[++index]);
-                }
-                else
-                {
-                    index--;
-                }
-            }
-
-            /// extract compression_codec
-            if (++index < size)
-            {
-                const String & compression_codec = column_elements[index];
-
-                if (compression_codec.find("CODEC") != String::npos)
-                {
-                    cloumn_mapping_json.set(
-                        "compression_codec",
-                        compression_codec.substr(
-                            compression_codec.find("(") + 1, compression_codec.find(")") - compression_codec.find("(")));
-                }
-                else
-                {
-                    index--;
-                }
-            }
-
-            /// FIXME : extract ttl_expression
-
-            /// FIXME : extract skipping_index_expression
-
-            columns_mapping_json.add(cloumn_mapping_json);
-        }
-    }
-
-    resp_table.set("columns", columns_mapping_json);
-}
-
-void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables)
-{
-    Poco::JSON::Array tables_mapping_json;
-
-    for (const auto & table : tables)
-    {
-        /// FIXME : Later based on engin seting dstinguish table or rawstore
-        if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") == String::npos)
-        {
-            Poco::JSON::Object table_mapping_json;
-
-            table_mapping_json.set("name", table->name);
-            table_mapping_json.set("engine", table->engine);
-            table_mapping_json.set("order_by_expression", table->sorting_key);
-            table_mapping_json.set("partition_by_expression", table->partition_key);
-            table_mapping_json.set("_time_column", table->primary_key);
-
-            /// extract ttl
-            String::size_type ttl_pos = String::npos;
-            ttl_pos = table->engine_full.find(" TTL ");
-            if (ttl_pos != String::npos)
-            {
-                String::size_type settings_pos = String::npos;
-                settings_pos = table->engine_full.find(" SETTINGS ");
-                const String & ttl = table->engine_full.substr(ttl_pos + 5, settings_pos - ttl_pos - 5);
-                table_mapping_json.set("ttl_expression", ttl);
-            }
-
-            buildColumnsJSON(table_mapping_json, table->create_table_query);
-            tables_mapping_json.add(table_mapping_json);
-        }
-    }
-
-    resp.set("data", tables_mapping_json);
-}
-
 }
 
 std::map<String, std::map<String, String> > TableRestRouterHandler::update_schema = {
@@ -164,7 +44,6 @@ std::map<String, String> TableRestRouterHandler::granularity_func_mapping = {
     {"H", "toStartOfHour(`_time`)"},
     {"m", "toStartOfMinute(`_time`)"}
 };
-
 
 bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
@@ -202,6 +81,11 @@ bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payloa
     return true;
 }
 
+bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
+{
+    return validateSchema(update_schema, payload, error_msg);
+}
+
 String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */, Int32 & /*http_status */) const
 {
     const String & database_name = getPathParameter("database");
@@ -226,11 +110,6 @@ String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* pay
     return resp_str;
 }
 
-bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
-{
-    return validateSchema(update_schema, payload, error_msg);
-}
-
 String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & /*http_status*/) const
 {
     const auto & shard = getQueryParameter("shard");
@@ -245,19 +124,6 @@ String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & paylo
     }
 
     return processQuery(query);
-}
-
-String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & /*http_status*/) const
-{
-    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
-    {
-        query_context->setDistributedDDLOperation(true);
-        query_context->setQueryParameter("_payload", "{}");
-    }
-
-    const String & database_name = getPathParameter("database");
-    const String & table_name = getPathParameter("table");
-    return processQuery("DROP TABLE " + database_name + "." + table_name);
 }
 
 String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & /*http_status*/) const
@@ -284,27 +150,102 @@ String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payl
     return processQuery(query);
 }
 
-String TableRestRouterHandler::buildResponse() const
+String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & /*http_status*/) const
 {
-    Poco::JSON::Object resp;
-    resp.set("query_id", query_context->getCurrentQueryId());
-    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    resp.stringify(resp_str_stream, 0);
+    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
+    {
+        query_context->setDistributedDDLOperation(true);
+        query_context->setQueryParameter("_payload", "{}");
+    }
 
-    return resp_str_stream.str();
+    const String & database_name = getPathParameter("database");
+    const String & table_name = getPathParameter("table");
+    return processQuery("DROP TABLE " + database_name + "." + table_name);
 }
 
-String TableRestRouterHandler::processQuery(const String & query) const
+void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const
 {
-    BlockIO io{executeQuery(query, query_context, false /* internal */)};
-
-    if (io.pipeline.initialized())
+    const auto & columns_ast = columns_list->columns;
+    Poco::JSON::Array columns_mapping_json;
+    for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
     {
-        return "TableRestRouterHandler execute io.pipeline.initialized not implemented";
-    }
-    io.onFinish();
+        Poco::JSON::Object cloumn_mapping_json;
 
-    return buildResponse();
+        const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
+        const auto & column_type = DataTypeFactory::instance().get(col_decl.type);
+
+        cloumn_mapping_json.set("name", col_decl.name);
+        
+        String type = column_type->getName();
+        if (column_type->isNullable())
+        {
+            type = removeNullable(column_type)->getName();
+            cloumn_mapping_json.set("nullable", true);
+        }
+        else
+        {
+            cloumn_mapping_json.set("nullable", false);
+        }
+        cloumn_mapping_json.set("type", type);
+
+        if (col_decl.default_expression)
+        {
+            cloumn_mapping_json.set("default", queryToString(col_decl.default_expression));
+        }
+        else
+        {
+            String alias = col_decl.tryGetAlias();
+            if (!alias.empty())
+            {
+                cloumn_mapping_json.set("alias", alias);
+            }
+        }
+
+        if (col_decl.comment)
+        {
+            cloumn_mapping_json.set("comment", queryToString(col_decl.comment));
+        }
+
+        if (col_decl.codec)
+        {
+            cloumn_mapping_json.set("codec", queryToString(col_decl.codec));
+        }
+
+        if (col_decl.ttl)
+        {
+            cloumn_mapping_json.set("ttl", queryToString(col_decl.ttl));
+        }
+
+        columns_mapping_json.add(cloumn_mapping_json);
+    }
+    resp_table.set("columns", columns_mapping_json);
+}
+
+ASTPtr TableRestRouterHandler::parseQuerySyntax(const String & create_table_query) const
+{
+    const size_t & max_query_size = query_context->getSettingsRef().max_query_size;
+    const auto & max_parser_depth = query_context->getSettingsRef().max_parser_depth;
+    const char * begin = create_table_query.data();
+    const char * end = create_table_query.data() + create_table_query.size();
+
+    ASTPtr ast;
+
+#if !defined(ARCADIA_BUILD)
+    if (query_context->getSettingsRef().use_antlr_parser)
+    {
+        ast = parseQuery(begin, end, max_query_size, max_parser_depth, query_context->getCurrentDatabase());
+    }
+    else
+    {
+        ParserQuery parser(end);
+        ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
+    }
+#else
+    ParserQuery parser(end);
+    ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
+#endif
+
+    return ast;
 }
 
 String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const
@@ -360,6 +301,29 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
     }
 
     return boost::algorithm::join(create_segments, " ");
+}
+
+String TableRestRouterHandler::processQuery(const String & query) const
+{
+    BlockIO io{executeQuery(query, query_context, false /* internal */)};
+
+    if (io.pipeline.initialized())
+    {
+        return "TableRestRouterHandler execute io.pipeline.initialized not implemented";
+    }
+    io.onFinish();
+
+    return buildResponse();
+}
+
+String TableRestRouterHandler::buildResponse() const
+{
+    Poco::JSON::Object resp;
+    resp.set("query_id", query_context->getCurrentQueryId());
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+
+    return resp_str_stream.str();
 }
 
 }

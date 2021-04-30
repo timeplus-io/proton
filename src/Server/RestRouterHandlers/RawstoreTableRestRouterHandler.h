@@ -17,6 +17,7 @@ private:
     static std::map<String, std::map<String, String>> create_schema;
 
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
+    void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const override;
 
     String getDefaultPartitionGranularity() const override;
     String getDefaultOrderByGranularity() const override;

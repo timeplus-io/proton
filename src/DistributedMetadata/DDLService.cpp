@@ -466,7 +466,22 @@ void DDLService::mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, con
         hosts.push_back(node->host + ":" + node->http_port);
     }
 
-    std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(DDL_DATABSE_POST_API_PATH_FMT, database), http_port)};
+    String api_path_fmt = "";
+    if (method == Poco::Net::HTTPRequest::HTTP_POST)
+    {
+        api_path_fmt = DDL_DATABSE_POST_API_PATH_FMT;
+    }
+    else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
+    {
+        api_path_fmt = DDL_DATABSE_DELETE_API_PATH_FMT;
+    }
+    else
+    {
+        assert(false);
+        LOG_ERROR(log, "Unsupported method={}", method);
+    }
+
+    std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(api_path_fmt, database), http_port)};
 
     /// FIXME: make sure `target_hosts` is a complete list of hosts which
     /// has this table definition (shards * replication_factor)

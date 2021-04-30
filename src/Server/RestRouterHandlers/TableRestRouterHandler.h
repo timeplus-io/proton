@@ -2,9 +2,11 @@
 
 #include "RestRouterHandler.h"
 
+#include <DistributedMetadata/CatalogService.h>
 
 namespace DB
 {
+class ASTColumns;
 class TableRestRouterHandler : public RestRouterHandler
 {
 public:
@@ -30,6 +32,10 @@ protected:
     String executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
     String executeDelete(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
     String executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
+
+    virtual void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const = 0;
+    virtual void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_ast) const;
+    ASTPtr parseQuerySyntax(const String & create_table_query) const;
 
     virtual String getDefaultPartitionGranularity() const = 0;
     virtual String getDefaultOrderByGranularity() const = 0;
