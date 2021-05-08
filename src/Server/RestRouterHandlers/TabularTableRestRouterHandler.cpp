@@ -10,7 +10,7 @@
 
 namespace DB
 {
-std::map<String, std::map<String, String> > TabularTableRestRouterHandler::create_schema= {
+std::map<String, std::map<String, String> > TabularTableRestRouterHandler::create_schema = {
     {"required",{
                     {"name","string"},
                     {"columns", "array"}

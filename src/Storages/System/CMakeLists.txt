@@ -9,7 +9,6 @@ get_property (BUILD_COMPILE_DEFINITIONS DIRECTORY ${ClickHouse_SOURCE_DIR} PROPE
 
 get_property(TZDATA_VERSION GLOBAL PROPERTY TZDATA_VERSION_PROP)
 
-
 find_package(Git)
 if(Git_FOUND)
     # The commit's git hash, and whether the building workspace was dirty or not
@@ -38,6 +37,10 @@ if(Git_FOUND)
       OUTPUT_VARIABLE GIT_COMMIT_SUBJECT
       ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
+
+# Daisy: start.
+string (TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S" UTC)
+# Daisy: end.
 
 configure_file (StorageSystemBuildOptions.generated.cpp.in ${CONFIG_BUILD})
 
