@@ -15,6 +15,11 @@
 
 namespace DB
 {
+namespace
+{
+    constexpr Int32 MAX_RETRIES = 3;
+}
+
 namespace ErrorCodes
 {
     extern const int CONFIG_ERROR;
@@ -122,13 +127,32 @@ void appendBlock(Block && block, ContextPtr context, IDistributedWriteAheadLog::
     auto topic = config.getString("cluster_settings.system_ddls.name");
     std::any ctx{DistributedWriteAheadLogKafkaContext{topic}};
 
-    auto result = wal->append(record, ctx);
-    if (result.err != ErrorCodes::OK)
+    auto result_code = ErrorCodes::OK;
+    const auto & query_id = context->getCurrentQueryId();
+    for (auto i = 0; i < MAX_RETRIES; ++i)
     {
-        LOG_ERROR(
-            log, "Failed to append record to DistributedWriteAheadLog, query_id={}, error={}", context->getCurrentQueryId(), result.err);
-        throw Exception("Failed to append record to DistributedWriteAheadLog, error={}", result.err);
+        result_code = wal->append(record, ctx).err;
+        if (result_code == ErrorCodes::OK)
+        {
+            LOG_INFO(log, "Successfully append record to DistributedWriteAheadLog, query_id={}", query_id);
+            return;
+        }
+
+        LOG_WARNING(
+            log,
+            "Failed to append record to DistributedWriteAheadLog, query_id={}, error={}, tried_times={}",
+            query_id,
+            result_code,
+            i + 1);
+
+        if (i < MAX_RETRIES - 1)
+        {
+            LOG_INFO(log, "Sleep for a while and will try to append record again, query_id={}", query_id);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
+        }
     }
+    LOG_ERROR(log, "Failed to append record to DistributedWriteAheadLog, query_id={}, error={}", context->getCurrentQueryId(), result_code);
+    throw Exception("Failed to append record to DistributedWriteAheadLog, error={}", result_code);
 }
 
 }

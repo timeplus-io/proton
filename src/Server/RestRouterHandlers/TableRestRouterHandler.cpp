@@ -25,7 +25,9 @@ namespace DB
     
 namespace ErrorCodes
 {
+    extern const int TABLE_ALREADY_EXISTS;
     extern const int UNKNOWN_DATABASE;
+    extern const int UNKNOWN_TABLE;
 }
 
 std::map<String, std::map<String, String> > TableRestRouterHandler::update_schema = {
@@ -86,13 +88,14 @@ bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & paylo
     return validateSchema(update_schema, payload, error_msg);
 }
 
-String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */, Int32 & /*http_status */) const
+String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
 {
     const String & database_name = getPathParameter("database");
     const auto & database = DatabaseCatalog::instance().tryGetDatabase(database_name);
 
     if (!database)
     {
+        http_status = HTTPResponse::HTTP_BAD_REQUEST;
         return jsonErrorResponse(fmt::format("Databases {} does not exist.", database_name), ErrorCodes::UNKNOWN_DATABASE);
     }
 
@@ -110,8 +113,16 @@ String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* pay
     return resp_str;
 }
 
-String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & /*http_status*/) const
+String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
 {
+    const auto & database_name = getPathParameter("database");
+    const auto & table_name = payload->get("name").toString();
+    if (CatalogService::instance(query_context).tableExists(database_name, table_name))
+    {
+        http_status = HTTPResponse::HTTP_BAD_REQUEST;
+        return jsonErrorResponse(fmt::format("Table {}.{} already exists.", database_name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
+    }
+
     const auto & shard = getQueryParameter("shard");
     const auto & query = getCreationSQL(payload, shard);
 
@@ -126,10 +137,16 @@ String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & paylo
     return processQuery(query);
 }
 
-String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & /*http_status*/) const
+String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
 {
     const String & database_name = getPathParameter("database");
     const String & table_name = getPathParameter("table");
+
+    if (!CatalogService::instance(query_context).tableExists(database_name, table_name))
+    {
+        http_status = HTTPResponse::HTTP_BAD_REQUEST;
+        return jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database_name, table_name), ErrorCodes::UNKNOWN_TABLE);
+    }
 
     LOG_INFO(log, "Updating table {}.{}", database_name, table_name);
     std::vector<String> create_segments;
@@ -150,16 +167,22 @@ String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payl
     return processQuery(query);
 }
 
-String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & /*http_status*/) const
+String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
 {
+    const String & database_name = getPathParameter("database");
+    const String & table_name = getPathParameter("table");
+
+    if (!CatalogService::instance(query_context).tableExists(database_name, table_name))
+    {
+        http_status = HTTPResponse::HTTP_BAD_REQUEST;
+        return jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database_name, table_name), ErrorCodes::UNKNOWN_TABLE);
+    }
+
     if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
     {
         query_context->setDistributedDDLOperation(true);
         query_context->setQueryParameter("_payload", "{}");
     }
-
-    const String & database_name = getPathParameter("database");
-    const String & table_name = getPathParameter("table");
     return processQuery("DROP TABLE " + database_name + "." + table_name);
 }
 

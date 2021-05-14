@@ -392,6 +392,12 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
             }
 
             LOG_WARNING(log, "Failed to commit placement decision for create table payload={}, tried {} times", payload, i + 1);
+
+            if (i < MAX_RETRIES - 1)
+            {
+                LOG_INFO(log, "Sleep for a while and will try again.");
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
+            }
         }
 
         LOG_ERROR(log, "Failed to commit placement decision for create table payload={}", payload);
@@ -521,10 +527,20 @@ void DDLService::commit(Int64 last_sn)
                 /// table or delete table, it shall be OK. For alter table, it may depend ?
                 LOG_ERROR(log, "Failed to commit offset={} error={} tried_times={}", last_sn, err, i);
             }
+            else
+            {
+                return;
+            }
         }
         catch (...)
         {
             LOG_ERROR(log, "Failed to commit offset={} exception={}, tried_times={}", last_sn, getCurrentExceptionMessage(true, true), i);
+        }
+
+        if (i < MAX_RETRIES - 1)
+        {
+            LOG_INFO(log, "Sleep for a while and will try to commit offset={} again.", last_sn);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
         }
     }
 }
