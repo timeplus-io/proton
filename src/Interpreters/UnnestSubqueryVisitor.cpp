@@ -65,7 +65,7 @@ void UnnestSubqueryVisitorData::visit(ASTTableExpression & table, ASTSelectQuery
     ASTs subquery_selects;
     subquery_selects_map.reserve(sub_query->size());
     subquery_selects.reserve(sub_query->size());
-    if (!mergeable(*sub_query, asterisk_in_subquery, subquery_selects_map, subquery_selects))
+    if (!mergeable(*sub_query, parent_select.select()->children, asterisk_in_subquery, subquery_selects_map, subquery_selects))
     {
         return;
     }
@@ -131,6 +131,7 @@ void UnnestSubqueryVisitorData::rewriteColumn(
 
 bool UnnestSubqueryVisitorData::mergeable(
     const ASTSelectQuery & child_query,
+    const ASTs & parent_selects,
     bool & asterisk_in_subquery,
     std::unordered_map<String, ASTPtr> & subquery_selects_map,
     ASTs & subquery_selects)
@@ -161,6 +162,45 @@ bool UnnestSubqueryVisitorData::mergeable(
             return false;
         }
     }
+
+    if (!asterisk_in_subquery)
+    {
+        for (const auto & parent_select_item : parent_selects)
+        {
+            if (!isValid(parent_select_item, subquery_selects_map))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool UnnestSubqueryVisitorData::isValid(const ASTPtr & ast, const std::unordered_map<String, ASTPtr> & subquery_selects_map) const
+{
+    if (ast->as<ASTAsterisk>() || ast->as<ASTQualifiedAsterisk>())
+    {
+        return true;
+    }
+
+    if (auto * identifier = ast->as<ASTIdentifier>())
+    {
+        const String & column_name = identifier->getColumnName();
+        if (subquery_selects_map.find(column_name) == subquery_selects_map.end())
+        {
+            return false;
+        }
+    }
+
+    for (auto & child : ast->children)
+    {
+        if (!isValid(child, subquery_selects_map))
+        {
+            return false;
+        }
+    }
+
     return true;
 }
 
