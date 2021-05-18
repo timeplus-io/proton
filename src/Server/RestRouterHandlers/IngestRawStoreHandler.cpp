@@ -16,7 +16,7 @@ namespace ErrorCodes
     extern const int INVALID_CONFIG_PARAMETER;
 }
 
-String IngestRawStoreHandler::execute(ReadBuffer & input, HTTPServerResponse & /* response */, Int32 & http_status) const
+String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) const
 {
     const auto & database_name = getPathParameter("database", "");
     const auto & table_name = getPathParameter("rawstore", "");

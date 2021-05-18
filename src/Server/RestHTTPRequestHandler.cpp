@@ -360,9 +360,8 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
 
     /// Set keep alive timeout
     const auto & config = server.config();
-    setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
 
-    Int32 http_status = HTTPResponse::HTTP_OK;
+    setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
 
     try
     {
@@ -380,12 +379,7 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
         }
 
         LOG_DEBUG(log, "Start processing query_id={} user={}", client_info.current_query_id, client_info.current_user);
-        auto response_payload{router_handler->execute(request, response, http_status)};
-
-        /// Send back result
-        response.setStatusAndReason(HTTPResponse::HTTPStatus(http_status));
-        *response.send() << response_payload << std::endl;
-
+        router_handler->execute(request, response);
         LOG_DEBUG(log, "End of processing query_id={} user={}", client_info.current_query_id, client_info.current_user);
     }
     catch (...)

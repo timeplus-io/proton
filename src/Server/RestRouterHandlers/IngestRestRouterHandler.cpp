@@ -14,7 +14,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
 }
 
-String IngestRestRouterHandler::execute(ReadBuffer & input, HTTPServerResponse & /* response */, Int32 & http_status) const
+String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status) const
 {
     const auto & database_name = getPathParameter("database", "");
     const auto & table_name = getPathParameter("table", "");

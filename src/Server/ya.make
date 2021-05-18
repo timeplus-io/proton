@@ -33,15 +33,16 @@ SRCS(
     ProtocolServerAdapter.cpp
     ReplicasStatusHandler.cpp
     RestHTTPRequestHandler.cpp
-    RestRouterHandlers/ColumnRestRouterHandler.cpp
     RestRouterHandlers/DatabaseRestRouterHandler.cpp
     RestRouterHandlers/IngestRawStoreHandler.cpp
     RestRouterHandlers/IngestRestRouterHandler.cpp
     RestRouterHandlers/IngestStatusHandler.cpp
     RestRouterHandlers/RawstoreTableRestRouterHandler.cpp
+    RestRouterHandlers/RestRouterHandler.cpp
     RestRouterHandlers/RestStatusHandler.cpp
     RestRouterHandlers/SQLAnalyzerRestRouterHandler.cpp
     RestRouterHandlers/SchemaValidator.cpp
+    RestRouterHandlers/SearchHandler.cpp
     RestRouterHandlers/TableRestRouterHandler.cpp
     RestRouterHandlers/TabularTableRestRouterHandler.cpp
     RestRouterHandlers/TaskRestRouterHandler.cpp

@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int BAD_REQUEST_PARAMETER;
@@ -37,32 +36,7 @@ public:
     /// a correct `http_status` code will be set by trying best.
     /// This function may throw, and caller will need catch the exception
     /// and sends back HTTP `500` to clients
-    String execute(HTTPServerRequest & request, HTTPServerResponse & response, Int32 & http_status)
-    {
-        setupQueryParams(request);
-
-        http_status = HTTPResponse::HTTP_OK;
-
-        if (streaming())
-        {
-            return execute(request.getStream(), response, http_status);
-        }
-        else
-        {
-            String data = "{}";
-
-            auto size = request.getContentLength();
-            if (size > 0)
-            {
-                data.resize(size);
-                request.getStream().readStrict(data.data(), size);
-            }
-
-            Poco::JSON::Parser parser;
-            auto payload = parser.parse(data).extract<Poco::JSON::Object::Ptr>();
-            return execute(payload, http_status);
-        }
-    }
+    void execute(HTTPServerRequest & request, HTTPServerResponse & response);
 
     const String & getPathParameter(const String & name, const String & default_value = "") const
     {
@@ -84,7 +58,13 @@ public:
         return query_parameters->get(name, default_value);
     }
 
+    const String & getAcceptEncoding() const { return accepted_encoding; }
+
+    Int64 getContentLength() const { return content_length; }
+
     bool hasQueryParameter(const String & name) const { return query_parameters->has(name); }
+
+    virtual bool streamingOutput() const { return false; }
 
 public:
     static String jsonErrorResponse(const String & error_msg, int error_code, const String & query_id)
@@ -96,7 +76,6 @@ public:
         error_resp.set("code", error_code);
         error_resp.set("request_id", query_id);
         error_resp.stringify(error_str_stream, 0);
-
         return error_str_stream.str();
     }
 
@@ -108,12 +87,18 @@ protected:
 
 private:
     /// Override this function if derived handler need read data in a streaming way from http input
-    virtual bool streaming() const { return false; }
+    virtual bool streamingInput() const { return false; }
 
-    /// Streaming `execute`, so far Ingest API probably needs override this function
-    virtual String execute(ReadBuffer & /* input */, HTTPServerResponse & /* response */, Int32 & http_status) const
+    /// Handle the request in streaming way, so far Ingest API probably needs override this function
+    virtual String execute(ReadBuffer & /* input */, Int32 & http_status) const { return handleNotImplemented(http_status); }
+
+    /// Sending response in a streaming way
+    virtual void execute(const Poco::JSON::Object::Ptr & /* payload */, HTTPServerResponse & response) const
     {
-        return handleNotImplemented(http_status);
+        Int32 http_status = 200;
+        auto response_payload{handleNotImplemented(http_status)};
+        response.setStatusAndReason(HTTPResponse::HTTPStatus(http_status));
+        *response.send() << response_payload << std::endl;
     }
 
     String handleNotImplemented(Int32 & http_status) const
@@ -183,6 +168,13 @@ private:
     virtual bool validateDelete(const Poco::JSON::Object::Ptr & /* payload */, String & /* error_msg */) const { return true; }
     virtual bool validatePatch(const Poco::JSON::Object::Ptr & /* payload */, String & /* error_msg */) const { return true; }
 
+    void setupHTTPContext(const HTTPServerRequest & request)
+    {
+        accepted_encoding = request.get("Accept-Encoding", "");
+        content_length = request.getContentLength64();
+        setupQueryParams(request);
+    }
+
     void setupQueryParams(const HTTPServerRequest & request) { query_parameters = std::make_unique<HTMLForm>(request); }
 
 protected:
@@ -191,6 +183,8 @@ protected:
 
     std::unordered_map<String, String> path_parameters;
     std::unique_ptr<HTMLForm> query_parameters;
+    String accepted_encoding;
+    Int64 content_length;
 };
 
 using RestRouterHandlerPtr = std::shared_ptr<RestRouterHandler>;

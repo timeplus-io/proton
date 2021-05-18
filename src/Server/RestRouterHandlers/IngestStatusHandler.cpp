@@ -86,7 +86,7 @@ String makeBatchResponse(const std::vector<IngestingBlocks::IngestStatus> & stat
 
 bool IngestStatusHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
-    return !validateSchema(POLL_SCHEMA, payload, error_msg);
+    return validateSchema(POLL_SCHEMA, payload, error_msg);
 }
 
 bool IngestStatusHandler::categorizePollIds(const std::vector<String> & poll_ids, TablePollIdMap & table_poll_ids, String & error) const
