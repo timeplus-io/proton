@@ -8,6 +8,10 @@ import threading
 from helpers.cluster import ClickHouseCluster
 from helpers.client import QueryRuntimeException
 
+# Daisy: start.
+pytestmark = pytest.mark.skip(reason="daisy cicd")
+# Daisy: ends.
+
 cluster = ClickHouseCluster(__file__)
 
 node1 = cluster.add_instance('node1', main_configs=['configs/remote_servers.xml', 'configs/named_collections.xml'], with_mysql=True)

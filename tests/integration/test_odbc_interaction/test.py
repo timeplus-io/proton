@@ -11,6 +11,10 @@ from helpers.test_tools import assert_eq_with_retry
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from multiprocessing.dummy import Pool
 
+# Daisy: start.
+pytestmark = pytest.mark.skip(reason="daisy cicd")
+# Daisy: ends.
+
 cluster = ClickHouseCluster(__file__)
 node1 = cluster.add_instance('node1', with_odbc_drivers=True, with_mysql=True, with_postgres=True,
                              main_configs=['configs/openssl.xml', 'configs/odbc_logging.xml'],

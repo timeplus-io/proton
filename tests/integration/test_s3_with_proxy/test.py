@@ -5,6 +5,14 @@ import time
 import pytest
 from helpers.cluster import ClickHouseCluster
 
+# Daisy: start.
+pytestmark = pytest.mark.skip(reason="daisy cicd")
+# Daisy: ends.
+
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().addHandler(logging.StreamHandler())
+
+
 # Runs simple proxy resolver in python env container.
 def run_resolver(cluster):
     container_id = cluster.get_container_id('resolver')

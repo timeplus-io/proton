@@ -4,6 +4,10 @@ from multiprocessing.dummy import Pool
 
 from helpers.cluster import ClickHouseCluster
 
+# Daisy: start.
+pytestmark = pytest.mark.skip(reason="daisy cicd")
+# Daisy: ends.
+
 cluster = ClickHouseCluster(__file__)
 node1 = cluster.add_instance('node1', main_configs=['configs/named_collections.xml'], with_postgres=True)
 node2 = cluster.add_instance('node2', main_configs=['configs/named_collections.xml'], with_postgres_cluster=True)

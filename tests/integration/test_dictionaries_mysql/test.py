@@ -8,6 +8,15 @@ import logging
 
 DICTS = ['configs/dictionaries/mysql_dict1.xml', 'configs/dictionaries/mysql_dict2.xml']
 CONFIG_FILES = ['configs/remote_servers.xml', 'configs/named_collections.xml']
+
+# Daisy: start.
+pytestmark = pytest.mark.skip(reason="daisy cicd")
+# Daisy: ends.
+
+CONFIG_FILES = ['configs/dictionaries/mysql_dict1.xml', 'configs/dictionaries/mysql_dict2.xml',
+                'configs/remote_servers.xml']
+CONFIG_FILES += ['configs/enable_dictionaries.xml', 'configs/log_conf.xml']
+
 cluster = ClickHouseCluster(__file__)
 instance = cluster.add_instance('instance', main_configs=CONFIG_FILES, with_mysql=True, dictionaries=DICTS)
 
