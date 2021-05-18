@@ -110,11 +110,14 @@ public:
     TablePtrs findTableByDB(const String & database) const;
 
     bool tableExists(const String & database, const String & table) const;
+    std::pair<bool, bool> columnExists(const String & database, const String & table, const String & column) const;
 
     TablePtrs tables() const;
     std::vector<String> databases() const;
 
     ClusterPtr tableCluster(const String & database, const String & table, Int32 replication_factor, Int32 shards);
+
+    void deleteCatalogForNode(const NodePtr & node);
 
 private:
     bool setTableStorageByName(const String & database, const String & table, const StoragePtr & storage);

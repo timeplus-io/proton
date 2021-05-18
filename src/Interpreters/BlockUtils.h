@@ -16,6 +16,11 @@ Block buildBlock(
     const std::vector<std::pair<String, std::vector<String>>> & string_cols,
     const std::vector<std::pair<String, std::vector<Int64>>> & int64_cols);
 
-void appendBlock(Block && block, ContextPtr context, IDistributedWriteAheadLog::OpCode opCode, const Poco::Logger * log);
+void appendDDLBlock(
+    Block && block,
+    ContextPtr context,
+    const std::vector<String> & parameter_names,
+    IDistributedWriteAheadLog::OpCode opCode,
+    const Poco::Logger * log);
 
 }

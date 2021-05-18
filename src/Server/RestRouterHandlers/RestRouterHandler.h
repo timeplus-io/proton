@@ -51,6 +51,14 @@ public:
         }
     }
 
+    void setupDistributedQueryParameters(const std::map<String, String> & parameters, const Poco::JSON::Object::Ptr & payload = nullptr) const;
+
+
+    inline bool isDistributedDDL() const
+    {
+        return query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false";
+    }
+
     void setPathParameter(const String & name, const String & value) { path_parameters[name] = value; }
 
     const String & getQueryParameter(const String & name, const String & default_value = "") const

@@ -20,9 +20,7 @@ protected:
     static String getPartitionExpr(const Poco::JSON::Object::Ptr & payload, const String & default_granularity);
     static String getStringValueFrom(const Poco::JSON::Object::Ptr & payload, const String & key, const String & default_value);
 
-    String buildResponse() const;
     String getEngineExpr(const Poco::JSON::Object::Ptr & payload) const;
-    String processQuery(const String & query) const;
     String getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard) const;
 
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
@@ -35,7 +33,6 @@ protected:
 
     virtual void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const = 0;
     virtual void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_ast) const;
-    ASTPtr parseQuerySyntax(const String & create_table_query) const;
 
     virtual String getDefaultPartitionGranularity() const = 0;
     virtual String getDefaultOrderByGranularity() const = 0;

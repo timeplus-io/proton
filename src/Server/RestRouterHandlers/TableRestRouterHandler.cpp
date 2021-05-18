@@ -1,20 +1,12 @@
 #include "TableRestRouterHandler.h"
+#include "ColumnDefinition.h"
 #include "SchemaValidator.h"
 
-#include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Interpreters/executeQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserQuery.h>
-#include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
-#include <Storages/ColumnsDescription.h>
-
-#if !defined(ARCADIA_BUILD)
-#    include <Parsers/New/parseQuery.h> // Y_IGNORE
-#endif
 
 #include <boost/algorithm/string/join.hpp>
 
@@ -126,15 +118,12 @@ String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & paylo
     const auto & shard = getQueryParameter("shard");
     const auto & query = getCreationSQL(payload, shard);
 
-    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
+    if (isDistributedDDL())
     {
-        std::stringstream payload_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        payload->stringify(payload_str_stream, 0);
-        query_context->setQueryParameter("_payload", payload_str_stream.str());
-        query_context->setDistributedDDLOperation(true);
+        setupDistributedQueryParameters({}, payload);
     }
 
-    return processQuery(query);
+    return processQuery(query, query_context);
 }
 
 String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
@@ -155,16 +144,12 @@ String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payl
 
     const String & query = boost::algorithm::join(create_segments, " ");
 
-    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
+    if (isDistributedDDL())
     {
-        query_context->setDistributedDDLOperation(true);
-
-        std::stringstream payload_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        payload->stringify(payload_str_stream, 0);
-        query_context->setQueryParameter("_payload", payload_str_stream.str());
+        setupDistributedQueryParameters({}, payload);
     }
 
-    return processQuery(query);
+    return processQuery(query, query_context);
 }
 
 String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
@@ -178,12 +163,12 @@ String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*p
         return jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database_name, table_name), ErrorCodes::UNKNOWN_TABLE);
     }
 
-    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
+    if (isDistributedDDL())
     {
-        query_context->setDistributedDDLOperation(true);
-        query_context->setQueryParameter("_payload", "{}");
+        setupDistributedQueryParameters({});
     }
-    return processQuery("DROP TABLE " + database_name + "." + table_name);
+
+    return processQuery("DROP TABLE " + database_name + "." + table_name, query_context);
 }
 
 void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const
@@ -244,33 +229,6 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
     resp_table.set("columns", columns_mapping_json);
 }
 
-ASTPtr TableRestRouterHandler::parseQuerySyntax(const String & create_table_query) const
-{
-    const size_t & max_query_size = query_context->getSettingsRef().max_query_size;
-    const auto & max_parser_depth = query_context->getSettingsRef().max_parser_depth;
-    const char * begin = create_table_query.data();
-    const char * end = create_table_query.data() + create_table_query.size();
-
-    ASTPtr ast;
-
-#if !defined(ARCADIA_BUILD)
-    if (query_context->getSettingsRef().use_antlr_parser)
-    {
-        ast = parseQuery(begin, end, max_query_size, max_parser_depth, query_context->getCurrentDatabase());
-    }
-    else
-    {
-        ParserQuery parser(end);
-        ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
-    }
-#else
-    ParserQuery parser(end);
-    ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
-#endif
-
-    return ast;
-}
-
 String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const
 {
     if (query_context->isDistributed())
@@ -324,29 +282,6 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
     }
 
     return boost::algorithm::join(create_segments, " ");
-}
-
-String TableRestRouterHandler::processQuery(const String & query) const
-{
-    BlockIO io{executeQuery(query, query_context, false /* internal */)};
-
-    if (io.pipeline.initialized())
-    {
-        return "TableRestRouterHandler execute io.pipeline.initialized not implemented";
-    }
-    io.onFinish();
-
-    return buildResponse();
-}
-
-String TableRestRouterHandler::buildResponse() const
-{
-    Poco::JSON::Object resp;
-    resp.set("query_id", query_context->getCurrentQueryId());
-    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    resp.stringify(resp_str_stream, 0);
-
-    return resp_str_stream.str();
 }
 
 }

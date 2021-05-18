@@ -57,7 +57,7 @@ void RestStatusHandler::buildResponse(const Block & block, String & resp) const
         }
     }
     build_info.set("name", "Daisy");
-    
+
     Poco::JSON::Object json_resp;
     json_resp.set("build", build_info);
 

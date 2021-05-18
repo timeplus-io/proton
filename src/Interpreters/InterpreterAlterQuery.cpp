@@ -23,6 +23,7 @@
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
 #include <Common/typeid_cast.h>
+#include <Poco/Net/HTTPRequest.h>
 
 #include <DistributedMetadata/CatalogService.h>
 
@@ -44,6 +45,40 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     /// Daisy : end
 }
+
+
+/// Daisy : start
+namespace
+{
+IDistributedWriteAheadLog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
+{
+    if (queryParams.contains("column"))
+    {
+        auto iter = queryParams.find("query_method");
+
+        if (iter->second == Poco::Net::HTTPRequest::HTTP_POST)
+        {
+            return IDistributedWriteAheadLog::OpCode::CREATE_COLUMN;
+        }
+        else if (iter->second == Poco::Net::HTTPRequest::HTTP_PATCH)
+        {
+            return IDistributedWriteAheadLog::OpCode::ALTER_COLUMN;
+        }
+        else if (iter->second == Poco::Net::HTTPRequest::HTTP_DELETE)
+        {
+            return IDistributedWriteAheadLog::OpCode::DELETE_COLUMN;
+        }
+        else
+        {
+            assert(false);
+            return IDistributedWriteAheadLog::OpCode::UNKNOWN;
+        }
+    }
+
+    return IDistributedWriteAheadLog::OpCode::ALTER_TABLE;
+}
+}
+/// Daisy : end
 
 
 InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextPtr context_) : WithContext(context_), query_ptr(query_ptr_)
@@ -251,7 +286,8 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         /// Schema: (payload, database, table, timestamp, query_id, user)
         Block block = buildBlock(string_cols, int32_cols, uint64_cols);
 
-        appendBlock(std::move(block), ctx, IDistributedWriteAheadLog::OpCode::ALTER_TABLE, log);
+        appendDDLBlock(
+            std::move(block), ctx, {"table_type", "column", "query_method"}, getAlterTableParamOpCode(ctx->getQueryParameters()), log);
 
         LOG_INFO(
             log, "Request of altering DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());

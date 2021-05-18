@@ -426,6 +426,7 @@ void StorageDistributedMergeTree::truncate(const ASTPtr & query, const StorageMe
 void StorageDistributedMergeTree::alter(const AlterCommands & commands, ContextPtr context_, TableLockHolder & table_lock_holder)
 {
     storage->alter(commands, context_, table_lock_holder);
+    setInMemoryMetadata(storage->getInMemoryMetadata());
 }
 
 NamesAndTypesList StorageDistributedMergeTree::getVirtuals() const

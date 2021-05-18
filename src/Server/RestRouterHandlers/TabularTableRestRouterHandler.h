@@ -14,7 +14,6 @@ private:
     static std::map<String, std::map<String, String>> create_schema;
     static std::map<String, std::map<String, String>> column_schema;
 
-    String getColumnDefinition(const Poco::JSON::Object::Ptr & column) const;
     void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const override;
 
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;

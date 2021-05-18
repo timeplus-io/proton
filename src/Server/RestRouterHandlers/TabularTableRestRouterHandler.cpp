@@ -1,6 +1,8 @@
 #include "TabularTableRestRouterHandler.h"
+#include "ColumnDefinition.h"
 #include "SchemaValidator.h"
 
+#include <Interpreters/executeQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
 
@@ -56,8 +58,7 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
             continue;
         }
 
-        const String & query = table->create_table_query;
-        const auto & query_ptr = parseQuerySyntax(query);
+        const auto & query_ptr = parseQuery(table->create_table_query, query_context);
         const auto & create = query_ptr->as<const ASTCreateQuery &>();
 
         Poco::JSON::Object table_mapping_json;
@@ -121,7 +122,7 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
     std::vector<String> columns_definition;
     for (const auto & col : *columns)
     {
-        columns_definition.push_back(getColumnDefinition(col.extract<Poco::JSON::Object::Ptr>()));
+        columns_definition.push_back(getCreateColumnDefination(col.extract<Poco::JSON::Object::Ptr>()));
     }
 
     if (payload->has("_time_column"))
@@ -134,43 +135,6 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
     }
 
     return boost::algorithm::join(columns_definition, ",");
-}
-
-String TabularTableRestRouterHandler::getColumnDefinition(const Poco::JSON::Object::Ptr & column) const
-{
-    std::vector<String> column_definition;
-
-    column_definition.push_back(column->get("name").toString());
-    if (column->has("nullable") && column->get("nullable"))
-    {
-        column_definition.push_back(" Nullable(" + column->get("type").toString() + ")");
-    }
-    else
-    {
-        column_definition.push_back(" " + column->get("type").toString());
-    }
-
-    if (column->has("default"))
-    {
-        column_definition.push_back(" DEFAULT " + column->get("default").toString());
-    }
-
-    if (column->has("compression_codec"))
-    {
-        column_definition.push_back(" CODEC(" + column->get("compression_codec").toString() + ")");
-    }
-
-    if (column->has("ttl_expression"))
-    {
-        column_definition.push_back(" TTL " + column->get("ttl_expression").toString());
-    }
-
-    if (column->has("skipping_index_expression"))
-    {
-        column_definition.push_back(", " + column->get("skipping_index_expression").toString());
-    }
-
-    return boost::algorithm::join(column_definition, " ");
 }
 
 String TabularTableRestRouterHandler::getDefaultPartitionGranularity() const

@@ -37,6 +37,11 @@ public:
         DELETE_TABLE,
         ALTER_TABLE,
 
+        /// Column Metadata
+        CREATE_COLUMN,
+        DELETE_COLUMN,
+        ALTER_COLUMN,
+
         /// Database
         CREATE_DATABASE,
         DELETE_DATABASE,

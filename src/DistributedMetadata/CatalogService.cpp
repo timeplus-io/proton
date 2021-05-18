@@ -411,6 +411,65 @@ bool CatalogService::tableExists(const String & database, const String & table) 
     return indexed_by_name.find(std::make_pair(database, table)) != indexed_by_name.end();
 }
 
+std::pair<bool, bool> CatalogService::columnExists(const String & database, const String & table, const String & column) const
+{
+    const auto & tables = findTableByName(database, table);
+
+    if (tables.empty())
+        return {false, false};
+
+    const auto & query_ptr = parseQuery(tables[0]->create_table_query, global_context);
+    const auto & create = query_ptr->as<const ASTCreateQuery &>();
+    const auto & columns_ast = create.columns_list->columns;
+
+    for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
+    {
+        const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
+        if (col_decl.name == column)
+        {
+            return {true, true};
+        }
+    }
+
+    return {true, false};
+}
+
+void CatalogService::deleteCatalogForNode(const NodePtr & node)
+{
+    std::unique_lock guard{catalog_rwlock};
+
+    auto iter = indexed_by_node.find(node->identity);
+    if (iter == indexed_by_node.end())
+    {
+        return;
+    }
+
+    for (const auto & p : iter->second)
+    {
+        auto iter_by_name = indexed_by_name.find(std::make_pair(p.second->database, p.second->name));
+        assert(iter_by_name != indexed_by_name.end());
+
+        /// Deleted table, remove from `indexed_by_name` and `indexed_by_id`
+        auto removed = iter_by_name->second.erase(std::make_pair(p.second->node_identity, p.second->shard));
+        assert(removed == 1);
+        (void)removed;
+
+        if (iter_by_name->second.empty())
+        {
+            indexed_by_name.erase(iter_by_name);
+        }
+
+        {
+            std::unique_lock storage_guard{storage_rwlock};
+            removed = indexed_by_id.erase(p.second->uuid);
+            assert(removed == 1);
+            (void)removed;
+        }
+    }
+
+    iter->second.clear();
+}
+
 ClusterPtr CatalogService::tableCluster(const String & database, const String & table, Int32 replication_factor, Int32 shards)
 {
     /// FIXME : pick the right replica to service the query request
@@ -578,7 +637,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
 {
     if (snapshot.empty())
     {
-        return;
+        return deleteCatalogForNode(node);
     }
 
     std::unique_lock guard{catalog_rwlock};

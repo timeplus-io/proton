@@ -1238,4 +1238,33 @@ void executeTrivialBlockIO(BlockIO & streams, ContextPtr context)
     streams.onFinish();
 }
 
+/// Daisy : starts
+ASTPtr parseQuery(const String & query, ContextPtr query_context)
+{
+    const size_t & max_query_size = query_context->getSettingsRef().max_query_size;
+    const auto & max_parser_depth = query_context->getSettingsRef().max_parser_depth;
+    const char * begin = query.data();
+    const char * end = query.data() + query.size();
+
+    ASTPtr ast;
+
+#if !defined(ARCADIA_BUILD)
+    if (query_context->getSettingsRef().use_antlr_parser)
+    {
+        ast = parseQuery(begin, end, max_query_size, max_parser_depth, query_context->getCurrentDatabase());
+    }
+    else
+    {
+        ParserQuery parser(end);
+        ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
+    }
+#else
+    ParserQuery parser(end);
+    ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
+#endif
+
+    return ast;
+}
+/// Daisy : ends
+
 }

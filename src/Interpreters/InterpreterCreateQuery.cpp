@@ -949,7 +949,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor)
     Block  block = buildBlock(string_cols, int32_cols, uint64_cols);
 
-    appendBlock(std::move(block), ctx, IDistributedWriteAheadLog::OpCode::CREATE_TABLE, log);
+    appendDDLBlock(std::move(block), ctx, {"table_type"}, IDistributedWriteAheadLog::OpCode::CREATE_TABLE, log);
 
     LOG_INFO(log, "Request of creating DistributedMergeTree query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
@@ -1001,7 +1001,7 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
         Block block = buildBlock(string_cols, int32_cols, uint64_cols);
         /// Schema: (payload, database, timestamp, query_id, user)
 
-        appendBlock(std::move(block), ctx, IDistributedWriteAheadLog::OpCode::CREATE_DATABASE, log);
+        appendDDLBlock(std::move(block), ctx, {"table_type"}, IDistributedWriteAheadLog::OpCode::CREATE_DATABASE, log);
 
         LOG_INFO(
             log, "Request of create database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());

@@ -35,12 +35,9 @@ String DatabaseRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* 
 
 String DatabaseRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
 {
-    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
+    if (isDistributedDDL())
     {
-        std::stringstream payload_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        payload->stringify(payload_str_stream, 0);
-        query_context->setQueryParameter("_payload", payload_str_stream.str());
-        query_context->setDistributedDDLOperation(true);
+        setupDistributedQueryParameters({}, payload);
     }
 
     const String & database_name = payload->get("name").toString();
@@ -51,10 +48,9 @@ String DatabaseRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & pa
 
 String DatabaseRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
 {
-    if (query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false")
+    if (isDistributedDDL())
     {
-        query_context->setDistributedDDLOperation(true);
-        query_context->setQueryParameter("_payload", "{}");
+        setupDistributedQueryParameters({});
     }
 
     const String & database_name = getPathParameter("database");
