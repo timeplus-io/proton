@@ -39,9 +39,6 @@ public:
         String primary_key;
         String sampling_key;
         String storage_policy;
-        UInt64 total_rows = 0;
-        UInt64 total_bytes = 0;
-        UInt8 is_temporary = 0;
         Int32 shard = 0;
 
         Table(const String & node_identity_, const String & host_) : node_identity(node_identity_), host(host_) { }

@@ -124,7 +124,7 @@ void appendDDLBlock(
         }
     }
 
-    auto wal = DistributedWriteAheadLogPool::instance(context->getGlobalContext()).getDefault();
+    auto wal = DistributedWriteAheadLogPool::instance(context->getGlobalContext()).getMeta();
     if (!wal)
     {
         LOG_ERROR(

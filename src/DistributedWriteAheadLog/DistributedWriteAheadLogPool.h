@@ -20,7 +20,7 @@ public:
 
     DistributedWriteAheadLogPtr get(const String & id) const;
 
-    DistributedWriteAheadLogPtr getDefault() const;
+    DistributedWriteAheadLogPtr getMeta() const;
 
     void startup();
     void shutdown();
@@ -34,7 +34,8 @@ private:
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 
-    DistributedWriteAheadLogPtr default_wal;
+    String default_cluster = "";
+    DistributedWriteAheadLogPtr meta_wal;
     std::unordered_map<String, std::vector<DistributedWriteAheadLogPtr>> wals;
     mutable std::unordered_map<String, std::atomic_uint64_t> indexes;
 

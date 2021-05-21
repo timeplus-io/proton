@@ -7,6 +7,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/executeSelectQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -111,65 +112,19 @@ void CatalogService::doBroadcast()
 
     /// Default max_block_size is 65505 (rows) which shall be bigger enough for a block to contain
     /// all tables on a single node
-    String query = "SELECT * FROM system.tables WHERE (database != 'system') OR (database = 'system' AND name='tables')";
+    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, primary_key, sampling_key, storage_policy";
+    String query = fmt::format(
+        "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system') OR (database = 'system' AND name='tasks'))", cols);
 
     /// FIXME, QueryScope
     /// CurrentThread::attachQueryContext(context);
     auto context = Context::createCopy(global_context);
     context->makeQueryContext();
-    BlockIO io{executeQuery(query, context, true /* internal */)};
 
-    if (io.pipeline.initialized())
-    {
-        processQueryWithProcessors(io.pipeline);
-    }
-    else if (io.in)
-    {
-        processQuery(io.in);
-    }
-    else
-    {
-        assert(false);
-        LOG_ERROR(log, "Failed to execute table query");
-    }
-}
-
-void CatalogService::processQueryWithProcessors(QueryPipeline & pipeline)
-{
-    PullingAsyncPipelineExecutor executor(pipeline);
-    Block block;
-
-    while (executor.pull(block, 100))
-    {
-        if (block)
-        {
-            append(std::move(block));
-            assert(!block);
-        }
-    }
-}
-
-void CatalogService::processQuery(BlockInputStreamPtr & in)
-{
-    AsynchronousBlockInputStream async_in(in);
-    async_in.readPrefix();
-
-    while (true)
-    {
-        if (async_in.poll(100))
-        {
-            Block block{async_in.read()};
-            if (!block)
-            {
-                break;
-            }
-
-            append(std::move(block));
-            assert(!block);
-        }
-    }
-
-    async_in.readSuffix();
+    executeSelectQuery(query, context, [this](Block && block) {
+        append(std::move(block));
+        assert(!block);
+    });
 }
 
 void CatalogService::append(Block && block)
@@ -183,8 +138,7 @@ void CatalogService::append(Block && block)
     record.headers["_version"] = "1";
 
     /// FIXME : reschedule
-    int retries = 3;
-    while (retries--)
+    for (int i = 0; i < 3; ++i)
     {
         const auto & result = dwal->append(record, dwal_append_ctx);
         if (result.err == ErrorCodes::OK)
@@ -567,9 +521,6 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
             {"name", &table->name},
             {"engine", &table->engine},
             {"uuid", &table->uuid},
-            {"metadata_path", &table->metadata_path},
-            {"data_paths", &table->data_paths},
-            {"dependencies_database", &table->dependencies_database},
             {"dependencies_table", &table->dependencies_table},
             {"create_table_query", &table->create_table_query},
             {"engine_full", &table->engine_full},
@@ -578,8 +529,6 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
             {"primary_key", &table->primary_key},
             {"sampling_key", &table->sampling_key},
             {"storage_policy", &table->storage_policy},
-            {"total_rows", &table->total_rows},
-            {"total_bytes", &table->total_bytes},
         };
 
         for (const auto & col : block)
@@ -587,11 +536,7 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
             auto it = kvp.find(col.name);
             if (it != kvp.end())
             {
-                if (col.name == "total_rows" || col.name == "total_bytes")
-                {
-                    *static_cast<UInt64 *>(it->second) = col.column->get64(row);
-                }
-                else if (col.name == "data_paths" || col.name == "dependencies_database" || col.name == "dependencies_table")
+                if (col.name == "dependencies_table")
                 {
                     /// String array
                     WriteBufferFromOwnString buffer;
@@ -729,7 +674,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             if (uuid != UUIDHelpers::Nil)
             {
                 auto removed = indexed_by_id.erase(uuid);
-		(void)removed;
+                (void)removed;
                 assert(removed);
                 assert(removed == 1);
             }

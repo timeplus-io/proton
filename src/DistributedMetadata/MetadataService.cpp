@@ -26,7 +26,7 @@ namespace
 
 MetadataService::MetadataService(const ContextPtr & global_context_, const String & service_name)
     : global_context(global_context_)
-    , dwal(DistributedWriteAheadLogPool::instance(global_context_).getDefault())
+    , dwal(DistributedWriteAheadLogPool::instance(global_context_).getMeta())
     , log(&Poco::Logger::get(service_name))
 {
 }

@@ -3,6 +3,7 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
 #include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
+#include <DistributedWriteAheadLog/DistributedWriteAheadLogName.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -184,7 +185,7 @@ size_t getClusterQueriedNodes(const Settings & settings, const ClusterPtr & clus
     return (num_remote_shards * settings.max_parallel_replicas) + num_local_shards;
 }
 
-std::string makeFormattedListOfShards(const ClusterPtr & cluster)
+String makeFormattedListOfShards(const ClusterPtr & cluster)
 {
     WriteBufferFromOwnString buf;
 
@@ -198,6 +199,19 @@ std::string makeFormattedListOfShards(const ClusterPtr & cluster)
     buf << "]";
 
     return buf.str();
+}
+
+String topic(const StorageID & storage_id, ContextPtr global_context)
+{
+    auto name = escapeDWalName(storage_id.getDatabaseName(), storage_id.getTableName());
+    if (name != "system.tasks")
+    {
+        return name;
+    }
+
+    /// We will need map "system.tasks" table to "__system_tasks" topic
+    String name_key = "cluster_settings.system_tasks.name";
+    return global_context->getConfigRef().getString(name_key);
 }
 }
 
@@ -414,7 +428,7 @@ void StorageDistributedMergeTree::checkTableCanBeDropped() const
 
 void StorageDistributedMergeTree::drop()
 {
-    /// FIXME : remove kafka topic, tear down tail thread
+    shutdown();
     storage->drop();
 }
 
@@ -1169,12 +1183,11 @@ void StorageDistributedMergeTree::backgroundConsumer()
     /// Sleep a while to let librdkafka to populate topic / partition metadata
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-    auto topic = getStorageID().getFullTableName();
     setThreadName("DistMergeTree");
 
     auto ssettings = storage_settings.get();
 
-    DistributedWriteAheadLogKafkaContext consume_ctx{topic, shard, sequenceNumberLoaded()};
+    DistributedWriteAheadLogKafkaContext consume_ctx{topic(getStorageID(), getContext()), shard, sequenceNumberLoaded()};
     consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
     consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshhold_ms.value;
     consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshhold_count;
@@ -1326,14 +1339,7 @@ void StorageDistributedMergeTree::initWal()
 
     shard = ssettings->shard.value;
 
-    if (ssettings->streaming_storage_cluster_id.value.empty())
-    {
-        dwal = DistributedWriteAheadLogPool::instance(getContext()).getDefault();
-    }
-    else
-    {
-        dwal = DistributedWriteAheadLogPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
-    }
+    dwal = DistributedWriteAheadLogPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
 
     if (!dwal)
     {
@@ -1342,9 +1348,7 @@ void StorageDistributedMergeTree::initWal()
 
     /// Cached ctx, reused by append. Multiple threads are accessing append context
     /// since librdkafka topic handle is thread safe, so we are good
-    /// FIXME, take care of kafka naming restrictive
-    auto topic = getStorageID().getFullTableName();
-    DistributedWriteAheadLogKafkaContext append_ctx{topic};
+    DistributedWriteAheadLogKafkaContext append_ctx{topic(getStorageID(), getContext())};
     append_ctx.request_required_acks = dwal_request_required_acks;
     append_ctx.request_timeout_ms = dwal_request_timeout_ms;
     append_ctx.topic_handle = static_cast<DistributedWriteAheadLogKafka *>(dwal.get())->initProducerTopic(append_ctx);

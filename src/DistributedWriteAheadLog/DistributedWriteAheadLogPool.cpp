@@ -62,7 +62,7 @@ void DistributedWriteAheadLogPool::startup()
         init(key);
     }
 
-    if (!wals.empty() && default_wal == nullptr)
+    if (!wals.empty() && default_cluster.empty())
     {
         throw Exception("Default Kafka DWAL cluster is not assigned", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -86,6 +86,8 @@ void DistributedWriteAheadLogPool::shutdown()
             dwal->shutdown();
         }
     }
+
+    meta_wal->shutdown();
 
     LOG_INFO(log, "Stopped");
 }
@@ -185,17 +187,28 @@ void DistributedWriteAheadLogPool::init(const String & key)
         kwal->startup();
         wals[kafka_settings.cluster_id].push_back(kwal);
 
-        if (system_default)
-        {
-            LOG_INFO(log, "Setting {} cluster as default Kafka DWAL cluster", kafka_settings.cluster_id);
-            default_wal = kwal;
-        }
     }
     indexes[kafka_settings.cluster_id] = 0;
+
+    if (system_default)
+    {
+        LOG_INFO(log, "Setting {} cluster as default Kafka DWAL cluster", kafka_settings.cluster_id);
+        default_cluster = kafka_settings.cluster_id;
+
+        /// Meta DWal with a different consumer group
+        kafka_settings.group_id += "-meta";
+        meta_wal = std::make_shared<DistributedWriteAheadLogKafka>(std::make_unique<DistributedWriteAheadLogKafkaSettings>(kafka_settings));
+        meta_wal->startup();
+    }
 }
 
 DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::get(const String & id) const
 {
+    if (id.empty() && !default_cluster.empty())
+    {
+        return get(default_cluster);
+    }
+
     auto iter = wals.find(id);
     if (iter == wals.end())
     {
@@ -205,8 +218,8 @@ DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::get(const String & id)
     return iter->second[indexes[id]++ % iter->second.size()];
 }
 
-DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::getDefault() const
+DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::getMeta() const
 {
-    return default_wal;
+    return meta_wal;
 }
 }
