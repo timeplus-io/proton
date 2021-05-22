@@ -473,8 +473,25 @@ void DDLService::mutateTable(IDistributedWriteAheadLog::RecordPtr record, const 
         return;
     }
 
-    /// FIXME: make sure `target_hosts` is a complete list of hosts which
-    /// has this table definition (shards * replication_factor)
+    auto [replication_factor, shards] = catalog.shardAndReplicationFactor(database, table);
+    auto definication_size = replication_factor * shards;
+    int hosts_size = target_hosts.size();
+
+    if (hosts_size != definication_size)
+    {
+        LOG_ERROR(
+            log,
+            "The number of table {} definitions is inconsistent with the actual obtained, payload={} query_id={} user={} "
+            "definication_size={} hosts_size={}",
+            table,
+            payload,
+            query_id,
+            user,
+            definication_size,
+            hosts_size);
+        failDDL(query_id, user, payload, "Table number obtained error");
+        return;
+    }
 
     for (auto & uri : target_hosts)
     {
@@ -537,9 +554,6 @@ void DDLService::mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, con
     }
 
     std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(api_path_fmt, database), http_port)};
-
-    /// FIXME: make sure `target_hosts` is a complete list of hosts which
-    /// has this table definition (shards * replication_factor)
 
     /// FIXME : Parallelize doDDL on the uris
     for (auto & uri : target_hosts)

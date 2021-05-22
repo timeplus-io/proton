@@ -49,18 +49,21 @@ const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 
 const String THIS_HOST = getFQDNOrHostName();
 
-Int32 parseShard(const String & engine_full)
+const String PARSE_SHARD_REGEX = "shard\\s*=\\s*(\\d+)";
+const String PARSE_SHARDS_REGEX = "DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+),\\s*\\d+\\)";
+const String PARSE_REPLICATION_REGEX = "DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+,\\s*\\d+\\)";
+
+Int32 searchIntValueByRegex(const String & regex_s, const String & str)
 {
-    /// shard = <shard_number>
-    static std::regex shard_regex("shard\\s*=\\s*(\\d+)");
+    std::regex pattern(regex_s);
 
-    std::smatch shard_match;
+    std::smatch pattern_match;
 
-    auto m = std::regex_search(engine_full, shard_match, shard_regex);
+    auto m = std::regex_search(str, pattern_match, pattern);
     assert(m);
     (void)m;
 
-    return std::stoi(shard_match.str(1));
+    return std::stoi(pattern_match.str(1));
 }
 }
 
@@ -557,7 +560,7 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
 
         if (table->engine == "DistributedMergeTree")
         {
-            table->shard = parseShard(table->engine_full);
+            table->shard = searchIntValueByRegex(PARSE_SHARD_REGEX, table->engine_full);
         }
 
         if (table->database == "system")
@@ -715,4 +718,18 @@ void CatalogService::processRecords(const IDistributedWriteAheadLog::RecordPtrs 
         mergeCatalog(node, buildCatalog(node, record->block));
     }
 }
+
+std::pair<Int32, Int32> CatalogService::shardAndReplicationFactor(const String & database, const String & table) const
+{
+    const auto & tables = findTableByName(database, table);
+
+    if (tables.empty())
+        return {0, 0};
+
+    return {
+        searchIntValueByRegex(PARSE_REPLICATION_REGEX, tables[0]->engine_full),
+        searchIntValueByRegex(PARSE_SHARDS_REGEX, tables[0]->engine_full)};
 }
+
+}
+
