@@ -48,8 +48,9 @@ Block buildBlock(const std::vector<TaskStatusService::TaskStatusPtr> & tasks)
             {"reason", std::vector<String>()},
             {"user", std::vector<String>()},
             {"context", std::vector<String>()}};
+
     std::vector<std::pair<String, std::vector<Int64>>> int64_cols
-        = {{"last_modified", std::vector<Int64>()}, {"created", std::vector<Int64>()}, {"recorded", std::vector<Int64>()}};
+        = {{"last_modified", std::vector<Int64>()}, {"created", std::vector<Int64>()}};
 
     for (const auto & task : tasks)
     {
@@ -94,10 +95,6 @@ Block buildBlock(const std::vector<TaskStatusService::TaskStatusPtr> & tasks)
             else if ("created" == col.first)
             {
                 col.second.push_back(task->created == -1 ? (UTCMilliseconds::now()) : task->created);
-            }
-            else if ("recorded" == col.first)
-            {
-                col.second.push_back(MonotonicMilliseconds::now());
             }
             else
             {
@@ -236,21 +233,8 @@ bool TaskStatusService::validateSchema(const Block & block, const std::vector<St
 
 bool TaskStatusService::tableExists() const
 {
-    bool exists = false;
-    CurrentThread::detachQueryIfNotDetached();
-
-    ContextPtr query_context = Context::createCopy(global_context);
-    CurrentThread::QueryScope query_scope{query_context};
-
-    executeSelectQuery(
-        "SELECT count(*) AS c FROM system.tables WHERE database = 'system' AND name = 'tasks'",
-        query_context,
-        [&exists](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-            assert(block.has("c"));
-            const auto & counts_col = block.findByName("c")->column;
-            exists = counts_col->getUInt(0) != 0;
-        });
-    return exists;
+    StorageID sid{"system", "tasks"};
+    return DatabaseCatalog::instance().isTableExist(sid, global_context);
 }
 
 TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const IDistributedWriteAheadLog::RecordPtr & record) const
@@ -273,8 +257,6 @@ void TaskStatusService::buildTaskStatusFromBlock(const Block & block, std::vecto
     const auto & context_col = block.findByName("context")->column;
     const auto & last_modified_col = block.findByName("last_modified")->column;
     const auto & created_col = block.findByName("created")->column;
-    const auto recorded_col_with_type_and_name = block.findByName("recorded");
-    const auto & recorded_col = recorded_col_with_type_and_name ? recorded_col_with_type_and_name->column : nullptr;
 
     for (size_t i = 0; i < id_col->size(); ++i)
     {
@@ -287,10 +269,6 @@ void TaskStatusService::buildTaskStatusFromBlock(const Block & block, std::vecto
         task->context = context_col->getDataAt(i).toString();
         task->last_modified = last_modified_col->getInt(i);
         task->created = created_col->getInt(i);
-        if (recorded_col)
-        {
-            task->recorded = std::chrono::steady_clock::time_point(std::chrono::milliseconds(recorded_col->get64(i)));
-        }
 
         assert(task->last_modified);
         assert(task->created);
@@ -633,8 +611,6 @@ bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> 
         query += value;
         delimiter = ",";
     }
-
-    LOG_TRACE(log, "Persistent task value #{}#", query);
 
     LOG_INFO(log, "Persistent {} tasks. ", tasks.size());
     ReadBufferFromString in(query);

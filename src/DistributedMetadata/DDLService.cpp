@@ -481,20 +481,20 @@ void DDLService::mutateTable(IDistributedWriteAheadLog::RecordPtr record, const 
     }
 
     auto [replication_factor, shards] = catalog.shardAndReplicationFactor(database, table);
-    auto definication_size = replication_factor * shards;
+    auto total_replicas = replication_factor * shards;
     int hosts_size = target_hosts.size();
 
-    if (hosts_size != definication_size)
+    if (hosts_size != total_replicas)
     {
         LOG_ERROR(
             log,
             "The number of table {} definitions is inconsistent with the actual obtained, payload={} query_id={} user={} "
-            "definication_size={} hosts_size={}",
+            "total_replicas={} hosts_size={}",
             table,
             payload,
             query_id,
             user,
-            definication_size,
+            total_replicas,
             hosts_size);
         failDDL(query_id, user, payload, "Table number obtained error");
         return;

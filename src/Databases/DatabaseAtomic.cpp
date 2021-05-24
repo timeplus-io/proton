@@ -616,6 +616,19 @@ StoragePtr DatabaseAtomic::tryGetTable(const String & table_name, ContextPtr ctx
 
     return catalog_service.createVirtualTableStorage(table->create_table_query, table->database, table_name);
 }
+
+bool DatabaseAtomic::isTableExist(const String & table_name, ContextPtr ctx) const
+{
+    auto exists = DatabaseOrdinary::isTableExist(table_name, ctx);
+    if (exists)
+    {
+        return exists;
+    }
+
+    /// Try `CatalogService`
+    auto & catalog_service = CatalogService::instance(getContext());
+    return catalog_service.tableExists(getDatabaseName(), table_name);
+}
 /// Daisy : ends
 
 }

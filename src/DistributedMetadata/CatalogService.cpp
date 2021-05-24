@@ -1,17 +1,12 @@
 #include "CatalogService.h"
 
-#include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
-#include <DataStreams/AsynchronousBlockInputStream.h>
-#include <DataStreams/BlockIO.h>
-#include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Storages/IStorage.h>
 #include <Common/Exception.h>
 #include <common/getFQDNOrHostName.h>
@@ -50,8 +45,8 @@ const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 const String THIS_HOST = getFQDNOrHostName();
 
 const String PARSE_SHARD_REGEX = "shard\\s*=\\s*(\\d+)";
-const String PARSE_SHARDS_REGEX = "DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+),\\s*\\d+\\)";
-const String PARSE_REPLICATION_REGEX = "DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+,\\s*\\d+\\)";
+const String PARSE_SHARDS_REGEX = "DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,";
+const String PARSE_REPLICATION_REGEX = "DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+\\s*,";
 
 Int32 searchIntValueByRegex(const String & regex_s, const String & str)
 {
@@ -561,12 +556,6 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
         if (table->engine == "DistributedMergeTree")
         {
             table->shard = searchIntValueByRegex(PARSE_SHARD_REGEX, table->engine_full);
-        }
-
-        if (table->database == "system")
-        {
-            /// Ignore tables in `system` database
-            continue;
         }
 
         DatabaseTableShard key = std::make_pair(table->database, std::make_pair(table->name, table->shard));

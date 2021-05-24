@@ -26,8 +26,6 @@ public:
         String context;
         Int64 last_modified = -1;
         Int64 created = -1;
-        /// `recorded` timestamp is for local tracking
-        SteadyClock recorded;
 
         /// Overall general status codes
         static const String SUBMITTED;

@@ -67,6 +67,7 @@ public:
 
     /// Daisy : starts
     StoragePtr tryGetTable(const String & table_name, ContextPtr context) const override;
+    bool isTableExist(const String & table_name, ContextPtr) const override;
     /// Daisy : ends
 
 protected:

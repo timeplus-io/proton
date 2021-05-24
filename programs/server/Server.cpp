@@ -260,14 +260,18 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 }
 
 /// Daisy : starts
+/// Service dependencies :
+/// All meta services and StorageDistributedMergeTree depend on DWAL
+/// Placement -> Catalog
+/// Task -> StorageDistributedMergeTree
+/// DDL -> REST API Server
+///     -> Catalog
+///     -> Placement
+///     -> Task
 void initDistributedMetadataServices(DB::ContextPtr & global_context)
 {
-    /// Init DWAL pool
     auto & pool = DB::DistributedWriteAheadLogPool::instance(global_context);
     pool.startup();
-
-    auto & task_status_service = DB::TaskStatusService::instance(global_context);
-    task_status_service.startup();
 
     auto & catalog_service = DB::CatalogService::instance(global_context);
     catalog_service.startup();
@@ -275,6 +279,14 @@ void initDistributedMetadataServices(DB::ContextPtr & global_context)
     auto & placement_service = DB::PlacementService::instance(global_context);
     placement_service.startup();
 
+    auto & task_status_service = DB::TaskStatusService::instance(global_context);
+    task_status_service.startup();
+}
+
+/// DDL service depends on REST server
+/// so it will need initialize after REST server
+void initDistributedMetadataServicesPost(DB::ContextPtr & global_context)
+{
     auto & ddl_service = DB::DDLService::instance(global_context);
     ddl_service.startup();
 }
@@ -1323,7 +1335,6 @@ if (ThreadFuzzer::instance().isEffective())
     {
         DB::CatalogService::instance(global_context).broadcast();
         DB::PlacementService::instance(global_context).scheduleBroadcast();
-        DB::TaskStatusService::instance(global_context).schedulePersistentTask();
     }
     /// Daisy : end.
 
@@ -1523,6 +1534,14 @@ if (ThreadFuzzer::instance().isEffective())
         {
             tryLogCurrentException(log, "Caught exception while starting cluster discovery");
         }
+
+        /// Daisy : starts
+        initDistributedMetadataServicesPost(global_context);
+        if (global_context->isDistributed())
+        {
+            DB::TaskStatusService::instance(global_context).schedulePersistentTask();
+        }
+        /// Daisy : ends
 
         SCOPE_EXIT_SAFE({
             LOG_DEBUG(log, "Received termination signal.");

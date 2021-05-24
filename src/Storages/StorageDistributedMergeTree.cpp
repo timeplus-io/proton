@@ -201,17 +201,9 @@ String makeFormattedListOfShards(const ClusterPtr & cluster)
     return buf.str();
 }
 
-String topic(const StorageID & storage_id, ContextPtr global_context)
+inline String topic(const StorageID & storage_id)
 {
-    auto name = escapeDWalName(storage_id.getDatabaseName(), storage_id.getTableName());
-    if (name != "system.tasks")
-    {
-        return name;
-    }
-
-    /// We will need map "system.tasks" table to "__system_tasks" topic
-    String name_key = "cluster_settings.system_tasks.name";
-    return global_context->getConfigRef().getString(name_key);
+    return escapeDWalName(storage_id.getDatabaseName(), storage_id.getTableName());
 }
 }
 
@@ -1020,7 +1012,7 @@ void StorageDistributedMergeTree::doCommit(
                                              this] {
         LOG_DEBUG(log, "Committing rows={} for shard={} to file system", moved_block.rows(), shard);
 
-        while (1)
+        while (!stopped.test())
         {
             try
             {
@@ -1187,7 +1179,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
 
     auto ssettings = storage_settings.get();
 
-    DistributedWriteAheadLogKafkaContext consume_ctx{topic(getStorageID(), getContext()), shard, sequenceNumberLoaded()};
+    DistributedWriteAheadLogKafkaContext consume_ctx{topic(getStorageID()), shard, sequenceNumberLoaded()};
     consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
     consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshhold_ms.value;
     consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshhold_count;
@@ -1212,6 +1204,8 @@ void StorageDistributedMergeTree::backgroundConsumer()
         StorageDistributedMergeTree * storage;
         std::any & ctx;
 
+        std::atomic_uint16_t outstanding_commits = 0;
+
         CallbackData(StorageDistributedMergeTree * storage_, std::any & ctx_) : storage(storage_), ctx(ctx_) { }
     };
 
@@ -1221,6 +1215,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
     auto callback = [](IDistributedWriteAheadLog::RecordPtrs records, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         auto cdata = static_cast<CallbackData *>(data);
 
+        ++cdata->outstanding_commits;
         try
         {
             cdata->storage->commit(records, cdata->ctx);
@@ -1233,7 +1228,9 @@ void StorageDistributedMergeTree::backgroundConsumer()
                 cdata->storage->shard,
                 getCurrentExceptionMessage(true, true));
         }
+        --cdata->outstanding_commits;
     };
+
 
     while (!stopped.test())
     {
@@ -1283,12 +1280,18 @@ void StorageDistributedMergeTree::backgroundConsumer()
         catch (...)
         {
             LOG_ERROR(log, "Failed to consume data for shard={}, exception={}", shard, getCurrentExceptionMessage(true, true));
-
-            throw;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     }
 
     dwal->stopConsume(dwal_consume_ctx);
+
+    /// Wait for the outstanding commits
+    while (callback_data.outstanding_commits != 0)
+    {
+        LOG_INFO(log, "Waiting for outstanding commits={} to finish", callback_data.outstanding_commits);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
 
     /// When tearing down, commit whatever it has
     commitSN(dwal_consume_ctx);
@@ -1348,7 +1351,7 @@ void StorageDistributedMergeTree::initWal()
 
     /// Cached ctx, reused by append. Multiple threads are accessing append context
     /// since librdkafka topic handle is thread safe, so we are good
-    DistributedWriteAheadLogKafkaContext append_ctx{topic(getStorageID(), getContext())};
+    DistributedWriteAheadLogKafkaContext append_ctx{topic(getStorageID())};
     append_ctx.request_required_acks = dwal_request_required_acks;
     append_ctx.request_timeout_ms = dwal_request_timeout_ms;
     append_ctx.topic_handle = static_cast<DistributedWriteAheadLogKafka *>(dwal.get())->initProducerTopic(append_ctx);
