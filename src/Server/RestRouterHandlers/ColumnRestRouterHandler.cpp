@@ -62,11 +62,10 @@ bool ColumnRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & payl
 
 String ColumnRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
 {
-    const String & database_name = getPathParameter("database");
-    const String & table_name = getPathParameter("table");
-    const String & column_name = payload->get("name");
+    const String & table = getPathParameter("table");
+    const String & column = payload->get("name");
 
-    auto [assert, message] = assertColumnNotExists(database_name, table_name, column_name);
+    auto [assert, message] = assertColumnNotExists(table, column);
     if (!assert)
     {
         http_status = HTTPResponse::HTTP_BAD_REQUEST;
@@ -75,11 +74,11 @@ String ColumnRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payl
 
     if (isDistributedDDL())
     {
-        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_POST}, {"column", column_name}}, payload);
+        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_POST}, {"column", column}}, payload);
     }
 
     std::vector<String> create_segments;
-    create_segments.push_back("ALTER TABLE " + database_name + "." + table_name);
+    create_segments.push_back("ALTER TABLE " + database + "." + table);
     create_segments.push_back("ADD COLUMN ");
     create_segments.push_back(getCreateColumnDefination(payload));
     const String & query = boost::algorithm::join(create_segments, " ");
@@ -89,11 +88,10 @@ String ColumnRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payl
 
 String ColumnRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
 {
-    String column_name = getPathParameter("column");
-    const String & database_name = getPathParameter("database");
-    const String & table_name = getPathParameter("table");
+    const String & table = getPathParameter("table");
+    String column = getPathParameter("column");
 
-    auto [assert, message] = assertColumnExists(database_name, table_name, column_name);
+    auto [assert, message] = assertColumnExists(table, column);
     if (!assert)
     {
         http_status = HTTPResponse::HTTP_BAD_REQUEST;
@@ -102,12 +100,12 @@ String ColumnRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & pay
 
     if (isDistributedDDL())
     {
-        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_PATCH}, {"column", column_name}}, payload);
+        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_PATCH}, {"column", column}}, payload);
     }
 
     std::vector<String> update_segments;
-    update_segments.push_back("ALTER TABLE " + database_name + "." + table_name);
-    update_segments.push_back(getUpdateColumnDefination(payload, column_name));
+    update_segments.push_back("ALTER TABLE " + database + "." + table);
+    update_segments.push_back(getUpdateColumnDefination(payload, column));
     const String & query = boost::algorithm::join(update_segments, " ");
 
     return processQuery(query, query_context);
@@ -115,11 +113,10 @@ String ColumnRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & pay
 
 String ColumnRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
 {
-    const String & column_name = getPathParameter("column");
-    const String & database_name = getPathParameter("database");
-    const String & table_name = getPathParameter("table");
+    const String & column = getPathParameter("column");
+    const String & table = getPathParameter("table");
 
-    auto [assert, message] = assertColumnExists(database_name, table_name, column_name);
+    auto [assert, message] = assertColumnExists(table, column);
     if (!assert)
     {
         http_status = HTTPResponse::HTTP_BAD_REQUEST;
@@ -128,19 +125,18 @@ String ColumnRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*
 
     if (isDistributedDDL())
     {
-        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_DELETE}, {"column", column_name}});
+        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_DELETE}, {"column", column}});
     }
 
     std::vector<String> delete_segments;
-    delete_segments.push_back("ALTER TABLE " + database_name + "." + table_name);
-    delete_segments.push_back("DROP COLUMN " + column_name);
+    delete_segments.push_back("ALTER TABLE " + database + "." + table);
+    delete_segments.push_back("DROP COLUMN " + column);
     const String & query = boost::algorithm::join(delete_segments, " ");
 
     return processQuery(query, query_context);
 }
 
-std::pair<bool, String>
-ColumnRestRouterHandler::assertColumnExists(const String & database, const String & table, const String & column) const
+std::pair<bool, String> ColumnRestRouterHandler::assertColumnExists(const String & table, const String & column) const
 {
     const auto & catalog_service = CatalogService::instance(query_context);
     auto [table_exist, column_exist] = catalog_service.columnExists(database, table, column);
@@ -158,8 +154,7 @@ ColumnRestRouterHandler::assertColumnExists(const String & database, const Strin
     return {true, ""};
 }
 
-std::pair<bool, String>
-ColumnRestRouterHandler::assertColumnNotExists(const String & database, const String & table, const String & column) const
+std::pair<bool, String> ColumnRestRouterHandler::assertColumnNotExists(const String & table, const String & column) const
 {
     const auto & catalog_service = CatalogService::instance(query_context);
     auto [table_exist, column_exist] = catalog_service.columnExists(database, table, column);

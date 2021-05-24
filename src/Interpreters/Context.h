@@ -426,6 +426,10 @@ public:
 
     void setQuotaKey(String quota_key_);
 
+    /// Daisy : starts
+    String getPasswordByUserName(const String & user_name) const;
+    /// Daisy : ends
+
     void setCurrentRoles(const std::vector<UUID> & current_roles_);
     void setCurrentRolesDefault();
     boost::container::flat_set<UUID> getCurrentRoles() const;

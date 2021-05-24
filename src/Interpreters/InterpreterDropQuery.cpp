@@ -110,7 +110,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         {
             throw Exception(fmt::format("Table {}.{} does not exist.", query.database, query.table), ErrorCodes::UNKNOWN_TABLE);
         }
-        if (tables[0]->engine !="DistributedMergeTree")
+        if (tables[0]->engine != "DistributedMergeTree")
         {
             /// FIXME:  We only support `DistributedMergeTree` table engine for now
             return false;
@@ -121,13 +121,12 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         auto query_str = queryToString(query);
         LOG_INFO(log, "Drop DistributedMergeTree query={} query_id={}", query_str, ctx->getCurrentQueryId());
 
-        std::vector<std::pair<String, String>> string_cols = {
-            {"payload", ctx->getQueryParameters().at("_payload")},
-            {"database", query.database},
-            {"table", query.table},
-            {"query_id", ctx->getCurrentQueryId()},
-            {"user", ctx->getUserName()}
-        };
+        std::vector<std::pair<String, String>> string_cols
+            = {{"payload", ctx->getQueryParameters().at("_payload")},
+               {"database", query.database},
+               {"table", query.table},
+               {"query_id", ctx->getCurrentQueryId()},
+               {"user", ctx->getUserName()}};
 
         std::vector<std::pair<String, Int32>> int32_cols;
 
@@ -171,18 +170,17 @@ bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
         {
             throw Exception(fmt::format("Databases {} does not exist.", query.database), ErrorCodes::UNKNOWN_DATABASE);
         }
- 
+
         auto * log = &Poco::Logger::get("InterpreterDropQuery");
 
         auto query_str = queryToString(query);
         LOG_INFO(log, "Drop database query={} query_id={}", query_str, ctx->getCurrentQueryId());
 
-        std::vector<std::pair<String, String>> string_cols = {
-            {"payload", ctx->getQueryParameters().at("_payload")},
-            {"database", query.database},
-            {"query_id", ctx->getCurrentQueryId()},
-            {"user", ctx->getUserName()}
-        };
+        std::vector<std::pair<String, String>> string_cols
+            = {{"payload", ctx->getQueryParameters().at("_payload")},
+               {"database", query.database},
+               {"query_id", ctx->getCurrentQueryId()},
+               {"user", ctx->getUserName()}};
 
         std::vector<std::pair<String, Int32>> int32_cols;
 
@@ -194,8 +192,7 @@ bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
 
         appendDDLBlock(std::move(block), ctx, {"table_type"}, IDistributedWriteAheadLog::OpCode::DELETE_DATABASE, log);
 
-        LOG_INFO(
-            log, "Request of dropping database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+        LOG_INFO(log, "Request of dropping database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
         /// FIXME, project tasks status
         return true;

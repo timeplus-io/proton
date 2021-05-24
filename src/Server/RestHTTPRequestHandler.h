@@ -46,6 +46,8 @@ private:
         int exception_code,
         HTTPServerRequest & request,
         HTTPServerResponse & response);
+
+    String getDatabaseByUser(const String & user) const;
 };
 
 }

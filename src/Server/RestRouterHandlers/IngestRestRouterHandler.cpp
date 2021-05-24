@@ -16,13 +16,12 @@ namespace ErrorCodes
 
 String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status) const
 {
-    const auto & database_name = getPathParameter("database", "");
-    const auto & table_name = getPathParameter("table", "");
+    const auto & table = getPathParameter("table", "");
 
-    if (database_name.empty() || table_name.empty())
+    if (table.empty())
     {
         http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse("Database or Table is empty", ErrorCodes::BAD_REQUEST_PARAMETER);
+        return jsonErrorResponse("Table is empty", ErrorCodes::BAD_REQUEST_PARAMETER);
     }
 
     if (hasQueryParameter("mode"))
@@ -46,8 +45,8 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
         LOG_ERROR(
             log,
             "Ingest to database {}, table {} failed with invalid JSON request, exception = {}",
-            database_name,
-            table_name,
+            database,
+            table,
             error,
             ErrorCodes::INCORRECT_DATA);
         return jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA);
@@ -61,13 +60,13 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
         LOG_ERROR(
             log,
             "Ingest to database {}, table {} failed with invalid request, exception = {}",
-            database_name,
-            table_name,
+            database,
+            table,
             error,
             ErrorCodes::INCORRECT_DATA);
         return jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA);
     }
-    query = "INSERT into " + database_name + "." + table_name + " " + cols + " FORMAT JSONCompactEachRow ";
+    query = "INSERT into " + database + "." + table + " " + cols + " FORMAT JSONCompactEachRow ";
 
     auto it = buffers.find("data");
     std::unique_ptr<ReadBuffer> in;
@@ -82,8 +81,8 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
         LOG_ERROR(
             log,
             "Ingest to database {}, table {} failed with invalid request, exception = {}",
-            database_name,
-            table_name,
+            database,
+            table,
             "Invalid Request, missing 'data' field",
             ErrorCodes::INCORRECT_DATA);
         return jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA);

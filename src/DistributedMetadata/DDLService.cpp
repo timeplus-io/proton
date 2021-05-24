@@ -33,12 +33,12 @@ namespace
     const String DDL_DATA_RETENTION_KEY = DDL_KEY_PREFIX + "data_retention";
     const String DDL_DEFAULT_TOPIC = "__system_ddls";
 
-    const String DDL_TABLE_POST_API_PATH_FMT = "/dae/v1/ddl/{}/{}";
-    const String DDL_TABLE_PATCH_API_PATH_FMT = "/dae/v1/ddl/{}/{}/{}";
-    const String DDL_TABLE_DELETE_API_PATH_FMT = "/dae/v1/ddl/{}/{}/{}";
-    const String DDL_COLUMN_POST_API_PATH_FMT = "/dae/v1/ddl/{}/{}/columns";
-    const String DDL_COLUMN_PATCH_API_PATH_FMT = "/dae/v1/ddl/{}/{}/columns/{}";
-    const String DDL_COLUMN_DELETE_API_PATH_FMT = "/dae/v1/ddl/{}/{}/columns/{}";
+    const String DDL_TABLE_POST_API_PATH_FMT = "/dae/v1/ddl/{}";
+    const String DDL_TABLE_PATCH_API_PATH_FMT = "/dae/v1/ddl/{}/{}";
+    const String DDL_TABLE_DELETE_API_PATH_FMT = "/dae/v1/ddl/{}/{}";
+    const String DDL_COLUMN_POST_API_PATH_FMT = "/dae/v1/ddl/{}/columns";
+    const String DDL_COLUMN_PATCH_API_PATH_FMT = "/dae/v1/ddl/{}/columns/{}";
+    const String DDL_COLUMN_DELETE_API_PATH_FMT = "/dae/v1/ddl/{}/columns/{}";
     const String DDL_DATABSE_POST_API_PATH_FMT = "/dae/v1/ddl/databases";
     const String DDL_DATABSE_DELETE_API_PATH_FMT = "/dae/v1/ddl/databases/{}";
 
@@ -95,20 +95,19 @@ namespace
         return "tables";
     }
 
-    String getTableApiPath(
-        const std::unordered_map<String, String> & headers, const String & database, const String & table, const String & method)
+    String getTableApiPath(const std::unordered_map<String, String> & headers, const String & table, const String & method)
     {
         if (method == Poco::Net::HTTPRequest::HTTP_POST)
         {
-            return fmt::format(DDL_TABLE_POST_API_PATH_FMT, database, getTableCategory(headers));
+            return fmt::format(DDL_TABLE_POST_API_PATH_FMT, getTableCategory(headers));
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return fmt::format(DDL_TABLE_PATCH_API_PATH_FMT, database, getTableCategory(headers), table);
+            return fmt::format(DDL_TABLE_PATCH_API_PATH_FMT, getTableCategory(headers), table);
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return fmt::format(DDL_TABLE_DELETE_API_PATH_FMT, database, getTableCategory(headers), table);
+            return fmt::format(DDL_TABLE_DELETE_API_PATH_FMT, getTableCategory(headers), table);
         }
         else
         {
@@ -117,20 +116,19 @@ namespace
         }
     }
 
-    String getColumnApiPath(
-        const std::unordered_map<String, String> & headers, const String & database, const String & table, const String & method)
+    String getColumnApiPath(const std::unordered_map<String, String> & headers, const String & table, const String & method)
     {
         if (method == Poco::Net::HTTPRequest::HTTP_POST)
         {
-            return fmt::format(DDL_COLUMN_POST_API_PATH_FMT, database, table);
+            return fmt::format(DDL_COLUMN_POST_API_PATH_FMT, table);
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return fmt::format(DDL_COLUMN_PATCH_API_PATH_FMT, database, table, headers.at("column"));
+            return fmt::format(DDL_COLUMN_PATCH_API_PATH_FMT, table, headers.at("column"));
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return fmt::format(DDL_COLUMN_DELETE_API_PATH_FMT, database, table, headers.at("column"));
+            return fmt::format(DDL_COLUMN_DELETE_API_PATH_FMT, table, headers.at("column"));
         }
         else
         {
@@ -249,7 +247,8 @@ bool DDLService::validateSchema(const Block & block, const std::vector<String> &
     return true;
 }
 
-Int32 DDLService::sendRequest(const String & payload, const Poco::URI & uri, const String & method, const String & query_id) const
+Int32 DDLService::sendRequest(
+    const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const
 {
     /// One second for connect/send/receive
     ConnectionTimeouts timeouts({1, 0}, {1, 0}, {5, 0});
@@ -263,6 +262,13 @@ Int32 DDLService::sendRequest(const String & payload, const Poco::URI & uri, con
         request.setContentLength(payload.size());
         request.setContentType("application/json");
         request.add("X-ClickHouse-Query-Id", query_id);
+        request.add("X-ClickHouse-User", user);
+
+        const String & password = global_context->getPasswordByUserName(user);
+        if (!password.empty())
+        {
+            request.add("X-ClickHouse-Key", password);
+        }
 
         auto & ostr = session->sendRequest(request);
         ostr << payload;
@@ -315,12 +321,13 @@ Int32 DDLService::sendRequest(const String & payload, const Poco::URI & uri, con
     return ErrorCodes::UNKNOWN_EXCEPTION;
 }
 
-Int32 DDLService::doDDL(const String & payload, const Poco::URI & uri, const String & method, const String & query_id) const
+Int32 DDLService::doDDL(
+    const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const
 {
     Int32 err = ErrorCodes::OK;
     for (auto i = 0; i < MAX_RETRIES; ++i)
     {
-        err = sendRequest(payload, uri, method, query_id);
+        err = sendRequest(payload, uri, method, query_id, user);
         if (err == ErrorCodes::OK || err == ErrorCodes::UNRETRIABLE_ERROR)
         {
             return err;
@@ -374,7 +381,7 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
         assert(!hosts.empty());
 
         std::vector<Poco::URI> target_hosts{
-            toURIs(hosts, getTableApiPath(record->headers, database, table, Poco::Net::HTTPRequest::HTTP_POST), http_port)};
+            toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST), http_port)};
 
         /// Create table on each target host according to placement
         for (Int32 i = 0; i < replication_factor; ++i)
@@ -383,7 +390,7 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
             {
                 target_hosts[i * shards + j].setQueryParameters(
                     Poco::URI::QueryParameters{{"distributed_ddl", "false"}, {"shard", std::to_string(j)}});
-                auto err = doDDL(payload, target_hosts[i * shards + j], Poco::Net::HTTPRequest::HTTP_POST, query_id);
+                auto err = doDDL(payload, target_hosts[i * shards + j], Poco::Net::HTTPRequest::HTTP_POST, query_id, user);
                 if (err == ErrorCodes::UNRETRIABLE_ERROR)
                 {
                     failDDL(query_id, user, payload, "Unable to fulfill the request due to unrecoverable failure");
@@ -496,7 +503,7 @@ void DDLService::mutateTable(IDistributedWriteAheadLog::RecordPtr record, const 
     for (auto & uri : target_hosts)
     {
         uri.setQueryParameters(Poco::URI::QueryParameters{{"distributed_ddl", "false"}});
-        doDDL(payload, uri, method, query_id);
+        doDDL(payload, uri, method, query_id, user);
     }
 
     succeedDDL(query_id, user, payload);
@@ -559,7 +566,7 @@ void DDLService::mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, con
     for (auto & uri : target_hosts)
     {
         uri.setQueryParameters(Poco::URI::QueryParameters{{"distributed_ddl", "false"}});
-        doDDL(payload, uri, method, query_id);
+        doDDL(payload, uri, method, query_id, user);
     }
 
     succeedDDL(query_id, user, payload);
@@ -672,12 +679,12 @@ std::vector<Poco::URI> DDLService::getTargetURIs(
         || record->op_code == IDistributedWriteAheadLog::OpCode::DELETE_COLUMN)
     {
         /// Column DDL request
-        return toURIs(placement.placed(database, table), getColumnApiPath(record->headers, database, table, method), http_port);
+        return toURIs(placement.placed(database, table), getColumnApiPath(record->headers, table, method), http_port);
     }
     else
     {
         /// Table DDL request
-        return toURIs(placement.placed(database, table), getTableApiPath(record->headers, database, table, method), http_port);
+        return toURIs(placement.placed(database, table), getTableApiPath(record->headers, table, method), http_port);
     }
 }
 

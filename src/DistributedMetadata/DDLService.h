@@ -28,8 +28,10 @@ private:
     std::pair<Int32, Int32> batchSizeAndTimeout() const override { return std::make_pair(10, 200); }
 
 private:
-    Int32 sendRequest(const String & payload, const Poco::URI & uri, const String & method, const String & query_id) const;
-    Int32 doDDL(const String & payload, const Poco::URI & uri, const String & method, const String & query_id) const;
+    Int32
+    sendRequest(const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const;
+    Int32 doDDL(const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const;
+
     void createTable(IDistributedWriteAheadLog::RecordPtr record);
     void mutateTable(IDistributedWriteAheadLog::RecordPtr record, const String & method) const;
     void mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, const String & method) const;

@@ -19,8 +19,8 @@ private:
     String executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
 
 private:
-    std::pair<bool, String> assertColumnExists(const String & database, const String & table, const String & column) const;
-    std::pair<bool, String> assertColumnNotExists(const String & database, const String & table, const String & column) const;
+    std::pair<bool, String> assertColumnExists(const String & table, const String & column) const;
+    std::pair<bool, String> assertColumnNotExists(const String & table, const String & column) const;
 };
 
 }

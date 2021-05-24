@@ -18,17 +18,16 @@ namespace ErrorCodes
 
 String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) const
 {
-    const auto & database_name = getPathParameter("database", "");
-    const auto & table_name = getPathParameter("rawstore", "");
+    const auto & table = getPathParameter("rawstore", "");
 
     /// Read enrichment and pass the settings to context
-    if (database_name.empty() || table_name.empty())
+    if (table.empty())
     {
         http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse("Database or Table is empty", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        return jsonErrorResponse("Table is empty", ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
 
-    String query = "INSERT into " + database_name + "." + table_name + " FORMAT RawStoreEachRow ";
+    String query = "INSERT into " + database + "." + table + " FORMAT RawStoreEachRow ";
 
     /// Parse JSON into ReadBuffers
     PODArray<char> parse_buf;
@@ -40,8 +39,8 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
         LOG_ERROR(
             log,
             "Ingest to database {}, rawstore {} failed with invalid JSON request, exception = {}",
-            database_name,
-            table_name,
+            database,
+            table,
             error,
             ErrorCodes::INCORRECT_DATA);
         return jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA);
@@ -57,8 +56,8 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
             LOG_ERROR(
                 log,
                 "Ingest to database {}, rawstore {} failed with invalid request, exception = {}",
-                database_name,
-                table_name,
+                database,
+                table,
                 error,
                 ErrorCodes::INCORRECT_DATA);
             return jsonErrorResponse("error", ErrorCodes::INCORRECT_DATA);
@@ -79,8 +78,8 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
         LOG_ERROR(
             log,
             "Ingest to database {}, rawstore {} failed with invalid request, exception = {}",
-            database_name,
-            table_name,
+            database,
+            table,
             "Invalid Request, missing 'data' field",
             ErrorCodes::INCORRECT_DATA);
         return jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA);

@@ -29,6 +29,8 @@ public:
     RestRouterHandler(ContextPtr query_context_, const String & router_name)
         : query_context(query_context_), log(&Poco::Logger::get(router_name))
     {
+        database = query_context->getCurrentDatabase();
+        assert(!database.empty());
     }
     virtual ~RestRouterHandler() = default;
 
@@ -193,6 +195,7 @@ protected:
     std::unique_ptr<HTMLForm> query_parameters;
     String accepted_encoding;
     Int64 content_length;
+    String database;
 };
 
 using RestRouterHandlerPtr = std::shared_ptr<RestRouterHandler>;

@@ -722,6 +722,19 @@ std::optional<UUID> Context::getUserID() const
     return user_id;
 }
 
+/// Daisy : starts
+String Context::getPasswordByUserName(const String & user_name) const
+{
+    if (auto id = getAccessControlManager().find<User>(user_name))
+    {
+        if (auto user = getAccessControlManager().tryRead<User>(*id))
+        {
+            return user->authentication.getPassword();
+        }
+    }
+    return "";
+}
+/// Daisy : ends
 
 void Context::setQuotaKey(String quota_key_)
 {
