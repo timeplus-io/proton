@@ -78,6 +78,7 @@ public:
 
     ASTPtr clone() const override;
 
+    bool stream = false;
     bool distinct = false;
     bool group_by_with_totals = false;
     bool group_by_with_rollup = false;
