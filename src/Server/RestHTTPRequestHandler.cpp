@@ -338,7 +338,7 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
 
     /// Set the query id supplied by the user, if any, and also update the OpenTelemetry fields.
     ClientInfo & client_info = request_context->getClientInfo();
-    request_context->setCurrentQueryId(params.get("query_id", request.get("X-ClickHouse-Query-Id", "")));
+    request_context->setCurrentQueryId(params.get("x-bdg-request-id", request.get("X-ClickHouse-Query-Id", "")));
     client_info.initial_query_id = client_info.current_query_id;
 
     /// Setup idemopotent key if it is passed by user

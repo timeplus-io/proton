@@ -22,5 +22,7 @@ private:
     String getQuery(const Poco::JSON::Object::Ptr & payload) const;
 
     std::shared_ptr<WriteBufferFromHTTPServerResponse> getOutputBuffer(HTTPServerResponse & response) const;
+
+    void setQuerySettings() const;
 };
 }

@@ -25,7 +25,7 @@ namespace
            {"optional", {{"mode", "string"}, {"end_time", "string"}, {"start_time", "string"}, {"offset", "int"}, {"page_size", "int"}}}};
 }
 
-void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload,  HTTPServerResponse & response) const
+void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload, HTTPServerResponse & response) const
 {
     auto send_error = [&response](const String && error_msg) {
         response.setStatusAndReason(HTTPResponse::HTTP_BAD_REQUEST);
@@ -75,10 +75,6 @@ String SearchHandler::getQuery(const Poco::JSON::Object::Ptr & payload) const
     const auto & mode = payload->has("mode") ? payload->get("mode").toString() : "verbose";
 
     /// FIXME: to support 'realtime' mode in future
-    /// FIXME: change the behavior of 'verbose' mode. Currently in frontier service, 'standard' and 'verbose' mode are the same
-    if (mode == "standard" || mode.empty() || mode == "verbose")
-        query_context->setDefaultFormat("JSONCompactEachRowWithNamesAndTypes");
-
     if (mode == "verbose")
     {
         query_context->setSetting("asterisk_include_materialized_columns", true);
@@ -94,6 +90,9 @@ String SearchHandler::getQuery(const Poco::JSON::Object::Ptr & payload) const
         query_context->setTimeParamEnd(end_time);
 
     query_context->setSetting("unnest_subqueries", true);
+
+    /// Setup settings passed by query params
+    setQuerySettings();
 
     std::vector<String> query_parts;
     query_parts.push_back(fmt::format("SELECT * FROM ({})", payload->get("query").toString()));
@@ -175,5 +174,65 @@ std::shared_ptr<WriteBufferFromHTTPServerResponse> SearchHandler::getOutputBuffe
         out->setCompressionLevel(settings.http_zlib_compression_level);
 
     return out;
+}
+
+void SearchHandler::setQuerySettings() const
+{
+    static const NameSet reserved_param_names{
+        "compress",
+        "decompress",
+        "user",
+        "password",
+        "quota_key",
+        "query_id",
+        "stacktrace",
+        "buffer_size",
+        "wait_end_of_query",
+        "session_id",
+        "session_timeout",
+        "session_check"};
+
+    auto param_could_be_skipped = [&](const String & name) {
+        /// Empty parameter appears when URL like ?&a=b or a=b&&c=d. Just skip them for user's convenience.
+        if (name.empty())
+            return true;
+
+        if (reserved_param_names.count(name))
+            return true;
+
+        return false;
+    };
+
+    const auto & query_id = getQueryParameter("x-bdg-request-id");
+    if (!query_id.empty())
+        query_context->setCurrentQueryId(query_id);
+
+    /// FIXME to support cascaded write buffer and session
+    SettingsChanges settings_changes;
+    String default_format = "JSONCompact";
+    for (const auto & [key, value] : *query_parameters)
+    {
+        if (param_could_be_skipped(key))
+            continue;
+
+        if (key == "default_format" && !value.empty())
+            default_format = value;
+        else
+        {
+            /// Other than query parameters are treated as settings.
+            if (startsWith(key, "param_"))
+            {
+                /// Save name and values of substitution in dictionary.
+                const String parameter_name = key.substr(strlen("param_"));
+                settings_changes.push_back({parameter_name, value});
+            }
+            else
+                settings_changes.push_back({key, value});
+        }
+    }
+
+    query_context->setDefaultFormat(default_format);
+    query_context->checkSettingsConstraints(settings_changes);
+    query_context->applySettingsChanges(settings_changes);
 }
 }
