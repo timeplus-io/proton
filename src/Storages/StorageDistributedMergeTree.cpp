@@ -489,15 +489,15 @@ std::optional<JobAndPool> StorageDistributedMergeTree::getDataProcessingJob()
 }
 
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
-    ContextPtr context_, QueryProcessingStage::Enum to_stage, SelectQueryInfo & query_info) const
+    ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
 {
     if (isRemote())
     {
-        return getQueryProcessingStageRemote(context_, to_stage, query_info);
+        return getQueryProcessingStageRemote(context_, to_stage, metadata_snapshot, query_info);
     }
     else
     {
-        return storage->getQueryProcessingStage(context_, to_stage, query_info);
+        return storage->getQueryProcessingStage(context_, to_stage, metadata_snapshot, query_info);
     }
 }
 
@@ -666,7 +666,7 @@ ClusterPtr StorageDistributedMergeTree::getOptimizedCluster(
 }
 
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageRemote(
-    ContextPtr context_, QueryProcessingStage::Enum to_stage, SelectQueryInfo & query_info) const
+    ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & /* metadata_snapshot */, SelectQueryInfo & query_info) const
 {
     const auto & settings = context_->getSettingsRef();
 

@@ -46,7 +46,7 @@ public:
       * Returns part with unique name starting with 'tmp_', yet not added to MergeTreeData.
       * If seq_info is not null, commit the sequence info as well. Added by Daisy
       */
-    MergeTreeData::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, bool optimize_on_insert, const SequenceInfoPtr & seq_info = nullptr);
+    MergeTreeData::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, const SequenceInfoPtr & seq_info, ContextPtr context);
 
     MergeTreeData::MutableDataPartPtr
     writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);

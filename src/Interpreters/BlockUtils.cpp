@@ -1,6 +1,7 @@
 #include "BlockUtils.h"
 
 #include <Core/Types.h>
+#include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseFactory.h>
@@ -9,9 +10,9 @@
 #include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
 #include <Interpreters/Context.h>
 #include <Common/typeid_cast.h>
-
 #include <common/logger_useful.h>
 
+#include <Poco/Util/AbstractConfiguration.h>
 
 namespace DB
 {

@@ -101,7 +101,7 @@ public:
 
     std::optional<JobAndPool> getDataProcessingJob() override;
 
-    QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum to_stage, SelectQueryInfo &) const override;
+    QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo &) const override;
 
 private:
     /// Partition helpers
@@ -130,7 +130,7 @@ private:
 
     /// Distributed query
     QueryProcessingStage::Enum
-    getQueryProcessingStageRemote(ContextPtr context, QueryProcessingStage::Enum to_stage, SelectQueryInfo & query_info) const;
+    getQueryProcessingStageRemote(ContextPtr context, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const;
 
     ClusterPtr getOptimizedCluster(ContextPtr context, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const;
 
