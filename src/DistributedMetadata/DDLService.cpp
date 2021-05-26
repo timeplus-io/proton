@@ -363,8 +363,8 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
     Int32 shards = block.getByName("shards").column->getInt(0);
     Int32 replication_factor = block.getByName("replication_factor").column->getInt(0);
 
-    /// FIXME : check with catalog to see if this DDL is fufilled
-    /// Build a data structure to cached last 10000 DDLs, check aginst this data structure
+    /// FIXME : check with catalog to see if this DDL is fulfilled
+    /// Build a data structure to cached last 10000 DDLs, check against this data structure
 
     /// Create a DWAL for this table. FIXME: retention_ms
     std::any ctx{DistributedWriteAheadLogKafkaContext{database + "." + table, shards, replication_factor}};

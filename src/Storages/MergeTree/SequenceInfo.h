@@ -46,7 +46,7 @@ namespace DB
 ///   e. The code builds a block for sequence numbers in [201, 299]. Note the sequence range for the block
 ///      has to be exactly the same as missed in step 1, otherwise we may have missing data or duplicate data
 ///   f. Block with sequence numbers in [201, 299] will go through the same process (step b, c above) which will backfill
-///      the missing data. There are sub-cases here as [201, 299] can be splitted into several partitions (although in
+///      the missing data. There are sub-cases here as [201, 299] can be split into several partitions (although in
 ///      normal circumenstances, they will be in one partition) and hence resulting several blocks and some blocks may
 ///      be committed in local file system and some doesn't. The code needs honor these sub-cases as well.
 ///   g. The code also notices sequence [300, 600] is already committed, the tailing process just discard this data
@@ -83,9 +83,11 @@ struct SequenceRange
     }
 
     SequenceRange() { }
-    SequenceRange(Int64 start_seq_, Int64 end_seq_) : start_sn(start_seq_), end_sn(end_seq_) { }
-    SequenceRange(Int32 part_index_, Int64 parts_) : part_index(part_index_), parts(parts_) { }
-    SequenceRange(Int64 start_seq_, Int64 end_seq_, Int32 part_index_, Int64 parts_) : start_sn(start_seq_), end_sn(end_seq_), part_index(part_index_), parts(parts_) { }
+    SequenceRange(Int64 start_sn_, Int64 end_sn_) : start_sn(start_sn_), end_sn(end_sn_) { }
+    SequenceRange(Int64 start_sn_, Int64 end_sn_, Int32 part_index_, Int32 parts_)
+        : start_sn(start_sn_), end_sn(end_sn_), part_index(part_index_), parts(parts_)
+    {
+    }
 
     void write(WriteBuffer & out) const;
 };
@@ -97,6 +99,8 @@ bool operator==(const SequenceRange & lhs, const SequenceRange & rhs);
 bool operator<(const SequenceRange & lhs, const SequenceRange & rhs);
 
 using SequenceRanges = std::vector<SequenceRange>;
+
+String sequenceRangesToString(const SequenceRanges & sequence_ranges);
 
 struct SequenceInfo
 {
@@ -140,6 +144,7 @@ using SequenceInfoPtr = std::shared_ptr<SequenceInfo>;
 SequenceInfoPtr
 mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, Poco::Logger * log);
 
-/// Find missing sequence ranges according to committed sn and return missing sequence ranges and new committed sn
-std::pair<SequenceRanges, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, Poco::Logger * log);
+/// Find missing sequence ranges according to committed sn and
+/// return missing sequence ranges, next expecting sn and max committed sn + 1
+std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, Poco::Logger * log);
 }

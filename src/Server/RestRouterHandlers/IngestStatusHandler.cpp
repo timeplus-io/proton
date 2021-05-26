@@ -11,7 +11,6 @@
 #include <numeric>
 #include <vector>
 
-
 namespace DB
 {
 namespace ErrorCodes
@@ -20,6 +19,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int TYPE_MISMATCH;
     extern const int INVALID_POLL_ID;
+    extern const int INCORRECT_DATA;
     extern const int CHANNEL_ID_NOT_EXISTS;
     extern const int SEND_POLL_REQ_ERROR;
 }
@@ -29,7 +29,6 @@ namespace
 const String BATCH_URL = "http://{}:{}/dae/v1/ingest/statuses";
 
 const std::map<String, std::map<String, String>> POLL_SCHEMA = {{"required", {{"channel", "string"}, {"poll_ids", "array"}}}};
-
 
 StoragePtr
 getTableStorage(const String & database_name, const String & table_name, ContextPtr query_context, String & error, int & error_code)

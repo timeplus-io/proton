@@ -196,8 +196,8 @@ SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 commi
 
         /// We don't check sequence gap here. There are 3 possible cases
         /// 1. The missing sequence is not committed yet (rarely)
-        /// 2. It is casued by resending an / several idempotent blocks which will be deduped and ignored.
-        /// 3. The Block whish has the missing sequence is distributed to a different partition
+        /// 2. It is caused by resending an / several idempotent blocks which will be deduped and ignored.
+        /// 3. The Block which has the missing sequence is distributed to a different partition
         /// Only for sequence ranges which are beyond the `committed_sn`, we need merge them and
         /// keep them around
         if (next_seq_range.end_sn > committed_sn)
@@ -359,7 +359,7 @@ inline void collectMissingSequenceRanges(
     }
     const auto & cur_range = sequence_ranges[index];
 
-    /// Meet a new start_sn, calcuate if the parts in prev_range
+    /// Meet a new start_sn, calculate if the parts in prev_range
     /// are all committed. There are several cases
     /// 1. There are sequence gaps before prev_range
     /// 2. There are part missing in current prev_range
@@ -371,7 +371,7 @@ inline void collectMissingSequenceRanges(
 
         if (prev_range.start_sn == next_expecting_sn)
         {
-            /// If we can progress sn, it means ther are no sequence missing
+            /// If we can progress sn, it means there are no sequence missing
             /// before prev_range. Progress next expecting sn
             next_expecting_sn = prev_range.end_sn + 1;
 
@@ -433,7 +433,7 @@ bool operator<(const SequenceRange & lhs, const SequenceRange & rhs)
     }
 }
 
-inline void SequenceRange::write(WriteBuffer & out) const
+void SequenceRange::write(WriteBuffer & out) const
 {
     DB::writeText(start_sn, out);
     DB::writeText(",", out);
@@ -527,6 +527,17 @@ std::shared_ptr<SequenceInfo> SequenceInfo::read(ReadBuffer & in)
     return std::make_shared<SequenceInfo>(std::move(sequence_ranges), idempotent_keys);
 }
 
+String sequenceRangesToString(const SequenceRanges & sequence_ranges)
+{
+    WriteBufferFromOwnString out;
+    for (const auto & sequence_range : sequence_ranges)
+    {
+        sequence_range.write(out);
+        DB::writeText(";", out);
+    }
+    return out.str();
+}
+
 /// Data in parameter `sequences` will be reordered when merging
 SequenceInfoPtr
 mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, Poco::Logger * log)
@@ -564,12 +575,11 @@ mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, 
 }
 
 /// The `sequence_ranges` are assumed to have sequence numbers which are great than `committed`
-std::pair<SequenceRanges, Int64>
-missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed, Poco::Logger * log)
+std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed, Poco::Logger * log)
 {
     if (sequence_ranges.empty())
     {
-        return {{}, committed + 1};
+        return {{}, committed + 1, committed + 1};
     }
 
     std::sort(sequence_ranges.begin(), sequence_ranges.end());
@@ -603,6 +613,6 @@ missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed, Poco::L
     /// The last range
     collectMissingSequenceRanges(sequence_ranges, prev_index, sequence_ranges.size(), parts, log, next_expecting_sn, missing_ranges);
 
-    return {std::move(missing_ranges), next_expecting_sn};
+    return {std::move(missing_ranges), next_expecting_sn, sequence_ranges.back().end_sn + 1};
 }
 }

@@ -2,8 +2,6 @@
 
 #include "RestRouterHandler.h"
 
-
-
 namespace DB
 {
 using TablePollIdMap = std::unordered_map<std::pair<String, String>, std::vector<String>, boost::hash<std::pair<String, String>>>;
@@ -23,5 +21,4 @@ private:
     String forwardRequest(const Poco::URI & uri, const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const;
     bool categorizePollIds(const std::vector<String> & poll_ids, TablePollIdMap & table_poll_ids, String & error) const;
 };
-
 }

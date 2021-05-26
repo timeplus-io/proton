@@ -119,7 +119,7 @@ void CatalogService::doBroadcast()
     auto context = Context::createCopy(global_context);
     context->makeQueryContext();
 
-    executeSelectQuery(query, context, [this](Block && block) {
+    executeSelectQuery(query, context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         append(std::move(block));
         assert(!block);
     });

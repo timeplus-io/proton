@@ -593,7 +593,7 @@ bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> 
 
     for (const auto & task : tasks)
     {
-        /// Only SUCCEEDED or FAILED task should be persistented into table
+        /// Only SUCCEEDED or FAILED task should be persisted into table
         assert(task->status == TaskStatus::SUCCEEDED || task->status == TaskStatus::FAILED);
         auto created = std::to_string(task->created);
         auto last_modified = std::to_string(task->last_modified);

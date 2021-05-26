@@ -248,6 +248,7 @@ private:
     Int64 loadSN() const;
     const SequenceRanges & missingSequenceRanges() const { return missing_sequence_ranges; }
     const std::deque<std::shared_ptr<String>> & lastIdempotentKeys() const { return last_idempotent_keys; }
+    Int64 maxCommittedSN() const { return max_committed_sn; }
 
 private:
     void locateSNFile();
@@ -257,6 +258,8 @@ private:
     PathWithDisk sn_file;
     std::deque<std::shared_ptr<String>> last_idempotent_keys;
     SequenceRanges missing_sequence_ranges;
+    /// Used for recovery
+    Int64 max_committed_sn = -1;
     /// Daisy : ends
 
 protected:

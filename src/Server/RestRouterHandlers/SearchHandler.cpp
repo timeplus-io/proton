@@ -27,7 +27,7 @@ namespace
 
 void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload, HTTPServerResponse & response) const
 {
-    auto send_error = [&response](const String && error_msg) {
+    auto send_error = [&response](const String && error_msg) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         response.setStatusAndReason(HTTPResponse::HTTP_BAD_REQUEST);
         *response.send() << error_msg << std::endl;
     };
@@ -192,7 +192,7 @@ void SearchHandler::setQuerySettings() const
         "session_timeout",
         "session_check"};
 
-    auto param_could_be_skipped = [&](const String & name) {
+    auto param_could_be_skipped = [&](const String & name) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         /// Empty parameter appears when URL like ?&a=b or a=b&&c=d. Just skip them for user's convenience.
         if (name.empty())
             return true;

@@ -14,7 +14,6 @@
 
 namespace DB
 {
-    
 namespace ErrorCodes
 {
     extern const int TABLE_ALREADY_EXISTS;

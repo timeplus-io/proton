@@ -66,8 +66,6 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
 
-    NamesAndTypesList getVirtuals() const override;
-
     /** Perform the next step in combining the parts.
       */
     bool optimize(
@@ -161,6 +159,7 @@ public:
 
     IDistributedWriteAheadLog::RecordSequenceNumber lastSequenceNumber() const;
 
+    friend struct DistributedMergeTreeCallbackData;
     friend class DistributedMergeTreeBlockOutputStream;
     friend class MergeTreeData;
 
@@ -207,16 +206,22 @@ private:
     void addIdempotentKey(const String & key);
     void buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_);
 
-    void commit(const IDistributedWriteAheadLog::RecordPtrs & records, std::any & dwal_consume_ctx);
+    void commit(IDistributedWriteAheadLog::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx);
 
     using SequencePair = std::pair<IDistributedWriteAheadLog::RecordSequenceNumber, IDistributedWriteAheadLog::RecordSequenceNumber>;
 
-    void doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, std::any & dwal_consume_ctx);
+    void doCommit(
+        Block block,
+        SequencePair seq_pair,
+        std::shared_ptr<IdempotentKeys> keys,
+        SequenceRanges missing_sequence_ranges,
+        std::any & dwal_consume_ctx);
     void commitSN(std::any & dwal_consume_ctx);
     void commitSNLocal(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn);
     void commitSNRemote(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx);
     void progressSequences(const SequencePair & seq);
-    void progressSequencesWithLock(const SequencePair & seq);
+    void progressSequencesWithoutLock(const SequencePair & seq);
+    Int64 maxCommittedSN() const;
 
 private:
     Int32 replication_factor;

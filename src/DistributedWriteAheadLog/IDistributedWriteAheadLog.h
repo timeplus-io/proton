@@ -104,6 +104,7 @@ public:
         static RecordPtr read(const char * data, size_t size);
 
         Record(OpCode op_code_, Block && block_) : op_code(op_code_), block(std::move(block_)) { }
+        explicit Record(RecordSequenceNumber sn_) : sn(sn_) { }
     };
 
     constexpr static UInt8 WAL_VERSION = 1;
@@ -164,7 +165,7 @@ public:
     /// `create` creates a WAL log named `name`. Returns 0 if success; otherwise non-zero
     virtual Int32 create(const String & name, std::any & ctx) = 0;
 
-    /// `remove` deltes a WAL log named `name`. Returns 0 if success; otherwise non-zero
+    /// `remove` deletes a WAL log named `name`. Returns 0 if success; otherwise non-zero
     virtual Int32 remove(const String & name, std::any & ctx) = 0;
 
     /// `describe` return 0 if success; otherwise return non-zero

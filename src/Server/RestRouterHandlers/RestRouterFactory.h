@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ColumnRestRouterHandler.h"
 #include "DatabaseRestRouterHandler.h"
 #include "IngestRawStoreHandler.h"
 #include "IngestRestRouterHandler.h"
@@ -11,8 +12,6 @@
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
-#include "DatabaseRestRouterHandler.h"
-#include "ColumnRestRouterHandler.h"
 
 #include <re2/re2.h>
 

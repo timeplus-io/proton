@@ -1778,7 +1778,7 @@ void StorageMergeTree::populateCommittedSNFromParts()
         }
     }
 
-    auto [missing_ranges, next_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, committed, log);
+    auto [missing_ranges, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, committed, log);
     if (next_expecting_sn != committed + 1)
     {
         /// We are progressing committed sn here as the committed sn in sn.txt in parts directories
@@ -1787,17 +1787,7 @@ void StorageMergeTree::populateCommittedSNFromParts()
         setCommittedSN(next_expecting_sn - 1);
     }
 
-    for (const auto & missing_range: missing_ranges)
-    {
-        LOG_INFO(
-            log,
-            "Missing sn range : ({}, {}, {}, {})",
-            missing_range.start_sn,
-            missing_range.end_sn,
-            missing_range.part_index,
-            missing_range.parts);
-    }
-
+    max_committed_sn = max_expecting_sn - 1;
     missing_sequence_ranges.swap(missing_ranges);
 
     /// Collect last N idempotent keys

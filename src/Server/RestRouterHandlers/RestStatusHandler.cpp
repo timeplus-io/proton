@@ -9,7 +9,6 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNKNOWN_TYPE_OF_QUERY;
-    extern const int NOT_FOUND_COLUMN_IN_BLOCK;
 }
 
 namespace

@@ -38,7 +38,6 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
     extern const int UNKNOWN_TABLE;
     extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_DICTIONARY;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
     extern const int TABLE_IS_READ_ONLY;

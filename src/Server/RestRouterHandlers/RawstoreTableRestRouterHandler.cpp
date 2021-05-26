@@ -12,12 +12,6 @@
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-    extern const int UNKNOWN_DATABASE;
-}
-
 std::map<String, std::map<String, String> > RawstoreTableRestRouterHandler::create_schema = {
     {"required",{
                         {"name","string"}
@@ -39,7 +33,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
 
     for (const auto & table : tables)
     {
-        /// FIXME : Later based on engin seting distinguish rawstore
+        /// FIXME : Later based on engine setting to distinguish rawstore
         if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") == String::npos)
         {
             continue;

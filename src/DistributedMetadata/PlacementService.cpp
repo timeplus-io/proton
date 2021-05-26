@@ -132,7 +132,7 @@ String PlacementService::getNodeIdentityByChannel(const String & channel) const
 
     for (const auto & [node_identity, node_metrics] : nodes_metrics)
     {
-        if(!node_metrics->staled && node_metrics->channel == channel)
+        if (!node_metrics->staled && node_metrics->channel == channel)
         {
             return node_metrics->host;
         }

@@ -1,9 +1,10 @@
 #include "StorageDistributedMergeTree.h"
+#include "DistributedMergeTreeCallbackData.h"
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
 #include <DistributedWriteAheadLog/DistributedWriteAheadLogName.h>
+#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -259,6 +260,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
             last_sn = sn;
             local_sn = sn;
         }
+
         LOG_INFO(log, "Load committed sn={}", sn);
     }
 
@@ -393,17 +395,20 @@ bool StorageDistributedMergeTree::supportsIndexForIn() const
 
 std::optional<UInt64> StorageDistributedMergeTree::totalRows(const Settings & settings) const
 {
+    assert(storage);
     return storage->totalRows(settings);
 }
 
 std::optional<UInt64>
 StorageDistributedMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
 {
+    assert(storage);
     return storage->totalRowsByPartitionPredicate(query_info, context_);
 }
 
 std::optional<UInt64> StorageDistributedMergeTree::totalBytes(const Settings & settings) const
 {
+    assert(storage);
     return storage->totalBytes(settings);
 }
 
@@ -415,29 +420,28 @@ StorageDistributedMergeTree::write(const ASTPtr & /*query*/, const StorageMetada
 
 void StorageDistributedMergeTree::checkTableCanBeDropped() const
 {
+    assert(storage);
     storage->checkTableCanBeDropped();
 }
 
 void StorageDistributedMergeTree::drop()
 {
     shutdown();
+    assert(storage);
     storage->drop();
 }
 
 void StorageDistributedMergeTree::truncate(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
 {
+    assert(storage);
     storage->truncate(query, metadata_snapshot, context_, holder);
 }
 
 void StorageDistributedMergeTree::alter(const AlterCommands & commands, ContextPtr context_, TableLockHolder & table_lock_holder)
 {
+    assert(storage);
     storage->alter(commands, context_, table_lock_holder);
     setInMemoryMetadata(storage->getInMemoryMetadata());
-}
-
-NamesAndTypesList StorageDistributedMergeTree::getVirtuals() const
-{
-    return storage->getVirtuals();
 }
 
 bool StorageDistributedMergeTree::optimize(
@@ -449,42 +453,50 @@ bool StorageDistributedMergeTree::optimize(
     const Names & deduplicate_by_columns,
     ContextPtr context_)
 {
+    assert(storage);
     return storage->optimize(query, metadata_snapshot, partition, finall, deduplicate, deduplicate_by_columns, context_);
 }
 
 void StorageDistributedMergeTree::mutate(const MutationCommands & commands, ContextPtr context_)
 {
+    assert(storage);
     storage->mutate(commands, context_);
 }
 
 /// Return introspection information about currently processing or recently processed mutations.
 std::vector<MergeTreeMutationStatus> StorageDistributedMergeTree::getMutationsStatus() const
 {
+    assert(storage);
     return storage->getMutationsStatus();
 }
 
 CancellationCode StorageDistributedMergeTree::killMutation(const String & mutation_id)
 {
+    assert(storage);
     return storage->killMutation(mutation_id);
 }
 
 ActionLock StorageDistributedMergeTree::getActionLock(StorageActionBlockType action_type)
 {
+    assert(storage);
     return storage->getActionLock(action_type);
 }
 
 void StorageDistributedMergeTree::onActionLockRemove(StorageActionBlockType action_type)
 {
+    assert(storage);
     storage->onActionLockRemove(action_type);
 }
 
 CheckResults StorageDistributedMergeTree::checkData(const ASTPtr & query, ContextPtr context_)
 {
+    assert(storage);
     return storage->checkData(query, context_);
 }
 
 std::optional<JobAndPool> StorageDistributedMergeTree::getDataProcessingJob()
 {
+    assert(storage);
     return storage->getDataProcessingJob();
 }
 
@@ -503,22 +515,26 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
 
 void StorageDistributedMergeTree::dropPartition(const ASTPtr & partition, bool detach, bool drop_part, ContextPtr context_, bool throw_if_noop)
 {
+    assert(storage);
     storage->dropPartition(partition, detach, drop_part, context_, throw_if_noop);
 }
 
 PartitionCommandsResultInfo StorageDistributedMergeTree::attachPartition(
     const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context_)
 {
+    assert(storage);
     return storage->attachPartition(partition, metadata_snapshot, part, context_);
 }
 
 void StorageDistributedMergeTree::replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
 {
+    assert(storage);
     storage->replacePartitionFrom(source_table, partition, replace, context_);
 }
 
 void StorageDistributedMergeTree::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context_)
 {
+    assert(storage);
     storage->movePartitionToTable(dest_table, partition, context_);
 }
 
@@ -527,6 +543,7 @@ void StorageDistributedMergeTree::movePartitionToTable(const StoragePtr & dest_t
 /// mechanisms for parts locking
 bool StorageDistributedMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & part) const
 {
+    assert(storage);
     return storage->partIsAssignedToBackgroundOperation(part);
 }
 
@@ -536,11 +553,13 @@ bool StorageDistributedMergeTree::partIsAssignedToBackgroundOperation(const Data
 /// MergeTree because they store mutations in different way.
 MutationCommands StorageDistributedMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const
 {
+    assert(storage);
     return storage->getFirstAlterMutationCommandsForPart(part);
 }
 
 void StorageDistributedMergeTree::startBackgroundMovesIfNeeded()
 {
+    assert(storage);
     return storage->startBackgroundMovesIfNeeded();
 }
 
@@ -850,6 +869,12 @@ void StorageDistributedMergeTree::mergeBlocks(Block & lhs, Block & rhs)
     lhs.checkNumberOfRows();
 }
 
+Int64 StorageDistributedMergeTree::maxCommittedSN() const
+{
+    assert(storage);
+    return storage->maxCommittedSN();
+}
+
 void StorageDistributedMergeTree::commitSNLocal(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn)
 {
     try
@@ -938,7 +963,7 @@ void StorageDistributedMergeTree::commitSN(std::any & dwal_consume_ctx)
     commitSNRemote(commit_sn, dwal_consume_ctx);
 }
 
-inline void StorageDistributedMergeTree::progressSequencesWithLock(const SequencePair & seq)
+inline void StorageDistributedMergeTree::progressSequencesWithoutLock(const SequencePair & seq)
 {
     assert(!outstanding_sns.empty());
 
@@ -980,11 +1005,15 @@ inline void StorageDistributedMergeTree::progressSequencesWithLock(const Sequenc
 inline void StorageDistributedMergeTree::progressSequences(const SequencePair & seq)
 {
     std::lock_guard lock(sns_mutex);
-    progressSequencesWithLock(seq);
+    progressSequencesWithoutLock(seq);
 }
 
 void StorageDistributedMergeTree::doCommit(
-    Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, std::any & dwal_consume_ctx)
+    Block block,
+    SequencePair seq_pair,
+    std::shared_ptr<IdempotentKeys> keys,
+    SequenceRanges missing_sequence_ranges,
+    std::any & dwal_consume_ctx)
 {
     {
         std::lock_guard lock(sns_mutex);
@@ -997,7 +1026,7 @@ void StorageDistributedMergeTree::doCommit(
         /// the offset checkpointing
         if (!block)
         {
-            progressSequencesWithLock(seq_pair);
+            progressSequencesWithoutLock(seq_pair);
             return;
         }
 
@@ -1009,9 +1038,8 @@ void StorageDistributedMergeTree::doCommit(
                                              moved_block = std::move(block),
                                              moved_seq = std::move(seq_pair),
                                              moved_keys = std::move(keys),
+                                             moved_sequence_ranges = std::move(missing_sequence_ranges),
                                              this] {
-        LOG_DEBUG(log, "Committing rows={} for shard={} to file system", moved_block.rows(), shard);
-
         while (!stopped.test())
         {
             try
@@ -1019,8 +1047,9 @@ void StorageDistributedMergeTree::doCommit(
                 auto output_stream = storage->write(nullptr, storage->getInMemoryMetadataPtr(), getContext());
 
                 /// Setup sequence numbers to persistent them to file system
-                static_cast<MergeTreeBlockOutputStream *>(output_stream.get())
-                    ->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
+                auto merge_tree_output = static_cast<MergeTreeBlockOutputStream *>(output_stream.get());
+                merge_tree_output->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
+                merge_tree_output->setMissingSequenceRanges(std::move(moved_sequence_ranges));
 
                 output_stream->writePrefix();
                 output_stream->write(moved_block);
@@ -1108,7 +1137,7 @@ bool StorageDistributedMergeTree::dedupBlock(const IDistributedWriteAheadLog::Re
     return false;
 }
 
-void StorageDistributedMergeTree::commit(const IDistributedWriteAheadLog::RecordPtrs & records, std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commit(IDistributedWriteAheadLog::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx)
 {
     if (records.empty())
     {
@@ -1151,9 +1180,18 @@ void StorageDistributedMergeTree::commit(const IDistributedWriteAheadLog::Record
         }
     }
 
-    doCommit(std::move(block), std::make_pair(records.front()->sn, records.back()->sn), std::move(keys), dwal_consume_ctx);
+    LOG_DEBUG(
+        log, "Committing records={} rows={} bytes={} for shard={} to file system", records.size(), block.rows(), block.bytes(), shard);
+
+    doCommit(
+        std::move(block),
+        std::make_pair(records.front()->sn, records.back()->sn),
+        std::move(keys),
+        std::move(missing_sequence_ranges),
+        dwal_consume_ctx);
     assert(!block);
     assert(!keys);
+    assert(missing_sequence_ranges.empty());
 }
 
 IDistributedWriteAheadLog::RecordSequenceNumber StorageDistributedMergeTree::sequenceNumberLoaded() const
@@ -1181,56 +1219,34 @@ void StorageDistributedMergeTree::backgroundConsumer()
 
     DistributedWriteAheadLogKafkaContext consume_ctx{topic(getStorageID()), shard, sequenceNumberLoaded()};
     consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
-    consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshhold_ms.value;
-    consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshhold_count;
-    consume_ctx.consume_callback_max_messages_size = ssettings->distributed_flush_threshhold_size;
-    SequenceRanges missing_ranges = storage->missingSequenceRanges();
+    consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
+    consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
+    consume_ctx.consume_callback_max_messages_size = ssettings->distributed_flush_threshold_size;
+    const auto & missing_sequence_ranges = storage->missingSequenceRanges();
 
     LOG_INFO(
         log,
-        "Start consuming records from shard={} sn={} distributed_flush_threshhold_ms={} "
-        "distributed_flush_threshhold_count={} "
-        "distributed_flush_threshhold_size={}",
+        "Start consuming records from shard={} sn={} distributed_flush_threshold_ms={} "
+        "distributed_flush_threshold_count={} "
+        "distributed_flush_threshold_size={} with missing_sequence_ranges={}",
         shard,
         consume_ctx.offset,
         consume_ctx.consume_callback_timeout_ms,
         consume_ctx.consume_callback_max_rows,
-        consume_ctx.consume_callback_max_messages_size);
+        consume_ctx.consume_callback_max_messages_size,
+        sequenceRangesToString(missing_sequence_ranges));
 
     std::any dwal_consume_ctx{consume_ctx};
 
-    struct CallbackData
-    {
-        StorageDistributedMergeTree * storage;
-        std::any & ctx;
-
-        std::atomic_uint16_t outstanding_commits = 0;
-
-        CallbackData(StorageDistributedMergeTree * storage_, std::any & ctx_) : storage(storage_), ctx(ctx_) { }
-    };
-
-    CallbackData callback_data{this, dwal_consume_ctx};
+    DistributedMergeTreeCallbackData callback_data{this, missing_sequence_ranges, dwal_consume_ctx};
 
     /// The callback is happening in the same thread as the caller
     auto callback = [](IDistributedWriteAheadLog::RecordPtrs records, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        auto cdata = static_cast<CallbackData *>(data);
+        assert(!records.empty());
 
-        ++cdata->outstanding_commits;
-        try
-        {
-            cdata->storage->commit(records, cdata->ctx);
-        }
-        catch (...)
-        {
-            LOG_ERROR(
-                cdata->storage->log,
-                "Failed to commit data for shard={}, exception={}",
-                cdata->storage->shard,
-                getCurrentExceptionMessage(true, true));
-        }
-        --cdata->outstanding_commits;
+        auto cdata = static_cast<DistributedMergeTreeCallbackData *>(data);
+        cdata->commit(std::move(records));
     };
-
 
     while (!stopped.test())
     {
@@ -1286,12 +1302,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
 
     dwal->stopConsume(dwal_consume_ctx);
 
-    /// Wait for the outstanding commits
-    while (callback_data.outstanding_commits != 0)
-    {
-        LOG_INFO(log, "Waiting for outstanding commits={} to finish", callback_data.outstanding_commits);
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
+    callback_data.wait();
 
     /// When tearing down, commit whatever it has
     commitSN(dwal_consume_ctx);

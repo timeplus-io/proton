@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/SequenceInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Interpreters/PartLog.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
@@ -31,6 +32,11 @@ void MergeTreeSink::consume(Chunk chunk)
     {
         Stopwatch watch;
 
+        if (ignorePartBlock(parts, part_index))
+        {
+            part_index++;
+            continue;
+        }
 
         SequenceInfoPtr part_seq;
 
@@ -71,5 +77,61 @@ void MergeTreeSink::consume(Chunk chunk)
         }
     }
 }
+
+/// Daisy : starts
+inline bool MergeTreeBlockOutputStream::ignorePartBlock(Int32 parts, Int32 part_index) const
+{
+    if (missing_seq_ranges.empty())
+    {
+        return false;
+    }
+
+    const auto & last_seq_range = missing_seq_ranges.back();
+    assert(parts == last_seq_range.parts);
+
+    if (parts != last_seq_range.parts)
+    {
+        /// This shall not happen. If it does happen, the table partition algorithm
+        /// in table definition has been changed. We just persist the blocks in favor
+        /// of avoiding data loss (there can be data duplication)
+        LOG_WARNING(
+            storage.log,
+            "Recovery phase. Expecting parts={}, but got={} for start_sn={}, end_sn={}. Partition algorithm is probably changed",
+            parts,
+            last_seq_range.parts,
+            last_seq_range.start_sn,
+            last_seq_range.end_sn);
+        return false;
+    }
+
+    /// Recovery phase, only persist missing sequence ranges to avoid duplicate data
+    for (const auto & seq_range : missing_seq_ranges)
+    {
+        if (seq_range.part_index == part_index)
+        {
+            /// The part block is in missing sequence ranges, persist it
+            LOG_INFO(
+                storage.log,
+                "Recovery phase. Persisting missing parts={} part_index={} for start_sn={}, end_sn={}",
+                parts,
+                part_index,
+                last_seq_range.start_sn,
+                last_seq_range.end_sn);
+
+            return false;
+        }
+    }
+
+    LOG_INFO(
+        storage.log,
+        "Recovery phase. Skipping persisting parts={} part_index={} for start_sn={}, end_sn={} because it was previously persisted",
+        parts,
+        part_index,
+        last_seq_range.start_sn,
+        last_seq_range.end_sn);
+
+    return true;
+}
+/// Daisy : ends
 
 }
