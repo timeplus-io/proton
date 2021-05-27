@@ -1343,11 +1343,15 @@
         <system_catalogs>
             <name>__system_catalogs</name>
             <replication_factor>1</replication_factor>
+            <log_roll_size>100</log_roll_size>
+            <log_roll_period>7200</log_roll_period>
         </system_catalogs>
 
         <system_node_metrics>
             <name>__system_node_metrics</name>
             <replication_factor>1</replication_factor>
+            <log_roll_size>100</log_roll_size>
+            <log_roll_period>7200</log_roll_period>
         </system_node_metrics>
 
         <system_tasks>

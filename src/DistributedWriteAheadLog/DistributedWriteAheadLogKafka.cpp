@@ -30,8 +30,6 @@ using KTopicConfPtr = std::unique_ptr<rd_kafka_topic_conf_t, decltype(rd_kafka_t
 using KConfCallback = std::function<void(rd_kafka_conf_t *)>;
 using KConfParams = std::vector<std::pair<String, String>>;
 
-const char * IDEM_HEADER_NAME = "_idem";
-
 Int32 mapErrorCode(rd_kafka_resp_err_t err)
 {
     /// FIXME, more code mapping
@@ -734,10 +732,10 @@ Int32 DistributedWriteAheadLogKafka::doAppend(const Record & record, DeliveryRep
         for (const auto & h : record.headers)
         {
             rd_kafka_header_add(header_ptr.get(), h.first.data(), h.first.size(), h.second.data(), h.second.size());
-            if (h.first == IDEM_HEADER_NAME)
+            if (h.first == IDEMPOTENT_KEY)
             {
-                key_data = h.first.data();
-                key_size = h.first.size();
+                key_data = h.second.data();
+                key_size = h.second.size();
             }
         }
 
@@ -1166,10 +1164,24 @@ Int32 DistributedWriteAheadLogKafka::create(const String & name, std::any & ctx)
     }
 
     KConfParams params = {
-        std::make_pair("compression.type", "lz4"),
+        std::make_pair("compression.type", "snappy"),
         std::make_pair("cleanup.policy", walctx.cleanup_policy),
-        std::make_pair("retention.ms", std::to_string(walctx.retention_ms)),
     };
+
+    if (walctx.retention_ms > 0)
+    {
+        params.emplace_back("retention.ms", std::to_string(walctx.retention_ms));
+    }
+
+    if (walctx.segment_bytes > 0)
+    {
+        params.emplace_back("segment.bytes", std::to_string(walctx.segment_bytes));
+    }
+
+    if (walctx.segment_ms > 0)
+    {
+        params.emplace_back("segment.ms", std::to_string(walctx.segment_ms));
+    }
 
     for (const auto & param : params)
     {

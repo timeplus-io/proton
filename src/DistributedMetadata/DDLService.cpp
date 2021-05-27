@@ -28,9 +28,6 @@ namespace
 {
     /// globals
     const String DDL_KEY_PREFIX = "cluster_settings.system_ddls.";
-    const String DDL_NAME_KEY = DDL_KEY_PREFIX + "name";
-    const String DDL_REPLICATION_FACTOR_KEY = DDL_KEY_PREFIX + "replication_factor";
-    const String DDL_DATA_RETENTION_KEY = DDL_KEY_PREFIX + "data_retention";
     const String DDL_DEFAULT_TOPIC = "__system_ddls";
 
     const String DDL_TABLE_POST_API_PATH_FMT = "/dae/v1/ddl/{}";
@@ -179,11 +176,9 @@ DDLService::DDLService(const ContextPtr & global_context_)
 MetadataService::ConfigSettings DDLService::configSettings() const
 {
     return {
-        .name_key = DDL_NAME_KEY,
+        .key_prefix = DDL_KEY_PREFIX,
         .default_name = DDL_DEFAULT_TOPIC,
-        .data_retention_key = DDL_DATA_RETENTION_KEY,
         .default_data_retention = 168,
-        .replication_factor_key = DDL_REPLICATION_FACTOR_KEY,
         .request_required_acks = -1,
         .request_timeout_ms = 10000,
         .auto_offset_reset = "earliest",

@@ -11,18 +11,12 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/executeSelectQuery.h>
-
 #include <common/ClockUtils.h>
 #include <common/DateLUT.h>
 #include <common/logger_useful.h>
 
 #include <Poco/Util/Application.h>
 
-#include <chrono>
-#include <mutex>
-#include <sstream>
-#include <thread>
-#include <vector>
 
 namespace DB
 {
@@ -34,9 +28,6 @@ namespace ErrorCodes
 namespace
 {
 String TASK_KEY_PREFIX = "cluster_settings.system_tasks.";
-String TASK_NAME_KEY = TASK_KEY_PREFIX + "name";
-String TASK_REPLICATION_FACTOR_KEY = TASK_KEY_PREFIX + "replication_factor";
-String TASK_DATA_RETENTION_KEY = TASK_KEY_PREFIX + "data_retention";
 String TASK_DEFAULT_TOPIC = "__system_tasks";
 
 Block buildBlock(const std::vector<TaskStatusService::TaskStatusPtr> & tasks)
@@ -133,11 +124,9 @@ TaskStatusService::TaskStatusService(const ContextPtr & global_context_) : Metad
 MetadataService::ConfigSettings TaskStatusService::configSettings() const
 {
     return {
-        .name_key = TASK_NAME_KEY,
+        .key_prefix = TASK_KEY_PREFIX,
         .default_name = TASK_DEFAULT_TOPIC,
-        .data_retention_key = TASK_DATA_RETENTION_KEY,
         .default_data_retention = 24,
-        .replication_factor_key = TASK_REPLICATION_FACTOR_KEY,
         .request_required_acks = -1,
         .request_timeout_ms = 10000,
         .auto_offset_reset = "earliest",
@@ -487,7 +476,8 @@ bool TaskStatusService::createTaskTable()
 
     const auto & config = global_context->getConfigRef();
     const auto & conf = configSettings();
-    const auto replicas = std::to_string(config.getInt(conf.replication_factor_key, 1));
+    const String replication_factor_key = conf.key_prefix + "replication_factor";
+    const auto replicas = std::to_string(config.getInt(replication_factor_key, 1));
 
     String query = fmt::format(
         "CREATE TABLE IF NOT EXISTS \

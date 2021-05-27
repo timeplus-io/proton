@@ -37,7 +37,13 @@ struct DistributedWriteAheadLogKafkaContext
     String compression_codec = "snappy";
 
     /// Data retention for cleanup_policy `delete`
-    Int32 retention_ms = 86400 * 1000;
+    Int64 retention_ms = -1;
+
+    /// Segments roll over size
+    Int64 segment_bytes = -1;
+
+    /// Segments roll over time
+    Int64 segment_ms = -1;
 
     /// `compact` or `delete`
     String cleanup_policy = "delete";
@@ -57,7 +63,31 @@ struct DistributedWriteAheadLogKafkaContext
 
     static String topicPartitonKey(const String & topic, Int32 partition) { return topic + "$" + std::to_string(partition); }
 
-    String key() { return topicPartitonKey(topic, partition); }
+    String key() const { return topicPartitonKey(topic, partition); }
+
+    String string() const
+    {
+        std::vector<String> ctxes;
+        ctxes.push_back("topic=" + topic);
+        ctxes.push_back("partition=" + std::to_string(partition));
+        ctxes.push_back("offset=" + std::to_string(offset));
+        ctxes.push_back("partitions=" + std::to_string(partitions));
+        ctxes.push_back("replication_factor=" + std::to_string(replication_factor));
+        ctxes.push_back("compression_codec=" + compression_codec);
+        ctxes.push_back("retention_ms=" + std::to_string(retention_ms));
+        ctxes.push_back("segment_bytes=" + std::to_string(segment_bytes));
+        ctxes.push_back("segment_ms=" + std::to_string(segment_ms));
+        ctxes.push_back("cleanup_policy=" + cleanup_policy);
+        ctxes.push_back("request_required_acks=" + std::to_string(request_required_acks));
+        ctxes.push_back("request_timeout_ms=" + std::to_string(request_timeout_ms));
+        ctxes.push_back("auto_offset_reset=" + auto_offset_reset);
+        ctxes.push_back("consume_callback_max_messages=" + std::to_string(consume_callback_max_messages));
+        ctxes.push_back("consume_callback_max_rows=" + std::to_string(consume_callback_max_rows));
+        ctxes.push_back("consume_callback_max_messages_size=" + std::to_string(consume_callback_max_messages_size));
+        ctxes.push_back("consume_callback_timeout_ms=" + std::to_string(consume_callback_timeout_ms));
+
+        return boost::algorithm::join(ctxes, " ");
+    }
 
     /// Cached topic handle across call
     std::shared_ptr<rd_kafka_topic_s> topic_handle;

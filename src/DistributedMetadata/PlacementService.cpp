@@ -23,9 +23,6 @@ namespace
 {
 /// Globals
 const String PLACEMENT_KEY_PREFIX = "cluster_settings.system_node_metrics.";
-const String PLACEMENT_NAME_KEY = PLACEMENT_KEY_PREFIX + "name";
-const String PLACEMENT_REPLICATION_FACTOR_KEY = PLACEMENT_KEY_PREFIX + "replication_factor";
-const String PLACEMENT_DATA_RETENTION_KEY = PLACEMENT_KEY_PREFIX + "data_retention";
 const String PLACEMENT_DEFAULT_TOPIC = "__system_node_metrics";
 
 const String THIS_HOST = getFQDNOrHostName();
@@ -49,11 +46,9 @@ PlacementService::PlacementService(const ContextPtr & global_context_, Placement
 MetadataService::ConfigSettings PlacementService::configSettings() const
 {
     return {
-        .name_key = PLACEMENT_NAME_KEY,
+        .key_prefix = PLACEMENT_KEY_PREFIX,
         .default_name = PLACEMENT_DEFAULT_TOPIC,
-        .data_retention_key = PLACEMENT_DATA_RETENTION_KEY,
         .default_data_retention = 2,
-        .replication_factor_key = PLACEMENT_REPLICATION_FACTOR_KEY,
         .request_required_acks = 1,
         .request_timeout_ms = 10000,
         .auto_offset_reset = "earliest",

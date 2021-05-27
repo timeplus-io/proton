@@ -43,15 +43,16 @@ protected:
 protected:
     struct ConfigSettings
     {
-        String name_key;
+        String key_prefix;
+
         /// Topic
         String default_name;
-        String data_retention_key;
         Int32 default_data_retention;
-        String replication_factor_key;
+
         /// Producer
         Int32 request_required_acks = 1;
         Int32 request_timeout_ms = 10000;
+
         /// Consumer
         String auto_offset_reset = "earliest";
         Int64 initial_default_offset = -2;

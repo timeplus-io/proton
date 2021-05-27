@@ -22,6 +22,11 @@ namespace
 {
     /// Globals
     const String SYSTEM_ROLES_KEY = "cluster_settings.node_roles";
+    const String NAME_KEY = "name";
+    const String REPLICATION_FACTOR_KEY = "replication_factor";
+    const String DATA_RETENTION_KEY = "data_retention";
+    const String LOG_ROLL_SIZE_KEY = "log_roll_size";
+    const String LOG_ROLL_PERIOD_KEY = "log_roll_period";
 }
 
 MetadataService::MetadataService(const ContextPtr & global_context_, const String & service_name)
@@ -108,7 +113,7 @@ void MetadataService::doCreateDWal(std::any & ctx)
         return;
     }
 
-    LOG_INFO(log, "Didn't find topic={}, create one", kctx.topic);
+    LOG_INFO(log, "Didn't find topic={}, create one with settings={}", kctx.topic, kctx.string());
 
     while (!stopped.test())
     {
@@ -205,14 +210,24 @@ void MetadataService::startup()
     /// For example, every node can call produce node metrics via PlacementService
     const auto & conf = configSettings();
 
-    String topic = config.getString(conf.name_key, conf.default_name);
-    auto replication_factor = config.getInt(conf.replication_factor_key, 1);
+    String topic = config.getString(conf.key_prefix + NAME_KEY , conf.default_name);
+    auto replication_factor = config.getInt(conf.key_prefix + REPLICATION_FACTOR_KEY, 1);
     DistributedWriteAheadLogKafkaContext kctx{topic, 1, replication_factor, cleanupPolicy()};
     /// Topic settings
-    kctx.retention_ms = config.getInt(conf.data_retention_key, conf.default_data_retention);
+    kctx.retention_ms = config.getInt(conf.key_prefix + DATA_RETENTION_KEY, conf.default_data_retention);
     if (kctx.retention_ms > 0)
     {
+        /// Hour based in config
         kctx.retention_ms *= 3600 * 1000;
+    }
+
+    /// Compact topics
+    if (kctx.cleanup_policy == "compact")
+    {
+        /// In MBs
+        kctx.segment_bytes = config.getInt(conf.key_prefix + LOG_ROLL_SIZE_KEY, 100) * 1024 * 1024;
+        /// In Seconds
+        kctx.segment_ms = config.getInt(conf.key_prefix + LOG_ROLL_PERIOD_KEY, 7200) * 1000;
     }
 
     /// Producer settings

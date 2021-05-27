@@ -37,21 +37,16 @@ namespace
 {
 /// Globals
 const String CATALOG_KEY_PREFIX = "cluster_settings.system_catalogs.";
-const String CATALOG_NAME_KEY = CATALOG_KEY_PREFIX + "name";
-const String CATALOG_REPLICATION_FACTOR_KEY = CATALOG_KEY_PREFIX + "replication_factor";
-const String CATALOG_DATA_RETENTION_KEY = CATALOG_KEY_PREFIX + "data_retention";
 const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 
 const String THIS_HOST = getFQDNOrHostName();
 
-const String PARSE_SHARD_REGEX = "shard\\s*=\\s*(\\d+)";
-const String PARSE_SHARDS_REGEX = "DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,";
-const String PARSE_REPLICATION_REGEX = "DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+\\s*,";
+std::regex PARSE_SHARD_REGEX{"shard\\s*=\\s*(\\d+)"};
+std::regex PARSE_SHARDS_REGEX{"DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
+std::regex PARSE_REPLICATION_REGEX{"DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+\\s*,"};
 
-Int32 searchIntValueByRegex(const String & regex_s, const String & str)
+Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
 {
-    std::regex pattern(regex_s);
-
     std::smatch pattern_match;
 
     auto m = std::regex_search(str, pattern_match, pattern);
@@ -76,11 +71,9 @@ CatalogService::CatalogService(const ContextPtr & global_context_) : MetadataSer
 MetadataService::ConfigSettings CatalogService::configSettings() const
 {
     return {
-        .name_key = CATALOG_NAME_KEY,
+        .key_prefix = CATALOG_KEY_PREFIX,
         .default_name = CATALOG_DEFAULT_TOPIC,
-        .data_retention_key = CATALOG_DATA_RETENTION_KEY,
         .default_data_retention = -1,
-        .replication_factor_key = CATALOG_REPLICATION_FACTOR_KEY,
         .request_required_acks = -1,
         .request_timeout_ms = 10000,
         .auto_offset_reset = "earliest",
