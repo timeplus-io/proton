@@ -122,21 +122,6 @@ std::vector<NodeMetricsPtr> PlacementService::nodes() const
     return nodes;
 }
 
-String PlacementService::getNodeIdentityByChannel(const String & channel) const
-{
-    std::shared_lock guard(rwlock);
-
-    for (const auto & [node_identity, node_metrics] : nodes_metrics)
-    {
-        if (!node_metrics->staled && node_metrics->node.channel == channel)
-        {
-            return node_metrics->node.host;
-        }
-    }
-
-    return "";
-}
-
 void PlacementService::preShutdown()
 {
     if (broadcast_task)

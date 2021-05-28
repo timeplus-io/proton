@@ -21,6 +21,7 @@ namespace ErrorCodes
 {
     extern const int BAD_REQUEST_PARAMETER;
     extern const int UNKNOWN_TYPE_OF_QUERY;
+    extern const int UNKNOWN_EXCEPTION;
 }
 
 class RestRouterHandler : private boost::noncopyable
@@ -103,6 +104,17 @@ protected:
     String jsonErrorResponse(const String & error_msg, int error_code) const
     {
         return jsonErrorResponse(error_msg, error_code, query_context->getCurrentQueryId());
+    }
+
+    /// Compose the error response from a response of a forwared request
+    String jsonErrorResponseFrom(const String & response, int error_code = ErrorCodes::UNKNOWN_EXCEPTION) const
+    {
+        if (response.find("request_id") != String::npos && response.find("error_msg") != String::npos)
+        {
+            /// It is already a well-formed response in JSON from remote
+            return response;
+        }
+        return jsonErrorResponse("Internal server error", error_code);
     }
 
 private:

@@ -80,6 +80,7 @@ public:
 
     std::vector<NodePtr> nodes(const String & role = "") const;
     NodePtr nodeByIdentity(const String & identity) const;
+    NodePtr nodeByChannel(const String & channel) const;
 
 private:
     bool setTableStorageByName(const String & database, const String & table, const StoragePtr & storage);

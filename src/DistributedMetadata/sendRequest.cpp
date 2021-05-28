@@ -35,7 +35,7 @@ std::pair<String, Int32> sendRequest(
     Poco::Logger * log)
 {
     /// One second for connect/send/receive
-    ConnectionTimeouts timeouts({1, 0}, {1, 0}, {5, 0});
+    ConnectionTimeouts timeouts({2, 0}, {5, 0}, {10, 0});
 
     PooledHTTPSessionPtr session;
     try
@@ -45,7 +45,8 @@ std::pair<String, Int32> sendRequest(
         request.setHost(uri.getHost());
         request.setContentLength(payload.size());
         request.setContentType("application/json");
-        request.add("X-ClickHouse-Query-Id", query_id);
+        /// FIXME : query ID chain. Change the query ID to avoid same query ID issue
+        request.add("X-ClickHouse-Query-Id", "from-" + query_id);
         request.add("X-ClickHouse-User", user);
 
         if (!password.empty())

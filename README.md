@@ -221,4 +221,6 @@ $ clickhouse-client
 And query like `SELECT * FROM testtable`
 
 ### Query Data via REST API
+```
 $ curl http://localhost:8123/dae/v1/search -X POST -H "content-type: application/json" -d '{"query": "SELECT * FROM testtable"}'
+```

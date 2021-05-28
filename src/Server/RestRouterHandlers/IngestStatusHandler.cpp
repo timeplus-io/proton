@@ -1,15 +1,13 @@
 #include "IngestStatusHandler.h"
 #include "SchemaValidator.h"
 
-#include <DistributedMetadata/PlacementService.h>
-#include <IO/HTTPCommon.h>
+#include <DistributedMetadata/CatalogService.h>
+#include <DistributedMetadata/sendRequest.h>
 #include <Storages/StorageDistributedMergeTree.h>
 
-#include <Poco/Net/HTTPRequest.h>
 #include <Poco/Path.h>
 
 #include <numeric>
-#include <vector>
 
 namespace DB
 {
@@ -33,9 +31,6 @@ const std::map<String, std::map<String, String>> POLL_SCHEMA = {{"required", {{"
 StoragePtr
 getTableStorage(const String & database_name, const String & table_name, ContextPtr query_context, String & error, int & error_code)
 {
-    error.clear();
-    error_code = ErrorCodes::OK;
-
     StoragePtr storage;
     try
     {
@@ -64,7 +59,7 @@ getTableStorage(const String & database_name, const String & table_name, Context
     return storage;
 }
 
-String makeBatchResponse(const std::vector<IngestingBlocks::IngestStatus> & statuses)
+String makeBatchResponse(const std::vector<IngestingBlocks::IngestStatus> & statuses, const String & query_id)
 {
     Poco::JSON::Object resp;
     Poco::JSON::Array json_statuses;
@@ -77,6 +72,7 @@ String makeBatchResponse(const std::vector<IngestingBlocks::IngestStatus> & stat
         json_statuses.add(json);
     }
     resp.set("status", json_statuses);
+    resp.set("request_id", query_id);
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
     return resp_str_stream.str();
@@ -114,22 +110,16 @@ bool IngestStatusHandler::categorizePollIds(const std::vector<String> & poll_ids
 
 std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
-    String error;
-    PlacementService & placement = PlacementService::instance(query_context);
-    const String & target_node = placement.getNodeIdentityByChannel(payload->get("channel").toString());
+    if (!payload)
+        return {jsonErrorResponse("payload is empty", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
 
-    if (target_node.empty())
+    const auto & chan = payload->get("channel").toString();
+    if (query_context->getChannel() == chan)
     {
-        /// Invalid node
-        return {jsonErrorResponse("Unknown channel", ErrorCodes::CHANNEL_ID_NOT_EXISTS), HTTPResponse::HTTP_NOT_FOUND};
-    }
-
-    if (target_node == query_context->getNodeIdentity())
-    {
-        const auto & arr = payload->getArray("poll_ids");
+        String error;
+        /// The current node is the target ingesting node having the channel
         std::vector<String> poll_ids;
-
-        for (const auto & poll_id : *arr)
+        for (const auto & poll_id : *payload->getArray("poll_ids"))
             poll_ids.emplace_back(poll_id.extract<String>());
 
         TablePollIdMap table_poll_ids;
@@ -139,10 +129,9 @@ std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Obje
         }
 
         std::vector<IngestingBlocks::IngestStatus> statuses;
-        int error_code = ErrorCodes::OK;
-
         for (const auto & table_polls : table_poll_ids)
         {
+            int error_code = ErrorCodes::OK;
             auto storage = getTableStorage(table_polls.first.first, table_polls.first.second, query_context, error, error_code);
             if (!storage)
             {
@@ -161,78 +150,39 @@ std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Obje
 
         if (statuses.empty())
         {
-            return {
-                jsonErrorResponse("None of poll_id in 'poll_ids' is valid", ErrorCodes::INVALID_POLL_ID), HTTPResponse::HTTP_BAD_REQUEST};
+            return {jsonErrorResponse("'poll_ids' are all invalid", ErrorCodes::INVALID_POLL_ID), HTTPResponse::HTTP_BAD_REQUEST};
         }
-        return {makeBatchResponse(statuses), HTTPResponse::HTTP_OK};
+        return {makeBatchResponse(statuses, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
     }
     else
     {
-        Poco::URI uri{fmt::format(BATCH_URL, target_node, query_context->getConfigRef().getString("http_port"))};
-        return forwardRequest(uri, payload);
-    }
-}
+        auto target_node = CatalogService::instance(query_context).nodeByChannel(chan);
+        if (target_node == nullptr)
+        {
+            /// Node not found, either node is gone or invalid channel
+            return {jsonErrorResponse("Unknown channel", ErrorCodes::CHANNEL_ID_NOT_EXISTS), HTTPResponse::HTTP_NOT_FOUND};
+        }
 
-std::pair<String, Int32> IngestStatusHandler::forwardRequest(const Poco::URI & uri, const Poco::JSON::Object::Ptr & payload) const
-{
-    LOG_DEBUG(log, "Forward request to uri={}", uri.toString());
-
-    /// One second for connect/send/receive
-    ConnectionTimeouts timeouts({1, 0}, {1, 0}, {5, 0});
-
-    String error;
-    PooledHTTPSessionPtr session;
-    try
-    {
-        if (!payload)
-            return {jsonErrorResponse("payload is empty", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
-
-        session = makePooledHTTPSession(uri, timeouts, 1);
-        Poco::Net::HTTPRequest request{Poco::Net::HTTPRequest::HTTP_GET, uri.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1};
-        request.setHost(uri.getHost());
         std::stringstream req_body_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
         payload->stringify(req_body_stream, 0);
-        request.setMethod(Poco::Net::HTTPRequest::HTTP_POST);
         const String & body = req_body_stream.str();
-        request.setContentType("application/json");
-        request.setContentLength(body.length());
-        request.add("X-ClickHouse-Query-Id", query_context->getCurrentQueryId());
-        auto & ostr = session->sendRequest(request);
-        ostr << req_body_stream.str();
 
-        if (!ostr.good())
+        /// Forward the request to target node
+        /// FIXME, https
+        Poco::URI uri{fmt::format(BATCH_URL, target_node->host, target_node->http_port)};
+        auto [response, http_status] = sendRequest(
+            uri,
+            HTTPRequest::HTTP_POST,
+            query_context->getCurrentQueryId(),
+            query_context->getUserName(),
+            query_context->getPasswordByUserName(query_context->getUserName()),
+            body,
+            log);
+        if (http_status == HTTPResponse::HTTP_OK)
         {
-            error = "Failed on uri=" + uri.toString();
-            LOG_ERROR(log, error);
-            return {jsonErrorResponse(error, ErrorCodes::SEND_POLL_REQ_ERROR), HTTPResponse::HTTP_SERVICE_UNAVAILABLE};
+            return {response, http_status};
         }
-
-        Poco::Net::HTTPResponse response;
-        auto & istr = session->receiveResponse(response);
-        auto http_status = response.getStatus();
-
-        if (http_status != Poco::Net::HTTPResponse::HTTP_OK)
-        {
-            LOG_INFO(log, "Executed on uri={} failed", uri.toString());
-        }
-        return {String(std::istreambuf_iterator<char>(istr), {}), http_status};
+        return {jsonErrorResponseFrom(response, ErrorCodes::SEND_POLL_REQ_ERROR), http_status};
     }
-    catch (const Poco::Exception & e)
-    {
-        if (!session.isNull())
-        {
-            session->attachSessionData(e.message());
-        }
-        error = "Failed on uri=" + uri.toString() + " error=" + e.message() + " exception=" + getCurrentExceptionMessage(false, true);
-        LOG_ERROR(log, error);
-    }
-    catch (...)
-    {
-        error = "Failed on uri=" + uri.toString() + " exception=" + getCurrentExceptionMessage(false, true);
-        LOG_ERROR(log, error);
-    }
-
-    return {jsonErrorResponse(error, ErrorCodes::SEND_POLL_REQ_ERROR), HTTPResponse::HTTP_INTERNAL_SERVER_ERROR};
 }
-
 }

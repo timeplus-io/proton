@@ -61,7 +61,7 @@ std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object
         return {response, http_status};
     }
 
-    return {buildErrorResponse(response), http_status};
+    return {jsonErrorResponseFrom(response), http_status};
 }
 
 String ClusterInfoHandler::buildResponse() const
@@ -76,19 +76,10 @@ String ClusterInfoHandler::buildResponse() const
 
     Poco::JSON::Object resp;
     resp.set("nodes", json_nodes);
+    resp.set("request_id", query_context->getCurrentQueryId());
 
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
     return resp_str_stream.str();
-}
-
-String ClusterInfoHandler::buildErrorResponse(const String & response) const
-{
-    if (response.find("request_id") != String::npos && response.find("error_msg") != String::npos)
-    {
-        /// It is already a well-formed response from remote
-        return response;
-    }
-    return jsonErrorResponse("Internal server error", ErrorCodes::RESOURCE_NOT_INITED);
 }
 }

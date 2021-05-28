@@ -72,11 +72,6 @@ void DistributedWriteAheadLogPool::startup()
 
 void DistributedWriteAheadLogPool::shutdown()
 {
-    if (!global_context->isDistributed())
-    {
-        return;
-    }
-
     if (stopped.test_and_set())
     {
         return;

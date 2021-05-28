@@ -124,6 +124,7 @@ void CatalogService::append(Block && block)
     record.partition_key = 0;
     record.setIdempotentKey(global_context->getNodeIdentity());
     record.headers["_host"] = THIS_HOST;
+    record.headers["_channel"] = global_context->getChannel();
     record.headers["_node_roles"] = node_roles;
     record.headers["_version"] = "1";
 
@@ -438,13 +439,27 @@ std::vector<NodePtr> CatalogService::nodes(const String & role) const
 NodePtr CatalogService::nodeByIdentity(const String & identity) const
 {
     std::shared_lock guard{catalog_rwlock};
-    for (const auto & idem_node : table_nodes)
+
+    auto iter = table_nodes.find(identity);
+    if (iter != table_nodes.end())
     {
-        if (idem_node.second->identity == identity)
+        return iter->second;
+    }
+    return nullptr;
+}
+
+NodePtr CatalogService::nodeByChannel(const String & channel) const
+{
+    std::shared_lock guard(catalog_rwlock);
+
+    for (const auto & node : table_nodes)
+    {
+        if (node.second->channel == channel)
         {
-            return idem_node.second;
+            return node.second;
         }
     }
+
     return nullptr;
 }
 
@@ -625,14 +640,17 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
         indexed_by_node.emplace(node->identity, snapshot);
 
         /// This is a new node
-        /// FIXME : support tcp/http port changes and dead node
         auto res = table_nodes.emplace(node->identity, node);
         assert(res.second);
         (void)res;
         return;
     }
 
-    /// Found node. Merge existing tables from this node to `indexed_by_name`
+    /// Existing node, update it
+    /// FIXME : support tcp/http port changes and dead node
+    table_nodes[node->identity] = node;
+
+    /// Merge existing tables from this node to `indexed_by_name`
     /// and delete `deleted` table entries from `indexed_by_name`
     for (const auto & p : iter->second)
     {

@@ -56,7 +56,7 @@ void RestRouterHandler::execute(HTTPServerRequest & request, HTTPServerResponse 
     if (!streamingOutput())
     {
         response.setStatusAndReason(HTTPResponse::HTTPStatus(result.second));
-        *response.send() << result.first << std::endl;
+        *response.send() << result.first;
     }
 }
 
