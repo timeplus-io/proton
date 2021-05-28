@@ -56,10 +56,7 @@ public:
     void setupDistributedQueryParameters(const std::map<String, String> & parameters, const Poco::JSON::Object::Ptr & payload = nullptr) const;
 
 
-    inline bool isDistributedDDL() const
-    {
-        return query_context->isDistributed() && getQueryParameter("distributed_ddl") != "false";
-    }
+    inline bool isDistributedDDL() const { return query_context->isDistributed() && getQueryParameterBool("distributed_ddl", true); }
 
     void setPathParameter(const String & name, const String & value) { path_parameters[name] = value; }
 
@@ -68,13 +65,26 @@ public:
         return query_parameters->get(name, default_value);
     }
 
+    bool getQueryParameterBool(const String & name, bool default_value = false) const
+    {
+        const auto & val = query_parameters->get(name, "");
+        if (val.empty())
+        {
+            return default_value;
+        }
+
+        if (val == "false" || val == "0")
+        {
+            return false;
+        }
+        return true;
+    }
+
     const String & getAcceptEncoding() const { return accepted_encoding; }
 
     Int64 getContentLength() const { return content_length; }
 
     bool hasQueryParameter(const String & name) const { return query_parameters->has(name); }
-
-    virtual bool streamingOutput() const { return false; }
 
 public:
     static String jsonErrorResponse(const String & error_msg, int error_code, const String & query_id)
@@ -96,82 +106,80 @@ protected:
     }
 
 private:
+    /// Override this function if derived handler need write data in a streaming way to http output
+    virtual bool streamingOutput() const { return false; }
+
     /// Override this function if derived handler need read data in a streaming way from http input
     virtual bool streamingInput() const { return false; }
 
     /// Handle the request in streaming way, so far Ingest API probably needs override this function
-    virtual String execute(ReadBuffer & /* input */, Int32 & http_status) const { return handleNotImplemented(http_status); }
+    virtual std::pair<String, Int32> execute(ReadBuffer & /* input */) const { return handleNotImplemented(); }
 
     /// Sending response in a streaming way
     virtual void execute(const Poco::JSON::Object::Ptr & /* payload */, HTTPServerResponse & response) const
     {
-        Int32 http_status = 200;
-        auto response_payload{handleNotImplemented(http_status)};
-        response.setStatusAndReason(HTTPResponse::HTTPStatus(http_status));
-        *response.send() << response_payload << std::endl;
+        auto result{handleNotImplemented()};
+        response.setStatusAndReason(HTTPResponse::HTTPStatus(result.second));
+        *response.send() << result.first << std::endl;
     }
 
-    String handleNotImplemented(Int32 & http_status) const
+    std::pair<String, Int32> handleNotImplemented() const
     {
-        http_status = HTTPResponse::HTTP_NOT_IMPLEMENTED;
-        return jsonErrorResponse("HTTP method requested is not supported", ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
+        return {
+            jsonErrorResponse("HTTP method requested is not supported", ErrorCodes::UNKNOWN_TYPE_OF_QUERY),
+            HTTPResponse::HTTP_NOT_IMPLEMENTED};
     }
 
-    String execute(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
+    std::pair<String, Int32> execute(const Poco::JSON::Object::Ptr & payload) const
     {
         const auto & client_info = query_context->getClientInfo();
 
         if (client_info.http_method == ClientInfo::HTTPMethod::GET)
         {
-            return doExecute(&RestRouterHandler::validateGet, &RestRouterHandler::executeGet, payload, http_status);
+            return doExecute(&RestRouterHandler::validateGet, &RestRouterHandler::executeGet, payload);
         }
         else if (client_info.http_method == ClientInfo::HTTPMethod::POST)
         {
-            return doExecute(&RestRouterHandler::validatePost, &RestRouterHandler::executePost, payload, http_status);
+            return doExecute(&RestRouterHandler::validatePost, &RestRouterHandler::executePost, payload);
         }
         else if (client_info.http_method == ClientInfo::HTTPMethod::PATCH)
         {
-            return doExecute(&RestRouterHandler::validatePatch, &RestRouterHandler::executePatch, payload, http_status);
+            return doExecute(&RestRouterHandler::validatePatch, &RestRouterHandler::executePatch, payload);
         }
         else if (client_info.http_method == ClientInfo::HTTPMethod::DELETE)
         {
-            return doExecute(&RestRouterHandler::validateDelete, &RestRouterHandler::executeDelete, payload, http_status);
+            return doExecute(&RestRouterHandler::validateDelete, &RestRouterHandler::executeDelete, payload);
         }
 
-        return handleNotImplemented(http_status);
+        return handleNotImplemented();
     }
 
     template <typename Validate, typename Execute>
-    String doExecute(Validate validate, Execute exec, const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
+    std::pair<String, Int32> doExecute(Validate validate, Execute exec, const Poco::JSON::Object::Ptr & payload) const
     {
         String error_msg;
         if (!(this->*validate)(payload, error_msg))
         {
-            http_status = HTTPResponse::HTTP_BAD_REQUEST;
-            return jsonErrorResponse(error_msg, ErrorCodes::BAD_REQUEST_PARAMETER);
+            return {jsonErrorResponse(error_msg, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
         }
-        return (this->*exec)(payload, http_status);
+        return (this->*exec)(payload);
     }
 
-    virtual String executeGet(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
+    /// Return http response payload and http code
+    virtual std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
     {
-        return handleNotImplemented(http_status);
+        return handleNotImplemented();
     }
 
-    virtual String executePost(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
+    /// Return http response payload and http code
+    virtual std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & /* payload */) const
     {
-        return handleNotImplemented(http_status);
+        return handleNotImplemented();
     }
 
-    virtual String executeDelete(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
-    {
-        return handleNotImplemented(http_status);
-    }
+    virtual std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const { return handleNotImplemented(); }
 
-    virtual String executePatch(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
-    {
-        return handleNotImplemented(http_status);
-    }
+    virtual std::pair<String, Int32> executePatch(const Poco::JSON::Object::Ptr & /* payload */) const { return handleNotImplemented(); }
 
     virtual bool validateGet(const Poco::JSON::Object::Ptr & /* payload */, String & /* error_msg */) const { return true; }
     virtual bool validatePost(const Poco::JSON::Object::Ptr & /* payload */, String & /* error_msg */) const { return true; }

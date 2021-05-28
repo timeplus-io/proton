@@ -11,7 +11,7 @@ public:
     ~ClusterInfoHandler() override = default;
 
 private:
-    String executeGet(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
+    std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & payload) const override;
     String buildResponse() const;
     String buildErrorResponse(const String & response) const;
 };

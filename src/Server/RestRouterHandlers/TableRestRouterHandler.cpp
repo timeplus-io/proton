@@ -59,7 +59,7 @@ bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payloa
     }
 
     /// For non-distributed env or user force to create a `local` MergeTree table
-    if (!query_context->isDistributed() || getQueryParameter("distributed") == "false")
+    if (!query_context->isDistributed() || getQueryParameterBool("distributed", false))
     {
         int shards = payload->has("shards") ? payload->get("shards").convert<Int32>() : 1;
         int replication_factor = payload->has("replication_factor") ? payload->get("replication_factor").convert<Int32>() : 1;
@@ -79,12 +79,11 @@ bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & paylo
     return validateSchema(update_schema, payload, error_msg);
 }
 
-String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
+std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     if (!DatabaseCatalog::instance().tryGetDatabase(database))
     {
-        http_status = HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE);
+        return {jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     const auto & catalog_service = CatalogService::instance(query_context);
@@ -98,16 +97,17 @@ String TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* pay
     resp.stringify(resp_str_stream, 0);
     String resp_str = resp_str_stream.str();
 
-    return resp_str;
+    return {resp_str, HTTPResponse::HTTP_OK};
 }
 
-String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
+std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
     const auto & table = payload->get("name").toString();
     if (CatalogService::instance(query_context).tableExists(database, table))
     {
-        http_status = HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse(fmt::format("Table {}.{} already exists.", database, table), ErrorCodes::TABLE_ALREADY_EXISTS);
+        return {
+            jsonErrorResponse(fmt::format("Table {}.{} already exists.", database, table), ErrorCodes::TABLE_ALREADY_EXISTS),
+            HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     const auto & shard = getQueryParameter("shard");
@@ -118,17 +118,18 @@ String TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & paylo
         setupDistributedQueryParameters({}, payload);
     }
 
-    return processQuery(query, query_context);
+    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
 }
 
-String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
+std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload) const
 {
     const String & table = getPathParameter("table");
 
     if (!CatalogService::instance(query_context).tableExists(database, table))
     {
-        http_status = HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE);
+        return {
+            jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
+            HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     LOG_INFO(log, "Updating table {}.{}", database, table);
@@ -143,17 +144,18 @@ String TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payl
         setupDistributedQueryParameters({}, payload);
     }
 
-    return processQuery(query, query_context);
+    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
 }
 
-String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
+std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     const String & table = getPathParameter("table");
 
     if (!CatalogService::instance(query_context).tableExists(database, table))
     {
-        http_status = HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE);
+        return {
+            jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
+            HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     if (isDistributedDDL())
@@ -161,7 +163,7 @@ String TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /*p
         setupDistributedQueryParameters({});
     }
 
-    return processQuery("DROP TABLE " + database + "." + table, query_context);
+    return {processQuery("DROP TABLE " + database + "." + table, query_context), HTTPResponse::HTTP_OK};
 }
 
 void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const

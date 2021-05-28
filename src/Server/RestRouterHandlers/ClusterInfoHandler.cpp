@@ -16,13 +16,12 @@ namespace
     const String CLUSTER_INFO_URL = "http://{}:{}/dae/v1/clusterinfo";
 }
 
-String ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
+std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     auto placement_nodes = CatalogService::instance(query_context).nodes("placement");
     if (placement_nodes.empty())
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_INTERNAL_SERVER_ERROR;
-        return jsonErrorResponse("Internal server error", ErrorCodes::RESOURCE_NOT_INITED);
+        return {jsonErrorResponse("Internal server error", ErrorCodes::RESOURCE_NOT_INITED), HTTPResponse::HTTP_INTERNAL_SERVER_ERROR};
     }
 
     const auto & identity = query_context->getNodeIdentity();
@@ -32,7 +31,7 @@ String ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*
         {
             /// If the current node is one of the placement nodes
             /// Use the current node to serve the request directly
-            return buildResponse();
+            return {buildResponse(), HTTPResponse::HTTP_OK};
         }
     }
 
@@ -48,7 +47,7 @@ String ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*
 
     /// FIXME, https
     Poco::URI uri{fmt::format(CLUSTER_INFO_URL, placement_nodes[pos]->host, placement_nodes[pos]->http_port)};
-    auto [response, http_code] = sendRequest(
+    auto [response, http_status] = sendRequest(
         uri,
         Poco::Net::HTTPRequest::HTTP_GET,
         query_context->getCurrentQueryId(),
@@ -57,13 +56,12 @@ String ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*
         "",
         log);
 
-    if (http_code == Poco::Net::HTTPResponse::HTTP_OK)
+    if (http_status == HTTPResponse::HTTP_OK)
     {
-        return response;
+        return {response, http_status};
     }
 
-    http_status = http_code;
-    return buildErrorResponse(response);
+    return {buildErrorResponse(response), http_status};
 }
 
 String ClusterInfoHandler::buildResponse() const

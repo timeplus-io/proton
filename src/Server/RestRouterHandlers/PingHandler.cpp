@@ -16,7 +16,7 @@ namespace
     std::map<String, String> colname_bldkey_mapping = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}};
 }
 
-String PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
+std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/) const
 {
     const String & status = getPathParameter("status");
 
@@ -27,17 +27,18 @@ String PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/, Int3
         String resp = "";
         executeSelectQuery(query, query_context, [this, &resp](Block && block) { return this->buildResponse(block, resp); });
 
-        return resp;
+        return {resp, HTTPResponse::HTTP_OK};
     }
     else if (status == "ping")
     {
         /// FIXME : introduce more sophisticated health calculation in future.
-        return "{\"status\":\"UP\"}";
+        return {"{\"status\":\"UP\"}", HTTPResponse::HTTP_OK};
     }
     else
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_NOT_FOUND;
-        return jsonErrorResponse("Unknown URI", ErrorCodes::UNKNOWN_TYPE_OF_QUERY, query_context->getCurrentQueryId());
+        return {
+            jsonErrorResponse("Unknown URI", ErrorCodes::UNKNOWN_TYPE_OF_QUERY, query_context->getCurrentQueryId()),
+            HTTPResponse::HTTP_NOT_FOUND};
     }
 }
 
@@ -64,5 +65,4 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
     json_resp.stringify(resp_str_stream, 0);
     resp = resp_str_stream.str();
 }
-
 }

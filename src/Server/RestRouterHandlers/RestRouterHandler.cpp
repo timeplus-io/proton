@@ -28,12 +28,11 @@ void RestRouterHandler::execute(HTTPServerRequest & request, HTTPServerResponse 
 {
     setupHTTPContext(request);
 
-    Int32 http_status = HTTPResponse::HTTP_OK;
-    String response_payload;
+    std::pair<String, Int32> result;
 
     if (streamingInput())
     {
-        response_payload = execute(request.getStream(), http_status);
+        result = execute(request.getStream());
     }
     else
     {
@@ -46,7 +45,9 @@ void RestRouterHandler::execute(HTTPServerRequest & request, HTTPServerResponse 
             execute(payload, response);
         }
         else
-            response_payload = execute(payload, http_status);
+        {
+            result = execute(payload);
+        }
     }
 
     /// When `streamingOutput` is true, all of the response has already handled
@@ -54,8 +55,8 @@ void RestRouterHandler::execute(HTTPServerRequest & request, HTTPServerResponse 
     /// can be corrupted
     if (!streamingOutput())
     {
-        response.setStatusAndReason(HTTPResponse::HTTPStatus(http_status));
-        *response.send() << response_payload << std::endl;
+        response.setStatusAndReason(HTTPResponse::HTTPStatus(result.second));
+        *response.send() << result.first << std::endl;
     }
 }
 
@@ -85,5 +86,4 @@ void RestRouterHandler::setupDistributedQueryParameters(
     }
     query_context->setDistributedDDLOperation(true);
 }
-
 }

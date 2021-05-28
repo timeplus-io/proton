@@ -14,9 +14,9 @@ private:
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
     bool validatePatch(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
 
-    String executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executeDelete(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
+    std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executePatch(const Poco::JSON::Object::Ptr & payload) const override;
 
 private:
     std::pair<bool, String> assertColumnExists(const String & table, const String & column) const;

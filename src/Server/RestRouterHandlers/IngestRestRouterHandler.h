@@ -11,7 +11,7 @@ public:
     explicit IngestRestRouterHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "Ingest") { }
     ~IngestRestRouterHandler() override { }
 
-    String execute(ReadBuffer & input, Int32 & http_status) const override;
+    std::pair<String, Int32> execute(ReadBuffer & input) const override;
 
 private:
     bool streamingInput() const override { return true; }

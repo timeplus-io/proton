@@ -13,12 +13,12 @@ public:
     ~IngestStatusHandler() override = default;
 
 private:
-    String executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
+    std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & payload) const override;
 
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
     bool streamingInput() const override { return false; }
 
-    String forwardRequest(const Poco::URI & uri, const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const;
+    std::pair<String, Int32> forwardRequest(const Poco::URI & uri, const Poco::JSON::Object::Ptr & payload) const;
     bool categorizePollIds(const std::vector<String> & poll_ids, TablePollIdMap & table_poll_ids, String & error) const;
 };
 }

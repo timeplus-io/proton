@@ -26,10 +26,10 @@ protected:
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
     bool validatePatch(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
 
-    String executeGet(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executeDelete(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executePatch(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
+    std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executePatch(const Poco::JSON::Object::Ptr & payload) const override;
 
     virtual void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const = 0;
     virtual void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_ast) const;

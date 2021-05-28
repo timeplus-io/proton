@@ -16,15 +16,14 @@ namespace ErrorCodes
     extern const int INVALID_CONFIG_PARAMETER;
 }
 
-String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) const
+std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) const
 {
     const auto & table = getPathParameter("rawstore", "");
 
     /// Read enrichment and pass the settings to context
     if (table.empty())
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse("Table is empty", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        return {jsonErrorResponse("Table is empty", ErrorCodes::INVALID_CONFIG_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     String query = "INSERT into " + database + "." + table + " FORMAT RawStoreEachRow ";
@@ -35,7 +34,6 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
     String error;
     if (!readIntoBuffers(input, parse_buf, buffers, error))
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
         LOG_ERROR(
             log,
             "Ingest to database {}, rawstore {} failed with invalid JSON request, exception = {}",
@@ -43,7 +41,7 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
             table,
             error,
             ErrorCodes::INCORRECT_DATA);
-        return jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA);
+        return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     /// Handle "enrichment"
@@ -52,7 +50,6 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
     {
         if (!handleEnrichment(*it->second, error))
         {
-            http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
             LOG_ERROR(
                 log,
                 "Ingest to database {}, rawstore {} failed with invalid request, exception = {}",
@@ -60,7 +57,7 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
                 table,
                 error,
                 ErrorCodes::INCORRECT_DATA);
-            return jsonErrorResponse("error", ErrorCodes::INCORRECT_DATA);
+            return {jsonErrorResponse("error", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
         }
     }
 
@@ -74,7 +71,6 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
     }
     else
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
         LOG_ERROR(
             log,
             "Ingest to database {}, rawstore {} failed with invalid request, exception = {}",
@@ -82,7 +78,7 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
             table,
             "Invalid Request, missing 'data' field",
             ErrorCodes::INCORRECT_DATA);
-        return jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA);
+        return {jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     if (hasQueryParameter("mode"))
@@ -112,7 +108,7 @@ String IngestRawStoreHandler::execute(ReadBuffer & input, Int32 & http_status) c
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
 
-    return resp_str_stream.str();
+    return {resp_str_stream.str(), HTTPResponse::HTTP_OK};
 }
 
 bool IngestRawStoreHandler::handleEnrichment(ReadBuffer & buf, String & error) const

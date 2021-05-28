@@ -26,14 +26,14 @@ bool DatabaseRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & pay
     return validateSchema(CREATE_SCHEMA, payload, error_msg);
 }
 
-String DatabaseRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
+std::pair<String, Int32> DatabaseRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     String query = "SHOW DATABASES;";
 
-    return processQuery(query, http_status);
+    return processQuery(query);
 }
 
-String DatabaseRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
+std::pair<String, Int32> DatabaseRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
     if (isDistributedDDL())
     {
@@ -43,10 +43,10 @@ String DatabaseRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & pa
     const String & database_name = payload->get("name").toString();
     String query = "CREATE DATABASE " + database_name;
 
-    return processQuery(query, http_status);
+    return processQuery(query);
 }
 
-String DatabaseRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const
+std::pair<String, Int32> DatabaseRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     if (isDistributedDDL())
     {
@@ -56,10 +56,10 @@ String DatabaseRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & 
     const String & database_name = getPathParameter("database");
     String query = "DROP DATABASE " + database_name;
 
-    return processQuery(query, http_status);
+    return processQuery(query);
 }
 
-String DatabaseRestRouterHandler::processQuery(const String & query, Int32 & /* http_status */) const
+std::pair<String, Int32> DatabaseRestRouterHandler::processQuery(const String & query) const
 {
     BlockIO io{executeQuery(query, query_context, false /* internal */)};
 
@@ -74,7 +74,7 @@ String DatabaseRestRouterHandler::processQuery(const String & query, Int32 & /* 
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
 
-    return resp_str_stream.str();
+    return {resp_str_stream.str(), HTTPResponse::HTTP_OK};
 }
 
 void DatabaseRestRouterHandler::processQueryWithProcessors(Poco::JSON::Object & resp, QueryPipeline & pipeline) const
@@ -96,5 +96,4 @@ void DatabaseRestRouterHandler::processQueryWithProcessors(Poco::JSON::Object & 
     }
     resp.set("databases", databases_mapping_json);
 }
-
 }

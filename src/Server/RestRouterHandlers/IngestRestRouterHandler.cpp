@@ -14,14 +14,13 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
 }
 
-String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status) const
+std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) const
 {
     const auto & table = getPathParameter("table", "");
 
     if (table.empty())
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse("Table is empty", ErrorCodes::BAD_REQUEST_PARAMETER);
+        return {jsonErrorResponse("Table is empty", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     if (hasQueryParameter("mode"))
@@ -41,7 +40,6 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
     String error;
     if (!readIntoBuffers(input, parse_buf, buffers, error))
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
         LOG_ERROR(
             log,
             "Ingest to database {}, table {} failed with invalid JSON request, exception = {}",
@@ -49,14 +47,13 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
             table,
             error,
             ErrorCodes::INCORRECT_DATA);
-        return jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA);
+        return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     /// Get query
     String query, cols;
     if (!parseColumns(buffers, cols, error))
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
         LOG_ERROR(
             log,
             "Ingest to database {}, table {} failed with invalid request, exception = {}",
@@ -64,7 +61,7 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
             table,
             error,
             ErrorCodes::INCORRECT_DATA);
-        return jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA);
+        return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
     query = "INSERT into " + database + "." + table + " " + cols + " FORMAT JSONCompactEachRow ";
 
@@ -77,7 +74,6 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
     }
     else
     {
-        http_status = Poco::Net::HTTPResponse::HTTP_BAD_REQUEST;
         LOG_ERROR(
             log,
             "Ingest to database {}, table {} failed with invalid request, exception = {}",
@@ -85,7 +81,7 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
             table,
             "Invalid Request, missing 'data' field",
             ErrorCodes::INCORRECT_DATA);
-        return jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA);
+        return {jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     String dummy_string;
@@ -105,7 +101,7 @@ String IngestRestRouterHandler::execute(ReadBuffer & input, Int32 & http_status)
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
 
-    return resp_str_stream.str();
+    return {resp_str_stream.str(), HTTPResponse::HTTP_OK};
 }
 
 inline bool IngestRestRouterHandler::parseColumns(JSONReadBuffers & buffers, String & cols, String & error)

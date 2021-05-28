@@ -51,6 +51,10 @@ namespace ErrorCodes
 namespace
 {
 
+std::map<String, std::map<String, String>> POST_SCHEMA = {
+    {"required", {{"query", "string"}}},
+};
+
 String buildResponse(
     const String & original_query,
     const String & rewritten_query,
@@ -199,12 +203,7 @@ String queryType(ASTPtr & ast)
 }
 }
 
-std::map<String, std::map<String, String>> SQLAnalyzerRestRouterHandler::post_schema = {
-    {"required", {{"query", "string"}}},
-};
-
-
-String SQLAnalyzerRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const
+std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
     const auto & query = payload->get("query").toString();
     ParserQuery parser(query.c_str() + query.size());
@@ -239,20 +238,19 @@ String SQLAnalyzerRestRouterHandler::executePost(const Poco::JSON::Object::Ptr &
         }
 
         auto query_type = queryType(ast);
-        return buildResponse(query, rewritten_query, query_type, profile, block, query_context->requiredColumns());
+        return {buildResponse(query, rewritten_query, query_type, profile, block, query_context->requiredColumns()), HTTPResponse::HTTP_OK};
     }
     else
     {
         LOG_ERROR(log, "Query rewrite, query_id={} error_msg={}", query_context->getCurrentQueryId(), error_msg);
 
-        http_status = Poco::Net::HTTPResponse::HTTPResponse::HTTP_BAD_REQUEST;
-        return jsonErrorResponse("Invalid query", ErrorCodes::INCORRECT_QUERY);
+        return {jsonErrorResponse("Invalid query", ErrorCodes::INCORRECT_QUERY), HTTPResponse::HTTP_BAD_REQUEST};
     }
 }
 
 bool SQLAnalyzerRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
-    if (!validateSchema(post_schema, payload, error_msg))
+    if (!validateSchema(POST_SCHEMA, payload, error_msg))
     {
         return false;
     }

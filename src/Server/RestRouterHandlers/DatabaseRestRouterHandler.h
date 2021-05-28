@@ -15,12 +15,12 @@ public:
 private:
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
 
-    String executeGet(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
-    String executeDelete(const Poco::JSON::Object::Ptr & /* payload */, Int32 & http_status) const override;
+    std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & payload) const override;
 
 private:
-    String processQuery(const String & query, Int32 & /* http_status */) const;
+    std::pair<String, Int32> processQuery(const String & query) const;
     String buildResponse() const;
     void processQueryWithProcessors(Poco::JSON::Object & resp, QueryPipeline & pipeline) const;
 };

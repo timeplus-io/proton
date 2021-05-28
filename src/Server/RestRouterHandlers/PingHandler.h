@@ -11,7 +11,7 @@ public:
     ~PingHandler() override { }
 
 private:
-    String executeGet(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
+    std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & payload) const override;
     void buildResponse(const Block & block, String & resp) const;
 };
 

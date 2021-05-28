@@ -5,6 +5,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int RESOURCE_NOT_FOUND;
+}
+
 namespace
 {
     Poco::JSON::Array buildTaskResponse(const std::vector<DB::TaskStatusService::TaskStatusPtr> & tasks)
@@ -28,7 +33,7 @@ namespace
     }
 }
 
-String TaskRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
+std::pair<String, Int32> TaskRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     const auto & task_id = getPathParameter("task_id");
 
@@ -52,8 +57,7 @@ String TaskRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /*paylo
     }
     else
     {
-        http_status = 404;
-        return "Not Found";
+        return {jsonErrorResponse("Not found", ErrorCodes::RESOURCE_NOT_FOUND), HTTPResponse::HTTP_NOT_FOUND};
     }
 
     Poco::JSON::Object result;
@@ -62,7 +66,7 @@ String TaskRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /*paylo
 
     std::ostringstream oss; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     Poco::JSON::Stringifier::condense(result, oss);
-    return oss.str();
+    return {oss.str(), HTTPResponse::HTTP_OK};
 }
 
 };
