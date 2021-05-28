@@ -45,7 +45,7 @@ void MetadataService::shutdown()
 {
     if (stopped.test_and_set())
     {
-        /// already shutdown
+        /// Already shutdown
         return;
     }
 
@@ -58,6 +58,19 @@ void MetadataService::shutdown()
         pool->wait();
     }
     LOG_INFO(log, "Stopped");
+}
+
+void MetadataService::setupRecordHeaderFromConfig(
+    IDistributedWriteAheadLog::Record & record, const std::map<String, String> & key_and_defaults) const
+{
+    for (const auto & kv : key_and_defaults)
+    {
+        const auto & v = global_context->getConfigRef().getString(kv.first, kv.second);
+        if (!v.empty())
+        {
+            record.headers["_" + kv.first] = v;
+        }
+    }
 }
 
 void MetadataService::doDeleteDWal(std::any & ctx)
@@ -137,11 +150,6 @@ void MetadataService::doCreateDWal(std::any & ctx)
     }
 
     waitUntilDWalReady(ctx);
-}
-
-void MetadataService::createDWal()
-{
-    doCreateDWal(dwal_append_ctx);
 }
 
 void MetadataService::tailingRecords()
@@ -240,7 +248,10 @@ void MetadataService::startup()
     for (const auto & key : role_keys)
     {
         /// Node only with corresponding service role has corresponding data consuming capability
-        if (config.getString(SYSTEM_ROLES_KEY + "." + key, "") == this_role)
+        const auto & node_role = config.getString(SYSTEM_ROLES_KEY + "." + key, "");
+        node_roles += node_role + ",";
+
+        if (node_role == this_role && !pool)
         {
             LOG_INFO(log, "Detects the current log has `{}` role", this_role);
 
@@ -254,9 +265,12 @@ void MetadataService::startup()
 
             pool.emplace(1);
             pool->scheduleOrThrowOnError([this] { tailingRecords(); });
-
-            break;
         }
+    }
+
+    if (!node_roles.empty())
+    {
+        node_roles.pop_back();
     }
 
     /// Append ctx is cached for multiple threads access

@@ -1,4 +1,4 @@
-#include "RestStatusHandler.h"
+#include "PingHandler.h"
 
 #include <Core/Block.h>
 #include <Interpreters/executeSelectQuery.h>
@@ -16,7 +16,7 @@ namespace
     std::map<String, String> colname_bldkey_mapping = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}};
 }
 
-String RestStatusHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
+String PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/, Int32 & http_status) const
 {
     const String & status = getPathParameter("status");
 
@@ -41,7 +41,7 @@ String RestStatusHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/
     }
 }
 
-void RestStatusHandler::buildResponse(const Block & block, String & resp) const
+void PingHandler::buildResponse(const Block & block, String & resp) const
 {
     const auto & name = block.findByName("name")->column;
     const auto & value = block.findByName("value")->column;

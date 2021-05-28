@@ -124,9 +124,11 @@ void CatalogService::append(Block && block)
     record.partition_key = 0;
     record.setIdempotentKey(global_context->getNodeIdentity());
     record.headers["_host"] = THIS_HOST;
-    record.headers["_http_port"] = global_context->getConfigRef().getString("http_port", "8123");
-    record.headers["_tcp_port"] = global_context->getConfigRef().getString("tcp_port", "9000");
+    record.headers["_node_roles"] = node_roles;
     record.headers["_version"] = "1";
+
+    std::map<String, String> key_and_defaults = {{"https_port", "-1"}, {"http_port", "-1"}, {"tcp_port_secure", "-1"}, {"tcp_port", "-1"}};
+    setupRecordHeaderFromConfig(record, key_and_defaults);
 
     /// FIXME : reschedule
     for (int i = 0; i < 3; ++i)
@@ -413,6 +415,37 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
     }
 
     iter->second.clear();
+}
+
+std::vector<NodePtr> CatalogService::nodes(const String & role) const
+{
+    std::vector<NodePtr> result;
+    {
+        std::shared_lock guard{catalog_rwlock};
+        result.reserve(table_nodes.size());
+
+        for (const auto & idem_node : table_nodes)
+        {
+            if (idem_node.second->roles.find(role) != String::npos)
+            {
+                result.push_back(idem_node.second);
+            }
+        }
+    }
+    return result;
+}
+
+NodePtr CatalogService::nodeByIdentity(const String & identity) const
+{
+    std::shared_lock guard{catalog_rwlock};
+    for (const auto & idem_node : table_nodes)
+    {
+        if (idem_node.second->identity == identity)
+        {
+            return idem_node.second;
+        }
+    }
+    return nullptr;
 }
 
 ClusterPtr CatalogService::tableCluster(const String & database, const String & table, Int32 replication_factor, Int32 shards)

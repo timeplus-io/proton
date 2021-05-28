@@ -1,13 +1,14 @@
 #pragma once
 
+#include "ClusterInfoHandler.h"
 #include "ColumnRestRouterHandler.h"
 #include "DatabaseRestRouterHandler.h"
 #include "IngestRawStoreHandler.h"
 #include "IngestRestRouterHandler.h"
 #include "IngestStatusHandler.h"
+#include "PingHandler.h"
 #include "RawstoreTableRestRouterHandler.h"
 #include "RestRouterHandler.h"
-#include "RestStatusHandler.h"
 #include "SQLAnalyzerRestRouterHandler.h"
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
@@ -51,6 +52,13 @@ public:
             "POST",
             [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRawStoreHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
+            "/dae/v1/search(\\?[\\w\\-=&#]+){0,1}",
+            "POST",
+            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<DB::SearchHandler>(query_context);
             });
 
         factory.registerRouterHandler(
@@ -134,14 +142,14 @@ public:
             "/dae/(?P<status>ping|info)$",
             "GET",
             [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<DB::RestStatusHandler>(query_context);
+                return std::make_shared<DB::PingHandler>(query_context);
             });
 
         factory.registerRouterHandler(
-            "/dae/v1/search(\\?[\\w\\-=&#]+){0,1}",
-            "POST",
+            "/dae/v1/clusterinfo",
+            "GET",
             [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<DB::SearchHandler>(query_context);
+                return std::make_shared<DB::ClusterInfoHandler>(query_context);
             });
     }
 

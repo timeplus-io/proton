@@ -6,7 +6,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Storages/System/StorageSystemStoragePolicies.h>
-#include <common/ClockUtils.h>
 #include <common/getFQDNOrHostName.h>
 #include <common/logger_useful.h>
 
@@ -74,7 +73,7 @@ std::vector<NodeMetricsPtr> PlacementService::place(
                 log,
                 "Node identity={} host={} is staled. Didn't hear from it since last update={} for {}ms",
                 node_identity,
-                node_metrics->host,
+                node_metrics->node.host,
                 node_metrics->last_update_time,
                 staleness);
         }
@@ -92,11 +91,13 @@ std::vector<String> PlacementService::placed(const String & database, const Stri
 
     std::shared_lock guard(rwlock);
 
+    /// FIXME, return NodeMetrics directly
     for (const auto & t : tables)
     {
-        if (nodes_metrics.contains(t->node_identity))
+        auto iter = nodes_metrics.find(t->node_identity);
+        if (iter != nodes_metrics.end())
         {
-            hosts.push_back(t->host + ":" + nodes_metrics.at(t->node_identity)->http_port);
+            hosts.push_back(iter->second->node.host + ":" + std::to_string(iter->second->node.http_port));
         }
         else
         {
@@ -127,13 +128,19 @@ String PlacementService::getNodeIdentityByChannel(const String & channel) const
 
     for (const auto & [node_identity, node_metrics] : nodes_metrics)
     {
-        if (!node_metrics->staled && node_metrics->channel == channel)
+        if (!node_metrics->staled && node_metrics->node.channel == channel)
         {
-            return node_metrics->host;
+            return node_metrics->node.host;
         }
     }
 
     return "";
+}
+
+void PlacementService::preShutdown()
+{
+    if (broadcast_task)
+        (*broadcast_task)->deactivate();
 }
 
 void PlacementService::processRecords(const IDistributedWriteAheadLog::RecordPtrs & records)
@@ -142,6 +149,12 @@ void PlacementService::processRecords(const IDistributedWriteAheadLog::RecordPtr
     for (const auto & record : records)
     {
         assert(record->op_code == IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK);
+        if (!record->hasIdempotentKey())
+        {
+            LOG_ERROR(log, "Invalid metric record, missing idempotent key");
+            continue;
+        }
+
         if (record->headers["_version"] == "1")
         {
             mergeMetrics(record->idempotentKey(), record);
@@ -153,80 +166,50 @@ void PlacementService::processRecords(const IDistributedWriteAheadLog::RecordPtr
     }
 }
 
-void PlacementService::mergeMetrics(const String & key, const IDistributedWriteAheadLog::RecordPtr & record)
+void PlacementService::mergeMetrics(const String & node_identity, const IDistributedWriteAheadLog::RecordPtr & record)
 {
-    for (const auto & item : {"_host", "_channel", "_http_port", "_tcp_port", "_tables"})
+    NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node_identity, record->headers);
+    if (!node_metrics->isValid() || node_metrics->node.channel.empty())
     {
-        if (!record->headers.contains(item))
-        {
-            LOG_ERROR(log, "Invalid metric record. '{}', '{}' not found", key, item);
-            return;
-        }
+        LOG_ERROR(log, "Invalid metric record: {}", node_metrics->node.string());
+        return;
     }
 
-    const String & host = record->headers["_host"];
-    const String & channel_id = record->headers["_channel"];
-    const String & http_port = record->headers["_http_port"];
-    const String & tcp_port = record->headers["_tcp_port"];
-    const Int64 table_counts = std::stoll(record->headers["_tables"]);
-    const auto broadcast_time = std::stoll(record->headers["_broadcast_time"]);
-
     DiskSpace disk_space;
+    disk_space.reserve(record->block.rows());
+
     for (size_t row = 0; row < record->block.rows(); ++row)
     {
         const auto & policy_name = record->block.getByName("policy_name").column->getDataAt(row);
         const auto space = record->block.getByName("disk_space").column->get64(row);
-        LOG_TRACE(log, "Receive disk space data from {}. Storage policy={}, Disk size={}GB", key, policy_name, space);
+        LOG_TRACE(log, "Receive disk space data from {}. Storage policy={}, Disk size={}GB", node_identity, policy_name, space);
         disk_space.emplace(policy_name, space);
     }
 
-    std::unique_lock guard(rwlock);
-
-    NodeMetricsPtr node_metrics;
-    auto iter = nodes_metrics.find(key);
-    if (iter == nodes_metrics.end())
-    {
-        /// New node metrics.
-        node_metrics = std::make_shared<NodeMetrics>(host, channel_id);
-        nodes_metrics.emplace(key, node_metrics);
-    }
-    else
-    {
-        /// Existing node metrics.
-        node_metrics = iter->second;
-        auto utc_now = UTCMilliseconds::now();
-        if (utc_now < broadcast_time)
-        {
-            LOG_WARNING(
-                log,
-                "The broadcast time from node identity={} host={} is ahead of local time. Clocks between the machines are out of sync.",
-                key,
-                host);
-        }
-        else if (auto latency = utc_now - broadcast_time; latency > LATENCY_THRESHOLD_MS)
-        {
-            LOG_TRACE(
-                log,
-                "It took {}ms to broadcast node metrics from node identity={} host={}. Probably there is some perf issue or the clocks "
-                "between the machines are out of sync too much.",
-                latency,
-                key,
-                host);
-        }
-
-        if (node_metrics->staled)
-        {
-            node_metrics->staled = false;
-            LOG_INFO(log, "Node identity={} host={} recovered from staleness", key, host);
-        }
-    }
-    node_metrics->channel = channel_id;
-    node_metrics->node_identity = key;
-    node_metrics->http_port = http_port;
-    node_metrics->tcp_port = tcp_port;
     node_metrics->disk_space.swap(disk_space);
-    node_metrics->num_of_tables = table_counts;
-    node_metrics->last_update_time = MonotonicMilliseconds::now();
+
+    bool staled = false;
+    {
+        std::unique_lock guard(rwlock);
+
+        auto iter = nodes_metrics.find(node_identity);
+        if (iter != nodes_metrics.end())
+        {
+            /// Existing node metrics.
+            staled = iter->second->staled;
+            iter->second = node_metrics;
+        }
+        else
+        {
+            /// New node metrics.
+            nodes_metrics.emplace(node_identity, node_metrics);
+        }
+    }
+
+    if (staled)
+    {
+        LOG_INFO(log, "Node identity={} host={} recovered from staleness", node_metrics->node.identity, node_metrics->node.host);
+    }
 }
 
 void PlacementService::scheduleBroadcast()
@@ -285,10 +268,12 @@ void PlacementService::doBroadcast()
     record.partition_key = 0;
     record.setIdempotentKey(global_context->getNodeIdentity());
     record.headers["_host"] = THIS_HOST;
+    record.headers["_node_roles"] = node_roles;
     record.headers["_channel"] = global_context->getChannel();
-    record.headers["_http_port"] = global_context->getConfigRef().getString("http_port", "8123");
-    record.headers["_tcp_port"] = global_context->getConfigRef().getString("tcp_port", "9000");
     record.headers["_version"] = "1";
+
+    std::map<String, String> key_and_defaults = {{"https_port", "-1"}, {"http_port", "-1"}, {"tcp_port_secure", "-1"}, {"tcp_port", "-1"}};
+    setupRecordHeaderFromConfig(record, key_and_defaults);
 
     const String table_count_query = "SELECT count(*) as table_counts FROM system.tables WHERE database != 'system'";
 
@@ -305,11 +290,11 @@ void PlacementService::doBroadcast()
     const auto & result = dwal->append(record, dwal_append_ctx);
     if (result.err == ErrorCodes::OK)
     {
-        LOG_DEBUG(log, "Appended {} disk space records in one node metrics block", record.block.rows());
+        LOG_DEBUG(log, "Appended node metrics");
     }
     else
     {
-        LOG_ERROR(log, "Failed to append node metrics block, error={}", result.err);
+        LOG_ERROR(log, "Failed to append node metrics error={}", result.err);
     }
 }
 

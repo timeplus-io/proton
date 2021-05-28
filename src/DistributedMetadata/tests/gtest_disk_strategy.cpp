@@ -23,13 +23,14 @@ TEST(PlacementService, PlaceNodesByDiskSpace)
     std::shuffle(default_disks.begin(), default_disks.end(), g);
     std::shuffle(cold_disks.begin(), cold_disks.end(), g);
 
+    std::unordered_map<String, String> headers;
     NodeMetricsContainer container;
     String default_policy = "default";
     String cold_policy = "cold_policy";
     for (int i = 0; i < 100; i++)
     {
         String node = std::to_string(i);
-        NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node, node);
+        NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node, headers);
         node_metrics->disk_space.emplace(default_policy, default_disks[i]);
         node_metrics->disk_space.emplace(cold_policy, cold_disks[i]);
         container.emplace(node, node_metrics);
@@ -89,12 +90,13 @@ TEST(PlacementService, PlaceNodesByTableCounts)
     std::mt19937 g(rd());
     std::shuffle(num_of_tables.begin(), num_of_tables.end(), g);
 
+    std::unordered_map<String, String> headers;
     NodeMetricsContainer container;
     String default_policy = "default";
     for (int i = 0; i < 100; i++)
     {
         String node = std::to_string(i);
-        NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node, node);
+        NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node, headers);
         node_metrics->disk_space.emplace(default_policy, 100);
         node_metrics->num_of_tables = num_of_tables[i];
         container.emplace(node, node_metrics);

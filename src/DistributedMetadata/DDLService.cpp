@@ -3,13 +3,14 @@
 #include "CatalogService.h"
 #include "PlacementService.h"
 #include "TaskStatusService.h"
+#include "sendRequest.h"
 
 #include <Core/Block.h>
 #include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
-#include <IO/HTTPCommon.h>
 #include <Interpreters/Context.h>
 
 #include <Poco/Net/HTTPRequest.h>
+#include <Poco/Net/HTTPResponse.h>
 #include <Poco/Util/AbstractConfiguration.h>
 
 #include <boost/algorithm/string/join.hpp>
@@ -20,13 +21,13 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int OK;
-    extern const int UNKNOWN_EXCEPTION;
     extern const int UNRETRIABLE_ERROR;
+    extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace
 {
-    /// globals
+    /// Globals
     const String DDL_KEY_PREFIX = "cluster_settings.system_ddls.";
     const String DDL_DEFAULT_TOPIC = "__system_ddls";
 
@@ -42,14 +43,14 @@ namespace
     constexpr Int32 MAX_RETRIES = 3;
 
     /// FIXME, add other un-retriable error codes
-    const std::vector<String> UNRETRIABLE_ERROR_CODES{
+    const std::vector<String> UNRETRIABLE_ERROR_CODES = {
         "57", /// Table already exists.
         "60", /// Table does not exist.
         "81", /// Database does not exist.
         "82", /// Database already  exists.
     };
 
-    bool isUnRetriableError(const String & err_msg)
+    bool isUnretriableError(const String & err_msg)
     {
         for (const auto & err_code : UNRETRIABLE_ERROR_CODES)
         {
@@ -62,25 +63,19 @@ namespace
         return false;
     }
 
-    int toErrorCode(std::istream & istr)
+    int toErrorCode(int http_code, const String & error_message)
     {
-        std::stringstream error_message; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        error_message << istr.rdbuf();
-        /// FIXME, revise HTTP status code for the legacy HTTP API
-        const auto & msg = error_message.str();
+        if (http_code == Poco::Net::HTTPResponse::HTTP_OK)
+        {
+            return ErrorCodes::OK;
+        }
 
-        return isUnRetriableError(msg) ? ErrorCodes::UNRETRIABLE_ERROR : ErrorCodes::UNKNOWN_EXCEPTION;
-    }
-
-    int toErrorCode(const Poco::Exception & e)
-    {
-        /// FIXME, more error code handling
-        auto code = e.code();
-        if (code == 1000 || code == 422)
+        if (http_code < 0)
         {
             return ErrorCodes::UNRETRIABLE_ERROR;
         }
-        return ErrorCodes::UNKNOWN_EXCEPTION;
+
+        return isUnretriableError(error_message) ? ErrorCodes::UNRETRIABLE_ERROR : ErrorCodes::UNKNOWN_EXCEPTION;
     }
 
     String getTableCategory(const std::unordered_map<String, String> & headers)
@@ -155,7 +150,6 @@ namespace
 
         return uris;
     }
-
 }
 
 DDLService & DDLService::instance(const ContextPtr & global_context_)
@@ -242,97 +236,24 @@ bool DDLService::validateSchema(const Block & block, const std::vector<String> &
     return true;
 }
 
-Int32 DDLService::sendRequest(
-    const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const
-{
-    /// One second for connect/send/receive
-    ConnectionTimeouts timeouts({1, 0}, {1, 0}, {5, 0});
-
-    PooledHTTPSessionPtr session;
-    try
-    {
-        session = makePooledHTTPSession(uri, timeouts, 1);
-        Poco::Net::HTTPRequest request{method, uri.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1};
-        request.setHost(uri.getHost());
-        request.setContentLength(payload.size());
-        request.setContentType("application/json");
-        request.add("X-ClickHouse-Query-Id", query_id);
-        request.add("X-ClickHouse-User", user);
-
-        const String & password = global_context->getPasswordByUserName(user);
-        if (!password.empty())
-        {
-            request.add("X-ClickHouse-Key", password);
-        }
-
-        auto & ostr = session->sendRequest(request);
-        ostr << payload;
-
-        if (!ostr.good())
-        {
-            LOG_ERROR(log, "Failed to send request data {} to uri={}", payload, uri.toString());
-            return ErrorCodes::UNKNOWN_EXCEPTION;
-        }
-
-        Poco::Net::HTTPResponse response;
-        auto & istr = session->receiveResponse(response);
-        auto status = response.getStatus();
-        if (status == Poco::Net::HTTPResponse::HTTP_OK)
-        {
-            LOG_INFO(log, "Executed DDL operation on uri={} successfully, method={}, payload={}", uri.toString(), method, payload);
-            return ErrorCodes::OK;
-        }
-        else
-        {
-            return toErrorCode(istr);
-        }
-    }
-    catch (const Poco::Exception & e)
-    {
-        if (!session.isNull())
-        {
-            session->attachSessionData(e.message());
-        }
-
-        LOG_ERROR(
-            log,
-            "Failed to do DDL operation on uri={} method={} error={} exception={}",
-            uri.toString(),
-            method,
-            e.message(),
-            getCurrentExceptionMessage(true, true));
-
-        return toErrorCode(e);
-    }
-    catch (...)
-    {
-        LOG_ERROR(
-            log,
-            "Failed to do DDL operation on uri={} method={} exception={}",
-            uri.toString(),
-            method,
-            getCurrentExceptionMessage(true, true));
-    }
-    return ErrorCodes::UNKNOWN_EXCEPTION;
-}
-
 Int32 DDLService::doDDL(
     const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const
 {
+    const String & password = global_context->getPasswordByUserName(user);
     Int32 err = ErrorCodes::OK;
+
     for (auto i = 0; i < MAX_RETRIES; ++i)
     {
-        err = sendRequest(payload, uri, method, query_id, user);
+        auto [response, http_code] = sendRequest(uri, method, query_id, user, password, payload, log);
+
+        err = toErrorCode(http_code, response);
         if (err == ErrorCodes::OK || err == ErrorCodes::UNRETRIABLE_ERROR)
         {
             return err;
         }
 
-        LOG_WARNING(log, "Failed to send request to uri={} error_code={} tried {} times.", uri.toString(), err, i + 1);
-
         if (i < MAX_RETRIES - 1)
         {
-            LOG_INFO(log, "Sleep for a while and will try to send request again.");
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
         }
     }
@@ -418,7 +339,8 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
         target_hosts.reserve(qualified_nodes.size());
         for (const auto & node : qualified_nodes)
         {
-            target_hosts.push_back(node->host + ":" + node->http_port);
+            /// FIXME, https
+            target_hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
         }
 
         /// We got the placement, commit the placement decision
@@ -537,7 +459,8 @@ void DDLService::mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, con
     hosts.reserve(nodes.size());
     for (const auto & node : nodes)
     {
-        hosts.push_back(node->host + ":" + node->http_port);
+        /// FIXME, https
+        hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
     }
 
     String api_path_fmt = "";

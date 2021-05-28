@@ -12,9 +12,9 @@ public:
     explicit IngestStatusHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "IngestStatus") { }
     ~IngestStatusHandler() override = default;
 
+private:
     String executePost(const Poco::JSON::Object::Ptr & payload, Int32 & http_status) const override;
 
-private:
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
     bool streamingInput() const override { return false; }
 

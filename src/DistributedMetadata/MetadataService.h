@@ -33,10 +33,11 @@ private:
     virtual std::pair<Int32, Int32> batchSizeAndTimeout() const { return std::make_pair(100, 500); }
 
     /// Create DWal on server
-    void createDWal();
     void waitUntilDWalReady(std::any & ctx);
 
 protected:
+    void setupRecordHeaderFromConfig(IDistributedWriteAheadLog::Record & record, const std::map<String, String> & key_and_defaults) const;
+
     void doCreateDWal(std::any & ctx);
     void doDeleteDWal(std::any & ctx);
 
@@ -68,6 +69,8 @@ protected:
 
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
     std::optional<ThreadPool> pool;
+
+    String node_roles;
 
     Poco::Logger * log;
 };

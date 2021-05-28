@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MetadataService.h"
+#include "Node.h"
 
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/Cluster.h>
@@ -47,46 +48,6 @@ public:
     using TablePtr = std::shared_ptr<Table>;
     using TablePtrs = std::vector<TablePtr>;
 
-    struct Node
-    {
-        /// Node identity
-        String identity;
-
-        /// `host` is network reachable like hostname, FQDN or IP
-        String host;
-
-        Int32 http_port = 8123;
-        Int32 tcp_port = 9000;
-
-        Node(const String & identity_, const std::unordered_map<String, String> & headers)
-        {
-            identity = identity_;
-
-            auto iter = headers.find("_host");
-            if (iter != headers.end())
-            {
-                host = iter->second;
-            }
-
-            iter = headers.find("_http_port");
-            if (iter != headers.end())
-            {
-                http_port = std::stoi(iter->second);
-            }
-
-            iter = headers.find("_tcp_port");
-            if (iter != headers.end())
-            {
-                tcp_port = std::stoi(iter->second);
-            }
-        }
-
-        bool isValid() const { return !identity.empty() && !host.empty() && http_port > 0 && tcp_port > 0; }
-
-        String string() const { return identity + "," + host + "," + std::to_string(http_port) + "," + std::to_string(tcp_port); }
-    };
-    using NodePtr = std::shared_ptr<Node>;
-
 public:
     static CatalogService & instance(const ContextPtr & context_);
 
@@ -116,6 +77,9 @@ public:
 
     void deleteCatalogForNode(const NodePtr & node);
     std::pair<Int32, Int32> shardAndReplicationFactor(const String & database, const String & table) const;
+
+    std::vector<NodePtr> nodes(const String & role = "") const;
+    NodePtr nodeByIdentity(const String & identity) const;
 
 private:
     bool setTableStorageByName(const String & database, const String & table, const StoragePtr & storage);

@@ -26,11 +26,7 @@ public:
     std::vector<NodeMetricsPtr> nodes() const;
 
 private:
-    void preShutdown() override
-    {
-        if (broadcast_task)
-            (*broadcast_task)->deactivate();
-    }
+    void preShutdown() override;
     void processRecords(const IDistributedWriteAheadLog::RecordPtrs & records) override;
     String role() const override { return "placement"; }
     String cleanupPolicy() const override { return "compact"; }
