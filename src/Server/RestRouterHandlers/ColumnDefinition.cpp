@@ -13,7 +13,7 @@ namespace
     String buildResponse(const String & query_id)
     {
         Poco::JSON::Object resp;
-        resp.set("query_id", query_id);
+        resp.set("request_id", query_id);
         std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
         resp.stringify(resp_str_stream, 0);
 

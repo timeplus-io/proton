@@ -12,6 +12,6 @@ public:
 
 private:
     std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & payload) const override;
-    String buildResponse() const;
+    String getClusterInfoLocally() const;
 };
 }

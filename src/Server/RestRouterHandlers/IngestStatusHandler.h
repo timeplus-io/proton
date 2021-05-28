@@ -19,5 +19,6 @@ private:
     bool streamingInput() const override { return false; }
 
     bool categorizePollIds(const std::vector<String> & poll_ids, TablePollIdMap & table_poll_ids, String & error) const;
+    std::pair<String, Int32> getIngestStatusLocally(const Poco::JSON::Object::Ptr & payload) const;
 };
 }

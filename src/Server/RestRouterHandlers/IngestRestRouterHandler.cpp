@@ -91,7 +91,7 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
 
     /// Send back ingest response
     Poco::JSON::Object resp;
-    resp.set("query_id", query_context->getCurrentQueryId());
+    resp.set("request_id", query_context->getCurrentQueryId());
     const auto & poll_id = query_context->getQueryStatusPollId();
     if (!poll_id.empty())
     {

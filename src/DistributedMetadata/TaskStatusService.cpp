@@ -465,6 +465,7 @@ bool TaskStatusService::createTaskTable()
     {
         return true;
     }
+
     if (!create_task_table_id.empty())
     {
         auto task = findByIdInMemory(create_task_table_id);

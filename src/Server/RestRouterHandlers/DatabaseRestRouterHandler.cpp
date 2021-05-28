@@ -70,7 +70,7 @@ std::pair<String, Int32> DatabaseRestRouterHandler::processQuery(const String & 
     }
     io.onFinish();
 
-    resp.set("query_id", query_context->getCurrentQueryId());
+    resp.set("request_id", query_context->getCurrentQueryId());
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
 

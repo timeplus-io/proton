@@ -92,7 +92,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
     Poco::JSON::Object resp;
     buildTablesJSON(resp, tables);
 
-    resp.set("query_id", query_context->getCurrentQueryId());
+    resp.set("request_id", query_context->getCurrentQueryId());
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
     String resp_str = resp_str_stream.str();

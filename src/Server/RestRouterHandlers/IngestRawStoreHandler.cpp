@@ -98,7 +98,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     executeQuery(*in, out, /* allow_into_outfile = */ false, query_context, {});
 
     Poco::JSON::Object resp;
-    resp.set("query_id", query_context->getClientInfo().current_query_id);
+    resp.set("request_id", query_context->getCurrentQueryId());
     const auto & poll_id = query_context->getQueryStatusPollId();
     if (!poll_id.empty())
     {

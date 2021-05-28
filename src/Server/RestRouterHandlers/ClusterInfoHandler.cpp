@@ -31,7 +31,7 @@ std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object
         {
             /// If the current node is one of the placement nodes
             /// Use the current node to serve the request directly
-            return {buildResponse(), HTTPResponse::HTTP_OK};
+            return {getClusterInfoLocally(), HTTPResponse::HTTP_OK};
         }
     }
 
@@ -64,7 +64,7 @@ std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object
     return {jsonErrorResponseFrom(response), http_status};
 }
 
-String ClusterInfoHandler::buildResponse() const
+String ClusterInfoHandler::getClusterInfoLocally() const
 {
     auto nodes{PlacementService::instance(query_context).nodes()};
 

@@ -116,43 +116,7 @@ std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Obje
     const auto & chan = payload->get("channel").toString();
     if (query_context->getChannel() == chan)
     {
-        String error;
-        /// The current node is the target ingesting node having the channel
-        std::vector<String> poll_ids;
-        for (const auto & poll_id : *payload->getArray("poll_ids"))
-            poll_ids.emplace_back(poll_id.extract<String>());
-
-        TablePollIdMap table_poll_ids;
-        if (!categorizePollIds(poll_ids, table_poll_ids, error))
-        {
-            return {jsonErrorResponse(error, ErrorCodes::INVALID_POLL_ID), HTTPResponse::HTTP_BAD_REQUEST};
-        }
-
-        std::vector<IngestingBlocks::IngestStatus> statuses;
-        for (const auto & table_polls : table_poll_ids)
-        {
-            int error_code = ErrorCodes::OK;
-            auto storage = getTableStorage(table_polls.first.first, table_polls.first.second, query_context, error, error_code);
-            if (!storage)
-            {
-                LOG_ERROR(
-                    log,
-                    "{}, for poll_ids: {}",
-                    error,
-                    std::accumulate(table_polls.second.begin(), table_polls.second.end(), std::string{","}),
-                    error_code);
-                continue;
-            }
-
-            StorageDistributedMergeTree * dstorage = static_cast<StorageDistributedMergeTree *>(storage.get());
-            dstorage->getIngestionStatuses(table_polls.second, statuses);
-        }
-
-        if (statuses.empty())
-        {
-            return {jsonErrorResponse("'poll_ids' are all invalid", ErrorCodes::INVALID_POLL_ID), HTTPResponse::HTTP_BAD_REQUEST};
-        }
-        return {makeBatchResponse(statuses, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
+        return getIngestStatusLocally(payload);
     }
     else
     {
@@ -184,5 +148,47 @@ std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Obje
         }
         return {jsonErrorResponseFrom(response, ErrorCodes::SEND_POLL_REQ_ERROR), http_status};
     }
+}
+
+std::pair<String, Int32> IngestStatusHandler::getIngestStatusLocally(const Poco::JSON::Object::Ptr & payload) const
+{
+    /// Assume clients group poll_ids by channel
+    String error;
+    /// The current node is the target ingesting node having the channel
+    std::vector<String> poll_ids;
+    for (const auto & poll_id : *payload->getArray("poll_ids"))
+        poll_ids.emplace_back(poll_id.extract<String>());
+
+    TablePollIdMap table_poll_ids;
+    if (!categorizePollIds(poll_ids, table_poll_ids, error))
+    {
+        return {jsonErrorResponse(error, ErrorCodes::INVALID_POLL_ID), HTTPResponse::HTTP_BAD_REQUEST};
+    }
+
+    std::vector<IngestingBlocks::IngestStatus> statuses;
+    for (const auto & table_polls : table_poll_ids)
+    {
+        int error_code = ErrorCodes::OK;
+        auto storage = getTableStorage(table_polls.first.first, table_polls.first.second, query_context, error, error_code);
+        if (!storage)
+        {
+            LOG_ERROR(
+                log,
+                "{}, for poll_ids: {}",
+                error,
+                std::accumulate(table_polls.second.begin(), table_polls.second.end(), std::string{","}),
+                error_code);
+            continue;
+        }
+
+        StorageDistributedMergeTree * dstorage = static_cast<StorageDistributedMergeTree *>(storage.get());
+        dstorage->getIngestionStatuses(table_polls.second, statuses);
+    }
+
+    if (statuses.empty())
+    {
+        return {jsonErrorResponse("'poll_ids' are all invalid", ErrorCodes::INVALID_POLL_ID), HTTPResponse::HTTP_BAD_REQUEST};
+    }
+    return {makeBatchResponse(statuses, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
 }
 }

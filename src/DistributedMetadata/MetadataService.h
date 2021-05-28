@@ -22,6 +22,8 @@ public:
     void startup();
     void shutdown();
 
+    const String & nodeRoles() const { return node_roles; }
+
 private:
     void tailingRecords();
     void doTailingRecords();

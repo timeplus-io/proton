@@ -2,8 +2,6 @@
 
 #include "RestRouterHandler.h"
 
-#include <DistributedMetadata/TaskStatusService.h>
-
 namespace DB
 {
 class TaskRestRouterHandler final : public RestRouterHandler
@@ -14,6 +12,7 @@ public:
 
 private:
     std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & payload) const override;
+    std::pair<String, Int32> getTasksLocally() const;
 };
 
 }
