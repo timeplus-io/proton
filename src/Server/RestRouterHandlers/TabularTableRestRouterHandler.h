@@ -22,6 +22,7 @@ private:
     String getColumnsDefinition(const Poco::JSON::Object::Ptr & payload) const override;
     String getOrderByExpr(
         const Poco::JSON::Object::Ptr & payload, const String & time_column, const String & default_order_by_granularity) const override;
+    String subtype() const override { return "tabular"; }
 };
 
 }

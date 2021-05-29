@@ -270,9 +270,11 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
         create_segments.push_back("TTL " + payload->get("ttl_expression").toString());
     }
 
+    create_segments.push_back("SETTINGS subtype='" + subtype() + "'");
+
     if (!shard.empty())
     {
-        create_segments.push_back("SETTINGS shard=" + shard);
+        create_segments.push_back(", shard=" + shard);
     }
 
     return boost::algorithm::join(create_segments, " ");

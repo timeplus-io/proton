@@ -46,6 +46,7 @@ namespace
     const std::vector<String> UNRETRIABLE_ERROR_CODES = {
         "57", /// Table already exists.
         "60", /// Table does not exist.
+        "62", /// Syntax error.
         "81", /// Database does not exist.
         "82", /// Database already  exists.
     };
