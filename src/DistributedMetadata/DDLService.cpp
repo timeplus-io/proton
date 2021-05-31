@@ -6,7 +6,8 @@
 #include "sendRequest.h"
 
 #include <Core/Block.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/Name.h>
 #include <Interpreters/Context.h>
 
 #include <Poco/Net/HTTPRequest.h>
@@ -263,7 +264,7 @@ Int32 DDLService::doDDL(
     return err;
 }
 
-void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
+void DDLService::createTable(DWAL::RecordPtr record)
 {
     const Block & block = record->block;
     assert(block.has("query_id"));
@@ -284,7 +285,7 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
     /// Build a data structure to cached last 10000 DDLs, check against this data structure
 
     /// Create a DWAL for this table. FIXME: retention_ms
-    std::any ctx{DistributedWriteAheadLogKafkaContext{database + "." + table, shards, replication_factor}};
+    std::any ctx{DWAL::KafkaWALContext{DWAL::escapeDWalName(database, table), shards, replication_factor}};
     doCreateDWal(ctx);
 
     if (record->headers.contains("hosts"))
@@ -373,7 +374,7 @@ void DDLService::createTable(IDistributedWriteAheadLog::RecordPtr record)
     }
 }
 
-void DDLService::mutateTable(IDistributedWriteAheadLog::RecordPtr record, const String & method) const
+void DDLService::mutateTable(DWAL::RecordPtr record, const String & method) const
 {
     Block & block = record->block;
     assert(block.has("query_id"));
@@ -427,7 +428,7 @@ void DDLService::mutateTable(IDistributedWriteAheadLog::RecordPtr record, const 
     succeedDDL(query_id, user, payload);
 }
 
-void DDLService::mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, const String & method) const
+void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) const
 {
     Block & block = record->block;
     assert(block.has("query_id"));
@@ -525,54 +526,54 @@ void DDLService::commit(Int64 last_sn)
     }
 }
 
-void DDLService::processRecords(const IDistributedWriteAheadLog::RecordPtrs & records)
+void DDLService::processRecords(const DWAL::RecordPtrs & records)
 {
     for (auto & record : records)
     {
         switch (record->op_code)
         {
-            case IDistributedWriteAheadLog::OpCode::CREATE_TABLE:
+            case DWAL::OpCode::CREATE_TABLE:
             {
                 createTable(record);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::ALTER_TABLE:
+            case DWAL::OpCode::ALTER_TABLE:
             {
                 mutateTable(record, Poco::Net::HTTPRequest::HTTP_PATCH);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::DELETE_TABLE:
+            case DWAL::OpCode::DELETE_TABLE:
             {
                 mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE);
 
                 /// Delete DWAL
                 String database = record->block.getByName("database").column->getDataAt(0).toString();
                 String table = record->block.getByName("table").column->getDataAt(0).toString();
-                std::any ctx{DistributedWriteAheadLogKafkaContext{database + "." + table}};
+                std::any ctx{DWAL::KafkaWALContext{DWAL::escapeDWalName(database, table)}};
                 doDeleteDWal(ctx);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::CREATE_COLUMN:
+            case DWAL::OpCode::CREATE_COLUMN:
             {
                 mutateTable(record, Poco::Net::HTTPRequest::HTTP_POST);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::ALTER_COLUMN:
+            case DWAL::OpCode::ALTER_COLUMN:
             {
                 mutateTable(record, Poco::Net::HTTPRequest::HTTP_PATCH);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::DELETE_COLUMN:
+            case DWAL::OpCode::DELETE_COLUMN:
             {
                 mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::CREATE_DATABASE:
+            case DWAL::OpCode::CREATE_DATABASE:
             {
                 mutateDatabase(record, Poco::Net::HTTPRequest::HTTP_POST);
                 break;
             }
-            case IDistributedWriteAheadLog::OpCode::DELETE_DATABASE:
+            case DWAL::OpCode::DELETE_DATABASE:
             {
                 mutateDatabase(record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 break;
@@ -591,11 +592,11 @@ void DDLService::processRecords(const IDistributedWriteAheadLog::RecordPtrs & re
 }
 
 std::vector<Poco::URI> DDLService::getTargetURIs(
-    IDistributedWriteAheadLog::RecordPtr record, const String & database, const String & table, const String & method) const
+    DWAL::RecordPtr record, const String & database, const String & table, const String & method) const
 {
-    if (record->op_code == IDistributedWriteAheadLog::OpCode::CREATE_COLUMN
-        || record->op_code == IDistributedWriteAheadLog::OpCode::ALTER_COLUMN
-        || record->op_code == IDistributedWriteAheadLog::OpCode::DELETE_COLUMN)
+    if (record->op_code == DWAL::OpCode::CREATE_COLUMN
+        || record->op_code == DWAL::OpCode::ALTER_COLUMN
+        || record->op_code == DWAL::OpCode::DELETE_COLUMN)
     {
         /// Column DDL request
         return toURIs(placement.placed(database, table), getColumnApiPath(record->headers, table, method), http_port);

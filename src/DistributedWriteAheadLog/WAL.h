@@ -1,13 +1,13 @@
 #pragma once
 
-#include "ByteVector.h"
-
-#include <Core/Block.h>
+#include "Cluster.h"
+#include "Record.h"
 
 #include <any>
 
-
 namespace DB
+{
+namespace DWAL
 {
 /** Distributed Write Ahead Log (WAL) interfaces which defines an ordered sequence of `transitions`.
  * At its core, it is an sequntial orderded and append-only log abstraction
@@ -19,95 +19,13 @@ namespace DB
  * 4. ...
  */
 
-class IDistributedWriteAheadLog : private boost::noncopyable
+class WAL : private boost::noncopyable
 {
 public:
-    virtual ~IDistributedWriteAheadLog() = default;
+    virtual ~WAL() = default;
     virtual void startup();
     virtual void shutdown();
-
-    enum class OpCode : UInt8
-    {
-        /// Data
-        ADD_DATA_BLOCK = 0,
-        ALTER_DATA_BLOCK,
-
-        /// Table Metadata
-        CREATE_TABLE,
-        DELETE_TABLE,
-        ALTER_TABLE,
-
-        /// Column Metadata
-        CREATE_COLUMN,
-        DELETE_COLUMN,
-        ALTER_COLUMN,
-
-        /// Database
-        CREATE_DATABASE,
-        DELETE_DATABASE,
-
-        /// Dictionary
-        CREATE_DICTIONARY,
-        DELETE_DICTIONARY,
-
-        MAX_OPS_CODE,
-
-        UNKNOWN = 0x3F,
-    };
-
-    using RecordSequenceNumber = Int64;
-
-    struct Record;
-
-    using Records = std::vector<Record>;
-    using RecordPtr = std::shared_ptr<Record>;
-    using RecordPtrs = std::vector<RecordPtr>;
-
-    inline const static String IDEMPOTENT_KEY = "_idem";
-
-    struct Record
-    {
-        /// fields on the wire
-        OpCode op_code = OpCode::UNKNOWN;
-
-        std::unordered_map<String, String> headers;
-
-        Block block;
-
-        /// fields which are not on the wire
-        UInt64 partition_key = 0;
-
-        RecordSequenceNumber sn = -1;
-
-        bool empty() const { return block.rows() == 0; }
-
-        bool hasIdempotentKey() const { return headers.contains(IDEMPOTENT_KEY) && !headers.at(IDEMPOTENT_KEY).empty(); }
-        String & idempotentKey() { return headers.at(IDEMPOTENT_KEY); }
-        void setIdempotentKey(const String & key) { headers[IDEMPOTENT_KEY] = key; }
-
-        static UInt8 ALWAYS_INLINE version(UInt64 flags)
-        {
-            return flags & 0x1F;
-        }
-
-        static OpCode ALWAYS_INLINE opcode(UInt64 flags)
-        {
-            auto opcode = (flags >> 5ul) & 0x3F;
-            if (likely(opcode < static_cast<UInt64>(OpCode::MAX_OPS_CODE)))
-            {
-                return static_cast<OpCode>(opcode);
-            }
-            return OpCode::UNKNOWN;
-        }
-
-        static ByteVector write(const Record & record);
-        static RecordPtr read(const char * data, size_t size);
-
-        Record(OpCode op_code_, Block && block_) : op_code(op_code_), block(std::move(block_)) { }
-        explicit Record(RecordSequenceNumber sn_) : sn(sn_) { }
-    };
-
-    constexpr static UInt8 WAL_VERSION = 1;
+    virtual String type() const = 0;
 
     struct AppendResult
     {
@@ -169,8 +87,11 @@ public:
     virtual Int32 remove(const String & name, std::any & ctx) = 0;
 
     /// `describe` return 0 if success; otherwise return non-zero
-    virtual Int32 describe(const String & name, std::any & ctx) = 0;
+    virtual Int32 describe(const String & name, std::any & ctx) const = 0;
+
+    virtual ClusterPtr cluster(std::any & ctx) const = 0;
 };
 
-using DistributedWriteAheadLogPtr = std::shared_ptr<IDistributedWriteAheadLog>;
+using WALPtr = std::shared_ptr<WAL>;
+}
 }

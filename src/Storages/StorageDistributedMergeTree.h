@@ -3,7 +3,7 @@
 #include <pcg_random.hpp>
 #include <ext/shared_ptr_helper.h>
 
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/WAL.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/IngestingBlocks.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -157,7 +157,7 @@ public:
         ingesting_blocks.getStatuses(poll_ids, statuses);
     }
 
-    IDistributedWriteAheadLog::RecordSequenceNumber lastSequenceNumber() const;
+    DWAL::RecordSequenceNumber lastSequenceNumber() const;
 
     friend struct DistributedMergeTreeCallbackData;
     friend class DistributedMergeTreeBlockOutputStream;
@@ -195,20 +195,20 @@ private:
     };
 
     WriteCallbackData * writeCallbackData(const String & query_status_poll_id, UInt16 block_id);
-    void writeCallback(const IDistributedWriteAheadLog::AppendResult & result, const String & query_status_poll_id, UInt16 block_id);
+    void writeCallback(const DWAL::WAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id);
 
-    static void writeCallback(const IDistributedWriteAheadLog::AppendResult & result, void * data);
+    static void writeCallback(const DWAL::WAL::AppendResult & result, void * data);
 
-    IDistributedWriteAheadLog::RecordSequenceNumber sequenceNumberLoaded() const;
+    DWAL::RecordSequenceNumber sequenceNumberLoaded() const;
     void backgroundConsumer();
     void mergeBlocks(Block & lhs, Block & rhs);
-    bool dedupBlock(const IDistributedWriteAheadLog::RecordPtr & record);
+    bool dedupBlock(const DWAL::RecordPtr & record);
     void addIdempotentKey(const String & key);
     void buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_);
 
-    void commit(IDistributedWriteAheadLog::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx);
+    void commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx);
 
-    using SequencePair = std::pair<IDistributedWriteAheadLog::RecordSequenceNumber, IDistributedWriteAheadLog::RecordSequenceNumber>;
+    using SequencePair = std::pair<DWAL::RecordSequenceNumber, DWAL::RecordSequenceNumber>;
 
     void doCommit(
         Block block,
@@ -217,8 +217,8 @@ private:
         SequenceRanges missing_sequence_ranges,
         std::any & dwal_consume_ctx);
     void commitSN(std::any & dwal_consume_ctx);
-    void commitSNLocal(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn);
-    void commitSNRemote(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx);
+    void commitSNLocal(DWAL::RecordSequenceNumber commit_sn);
+    void commitSNRemote(DWAL::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx);
     void progressSequences(const SequencePair & seq);
     void progressSequencesWithoutLock(const SequencePair & seq);
     Int64 maxCommittedSN() const;
@@ -239,7 +239,7 @@ private:
     /// Cached ctx for reuse
     std::any dwal_append_ctx;
 
-    DistributedWriteAheadLogPtr dwal;
+    DWAL::WALPtr dwal;
     IngestingBlocks & ingesting_blocks;
 
     /// Local checkpoint threshold timer
@@ -252,9 +252,9 @@ private:
     ThreadPool & part_commit_pool;
 
     mutable std::mutex sns_mutex;
-    IDistributedWriteAheadLog::RecordSequenceNumber last_sn = -1; /// To be committed to DWAL
-    IDistributedWriteAheadLog::RecordSequenceNumber prev_sn = -1; /// Committed to DWAL
-    IDistributedWriteAheadLog::RecordSequenceNumber local_sn = -1; /// Committed to `committed_sn.txt`
+    DWAL::RecordSequenceNumber last_sn = -1; /// To be committed to DWAL
+    DWAL::RecordSequenceNumber prev_sn = -1; /// Committed to DWAL
+    DWAL::RecordSequenceNumber local_sn = -1; /// Committed to `committed_sn.txt`
     std::set<SequencePair> local_committed_sns; /// Committed to `Part` folder
     std::deque<SequencePair> outstanding_sns;
 

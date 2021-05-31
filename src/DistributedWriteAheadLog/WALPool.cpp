@@ -1,6 +1,6 @@
-#include "DistributedWriteAheadLogPool.h"
+#include "WALPool.h"
 
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -14,30 +14,32 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
+namespace DWAL
+{
 namespace
 {
     /// Globals
-    const String SYSTEM_DWALS_KEY = "cluster_settings.streaming_storage";
-    const String SYSTEM_DWALS_KEY_PREFIX = "cluster_settings.streaming_storage.";
+    const String SYSTEM_WALS_KEY = "cluster_settings.streaming_storage";
+    const String SYSTEM_WALS_KEY_PREFIX = "cluster_settings.streaming_storage.";
 }
 
-DistributedWriteAheadLogPool & DistributedWriteAheadLogPool::instance(ContextPtr global_context)
+WALPool & WALPool::instance(ContextPtr global_context)
 {
-    static DistributedWriteAheadLogPool pool{global_context};
+    static WALPool pool{global_context};
     return pool;
 }
 
-DistributedWriteAheadLogPool::DistributedWriteAheadLogPool(ContextPtr global_context_)
-    : global_context(global_context_), log(&Poco::Logger::get("DistributedWriteAheadLogPool"))
+WALPool::WALPool(ContextPtr global_context_)
+    : global_context(global_context_), log(&Poco::Logger::get("WALPool"))
 {
 }
 
-DistributedWriteAheadLogPool::~DistributedWriteAheadLogPool()
+WALPool::~WALPool()
 {
     shutdown();
 }
 
-void DistributedWriteAheadLogPool::startup()
+void WALPool::startup()
 {
     if (!global_context->isDistributed())
     {
@@ -54,23 +56,23 @@ void DistributedWriteAheadLogPool::startup()
 
     const auto & config = global_context->getConfigRef();
 
-    Poco::Util::AbstractConfiguration::Keys sys_dwal_keys;
-    config.keys(SYSTEM_DWALS_KEY, sys_dwal_keys);
+    Poco::Util::AbstractConfiguration::Keys sys_WAL_keys;
+    config.keys(SYSTEM_WALS_KEY, sys_WAL_keys);
 
-    for (const auto & key : sys_dwal_keys)
+    for (const auto & key : sys_WAL_keys)
     {
         init(key);
     }
 
     if (!wals.empty() && default_cluster.empty())
     {
-        throw Exception("Default Kafka DWAL cluster is not assigned", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Default Kafka WAL cluster is not assigned", ErrorCodes::BAD_ARGUMENTS);
     }
 
     LOG_INFO(log, "Started");
 }
 
-void DistributedWriteAheadLogPool::shutdown()
+void WALPool::shutdown()
 {
     if (stopped.test_and_set())
     {
@@ -79,11 +81,11 @@ void DistributedWriteAheadLogPool::shutdown()
 
     LOG_INFO(log, "Stopping");
 
-    for (auto & dwals : wals)
+    for (auto & cluster_wals : wals)
     {
-        for (auto & dwal : dwals.second)
+        for (auto & wal : cluster_wals.second)
         {
-            dwal->shutdown();
+            wal->shutdown();
         }
     }
 
@@ -95,15 +97,15 @@ void DistributedWriteAheadLogPool::shutdown()
     LOG_INFO(log, "Stopped");
 }
 
-void DistributedWriteAheadLogPool::init(const String & key)
+void WALPool::init(const String & key)
 {
     /// FIXME; for now, we only support kafka, so assume it is kafka
     /// assert(key.startswith("kafka"));
 
     const auto & config = global_context->getConfigRef();
 
-    DistributedWriteAheadLogKafkaSettings kafka_settings;
-    Int32 dwal_pool_size = 0;
+    KafkaWALSettings kafka_settings;
+    Int32 wal_pool_size = 0;
     bool system_default = false;
 
     std::vector<std::tuple<String, String, void *>> settings = {
@@ -133,12 +135,12 @@ void DistributedWriteAheadLogPool::init(const String & key)
         {".fetch_message_max_bytes", "Int32", &kafka_settings.fetch_message_max_bytes},
         {".queued_min_messages", "Int32", &kafka_settings.queued_min_messages},
         {".queued_max_messages_kbytes", "Int32", &kafka_settings.queued_max_messages_kbytes},
-        {".internal_pool_size", "Int32", &dwal_pool_size},
+        {".internal_pool_size", "Int32", &wal_pool_size},
     };
 
     for (const auto & t : settings)
     {
-        auto k = SYSTEM_DWALS_KEY_PREFIX + key + std::get<0>(t);
+        auto k = SYSTEM_WALS_KEY_PREFIX + key + std::get<0>(t);
         if (config.has(k))
         {
             const auto & type = std::get<1>(t);
@@ -179,13 +181,13 @@ void DistributedWriteAheadLogPool::init(const String & key)
         throw Exception("Duplicated Kafka cluster id " + kafka_settings.cluster_id, ErrorCodes::BAD_ARGUMENTS);
     }
 
-    /// Create DWALs
-    LOG_INFO(log, "Creating Kafka DWAL with settings: {}", kafka_settings.string());
+    /// Create WALs
+    LOG_INFO(log, "Creating Kafka WAL with settings: {}", kafka_settings.string());
 
-    for (Int32 i = 0; i < dwal_pool_size; ++i)
+    for (Int32 i = 0; i < wal_pool_size; ++i)
     {
         auto kwal
-            = std::make_shared<DistributedWriteAheadLogKafka>(std::make_unique<DistributedWriteAheadLogKafkaSettings>(kafka_settings));
+            = std::make_shared<KafkaWAL>(std::make_unique<KafkaWALSettings>(kafka_settings));
 
         kwal->startup();
         wals[kafka_settings.cluster_id].push_back(kwal);
@@ -195,17 +197,17 @@ void DistributedWriteAheadLogPool::init(const String & key)
 
     if (system_default)
     {
-        LOG_INFO(log, "Setting {} cluster as default Kafka DWAL cluster", kafka_settings.cluster_id);
+        LOG_INFO(log, "Setting {} cluster as default Kafka WAL cluster", kafka_settings.cluster_id);
         default_cluster = kafka_settings.cluster_id;
 
-        /// Meta DWal with a different consumer group
+        /// Meta WAL with a different consumer group
         kafka_settings.group_id += "-meta";
-        meta_wal = std::make_shared<DistributedWriteAheadLogKafka>(std::make_unique<DistributedWriteAheadLogKafkaSettings>(kafka_settings));
+        meta_wal = std::make_shared<KafkaWAL>(std::make_unique<KafkaWALSettings>(kafka_settings));
         meta_wal->startup();
     }
 }
 
-DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::get(const String & id) const
+WALPtr WALPool::get(const String & id) const
 {
     if (id.empty() && !default_cluster.empty())
     {
@@ -221,8 +223,23 @@ DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::get(const String & id)
     return iter->second[indexes[id]++ % iter->second.size()];
 }
 
-DistributedWriteAheadLogPtr DistributedWriteAheadLogPool::getMeta() const
+WALPtr WALPool::getMeta() const { return meta_wal; }
+
+std::vector<ClusterPtr> WALPool::clusters(std::any & ctx) const
 {
-    return meta_wal;
+    std::vector<ClusterPtr> results;
+    results.reserve(wals.size());
+
+    for (const auto & cluster_wal : wals)
+    {
+        auto result{cluster_wal.second.back()->cluster(ctx)};
+        if (result)
+        {
+            results.push_back(std::move(result));
+        }
+    }
+
+    return results;
+}
 }
 }

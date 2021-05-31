@@ -27,14 +27,14 @@ public:
 
 private:
     void preShutdown() override;
-    void processRecords(const IDistributedWriteAheadLog::RecordPtrs & records) override;
+    void processRecords(const DWAL::RecordPtrs & records) override;
     String role() const override { return "placement"; }
     String cleanupPolicy() const override { return "compact"; }
     ConfigSettings configSettings() const override;
     std::pair<Int32, Int32> batchSizeAndTimeout() const override { return std::make_pair(100, 500); }
 
 private:
-    void mergeMetrics(const String & key, const IDistributedWriteAheadLog::RecordPtr & record);
+    void mergeMetrics(const String & key, const DWAL::RecordPtr & record);
 
     /// `broadcast` broadcasts the metrics of this node
     void broadcast();

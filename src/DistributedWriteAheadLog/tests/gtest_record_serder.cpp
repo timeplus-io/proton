@@ -5,12 +5,15 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DistributedWriteAheadLog/ByteVector.h>
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/OpCodes.h>
+#include <DistributedWriteAheadLog/Record.h>
+#include <DistributedWriteAheadLog/WAL.h>
 
 #include <gtest/gtest.h>
 
 
 using namespace DB;
+using namespace DB::DWAL;
 using namespace std;
 
 TEST(CheckRecordSerializationDeserialization, Serder)
@@ -60,11 +63,11 @@ TEST(CheckRecordSerializationDeserialization, Serder)
     ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, "_time");
     block.insert(time_col_with_type);
 
-    IDistributedWriteAheadLog::Record r{IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, move(block)};
+    Record r{OpCode::ADD_DATA_BLOCK, move(block)};
 
-    ByteVector data{IDistributedWriteAheadLog::Record::write(r)};
+    ByteVector data{Record::write(r)};
 
-    auto rr = IDistributedWriteAheadLog::Record::read(reinterpret_cast<char *>(data.data()), data.size());
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size());
     EXPECT_EQ(r.op_code, rr->op_code);
 
     SipHash hash_expected;

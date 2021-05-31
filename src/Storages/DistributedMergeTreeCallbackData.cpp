@@ -16,7 +16,7 @@ void DistributedMergeTreeCallbackData::wait() const
     }
 }
 
-void DistributedMergeTreeCallbackData::commit(IDistributedWriteAheadLog::RecordPtrs records)
+void DistributedMergeTreeCallbackData::commit(DWAL::RecordPtrs records)
 {
     if (finishRecovery())
     {
@@ -61,7 +61,7 @@ void DistributedMergeTreeCallbackData::commit(IDistributedWriteAheadLog::RecordP
     }
 }
 
-inline void DistributedMergeTreeCallbackData::doCommit(IDistributedWriteAheadLog::RecordPtrs records, SequenceRanges sequence_ranges)
+inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges)
 {
     ++outstanding_commits;
     try
@@ -77,9 +77,9 @@ inline void DistributedMergeTreeCallbackData::doCommit(IDistributedWriteAheadLog
 }
 
 std::vector<RecordsSequenceRangesPair> DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(
-    const IDistributedWriteAheadLog::RecordPtrs & records,
+    const DWAL::RecordPtrs & records,
     const SequenceRanges & sequence_ranges,
-    IDistributedWriteAheadLog::RecordSequenceNumber max_committed_sn)
+    DWAL::RecordSequenceNumber max_committed_sn)
 {
     std::vector<RecordsSequenceRangesPair> range_buckets(sequence_ranges.size() + 1);
 

@@ -1,6 +1,7 @@
 #pragma once
 
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/Cluster.h>
+#include <DistributedWriteAheadLog/WAL.h>
 #include <Common/ThreadPool.h>
 
 #include <boost/noncopyable.hpp>
@@ -23,13 +24,14 @@ public:
     void shutdown();
 
     const String & nodeRoles() const { return node_roles; }
+    std::vector<DWAL::ClusterPtr> clusters();
 
 private:
     void tailingRecords();
     void doTailingRecords();
     virtual void postStartup() {}
     virtual void preShutdown() {}
-    virtual void processRecords(const IDistributedWriteAheadLog::RecordPtrs & records) = 0;
+    virtual void processRecords(const DWAL::RecordPtrs & records) = 0;
     virtual String role() const = 0;
     virtual String cleanupPolicy() const { return "delete"; }
     virtual std::pair<Int32, Int32> batchSizeAndTimeout() const { return std::make_pair(100, 500); }
@@ -38,7 +40,8 @@ private:
     void waitUntilDWalReady(std::any & ctx);
 
 protected:
-    void setupRecordHeaderFromConfig(IDistributedWriteAheadLog::Record & record, const std::map<String, String> & key_and_defaults) const;
+    void
+    setupRecordHeaderFromConfig(DWAL::Record & record, const std::map<String, String> & key_and_defaults) const;
 
     void doCreateDWal(std::any & ctx);
     void doDeleteDWal(std::any & ctx);
@@ -67,7 +70,7 @@ protected:
 
     std::any dwal_append_ctx;
     std::any dwal_consume_ctx;
-    DistributedWriteAheadLogPtr dwal;
+    DWAL::WALPtr dwal;
 
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
     std::optional<ThreadPool> pool;

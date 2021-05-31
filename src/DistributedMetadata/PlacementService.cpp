@@ -128,12 +128,12 @@ void PlacementService::preShutdown()
         (*broadcast_task)->deactivate();
 }
 
-void PlacementService::processRecords(const IDistributedWriteAheadLog::RecordPtrs & records)
+void PlacementService::processRecords(const DWAL::RecordPtrs & records)
 {
     /// Node metrics schema: node, disk_free
     for (const auto & record : records)
     {
-        assert(record->op_code == IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK);
+        assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
         if (!record->hasIdempotentKey())
         {
             LOG_ERROR(log, "Invalid metric record, missing idempotent key");
@@ -151,7 +151,7 @@ void PlacementService::processRecords(const IDistributedWriteAheadLog::RecordPtr
     }
 }
 
-void PlacementService::mergeMetrics(const String & node_identity, const IDistributedWriteAheadLog::RecordPtr & record)
+void PlacementService::mergeMetrics(const String & node_identity, const DWAL::RecordPtr & record)
 {
     NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node_identity, record->headers);
     if (!node_metrics->isValid() || node_metrics->node.channel.empty())
@@ -249,7 +249,7 @@ void PlacementService::doBroadcast()
     ColumnWithTypeAndName disk_space_col_with_type{std::move(disk_space_col), uint64_type, "disk_space"};
     disk_block.insert(disk_space_col_with_type);
 
-    IDistributedWriteAheadLog::Record record{IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, std::move(disk_block)};
+    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(disk_block)};
     record.partition_key = 0;
     record.setIdempotentKey(global_context->getNodeIdentity());
     record.headers["_host"] = THIS_HOST;

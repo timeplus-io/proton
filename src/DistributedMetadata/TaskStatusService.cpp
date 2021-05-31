@@ -97,11 +97,11 @@ Block buildBlock(const std::vector<TaskStatusService::TaskStatusPtr> & tasks)
     return DB::buildBlock(string_cols, int64_cols);
 }
 
-IDistributedWriteAheadLog::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)
+DWAL::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)
 {
     std::vector<TaskStatusService::TaskStatusPtr> tasks = {task};
     auto block = buildBlock(tasks);
-    return IDistributedWriteAheadLog::Record(IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, std::move(block));
+    return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block));
 }
 }
 
@@ -151,12 +151,12 @@ Int32 TaskStatusService::append(TaskStatusPtr task)
     return 0;
 }
 
-void TaskStatusService::processRecords(const IDistributedWriteAheadLog::RecordPtrs & records)
+void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
 {
     /// Consume records and build in-memory indexes
     for (const auto & record : records)
     {
-        assert(record->op_code == IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK);
+        assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
 
         auto task_ptr = buildTaskStatusFromRecord(record);
         updateTaskStatus(task_ptr);
@@ -226,7 +226,7 @@ bool TaskStatusService::tableExists() const
     return DatabaseCatalog::instance().isTableExist(sid, global_context);
 }
 
-TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const IDistributedWriteAheadLog::RecordPtr & record) const
+TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const
 {
     std::vector<TaskStatusService::TaskStatusPtr> tasks;
     buildTaskStatusFromBlock(record->block, tasks);

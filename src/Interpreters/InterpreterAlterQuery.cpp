@@ -50,7 +50,7 @@ namespace ErrorCodes
 /// Daisy : start
 namespace
 {
-IDistributedWriteAheadLog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
+DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
 {
     if (queryParams.contains("column"))
     {
@@ -58,24 +58,24 @@ IDistributedWriteAheadLog::OpCode getAlterTableParamOpCode(const std::unordered_
 
         if (iter->second == Poco::Net::HTTPRequest::HTTP_POST)
         {
-            return IDistributedWriteAheadLog::OpCode::CREATE_COLUMN;
+            return DWAL::OpCode::CREATE_COLUMN;
         }
         else if (iter->second == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return IDistributedWriteAheadLog::OpCode::ALTER_COLUMN;
+            return DWAL::OpCode::ALTER_COLUMN;
         }
         else if (iter->second == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return IDistributedWriteAheadLog::OpCode::DELETE_COLUMN;
+            return DWAL::OpCode::DELETE_COLUMN;
         }
         else
         {
             assert(false);
-            return IDistributedWriteAheadLog::OpCode::UNKNOWN;
+            return DWAL::OpCode::UNKNOWN;
         }
     }
 
-    return IDistributedWriteAheadLog::OpCode::ALTER_TABLE;
+    return DWAL::OpCode::ALTER_TABLE;
 }
 }
 /// Daisy : end

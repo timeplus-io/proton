@@ -2,15 +2,17 @@
 
 /// Daisy : starts. Added for Daisy
 
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/Record.h>
 #include <Storages/MergeTree/SequenceInfo.h>
+
+#include <any>
 
 namespace DB
 {
 
 class StorageDistributedMergeTree;
 
-using RecordsSequenceRangesPair = std::pair<IDistributedWriteAheadLog::RecordPtrs, SequenceRanges>;
+using RecordsSequenceRangesPair = std::pair<DWAL::RecordPtrs, SequenceRanges>;
 
 struct DistributedMergeTreeCallbackData
 {
@@ -20,28 +22,28 @@ struct DistributedMergeTreeCallbackData
     {
     }
 
-    void commit(IDistributedWriteAheadLog::RecordPtrs records);
+    void commit(DWAL::RecordPtrs records);
 
     /// Wait for the outstanding commits
     void wait() const;
 
     /// For testing
     static std::vector<RecordsSequenceRangesPair> categorizeRecordsAccordingToSequenceRanges(
-        const IDistributedWriteAheadLog::RecordPtrs & records,
+        const DWAL::RecordPtrs & records,
         const SequenceRanges & sequence_ranges,
-        IDistributedWriteAheadLog::RecordSequenceNumber max_committed_sn);
+        DWAL::RecordSequenceNumber max_committed_sn);
 
 private:
     bool finishRecovery() const { return missing_sequence_ranges.empty() && recovery_records.empty(); }
 
-    void doCommit(IDistributedWriteAheadLog::RecordPtrs records, SequenceRanges sequence_ranges = {});
+    void doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges = {});
 
 private:
     StorageDistributedMergeTree * storage;
 
     std::atomic_uint16_t outstanding_commits = 0;
     SequenceRanges missing_sequence_ranges;
-    IDistributedWriteAheadLog::RecordPtrs recovery_records;
+    DWAL::RecordPtrs recovery_records;
 
     std::any & ctx;
 };

@@ -2,9 +2,9 @@
 #include "DistributedMergeTreeCallbackData.h"
 
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogName.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/WALPool.h>
+#include <DistributedWriteAheadLog/Name.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -204,7 +204,7 @@ String makeFormattedListOfShards(const ClusterPtr & cluster)
 
 inline String topic(const StorageID & storage_id)
 {
-    return escapeDWalName(storage_id.getDatabaseName(), storage_id.getTableName());
+    return DWAL::escapeDWalName(storage_id.getDatabaseName(), storage_id.getTableName());
 }
 }
 
@@ -804,7 +804,7 @@ size_t StorageDistributedMergeTree::getRandomShardIndex()
     return std::uniform_int_distribution<size_t>(0, shards - 1)(rng);
 }
 
-IDistributedWriteAheadLog::RecordSequenceNumber StorageDistributedMergeTree::lastSequenceNumber() const
+DWAL::RecordSequenceNumber StorageDistributedMergeTree::lastSequenceNumber() const
 {
     std::lock_guard lock(sns_mutex);
     return last_sn;
@@ -822,7 +822,7 @@ StorageDistributedMergeTree::WriteCallbackData * StorageDistributedMergeTree::wr
 }
 
 void StorageDistributedMergeTree::writeCallback(
-    const IDistributedWriteAheadLog::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
+    const DWAL::WAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
 {
     if (result.err)
     {
@@ -835,7 +835,7 @@ void StorageDistributedMergeTree::writeCallback(
     }
 }
 
-void StorageDistributedMergeTree::writeCallback(const IDistributedWriteAheadLog::AppendResult & result, void * data)
+void StorageDistributedMergeTree::writeCallback(const DWAL::WAL::AppendResult & result, void * data)
 {
     auto pdata = static_cast<WriteCallbackData *>(data);
     pdata->storage->writeCallback(result, pdata->query_status_poll_id, pdata->block_id);
@@ -875,7 +875,7 @@ Int64 StorageDistributedMergeTree::maxCommittedSN() const
     return storage->maxCommittedSN();
 }
 
-void StorageDistributedMergeTree::commitSNLocal(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn)
+void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSequenceNumber commit_sn)
 {
     try
     {
@@ -900,7 +900,7 @@ void StorageDistributedMergeTree::commitSNLocal(IDistributedWriteAheadLog::Recor
     }
 }
 
-void StorageDistributedMergeTree::commitSNRemote(IDistributedWriteAheadLog::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx)
 {
     /// Commit sequence number to dwal
     try
@@ -928,7 +928,7 @@ void StorageDistributedMergeTree::commitSN(std::any & dwal_consume_ctx)
     size_t outstanding_sns_size = 0;
     size_t local_committed_sns_size = 0;
 
-    IDistributedWriteAheadLog::RecordSequenceNumber commit_sn = -1;
+    DWAL::RecordSequenceNumber commit_sn = -1;
     Int64 outstanding_commits = 0;
     {
         std::lock_guard lock(sns_mutex);
@@ -1111,7 +1111,7 @@ inline void StorageDistributedMergeTree::addIdempotentKey(const String & key)
     assert(idempotent_keys.size() == idempotent_keys_index.size());
 }
 
-bool StorageDistributedMergeTree::dedupBlock(const IDistributedWriteAheadLog::RecordPtr & record)
+bool StorageDistributedMergeTree::dedupBlock(const DWAL::RecordPtr & record)
 {
     if (!record->hasIdempotentKey())
     {
@@ -1137,7 +1137,7 @@ bool StorageDistributedMergeTree::dedupBlock(const IDistributedWriteAheadLog::Re
     return false;
 }
 
-void StorageDistributedMergeTree::commit(IDistributedWriteAheadLog::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx)
 {
     if (records.empty())
     {
@@ -1149,7 +1149,7 @@ void StorageDistributedMergeTree::commit(IDistributedWriteAheadLog::RecordPtrs r
 
     for (auto & rec : records)
     {
-        if (likely(rec->op_code == IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK))
+        if (likely(rec->op_code == DWAL::OpCode::ADD_DATA_BLOCK))
         {
             if (dedupBlock(rec))
             {
@@ -1173,7 +1173,7 @@ void StorageDistributedMergeTree::commit(IDistributedWriteAheadLog::RecordPtrs r
                 keys->emplace_back(rec->sn, std::move(rec->idempotentKey()));
             }
         }
-        else if (rec->op_code == IDistributedWriteAheadLog::OpCode::ALTER_DATA_BLOCK)
+        else if (rec->op_code == DWAL::OpCode::ALTER_DATA_BLOCK)
         {
             /// FIXME: execute the later before doing any ingestion
             throw Exception("Not impelemented", ErrorCodes::NOT_IMPLEMENTED);
@@ -1194,7 +1194,7 @@ void StorageDistributedMergeTree::commit(IDistributedWriteAheadLog::RecordPtrs r
     assert(missing_sequence_ranges.empty());
 }
 
-IDistributedWriteAheadLog::RecordSequenceNumber StorageDistributedMergeTree::sequenceNumberLoaded() const
+DWAL::RecordSequenceNumber StorageDistributedMergeTree::sequenceNumberLoaded() const
 {
     std::lock_guard lock(sns_mutex);
     if (local_sn >= 0)
@@ -1217,7 +1217,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
 
     auto ssettings = storage_settings.get();
 
-    DistributedWriteAheadLogKafkaContext consume_ctx{topic(getStorageID()), shard, sequenceNumberLoaded()};
+    DWAL::KafkaWALContext consume_ctx{topic(getStorageID()), shard, sequenceNumberLoaded()};
     consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
     consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
     consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
@@ -1241,7 +1241,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
     DistributedMergeTreeCallbackData callback_data{this, missing_sequence_ranges, dwal_consume_ctx};
 
     /// The callback is happening in the same thread as the caller
-    auto callback = [](IDistributedWriteAheadLog::RecordPtrs records, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    auto callback = [](DWAL::RecordPtrs records, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         assert(!records.empty());
 
         auto cdata = static_cast<DistributedMergeTreeCallbackData *>(data);
@@ -1265,8 +1265,8 @@ void StorageDistributedMergeTree::backgroundConsumer()
             auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(now - last_commit_ts).count() >= 5)
             {
-                IDistributedWriteAheadLog::RecordSequenceNumber remote_commit_sn = -1;
-                IDistributedWriteAheadLog::RecordSequenceNumber commit_sn = -1;
+                DWAL::RecordSequenceNumber remote_commit_sn = -1;
+                DWAL::RecordSequenceNumber commit_sn = -1;
                 {
                     std::lock_guard lock(sns_mutex);
                     if (last_sn != local_sn)
@@ -1307,7 +1307,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
     /// When tearing down, commit whatever it has
     commitSN(dwal_consume_ctx);
 
-    IDistributedWriteAheadLog::RecordSequenceNumber commit_sn = -1;
+    DWAL::RecordSequenceNumber commit_sn = -1;
     {
         std::lock_guard lock(sns_mutex);
         if (last_sn != local_sn)
@@ -1353,7 +1353,7 @@ void StorageDistributedMergeTree::initWal()
 
     shard = ssettings->shard.value;
 
-    dwal = DistributedWriteAheadLogPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
+    dwal = DWAL::WALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
 
     if (!dwal)
     {
@@ -1362,10 +1362,10 @@ void StorageDistributedMergeTree::initWal()
 
     /// Cached ctx, reused by append. Multiple threads are accessing append context
     /// since librdkafka topic handle is thread safe, so we are good
-    DistributedWriteAheadLogKafkaContext append_ctx{topic(getStorageID())};
+    DWAL::KafkaWALContext append_ctx{topic(getStorageID())};
     append_ctx.request_required_acks = dwal_request_required_acks;
     append_ctx.request_timeout_ms = dwal_request_timeout_ms;
-    append_ctx.topic_handle = static_cast<DistributedWriteAheadLogKafka *>(dwal.get())->initProducerTopic(append_ctx);
+    append_ctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopic(append_ctx);
     dwal_append_ctx = append_ctx;
 }
 }

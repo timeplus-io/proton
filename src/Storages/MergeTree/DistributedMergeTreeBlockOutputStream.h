@@ -1,7 +1,7 @@
 #pragma once
 
 #include <DataStreams/IBlockOutputStream.h>
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/WAL.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 
@@ -37,9 +37,9 @@ private:
     BlocksWithShard doShardBlock(const Block & block) const;
 
 private:
-    void writeCallback(const IDistributedWriteAheadLog::AppendResult & result);
+    void writeCallback(const DWAL::WAL::AppendResult & result);
 
-    static void writeCallback(const IDistributedWriteAheadLog::AppendResult & result, void * data);
+    static void writeCallback(const DWAL::WAL::AppendResult & result, void * data);
 
 private:
     StorageDistributedMergeTree & storage;

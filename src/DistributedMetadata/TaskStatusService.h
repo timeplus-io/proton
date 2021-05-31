@@ -50,7 +50,7 @@ public:
     void schedulePersistentTask();
 
 private:
-    void processRecords(const IDistributedWriteAheadLog::RecordPtrs & records) override;
+    void processRecords(const DWAL::RecordPtrs & records) override;
 
     void preShutdown() override;
 
@@ -63,7 +63,7 @@ private:
     void findByUserInMemory(const String & user, std::vector<TaskStatusPtr> & res);
     void findByUserInTable(const String & user, std::vector<TaskStatusPtr> & res);
 
-    TaskStatusPtr buildTaskStatusFromRecord(const IDistributedWriteAheadLog::RecordPtr & record) const;
+    TaskStatusPtr buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const;
 
     void buildTaskStatusFromBlock(const Block & block, std::vector<TaskStatusPtr> & res) const;
 

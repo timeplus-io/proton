@@ -1,4 +1,4 @@
-#include "IDistributedWriteAheadLog.h"
+#include "Record.h"
 
 #include <DataStreams/MaterializingBlockOutputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -11,16 +11,9 @@
 
 namespace DB
 {
-
-void IDistributedWriteAheadLog::startup()
+namespace DWAL
 {
-}
-
-void IDistributedWriteAheadLog::shutdown()
-{
-}
-
-ByteVector IDistributedWriteAheadLog::Record::write(const Record & record)
+ByteVector Record::write(const Record & record)
 {
     ByteVector data{static_cast<size_t>((record.block.bytes() + 2) * 1.5)};
 
@@ -32,7 +25,7 @@ ByteVector IDistributedWriteAheadLog::Record::write(const Record & record)
     /// [0-4] : Version
     /// [5-10] : OpCode
     /// [11-63] : Reserved
-    UInt64 flags = (IDistributedWriteAheadLog::WAL_VERSION) | (static_cast<UInt8>(record.op_code) << 5ul);
+    UInt64 flags = VERSION | (static_cast<UInt8>(record.op_code) << 5ul);
     writeIntBinary(flags, wb);
 
     /// Data
@@ -44,7 +37,7 @@ ByteVector IDistributedWriteAheadLog::Record::write(const Record & record)
     return data;
 }
 
-IDistributedWriteAheadLog::RecordPtr IDistributedWriteAheadLog::Record::read(const char * data, size_t size)
+RecordPtr Record::read(const char * data, size_t size)
 {
     ReadBufferFromMemory rb{data, size};
 
@@ -52,10 +45,11 @@ IDistributedWriteAheadLog::RecordPtr IDistributedWriteAheadLog::Record::read(con
     readIntBinary(flags, rb);
 
     /// FIXME, more graceful version handling
-    assert(Record::version(flags) == IDistributedWriteAheadLog::WAL_VERSION);
+    assert(Record::version(flags) == VERSION);
 
     NativeBlockInputStream input{rb, 0};
 
-    return std::make_shared<IDistributedWriteAheadLog::Record>(Record::opcode(flags), input.read());
+    return std::make_shared<Record>(Record::opcode(flags), input.read());
+}
 }
 }

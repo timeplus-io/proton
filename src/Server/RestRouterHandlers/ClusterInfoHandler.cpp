@@ -14,6 +14,35 @@ namespace ErrorCodes
 namespace
 {
     const String CLUSTER_INFO_URL = "http://{}:{}/dae/v1/clusterinfo";
+
+
+    Poco::JSON::Array streaming_clusters(ContextPtr query_context)
+    {
+        auto clusters{CatalogService::instance(query_context).clusters()};
+
+        Poco::JSON::Array json_clusters;
+
+        for (const auto & cluster : clusters)
+        {
+            Poco::JSON::Object::Ptr json_cluster(new Poco::JSON::Object());
+            json_cluster->set("id", cluster->id);
+            json_cluster->set("controller_id", cluster->controller_id);
+            Poco::JSON::Array json_nodes;
+
+            for (const auto & node : cluster->nodes)
+            {
+                Poco::JSON::Object::Ptr json_node(new Poco::JSON::Object());
+                json_node->set("id", node.id);
+                json_node->set("port", node.port);
+                json_node->set("host", node.host);
+                json_nodes.add(json_node);
+            }
+            json_cluster->set("nodes", json_nodes);
+            json_clusters.add(json_cluster);
+        }
+
+        return json_clusters;
+    }
 }
 
 std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
@@ -76,6 +105,7 @@ String ClusterInfoHandler::getClusterInfoLocally() const
 
     Poco::JSON::Object resp;
     resp.set("nodes", json_nodes);
+    resp.set("streaming_clusters", streaming_clusters(query_context));
     resp.set("request_id", query_context->getCurrentQueryId());
 
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM

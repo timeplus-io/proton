@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IDistributedWriteAheadLog.h"
+#include "WAL.h"
 
 #include <Common/ThreadPool.h>
 
@@ -15,9 +15,11 @@ struct rd_kafka_message_s;
 
 namespace DB
 {
-/// DistributedWriteAheadLogKafkaContext is not thread safe, so each produce/consume thread
+namespace DWAL
+{
+/// KafkaWALContext is not thread safe, so each produce/consume thread
 /// shall maintain its own context instance
-struct DistributedWriteAheadLogKafkaContext
+struct KafkaWALContext
 {
     String topic;
     Int32 partition = 0;
@@ -92,30 +94,21 @@ struct DistributedWriteAheadLogKafkaContext
     /// Cached topic handle across call
     std::shared_ptr<rd_kafka_topic_s> topic_handle;
 
-    DistributedWriteAheadLogKafkaContext(const String & topic_, Int32 partition_, Int64 offset_)
+    KafkaWALContext(const String & topic_, Int32 partition_, Int64 offset_)
         : topic(topic_), partition(partition_), offset(offset_)
     {
     }
 
-    DistributedWriteAheadLogKafkaContext(
+    KafkaWALContext(
         const String & topic_, Int32 partitions_, Int32 replication_factor_, const String & cleanup_policy_ = "delete")
         : topic(topic_), partitions(partitions_), replication_factor(replication_factor_), cleanup_policy(cleanup_policy_)
     {
     }
 
-    explicit DistributedWriteAheadLogKafkaContext(const String & topic_) : topic(topic_) { }
+    explicit KafkaWALContext(const String & topic_) : topic(topic_) { }
 };
 
-struct KafkaStats
-{
-    UInt64 received = 0;
-    UInt64 dropped = 0;
-    UInt64 failed = 0;
-    UInt64 bytes = 0;
-    String pstat;
-};
-
-struct DistributedWriteAheadLogKafkaSettings
+struct KafkaWALSettings
 {
     String cluster_id;
 
@@ -195,54 +188,57 @@ struct DistributedWriteAheadLogKafkaSettings
     }
 };
 
-class DistributedWriteAheadLogKafka final : public IDistributedWriteAheadLog
+class KafkaWAL final : public WAL
 {
 public:
-    explicit DistributedWriteAheadLogKafka(std::unique_ptr<DistributedWriteAheadLogKafkaSettings> settings_);
-    ~DistributedWriteAheadLogKafka() override;
+    explicit KafkaWAL(std::unique_ptr<KafkaWALSettings> settings_);
+    ~KafkaWAL() override;
 
     void startup() override;
     void shutdown() override;
+    String type() const override { return "kafka"; }
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    ClusterPtr cluster(std::any & ctx) const override;
+
+    /// `ctx` is KafkaWALContext
     AppendResult append(const Record & record, std::any & ctx) override;
 
     /// Async append, we don't poll result but rely on callback to deliver the result back
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     Int32 append(const Record & record, AppendCallback callback, void * data, std::any & ctx) override;
 
     void poll(Int32 timeout_ms, std::any & ctx) override;
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     /// register a consumer callback for topic, partition
     Int32 consume(ConsumeCallback callback, void * data, std::any & ctx) override;
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     ConsumeResult consume(UInt32 count, Int32 timeout_ms, std::any & ctx) override;
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     /// Stop consuming
     Int32 stopConsume(std::any & ctx) override;
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     /// `commit` doesn't really commit offsets to Kafka brokers instead it stores offsets in
     /// memory and will be later committed in batch (every `auto_commit_internval_ms`). It doesn't
     /// commit offset synchronously because of performance concerns
     Int32 commit(RecordSequenceNumber sequence_number, std::any & ctx) override;
 
     /// APIs for clients to cache the topic handle
-    std::shared_ptr<rd_kafka_topic_s> initProducerTopic(const DistributedWriteAheadLogKafkaContext & ctx);
-    std::shared_ptr<rd_kafka_topic_s> initConsumerTopic(const DistributedWriteAheadLogKafkaContext & ctx);
+    std::shared_ptr<rd_kafka_topic_s> initProducerTopic(const KafkaWALContext & ctx);
+    std::shared_ptr<rd_kafka_topic_s> initConsumerTopic(const KafkaWALContext & ctx);
 
     /// Admin APIs
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     Int32 create(const String & name, std::any & ctx) override;
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
+    /// `ctx` is KafkaWALContext
     Int32 remove(const String & name, std::any & ctx) override;
 
-    /// `ctx` is DistributedWriteAheadLogKafkaContext
-    Int32 describe(const String & name, std::any & ctx) override;
+    /// `ctx` is KafkaWALContext
+    Int32 describe(const String & name, std::any & ctx) const override;
 
 private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);
@@ -272,17 +268,17 @@ private:
     /// poll errors
     void backgroundPollConsumer();
 
-    Int32 initConsumerTopicHandleIfNecessary(DistributedWriteAheadLogKafkaContext & walctx);
+    Int32 initConsumerTopicHandleIfNecessary(KafkaWALContext & walctx);
 
-    AppendResult handleError(int err, const Record & record, const DistributedWriteAheadLogKafkaContext & ctx);
+    AppendResult handleError(int err, const Record & record, const KafkaWALContext & ctx);
 
 #if 0
-    void flush(std::unordered_map<String, IDistributedWriteAheadLog::RecordPtrs> & buffer);
+    void flush(std::unordered_map<String, RecordPtrs> & buffer);
 #endif
 
     /// DeliveryReport `dr` must reside on heap. if `do_append` succeeds, the DeliveryReport object is handled over
     /// to librdkafka and will be used by `delivery_report` callback eventually
-    Int32 doAppend(const Record & record, DeliveryReport * dr, DistributedWriteAheadLogKafkaContext & walctx);
+    Int32 doAppend(const Record & record, DeliveryReport * dr, KafkaWALContext & walctx);
 
 private:
     static void deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rkmessage, void * /*opaque*/);
@@ -305,7 +301,7 @@ public:
     using StatsPtr = std::unique_ptr<Stats>;
 
 private:
-    std::unique_ptr<DistributedWriteAheadLogKafkaSettings> settings;
+    std::unique_ptr<KafkaWALSettings> settings;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
@@ -315,7 +311,7 @@ private:
 
 #if 0
     std::mutex consumer_callbacks_mutex;
-    std::unordered_map<String, std::pair<IDistributedWriteAheadLog::ConsumeCallback, void *>> consumer_callbacks;
+    std::unordered_map<String, std::pair<WAL::ConsumeCallback, void *>> consumer_callbacks;
 #endif
 
     ThreadPool poller;
@@ -324,4 +320,5 @@ private:
 
     StatsPtr stats;
 };
+}
 }

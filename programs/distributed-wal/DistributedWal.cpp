@@ -6,8 +6,8 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/WAL.h>
 #include <Common/TerminalSize.h>
 #include <Common/ThreadPool.h>
 
@@ -17,6 +17,7 @@
 
 using namespace std;
 using namespace DB;
+using namespace DB::DWAL;
 
 
 namespace
@@ -217,7 +218,7 @@ struct BenchmarkSettings
     ConsumerSettings consumer_settings;
     AdminTopicSettings topic_settings;
 
-    unique_ptr<DistributedWriteAheadLogKafkaSettings> wal_settings;
+    unique_ptr<KafkaWALSettings> wal_settings;
 
     bool exit = true;
 };
@@ -288,7 +289,7 @@ BenchmarkSettings parseProduceSettings(po::parsed_options & cmd_parsed, const ch
         return {};
     }
 
-    auto settings = make_unique<DistributedWriteAheadLogKafkaSettings>();
+    auto settings = make_unique<KafkaWALSettings>();
     settings->brokers = option_map["kafka_brokers"].as<String>();
     settings->retry_backoff_ms = option_map["retry_backoff_ms"].as<Int32>();
     settings->message_send_max_retries = option_map["message_send_max_retries"].as<Int32>();
@@ -375,7 +376,7 @@ BenchmarkSettings parseConsumeSettings(po::parsed_options & cmd_parsed, const ch
         }
     }
 
-    auto settings = make_unique<DistributedWriteAheadLogKafkaSettings>();
+    auto settings = make_unique<KafkaWALSettings>();
     settings->brokers = option_map["kafka_brokers"].as<String>();
     settings->group_id = option_map["group_id"].as<String>();
     settings->queued_min_messages = option_map["queued_min_messages"].as<Int32>();
@@ -456,7 +457,7 @@ BenchmarkSettings parseTopicSettings(po::parsed_options & cmd_parsed, const char
         return {};
     }
 
-    auto settings = make_unique<DistributedWriteAheadLogKafkaSettings>();
+    auto settings = make_unique<KafkaWALSettings>();
     settings->brokers = option_map["kafka_brokers"].as<String>();
     settings->debug = option_map["debug"].as<String>();
 
@@ -534,12 +535,12 @@ String calculateFileName(const BenchmarkSettings & settings)
     return filename;
 }
 
-using DWalPtr = shared_ptr<DistributedWriteAheadLogKafka>;
+using DWalPtr = shared_ptr<KafkaWAL>;
 using DWalPtrs = vector<DWalPtr>;
 using ResultQueue = vector<Int32>;
 using ResultQueues = vector<ResultQueue>;
 using TimePoint = chrono::time_point<chrono::steady_clock>;
-using RecordContainer = unordered_map<UInt64, pair<shared_ptr<IDistributedWriteAheadLog::Record>, TimePoint>>;
+using RecordContainer = unordered_map<UInt64, pair<shared_ptr<DWAL::Record>, TimePoint>>;
 
 DWalPtrs create_dwals(const BenchmarkSettings & bench_settings, Int32 size)
 {
@@ -547,10 +548,10 @@ DWalPtrs create_dwals(const BenchmarkSettings & bench_settings, Int32 size)
     wals.reserve(size);
     for (Int32 i = 0; i < size; ++i)
     {
-        auto settings = make_unique<DistributedWriteAheadLogKafkaSettings>();
+        auto settings = make_unique<KafkaWALSettings>();
         /// make a copy
         *settings = *bench_settings.wal_settings;
-        wals.push_back(make_shared<DistributedWriteAheadLogKafka>(move(settings)));
+        wals.push_back(make_shared<KafkaWAL>(move(settings)));
         wals.back()->startup();
     }
     return wals;
@@ -578,7 +579,7 @@ struct Data
 
 void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
 {
-    auto callback = [](const IDistributedWriteAheadLog::AppendResult & result, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    auto callback = [](const WAL::AppendResult & result, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         Data * d = static_cast<Data *>(data);
 
         TimePoint start;
@@ -606,7 +607,7 @@ void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex
     Int32 failed = 0;
     Int32 total = 0;
 
-    DistributedWriteAheadLogKafkaContext pctx{bench_settings.producer_settings.topic};
+    KafkaWALContext pctx{bench_settings.producer_settings.topic};
     pctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
     any ctx{pctx};
 
@@ -615,8 +616,7 @@ void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
-        auto record = make_shared<IDistributedWriteAheadLog::Record>(
-            IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size));
+        auto record = make_shared<DWAL::Record>(OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size));
         record->partition_key = 0;
         record->headers["_idem"] = to_string(i);
 
@@ -671,19 +671,18 @@ void ingestSync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex,
 {
     Int32 failed = 0;
 
-    DistributedWriteAheadLogKafkaContext pctx{bench_settings.producer_settings.topic};
+    KafkaWALContext pctx{bench_settings.producer_settings.topic};
     pctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
     any ctx{pctx};
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
-        IDistributedWriteAheadLog::Record record{
-            IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size)};
+        Record record{OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size)};
         record.partition_key = i;
         record.headers["_idem"] = to_string(i);
 
         auto start = chrono::steady_clock::now();
-        const IDistributedWriteAheadLog::AppendResult & result = wal->append(record, ctx);
+        const WAL::AppendResult & result = wal->append(record, ctx);
         if (result.err)
         {
             failed++;
@@ -755,7 +754,7 @@ struct ConsumeContext
     }
 };
 
-void doConsume(IDistributedWriteAheadLog::RecordPtrs records, void * data)
+void doConsume(DWAL::RecordPtrs records, void * data)
 {
     if (records.empty())
     {
@@ -787,7 +786,7 @@ void consume(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
             auto & wal = wals[jobid % wals.size()];
             auto & tpo = bench_settings.consumer_settings.kafka_topic_partition_offsets[jobid];
 
-            DistributedWriteAheadLogKafkaContext dcctx{tpo.topic, tpo.partition, tpo.offset};
+            KafkaWALContext dcctx{tpo.topic, tpo.partition, tpo.offset};
             dcctx.auto_offset_reset = bench_settings.consumer_settings.auto_offset_reset;
             dcctx.consume_callback_max_messages = bench_settings.consumer_settings.max_messages;
 
@@ -841,7 +840,7 @@ void consume(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
 
 void admin(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
 {
-    DistributedWriteAheadLogKafkaContext pctx{bench_settings.topic_settings.name};
+    KafkaWALContext pctx{bench_settings.topic_settings.name};
     pctx.partitions = bench_settings.topic_settings.partitions;
     pctx.replication_factor = bench_settings.topic_settings.replication_factor;
     std::any ctx{pctx};

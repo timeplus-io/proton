@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/WAL.h>
 #include <Storages/DistributedMergeTreeCallbackData.h>
 #include <Storages/MergeTree/SequenceInfo.h>
 
@@ -18,11 +18,11 @@ TEST(CategorizeRecords, SequenceRanges)
     sequence_ranges.emplace_back(38, 43, 3, 5);
 
     /// Build records
-    DB::IDistributedWriteAheadLog::RecordPtrs records;
+    DB::DWAL::RecordPtrs records;
 
     for (Int64 i = 2; i < 50; ++i)
     {
-        records.push_back(std::make_shared<DB::IDistributedWriteAheadLog::Record>(i));
+        records.push_back(std::make_shared<DB::DWAL::Record>(i));
     }
 
     auto range_buckets = DB::DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(records, sequence_ranges, 47);

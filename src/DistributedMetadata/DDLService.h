@@ -22,7 +22,7 @@ public:
     virtual ~DDLService() override = default;
 
 private:
-    void processRecords(const IDistributedWriteAheadLog::RecordPtrs & records) override;
+    void processRecords(const DWAL::RecordPtrs & records) override;
     String role() const override { return "ddl"; }
     ConfigSettings configSettings() const override;
     std::pair<Int32, Int32> batchSizeAndTimeout() const override { return std::make_pair(10, 200); }
@@ -30,9 +30,9 @@ private:
 private:
     Int32 doDDL(const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const;
 
-    void createTable(IDistributedWriteAheadLog::RecordPtr record);
-    void mutateTable(IDistributedWriteAheadLog::RecordPtr record, const String & method) const;
-    void mutateDatabase(IDistributedWriteAheadLog::RecordPtr record, const String & method) const;
+    void createTable(DWAL::RecordPtr record);
+    void mutateTable(DWAL::RecordPtr record, const String & method) const;
+    void mutateDatabase(DWAL::RecordPtr record, const String & method) const;
     void commit(Int64 last_sn);
 
 private:
@@ -51,7 +51,7 @@ private:
 
     bool validateSchema(const Block & block, const std::vector<String> & col_names) const;
     std::vector<Poco::URI>
-    getTargetURIs(IDistributedWriteAheadLog::RecordPtr record, const String & database, const String & table, const String & method) const;
+    getTargetURIs(DWAL::RecordPtr record, const String & database, const String & table, const String & method) const;
 
 private:
     String http_port;

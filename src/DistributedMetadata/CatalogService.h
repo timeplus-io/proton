@@ -85,7 +85,7 @@ public:
 private:
     bool setTableStorageByName(const String & database, const String & table, const StoragePtr & storage);
 
-    void processRecords(const IDistributedWriteAheadLog::RecordPtrs & records) override;
+    void processRecords(const DWAL::RecordPtrs & records) override;
     String role() const override { return "catalog"; }
     String cleanupPolicy() const override { return "compact"; }
     ConfigSettings configSettings() const override;

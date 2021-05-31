@@ -1,6 +1,6 @@
 #include "DistributedMergeTreeBlockOutputStream.h"
 
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <Storages/StorageDistributedMergeTree.h>
@@ -101,7 +101,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
     /// we failed the whole insert whenever single block failed
     for (auto & current_block : blocks)
     {
-        IDistributedWriteAheadLog::Record record{IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, std::move(current_block.block)};
+        DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(current_block.block)};
         record.partition_key = current_block.shard;
         if (!query_context->getIdempotentKey().empty())
         {
@@ -141,7 +141,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
     }
 }
 
-void DistributedMergeTreeBlockOutputStream::writeCallback(const IDistributedWriteAheadLog::AppendResult & result)
+void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::WAL::AppendResult & result)
 {
     if (result.err != ErrorCodes::OK)
     {
@@ -153,7 +153,7 @@ void DistributedMergeTreeBlockOutputStream::writeCallback(const IDistributedWrit
     }
 }
 
-void DistributedMergeTreeBlockOutputStream::writeCallback(const IDistributedWriteAheadLog::AppendResult & result, void * data)
+void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::WAL::AppendResult & result, void * data)
 {
     auto stream = static_cast<DistributedMergeTreeBlockOutputStream *>(data);
     stream->writeCallback(result);

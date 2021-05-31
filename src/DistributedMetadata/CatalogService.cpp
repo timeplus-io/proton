@@ -120,7 +120,7 @@ void CatalogService::doBroadcast()
 
 void CatalogService::append(Block && block)
 {
-    IDistributedWriteAheadLog::Record record{IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK, std::move(block)};
+    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(block)};
     record.partition_key = 0;
     record.setIdempotentKey(global_context->getNodeIdentity());
     record.headers["_host"] = THIS_HOST;
@@ -722,11 +722,11 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
     indexed_by_node[node->identity].swap(snapshot);
 }
 
-void CatalogService::processRecords(const IDistributedWriteAheadLog::RecordPtrs & records)
+void CatalogService::processRecords(const DWAL::RecordPtrs & records)
 {
     for (const auto & record : records)
     {
-        assert(record->op_code == IDistributedWriteAheadLog::OpCode::ADD_DATA_BLOCK);
+        assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
 
         if (!record->hasIdempotentKey())
         {

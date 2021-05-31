@@ -9,6 +9,8 @@
 
 namespace DB
 {
+namespace DWAL
+{
 class ByteVector final : public boost::noncopyable
 {
 public:
@@ -65,4 +67,5 @@ private:
     size_t cap;
     size_t siz;
 };
+}
 }

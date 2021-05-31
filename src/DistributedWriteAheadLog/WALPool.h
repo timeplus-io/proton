@@ -1,26 +1,30 @@
 #pragma once
 
-#include "IDistributedWriteAheadLog.h"
+#include "Cluster.h"
+#include "WAL.h"
 
 #include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
-
-/// Pooling DistributedWriteAheadLog. Singleton
+namespace DWAL
+{
+/// Pooling WAL. Singleton
 /// The pool will be initied during system startup and will be read only after that.
 /// So it doesn't hold any mutext in the multithread access env.
-class DistributedWriteAheadLogPool : private boost::noncopyable
+class WALPool : private boost::noncopyable
 {
 public:
-    static DistributedWriteAheadLogPool & instance(ContextPtr global_context);
+    static WALPool & instance(ContextPtr global_context);
 
-    explicit DistributedWriteAheadLogPool(ContextPtr global_context);
-    ~DistributedWriteAheadLogPool();
+    explicit WALPool(ContextPtr global_context);
+    ~WALPool();
 
-    DistributedWriteAheadLogPtr get(const String & id) const;
+    WALPtr get(const String & id) const;
 
-    DistributedWriteAheadLogPtr getMeta() const;
+    WALPtr getMeta() const;
+
+    std::vector<ClusterPtr> clusters(std::any & ctx) const;
 
     void startup();
     void shutdown();
@@ -35,10 +39,11 @@ private:
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 
     String default_cluster = "";
-    DistributedWriteAheadLogPtr meta_wal;
-    std::unordered_map<String, std::vector<DistributedWriteAheadLogPtr>> wals;
+    WALPtr meta_wal;
+    std::unordered_map<String, std::vector<WALPtr>> wals;
     mutable std::unordered_map<String, std::atomic_uint64_t> indexes;
 
     Poco::Logger * log;
 };
+}
 }

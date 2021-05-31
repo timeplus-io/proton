@@ -1,7 +1,7 @@
 #include "MetadataService.h"
 
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/WALPool.h>
 #include <Interpreters/Context.h>
 #include <Common/setThreadName.h>
 #include <common/logger_useful.h>
@@ -31,7 +31,7 @@ namespace
 
 MetadataService::MetadataService(const ContextPtr & global_context_, const String & service_name)
     : global_context(global_context_)
-    , dwal(DistributedWriteAheadLogPool::instance(global_context_).getMeta())
+    , dwal(DWAL::WALPool::instance(global_context_).getMeta())
     , log(&Poco::Logger::get(service_name))
 {
 }
@@ -60,8 +60,14 @@ void MetadataService::shutdown()
     LOG_INFO(log, "Stopped");
 }
 
+
+std::vector<DWAL::ClusterPtr> MetadataService::clusters()
+{
+    return DWAL::WALPool::instance(global_context).clusters(dwal_append_ctx);
+}
+
 void MetadataService::setupRecordHeaderFromConfig(
-    IDistributedWriteAheadLog::Record & record, const std::map<String, String> & key_and_defaults) const
+    DWAL::Record & record, const std::map<String, String> & key_and_defaults) const
 {
     for (const auto & kv : key_and_defaults)
     {
@@ -75,7 +81,7 @@ void MetadataService::setupRecordHeaderFromConfig(
 
 void MetadataService::doDeleteDWal(std::any & ctx)
 {
-    auto kctx = std::any_cast<DistributedWriteAheadLogKafkaContext &>(ctx);
+    auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
 
     int retries = 3;
     while (retries--)
@@ -102,7 +108,7 @@ void MetadataService::doDeleteDWal(std::any & ctx)
 
 void MetadataService::waitUntilDWalReady(std::any & ctx)
 {
-    auto kctx = std::any_cast<DistributedWriteAheadLogKafkaContext &>(ctx);
+    auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
     while (1)
     {
         if (dwal->describe(kctx.topic, ctx) == ErrorCodes::OK)
@@ -120,7 +126,7 @@ void MetadataService::waitUntilDWalReady(std::any & ctx)
 /// Try indefinitely to create dwal
 void MetadataService::doCreateDWal(std::any & ctx)
 {
-    auto kctx = std::any_cast<DistributedWriteAheadLogKafkaContext &>(ctx);
+    auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
     if (dwal->describe(kctx.topic, ctx) == ErrorCodes::OK)
     {
         return;
@@ -220,7 +226,7 @@ void MetadataService::startup()
 
     String topic = config.getString(conf.key_prefix + NAME_KEY , conf.default_name);
     auto replication_factor = config.getInt(conf.key_prefix + REPLICATION_FACTOR_KEY, 1);
-    DistributedWriteAheadLogKafkaContext kctx{topic, 1, replication_factor, cleanupPolicy()};
+    DWAL::KafkaWALContext kctx{topic, 1, replication_factor, cleanupPolicy()};
     /// Topic settings
     kctx.retention_ms = config.getInt(conf.key_prefix + DATA_RETENTION_KEY, conf.default_data_retention);
     if (kctx.retention_ms > 0)
@@ -275,7 +281,7 @@ void MetadataService::startup()
 
     /// Append ctx is cached for multiple threads access
     waitUntilDWalReady(append_ctx);
-    kctx.topic_handle = static_cast<DistributedWriteAheadLogKafka *>(dwal.get())->initProducerTopic(kctx);
+    kctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopic(kctx);
     /// kctx will be moved over to append ctx
     dwal_append_ctx = std::move(kctx);
 

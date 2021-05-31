@@ -1,13 +1,13 @@
 #include "BlockUtils.h"
 
-#include <Core/Types.h>
 #include <Columns/ColumnsNumber.h>
+#include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseFactory.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogKafka.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
-#include <DistributedWriteAheadLog/IDistributedWriteAheadLog.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/WAL.h>
+#include <DistributedWriteAheadLog/WALPool.h>
 #include <Interpreters/Context.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
@@ -108,10 +108,10 @@ void appendDDLBlock(
     Block && block,
     ContextPtr context,
     const std::vector<String> & parameter_names,
-    IDistributedWriteAheadLog::OpCode opCode,
+    DWAL::OpCode opCode,
     const Poco::Logger * log)
 {
-    IDistributedWriteAheadLog::Record record{opCode, std::move(block)};
+    DWAL::Record record{opCode, std::move(block)};
     record.headers["_version"] = "1";
 
     for (const auto & parameter_name : parameter_names)
@@ -125,7 +125,7 @@ void appendDDLBlock(
         }
     }
 
-    auto wal = DistributedWriteAheadLogPool::instance(context->getGlobalContext()).getMeta();
+    auto wal = DWAL::WALPool::instance(context->getGlobalContext()).getMeta();
     if (!wal)
     {
         LOG_ERROR(
@@ -137,8 +137,8 @@ void appendDDLBlock(
     }
 
     const auto & config = context->getGlobalContext()->getConfigRef();
-    auto topic = config.getString("cluster_settings.system_ddls.name");
-    std::any ctx{DistributedWriteAheadLogKafkaContext{topic}};
+    const auto & topic = config.getString("cluster_settings.system_ddls.name");
+    std::any ctx{DWAL::KafkaWALContext{topic}};
 
     auto result_code = ErrorCodes::OK;
     const auto & query_id = context->getCurrentQueryId();
@@ -147,16 +147,11 @@ void appendDDLBlock(
         result_code = wal->append(record, ctx).err;
         if (result_code == ErrorCodes::OK)
         {
-            LOG_INFO(log, "Successfully append record to DistributedWriteAheadLog, query_id={}", query_id);
+            LOG_INFO(log, "Successfully append record to WAL, query_id={}", query_id);
             return;
         }
 
-        LOG_WARNING(
-            log,
-            "Failed to append record to DistributedWriteAheadLog, query_id={}, error={}, tried_times={}",
-            query_id,
-            result_code,
-            i + 1);
+        LOG_WARNING(log, "Failed to append record to WAL, query_id={}, error={}, tried_times={}", query_id, result_code, i + 1);
 
         if (i < MAX_RETRIES - 1)
         {
@@ -164,8 +159,8 @@ void appendDDLBlock(
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
         }
     }
-    LOG_ERROR(log, "Failed to append record to DistributedWriteAheadLog, query_id={}, error={}", context->getCurrentQueryId(), result_code);
-    throw Exception("Failed to append record to DistributedWriteAheadLog, error={}", result_code);
+    LOG_ERROR(log, "Failed to append record to WAL, query_id={}, error={}", context->getCurrentQueryId(), result_code);
+    throw Exception("Failed to append record to WAL, error={}", result_code);
 }
 
 }
