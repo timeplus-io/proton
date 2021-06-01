@@ -241,7 +241,7 @@ private:
     std::any dwal_append_ctx;
 
     DWAL::WALPtr dwal;
-    IngestingBlocks & ingesting_blocks;
+    IngestingBlocks ingesting_blocks;
 
     /// Local checkpoint threshold timer
     std::chrono::time_point<std::chrono::steady_clock> last_commit_ts = std::chrono::steady_clock::now();

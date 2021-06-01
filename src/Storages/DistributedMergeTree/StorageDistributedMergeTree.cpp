@@ -233,7 +233,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
-    , ingesting_blocks(IngestingBlocks::instance())
+    , ingesting_blocks(120)
     , part_commit_pool(context_->getPartCommitPool())
     , rng(randomSeed())
 {
