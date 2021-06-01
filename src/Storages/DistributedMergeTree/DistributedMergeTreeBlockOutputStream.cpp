@@ -1,9 +1,9 @@
 #include "DistributedMergeTreeBlockOutputStream.h"
+#include "StorageDistributedMergeTree.h"
 
 #include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
-#include <Storages/StorageDistributedMergeTree.h>
 
 
 namespace DB

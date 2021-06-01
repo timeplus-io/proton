@@ -3,7 +3,7 @@
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/sendRequest.h>
-#include <Storages/StorageDistributedMergeTree.h>
+#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 
 #include <Poco/Path.h>
 

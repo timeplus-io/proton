@@ -1,11 +1,12 @@
 #pragma once
 
+#include "IngestingBlocks.h"
+
 #include <pcg_random.hpp>
 #include <ext/shared_ptr_helper.h>
 
 #include <DistributedWriteAheadLog/WAL.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
-#include <Storages/MergeTree/IngestingBlocks.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>

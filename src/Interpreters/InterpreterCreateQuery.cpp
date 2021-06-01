@@ -36,7 +36,7 @@
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
-#include <Storages/StorageDistributedMergeTree.h>
+#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 
 #include <DistributedWriteAheadLog/WAL.h>
 #include <DistributedWriteAheadLog/KafkaWAL.h>

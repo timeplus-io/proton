@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <DistributedWriteAheadLog/WAL.h>
-#include <Storages/DistributedMergeTreeCallbackData.h>
+#include <Storages/DistributedMergeTree/DistributedMergeTreeCallbackData.h>
 #include <Storages/MergeTree/SequenceInfo.h>
 
 

@@ -1,5 +1,6 @@
 #include "StorageDistributedMergeTree.h"
 #include "DistributedMergeTreeCallbackData.h"
+#include "DistributedMergeTreeBlockOutputStream.h"
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/KafkaWAL.h>
@@ -19,7 +20,6 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
-#include <Storages/MergeTree/DistributedMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
 #include <Storages/StorageMergeTree.h>
 #include <Common/randomSeed.h>
