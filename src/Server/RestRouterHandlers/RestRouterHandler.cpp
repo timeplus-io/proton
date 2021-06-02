@@ -1,5 +1,7 @@
 #include "RestRouterHandler.h"
 
+#include <Interpreters/executeSelectQuery.h>
+
 namespace DB
 {
 namespace
@@ -18,6 +20,16 @@ namespace
         Poco::JSON::Parser parser;
         return parser.parse(data).extract<Poco::JSON::Object::Ptr>();
     }
+
+    String buildResponse(const String & query_id, Poco::JSON::Object & resp)
+    {
+        resp.set("request_id", query_id);
+        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        resp.stringify(resp_str_stream, 0);
+
+        return resp_str_stream.str();
+    }
+
 }
 
 /// Execute request and return response. If it failed, a correct
@@ -86,4 +98,18 @@ void RestRouterHandler::setupDistributedQueryParameters(
     }
     query_context->setDistributedDDLOperation(true);
 }
+
+String RestRouterHandler::processQuery(const String & query, const std::function<void(Block &&)> & callback) const
+{
+    Poco::JSON::Object resp;
+    return processQuery(query, resp, callback);
+}
+
+String
+RestRouterHandler::processQuery(const String & query, Poco::JSON::Object & resp, const std::function<void(Block &&)> & callback) const
+{
+    executeSelectQuery(query, query_context, callback, false);
+    return buildResponse(query_context->getCurrentQueryId(), resp);
+}
+
 }

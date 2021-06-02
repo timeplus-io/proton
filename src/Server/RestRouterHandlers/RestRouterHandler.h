@@ -117,6 +117,11 @@ protected:
         return jsonErrorResponse("Internal server error", error_code);
     }
 
+    String processQuery(
+        const String & query, const std::function<void(Block &&)> & callback = [](Block &&) {}) const;
+
+    String processQuery(const String & query, Poco::JSON::Object & resp, const std::function<void(Block &&)> & callback) const;
+
 private:
     /// Override this function if derived handler need write data in a streaming way to http output
     virtual bool streamingOutput() const { return false; }
@@ -203,9 +208,20 @@ private:
         accepted_encoding = request.get("Accept-Encoding", "");
         content_length = request.getContentLength64();
         setupQueryParams(request);
+
+        if (isDistributedDDL())
+        {
+            setupRawQuery(request);
+        }
     }
 
     void setupQueryParams(const HTTPServerRequest & request) { query_parameters = std::make_unique<HTMLForm>(request); }
+
+    void setupRawQuery(const HTTPServerRequest & request)
+    { 
+        Poco::URI uri(request.getURI());
+        query_context->setQueryParameter("url_paramaters", uri.getRawQuery());
+    }
 
 protected:
     ContextPtr query_context;

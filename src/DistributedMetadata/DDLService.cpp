@@ -306,8 +306,11 @@ void DDLService::createTable(DWAL::RecordPtr record)
         {
             for (Int32 j = 0; j < shards; ++j)
             {
-                target_hosts[i * shards + j].setQueryParameters(
-                    Poco::URI::QueryParameters{{"distributed_ddl", "false"}, {"shard", std::to_string(j)}});
+                auto & uri = target_hosts[i * shards + j];
+                uri.setRawQuery(record->headers.at("url_paramaters"));
+                uri.addQueryParameter("distributed_ddl", "false");
+                uri.addQueryParameter("shard", std::to_string(j));
+
                 auto err = doDDL(payload, target_hosts[i * shards + j], Poco::Net::HTTPRequest::HTTP_POST, query_id, user);
                 if (err == ErrorCodes::UNRETRIABLE_ERROR)
                 {

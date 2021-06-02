@@ -21,6 +21,19 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
 }
 
+namespace
+{
+    const std::vector<String> CREATE_TABLE_SETTINGS = {
+        "streaming_storage_cluster_id",
+        "streaming_storage_auto_offset_reset",
+        "streaming_storage_request_required_acks",
+        "streaming_storage_request_timeout_ms",
+        "distributed_flush_threshold_ms",
+        "distributed_flush_threshold_count",
+        "distributed_flush_threshold_size",
+    };
+}
+
 std::map<String, std::map<String, String> > TableRestRouterHandler::update_schema = {
     {"required",{
                 }
@@ -118,7 +131,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
         setupDistributedQueryParameters({}, payload);
     }
 
-    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
+    return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
 std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload) const
@@ -144,7 +157,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
         setupDistributedQueryParameters({}, payload);
     }
 
-    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
+    return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
 std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
@@ -163,7 +176,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
         setupDistributedQueryParameters({});
     }
 
-    return {processQuery("DROP TABLE " + database + "." + table, query_context), HTTPResponse::HTTP_OK};
+    return {processQuery("DROP TABLE " + database + "." + table), HTTPResponse::HTTP_OK};
 }
 
 void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const
@@ -275,6 +288,15 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
     if (!shard.empty())
     {
         create_segments.push_back(", shard=" + shard);
+    }
+
+    for (const auto & setting : CREATE_TABLE_SETTINGS)
+    {
+        if (hasQueryParameter(setting))
+        {
+            /// FIXME : Do some parameters validation
+            create_segments.push_back(", " + setting+ "=" + getQueryParameter(setting));
+        }
     }
 
     return boost::algorithm::join(create_segments, " ");

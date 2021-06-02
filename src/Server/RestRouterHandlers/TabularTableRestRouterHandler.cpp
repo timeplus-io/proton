@@ -49,9 +49,13 @@ std::map<String, std::map<String, String> > TabularTableRestRouterHandler::colum
 void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const
 {
     Poco::JSON::Array tables_mapping_json;
+    std::unordered_set<String> table_names;
 
     for (const auto & table : tables)
     {
+        if (table_names.contains(table->name))
+            continue;
+
         /// FIXME : Later based on engin seting distinguish table
         if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") != String::npos)
         {
@@ -74,6 +78,8 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
 
         buildColumnsJSON(table_mapping_json, create.columns_list);
         tables_mapping_json.add(table_mapping_json);
+
+        table_names.insert(table->name);
     }
 
     resp.set("data", tables_mapping_json);

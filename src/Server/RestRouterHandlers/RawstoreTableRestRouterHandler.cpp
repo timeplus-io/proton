@@ -30,9 +30,13 @@ std::map<String, std::map<String, String> > RawstoreTableRestRouterHandler::crea
 void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const
 {
     Poco::JSON::Array tables_mapping_json;
+    std::unordered_set<String> table_names;
 
     for (const auto & table : tables)
     {
+        if (table_names.contains(table->name))
+            continue;
+
         /// FIXME : Later based on engine setting to distinguish rawstore
         if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") == String::npos)
         {
@@ -54,6 +58,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
         }
 
         tables_mapping_json.add(table_mapping_json);
+        table_names.insert(table->name);
     }
 
     resp.set("data", tables_mapping_json);

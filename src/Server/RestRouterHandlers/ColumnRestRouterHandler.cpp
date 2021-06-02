@@ -82,7 +82,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePost(const Poco::JSON::
     create_segments.push_back(getCreateColumnDefination(payload));
     const String & query = boost::algorithm::join(create_segments, " ");
 
-    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
+    return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
 std::pair<String, Int32> ColumnRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload) const
@@ -106,7 +106,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePatch(const Poco::JSON:
     update_segments.push_back(getUpdateColumnDefination(payload, column));
     const String & query = boost::algorithm::join(update_segments, " ");
 
-    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
+    return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
 std::pair<String, Int32> ColumnRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
@@ -130,7 +130,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executeDelete(const Poco::JSON
     delete_segments.push_back("DROP COLUMN " + column);
     const String & query = boost::algorithm::join(delete_segments, " ");
 
-    return {processQuery(query, query_context), HTTPResponse::HTTP_OK};
+    return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
 std::pair<bool, String> ColumnRestRouterHandler::assertColumnExists(const String & table, const String & column) const
