@@ -321,7 +321,7 @@ void StorageDistributedMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    if (isRemote())
+    if (requireDistributedQuery(context_))
     {
         /// This is a distributed query
         readRemote(query_plan, query_info, context_, processed_stage);
@@ -378,9 +378,32 @@ String StorageDistributedMergeTree::getName() const
 
 bool StorageDistributedMergeTree::isRemote() const
 {
-    /// If it is virtual table, then it is remote
-    /// virtual table doesn't have backing storage
     return !storage;
+}
+
+bool StorageDistributedMergeTree::requireDistributedQuery(ContextPtr context_) const
+{
+    if (!storage)
+    {
+        return true;
+    }
+
+    /// If it has backing storage and it is a single shard table
+    if (shards == 1)
+    {
+        return false;
+    }
+
+    const auto & client_info = context_->getClientInfo();
+    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    {
+        /// If this query is a remote query already
+        return false;
+    }
+
+    /// If it has backing storage and it is a multple shard table and
+    /// this query is an initial query, we need execute a distributed query
+    return true;
 }
 
 bool StorageDistributedMergeTree::supportsParallelInsert() const
@@ -503,7 +526,7 @@ std::optional<JobAndPool> StorageDistributedMergeTree::getDataProcessingJob()
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
     ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
 {
-    if (isRemote())
+    if (requireDistributedQuery(context_))
     {
         return getQueryProcessingStageRemote(context_, to_stage, metadata_snapshot, query_info);
     }
@@ -564,7 +587,6 @@ void StorageDistributedMergeTree::startBackgroundMovesIfNeeded()
 }
 
 /// Distributed query related functions
-/// FIXME, cache it ?
 ClusterPtr StorageDistributedMergeTree::getCluster() const
 {
     auto sid = getStorageID();
@@ -685,7 +707,7 @@ ClusterPtr StorageDistributedMergeTree::getOptimizedCluster(
 }
 
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageRemote(
-    ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & /* metadata_snapshot */, SelectQueryInfo & query_info) const
+    ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
 {
     const auto & settings = context_->getSettingsRef();
 
@@ -693,9 +715,8 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageR
     query_info.cluster = cluster;
 
     /// Always calculate optimized cluster here to avoid conditions during read()
-    if (settings.optimize_skip_unused_shards)
+    if (settings.optimize_skip_unused_shards && getClusterQueriedNodes(settings, cluster) > 1)
     {
-        auto metadata_snapshot = getInMemoryMetadataPtr();
         ClusterPtr optimized_cluster = getOptimizedCluster(context_, metadata_snapshot, query_info.query);
         if (optimized_cluster)
         {

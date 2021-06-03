@@ -27,6 +27,7 @@ public:
     std::vector<DWAL::ClusterPtr> clusters();
 
 private:
+    void initPorts();
     void tailingRecords();
     void doTailingRecords();
     virtual void postStartup() {}
@@ -40,8 +41,7 @@ private:
     void waitUntilDWalReady(std::any & ctx);
 
 protected:
-    void
-    setupRecordHeaderFromConfig(DWAL::Record & record, const std::map<String, String> & key_and_defaults) const;
+    void setupRecordHeaders(DWAL::Record & record, const String & version) const;
 
     void doCreateDWal(std::any & ctx);
     void doDeleteDWal(std::any & ctx);
@@ -76,6 +76,10 @@ protected:
     std::optional<ThreadPool> pool;
 
     String node_roles;
+    Int16 https_port = -1;
+    Int16 http_port = -1;
+    Int16 tcp_port = -1;
+    Int16 tcp_port_secure = -1;
 
     Poco::Logger * log;
 };

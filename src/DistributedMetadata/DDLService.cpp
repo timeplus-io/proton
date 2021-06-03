@@ -131,7 +131,7 @@ namespace
         }
     }
 
-    std::vector<Poco::URI> toURIs(const std::vector<String> & hosts, const String & path, const String & default_port)
+    std::vector<Poco::URI> toURIs(const std::vector<String> & hosts, const String & path)
     {
         std::vector<Poco::URI> uris;
         uris.reserve(hosts.size());
@@ -139,15 +139,7 @@ namespace
         for (auto host : hosts)
         {
             /// FIXME : HTTP for now
-            if (host.rfind(":") != String::npos)
-            {
-                /// `host` contains port information
-                uris.emplace_back("http://" + host + path);
-            }
-            else
-            {
-                uris.emplace_back("http://" + host + default_port + path);
-            }
+            uris.emplace_back("http://" + host + path);
         }
 
         return uris;
@@ -162,7 +154,6 @@ DDLService & DDLService::instance(const ContextPtr & global_context_)
 
 DDLService::DDLService(const ContextPtr & global_context_)
     : MetadataService(global_context_, "DDLService")
-    , http_port(":" + global_context_->getConfigRef().getString("http_port"))
     , catalog(CatalogService::instance(global_context_))
     , placement(PlacementService::instance(global_context_))
     , task(TaskStatusService::instance(global_context_))
@@ -298,8 +289,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
         boost::algorithm::split(hosts, hosts_val, boost::is_any_of(","));
         assert(!hosts.empty());
 
-        std::vector<Poco::URI> target_hosts{
-            toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST), http_port)};
+        std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST))};
 
         /// Create table on each target host according to placement
         for (Int32 i = 0; i < replication_factor; ++i)
@@ -468,22 +458,24 @@ void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) c
         hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
     }
 
-    String api_path_fmt = "";
+    const String * api_path_fmt = nullptr;
     if (method == Poco::Net::HTTPRequest::HTTP_POST)
     {
-        api_path_fmt = DDL_DATABSE_POST_API_PATH_FMT;
+        api_path_fmt = &DDL_DATABSE_POST_API_PATH_FMT;
     }
     else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
     {
-        api_path_fmt = DDL_DATABSE_DELETE_API_PATH_FMT;
+        api_path_fmt = &DDL_DATABSE_DELETE_API_PATH_FMT;
     }
     else
     {
         assert(false);
         LOG_ERROR(log, "Unsupported method={}", method);
+        failDDL(query_id, user, payload, "Unsupported method " + method);
+        return;
     }
 
-    std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(api_path_fmt, database), http_port)};
+    std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(*api_path_fmt, database))};
 
     /// FIXME : Parallelize doDDL on the uris
     for (auto & uri : target_hosts)
@@ -602,12 +594,12 @@ std::vector<Poco::URI> DDLService::getTargetURIs(
         || record->op_code == DWAL::OpCode::DELETE_COLUMN)
     {
         /// Column DDL request
-        return toURIs(placement.placed(database, table), getColumnApiPath(record->headers, table, method), http_port);
+        return toURIs(placement.placed(database, table), getColumnApiPath(record->headers, table, method));
     }
     else
     {
         /// Table DDL request
-        return toURIs(placement.placed(database, table), getTableApiPath(record->headers, table, method), http_port);
+        return toURIs(placement.placed(database, table), getTableApiPath(record->headers, table, method));
     }
 }
 

@@ -9,7 +9,6 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
 #include <Common/Exception.h>
-#include <common/getFQDNOrHostName.h>
 #include <common/logger_useful.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
@@ -38,8 +37,6 @@ namespace
 /// Globals
 const String CATALOG_KEY_PREFIX = "cluster_settings.system_catalogs.";
 const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
-
-const String THIS_HOST = getFQDNOrHostName();
 
 std::regex PARSE_SHARD_REGEX{"shard\\s*=\\s*(\\d+)"};
 std::regex PARSE_SHARDS_REGEX{"DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
@@ -122,14 +119,7 @@ void CatalogService::append(Block && block)
 {
     DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(block)};
     record.partition_key = 0;
-    record.setIdempotentKey(global_context->getNodeIdentity());
-    record.headers["_host"] = THIS_HOST;
-    record.headers["_channel"] = global_context->getChannel();
-    record.headers["_node_roles"] = node_roles;
-    record.headers["_version"] = "1";
-
-    std::map<String, String> key_and_defaults = {{"https_port", "-1"}, {"http_port", "-1"}, {"tcp_port_secure", "-1"}, {"tcp_port", "-1"}};
-    setupRecordHeaderFromConfig(record, key_and_defaults);
+    setupRecordHeaders(record, "1");
 
     /// FIXME : reschedule
     for (int i = 0; i < 3; ++i)
@@ -530,13 +520,13 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
         assert(replica_hosts.empty());
     }
 
-    /// FIXME, user/password etc
+    /// FIXME, user/password/https etc
     auto table_cluster = std::make_shared<Cluster>(
         global_context->getSettingsRef(),
         host_ports,
         /* username = */ "",
         /* password = */ "",
-        9000,
+        tcp_port,
         /* treat_local_as_remote = */ false,
         /* secure = */ false,
         /* priority = */ 1);

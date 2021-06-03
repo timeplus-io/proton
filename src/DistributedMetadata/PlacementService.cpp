@@ -6,7 +6,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Storages/System/StorageSystemStoragePolicies.h>
-#include <common/getFQDNOrHostName.h>
 #include <common/logger_useful.h>
 
 #include <city.h>
@@ -23,8 +22,6 @@ namespace
 /// Globals
 const String PLACEMENT_KEY_PREFIX = "cluster_settings.system_node_metrics.";
 const String PLACEMENT_DEFAULT_TOPIC = "__system_node_metrics";
-
-const String THIS_HOST = getFQDNOrHostName();
 }
 
 PlacementService & PlacementService::instance(const ContextPtr & context)
@@ -94,14 +91,11 @@ std::vector<String> PlacementService::placed(const String & database, const Stri
     /// FIXME, return NodeMetrics directly
     for (const auto & t : tables)
     {
+        /// FIXME, https
         auto iter = nodes_metrics.find(t->node_identity);
         if (iter != nodes_metrics.end())
         {
             hosts.push_back(iter->second->node.host + ":" + std::to_string(iter->second->node.http_port));
-        }
-        else
-        {
-            hosts.push_back(t->host);
         }
     }
     return hosts;
@@ -251,14 +245,7 @@ void PlacementService::doBroadcast()
 
     DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(disk_block)};
     record.partition_key = 0;
-    record.setIdempotentKey(global_context->getNodeIdentity());
-    record.headers["_host"] = THIS_HOST;
-    record.headers["_node_roles"] = node_roles;
-    record.headers["_channel"] = global_context->getChannel();
-    record.headers["_version"] = "1";
-
-    std::map<String, String> key_and_defaults = {{"https_port", "-1"}, {"http_port", "-1"}, {"tcp_port_secure", "-1"}, {"tcp_port", "-1"}};
-    setupRecordHeaderFromConfig(record, key_and_defaults);
+    setupRecordHeaders(record, "1");
 
     const String table_count_query = "SELECT count(*) as table_counts FROM system.tables WHERE database != 'system'";
 

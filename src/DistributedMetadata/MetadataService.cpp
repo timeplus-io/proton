@@ -4,6 +4,7 @@
 #include <DistributedWriteAheadLog/WALPool.h>
 #include <Interpreters/Context.h>
 #include <Common/setThreadName.h>
+#include <common/getFQDNOrHostName.h>
 #include <common/logger_useful.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
@@ -27,6 +28,8 @@ namespace
     const String DATA_RETENTION_KEY = "data_retention";
     const String LOG_ROLL_SIZE_KEY = "log_roll_size";
     const String LOG_ROLL_PERIOD_KEY = "log_roll_period";
+
+    const String THIS_HOST = getFQDNOrHostName();
 }
 
 MetadataService::MetadataService(const ContextPtr & global_context_, const String & service_name)
@@ -66,17 +69,27 @@ std::vector<DWAL::ClusterPtr> MetadataService::clusters()
     return DWAL::WALPool::instance(global_context).clusters(dwal_append_ctx);
 }
 
-void MetadataService::setupRecordHeaderFromConfig(
-    DWAL::Record & record, const std::map<String, String> & key_and_defaults) const
+void MetadataService::setupRecordHeaders(DWAL::Record & record, const String & version) const
 {
-    for (const auto & kv : key_and_defaults)
-    {
-        const auto & v = global_context->getConfigRef().getString(kv.first, kv.second);
-        if (!v.empty())
-        {
-            record.headers["_" + kv.first] = v;
-        }
-    }
+    record.headers["_https_port"] = https_port;
+    record.headers["_http_port"] = http_port;
+    record.headers["_tcp_port"] = tcp_port;
+    record.headers["_tcp_port_secure"] = tcp_port_secure;
+
+    record.headers["_node_roles"] = node_roles;
+    record.headers["_host"] = THIS_HOST;
+    record.headers["_channel"] = global_context->getChannel();
+
+    record.setIdempotentKey(global_context->getNodeIdentity());
+    record.headers["_version"] = version;
+}
+
+void MetadataService::initPorts()
+{
+    https_port = global_context->getConfigRef().getInt("https_port", -1);
+    http_port = global_context->getConfigRef().getInt("http_port", -1);
+    tcp_port_secure = global_context->getConfigRef().getInt("tcp_port_secure", -1);
+    tcp_port = global_context->getConfigRef().getInt("tcp_port", -1);
 }
 
 void MetadataService::doDeleteDWal(std::any & ctx)
@@ -278,6 +291,8 @@ void MetadataService::startup()
     {
         node_roles.pop_back();
     }
+
+    initPorts();
 
     /// Append ctx is cached for multiple threads access
     waitUntilDWalReady(append_ctx);

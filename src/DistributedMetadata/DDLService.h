@@ -54,8 +54,6 @@ private:
     getTargetURIs(DWAL::RecordPtr record, const String & database, const String & table, const String & method) const;
 
 private:
-    String http_port;
-
     CatalogService & catalog;
     PlacementService & placement;
     TaskStatusService & task;
