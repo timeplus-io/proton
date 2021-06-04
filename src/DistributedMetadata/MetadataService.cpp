@@ -267,7 +267,9 @@ void MetadataService::startup()
     for (const auto & key : role_keys)
     {
         /// Node only with corresponding service role has corresponding data consuming capability
-        const auto & node_role = config.getString(SYSTEM_ROLES_KEY + "." + key, "");
+        auto node_role = config.getString(SYSTEM_ROLES_KEY + "." + key, "");
+        boost::trim(node_role);
+        boost::to_lower(node_role);
         node_roles += node_role + ",";
 
         if (node_role == this_role && !pool)

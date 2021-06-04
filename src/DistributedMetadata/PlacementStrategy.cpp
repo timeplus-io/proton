@@ -1,5 +1,7 @@
 #include "PlacementStrategy.h"
 
+#include <boost/algorithm/string.hpp>
+
 #include <random>
 
 namespace DB
@@ -16,6 +18,12 @@ std::vector<NodeMetricsPtr> DiskStrategy::qualifiedNodes(const NodeMetricsContai
 
     for (const auto & [node, metrics] : nodes_metrics)
     {
+        /// If the role of the node is "ingest" or "search", skip it.
+        if (metrics->node.roles.find("search") != String::npos || metrics->node.roles.find("ingest") != String::npos)
+        {
+            continue;
+        }
+
         auto iter = metrics->disk_space.find(request.storage_policy);
         if (!metrics->staled && iter != metrics->disk_space.end() && iter->second > 0)
         {

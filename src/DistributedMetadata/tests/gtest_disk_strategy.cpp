@@ -131,3 +131,57 @@ TEST(PlacementService, PlaceNodesByTableCounts)
     }
 }
 
+TEST(PlacementService, PlaceNodesByRoles)
+{
+    NodeMetricsContainer container;
+    String default_policy = "default";
+    for (int i = 0; i < 100; i++)
+    {
+        String node = std::to_string(i);
+        std::unordered_map<String, String> headers;
+        if (node.ends_with("0"))
+        {
+            headers["_node_roles"] = "ingest";
+        }
+        else if (node.ends_with("1"))
+        {
+            headers["_node_roles"] = "search";
+        }
+        else if (node.ends_with("2"))
+        {
+            headers["_node_roles"] = "search,ingest";
+        }
+
+        NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node, headers);
+        node_metrics->disk_space.emplace(default_policy, 100);
+        node_metrics->num_of_tables = 10;
+        container.emplace(node, node_metrics);
+    }
+
+    DiskStrategy strategy;
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::uniform_int_distribution<size_t> big_number(71, 100);
+    /// Case1: nodes are not enough for the request
+    {
+        size_t required = big_number(g);
+        PlacementStrategy::PlacementRequest big_request{required, default_policy};
+        EXPECT_EQ(strategy.qualifiedNodes(container, big_request).size(), 0);
+    }
+
+    /// Case2: nodes are just enough for the request
+    {
+        PlacementStrategy::PlacementRequest boundary_request{70, default_policy};
+        EXPECT_EQ(strategy.qualifiedNodes(container, boundary_request).size(), 70);
+    }
+
+    std::uniform_int_distribution<size_t> required_number(0, 70);
+    /// Case3: get nodes for default policy
+    {
+        size_t required = required_number(g);
+        PlacementStrategy::PlacementRequest default_request{required, default_policy};
+        auto nodes = strategy.qualifiedNodes(container, default_request);
+        EXPECT_EQ(nodes.size(), required);
+    }
+}
