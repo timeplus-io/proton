@@ -211,7 +211,7 @@ void MergedBlockOutputStream::finalizePartOnDisk(
     }
 
     /// Daisy : starts
-    if (new_part->seq_info)
+    if (new_part->seq_info && new_part->seq_info->valid())
     {
         auto out = volume->getDisk()->writeFile(part_path + "sn.txt", 4096);
         new_part->seq_info->write(*out);
