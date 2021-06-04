@@ -71,10 +71,10 @@ std::vector<DWAL::ClusterPtr> MetadataService::clusters()
 
 void MetadataService::setupRecordHeaders(DWAL::Record & record, const String & version) const
 {
-    record.headers["_https_port"] = https_port;
-    record.headers["_http_port"] = http_port;
-    record.headers["_tcp_port"] = tcp_port;
-    record.headers["_tcp_port_secure"] = tcp_port_secure;
+    record.headers["_https_port"] = std::to_string(https_port);
+    record.headers["_http_port"] = std::to_string(http_port);
+    record.headers["_tcp_port"] = std::to_string(tcp_port);
+    record.headers["_tcp_port_secure"] = std::to_string(tcp_port_secure);
 
     record.headers["_node_roles"] = node_roles;
     record.headers["_host"] = THIS_HOST;
