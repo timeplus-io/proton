@@ -1,0 +1,896 @@
+openapi: 3.0.0
+
+servers:
+  - url: http://{host}:{port}/dae/v1/ddl
+info:
+  version: "1.0.0"
+  title: "DDL service"
+  description: 'Rest API for DDL service, including CRUD operation on tables (tabular table, rawstore table) and columns.'
+paths:
+  /tables:
+    post:
+      summary: Create a tabular table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/tabularTable'
+      parameters:
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+    get:
+      summary: Get list of tabular tables
+      parameters:
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/tabularTableListResp"
+
+  /tables/{table_name}:
+    patch:
+      summary: Update an existed tabular table named table_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/updateTable"
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+    delete:
+      summary: Drop an existed tabular table named table_name
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+
+  /rawstores:
+    post:
+      summary: Create a rawstore table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/rawstoreTable"
+      parameters:
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+    get:
+      summary: Get list of rawstore tables
+      parameters:
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/rawstoreTableListResp"
+
+  /rawstores/{table_name}:
+    patch:
+      summary: Update an existed rawstore table named table_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/updateTable"
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+    delete:
+      summary: Drop an existed rawstore table named table_name
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+
+  /{table_name}/columns:
+    post:
+      summary: Add a column to existed table named table_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/column"
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+
+  /{table_name}/columns/{column_name}:
+    patch:
+      summary: Update the column column_name in tabular table table_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/updateColumn"
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: column_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+    delete:
+      summary: Drop an existed column column_name in tabular table named table_name
+      parameters:
+        - name: table_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: column_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+
+components:
+  schemas:
+    tabularTable:
+      type: object
+      required:
+        - "name"
+        - "columns"
+      properties:
+        name:
+          type: string
+          description: Table name
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/column"
+        shards:
+          type: integer
+          default: 1
+          description: Number of shards of the table.
+        replication_factor:
+          type: integer
+          default: 1
+          description: Number of replicas of per shard.
+        _time_column:
+          type: string
+          description: Which column shall be used for internal time partitioning in Daisy. Default is now() if it is not sepcified.
+        order_by_expression:
+          type: string
+          description: The first order by column is specified with order_by_granularity. It will append other expressions if it is specified.
+        order_by_granularity:
+          type: string
+          description: time granularity applied to _time column. It supports month(M), day(D), hour(H) and minute(m)
+          default: "D"
+          enum:
+            - "M"
+            - "D"
+            - "H"
+            - "m"
+        partition_by_granularity:
+          type: string
+          description: time granularity applied to _time column used in partition_by expression. It supports month(M), day(D), hour(H) and minute(m)
+          default: "M"
+          enum:
+            - "M"
+            - "D"
+            - "H"
+            - "m"
+        ttl_expression:
+          type: string
+
+    rawstoreTable:
+      type: object
+      required:
+        - "name"
+      properties:
+        name:
+          type: string
+          description: Table name
+        shards:
+          type: integer
+          default: 1
+          description: Number of shards of the table.
+        replication_factor:
+          type: integer
+          default: 1
+          description: Number of replicas of per shard.
+        order_by_granularity:
+          type: string
+          description: time granularity applied to _time column. It supports month(M), day(D), hour(H) and minute(m)
+          default: "D"
+          enum:
+            - "M"
+            - "D"
+            - "H"
+            - "m"
+        partition_by_granularity:
+          type: string
+          description: time granularity applied to _time column used in partition_by expression. It supports month(M), day(D), hour(H) and minute(m)
+          default: "M"
+          enum:
+            - "M"
+            - "D"
+            - "H"
+            - "m"
+        ttl_expression:
+          type: string
+
+    updateTable:
+      type: "object"
+      properties:
+        ttl_expression:
+          type: string
+
+    column:
+      type: object
+      required:
+        - "name"
+        - "type"
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        nullable:
+          type: boolean
+        default:
+          type: string
+        compression_codec:
+          type: string
+        ttl_expression:
+          type: string
+        skipping_index_expression:
+          type: string
+
+    updateColumn:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        default:
+          type: string
+        comment:
+          type: string
+        ttl_expression:
+          type: string
+        skipping_index_expression:
+          type: string
+
+    generalResp:
+      type: object
+      properties:
+        request_id:
+          type: string
+
+    tabularTableListResp:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/tabularTableResp"
+        request_id:
+          type: string
+
+    tabularTableResp:
+      type: object
+      required:
+        - "name"
+        - "engine"
+        - "order_by_expression"
+        - "partition_by_expression"
+        - "columns"
+      properties:
+        name:
+          type: string
+        engine:
+          type: string
+        order_by_expression:
+          type: string
+        partition_by_expression:
+          type: string
+        ttl:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/columnResp"
+
+    rawstoreTableListResp:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/rawstoreTableResp"
+        request_id:
+          type: string
+
+    rawstoreTableResp:
+      type: object
+      required:
+        - "name"
+        - "engine"
+        - "order_by_expression"
+        - "partition_by_expression"
+      properties:
+        name:
+          type: string
+        engine:
+          type: string
+        order_by_expression:
+          type: string
+        partition_by_expression:
+          type: string
+        ttl:
+          type: string
+
+    columnResp:
+      type: object
+      required:
+        - "name"
+        - "type"
+        - "nullable"
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        nullable:
+          type: boolean
+        default:
+          type: string
+        alias:
+          type: string
+        comment:
+          type: string
+        codec:
+          type: string
+        ttl:
+          type: string
