@@ -1,8 +1,8 @@
 #include "Record.h"
 
-#include <DataStreams/MaterializingBlockOutputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
+/// #include <DataStreams/materializeBlock.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromVector.h>
@@ -16,9 +16,8 @@ namespace DWAL
 ByteVector Record::write(const Record & record)
 {
     ByteVector data{static_cast<size_t>((record.block.bytes() + 2) * 1.5)};
-
     WriteBufferFromVector wb{data};
-    auto output = std::make_unique<MaterializingBlockOutputStream>(std::make_shared<NativeBlockOutputStream>(wb, 0, Block{}), Block{});
+    NativeBlockOutputStream output(wb, 0, Block{});
 
     /// Write flags
     /// flags bits distribution
@@ -29,10 +28,11 @@ ByteVector Record::write(const Record & record)
     writeIntBinary(flags, wb);
 
     /// Data
-    output->write(record.block);
-    output->flush();
+    /// materializeBlockInplace(record.block);
+    output.write(record.block);
+    output.flush();
 
-    /// shrink to what has been written
+    /// Shrink to what has been written
     wb.finalize();
     return data;
 }
