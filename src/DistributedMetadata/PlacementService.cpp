@@ -22,6 +22,9 @@ namespace
 /// Globals
 const String PLACEMENT_KEY_PREFIX = "cluster_settings.system_node_metrics.";
 const String PLACEMENT_DEFAULT_TOPIC = "__system_node_metrics";
+
+const size_t RESCHEDULE_INTERVAL_MS = 5000;
+const Int64 STALENESS_THRESHOLD_MS = 10000;
 }
 
 PlacementService & PlacementService::instance(const ContextPtr & context)
@@ -37,6 +40,8 @@ PlacementService::PlacementService(const ContextPtr & global_context_) : Placeme
 PlacementService::PlacementService(const ContextPtr & global_context_, PlacementStrategyPtr strategy_)
     : MetadataService(global_context_, "PlacementService"), catalog(CatalogService::instance(global_context_)), strategy(strategy_)
 {
+    const auto & config = global_context->getConfigRef();
+    reschedule_interval = config.getUInt("cluster_settings.schedule_intervals.node_metrics", RESCHEDULE_INTERVAL_MS);
 }
 
 MetadataService::ConfigSettings PlacementService::configSettings() const
@@ -215,7 +220,7 @@ void PlacementService::broadcast()
     {
         LOG_ERROR(log, "Failed to broadcast node metrics, error={}", getCurrentExceptionMessage(true, true));
     }
-    (*broadcast_task)->scheduleAfter(RESCHEDULE_INTERNAL_MS);
+    (*broadcast_task)->scheduleAfter(reschedule_interval);
 }
 
 void PlacementService::doBroadcast()

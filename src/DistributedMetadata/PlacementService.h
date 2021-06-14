@@ -41,14 +41,15 @@ private:
     void doBroadcast();
 
 private:
-    mutable std::shared_mutex rwlock;
     CatalogService & catalog;
+
+    mutable std::shared_mutex rwlock;
     NodeMetricsContainer nodes_metrics;
+
     PlacementStrategyPtr strategy;
     std::unique_ptr<BackgroundSchedulePoolTaskHolder> broadcast_task;
-    static constexpr size_t RESCHEDULE_INTERNAL_MS = 5000;
-    static constexpr Int64 LATENCY_THRESHOLD_MS = 5000;
-    static constexpr Int64 STALENESS_THRESHOLD_MS = 10000;
+
+    size_t reschedule_interval;
 };
 
 }
