@@ -275,14 +275,14 @@ void DDLService::createTable(DWAL::RecordPtr record)
     /// FIXME : check with catalog to see if this DDL is fulfilled
     /// Build a data structure to cached last 10000 DDLs, check against this data structure
 
-    /// Create a DWAL for this table. FIXME: retention_ms
-    std::any ctx{DWAL::KafkaWALContext{DWAL::escapeDWalName(database, table), shards, replication_factor}};
-    doCreateDWal(ctx);
-
     if (record->headers.contains("hosts"))
     {
         /// If `hosts` exists in the block, we already placed the replicas
         /// then we move to the execution stage
+
+        /// Create a DWAL for this table. FIXME: retention_ms
+        std::any ctx{DWAL::KafkaWALContext{DWAL::escapeDWalName(database, table), shards, replication_factor, "delete"}};
+        doCreateDWal(ctx);
 
         String hosts_val = record->headers.at("hosts");
         std::vector<String> hosts;

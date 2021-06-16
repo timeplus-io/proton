@@ -1,4 +1,5 @@
 #include "TaskStatusService.h"
+#include "CatalogService.h"
 
 #include <Core/Block.h>
 #include <DataStreams/BlockIO.h>
@@ -223,7 +224,14 @@ bool TaskStatusService::validateSchema(const Block & block, const std::vector<St
 bool TaskStatusService::tableExists() const
 {
     StorageID sid{"system", "tasks"};
-    return DatabaseCatalog::instance().isTableExist(sid, global_context);
+    if (DatabaseCatalog::instance().isTableExist(sid, global_context))
+    {
+        return true;
+    }
+
+    /// Try catalog service
+    auto & catalog_service = CatalogService::instance(global_context);
+    return catalog_service.tableExists(sid.getDatabaseName(), sid.getTableName());
 }
 
 TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const

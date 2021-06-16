@@ -116,7 +116,10 @@ std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Ob
 std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
     const auto & table = payload->get("name").toString();
-    if (CatalogService::instance(query_context).tableExists(database, table))
+    /// Only check table existence when the ddl is distributed since when it is local, the creation
+    /// may already happen in other nodes and broadcast to the action node, in this case, we will
+    /// report table exist failure but we should not
+    if (isDistributedDDL() && CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
             jsonErrorResponse(fmt::format("Table {}.{} already exists.", database, table), ErrorCodes::TABLE_ALREADY_EXISTS),
