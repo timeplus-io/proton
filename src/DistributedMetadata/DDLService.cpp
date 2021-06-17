@@ -297,7 +297,10 @@ void DDLService::createTable(DWAL::RecordPtr record)
             for (Int32 j = 0; j < shards; ++j)
             {
                 auto & uri = target_hosts[i * shards + j];
-                uri.setRawQuery(record->headers.at("url_paramaters"));
+                if (record->headers.contains("url_paramaters"))
+                {
+                    uri.setRawQuery(record->headers.at("url_paramaters"));
+                }
                 uri.addQueryParameter("distributed_ddl", "false");
                 uri.addQueryParameter("shard", std::to_string(j));
 

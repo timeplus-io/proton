@@ -212,7 +212,14 @@ void MetadataService::doTailingRecords()
             continue;
         }
 
-        processRecords(result.records);
+        try
+        {
+            processRecords(result.records);
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "Failed to process records, exception={}", getCurrentExceptionMessage(true, true));
+        }
     }
 
     dwal->stopConsume(dwal_consume_ctx);
