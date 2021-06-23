@@ -24,22 +24,23 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     }
 
     if (hasQueryParameter("mode"))
-    {
         query_context->setIngestMode(getQueryParameter("mode"));
-    }
     else
-    {
         query_context->setIngestMode("async");
-    }
 
     query_context->setSetting("output_format_parallel_formatting", false);
     query_context->setSetting("date_time_input_format", String{"best_effort"});
     
     /// Parse JSON into ReadBuffers
+
+    /// Request body can be compressed using algorithm specified in the Content-Encoding header.
+    auto input_maybe_compressed = wrapReadBufferWithCompressionMethod(
+        wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
+
     PODArray<char> parse_buf;
     JSONReadBuffers buffers;
     String error;
-    if (!readIntoBuffers(input, parse_buf, buffers, error))
+    if (!readIntoBuffers(*input_maybe_compressed, parse_buf, buffers, error))
     {
         LOG_ERROR(
             log,

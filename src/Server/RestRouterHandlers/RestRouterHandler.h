@@ -83,6 +83,8 @@ public:
 
     const String & getAcceptEncoding() const { return accepted_encoding; }
 
+    const String & getContentEncoding() const { return content_encoding; }
+
     Int64 getContentLength() const { return content_length; }
 
     bool hasQueryParameter(const String & name) const { return query_parameters->has(name); }
@@ -206,6 +208,7 @@ private:
     void setupHTTPContext(const HTTPServerRequest & request)
     {
         accepted_encoding = request.get("Accept-Encoding", "");
+        content_encoding = request.get("Content-Encoding", "");
         content_length = request.getContentLength64();
         setupQueryParams(request);
 
@@ -230,6 +233,7 @@ protected:
     std::unordered_map<String, String> path_parameters;
     std::unique_ptr<HTMLForm> query_parameters;
     String accepted_encoding;
+    String content_encoding;
     Int64 content_length;
     String database;
 };

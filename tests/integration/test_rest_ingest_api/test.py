@@ -1,4 +1,6 @@
 import json
+import io
+import gzip
 
 import pytest
 from helpers.cluster import ClickHouseCluster
@@ -40,6 +42,14 @@ SETTINGS index_granularity = 8192, shard = 0
                    )
 
 
+def get_gzipped_data(data):
+    gz_buffer = io.BytesIO()
+    gz_file = gzip.GzipFile(mode='wb', fileobj=gz_buffer)
+    gz_file.write(json.dumps(data).encode('utf-8'))
+    gz_file.close()
+    return gz_buffer.getvalue()
+
+
 @pytest.fixture(scope="module", autouse=True)
 def setup_nodes():
     print("setup node")
@@ -63,7 +73,7 @@ def setup_nodes():
 
         }, {
             "status": 400,
-            "result": "None of poll_id"
+            "result": "are all invalid"
         }
     ),
     (
@@ -80,10 +90,15 @@ def setup_nodes():
 def test_ingest_api_basic_case(table, query, status):
     instance.ip_address = "localhost"
     # insert data
-    resp = instance.http_request(method="POST", url="dae/v1/ingest/default/tables/" + table, data=json.dumps(query))
+    resp = instance.http_request(method="POST", url="dae/v1/ingest/tables/" + table,
+                                 data=get_gzipped_data(query),
+                                 headers={
+                                     'content-type': 'application/json',
+                                     'content-encoding': 'gzip',
+                                 })
     result = json.loads(resp.content)
     assert 'poll_id' in result
-    assert 'query_id' in result
+    assert 'request_id' in result
     assert 'channel' in result
     # get status
     req = {"channel": result['channel'], "poll_ids": [result['poll_id']]}
@@ -95,7 +110,8 @@ def test_ingest_api_basic_case(table, query, status):
 @pytest.mark.parametrize("poll, status", [
     (
         {
-            "channel": "fsfs"
+            "channel": "fsfs",
+            "poll_ids": ["fsf"]
         },
         {
             "status": 404,
@@ -121,7 +137,7 @@ def test_status_exception(poll, status):
 
         }, {
             "status": 400,
-            "result": '{"code":1010,"error_msg":"None of poll_id in \'poll_ids\' is valid"'
+            "result": '{"code":1010,"error_msg":"\'poll_ids\' are all invalid"'
         }
     ),
     (
@@ -138,14 +154,14 @@ def test_status_exception(poll, status):
 def test_poll_status_in_batch_case(table, query, status):
     instance.ip_address = "localhost"
     # insert data
-    resp = instance.http_request(method="POST", url="dae/v1/ingest/default/tables/" + table, data=json.dumps(query))
+    resp = instance.http_request(method="POST", url="dae/v1/ingest/tables/" + table, data=json.dumps(query))
     result = json.loads(resp.content)
     assert 'poll_id' in result
-    assert 'query_id' in result
-    assert 'channel_id' in result
-    req = {"channel_id": result['channel_id'], "poll_ids": [result['poll_id']]}
+    assert 'request_id' in result
+    assert 'channel' in result
+    req = {"channel": result['channel'], "poll_ids": [result['poll_id']]}
     # send again
-    resp = instance.http_request(method="POST", url="dae/v1/ingest/default/tables/" + table, data=json.dumps(query))
+    resp = instance.http_request(method="POST", url="dae/v1/ingest/tables/" + table, data=json.dumps(query))
     result = json.loads(resp.content)
     # get status
     req['poll_ids'].append(result['poll_id'])
