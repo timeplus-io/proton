@@ -1,0 +1,295 @@
+openapi: 3.0.0
+info:
+  title: daisy api
+  version: '1.0'
+  description: daisy api
+paths:
+  /dae/v1/search:
+    parameters: []
+    post:
+      summary: Excute SQL query
+      operationId: search
+      responses:
+        '200':
+          description: 'OK, the response format depends on the default_format. If not set, it is JSONCompact. '
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                x-examples:
+                  example-1:
+                    meta:
+                      - name: sourcetype
+                        type: String
+                      - name: _raw
+                        type: String
+                      - name: _index_time
+                        type: DateTime64(3)
+                    data:
+                      - - daisy
+                        - '2020.08.14 23:54:41.290486 [ 7891 ] {} <Debug> DNSResolver: Updating DNS cache'
+                        - '2020-12-16 07:57:50.347'
+                      - - daisy
+                        - '2020.08.14 23:54:41.290638 [ 7891 ] {} <Debug> DNSResolver: Updated DNS cache'
+                        - '2020-12-16 07:57:52.935'
+                      - - daisy
+                        - '2020.08.14 23:54:46.489261 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushing system log, 7 entries to flush'
+                        - '2020-12-16 07:57:52.935'
+                      - - daisy
+                        - '2020.08.14 23:54:46.491133 [ 7910 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 466.97 GiB.'
+                        - '2020-12-16 07:57:52.935'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492519 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected 2 parts from 202008_1_8832_2713 to 202008_8833_8833_0'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492558 [ 7880 ] {} <Debug> DiskLocal: Reserving 2.01 MiB on disk `default`, having unreserved 466.97 GiB.'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492571 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Merging 2 parts: from 202008_1_8832_2713 to 202008_8833_8833_0 into Wide'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492741 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushed system log'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.496145 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected MergeAlgorithm: Horizontal'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.496457 [ 7880 ] {} <Trace> MergeTreeSequentialSource: Reading 14 marks from part 202008_1_8832_2713, total 66268 rows starting from the beginning of the part'
+                        - '2020-12-16 07:57:52.937'
+                    rows: 10
+                    rows_before_limit_at_least: 824
+                    statistics:
+                      elapsed: 0.001534583
+                      rows_read: 824
+                      bytes_read: 141480
+                properties:
+                  meta:
+                    type: array
+                    uniqueItems: true
+                    minItems: 1
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          minLength: 1
+                        type:
+                          type: string
+                          minLength: 1
+                      required:
+                        - name
+                        - type
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  rows:
+                    type: number
+                  rows_before_limit_at_least:
+                    type: number
+                  statistics:
+                    type: object
+                    required:
+                      - elapsed
+                      - rows_read
+                      - bytes_read
+                    properties:
+                      elapsed:
+                        type: number
+                      rows_read:
+                        type: number
+                      bytes_read:
+                        type: number
+                required:
+                  - meta
+                  - data
+                  - rows
+                  - rows_before_limit_at_least
+                  - statistics
+              examples:
+                search-jsoncompact:
+                  value:
+                    meta:
+                      - name: sourcetype
+                        type: String
+                      - name: _raw
+                        type: String
+                      - name: _index_time
+                        type: DateTime64(3)
+                    data:
+                      - - daisy
+                        - '2020.08.14 23:54:41.290486 [ 7891 ] {} <Debug> DNSResolver: Updating DNS cache'
+                        - '2020-12-16 07:57:50.347'
+                      - - daisy
+                        - '2020.08.14 23:54:41.290638 [ 7891 ] {} <Debug> DNSResolver: Updated DNS cache'
+                        - '2020-12-16 07:57:52.935'
+                      - - daisy
+                        - '2020.08.14 23:54:46.489261 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushing system log, 7 entries to flush'
+                        - '2020-12-16 07:57:52.935'
+                      - - daisy
+                        - '2020.08.14 23:54:46.491133 [ 7910 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 466.97 GiB.'
+                        - '2020-12-16 07:57:52.935'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492519 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected 2 parts from 202008_1_8832_2713 to 202008_8833_8833_0'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492558 [ 7880 ] {} <Debug> DiskLocal: Reserving 2.01 MiB on disk `default`, having unreserved 466.97 GiB.'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492571 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Merging 2 parts: from 202008_1_8832_2713 to 202008_8833_8833_0 into Wide'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.492741 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushed system log'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.496145 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected MergeAlgorithm: Horizontal'
+                        - '2020-12-16 07:57:52.937'
+                      - - daisy
+                        - '2020.08.14 23:54:46.496457 [ 7880 ] {} <Trace> MergeTreeSequentialSource: Reading 14 marks from part 202008_1_8832_2713, total 66268 rows starting from the beginning of the part'
+                        - '2020-12-16 07:57:52.937'
+                    rows: 10
+                    rows_before_limit_at_least: 824
+                    statistics:
+                      elapsed: 0.001534583
+                      rows_read: 824
+                      bytes_read: 141480
+        '400':
+          $ref: '#/components/responses/error'
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: default_format
+          description: 'query result output format, like CSV, JSONEachRow, et al. The default value is ''JSONCompact'''
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              x-examples:
+                example-1:
+                  end_time: '2021-04-28T07:10:36.392Z'
+                  mode: string
+                  offset: 0
+                  page_size: 0
+                  query: string
+                  start_time: '2021-04-28T07:10:36.392Z'
+              properties:
+                end_time:
+                  type: string
+                  minLength: 1
+                  description: 'end time of the search query, in ISO-8601 format'
+                mode:
+                  type: string
+                  minLength: 1
+                  description: |-
+                    query mode, enum 'standard', 'verbose'
+                    - 'standard': without ...
+                    - 'verbose': fdsfds
+                offset:
+                  type: number
+                  description: 'offset of the query result, should always greater than 0, paging related'
+                page_size:
+                  type: number
+                  description: 'page size of query result, greater than 1, paging related'
+                query:
+                  type: string
+                  minLength: 1
+                start_time:
+                  type: string
+                  minLength: 1
+                  description: 'start time of the search query, in ISO-8601 format'
+              required:
+                - query
+            examples:
+              search-req-1:
+                value:
+                  query: select * from A
+                  offset: 0
+                  page_size: 10000
+                  start_time: '2020-01-01T19:00:00+08:00'
+                  end_time: now64(3) - interval 1 day
+                  mode: standard
+        description: search request
+      description: Execute query
+components:
+  schemas: {}
+  responses:
+    error:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            description: ''
+            type: object
+            x-examples:
+              example-1:
+                code: 408
+                error_msg: Empty query
+                request_id: f488db48-e3a5-4081-b8f4-9573158a4023
+            properties:
+              code:
+                type: number
+                description: error code
+              error_msg:
+                type: string
+                minLength: 1
+                description: readable error message
+              request_id:
+                type: string
+                minLength: 1
+                description: ''
+            required:
+              - code
+              - error_msg
+              - request_id
+          examples:
+            search-error-1:
+              value:
+                code: 408
+                error_msg: Invalid 'limit' or 'page_size
+                request_id: f488db48-e3a5-4081-b8f4-9573158a4023

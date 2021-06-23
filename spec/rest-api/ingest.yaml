@@ -1,0 +1,584 @@
+openapi: 3.0.0
+info:
+  title: ingest
+  version: '1.0'
+paths:
+  '/dae/v1/ingest/{table}':
+    parameters:
+      - schema:
+          type: string
+        name: table
+        in: path
+        required: true
+        description: table to insert data into
+    post:
+      summary: Insert data into a normal table
+      operationId: post-dae-v1-ingest-table
+      responses:
+        '200':
+          $ref: '#/components/responses/insertResp'
+        '400':
+          description: Bad Request or Insert Error
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                properties:
+                  code:
+                    type: number
+                  error_msg:
+                    type: string
+                    minLength: 1
+                  request_id:
+                    type: string
+                    minLength: 1
+                required:
+                  - code
+                  - error_msg
+                  - request_id
+                x-examples:
+                  example-1:
+                    code: 117
+                    error_msg: 'Invalid Request, missing ''data'' field'
+                    request_id: 439edf29-7347-4a75-858c-3a9894f70011
+              examples:
+                insert-normal-missing-data-field:
+                  value:
+                    code: 117
+                    error_msg: 'Invalid Request, missing ''data'' field'
+                    request_id: 439edf29-7347-4a75-858c-3a9894f70011
+                insert-normal-internal-error:
+                  value:
+                    code: 27
+                    error_msg: |-
+                      Code: 27, e.displayText() = DB::ParsingException: Cannot parse input: expected ']' before: ', 1],[2, "2021-04"]]\n\n}': (at row 1)
+                       (version 21.7.1.1)
+                    request_id: 6c35e8a7-68c3-4808-b4ff-c42fbe74433c
+                insert-normal-missing-column-field:
+                  value:
+                    code: 117
+                    error_msg: 'Invalid Request, ''columns'' field is missing'
+                    request_id: e1f3c35a-9182-4cc6-ac42-7c653445f6e3
+                insert-normal-invalid-column-field:
+                  value:
+                    code: 117
+                    error_msg: 'Invalid Request, ''columns'' field is invalid'
+                    request_id: 35d04828-4f52-4f54-8b63-e7e41b157d55
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: mode
+          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： daisy inserts data asynchronously but does not track the insert status.''async'' the default insert mode, daisy inserts data asynchronously but track the status and retry if insert fails. ''ordered'' daisy inserts data synchronously. '
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+      description: insert data into a normal table. daisy automatically choose the database belongs to the user to insert.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              x-examples:
+                example-1:
+                  columns:
+                    - i
+                    - t
+                  data:
+                    - - 1
+                      - '2021-02-03 01:00:00'
+                    - - 2
+                      - 2021-04
+              properties:
+                columns:
+                  description: 'columns to insert, array of column names'
+                  type: array
+                  items: {}
+                data:
+                  type: array
+                  description: 'data to be insert. Array of Array, each row is a single array.'
+                  items:
+                    type: array
+                    items:
+                      type: object
+              required:
+                - columns
+                - data
+            examples:
+              insert-req-1:
+                value:
+                  columns:
+                    - i
+                    - t
+                  data:
+                    - - 1
+                      - '2021-02-03 01:00:00'
+                    - - 2
+                      - 2021-04
+        description: 'insert request, include columns and data'
+  '/dae/v1/ingest/rawstores/{store}':
+    post:
+      summary: Insert data into a rawstore table
+      operationId: insert-rawstore
+      responses:
+        '200':
+          $ref: '#/components/responses/insertResp'
+        '400':
+          description: Bad Request or Insert Error
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                properties:
+                  code:
+                    type: number
+                  error_msg:
+                    type: string
+                    minLength: 1
+                  request_id:
+                    type: string
+                    minLength: 1
+                required:
+                  - code
+                  - error_msg
+                  - request_id
+                x-examples:
+                  example-1:
+                    code: 117
+                    error_msg: 'Invalid Request, missing ''data'' field'
+                    request_id: db336a87-6405-4d89-84b6-9b5d71a9fc80
+              examples:
+                ingest-rawstore-missing-data-field:
+                  value:
+                    code: 117
+                    error_msg: 'Invalid Request, missing ''data'' field'
+                    request_id: db336a87-6405-4d89-84b6-9b5d71a9fc80
+                ingest-rawstore-enrichment-invalid-type:
+                  value:
+                    code: 117
+                    error_msg: 'Invalid enrichment, only ''json_path'' and ''regex'' are supported right now'
+                    request_id: 15a7c017-6ad9-447d-b11c-da6e8388e306
+                ingest-rawstore-enrichment-missing-rule:
+                  value:
+                    code: 117
+                    error_msg: 'Invalid enrichment, either ''rawstore_time_extraction_type'' or ''rawstore_time_extraction_rule'' is missing '
+                    request_id: 80a2d63c-71f0-4413-b56b-97131e38ebcc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              x-examples:
+                example-1:
+                  data:
+                    - _raw: '{"log":{"time":"2021-03-21 00:10:23"}}'
+                      host: host1
+                      source: app1
+                      sourcetype: log
+                    - _raw: '{"log":{"time":"2021-03-22 00:12:23"}}'
+                      host: host1
+                      source: app2
+                      sourcetype: log
+                    - _raw: '{"log":{"time":"2021-03-23 00:12:23"}}'
+                      host: host1
+                      source: app3
+                      sourcetype: log
+                      _time: '2021-04-01 08:08:08'
+                  enrichment:
+                    time_extraction_type: json_path
+                    time_extraction_rule: log.time
+              properties:
+                data:
+                  type: array
+                  uniqueItems: true
+                  minItems: 1
+                  items:
+                    type: object
+                    properties:
+                      _raw:
+                        type: string
+                        minLength: 1
+                        description: 'the raw log, it can be any semi-structural text. ''_time'' value can be extracted from this field automatically or by rule.'
+                      host:
+                        type: string
+                        minLength: 1
+                      source:
+                        type: string
+                        minLength: 1
+                      sourcetype:
+                        type: string
+                        minLength: 1
+                      _time:
+                        type: string
+                        minLength: 1
+                        description: 'If _time presents, the value will be used. Secondly if ''enrichment'' field has been configured with either ''json_path'' or ''regex'' rule, the rule will be used to extract _time from _raw column. Last, if no ''enrichment'' field, it tries to automatically extract _time by finding any possible ISO-8601 timestamp from _raw field.'
+                    required:
+                      - _raw
+                      - host
+                      - source
+                      - sourcetype
+                enrichment:
+                  type: object
+                  properties:
+                    time_extraction_type:
+                      type: string
+                      minLength: 1
+                      description: 'either ''json_path'' or ''regex'', only support these two modes now.'
+                    time_extraction_rule:
+                      type: string
+                      minLength: 1
+                      description: 'If ''time_extraction_type'' is ''json_path'', then ''time_extraction_rule'' should be the json path of the _time in _raw field; otherwise, if it is ''regex'', a regex expression with group ''_time'' should be specified with PCRE2 syntax. for example, ''^(?P<_time>.+),\\s+\\[\\w+\\]'''
+                  required:
+                    - time_extraction_type
+                    - time_extraction_rule
+              required:
+                - data
+            examples:
+              insert-rawstore-json:
+                value:
+                  data:
+                    - _raw: '{"log":{"time":"2021-03-21 00:10:23"}}'
+                      host: host1
+                      source: app1
+                      sourcetype: log
+                    - _raw: '{"log":{"time":"2021-03-22 00:12:23"}}'
+                      host: host1
+                      source: app2
+                      sourcetype: log
+                    - _raw: '{"log":{"time":"2021-03-23 00:12:23"}}'
+                      host: host1
+                      source: app3
+                      sourcetype: log
+                      _time: '2021-04-01 08:08:08'
+                  enrichment:
+                    time_extraction_type: json_path
+                    time_extraction_rule: log.time
+              insert-rawstore-regex:
+                value:
+                  enrichment:
+                    time_extraction_type: regex
+                    time_extraction_rule: '^(?P<_time>.+),\s+\[\w+\]'
+                  data:
+                    - _raw: '2021-03-21T00:10:23+01, [Apache] This is a error.'
+                      host: host1
+                      source: apache
+                      sourcetype: access-log
+                    - _raw: '02 Mar 2021 00:10:23Z, [Apache] This is a error.'
+                      host: host2
+                      source: apache
+                      sourcetype: access-log
+                    - _raw: '2021-03-23 00:10:23, [Apache] This is a error.'
+                      host: host3
+                      source: apache
+                      sourcetype: access-log
+          application/xml:
+            schema:
+              type: object
+              properties: {}
+        description: Request contains the array of rows to be inserted into rawstore. rawstore has predefined schema and Daisy tries to extract _time automatically or by rule from _raw field if _time field is absent.
+      description: Insert data into a rawstore table
+      parameters:
+        - schema:
+            type: string
+          in: query
+          name: mode
+          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： daisy inserts data asynchronously but does not track the insert status.''async'' the default insert mode, daisy inserts data asynchronously but track the status and retry if insert fails. ''ordered'' daisy inserts data synchronously. '
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+    parameters:
+      - schema:
+          type: string
+        name: store
+        in: path
+        required: true
+        description: rawstore name to insert data into
+  /dae/v1/ingest/statuses:
+    parameters:
+      - name: x-bdg-request-id
+        in: header
+        required: false
+        description: the unique id to identify a ddl request
+        schema:
+          type: string
+      - name: X-ClickHouse-Query-Id
+        in: header
+        required: false
+        description: the unique id to identify a ddl request
+        schema:
+          type: string
+      - name: user
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: X-ClickHouse-User
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: password
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: X-ClickHouse-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: quota_key
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: X-ClickHouse-Quota
+        in: header
+        required: false
+        schema:
+          type: string
+    post:
+      summary: Batch query insert status
+      operationId: post-dae-v1-ingest-statuses
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                x-examples:
+                  example-1:
+                    request_id: 9643d4ee-09c9-4b07-8941-f56b11573c24
+                    status:
+                      - poll_id: NjM1NGZiMjEtZWU1MC00OTI1LTg1ZmMtY2UxMTAwNWEyZTc2IWAkZGVmYXVsdC50ZXN0MyFgJGRlZmF1bHQhYCRxaWhvb2RlbWFjYm9vay1wcm8tNS5sb2NhbCFgJDE2MjMyMDg0MzEzODY=
+                        progress: 100
+                        status: Succeeded
+                properties:
+                  request_id:
+                    type: string
+                    minLength: 1
+                  status:
+                    type: array
+                    uniqueItems: true
+                    minItems: 1
+                    items:
+                      type: object
+                      properties:
+                        poll_id:
+                          type: string
+                          minLength: 1
+                        progress:
+                          type: number
+                          description: 'progess in percentage, 100 means complete'
+                        status:
+                          type: string
+                          minLength: 1
+                          description: |-
+                            "Succeeded": completed successfully
+                            "Failed": insert fail
+                            "Processing": insert is still in progress
+                            "Unknown": the insert request is not found in daisy cache. It might be expired.
+                      required:
+                        - poll_id
+                        - progress
+                        - status
+                required:
+                  - request_id
+                  - status
+              examples:
+                status-poll-succeed:
+                  value:
+                    request_id: 9643d4ee-09c9-4b07-8941-f56b11573c24
+                    status:
+                      - poll_id: NjM1NGZiMjEtZWU1MC00OTI1LTg1ZmMtY2UxMTAwNWEyZTc2IWAkZGVmYXVsdC50ZXN0MyFgJGRlZmF1bHQhYCRxaWhvb2RlbWFjYm9vay1wcm8tNS5sb2NhbCFgJDE2MjMyMDg0MzEzODY=
+                        progress: 100
+                        status: Succeeded
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                properties:
+                  code:
+                    type: number
+                  error_msg:
+                    type: string
+                    minLength: 1
+                  request_id:
+                    type: string
+                    minLength: 1
+                required:
+                  - code
+                  - error_msg
+                  - request_id
+                x-examples:
+                  example-1:
+                    code: 1010
+                    error_msg: 'Invalid query id: MTZmM2FiODgtYzFkYi00NzIzLWI4ZjMtYmEyNzRmZjFlNTYwIWAkZGVmYXVsdC5zdG9yZTEhYCRkZWZhdWx0IWAkcWlob29kZW1hY2Jv2stcHJvLTUubG9jYWwhYCQxNjIzMjA2OTE4Mjkz ErrorCode: 36'
+                    request_id: 2fa6e152-ecf6-47fc-a9f4-9b78b71c6b9b
+              examples:
+                status-poll-invalid-pollId:
+                  value:
+                    code: 1010
+                    error_msg: 'Invalid query id: MTZmM2FiODgtYzFkYi00NzIzLWI4ZjMtYmEyNzRmZjFlNTYwIWAkZGVmYXVsdC5zdG9yZTEhYCRkZWZhdWx0IWAkcWlob29kZW1hY2Jv2stcHJvLTUubG9jYWwhYCQxNjIzMjA2OTE4Mjkz ErrorCode: 36'
+                    request_id: 2fa6e152-ecf6-47fc-a9f4-9b78b71c6b9b
+                All poll_ids are invalid:
+                  value:
+                    code: 1010
+                    error_msg: '''poll_ids'' are all invalid'
+                    request_id: ddd87890-3dd3-4ce5-ac46-d3d0788f348b
+      description: Batch query insert status
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              x-examples:
+                example-1:
+                  poll_ids:
+                    - NmU0OTRlYjMtOWU0Zi00ZDA4LWE1ZGQtNjYyNTM0YmRlZTc2IWAkZGVmYXVsdC5zdG9yZTIhYCRkZWZhdWx0IWAkbG9jYWxob3N0OjgxMjMhYCQxNjIwOTY5Mjc5MjQz
+                  channel: '16091421817298718387'
+              properties:
+                poll_ids:
+                  type: array
+                  description: poll_id array of the insert requests
+                  items:
+                    type: string
+                channel:
+                  type: string
+                  minLength: 1
+                  description: identified the node to query
+              required:
+                - poll_ids
+                - channel
+            examples:
+              batch-query-1:
+                value:
+                  poll_ids:
+                    - NmU0OTRlYjMtOWU0Zi00ZDA4LWE1ZGQtNjYyNTM0YmRlZTc2IWAkZGVmYXVsdC5zdG9yZTIhYCRkZWZhdWx0IWAkbG9jYWxob3N0OjgxMjMhYCQxNjIwOTY5Mjc5MjQz
+                  channel: '16091421817298718387'
+        description: Batch query request
+components:
+  schemas: {}
+  responses:
+    insertResp:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            description: ''
+            type: object
+            x-examples:
+              example-1:
+                poll_id: NmU0OTRlYjMtOWU0Zi00ZDA4LWE1ZGQtNjYyNTM0YmRlZTc2IWAkZGVmYXVsdC5zdG9yZTIhYCRkZWZhdWx0IWAkbG9jYWxob3N0OjgxMjMhYCQxNjIwOTY5Mjc5MjQz
+                channel: '16091421817298718387'
+                request_id: 1870aafa-5f6e-46aa-8e9b-77b7f286406f
+            properties:
+              poll_id:
+                type: string
+                minLength: 1
+                description: 'use to query the insert status of this request in async mode, only valid for DistributedMergeTree engine'
+              channel:
+                type: string
+                minLength: 1
+                description: identify the node which perform the insert operation
+              request_id:
+                type: string
+                minLength: 1
+            required:
+              - poll_id
+              - channel
+              - request_id
+          examples:
+            insert-success-1:
+              value:
+                poll_id: NmU0OTRlYjMtOWU0Zi00ZDA4LWE1ZGQtNjYyNTM0YmRlZTc2IWAkZGVmYXVsdC5zdG9yZTIhYCRkZWZhdWx0IWAkbG9jYWxob3N0OjgxMjMhYCQxNjIwOTY5Mjc5MjQz
+                channel: '16091421817298718387'
+                request_id: 1870aafa-5f6e-46aa-8e9b-77b7f286406f

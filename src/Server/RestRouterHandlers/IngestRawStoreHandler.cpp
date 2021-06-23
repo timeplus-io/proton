@@ -57,7 +57,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
                 table,
                 error,
                 ErrorCodes::INCORRECT_DATA);
-            return {jsonErrorResponse("error", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
+            return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
         }
     }
 

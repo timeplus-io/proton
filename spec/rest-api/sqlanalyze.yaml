@@ -1,0 +1,265 @@
+openapi: 3.0.0
+info:
+  title: daisy api
+  version: '1.0'
+  description: daisy api
+paths:
+  /dae/v1/sqlanalyzer:
+    post:
+      summary: Analyze SQL Query Result
+      operationId: sqlanalyzer
+      responses:
+        '200':
+          $ref: '#/components/responses/analyzeResponse'
+        '400':
+          $ref: '#/components/responses/error'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              x-examples:
+                example-1:
+                  query: 'select test_dict.a, r from tbl_left any  inner join test_dict on test_dict.key  = tbl_left.key limit 100;'
+              properties:
+                query:
+                  type: string
+                  minLength: 1
+                  description: SQL query to analyze
+              required:
+                - query
+            examples:
+              sqlanalyze-req-1:
+                value:
+                  query: 'select test_dict.a, r from tbl_left any  inner join test_dict on test_dict.key  = tbl_left.key limit 100'
+        description: Post the query to analyze
+      description: Analyze the query and get the required and result columns
+      parameters:
+        - name: x-bdg-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: X-ClickHouse-Query-Id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-User
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: X-ClickHouse-Quota
+          in: header
+          required: false
+          schema:
+            type: string
+    parameters: []
+components:
+  schemas: {}
+  responses:
+    analyzeResponse:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            description: ''
+            type: object
+            properties:
+              has_aggr:
+                type: boolean
+              has_subquery:
+                type: boolean
+              has_table_join:
+                type: boolean
+              has_union:
+                type: boolean
+              original_query:
+                type: string
+                minLength: 1
+              query_type:
+                type: string
+                minLength: 1
+              required_columns:
+                type: array
+                uniqueItems: true
+                minItems: 1
+                items:
+                  required:
+                    - column
+                    - column_type
+                    - database
+                    - is_view
+                    - table
+                  properties:
+                    column:
+                      type: string
+                      minLength: 1
+                    column_type:
+                      type: string
+                      minLength: 1
+                    database:
+                      type: string
+                      minLength: 1
+                    is_view:
+                      type: boolean
+                    table:
+                      type: string
+                      minLength: 1
+              result_columns:
+                type: array
+                uniqueItems: true
+                minItems: 1
+                items:
+                  required:
+                    - column
+                    - column_type
+                  properties:
+                    column:
+                      type: string
+                      minLength: 1
+                    column_type:
+                      type: string
+                      minLength: 1
+              rewritten_query:
+                type: string
+                minLength: 1
+            required:
+              - has_aggr
+              - has_subquery
+              - has_table_join
+              - has_union
+              - original_query
+              - query_type
+              - required_columns
+              - result_columns
+              - rewritten_query
+            x-examples:
+              example-1:
+                has_aggr: false
+                has_subquery: false
+                has_table_join: true
+                has_union: false
+                original_query: 'select test_dict.a, r from tbl_left any  inner join test_dict on test_dict.key  = tbl_left.key limit 100;'
+                query_type: SELECT
+                required_columns:
+                  - column: key
+                    column_type: UInt64
+                    database: default
+                    is_view: false
+                    table: tbl_left
+                  - column: r
+                    column_type: UInt64
+                    database: default
+                    is_view: false
+                    table: tbl_left
+                  - column: a
+                    column_type: String
+                    database: default
+                    is_view: false
+                    table: test_dict
+                  - column: key
+                    column_type: UInt64
+                    database: default
+                    is_view: false
+                    table: test_dict
+                result_columns:
+                  - column: a
+                    column_type: String
+                  - column: r
+                    column_type: UInt64
+                rewritten_query: 'select test_dict.a, r from tbl_left any  inner join test_dict on test_dict.key  = tbl_left.key limit 100;'
+          examples:
+            example1:
+              value:
+                has_aggr: false
+                has_subquery: false
+                has_table_join: true
+                has_union: false
+                original_query: 'select test_dict.a, r from tbl_left any  inner join test_dict on test_dict.key  = tbl_left.key limit 100;'
+                query_type: SELECT
+                required_columns:
+                  - column: key
+                    column_type: UInt64
+                    database: default
+                    is_view: false
+                    table: tbl_left
+                  - column: r
+                    column_type: UInt64
+                    database: default
+                    is_view: false
+                    table: tbl_left
+                  - column: a
+                    column_type: String
+                    database: default
+                    is_view: false
+                    table: test_dict
+                  - column: key
+                    column_type: UInt64
+                    database: default
+                    is_view: false
+                    table: test_dict
+                result_columns:
+                  - column: a
+                    column_type: String
+                  - column: r
+                    column_type: UInt64
+                rewritten_query: 'select test_dict.a, r from tbl_left any  inner join test_dict on test_dict.key  = tbl_left.key limit 100;'
+    error:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            description: ''
+            type: object
+            x-examples:
+              example-1:
+                code: 408
+                error_msg: Empty query
+                request_id: f488db48-e3a5-4081-b8f4-9573158a4023
+            properties:
+              code:
+                type: number
+                description: error code
+              error_msg:
+                type: string
+                minLength: 1
+                description: readable error message
+              request_id:
+                type: string
+                minLength: 1
+                description: ''
+            required:
+              - code
+              - error_msg
+              - request_id
+          examples:
+            empty-query-error:
+              value:
+                code: 408
+                error_msg: Empty query
+                request_id: f488db48-e3a5-4081-b8f4-9573158a4023
