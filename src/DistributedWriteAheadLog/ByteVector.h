@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdlib>
 #include <cassert>
+#include <cstdlib>
 #include <memory>
 
 #include <boost/core/noncopyable.hpp>
@@ -36,14 +36,14 @@ public:
             return;
         }
 
-        auto new_cap= static_cast<size_t>(cap* 1.5);
+        auto new_cap = static_cast<size_t>(new_size * 1.5);
         MemPtr new_mem{static_cast<uint8_t *>(std::malloc(new_cap)), std::free};
         assert(new_mem);
 
         std::memcpy(new_mem.get(), mem.get(), siz);
         mem.swap(new_mem);
         siz = new_size;
-        cap= new_cap;
+        cap = new_cap;
     }
 
     uint8_t * data() { return mem.get(); }
