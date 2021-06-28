@@ -1,0 +1,50 @@
+openapi: 3.0.0
+servers:
+  - url: 'http://{host}:{port}/dae'
+info:
+  version: 1.0.0
+  title: Daisy status
+  description: >-
+    Check whether the daisy cluster is alive, and to query the packaging
+    information of the current service.
+paths:
+  /ping:
+    get:
+      summary: Check whether the daisy cluster is alive
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/pingResp'
+  /info:
+    get:
+      summary: query the packaging information of the current service
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/infoResp'
+components:
+  schemas:
+    pingResp:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Server status status
+    infoResp:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Server name
+        time:
+          type: string
+          description: Server build time
+        version:
+          type: string
+          description: Current version
