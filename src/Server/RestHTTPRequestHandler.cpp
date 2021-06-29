@@ -410,6 +410,12 @@ String RestHTTPRequestHandler::getDatabaseByUser(const String & user) const
 {
     String database = "default";
 
+    /// FIXME : HACK, fix this when we have a user to database mapping.
+    if (user == "system")
+    {
+        return "system";
+    }
+
     if (database.empty())
     {
         throw Exception(

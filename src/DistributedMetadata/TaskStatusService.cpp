@@ -2,10 +2,7 @@
 #include "CatalogService.h"
 
 #include <Core/Block.h>
-#include <DataStreams/BlockIO.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/BlockUtils.h>
@@ -17,7 +14,6 @@
 #include <common/logger_useful.h>
 
 #include <Poco/Util/Application.h>
-
 
 namespace DB
 {
@@ -558,13 +554,14 @@ bool TaskStatusService::createTaskTable()
     ContextPtr context = Context::createCopy(global_context);
     context->setCurrentQueryId("");
     context->setQueryParameter("_payload", query_payload);
+    context->setUser("system", context->getPasswordByUserName("system"), Poco::Net::SocketAddress("127.0.0.1", 0));
     context->setDistributedDDLOperation(true);
     CurrentThread::QueryScope query_scope{context};
 
     try
     {
-        auto stream = executeQuery(query, context, true, QueryProcessingStage::Enum::WithMergeableStateAfterAggregation, false);
-        stream.onFinish();
+        executeSelectQuery(
+            query, context, [](Block &&) {}, true);
 
         create_task_table_id = context->getCurrentQueryId();
     }
