@@ -598,6 +598,7 @@ void KafkaWAL::initProducer()
         std::make_pair("enable.idempotence", std::to_string(settings->enable_idempotence)),
         std::make_pair("compression.codec", settings->compression_codec),
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
+        std::make_pair("message.max.bytes", std::to_string(settings->message_max_bytes)),
     };
 
     if (!settings->debug.empty())
@@ -631,6 +632,7 @@ void KafkaWAL::initConsumer()
         /// enable auto offset commit
         std::make_pair("enable.auto.commit", "true"),
         std::make_pair("auto.commit.interval.ms", std::to_string(settings->auto_commit_interval_ms)),
+        std::make_pair("fetch.message.max.bytes", std::to_string(settings->fetch_message_max_bytes)),
         std::make_pair("enable.auto.offset.store", "false"),
         std::make_pair("offset.store.method", "broker"),
         std::make_pair("enable.partition.eof", "false"),
@@ -1183,6 +1185,15 @@ Int32 KafkaWAL::create(const String & name, std::any & ctx)
     if (walctx.segment_ms > 0)
     {
         params.emplace_back("segment.ms", std::to_string(walctx.segment_ms));
+    }
+
+    if (walctx.message_max_bytes > 0)
+    {
+        params.emplace_back("max.message.bytes", std::to_string(walctx.message_max_bytes));
+    }
+    else
+    {
+        params.emplace_back("max.message.bytes", std::to_string(settings->message_max_bytes));
     }
 
     for (const auto & param : params)

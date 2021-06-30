@@ -63,6 +63,9 @@ struct KafkaWALContext
     Int32 consume_callback_max_messages_size = 33554432; /// 32 MB
     Int32 consume_callback_timeout_ms = 1000;
 
+    /// Per topic max message size
+    Int32 message_max_bytes = -1;
+
     static String topicPartitonKey(const String & topic, Int32 partition) { return topic + "$" + std::to_string(partition); }
 
     String key() const { return topicPartitonKey(topic, partition); }
@@ -87,6 +90,7 @@ struct KafkaWALContext
         ctxes.push_back("consume_callback_max_rows=" + std::to_string(consume_callback_max_rows));
         ctxes.push_back("consume_callback_max_messages_size=" + std::to_string(consume_callback_max_messages_size));
         ctxes.push_back("consume_callback_timeout_ms=" + std::to_string(consume_callback_timeout_ms));
+        ctxes.push_back("message_max_bytes=" + std::to_string(message_max_bytes));
 
         return boost::algorithm::join(ctxes, " ");
     }
