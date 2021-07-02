@@ -71,7 +71,7 @@ private:
     void updateTaskStatus(TaskStatusPtr & task);
 
     bool tableExists() const;
-    bool createTaskTable();
+    bool createTaskTable() const;
 
     bool persistentTaskStatuses(const std::vector<TaskStatusPtr> & tasks);
     void persistentFinishedTask();
@@ -80,11 +80,11 @@ private:
     mutable std::shared_mutex indexes_lock;
     std::unordered_map<String, TaskStatusPtr> indexed_by_id;
     std::unordered_map<String, std::unordered_map<String, TaskStatusPtr>> indexed_by_user;
+
     std::mutex tasks_lock;
     std::deque<std::pair<SteadyClock, String>> timed_tasks;
     std::unordered_map<Int64, std::vector<TaskStatusPtr>> finished_tasks;
     std::unique_ptr<BackgroundSchedulePoolTaskHolder> persistent_task;
-    String create_task_table_id = "";
 
     static constexpr size_t RESCHEDULE_TIME_MS = 120000;
     static constexpr Int32 RETRY_TIMES = 3;

@@ -3,6 +3,7 @@
 
 #include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DistributedWriteAheadLog/Name.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/BlockUtils.h>
@@ -20,6 +21,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int OK;
+    extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace
@@ -220,14 +222,24 @@ bool TaskStatusService::validateSchema(const Block & block, const std::vector<St
 bool TaskStatusService::tableExists() const
 {
     StorageID sid{"system", "tasks"};
+    /// Try local catalog
     if (DatabaseCatalog::instance().isTableExist(sid, global_context))
     {
         return true;
     }
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
     /// Try catalog service
     auto & catalog_service = CatalogService::instance(global_context);
-    return catalog_service.tableExists(sid.getDatabaseName(), sid.getTableName());
+    if (catalog_service.tableExists(sid.getDatabaseName(), sid.getTableName()))
+    {
+        return true;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    /// Try topic name
+    return dwal->describe(DWAL::escapeDWalName("system", "tasks"), const_cast<std::any &>(dwal_append_ctx)) == ErrorCodes::OK;
 }
 
 TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const
@@ -376,13 +388,21 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
 
 void TaskStatusService::schedulePersistentTask()
 {
-    for (int i = 0; i < RETRY_TIMES; ++i)
+    if (!tableExists())
     {
-        if (createTaskTable())
+        for (int i = 0; i < RETRY_TIMES; ++i)
         {
-            break;
+            if (createTaskTable())
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_INTERVAL_MS));
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_INTERVAL_MS));
+
+        if (!tableExists())
+        {
+            throw Exception("Failed to create system tasks table", ErrorCodes::UNKNOWN_EXCEPTION);
+        }
     }
 
     auto task_holder = global_context->getSchedulePool().createTask("PersistentTask", [this]() { this->persistentFinishedTask(); });
@@ -463,22 +483,8 @@ void TaskStatusService::persistentFinishedTask()
     (*persistent_task)->scheduleAfter(RESCHEDULE_TIME_MS);
 }
 
-bool TaskStatusService::createTaskTable()
+bool TaskStatusService::createTaskTable() const
 {
-    if (tableExists())
-    {
-        return true;
-    }
-
-    if (!create_task_table_id.empty())
-    {
-        auto task = findByIdInMemory(create_task_table_id);
-        if (task && task->status == TaskStatus::SUCCEEDED)
-        {
-            return true;
-        }
-    }
-
     const auto & config = global_context->getConfigRef();
     const auto & conf = configSettings();
     const String replication_factor_key = conf.key_prefix + "replication_factor";
@@ -560,17 +566,16 @@ bool TaskStatusService::createTaskTable()
 
     try
     {
-        executeSelectQuery(
-            query, context, [](Block &&) {}, true);
-
-        create_task_table_id = context->getCurrentQueryId();
+        executeSelectQuery(query, context, [](Block &&) {}, true);
     }
     catch (...)
     {
         LOG_ERROR(log, "Create task table failed. ", getCurrentExceptionMessage(true, true));
         return false;
     }
-    return false;
+
+    /// Poll if table creation succeeds
+    return tableExists();
 }
 
 bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> & tasks)
