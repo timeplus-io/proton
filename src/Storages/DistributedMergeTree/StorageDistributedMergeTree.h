@@ -158,7 +158,7 @@ public:
         ingesting_blocks.getStatuses(poll_ids, statuses);
     }
 
-    DWAL::RecordSequenceNumber lastSequenceNumber() const;
+    DWAL::RecordSN lastSN() const;
 
     friend struct DistributedMergeTreeCallbackData;
     friend class DistributedMergeTreeBlockOutputStream;
@@ -197,11 +197,11 @@ private:
     };
 
     WriteCallbackData * writeCallbackData(const String & query_status_poll_id, UInt16 block_id);
-    void writeCallback(const DWAL::WAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id);
+    void writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id);
 
-    static void writeCallback(const DWAL::WAL::AppendResult & result, void * data);
+    static void writeCallback(const DWAL::AppendResult & result, void * data);
 
-    DWAL::RecordSequenceNumber sequenceNumberLoaded() const;
+    DWAL::RecordSN snLoaded() const;
     void backgroundConsumer();
     void mergeBlocks(Block & lhs, Block & rhs);
     bool dedupBlock(const DWAL::RecordPtr & record);
@@ -210,7 +210,7 @@ private:
 
     void commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx);
 
-    using SequencePair = std::pair<DWAL::RecordSequenceNumber, DWAL::RecordSequenceNumber>;
+    using SequencePair = std::pair<DWAL::RecordSN, DWAL::RecordSN>;
 
     void doCommit(
         Block block,
@@ -219,8 +219,8 @@ private:
         SequenceRanges missing_sequence_ranges,
         std::any & dwal_consume_ctx);
     void commitSN(std::any & dwal_consume_ctx);
-    void commitSNLocal(DWAL::RecordSequenceNumber commit_sn);
-    void commitSNRemote(DWAL::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx);
+    void commitSNLocal(DWAL::RecordSN commit_sn);
+    void commitSNRemote(DWAL::RecordSN commit_sn, std::any & dwal_consume_ctx);
     void progressSequences(const SequencePair & seq);
     void progressSequencesWithoutLock(const SequencePair & seq);
     Int64 maxCommittedSN() const;
@@ -254,9 +254,9 @@ private:
     ThreadPool & part_commit_pool;
 
     mutable std::mutex sns_mutex;
-    DWAL::RecordSequenceNumber last_sn = -1; /// To be committed to DWAL
-    DWAL::RecordSequenceNumber prev_sn = -1; /// Committed to DWAL
-    DWAL::RecordSequenceNumber local_sn = -1; /// Committed to `committed_sn.txt`
+    DWAL::RecordSN last_sn = -1; /// To be committed to DWAL
+    DWAL::RecordSN prev_sn = -1; /// Committed to DWAL
+    DWAL::RecordSN local_sn = -1; /// Committed to `committed_sn.txt`
     std::set<SequencePair> local_committed_sns; /// Committed to `Part` folder
     std::deque<SequencePair> outstanding_sns;
 

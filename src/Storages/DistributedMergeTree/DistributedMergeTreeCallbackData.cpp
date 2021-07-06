@@ -77,9 +77,7 @@ inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records,
 }
 
 std::vector<RecordsSequenceRangesPair> DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(
-    const DWAL::RecordPtrs & records,
-    const SequenceRanges & sequence_ranges,
-    DWAL::RecordSequenceNumber max_committed_sn)
+    const DWAL::RecordPtrs & records, const SequenceRanges & sequence_ranges, DWAL::RecordSN max_committed_sn)
 {
     std::vector<RecordsSequenceRangesPair> range_buckets(sequence_ranges.size() + 1);
 

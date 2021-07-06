@@ -1,7 +1,5 @@
 #pragma once
 
-namespace DB
-{
 namespace DWAL
 {
 /// Operation codes
@@ -34,5 +32,3 @@ enum class OpCode : uint8_t
     UNKNOWN = 0x3F,
 };
 }
-}
-

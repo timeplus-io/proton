@@ -2,11 +2,10 @@
 
 #include "Cluster.h"
 #include "Record.h"
+#include "Results.h"
 
 #include <any>
 
-namespace DB
-{
 namespace DWAL
 {
 /** Distributed Write Ahead Log (WAL) interfaces which defines an ordered sequence of `transitions`.
@@ -26,25 +25,6 @@ public:
     virtual void startup();
     virtual void shutdown();
     virtual String type() const = 0;
-
-    struct AppendResult
-    {
-        RecordSequenceNumber sn = -1;
-
-        /// 0 if success, otherwise non-zero
-        /// FIXME, mapping to ErrorCodes
-        Int32 err = 0;
-        std::any ctx;
-    };
-
-    struct ConsumeResult
-    {
-        Int32 err = 0;
-        RecordPtrs records;
-    };
-
-    using AppendCallback = void (*)(const AppendResult & result, void * data);
-    using ConsumeCallback = void (*)(RecordPtrs records, void * data);
 
     /// Append a Record to the target WAL and returns SequenceNumber for this record
     /// Once this function is returned without an error, the record is guaranteed to be committed
@@ -77,7 +57,7 @@ public:
 
     /// Move the consuming sequence numbers forward
     /// return non-zero if failed, otherwise return zero
-    virtual Int32 commit(RecordSequenceNumber sequence_number, std::any & ctx) = 0;
+    virtual Int32 commit(RecordSN sn, std::any & ctx) = 0;
 
     /// Admin APIs
     /// `create` creates a WAL log named `name`. Returns 0 if success; otherwise non-zero
@@ -93,5 +73,4 @@ public:
 };
 
 using WALPtr = std::shared_ptr<WAL>;
-}
 }

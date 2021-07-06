@@ -155,6 +155,7 @@ struct Settings;
     M(String, streaming_storage, "kafka", "Backend streaming storage for write ahead log implementation", 0) \
     M(String, streaming_storage_cluster_id, "", "Backend streaming storage cluster id", 0) \
     M(String, streaming_storage_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \
+    M(String, streaming_storage_poll_mode, "shared", "Mode of polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \
     M(Int64, streaming_storage_request_required_acks, 1, "Waited ack during data ingestion to the backend write-ahead log", 0) \
     M(Int64, streaming_storage_request_timeout_ms, 30000, "Time out value for an ingest request to the backend write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_ms, 500, "Time threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \

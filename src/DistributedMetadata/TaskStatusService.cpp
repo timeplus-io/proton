@@ -3,7 +3,7 @@
 
 #include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DistributedWriteAheadLog/Name.h>
+#include <DistributedWriteAheadLog/KafkaWALCommon.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/BlockUtils.h>

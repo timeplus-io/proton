@@ -767,7 +767,7 @@ void TCPHandler::processTablesStatusRequest()
             /// Please note for DistributedMergeTree, the absolute delay means the last 32 bits
             /// of the last sequence number it commits
             status.is_replicated = true;
-            status.absolute_delay = distributed_merge_tree->lastSequenceNumber() & 0XFFFFFFFF;
+            status.absolute_delay = distributed_merge_tree->lastSN() & 0XFFFFFFFF;
         } /// Daisy : ends
         else
             status.is_replicated = false; //-V1048

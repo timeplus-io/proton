@@ -13,7 +13,7 @@
 
 
 using namespace DB;
-using namespace DB::DWAL;
+using namespace DWAL;
 using namespace std;
 
 TEST(CheckRecordSerializationDeserialization, Serder)

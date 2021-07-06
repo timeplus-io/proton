@@ -18,11 +18,11 @@ TEST(CategorizeRecords, SequenceRanges)
     sequence_ranges.emplace_back(38, 43, 3, 5);
 
     /// Build records
-    DB::DWAL::RecordPtrs records;
+    DWAL::RecordPtrs records;
 
     for (Int64 i = 2; i < 50; ++i)
     {
-        records.push_back(std::make_shared<DB::DWAL::Record>(i));
+        records.push_back(std::make_shared<DWAL::Record>(i));
     }
 
     auto range_buckets = DB::DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(records, sequence_ranges, 47);

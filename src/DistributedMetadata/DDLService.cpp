@@ -7,7 +7,7 @@
 
 #include <Core/Block.h>
 #include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/Name.h>
+#include <DistributedWriteAheadLog/KafkaWALCommon.h>
 #include <Interpreters/Context.h>
 
 #include <Poco/Net/HTTPRequest.h>

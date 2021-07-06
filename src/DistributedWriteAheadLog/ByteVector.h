@@ -7,8 +7,6 @@
 #include <boost/core/noncopyable.hpp>
 
 
-namespace DB
-{
 namespace DWAL
 {
 class ByteVector final : public boost::noncopyable
@@ -67,5 +65,4 @@ private:
     size_t cap;
     size_t siz;
 };
-}
 }

@@ -141,7 +141,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
     }
 }
 
-void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::WAL::AppendResult & result)
+void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::AppendResult & result)
 {
     if (result.err != ErrorCodes::OK)
     {
@@ -153,7 +153,7 @@ void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::WAL::Appen
     }
 }
 
-void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::WAL::AppendResult & result, void * data)
+void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::AppendResult & result, void * data)
 {
     auto stream = static_cast<DistributedMergeTreeBlockOutputStream *>(data);
     stream->writeCallback(result);

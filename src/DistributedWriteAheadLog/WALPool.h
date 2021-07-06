@@ -5,8 +5,6 @@
 
 #include <Interpreters/Context_fwd.h>
 
-namespace DB
-{
 namespace DWAL
 {
 /// Pooling WAL. Singleton
@@ -15,12 +13,12 @@ namespace DWAL
 class WALPool : private boost::noncopyable
 {
 public:
-    static WALPool & instance(ContextPtr global_context);
+    static WALPool & instance(DB::ContextPtr global_context);
 
-    explicit WALPool(ContextPtr global_context);
+    explicit WALPool(DB::ContextPtr global_context);
     ~WALPool();
 
-    WALPtr get(const String & id) const;
+    WALPtr get(const std::string & id) const;
 
     WALPtr getMeta() const;
 
@@ -30,20 +28,19 @@ public:
     void shutdown();
 
 private:
-    void init(const String & key);
+    void init(const std::string & key);
 
 private:
-    ContextPtr global_context;
+    DB::ContextPtr global_context;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 
-    String default_cluster = "";
+    std::string default_cluster = "";
     WALPtr meta_wal;
     std::unordered_map<String, std::vector<WALPtr>> wals;
     mutable std::unordered_map<String, std::atomic_uint64_t> indexes;
 
     Poco::Logger * log;
 };
-}
 }

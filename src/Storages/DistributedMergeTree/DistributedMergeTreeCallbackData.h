@@ -31,7 +31,7 @@ struct DistributedMergeTreeCallbackData
     static std::vector<RecordsSequenceRangesPair> categorizeRecordsAccordingToSequenceRanges(
         const DWAL::RecordPtrs & records,
         const SequenceRanges & sequence_ranges,
-        DWAL::RecordSequenceNumber max_committed_sn);
+        DWAL::RecordSN max_committed_sn);
 
 private:
     bool finishRecovery() const { return missing_sequence_ranges.empty() && recovery_records.empty(); }

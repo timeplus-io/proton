@@ -37,9 +37,9 @@ private:
     BlocksWithShard doShardBlock(const Block & block) const;
 
 private:
-    void writeCallback(const DWAL::WAL::AppendResult & result);
+    void writeCallback(const DWAL::AppendResult & result);
 
-    static void writeCallback(const DWAL::WAL::AppendResult & result, void * data);
+    static void writeCallback(const DWAL::AppendResult & result, void * data);
 
 private:
     StorageDistributedMergeTree & storage;

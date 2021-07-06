@@ -9,12 +9,10 @@
 #include <vector>
 #include <unordered_map>
 
-namespace DB
-{
 namespace DWAL
 {
 
-using RecordSequenceNumber = int64_t;
+using RecordSN = int64_t;
 
 struct Record
 {
@@ -26,12 +24,13 @@ struct Record
 
     std::unordered_map<std::string, std::string> headers;
 
-    Block block;
+    DB::Block block;
 
     /// fields which are not on the wire
     uint64_t partition_key = 0;
 
-    RecordSequenceNumber sn = -1;
+    String topic;
+    RecordSN sn = -1;
 
     bool empty() const { return block.rows() == 0; }
 
@@ -54,12 +53,11 @@ struct Record
     static ByteVector write(const Record & record);
     static std::shared_ptr<Record> read(const char * data, size_t size);
 
-    Record(OpCode op_code_, Block && block_) : op_code(op_code_), block(std::move(block_)) { }
-    explicit Record(RecordSequenceNumber sn_) : sn(sn_) { }
+    Record(OpCode op_code_, DB::Block && block_) : op_code(op_code_), block(std::move(block_)) { }
+    explicit Record(RecordSN sn_) : sn(sn_) { }
 };
 
 using Records = std::vector<Record>;
 using RecordPtr = std::shared_ptr<Record>;
 using RecordPtrs = std::vector<RecordPtr>;
-}
 }

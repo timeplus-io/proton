@@ -305,7 +305,7 @@ void MetadataService::startup()
 
     /// Append ctx is cached for multiple threads access
     waitUntilDWalReady(append_ctx);
-    kctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopic(kctx);
+    kctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopicHandle(kctx);
     /// kctx will be moved over to append ctx
     dwal_append_ctx = std::move(kctx);
 

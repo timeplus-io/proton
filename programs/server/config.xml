@@ -1311,7 +1311,7 @@
                 <enable_idempotence>true</enable_idempotence>
                 <queue_buffering_max_messages>100000</queue_buffering_max_messages>
                 <queue_buffering_max_kbytes>1048576</queue_buffering_max_kbytes>
-                <queue_buffering_max_ms>5</queue_buffering_max_ms>
+                <queue_buffering_max_ms>50</queue_buffering_max_ms>
                 <message_send_max_retries>2</message_send_max_retries>
                 <retry_backoff_ms>100</retry_backoff_ms>
                 <compression_codec>snappy</compression_codec>
@@ -1326,9 +1326,13 @@
                 <check_crcs>false</check_crcs>
                 <auto_commit_interval_ms>5000</auto_commit_interval_ms>
                 <fetch_message_max_bytes>1048576</fetch_message_max_bytes>
+                <fetch_wait_max_ms>500</fetch_wait_max_ms>
 
                 <queued_min_messages>1000000</queued_min_messages>
                 <queued_max_messages_kbytes>65536</queued_max_messages_kbytes>
+
+                <session_timeout_ms>10000</session_timeout_ms>
+                <max_poll_interval_ms>30000</max_poll_interval_ms>
 
                 <internal_pool_size>2</internal_pool_size>
             </kafka>

@@ -4,8 +4,8 @@
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/KafkaWALCommon.h>
 #include <DistributedWriteAheadLog/WALPool.h>
-#include <DistributedWriteAheadLog/Name.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -825,7 +825,7 @@ size_t StorageDistributedMergeTree::getRandomShardIndex()
     return std::uniform_int_distribution<size_t>(0, shards - 1)(rng);
 }
 
-DWAL::RecordSequenceNumber StorageDistributedMergeTree::lastSequenceNumber() const
+DWAL::RecordSN StorageDistributedMergeTree::lastSN() const
 {
     std::lock_guard lock(sns_mutex);
     return last_sn;
@@ -843,7 +843,7 @@ StorageDistributedMergeTree::WriteCallbackData * StorageDistributedMergeTree::wr
 }
 
 void StorageDistributedMergeTree::writeCallback(
-    const DWAL::WAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
+    const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
 {
     if (result.err)
     {
@@ -856,7 +856,7 @@ void StorageDistributedMergeTree::writeCallback(
     }
 }
 
-void StorageDistributedMergeTree::writeCallback(const DWAL::WAL::AppendResult & result, void * data)
+void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & result, void * data)
 {
     auto pdata = static_cast<WriteCallbackData *>(data);
     pdata->storage->writeCallback(result, pdata->query_status_poll_id, pdata->block_id);
@@ -896,7 +896,7 @@ Int64 StorageDistributedMergeTree::maxCommittedSN() const
     return storage->maxCommittedSN();
 }
 
-void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSequenceNumber commit_sn)
+void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSN commit_sn)
 {
     try
     {
@@ -921,7 +921,7 @@ void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSequenceNumber commi
     }
 }
 
-void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSequenceNumber commit_sn, std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSN commit_sn, std::any & dwal_consume_ctx)
 {
     /// Commit sequence number to dwal
     try
@@ -949,7 +949,7 @@ void StorageDistributedMergeTree::commitSN(std::any & dwal_consume_ctx)
     size_t outstanding_sns_size = 0;
     size_t local_committed_sns_size = 0;
 
-    DWAL::RecordSequenceNumber commit_sn = -1;
+    DWAL::RecordSN commit_sn = -1;
     Int64 outstanding_commits = 0;
     {
         std::lock_guard lock(sns_mutex);
@@ -1215,7 +1215,7 @@ void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRange
     assert(missing_sequence_ranges.empty());
 }
 
-DWAL::RecordSequenceNumber StorageDistributedMergeTree::sequenceNumberLoaded() const
+DWAL::RecordSN StorageDistributedMergeTree::snLoaded() const
 {
     std::lock_guard lock(sns_mutex);
     if (local_sn >= 0)
@@ -1238,7 +1238,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
 
     auto ssettings = storage_settings.get();
 
-    DWAL::KafkaWALContext consume_ctx{topic(getStorageID()), shard, sequenceNumberLoaded()};
+    DWAL::KafkaWALContext consume_ctx{topic(getStorageID()), shard, snLoaded()};
     consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
     consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
     consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
@@ -1286,8 +1286,8 @@ void StorageDistributedMergeTree::backgroundConsumer()
             auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(now - last_commit_ts).count() >= 5)
             {
-                DWAL::RecordSequenceNumber remote_commit_sn = -1;
-                DWAL::RecordSequenceNumber commit_sn = -1;
+                DWAL::RecordSN remote_commit_sn = -1;
+                DWAL::RecordSN commit_sn = -1;
                 {
                     std::lock_guard lock(sns_mutex);
                     if (last_sn != local_sn)
@@ -1328,7 +1328,7 @@ void StorageDistributedMergeTree::backgroundConsumer()
     /// When tearing down, commit whatever it has
     commitSN(dwal_consume_ctx);
 
-    DWAL::RecordSequenceNumber commit_sn = -1;
+    DWAL::RecordSN commit_sn = -1;
     {
         std::lock_guard lock(sns_mutex);
         if (last_sn != local_sn)
@@ -1386,7 +1386,7 @@ void StorageDistributedMergeTree::initWal()
     DWAL::KafkaWALContext append_ctx{topic(getStorageID())};
     append_ctx.request_required_acks = dwal_request_required_acks;
     append_ctx.request_timeout_ms = dwal_request_timeout_ms;
-    append_ctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopic(append_ctx);
+    append_ctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopicHandle(append_ctx);
     dwal_append_ctx = append_ctx;
 }
 }

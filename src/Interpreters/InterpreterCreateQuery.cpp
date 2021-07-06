@@ -38,10 +38,6 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 
-#include <DistributedWriteAheadLog/WAL.h>
-#include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/WALPool.h>
-
 #include <Interpreters/Context.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/executeQuery.h>

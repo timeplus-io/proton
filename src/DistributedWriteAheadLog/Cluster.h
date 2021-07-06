@@ -4,8 +4,6 @@
 #include <string>
 #include <vector>
 
-namespace DB
-{
 namespace DWAL
 {
 
@@ -38,5 +36,4 @@ struct Cluster
 };
 
 using ClusterPtr = std::shared_ptr<Cluster>;
-}
 }
