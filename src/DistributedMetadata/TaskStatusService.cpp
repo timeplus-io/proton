@@ -239,7 +239,8 @@ bool TaskStatusService::tableExists() const
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     /// Try topic name
-    return dwal->describe(DWAL::escapeDWalName("system", "tasks"), const_cast<std::any &>(dwal_append_ctx)) == ErrorCodes::OK;
+    auto result = dwal->describe(DWAL::escapeDWalName("system", "tasks"), const_cast<std::any &>(dwal_append_ctx));
+    return result.err == ErrorCodes::OK;
 }
 
 TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const

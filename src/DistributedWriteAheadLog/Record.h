@@ -19,17 +19,19 @@ struct Record
     inline const static std::string IDEMPOTENT_KEY = "_idem";
     constexpr static uint8_t VERSION = 1;
 
-    /// fields on the wire
+    /// Fields on the wire
     OpCode op_code = OpCode::UNKNOWN;
 
     std::unordered_map<std::string, std::string> headers;
 
     DB::Block block;
 
-    /// fields which are not on the wire
-    uint64_t partition_key = 0;
+    /// Fields which are not on the wire
 
     String topic;
+
+    uint64_t partition_key = 0;
+
     RecordSN sn = -1;
 
     bool empty() const { return block.rows() == 0; }

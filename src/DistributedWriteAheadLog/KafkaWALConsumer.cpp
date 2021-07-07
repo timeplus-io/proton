@@ -119,23 +119,8 @@ void KafkaWALConsumer::initHandle()
     rd_kafka_poll_set_consumer(consumer_handle.get());
 }
 
-int32_t KafkaWALConsumer::addConsumptions(const TopicPartionOffsets & partitions_)
+int32_t KafkaWALConsumer::addSubscriptions(const TopicPartitionOffsets & partitions_)
 {
-    std::lock_guard lock{partitions_mutex};
-
-    for (const auto & partition : partitions_)
-    {
-        auto iter = partitions.find(partition.topic);
-        if (iter != partitions.end())
-        {
-            auto pos = std::find(iter->second.begin(), iter->second.end(), partition.partition);
-            if (pos != iter->second.end())
-            {
-                return DB::ErrorCodes::BAD_ARGUMENTS;
-            }
-        }
-    }
-
     auto topic_partitions = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>(
         rd_kafka_topic_partition_list_new(partitions_.size()), rd_kafka_topic_partition_list_destroy);
 
@@ -155,32 +140,11 @@ int32_t KafkaWALConsumer::addConsumptions(const TopicPartionOffsets & partitions
         return ret_code;
     }
 
-    for (const auto & partition : partitions_)
-    {
-        partitions[partition.topic].push_back(partition.partition);
-    }
     return DB::ErrorCodes::OK;
 }
 
-int32_t KafkaWALConsumer::removeConsumptions(const TopicPartionOffsets & partitions_)
+int32_t KafkaWALConsumer::removeSubscriptions(const TopicPartitionOffsets & partitions_)
 {
-    std::lock_guard lock{partitions_mutex};
-
-    for (const auto & partition : partitions_)
-    {
-        auto iter = partitions.find(partition.topic);
-        if (iter == partitions.end())
-        {
-            return 1;
-        }
-
-        auto pos = std::find(iter->second.begin(), iter->second.end(), partition.partition);
-        if (pos == iter->second.end())
-        {
-            return DB::ErrorCodes::BAD_ARGUMENTS;
-        }
-    }
-
     auto topic_partitions = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>(
         rd_kafka_topic_partition_list_new(partitions_.size()), rd_kafka_topic_partition_list_destroy);
 
@@ -197,21 +161,6 @@ int32_t KafkaWALConsumer::removeConsumptions(const TopicPartionOffsets & partiti
         auto ret_code = mapErrorCode(rd_kafka_error_code(err), rd_kafka_error_is_retriable(err));
         rd_kafka_error_destroy(err);
         return ret_code;
-    }
-
-    for (const auto & partition : partitions_)
-    {
-        auto iter = partitions.find(partition.topic);
-        assert(iter != partitions.end());
-
-        auto pos = std::find(iter->second.begin(), iter->second.end(), partition.partition);
-        assert(pos != iter->second.end());
-        iter->second.erase(pos);
-
-        if (iter->second.empty())
-        {
-            partitions.erase(iter);
-        }
     }
 
     return DB::ErrorCodes::OK;
@@ -252,7 +201,7 @@ ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms)
         }
 
         auto now = DB::MonotonicMilliseconds::now();
-        if (now <= abs_time)
+        if (now >= abs_time)
         {
             /// Timed up
             break;
@@ -286,7 +235,7 @@ int32_t KafkaWALConsumer::stopConsume()
     return DB::ErrorCodes::OK;
 }
 
-int32_t KafkaWALConsumer::commit(const TopicPartionOffsets & tpos)
+int32_t KafkaWALConsumer::commit(const TopicPartitionOffsets & tpos)
 {
     std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *> topic_partition_list(
         rd_kafka_topic_partition_list_new(tpos.size()), rd_kafka_topic_partition_list_destroy);

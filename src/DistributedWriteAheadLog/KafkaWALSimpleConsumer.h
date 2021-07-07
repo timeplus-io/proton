@@ -6,6 +6,8 @@
 
 #include <Common/ThreadPool.h>
 
+#include <boost/noncopyable.hpp>
+
 #include <memory>
 #include <atomic>
 
@@ -20,7 +22,7 @@ struct KafkaWALContext;
 /// KafkaWALSimpleConsumer consumes data from a specific single partition of a topic
 /// It is designed on purpose that each SimpleConsumer will have dedicated thread
 /// consuming the messages
-class KafkaWALSimpleConsumer final
+class KafkaWALSimpleConsumer final: private boost::noncopyable
 {
 public:
     explicit KafkaWALSimpleConsumer(std::unique_ptr<KafkaWALSettings> settings_);

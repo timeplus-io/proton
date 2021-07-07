@@ -228,6 +228,7 @@ void KafkaWAL::shutdown()
 {
     if (stopped.test_and_set())
     {
+        LOG_ERROR(log, "Already shutdown");
         return;
     }
 
@@ -581,6 +582,41 @@ int32_t KafkaWAL::remove(const String & name, std::any & ctx)
         "delete");
 }
 
+DescribeResult KafkaWAL::describe(const String & name, std::any &) const
+{
+    std::shared_ptr<rd_kafka_topic_t> topic_handle{
+        rd_kafka_topic_new(producer_handle.get(), name.c_str(), nullptr), rd_kafka_topic_destroy};
+
+    if (!topic_handle)
+    {
+        LOG_ERROR(log, "Failed to describe topic, can't create topic handle");
+        return {.err = DB::ErrorCodes::UNKNOWN_EXCEPTION};
+    }
+
+    const struct rd_kafka_metadata * metadata = nullptr;
+
+    auto err = rd_kafka_metadata(producer_handle.get(), 0, topic_handle.get(), &metadata, 5000);
+    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+    {
+        LOG_ERROR(log, "Failed to describe topic, error={}", rd_kafka_err2str(err));
+        return {.err = mapErrorCode(err)};
+    }
+
+    for (int32_t i = 0 ; i < metadata->topic_cnt; ++i)
+    {
+        if (name == metadata->topics[i].topic)
+        {
+            auto partition_cnt = metadata->topics[i].partition_cnt;
+            rd_kafka_metadata_destroy(metadata);
+            return {.err = DB::ErrorCodes::OK, .ctx = partition_cnt};
+        }
+    }
+
+    rd_kafka_metadata_destroy(metadata);
+    return {.err = DB::ErrorCodes::RESOURCE_NOT_FOUND};
+}
+
+#if 0
 int32_t KafkaWAL::describe(const String & name, std::any & ctx) const
 {
     assert(ctx.has_value());
@@ -602,7 +638,7 @@ int32_t KafkaWAL::describe(const String & name, std::any & ctx) const
     };
 
     auto validate = [this, &name](const rd_kafka_event_t * event) -> int32_t {
-        /// validate result resources
+        /// Validate result resources
         size_t cnt = 0;
         auto rconfigs = rd_kafka_DescribeConfigs_result_resources(event, &cnt);
         if (cnt != 1 || rconfigs == nullptr)
@@ -629,6 +665,7 @@ int32_t KafkaWAL::describe(const String & name, std::any & ctx) const
             return mapErrorCode(err);
         }
 
+        cnt = 0;
         rd_kafka_ConfigResource_configs(rconfigs[0], &cnt);
         if (cnt == 0)
         {
@@ -641,6 +678,7 @@ int32_t KafkaWAL::describe(const String & name, std::any & ctx) const
     return doTopic(
         name, describeTopics, rd_kafka_event_DescribeConfigs_result, nullptr, validate, producer_handle.get(), 4000, log, "describe");
 }
+#endif
 
 ClusterPtr KafkaWAL::cluster(std::any & ctx) const
 {

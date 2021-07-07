@@ -68,7 +68,7 @@ public:
     int32_t remove(const std::string & name, std::any & ctx) override;
 
     /// `ctx` is KafkaWALContext
-    int32_t describe(const std::string & name, std::any & ctx) const override;
+    DescribeResult describe(const std::string & name, std::any & ctx) const override;
 
 private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);

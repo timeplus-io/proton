@@ -11,7 +11,7 @@ struct AppendResult
     RecordSN sn = -1;
 
     /// 0 if success, otherwise non-zero
-    Int32 err = 0;
+    int32_t err = 0;
 
     /// Other context
     std::any ctx;
@@ -19,10 +19,18 @@ struct AppendResult
 
 struct ConsumeResult
 {
-    Int32 err = 0;
+    int32_t err = 0;
     RecordPtrs records;
 };
 
 using AppendCallback = void (*)(const AppendResult & result, void * data);
 using ConsumeCallback = void (*)(RecordPtrs records, void * data);
+
+struct DescribeResult
+{
+    int32_t err = 0;
+
+    /// Other context
+    std::any ctx;
+};
 }

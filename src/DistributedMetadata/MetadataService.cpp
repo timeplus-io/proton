@@ -124,7 +124,7 @@ void MetadataService::waitUntilDWalReady(std::any & ctx)
     auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
     while (1)
     {
-        if (dwal->describe(kctx.topic, ctx) == ErrorCodes::OK)
+        if (dwal->describe(kctx.topic, ctx).err == ErrorCodes::OK)
         {
             return;
         }
@@ -140,7 +140,7 @@ void MetadataService::waitUntilDWalReady(std::any & ctx)
 void MetadataService::doCreateDWal(std::any & ctx)
 {
     auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
-    if (dwal->describe(kctx.topic, ctx) == ErrorCodes::OK)
+    if (dwal->describe(kctx.topic, ctx).err == ErrorCodes::OK)
     {
         return;
     }
