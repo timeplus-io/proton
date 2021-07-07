@@ -1321,7 +1321,6 @@
                 <message_delivery_sync_poll_ms>10</message_delivery_sync_poll_ms>
 
                 <group_id>daisy</group_id>
-                <message_max_bytes>1000000</message_max_bytes>
                 <enable_auto_commit>true</enable_auto_commit>
                 <check_crcs>false</check_crcs>
                 <auto_commit_interval_ms>5000</auto_commit_interval_ms>
