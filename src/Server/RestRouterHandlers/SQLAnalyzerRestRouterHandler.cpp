@@ -61,6 +61,7 @@ String buildResponse(
     const String & query_type,
     const QueryProfileMatcher::Data & query_profile,
     const Block & sampleBlock,
+    const bool hasAggr,
     const std::set<std::tuple<String, String, bool, String, String>> & required_columns)
 {
     /// {
@@ -85,7 +86,7 @@ String buildResponse(
     result->set("original_query", original_query);
     result->set("rewritten_query", rewritten_query);
     result->set("query_type", query_type);
-    result->set("has_aggr", query_profile.has_aggr);
+    result->set("has_aggr", hasAggr);
     result->set("has_table_join", query_profile.has_table_join);
     result->set("has_union", query_profile.has_union);
     result->set("has_subquery", query_profile.has_subquery);
@@ -229,16 +230,18 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
 
         /// FIXME: CREATE TABLE ... AS SELECT ...
         /// FIXME: INSERT INTO TABLE ... SELECT ...
+        bool hasAggr = false;
         if (ast->as<ASTSelectWithUnionQuery>())
         {
             /// Interpreter will trigger ast analysis. One side effect is collecting
             /// required columns during the analysis process
             InterpreterSelectWithUnionQuery interpreter(ast, query_context, SelectQueryOptions());
+            hasAggr = interpreter.hasAggregation();
             block = interpreter.getSampleBlock();
         }
 
         auto query_type = queryType(ast);
-        return {buildResponse(query, rewritten_query, query_type, profile, block, query_context->requiredColumns()), HTTPResponse::HTTP_OK};
+        return {buildResponse(query, rewritten_query, query_type, profile, block, hasAggr, query_context->requiredColumns()), HTTPResponse::HTTP_OK};
     }
     else
     {

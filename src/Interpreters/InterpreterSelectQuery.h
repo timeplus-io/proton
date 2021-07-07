@@ -97,7 +97,9 @@ public:
 
     const Names & getRequiredColumns() const { return required_columns; }
 
-    bool hasAggregation() const { return query_analyzer->hasAggregation(); }
+    /// Daisy : starts
+    bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
+    /// Daisy : ends
 
     static void addEmptySourceToQueryPlan(
         QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_);

@@ -29,14 +29,6 @@ void QueryProfileMatcher::visit(ASTPtr & ast, Data & data)
         return;
     }
 
-    if (auto * t = ast->as<ASTSelectQuery>())
-    {
-        if (t->groupBy())
-            data.has_aggr = true;
-
-        return;
-    }
-
     if (ast->as<ASTSubquery>())
     {
         data.has_subquery = true;
