@@ -41,7 +41,7 @@ public:
     /// and sends back HTTP `500` to clients
     void execute(HTTPServerRequest & request, HTTPServerResponse & response);
 
-    const String & getPathParameter(const String & name, const String & default_value = "") const
+    String getPathParameter(const String & name, const String & default_value = "") const
     {
         auto iter = path_parameters.find(name);
         if (iter != path_parameters.end())
@@ -61,7 +61,7 @@ public:
 
     void setPathParameter(const String & name, const String & value) { path_parameters[name] = value; }
 
-    const String & getQueryParameter(const String & name, const String & default_value = "") const
+    String getQueryParameter(const String & name, const String & default_value = "") const
     {
         return query_parameters->get(name, default_value);
     }
