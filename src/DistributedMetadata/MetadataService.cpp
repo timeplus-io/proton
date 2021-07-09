@@ -1,7 +1,6 @@
 #include "MetadataService.h"
 
-#include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/WALPool.h>
+#include <DistributedWriteAheadLog/KafkaWALPool.h>
 #include <Interpreters/Context.h>
 #include <Common/setThreadName.h>
 #include <common/getFQDNOrHostName.h>
@@ -34,7 +33,9 @@ namespace
 
 MetadataService::MetadataService(const ContextPtr & global_context_, const String & service_name)
     : global_context(global_context_)
-    , dwal(DWAL::WALPool::instance(global_context_).getMeta())
+    , dwal_append_ctx("")
+    , dwal_consume_ctx("")
+    , dwal(DWAL::KafkaWALPool::instance(global_context_).getMeta())
     , log(&Poco::Logger::get(service_name))
 {
 }
@@ -64,9 +65,9 @@ void MetadataService::shutdown()
 }
 
 
-std::vector<DWAL::ClusterPtr> MetadataService::clusters()
+std::vector<DWAL::KafkaWALClusterPtr> MetadataService::clusters()
 {
-    return DWAL::WALPool::instance(global_context).clusters(dwal_append_ctx);
+    return DWAL::KafkaWALPool::instance(global_context).clusters(dwal_append_ctx);
 }
 
 void MetadataService::setupRecordHeaders(DWAL::Record & record, const String & version) const
@@ -92,78 +93,75 @@ void MetadataService::initPorts()
     tcp_port = global_context->getConfigRef().getInt("tcp_port", -1);
 }
 
-void MetadataService::doDeleteDWal(std::any & ctx)
+void MetadataService::doDeleteDWal(const DWAL::KafkaWALContext & ctx) const
 {
-    auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
-
     int retries = 3;
     while (retries--)
     {
-        auto err = dwal->remove(kctx.topic, ctx);
+        auto err = dwal->remove(ctx.topic, ctx);
         if (err == ErrorCodes::OK)
         {
             /// FIXME, if the error is fatal. throws
-            LOG_INFO(log, "Successfully deleted topic={}", kctx.topic);
+            LOG_INFO(log, "Successfully deleted topic={}", ctx.topic);
             break;
         }
         else if (err == ErrorCodes::RESOURCE_NOT_FOUND)
         {
-            LOG_INFO(log, "Topic={} not exists", kctx.topic);
+            LOG_INFO(log, "Topic={} not exists", ctx.topic);
             break;
         }
         else
         {
-            LOG_INFO(log, "Failed to delete topic={}, will retry ...", kctx.topic);
+            LOG_INFO(log, "Failed to delete topic={}, will retry ...", ctx.topic);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     }
 }
 
-void MetadataService::waitUntilDWalReady(std::any & ctx)
+void MetadataService::waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) const
 {
-    auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
     while (1)
     {
-        if (dwal->describe(kctx.topic, ctx).err == ErrorCodes::OK)
+        if (dwal->describe(ctx.topic, ctx).err == ErrorCodes::OK)
         {
             return;
         }
         else
         {
-            LOG_INFO(log, "Wait for topic={} to be ready...", kctx.topic);
+            LOG_INFO(log, "Wait for topic={} to be ready...", ctx.topic);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     }
 }
 
 /// Try indefinitely to create dwal
-void MetadataService::doCreateDWal(std::any & ctx)
+void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
 {
-    auto kctx = std::any_cast<DWAL::KafkaWALContext &>(ctx);
-    if (dwal->describe(kctx.topic, ctx).err == ErrorCodes::OK)
+    if (dwal->describe(ctx.topic, ctx).err == ErrorCodes::OK)
     {
+        LOG_INFO(log, "Found topic={} already exists", ctx.topic);
         return;
     }
 
-    LOG_INFO(log, "Didn't find topic={}, create one with settings={}", kctx.topic, kctx.string());
+    LOG_INFO(log, "Didn't find topic={}, create one with settings={}", ctx.topic, ctx.string());
 
     while (!stopped.test())
     {
-        auto err = dwal->create(kctx.topic, ctx);
+        auto err = dwal->create(ctx.topic, ctx);
         if (err == ErrorCodes::OK)
         {
             /// FIXME, if the error is fatal. throws
-            LOG_INFO(log, "Successfully created topic={}", kctx.topic);
+            LOG_INFO(log, "Successfully created topic={}", ctx.topic);
             break;
         }
         else if (err == ErrorCodes::RESOURCE_ALREADY_EXISTS)
         {
-            LOG_INFO(log, "Topic={} already exists", kctx.topic);
+            LOG_INFO(log, "Topic={} already exists", ctx.topic);
             break;
         }
         else
         {
-            LOG_INFO(log, "Failed to create topic={}, will retry indefinitely ...", kctx.topic);
+            LOG_INFO(log, "Failed to create topic={}, will retry indefinitely ...", ctx.topic);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     }
@@ -246,6 +244,7 @@ void MetadataService::startup()
 
     String topic = config.getString(conf.key_prefix + NAME_KEY , conf.default_name);
     auto replication_factor = config.getInt(conf.key_prefix + REPLICATION_FACTOR_KEY, 1);
+
     DWAL::KafkaWALContext kctx{topic, 1, replication_factor, cleanupPolicy()};
     /// Topic settings
     kctx.retention_ms = config.getInt(conf.key_prefix + DATA_RETENTION_KEY, conf.default_data_retention);
@@ -268,8 +267,6 @@ void MetadataService::startup()
     kctx.request_required_acks = conf.request_required_acks;
     kctx.request_timeout_ms = conf.request_timeout_ms;
 
-    std::any append_ctx = kctx;
-
     const String & this_role = role();
     for (const auto & key : role_keys)
     {
@@ -284,12 +281,13 @@ void MetadataService::startup()
             LOG_INFO(log, "Detects the current log has `{}` role", this_role);
 
             /// First try to create corresponding dwal
-            doCreateDWal(append_ctx);
+            doCreateDWal(kctx);
 
             /// Consumer settings
             kctx.auto_offset_reset = conf.auto_offset_reset;
             kctx.offset = conf.initial_default_offset;
             dwal_consume_ctx = kctx;
+            dwal->initConsumerTopicHandle(dwal_consume_ctx);
 
             pool.emplace(1);
             pool->scheduleOrThrowOnError([this] { tailingRecords(); });
@@ -303,11 +301,11 @@ void MetadataService::startup()
 
     initPorts();
 
-    /// Append ctx is cached for multiple threads access
-    waitUntilDWalReady(append_ctx);
-    kctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopicHandle(kctx);
-    /// kctx will be moved over to append ctx
+    waitUntilDWalReady(kctx);
+
+    /// Append handle is cached for multiple threads access
     dwal_append_ctx = std::move(kctx);
+    dwal->initProducerTopicHandle(dwal_append_ctx);
 
     postStartup();
 }

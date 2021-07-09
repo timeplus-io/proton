@@ -21,6 +21,8 @@ public:
     explicit DDLService(const ContextPtr & glboal_context_);
     virtual ~DDLService() override = default;
 
+    Int32 append(const DWAL::Record & ddl_record) const;
+
 private:
     void processRecords(const DWAL::RecordPtrs & records) override;
     String role() const override { return "ddl"; }

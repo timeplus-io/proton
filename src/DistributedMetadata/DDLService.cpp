@@ -160,6 +160,11 @@ DDLService::DDLService(const ContextPtr & global_context_)
 {
 }
 
+Int32 DDLService::append(const DWAL::Record & ddl_record) const
+{
+    return dwal->append(ddl_record, dwal_append_ctx).err;
+}
+
 MetadataService::ConfigSettings DDLService::configSettings() const
 {
     return {
@@ -281,7 +286,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
         /// then we move to the execution stage
 
         /// Create a DWAL for this table. FIXME: retention_ms
-        std::any ctx{DWAL::KafkaWALContext{DWAL::escapeDWalName(database, table), shards, replication_factor, "delete"}};
+        DWAL::KafkaWALContext ctx{DWAL::escapeDWalName(database, table), shards, replication_factor, "delete"};
         doCreateDWal(ctx);
 
         String hosts_val = record->headers.at("hosts");
@@ -348,8 +353,8 @@ void DDLService::createTable(DWAL::RecordPtr record)
 
         for (auto i = 0; i < MAX_RETRIES; ++i)
         {
-            auto result = dwal->append(*record.get(), dwal_append_ctx);
-            if (result.err == ErrorCodes::OK)
+            auto result = append(*record.get());
+            if (result == ErrorCodes::OK)
             {
                 LOG_INFO(log, "Successfully find placement for create table payload={} placement={}", payload, hosts);
                 progressDDL(query_id, user, payload, "shard replicas placed");
@@ -547,7 +552,7 @@ void DDLService::processRecords(const DWAL::RecordPtrs & records)
                 /// Delete DWAL
                 String database = record->block.getByName("database").column->getDataAt(0).toString();
                 String table = record->block.getByName("table").column->getDataAt(0).toString();
-                std::any ctx{DWAL::KafkaWALContext{DWAL::escapeDWalName(database, table)}};
+                DWAL::KafkaWALContext ctx{DWAL::escapeDWalName(database, table)};
                 doDeleteDWal(ctx);
                 break;
             }

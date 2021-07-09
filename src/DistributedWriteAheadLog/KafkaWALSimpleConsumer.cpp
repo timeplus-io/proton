@@ -105,7 +105,7 @@ void KafkaWALSimpleConsumer::initHandle()
     /// rd_kafka_poll_set_consumer(consumer_handle.get());
 }
 
-void KafkaWALSimpleConsumer::backgroundPoll()
+void KafkaWALSimpleConsumer::backgroundPoll() const
 {
     LOG_INFO(log, "Polling consumer started");
     setThreadName("KWalCPoller");
@@ -124,7 +124,7 @@ void KafkaWALSimpleConsumer::backgroundPoll()
     LOG_INFO(log, "Polling consumer stopped");
 }
 
-std::shared_ptr<rd_kafka_topic_s> KafkaWALSimpleConsumer::initTopicHandle(const KafkaWALContext & ctx)
+void KafkaWALSimpleConsumer::initTopicHandle(KafkaWALContext & ctx) const
 {
     assert(inited.test());
 
@@ -136,14 +136,13 @@ std::shared_ptr<rd_kafka_topic_s> KafkaWALSimpleConsumer::initTopicHandle(const 
         std::make_pair("consume.callback.max.messages", std::to_string(ctx.consume_callback_max_messages)),
     };
 
-    return initRdKafkaTopicHandle(ctx.topic, topic_params, consumer_handle.get(), stats.get());
+    ctx.topic_handle = initRdKafkaTopicHandle(ctx.topic, topic_params, consumer_handle.get(), stats.get());
 }
 
-inline int32_t KafkaWALSimpleConsumer::initTopicHandleIfNecessary(KafkaWALContext & ctx)
+inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALContext & ctx) const
 {
-    if (unlikely(!ctx.topic_handle))
+    if (unlikely(!ctx.topic_consuming_started))
     {
-        ctx.topic_handle = initTopicHandle(ctx);
         /// Always starts from broker stored offset. Since for simple consumer, if we specify a
         // positive offset manually, it will disable auto-commit.
         /// We will filter uneeded messages according to ctx.offset in consume function
@@ -159,14 +158,17 @@ inline int32_t KafkaWALSimpleConsumer::initTopicHandleIfNecessary(KafkaWALContex
 
             return mapErrorCode(rd_kafka_last_error());
         }
+        const_cast<KafkaWALContext &>(ctx).topic_consuming_started = true;
     }
 
     return DB::ErrorCodes::OK;
 }
 
-int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, KafkaWALContext & ctx)
+int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, const KafkaWALContext & ctx) const
 {
-    auto err = initTopicHandleIfNecessary(ctx);
+    assert(ctx.topic_handle);
+
+    auto err = startConsumingIfNotYet(ctx);
     if (err != 0)
     {
         return err;
@@ -178,7 +180,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
         void * data;
 
         RecordPtrs records;
-        KafkaWALContext & ctx;
+        const KafkaWALContext & ctx;
         Poco::Logger * log;
 
         Int64 current_bytes = 0;
@@ -187,7 +189,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
         WrappedData(
             ConsumeCallback callback_,
             void * data_,
-            KafkaWALContext & ctx_,
+            const KafkaWALContext & ctx_,
             Poco::Logger * log_)
             : callback(callback_), data(data_), ctx(ctx_), log(log_)
         {
@@ -303,9 +305,11 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
     return DB::ErrorCodes::OK;
 }
 
-ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms, KafkaWALContext & ctx)
+ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
 {
-    auto err = initTopicHandleIfNecessary(ctx);
+    assert(ctx.topic_handle);
+
+    auto err = startConsumingIfNotYet(ctx);
     if (err != 0)
     {
         return {.err = mapErrorCode(rd_kafka_last_error()), .records = {}};
@@ -366,7 +370,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
     }
 }
 
-int32_t KafkaWALSimpleConsumer::stopConsume(KafkaWALContext & ctx)
+int32_t KafkaWALSimpleConsumer::stopConsume(const KafkaWALContext & ctx) const
 {
     if (!ctx.topic_handle)
     {
@@ -389,11 +393,12 @@ int32_t KafkaWALSimpleConsumer::stopConsume(KafkaWALContext & ctx)
     return DB::ErrorCodes::OK;
 }
 
-int32_t KafkaWALSimpleConsumer::commit(int64_t offset, KafkaWALContext & ctx)
+int32_t KafkaWALSimpleConsumer::commit(int64_t offset, const KafkaWALContext & ctx) const
 {
     if (!ctx.topic_handle)
     {
-        ctx.topic_handle = initTopicHandle(ctx);
+        LOG_ERROR(log, "Didn't init handle for topic={} partition={} yet", ctx.topic, ctx.partition);
+        return DB::ErrorCodes::RESOURCE_NOT_INITED;
     }
 
     LOG_INFO(log, "Stores commit offset={} for topic={} partition={}", offset, ctx.topic, ctx.partition);

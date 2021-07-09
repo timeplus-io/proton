@@ -239,7 +239,7 @@ bool TaskStatusService::tableExists() const
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     /// Try topic name
-    auto result = dwal->describe(DWAL::escapeDWalName("system", "tasks"), const_cast<std::any &>(dwal_append_ctx));
+    auto result = dwal->describe(DWAL::escapeDWalName("system", "tasks"), dwal_append_ctx);
     return result.err == ErrorCodes::OK;
 }
 

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Cluster.h"
+#include "KafkaWAL.h"
+#include "KafkaWALCluster.h"
 #include "KafkaWALConsumerMultiplexer.h"
 #include "KafkaWALSettings.h"
-#include "WAL.h"
 
 #include <Interpreters/Context_fwd.h>
 
@@ -14,21 +14,21 @@ namespace DWAL
 /// Pooling WAL. Singleton
 /// The pool will be initied during system startup and will be read only after that.
 /// So it doesn't hold any mutext in the multithread access env.
-class WALPool : private boost::noncopyable
+class KafkaWALPool : private boost::noncopyable
 {
 public:
-    static WALPool & instance(DB::ContextPtr global_context);
+    static KafkaWALPool & instance(DB::ContextPtr global_context);
 
-    explicit WALPool(DB::ContextPtr global_context);
-    ~WALPool();
+    explicit KafkaWALPool(DB::ContextPtr global_context);
+    ~KafkaWALPool();
 
-    WALPtr get(const std::string & cluster_id) const;
+    KafkaWALPtr get(const std::string & cluster_id) const;
 
-    WALPtr getMeta() const;
+    KafkaWALPtr getMeta() const;
 
     KafkaWALConsumerMultiplexerPtr getOrCreateConsumerMultiplexer(const std::string & cluster_id);
 
-    std::vector<ClusterPtr> clusters(std::any & ctx) const;
+    std::vector<KafkaWALClusterPtr> clusters(const KafkaWALContext & ctx) const;
 
     void startup();
     void shutdown();
@@ -43,8 +43,9 @@ private:
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 
     std::string default_cluster;
-    WALPtr meta_wal;
-    std::unordered_map<String, WALPtrs> wals;
+    KafkaWALPtr meta_wal;
+
+    std::unordered_map<String, KafkaWALPtrs> wals;
     mutable std::unordered_map<String, std::atomic_uint64_t> indexes;
 
     std::unordered_map<String, std::shared_ptr<KafkaWALSettings>> cluster_kafka_settings;

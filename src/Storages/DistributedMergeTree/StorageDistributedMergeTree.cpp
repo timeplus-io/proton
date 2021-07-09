@@ -2,9 +2,8 @@
 #include "DistributedMergeTreeBlockOutputStream.h"
 
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <DistributedWriteAheadLog/KafkaWALCommon.h>
-#include <DistributedWriteAheadLog/WALPool.h>
+#include <DistributedWriteAheadLog/KafkaWALPool.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
@@ -227,6 +226,9 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
+    , topic(DWAL::escapeDWalName(table_id_.getDatabaseName(), table_id_.getTableName()))
+    , dwal_append_ctx(topic, shards_, replication_factor_)
+    , dwal_consume_ctx(topic, shards_, replication_factor_)
     , ingesting_blocks(120)
     , part_commit_pool(context_->getPartCommitPool())
     , rng(randomSeed())
@@ -256,8 +258,6 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
 
         LOG_INFO(log, "Load committed sn={}", sn);
     }
-
-    initWal();
 
     for (Int32 shardId = 0; shardId < shards; ++shardId)
     {
@@ -350,6 +350,8 @@ void StorageDistributedMergeTree::startup()
     {
         LOG_INFO(log, "Starting");
         storage->startup();
+
+        initWal();
 
         if (storage_settings.get()->streaming_storage_subscription_mode.value == "shared")
         {
@@ -919,7 +921,7 @@ void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSN commit_sn)
     try
     {
         storage->commitSN(commit_sn);
-        last_commit_ts = std::chrono::steady_clock::now();
+        last_commit_ts = MonotonicSeconds::now();
 
         LOG_INFO(
             log, "Committed offset={} for shard={} to local file system", commit_sn, shard);
@@ -939,7 +941,7 @@ void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSN commit_sn)
     }
 }
 
-void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSN commit_sn, std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSN commit_sn)
 {
     /// Commit sequence number to dwal
     try
@@ -972,7 +974,7 @@ void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSN commit_sn, std::
     }
 }
 
-void StorageDistributedMergeTree::commitSN(std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commitSN()
 {
     size_t outstanding_sns_size = 0;
     size_t local_committed_sns_size = 0;
@@ -1009,7 +1011,7 @@ void StorageDistributedMergeTree::commitSN(std::any & dwal_consume_ctx)
         commitSNLocal(commit_sn);
     }
 
-    commitSNRemote(commit_sn, dwal_consume_ctx);
+    commitSNRemote(commit_sn);
 }
 
 inline void StorageDistributedMergeTree::progressSequencesWithoutLock(const SequencePair & seq)
@@ -1061,8 +1063,7 @@ void StorageDistributedMergeTree::doCommit(
     Block block,
     SequencePair seq_pair,
     std::shared_ptr<IdempotentKeys> keys,
-    SequenceRanges missing_sequence_ranges,
-    std::any & dwal_consume_ctx)
+    SequenceRanges missing_sequence_ranges)
 {
     {
         std::lock_guard lock(sns_mutex);
@@ -1125,7 +1126,7 @@ void StorageDistributedMergeTree::doCommit(
     assert(!block);
     assert(!keys);
 
-    commitSN(dwal_consume_ctx);
+    commitSN();
 }
 
 void StorageDistributedMergeTree::buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_)
@@ -1186,7 +1187,7 @@ bool StorageDistributedMergeTree::dedupBlock(const DWAL::RecordPtr & record)
     return false;
 }
 
-void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx)
+void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges)
 {
     if (records.empty())
     {
@@ -1236,8 +1237,7 @@ void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRange
         std::move(block),
         std::make_pair(records.front()->sn, records.back()->sn),
         std::move(keys),
-        std::move(missing_sequence_ranges),
-        dwal_consume_ctx);
+        std::move(missing_sequence_ranges));
     assert(!block);
     assert(!keys);
     assert(missing_sequence_ranges.empty());
@@ -1264,13 +1264,6 @@ void StorageDistributedMergeTree::backgroundPoll()
 
     setThreadName("DistMergeTree");
 
-    auto ssettings = storage_settings.get();
-
-    DWAL::KafkaWALContext consume_ctx{topic, shard, snLoaded()};
-    consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
-    consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
-    consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
-    consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
     const auto & missing_sequence_ranges = storage->missingSequenceRanges();
 
     LOG_INFO(
@@ -1279,15 +1272,13 @@ void StorageDistributedMergeTree::backgroundPoll()
         "distributed_flush_threshold_count={} "
         "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
         shard,
-        consume_ctx.offset,
-        consume_ctx.consume_callback_timeout_ms,
-        consume_ctx.consume_callback_max_rows,
-        consume_ctx.consume_callback_max_bytes,
+        dwal_consume_ctx.offset,
+        dwal_consume_ctx.consume_callback_timeout_ms,
+        dwal_consume_ctx.consume_callback_max_rows,
+        dwal_consume_ctx.consume_callback_max_bytes,
         sequenceRangesToString(missing_sequence_ranges));
 
-    std::any dwal_consume_ctx{consume_ctx};
-
-    callback_data = std::make_unique<DistributedMergeTreeCallbackData>(this, missing_sequence_ranges, dwal_consume_ctx);
+    callback_data = std::make_unique<DistributedMergeTreeCallbackData>(this, missing_sequence_ranges);
 
     while (!stopped.test())
     {
@@ -1303,10 +1294,9 @@ void StorageDistributedMergeTree::backgroundPoll()
 
             /// Check if we have something to commit
             /// Every 10 seconds, flush the local file system checkpoint
-            auto now = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - last_commit_ts).count() >= 10)
+            if (MonotonicSeconds::now() - last_commit_ts >= 10)
             {
-                periodicallyCommit(dwal_consume_ctx);
+                periodicallyCommit();
             }
         }
         catch (...)
@@ -1321,12 +1311,12 @@ void StorageDistributedMergeTree::backgroundPoll()
     callback_data->wait();
 
     /// When tearing down, commit whatever it has
-    finalCommit(dwal_consume_ctx);
+    finalCommit();
 }
 
-inline void StorageDistributedMergeTree::finalCommit(std::any & ctx)
+inline void StorageDistributedMergeTree::finalCommit()
 {
-    commitSN(ctx);
+    commitSN();
 
     DWAL::RecordSN commit_sn = -1;
     {
@@ -1343,7 +1333,7 @@ inline void StorageDistributedMergeTree::finalCommit(std::any & ctx)
     }
 }
 
-inline void StorageDistributedMergeTree::periodicallyCommit(std::any & ctx)
+inline void StorageDistributedMergeTree::periodicallyCommit()
 {
     DWAL::RecordSN remote_commit_sn = -1;
     DWAL::RecordSN commit_sn = -1;
@@ -1368,9 +1358,9 @@ inline void StorageDistributedMergeTree::periodicallyCommit(std::any & ctx)
 
     if (remote_commit_sn >= 0)
     {
-        commitSNRemote(remote_commit_sn, ctx);
+        commitSNRemote(remote_commit_sn);
     }
-    last_commit_ts = std::chrono::steady_clock::now();
+    last_commit_ts = MonotonicSeconds::now();
 }
 
 void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, void * data)
@@ -1379,7 +1369,7 @@ void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, void
 
     if (records.empty())
     {
-        cdata->storage->periodicallyCommit(cdata->storage->dwal_append_ctx);
+        cdata->storage->periodicallyCommit();
         return;
     }
 
@@ -1389,10 +1379,10 @@ void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, void
 void StorageDistributedMergeTree::addSubscription()
 {
     const auto & missing_sequence_ranges = storage->missingSequenceRanges();
-    callback_data = std::make_unique<DistributedMergeTreeCallbackData>(this, missing_sequence_ranges, dwal_append_ctx);
+    callback_data = std::make_unique<DistributedMergeTreeCallbackData>(this, missing_sequence_ranges);
 
     const auto & cluster_id = storage_settings.get()->streaming_storage_cluster_id.value;
-    multiplexer = DWAL::WALPool::instance(getContext()).getOrCreateConsumerMultiplexer(cluster_id);
+    multiplexer = DWAL::KafkaWALPool::instance(getContext()).getOrCreateConsumerMultiplexer(cluster_id);
 
     DWAL::TopicPartitionOffset tpo{topic, shard, snLoaded()};
     auto res = multiplexer->addSubscription(tpo, &StorageDistributedMergeTree::consumeCallback, callback_data.get());
@@ -1437,7 +1427,7 @@ void StorageDistributedMergeTree::removeSubscription()
     }
     LOG_INFO(log, "Removed subscription for shard={}", shard);
 
-    finalCommit(dwal_append_ctx);
+    finalCommit();
 }
 
 void StorageDistributedMergeTree::initWal()
@@ -1470,16 +1460,23 @@ void StorageDistributedMergeTree::initWal()
     }
 
     shard = ssettings->shard.value;
-    topic = DWAL::escapeDWalName(getStorageID().getDatabaseName(), getStorageID().getTableName());
 
-    dwal = DWAL::WALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
+    dwal = DWAL::KafkaWALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
 
+    /// Init consume context
+    dwal_consume_ctx.partition = shard;
+    dwal_consume_ctx.offset = snLoaded();
+    dwal_consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
+    dwal_consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
+    dwal_consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
+    dwal_consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
+    dwal->initConsumerTopicHandle(dwal_consume_ctx);
+
+    /// Init produce context
     /// Cached ctx, reused by append. Multiple threads are accessing append context
     /// since librdkafka topic handle is thread safe, so we are good
-    DWAL::KafkaWALContext append_ctx{topic};
-    append_ctx.request_required_acks = dwal_request_required_acks;
-    append_ctx.request_timeout_ms = dwal_request_timeout_ms;
-    append_ctx.topic_handle = static_cast<DWAL::KafkaWAL *>(dwal.get())->initProducerTopicHandle(append_ctx);
-    dwal_append_ctx = append_ctx;
+    dwal_append_ctx.request_required_acks = dwal_request_required_acks;
+    dwal_append_ctx.request_timeout_ms = dwal_request_timeout_ms;
+    dwal->initProducerTopicHandle(dwal_append_ctx);
 }
 }

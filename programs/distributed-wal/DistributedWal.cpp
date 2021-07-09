@@ -11,7 +11,6 @@
 #include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
 #include <DistributedWriteAheadLog/KafkaWALContext.h>
 #include <DistributedWriteAheadLog/KafkaWALSettings.h>
-#include <DistributedWriteAheadLog/WAL.h>
 #include <Common/TerminalSize.h>
 #include <Common/ThreadPool.h>
 
@@ -544,16 +543,14 @@ String calculateFileName(const BenchmarkSettings & settings)
     return filename;
 }
 
-using DWalPtr = shared_ptr<KafkaWAL>;
-using DWalPtrs = vector<DWalPtr>;
 using ResultQueue = vector<Int32>;
 using ResultQueues = vector<ResultQueue>;
 using TimePoint = chrono::time_point<chrono::steady_clock>;
 using RecordContainer = unordered_map<UInt64, pair<shared_ptr<DWAL::Record>, TimePoint>>;
 
-DWalPtrs createDWals(const BenchmarkSettings & bench_settings, Int32 size)
+KafkaWALPtrs createDWals(const BenchmarkSettings & bench_settings, Int32 size)
 {
-    DWalPtrs wals;
+    KafkaWALPtrs wals;
     wals.reserve(size);
     for (Int32 i = 0; i < size; ++i)
     {
@@ -586,7 +583,7 @@ struct Data
     }
 };
 
-void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
+void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
 {
     auto callback = [](const AppendResult & result, void * data) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         Data * d = static_cast<Data *>(data);
@@ -616,9 +613,8 @@ void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex
     Int32 failed = 0;
     Int32 total = 0;
 
-    KafkaWALContext pctx{bench_settings.producer_settings.topic};
-    pctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
-    any ctx{pctx};
+    KafkaWALContext ctx{bench_settings.producer_settings.topic};
+    ctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
 
     auto result = wal->describe(bench_settings.producer_settings.topic, ctx);
     if (result.err)
@@ -627,15 +623,13 @@ void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex
         return;
     }
 
-    auto partitions = any_cast<int32_t>(result.ctx);
-
     mutex cmutex;
     RecordContainer inflights;
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
         auto record = make_shared<DWAL::Record>(OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size));
-        record->partition_key = i % partitions;
+        record->partition_key = i % result.partitions;
         record->headers["_idem"] = to_string(i);
 
         unique_ptr<Data> data{new Data(cmutex, inflights, result_queue, total, failed, i)};
@@ -685,13 +679,12 @@ void ingestAsync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex
     }
 }
 
-void ingestSync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
+void ingestSync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
 {
     Int32 failed = 0;
 
-    KafkaWALContext pctx{bench_settings.producer_settings.topic};
-    pctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
-    any ctx{pctx};
+    KafkaWALContext ctx{bench_settings.producer_settings.topic};
+    ctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
 
     auto dresult = wal->describe(bench_settings.producer_settings.topic, ctx);
     if (dresult.err)
@@ -700,12 +693,10 @@ void ingestSync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex,
         return;
     }
 
-    auto partitions = any_cast<int32_t>(dresult.ctx);
-
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
         Record record{OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size)};
-        record.partition_key = i % partitions;
+        record.partition_key = i % dresult.partitions;
         record.headers["_idem"] = to_string(i);
 
         auto start = chrono::steady_clock::now();
@@ -718,7 +709,7 @@ void ingestSync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex,
 
         auto latency = chrono::duration_cast<chrono::microseconds>(std::chrono::steady_clock::now() - start).count();
         result_queue.push_back(latency);
-        /// cout << "producing record with sequence number : " << result.sn << " (partition, partition_key)=" << any_cast<Int32>(result.ctx) << ":" << i << "\n";
+        /// cout << "producing record with sequence number : " << result.sn << " (partition, partition_key)=" << result.partitions << ":" << i << "\n";
     }
 
     if (failed)
@@ -728,7 +719,7 @@ void ingestSync(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex,
     }
 }
 
-void doIngest(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
+void doIngest(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
 {
     if (bench_settings.producer_settings.mode == "sync")
     {
@@ -740,7 +731,7 @@ void doIngest(DWalPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, c
     }
 }
 
-Int64 ingest(DWalPtrs & wals, ResultQueues & result_queues, const BenchmarkSettings & bench_settings)
+Int64 ingest(KafkaWALPtrs & wals, ResultQueues & result_queues, const BenchmarkSettings & bench_settings)
 {
     auto bench_start = chrono::steady_clock::now();
     ThreadPool worker_pool{static_cast<size_t>(bench_settings.producer_settings.concurrency)};
@@ -772,11 +763,11 @@ struct ConsumeContext
 {
     mutex & stdout_mutex;
     atomic_int32_t & consumed;
-    any & ctx;
-    DWalPtr & dwal;
+    KafkaWALContext & ctx;
+    KafkaWALPtr & dwal;
     bool dumpdata;
 
-    ConsumeContext(mutex & stdout_mutex_, atomic_int32_t & consumed_, any & ctx_, DWalPtr & dwal_, bool dumpdata_)
+    ConsumeContext(mutex & stdout_mutex_, atomic_int32_t & consumed_, KafkaWALContext & ctx_, KafkaWALPtr & dwal_, bool dumpdata_)
         : stdout_mutex(stdout_mutex_), consumed(consumed_), ctx(ctx_), dwal(dwal_), dumpdata(dumpdata_)
     {
     }
@@ -807,7 +798,7 @@ void doConsume(DWAL::RecordPtrs records, void * data)
     cctx->dwal->commit(records.back()->sn, cctx->ctx);
 }
 
-void consume(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
+void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
 {
     mutex stdout_mutex;
     ThreadPool worker_pool{bench_settings.consumer_settings.kafka_topic_partition_offsets.size()};
@@ -819,11 +810,9 @@ void consume(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
             auto & tpo = bench_settings.consumer_settings.kafka_topic_partition_offsets[jobid];
             auto dumpdata = bench_settings.consumer_settings.dumpdata;
 
-            KafkaWALContext dcctx{tpo.topic, tpo.partition, tpo.offset};
-            dcctx.auto_offset_reset = bench_settings.consumer_settings.auto_offset_reset;
-            dcctx.consume_callback_max_messages = bench_settings.consumer_settings.max_messages;
-
-            any ctx{dcctx};
+            KafkaWALContext ctx{tpo.topic, tpo.partition, tpo.offset};
+            ctx.auto_offset_reset = bench_settings.consumer_settings.auto_offset_reset;
+            ctx.consume_callback_max_messages = bench_settings.consumer_settings.max_messages;
 
             atomic_int32_t consumed = 0;
             Int32 batch = 100;
@@ -995,12 +984,11 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
     }
 }
 
-void admin(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
+void admin(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
 {
-    KafkaWALContext pctx{bench_settings.topic_settings.name};
-    pctx.partitions = bench_settings.topic_settings.partitions;
-    pctx.replication_factor = bench_settings.topic_settings.replication_factor;
-    std::any ctx{pctx};
+    KafkaWALContext ctx{bench_settings.topic_settings.name};
+    ctx.partitions = bench_settings.topic_settings.partitions;
+    ctx.replication_factor = bench_settings.topic_settings.replication_factor;
 
     if (bench_settings.topic_settings.mode == "create")
     {
@@ -1033,7 +1021,7 @@ void admin(DWalPtrs & wals, const BenchmarkSettings & bench_settings)
         }
         else
         {
-            cout << "topic " << bench_settings.topic_settings.name << " has " << any_cast<int32_t>(result.ctx) << " partitions \n";
+            cout << "topic " << bench_settings.topic_settings.name << " has " << result.partitions << " partitions \n";
         }
     }
 }
@@ -1068,7 +1056,7 @@ int mainEntryClickHouseDWal(int argc, char ** argv)
 
     if (bench_settings.command == "produce")
     {
-        DWalPtrs wals{createDWals(bench_settings, bench_settings.producer_settings.wal_client_pool_size)};
+        KafkaWALPtrs wals{createDWals(bench_settings, bench_settings.producer_settings.wal_client_pool_size)};
 
         ResultQueues result_queues{static_cast<size_t>(bench_settings.producer_settings.concurrency)};
 
@@ -1083,14 +1071,14 @@ int mainEntryClickHouseDWal(int argc, char ** argv)
         }
         else
         {
-            DWalPtrs wals{createDWals(bench_settings, bench_settings.consumer_settings.wal_client_pool_size)};
+            KafkaWALPtrs wals{createDWals(bench_settings, bench_settings.consumer_settings.wal_client_pool_size)};
             consume(wals, bench_settings);
         }
     }
     else
     {
         /// admin topic
-        DWalPtrs wals{createDWals(bench_settings, 1)};
+        KafkaWALPtrs wals{createDWals(bench_settings, 1)};
         admin(wals, bench_settings);
     }
 

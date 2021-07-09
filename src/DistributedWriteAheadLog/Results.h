@@ -2,19 +2,17 @@
 
 #include "Record.h"
 
-#include <any>
-
 namespace DWAL
 {
 struct AppendResult
 {
-    RecordSN sn = -1;
-
     /// 0 if success, otherwise non-zero
     int32_t err = 0;
 
+    RecordSN sn = -1;
+
     /// Other context
-    std::any ctx;
+    int32_t partition = -1;
 };
 
 struct ConsumeResult
@@ -30,7 +28,6 @@ struct DescribeResult
 {
     int32_t err = 0;
 
-    /// Other context
-    std::any ctx;
+    int32_t partitions;
 };
 }

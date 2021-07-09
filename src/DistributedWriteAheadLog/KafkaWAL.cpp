@@ -118,7 +118,14 @@ namespace
     }
 }
 
-std::shared_ptr<rd_kafka_topic_s> KafkaWAL::initProducerTopicHandle(const KafkaWALContext & walctx)
+void KafkaWAL::initConsumerTopicHandle(KafkaWALContext & ctx) const
+{
+    assert (inited.test());
+
+    consumer->initTopicHandle(ctx);
+}
+
+void KafkaWAL::initProducerTopicHandle(KafkaWALContext & ctx) const
 {
     assert (inited.test());
 
@@ -129,7 +136,7 @@ std::shared_ptr<rd_kafka_topic_s> KafkaWAL::initProducerTopicHandle(const KafkaW
     }
     else
     {
-        acks = std::to_string(walctx.request_required_acks);
+        acks = std::to_string(ctx.request_required_acks);
     }
 
     KConfParams topic_params = {
@@ -137,12 +144,12 @@ std::shared_ptr<rd_kafka_topic_s> KafkaWAL::initProducerTopicHandle(const KafkaW
         /// std::make_pair("delivery.timeout.ms", std::to_string(kLocalMessageTimeout)),
         /// FIXME, partitioner
         std::make_pair("partitioner", "consistent_random"),
-        std::make_pair("compression.codec", "inherit"),
+        std::make_pair("compression.codec", "snappy"),
     };
 
     /// rd_kafka_topic_conf_set_partitioner_cb;
 
-    return initRdKafkaTopicHandle(walctx.topic, topic_params, producer_handle.get(), stats.get());
+    ctx.topic_handle = initRdKafkaTopicHandle(ctx.topic, topic_params, producer_handle.get(), stats.get());
 }
 
 void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rkmessage, void * opaque)
@@ -173,9 +180,9 @@ void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rk
         if (report->callback)
         {
             AppendResult result = {
-                .sn = rkmessage->offset,
                 .err = report->err,
-                .ctx = rkmessage->partition,
+                .sn = rkmessage->offset,
+                .partition = rkmessage->partition,
             };
             /// Since deliveryReport is invoked in the poller thread
             /// we will need be extremely careful the `callback` and
@@ -239,7 +246,7 @@ void KafkaWAL::shutdown()
     LOG_INFO(log, "Stopped");
 }
 
-void KafkaWAL::backgroundPollProducer()
+void KafkaWAL::backgroundPollProducer() const
 {
     LOG_INFO(log, "Polling producer started");
     setThreadName("KWalPPoller");
@@ -291,18 +298,17 @@ void KafkaWAL::initProducerHandle()
     producer_handle = initRdKafkaHandle(RD_KAFKA_PRODUCER, producer_params, stats.get(), cb_setup);
 }
 
-AppendResult KafkaWAL::append(const Record & record, std::any & ctx)
+AppendResult KafkaWAL::append(const Record & record, const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
     assert(!record.empty());
+    assert(ctx.topic_handle);
 
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
     std::unique_ptr<DeliveryReport> dr{new DeliveryReport};
 
-    int32_t err = doAppend(record, dr.get(), walctx);
+    int32_t err = doAppend(record, dr.get(), ctx);
     if (err != static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR))
     {
-        return handleError(err, record, walctx);
+        return handleError(err, record, ctx);
     }
 
     /// Indefinitely wait for the delivery report
@@ -312,25 +318,24 @@ AppendResult KafkaWAL::append(const Record & record, std::any & ctx)
         rd_kafka_poll(producer_handle.get(), settings->message_delivery_sync_poll_ms);
         if (dr->offset.load() != -1)
         {
-            return {.sn = dr->offset.load(), .ctx = dr->partition.load()};
+            return {.sn = dr->offset.load(), .partition = dr->partition.load()};
         }
         else if (dr->err != static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR))
         {
-            return handleError(dr->err.load(), record, walctx);
+            return handleError(dr->err.load(), record, ctx);
         }
     }
     __builtin_unreachable();
 }
 
-int32_t KafkaWAL::append(const Record & record, AppendCallback callback, void * data, std::any & ctx)
+int32_t KafkaWAL::append(const Record & record, AppendCallback callback, void * data, const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
     assert(!record.empty());
+    assert(ctx.topic_handle);
 
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
     std::unique_ptr<DeliveryReport> dr(new DeliveryReport{callback, data, true});
 
-    int32_t err = doAppend(record, dr.get(), walctx);
+    int32_t err = doAppend(record, dr.get(), ctx);
     if (likely(err == static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR)))
     {
         /// Move the ownership to `delivery_report`
@@ -338,18 +343,13 @@ int32_t KafkaWAL::append(const Record & record, AppendCallback callback, void * 
     }
     else
     {
-        handleError(err, record, walctx);
+        handleError(err, record, ctx);
     }
     return mapErrorCode(static_cast<rd_kafka_resp_err_t>(err));
 }
 
-int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, KafkaWALContext & walctx)
+int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const KafkaWALContext & ctx) const
 {
-    if (!walctx.topic_handle)
-    {
-        walctx.topic_handle = initProducerTopicHandle(walctx);
-    }
-
     const char * key_data = nullptr;
     size_t key_size = 0;
 
@@ -391,7 +391,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, KafkaWALC
     int err = rd_kafka_producev(
         producer_handle.get(),
         /// Topic
-        RD_KAFKA_V_RKT(walctx.topic_handle.get()),
+        RD_KAFKA_V_RKT(ctx.topic_handle.get()),
         /// Use builtin partitioner which is consistent hashing to select partition
         /// RD_KAFKA_V_PARTITION(RD_KAFKA_PARTITION_UA),
         /// Block if internal queue is full
@@ -428,7 +428,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, KafkaWALC
     return err;
 }
 
-AppendResult KafkaWAL::handleError(int err, const Record & record, const KafkaWALContext & ctx)
+AppendResult KafkaWAL::handleError(int err, const Record & record, const KafkaWALContext & ctx) const
 {
     auto kerr = static_cast<rd_kafka_resp_err_t>(err);
     LOG_ERROR(
@@ -438,57 +438,40 @@ AppendResult KafkaWAL::handleError(int err, const Record & record, const KafkaWA
         record.partition_key,
         rd_kafka_err2str(kerr));
 
-    return {.sn = -1, .err = mapErrorCode(kerr), .ctx = -1};
+    return {.err = mapErrorCode(kerr)};
 }
 
-void KafkaWAL::poll(int32_t timeout_ms, std::any & /*ctx*/)
+void KafkaWAL::poll(int32_t timeout_ms, const KafkaWALContext &) const
 {
     rd_kafka_poll(producer_handle.get(), timeout_ms);
 }
 
-int32_t KafkaWAL::consume(ConsumeCallback callback, void * data, std::any & ctx)
+int32_t KafkaWAL::consume(ConsumeCallback callback, void * data, const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
-
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
-
-    return consumer->consume(callback, data, walctx);
+    return consumer->consume(callback, data, ctx);
 }
 
-ConsumeResult KafkaWAL::consume(uint32_t count, int32_t timeout_ms, std::any & ctx)
+ConsumeResult KafkaWAL::consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
-
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
-    return consumer->consume(count, timeout_ms, walctx);
+    return consumer->consume(count, timeout_ms, ctx);
 }
 
-int32_t KafkaWAL::stopConsume(std::any & ctx)
+int32_t KafkaWAL::stopConsume(const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
-
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
-    return consumer->stopConsume(walctx);
+    return consumer->stopConsume(ctx);
 }
 
-int32_t KafkaWAL::commit(RecordSN sn, std::any & ctx)
+int32_t KafkaWAL::commit(RecordSN sn, const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
-
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
-    return consumer->commit(sn, walctx);
+    return consumer->commit(sn, ctx);
 }
 
-int32_t KafkaWAL::create(const std::string & name, std::any & ctx)
+int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) const
 {
-    assert(ctx.has_value());
-
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
-
     rd_kafka_NewTopic_t * topics[1] = {nullptr};
 
     char errstr[512] = {'\0'};
-    topics[0] = rd_kafka_NewTopic_new(name.c_str(), walctx.partitions, walctx.replication_factor, errstr, sizeof(errstr));
+    topics[0] = rd_kafka_NewTopic_new(name.c_str(), ctx.partitions, ctx.replication_factor, errstr, sizeof(errstr));
     if (errstr[0] != '\0')
     {
         LOG_ERROR(log, "Failed to create topic={} error={}", name, errstr);
@@ -497,27 +480,27 @@ int32_t KafkaWAL::create(const std::string & name, std::any & ctx)
 
     KConfParams params = {
         std::make_pair("compression.type", "snappy"),
-        std::make_pair("cleanup.policy", walctx.cleanup_policy),
+        std::make_pair("cleanup.policy", ctx.cleanup_policy),
     };
 
-    if (walctx.retention_ms > 0)
+    if (ctx.retention_ms > 0)
     {
-        params.emplace_back("retention.ms", std::to_string(walctx.retention_ms));
+        params.emplace_back("retention.ms", std::to_string(ctx.retention_ms));
     }
 
-    if (walctx.segment_bytes > 0)
+    if (ctx.segment_bytes > 0)
     {
-        params.emplace_back("segment.bytes", std::to_string(walctx.segment_bytes));
+        params.emplace_back("segment.bytes", std::to_string(ctx.segment_bytes));
     }
 
-    if (walctx.segment_ms > 0)
+    if (ctx.segment_ms > 0)
     {
-        params.emplace_back("segment.ms", std::to_string(walctx.segment_ms));
+        params.emplace_back("segment.ms", std::to_string(ctx.segment_ms));
     }
 
-    if (walctx.message_max_bytes > 0)
+    if (ctx.message_max_bytes > 0)
     {
-        params.emplace_back("max.message.bytes", std::to_string(walctx.message_max_bytes));
+        params.emplace_back("max.message.bytes", std::to_string(ctx.message_max_bytes));
     }
     else
     {
@@ -554,11 +537,8 @@ int32_t KafkaWAL::create(const std::string & name, std::any & ctx)
         "create");
 }
 
-int32_t KafkaWAL::remove(const String & name, std::any & ctx)
+int32_t KafkaWAL::remove(const String & name, const KafkaWALContext &) const
 {
-    assert(ctx.has_value());
-    (void)ctx;
-
     rd_kafka_DeleteTopic_t * topics[1] = {nullptr};
     topics[0] = rd_kafka_DeleteTopic_new(name.c_str());
     std::shared_ptr<rd_kafka_DeleteTopic_t> topics_holder{topics[0], rd_kafka_DeleteTopic_destroy};
@@ -581,7 +561,7 @@ int32_t KafkaWAL::remove(const String & name, std::any & ctx)
         "delete");
 }
 
-DescribeResult KafkaWAL::describe(const String & name, std::any &) const
+DescribeResult KafkaWAL::describe(const String & name, const KafkaWALContext &) const
 {
     std::shared_ptr<rd_kafka_topic_t> topic_handle{
         rd_kafka_topic_new(producer_handle.get(), name.c_str(), nullptr), rd_kafka_topic_destroy};
@@ -607,7 +587,15 @@ DescribeResult KafkaWAL::describe(const String & name, std::any &) const
         {
             auto partition_cnt = metadata->topics[i].partition_cnt;
             rd_kafka_metadata_destroy(metadata);
-            return {.err = DB::ErrorCodes::OK, .ctx = partition_cnt};
+
+            if (partition_cnt > 0)
+            {
+                return {.err = DB::ErrorCodes::OK, .partitions = partition_cnt};
+            }
+            else
+            {
+                return {.err = DB::ErrorCodes::RESOURCE_NOT_FOUND};
+            }
         }
     }
 
@@ -616,11 +604,8 @@ DescribeResult KafkaWAL::describe(const String & name, std::any &) const
 }
 
 #if 0
-int32_t KafkaWAL::describe(const String & name, std::any & ctx) const
+int32_t KafkaWAL::describe(const String & name, const KafkaWALContext &) const
 {
-    assert(ctx.has_value());
-    (void)ctx;
-
     rd_kafka_ConfigResource_t * configs[1];
     configs[0] = rd_kafka_ConfigResource_new(RD_KAFKA_RESOURCE_TOPIC, name.c_str());
     if (configs[0] == nullptr)
@@ -679,20 +664,18 @@ int32_t KafkaWAL::describe(const String & name, std::any & ctx) const
 }
 #endif
 
-ClusterPtr KafkaWAL::cluster(std::any & ctx) const
+KafkaWALClusterPtr KafkaWAL::cluster(const KafkaWALContext & ctx) const
 {
-    auto & walctx = std::any_cast<KafkaWALContext &>(ctx);
-
     const struct rd_kafka_metadata *metadata = nullptr;
 
-    auto err = rd_kafka_metadata(producer_handle.get(), 0, walctx.topic_handle.get(), &metadata, 5000);
+    auto err = rd_kafka_metadata(producer_handle.get(), 0, ctx.topic_handle.get(), &metadata, 5000);
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
         LOG_ERROR(log, "Failed to get cluster metadata error={}", rd_kafka_err2str(err));
         return nullptr;
     }
 
-    ClusterPtr result = std::make_shared<Cluster>();
+    KafkaWALClusterPtr result = std::make_shared<KafkaWALCluster>();
     result->id = settings->cluster_id;
     result->controller_id = rd_kafka_controllerid(producer_handle.get(), 0);
 

@@ -15,25 +15,25 @@ struct Partition
     std::vector<int32_t> isrs; /// In-Sync-Replicas nodes
 };
 
-struct WALInfo
+struct KafkaWALInfo
 {
     std::string name;
     std::vector<Partition> partitions;
 };
 
-struct Node
+struct KafkaNode
 {
     int32_t id; /// DWAL Node ID
     int32_t port; /// Node listening port
     std::string host; /// Node hostname
 };
 
-struct Cluster
+struct KafkaWALCluster
 {
     std::string id; /// Cluster ID
     int32_t controller_id; /// Controller node
-    std::vector<Node> nodes;
+    std::vector<KafkaNode> nodes;
 };
 
-using ClusterPtr = std::shared_ptr<Cluster>;
+using KafkaWALClusterPtr = std::shared_ptr<KafkaWALCluster>;
 }

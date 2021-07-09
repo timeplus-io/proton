@@ -70,7 +70,7 @@ inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records,
 {
     try
     {
-        storage->commit(std::move(records), std::move(sequence_ranges), ctx);
+        storage->commit(std::move(records), std::move(sequence_ranges));
     }
     catch (...)
     {

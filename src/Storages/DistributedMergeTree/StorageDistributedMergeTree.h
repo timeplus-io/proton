@@ -7,12 +7,13 @@
 #include <ext/shared_ptr_helper.h>
 
 #include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
-#include <DistributedWriteAheadLog/WAL.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Common/ThreadPool.h>
+#include <common/ClockUtils.h>
 
 
 namespace DB
@@ -210,7 +211,7 @@ private:
     void addIdempotentKey(const String & key);
     void buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_);
 
-    void commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges, std::any & dwal_consume_ctx);
+    void commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges);
 
     using SequencePair = std::pair<DWAL::RecordSN, DWAL::RecordSN>;
 
@@ -218,14 +219,13 @@ private:
         Block block,
         SequencePair seq_pair,
         std::shared_ptr<IdempotentKeys> keys,
-        SequenceRanges missing_sequence_ranges,
-        std::any & dwal_consume_ctx);
-    void commitSN(std::any & dwal_consume_ctx);
+        SequenceRanges missing_sequence_ranges);
+    void commitSN();
     void commitSNLocal(DWAL::RecordSN commit_sn);
-    void commitSNRemote(DWAL::RecordSN commit_sn, std::any & dwal_consume_ctx);
+    void commitSNRemote(DWAL::RecordSN commit_sn);
 
-    void finalCommit(std::any & ctx);
-    void periodicallyCommit(std::any & ctx);
+    void finalCommit();
+    void periodicallyCommit();
 
     void progressSequences(const SequencePair & seq);
     void progressSequencesWithoutLock(const SequencePair & seq);
@@ -252,10 +252,11 @@ private:
     String sharding_key_column_name;
 
     /// Cached ctx for reuse
-    std::any dwal_append_ctx;
+    DWAL::KafkaWALContext dwal_append_ctx;
+    DWAL::KafkaWALContext dwal_consume_ctx;
 
     /// For Produce and dedicated consumption
-    DWAL::WALPtr dwal;
+    DWAL::KafkaWALPtr dwal;
 
     /// For shared consumption
     DWAL::KafkaWALConsumerMultiplexerPtr multiplexer;
@@ -264,7 +265,7 @@ private:
     IngestingBlocks ingesting_blocks;
 
     /// Local checkpoint threshold timer
-    std::chrono::time_point<std::chrono::steady_clock> last_commit_ts = std::chrono::steady_clock::now();
+    Int64 last_commit_ts = MonotonicSeconds::now();
 
     /// Forwarding storage if it is not virtual
     std::shared_ptr<StorageMergeTree> storage;

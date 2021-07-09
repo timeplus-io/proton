@@ -89,6 +89,7 @@ struct KafkaWALContext
 
     /// Cached topic handle across call like for KafkaWALSimpleConsumer
     std::shared_ptr<rd_kafka_topic_s> topic_handle;
+    bool topic_consuming_started = false;
 
     KafkaWALContext(const std::string & topic_, int32_t partition_, int64_t offset_) : topic(topic_), partition(partition_), offset(offset_) { }
 

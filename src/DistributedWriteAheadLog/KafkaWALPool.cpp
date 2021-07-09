@@ -1,6 +1,5 @@
-#include "WALPool.h"
+#include "KafkaWALPool.h"
 
-#include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -24,23 +23,23 @@ namespace
     const std::string SYSTEM_WALS_KEY_PREFIX = "cluster_settings.streaming_storage.";
 }
 
-WALPool & WALPool::instance(DB::ContextPtr global_context)
+KafkaWALPool & KafkaWALPool::instance(DB::ContextPtr global_context)
 {
-    static WALPool pool{global_context};
+    static KafkaWALPool pool{global_context};
     return pool;
 }
 
-WALPool::WALPool(DB::ContextPtr global_context_)
-    : global_context(global_context_), log(&Poco::Logger::get("WALPool"))
+KafkaWALPool::KafkaWALPool(DB::ContextPtr global_context_)
+    : global_context(global_context_), log(&Poco::Logger::get("KafkaWALPool"))
 {
 }
 
-WALPool::~WALPool()
+KafkaWALPool::~KafkaWALPool()
 {
     shutdown();
 }
 
-void WALPool::startup()
+void KafkaWALPool::startup()
 {
     if (!global_context->isDistributed())
     {
@@ -73,7 +72,7 @@ void WALPool::startup()
     LOG_INFO(log, "Started");
 }
 
-void WALPool::shutdown()
+void KafkaWALPool::shutdown()
 {
     if (stopped.test_and_set())
     {
@@ -98,7 +97,7 @@ void WALPool::shutdown()
     LOG_INFO(log, "Stopped");
 }
 
-void WALPool::init(const std::string & key)
+void KafkaWALPool::init(const std::string & key)
 {
     /// FIXME; for now, we only support kafka, so assume it is kafka
     /// assert(key.startswith("kafka"));
@@ -221,7 +220,7 @@ void WALPool::init(const std::string & key)
     }
 }
 
-WALPtr WALPool::get(const std::string & cluster_id) const
+KafkaWALPtr KafkaWALPool::get(const std::string & cluster_id) const
 {
     if (cluster_id.empty() && !default_cluster.empty())
     {
@@ -237,10 +236,9 @@ WALPtr WALPool::get(const std::string & cluster_id) const
     return iter->second[indexes[cluster_id]++ % iter->second.size()];
 }
 
-WALPtr WALPool::getMeta() const { return meta_wal; }
+KafkaWALPtr KafkaWALPool::getMeta() const { return meta_wal; }
 
-
-KafkaWALConsumerMultiplexerPtr WALPool::getOrCreateConsumerMultiplexer(const std::string & cluster_id)
+KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(const std::string & cluster_id)
 {
     if (cluster_id.empty() && !default_cluster.empty())
     {
@@ -275,6 +273,7 @@ KafkaWALConsumerMultiplexerPtr WALPool::getOrCreateConsumerMultiplexer(const std
     KafkaWALConsumerMultiplexerPtr * best_multiplexer = nullptr;
 
     /// Find best multiplexer with minimum ref count
+    /// FIXME : better algo with more metrics like records consumed ?
     for (auto & multiplexer : iter->second.second)
     {
         if (!best_multiplexer)
@@ -302,9 +301,9 @@ KafkaWALConsumerMultiplexerPtr WALPool::getOrCreateConsumerMultiplexer(const std
     return *best_multiplexer;
 }
 
-std::vector<ClusterPtr> WALPool::clusters(std::any & ctx) const
+std::vector<KafkaWALClusterPtr> KafkaWALPool::clusters(const KafkaWALContext & ctx) const
 {
-    std::vector<ClusterPtr> results;
+    std::vector<KafkaWALClusterPtr> results;
     results.reserve(wals.size());
 
     for (const auto & cluster_wal : wals)

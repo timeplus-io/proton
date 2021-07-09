@@ -1,12 +1,10 @@
 #pragma once
 
-#include <DistributedWriteAheadLog/Cluster.h>
-#include <DistributedWriteAheadLog/WAL.h>
+#include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Common/ThreadPool.h>
 
 #include <boost/noncopyable.hpp>
 
-#include <any>
 #include <optional>
 
 
@@ -24,27 +22,31 @@ public:
     void shutdown();
 
     const String & nodeRoles() const { return node_roles; }
-    std::vector<DWAL::ClusterPtr> clusters();
+    std::vector<DWAL::KafkaWALClusterPtr> clusters();
 
 private:
     void initPorts();
     void tailingRecords();
     void doTailingRecords();
+
     virtual void postStartup() {}
     virtual void preShutdown() {}
+
     virtual void processRecords(const DWAL::RecordPtrs & records) = 0;
+
     virtual String role() const = 0;
     virtual String cleanupPolicy() const { return "delete"; }
+
     virtual std::pair<Int32, Int32> batchSizeAndTimeout() const { return std::make_pair(100, 500); }
 
     /// Create DWal on server
-    void waitUntilDWalReady(std::any & ctx);
+    void waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) const;
 
 protected:
     void setupRecordHeaders(DWAL::Record & record, const String & version) const;
 
-    void doCreateDWal(std::any & ctx);
-    void doDeleteDWal(std::any & ctx);
+    void doCreateDWal(const DWAL::KafkaWALContext & ctx) const;
+    void doDeleteDWal(const DWAL::KafkaWALContext & ctx) const;
 
 protected:
     struct ConfigSettings
@@ -68,9 +70,9 @@ protected:
 protected:
     ContextPtr global_context;
 
-    std::any dwal_append_ctx;
-    std::any dwal_consume_ctx;
-    DWAL::WALPtr dwal;
+    DWAL::KafkaWALContext dwal_append_ctx;
+    DWAL::KafkaWALContext dwal_consume_ctx;
+    DWAL::KafkaWALPtr dwal;
 
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
     std::optional<ThreadPool> pool;

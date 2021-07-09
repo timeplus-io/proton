@@ -5,14 +5,10 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/DatabaseFactory.h>
-#include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/WAL.h>
-#include <DistributedWriteAheadLog/WALPool.h>
+#include <DistributedMetadata/DDLService.h>
 #include <Interpreters/Context.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
-
-#include <Poco/Util/AbstractConfiguration.h>
 
 namespace DB
 {
@@ -125,26 +121,14 @@ void appendDDLBlock(
         }
     }
 
-    auto wal = DWAL::WALPool::instance(context->getGlobalContext()).getMeta();
-    if (!wal)
-    {
-        LOG_ERROR(
-            log,
-            "Distributed environment is not setup. Unable to operate with DistributedMergeTree engine. query_id={} ",
-            context->getCurrentQueryId());
-        throw Exception(
-            "Distributed environment is not setup. Unable to operate with DistributedMergeTree engine", ErrorCodes::CONFIG_ERROR);
-    }
-
-    const auto & config = context->getGlobalContext()->getConfigRef();
-    const auto & topic = config.getString("cluster_settings.system_ddls.name");
-    std::any ctx{DWAL::KafkaWALContext{topic}};
+    /// Depending on DDLService is not ideal here, but it is convenient
+    auto & ddl_service = DDLService::instance(context);
 
     auto result_code = ErrorCodes::OK;
     const auto & query_id = context->getCurrentQueryId();
     for (auto i = 0; i < MAX_RETRIES; ++i)
     {
-        result_code = wal->append(record, ctx).err;
+        result_code = ddl_service.append(record);
         if (result_code == ErrorCodes::OK)
         {
             LOG_INFO(log, "Successfully append record to WAL, query_id={}", query_id);
@@ -159,7 +143,8 @@ void appendDDLBlock(
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
         }
     }
-    LOG_ERROR(log, "Failed to append record to WAL, query_id={}, error={}", context->getCurrentQueryId(), result_code);
+
+    LOG_ERROR(log, "Failed to append record to WAL, query_id={}, error={}", query_id, result_code);
     throw Exception("Failed to append record to WAL, error={}", result_code);
 }
 
