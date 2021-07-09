@@ -48,7 +48,7 @@ struct KafkaWALSettings
     /////////////////////////////////////////////////////
 
     /// Global settings for consumer
-    std::string group_id = "";
+    std::string group_id;
     /// std::string group_instance_id
     /// std::string partition_assignment_strategy
 
@@ -69,6 +69,11 @@ struct KafkaWALSettings
     /// Global librdkafka client side settings for consumer per topic+partition
     int32_t queued_min_messages = 1000000;
     int32_t queued_max_messages_kbytes = 65536;
+
+    /// Global settings for shared subscription
+    int32_t shared_subscription_flush_threshold_count = 10000;
+    int32_t shared_subscription_flush_threshold_bytes = 10 * 1024 * 1024;
+    int32_t shared_subscription_flush_threshold_ms = 1000;
 
     std::unique_ptr<KafkaWALSettings> clone() const { return std::make_unique<KafkaWALSettings>(*this); }
 
@@ -94,6 +99,9 @@ struct KafkaWALSettings
         settings.push_back("auto_commit_interval_ms=" + std::to_string(auto_commit_interval_ms));
         settings.push_back("queued_min_messages=" + std::to_string(queued_min_messages));
         settings.push_back("queued_max_messages_kbytes=" + std::to_string(queued_max_messages_kbytes));
+        settings.push_back("shared_subscription_flush_threshold_count=" + std::to_string(shared_subscription_flush_threshold_count));
+        settings.push_back("shared_subscription_flush_threshold_bytes=" + std::to_string(shared_subscription_flush_threshold_bytes));
+        settings.push_back("shared_subscription_flush_threshold_ms=" + std::to_string(shared_subscription_flush_threshold_ms));
 
         return boost::algorithm::join(settings, " ");
     }

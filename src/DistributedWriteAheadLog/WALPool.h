@@ -1,9 +1,13 @@
 #pragma once
 
 #include "Cluster.h"
+#include "KafkaWALConsumerMultiplexer.h"
+#include "KafkaWALSettings.h"
 #include "WAL.h"
 
 #include <Interpreters/Context_fwd.h>
+
+#include <mutex>
 
 namespace DWAL
 {
@@ -18,9 +22,11 @@ public:
     explicit WALPool(DB::ContextPtr global_context);
     ~WALPool();
 
-    WALPtr get(const std::string & id) const;
+    WALPtr get(const std::string & cluster_id) const;
 
     WALPtr getMeta() const;
+
+    KafkaWALConsumerMultiplexerPtr getOrCreateConsumerMultiplexer(const std::string & cluster_id);
 
     std::vector<ClusterPtr> clusters(std::any & ctx) const;
 
@@ -36,10 +42,15 @@ private:
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 
-    std::string default_cluster = "";
+    std::string default_cluster;
     WALPtr meta_wal;
-    std::unordered_map<String, std::vector<WALPtr>> wals;
+    std::unordered_map<String, WALPtrs> wals;
     mutable std::unordered_map<String, std::atomic_uint64_t> indexes;
+
+    std::unordered_map<String, std::shared_ptr<KafkaWALSettings>> cluster_kafka_settings;
+
+    std::mutex multiplexer_mutex;
+    std::unordered_map<String, std::pair<size_t, KafkaWALConsumerMultiplexerPtrs>> multiplexers;
 
     Poco::Logger * log;
 };

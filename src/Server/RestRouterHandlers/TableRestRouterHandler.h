@@ -21,7 +21,12 @@ protected:
     static String getStringValueFrom(const Poco::JSON::Object::Ptr & payload, const String & key, const String & default_value);
 
     String getEngineExpr(const Poco::JSON::Object::Ptr & payload) const;
+
+    /// Return empty string if the request is invalid
     String getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard) const;
+
+    /// Return empty string if the setting is invalid
+    String getAndValidateStorageSetting(const String & key) const;
 
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
     bool validatePatch(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;

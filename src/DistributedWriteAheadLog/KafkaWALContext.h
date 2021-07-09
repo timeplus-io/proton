@@ -52,7 +52,7 @@ struct KafkaWALContext
     /// Per topic librdkafka client side settings for consumer
     int32_t consume_callback_max_messages = 100000;
     int32_t consume_callback_max_rows = 1000000;
-    int32_t consume_callback_max_messages_size = 33554432; /// 32 MB
+    int32_t consume_callback_max_bytes = 33554432; /// 32 MB
     int32_t consume_callback_timeout_ms = 1000;
 
     /// Per topic max message size
@@ -80,7 +80,7 @@ struct KafkaWALContext
         ctxes.push_back("auto_offset_reset=" + auto_offset_reset);
         ctxes.push_back("consume_callback_max_messages=" + std::to_string(consume_callback_max_messages));
         ctxes.push_back("consume_callback_max_rows=" + std::to_string(consume_callback_max_rows));
-        ctxes.push_back("consume_callback_max_messages_size=" + std::to_string(consume_callback_max_messages_size));
+        ctxes.push_back("consume_callback_max_bytes=" + std::to_string(consume_callback_max_bytes));
         ctxes.push_back("consume_callback_timeout_ms=" + std::to_string(consume_callback_timeout_ms));
         ctxes.push_back("message_max_bytes=" + std::to_string(message_max_bytes));
 

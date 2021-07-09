@@ -25,12 +25,13 @@ namespace
 {
     const std::vector<String> CREATE_TABLE_SETTINGS = {
         "streaming_storage_cluster_id",
+        "streaming_storage_subscription_mode",
         "streaming_storage_auto_offset_reset",
         "streaming_storage_request_required_acks",
         "streaming_storage_request_timeout_ms",
         "distributed_flush_threshold_ms",
         "distributed_flush_threshold_count",
-        "distributed_flush_threshold_size",
+        "distributed_flush_threshold_bytes",
     };
 }
 
@@ -128,6 +129,11 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
 
     const auto & shard = getQueryParameter("shard");
     const auto & query = getCreationSQL(payload, shard);
+
+    if (query.empty())
+    {
+        return {"", HTTPResponse::HTTP_BAD_REQUEST};
+    }
 
     if (isDistributedDDL())
     {
@@ -293,16 +299,51 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
         create_segments.push_back(", shard=" + shard);
     }
 
-    for (const auto & setting : CREATE_TABLE_SETTINGS)
+    for (const auto & key : CREATE_TABLE_SETTINGS)
     {
-        if (hasQueryParameter(setting))
+        if (hasQueryParameter(key))
         {
-            /// FIXME : Do some parameters validation
-            create_segments.push_back(", " + setting+ "=" + getQueryParameter(setting));
+            auto result = getAndValidateStorageSetting(key);
+            if (result.empty())
+            {
+                return "";
+            }
+            create_segments.push_back(", " + result);
         }
     }
 
     return boost::algorithm::join(create_segments, " ");
 }
 
+String TableRestRouterHandler::getAndValidateStorageSetting(const String & key) const
+{
+    const auto & value = getQueryParameter(key);
+
+    if (value.empty())
+    {
+        return value;
+    }
+
+    if (key == "streaming_storage_subscription_mode")
+    {
+        if (value != "shared" && value != "dedicated")
+        {
+            return "";
+        }
+
+        return fmt::format("{}='{}'", key, value);
+    }
+    else if (key == "streaming_storage_auto_offset_reset")
+    {
+        if (value != "earliest" && value != "latest")
+        {
+            return "";
+        }
+        return fmt::format("{}='{}'", key, value);
+    }
+    else
+    {
+        return fmt::format("{}={}", key, value);
+    }
+}
 }

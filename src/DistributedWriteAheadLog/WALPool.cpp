@@ -106,7 +106,8 @@ void WALPool::init(const std::string & key)
     const auto & config = global_context->getConfigRef();
 
     KafkaWALSettings kafka_settings;
-    int32_t wal_pool_size = 0;
+    int32_t dedicated_subscription_wal_pool_size = 2;
+    int32_t shared_subscription_wal_pool_max_size = 10;
     bool system_default = false;
 
     std::vector<std::tuple<String, String, void *>> settings = {
@@ -138,7 +139,11 @@ void WALPool::init(const std::string & key)
         {".queued_max_messages_kbytes", "Int32", &kafka_settings.queued_max_messages_kbytes},
         {".session_timeout_ms", "Int32", &kafka_settings.session_timeout_ms},
         {".max_poll_interval_ms", "Int32", &kafka_settings.max_poll_interval_ms},
-        {".internal_pool_size", "Int32", &wal_pool_size},
+        {".dedicated_subscription_pool_size", "Int32", &dedicated_subscription_wal_pool_size},
+        {".shared_subscription_pool_max_size", "Int32", &shared_subscription_wal_pool_max_size},
+        {".shared_subscription_flush_threshold_count", "Int32", &kafka_settings.shared_subscription_flush_threshold_count},
+        {".shared_subscription_flush_threshold_bytes", "Int32", &kafka_settings.shared_subscription_flush_threshold_bytes},
+        {".shared_subscription_flush_threshold_ms", "Int32", &kafka_settings.shared_subscription_flush_threshold_ms},
     };
 
     for (const auto & t : settings)
@@ -187,16 +192,21 @@ void WALPool::init(const std::string & key)
     /// Create WALs
     LOG_INFO(log, "Creating Kafka WAL with settings: {}", kafka_settings.string());
 
-    for (int32_t i = 0; i < wal_pool_size; ++i)
+    for (int32_t i = 0; i < dedicated_subscription_wal_pool_size; ++i)
     {
-        auto kwal
-            = std::make_shared<KafkaWAL>(std::make_unique<KafkaWALSettings>(kafka_settings));
+        auto ksettings = kafka_settings.clone();
+
+        ksettings->group_id += "-dedicated";
+        auto kwal = std::make_shared<KafkaWAL>(std::move(ksettings));
 
         kwal->startup();
         wals[kafka_settings.cluster_id].push_back(kwal);
-
     }
     indexes[kafka_settings.cluster_id] = 0;
+
+    multiplexers.emplace(
+        kafka_settings.cluster_id, std::make_pair<size_t, KafkaWALConsumerMultiplexerPtrs>(shared_subscription_wal_pool_max_size, {}));
+    cluster_kafka_settings.emplace(kafka_settings.cluster_id, kafka_settings.clone());
 
     if (system_default)
     {
@@ -204,29 +214,93 @@ void WALPool::init(const std::string & key)
         default_cluster = kafka_settings.cluster_id;
 
         /// Meta WAL with a different consumer group
-        kafka_settings.group_id += "-meta";
-        meta_wal = std::make_shared<KafkaWAL>(std::make_unique<KafkaWALSettings>(kafka_settings));
+        auto ksettings = kafka_settings.clone();
+        ksettings->group_id += "-meta";
+        meta_wal = std::make_shared<KafkaWAL>(std::move(ksettings));
         meta_wal->startup();
     }
 }
 
-WALPtr WALPool::get(const std::string & id) const
+WALPtr WALPool::get(const std::string & cluster_id) const
 {
-    if (id.empty() && !default_cluster.empty())
+    if (cluster_id.empty() && !default_cluster.empty())
     {
         return get(default_cluster);
     }
 
-    auto iter = wals.find(id);
+    auto iter = wals.find(cluster_id);
     if (iter == wals.end())
     {
-        return nullptr;
+        throw DB::Exception("Unknown kafka cluster_id=" + cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
     }
 
-    return iter->second[indexes[id]++ % iter->second.size()];
+    return iter->second[indexes[cluster_id]++ % iter->second.size()];
 }
 
 WALPtr WALPool::getMeta() const { return meta_wal; }
+
+
+KafkaWALConsumerMultiplexerPtr WALPool::getOrCreateConsumerMultiplexer(const std::string & cluster_id)
+{
+    if (cluster_id.empty() && !default_cluster.empty())
+    {
+        return getOrCreateConsumerMultiplexer(default_cluster);
+    }
+
+    std::lock_guard lock{multiplexer_mutex};
+
+    auto iter = multiplexers.find(cluster_id);
+    if (iter == multiplexers.end())
+    {
+        throw DB::Exception("Unknown kafka cluster_id=" + cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    auto & cluster_multiplexers = iter->second.second;
+
+    auto create_multiplexer = [&, this]() -> KafkaWALConsumerMultiplexerPtr {
+        auto kafka_settings = cluster_kafka_settings[cluster_id]->clone();
+        kafka_settings->group_id += "-shared";
+
+        auto multiplexer = std::make_shared<KafkaWALConsumerMultiplexer>(std::move(kafka_settings));
+        multiplexer->startup();
+        cluster_multiplexers.push_back(multiplexer);
+        return multiplexer;
+    };
+
+    if (cluster_multiplexers.empty())
+    {
+        return create_multiplexer();
+    }
+
+    KafkaWALConsumerMultiplexerPtr * best_multiplexer = nullptr;
+
+    /// Find best multiplexer with minimum ref count
+    for (auto & multiplexer : iter->second.second)
+    {
+        if (!best_multiplexer)
+        {
+            best_multiplexer = &multiplexer;
+            continue;
+        }
+
+        if (multiplexer.use_count() < best_multiplexer->use_count())
+        {
+            best_multiplexer = &multiplexer;
+        }
+    }
+
+    if (best_multiplexer->use_count() >= 20)
+    {
+        /// If the best multiplexer's use count reaches 20 (FIXME: configurable), and if we didn't reach
+        /// the maximum multiplexers in this Kafka cluster, create a new one to balance the load
+        if (cluster_multiplexers.size() < iter->second.first)
+        {
+            return create_multiplexer();
+        }
+    }
+
+    return *best_multiplexer;
+}
 
 std::vector<ClusterPtr> WALPool::clusters(std::any & ctx) const
 {

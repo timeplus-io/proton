@@ -15,7 +15,12 @@ namespace ErrorCodes
 namespace DWAL
 {
 KafkaWALConsumerMultiplexer::KafkaWALConsumerMultiplexer(std::unique_ptr<KafkaWALSettings> settings)
-    : consumer(std::make_unique<KafkaWALConsumer>(std::move(settings))), poller(1), log(&Poco::Logger::get("KafkaWALConsumerMultiplexer"))
+    : shared_subscription_flush_threshold_count(settings->shared_subscription_flush_threshold_count)
+    , shared_subscription_flush_threshold_bytes(settings->shared_subscription_flush_threshold_bytes)
+    , shared_subscription_flush_threshold_ms(settings->shared_subscription_flush_threshold_ms)
+    , consumer(std::make_unique<KafkaWALConsumer>(std::move(settings)))
+    , poller(1)
+    , log(&Poco::Logger::get("KafkaWALConsumerMultiplexer"))
 {
 }
 
@@ -45,7 +50,6 @@ void KafkaWALConsumerMultiplexer::shutdown()
 {
     if (stopped.test_and_set())
     {
-        LOG_ERROR(log, "Already shutdown");
         return;
     }
 
@@ -55,9 +59,12 @@ void KafkaWALConsumerMultiplexer::shutdown()
     LOG_INFO(log, "Stopped");
 }
 
-int32_t KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset & tpo, ConsumeCallback callback, void * data)
+KafkaWALConsumerMultiplexer::Result
+KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset & tpo, ConsumeCallback callback, void * data)
 {
-    assert(callback && data != nullptr);
+    assert(callback && consumer);
+
+    std::weak_ptr<CallbackContext> ctx;
     {
         std::lock_guard lock{callbacks_mutex};
 
@@ -68,19 +75,22 @@ int32_t KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset 
             auto pos = std::find(iter->second->partitions.begin(), iter->second->partitions.end(), tpo.partition);
             if (pos != iter->second->partitions.end())
             {
-                return DB::ErrorCodes::INVALID_OPERATION;
+                return {DB::ErrorCodes::INVALID_OPERATION, {}};
             }
         }
 
         auto res = consumer->addSubscriptions({tpo});
         if (res != DB::ErrorCodes::OK)
         {
-            return res;
+            return {res, {}};
         }
 
         if (iter == callbacks.end())
         {
-            callbacks.emplace(tpo.topic, std::make_shared<CallbackContext>(callback, data, tpo.partition));
+            auto s_ctx = std::make_shared<CallbackContext>(callback, data, tpo.partition);
+            ctx = s_ctx;
+
+            callbacks.emplace(tpo.topic, s_ctx);
         }
         else
         {
@@ -89,16 +99,19 @@ int32_t KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset 
             iter->second->callback = callback;
             iter->second->data = data;
             iter->second->partitions.push_back(tpo.partition);
+
+            ctx = iter->second;
         }
     }
 
     LOG_INFO(log, "Successfully add subscription to topic={} partition={} offset={}", tpo.topic, tpo.partition, tpo.offset);
 
-    return DB::ErrorCodes::OK;
+    return {DB::ErrorCodes::OK, ctx};
 }
 
 int32_t KafkaWALConsumerMultiplexer::removeSubscription(const TopicPartitionOffset & tpo)
 {
+    assert(consumer);
     {
         std::lock_guard lock{callbacks_mutex};
 
@@ -138,9 +151,10 @@ void KafkaWALConsumerMultiplexer::backgroundPoll()
     LOG_INFO(log, "Polling consumer multiplexer started");
     setThreadName("KWalCMPoller");
 
+    auto last_flush = DB::MonotonicSeconds::now();
     while (!stopped.test())
     {
-        auto result = consumer->consume(100000, 1000);
+        auto result = consumer->consume(shared_subscription_flush_threshold_count, shared_subscription_flush_threshold_ms);
 
         if (!result.records.empty())
         {
@@ -148,9 +162,37 @@ void KafkaWALConsumerMultiplexer::backgroundPoll()
             handleResult(std::move(result));
             assert(result.records.empty());
         }
+
+        if (DB::MonotonicSeconds::now() - last_flush >= 10)
+        {
+            flush();
+            last_flush = DB::MonotonicSeconds::now();
+        }
     }
 
     LOG_INFO(log, "Polling consumer multiplexer stopped");
+}
+
+void KafkaWALConsumerMultiplexer::flush() const
+{
+    std::vector<CallbackContextPtr> due_callbacks;
+    {
+        std::lock_guard lock{callbacks_mutex};
+
+        for (const auto & topic_callback : callbacks)
+        {
+            if (DB::MonotonicMilliseconds::now() - topic_callback.second->last_call_ts >= shared_subscription_flush_threshold_ms)
+            {
+                due_callbacks.push_back(topic_callback.second);
+            }
+        }
+    }
+
+    for (const auto & callback_ctx : due_callbacks)
+    {
+        callback_ctx->callback({}, callback_ctx->data);
+        callback_ctx->last_call_ts = DB::MonotonicMilliseconds::now();
+    }
 }
 
 void KafkaWALConsumerMultiplexer::handleResult(ConsumeResult result) const
@@ -179,12 +221,14 @@ void KafkaWALConsumerMultiplexer::handleResult(ConsumeResult result) const
         if (likely(callback_ctx))
         {
             callback_ctx->callback(std::move(topic_records.second), callback_ctx->data);
+            callback_ctx->last_call_ts = DB::MonotonicMilliseconds::now();
         }
     }
 }
 
 int32_t KafkaWALConsumerMultiplexer::commit(const TopicPartitionOffset & tpo)
 {
+    assert(consumer);
     return consumer->commit({tpo});
 }
 }

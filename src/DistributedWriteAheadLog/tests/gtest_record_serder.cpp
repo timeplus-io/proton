@@ -7,7 +7,6 @@
 #include <DistributedWriteAheadLog/ByteVector.h>
 #include <DistributedWriteAheadLog/OpCodes.h>
 #include <DistributedWriteAheadLog/Record.h>
-#include <DistributedWriteAheadLog/WAL.h>
 
 #include <gtest/gtest.h>
 

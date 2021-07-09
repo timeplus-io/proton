@@ -943,6 +943,7 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
     }
 
     /// Add a topic/partition at a time
+    size_t i = 0;
     for (const auto & tpo : bench_settings.consumer_settings.kafka_topic_partition_offsets)
     {
         this_thread::sleep_for(20000ms);
@@ -950,22 +951,21 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
         cout << "adding topic=" << tpo.topic << " partition=" << tpo.partition << " offset=" << tpo.offset
              << "\n";
 
-        Int32 jobid = 0;
-        for (auto & wal : wals)
+        /// The multiplexers are sharing the same consumer group id
+        /// Assign one to consume the partition
+        auto & wal = wals[i % wals.size()];
+        auto res = wal->addSubscription(tpo, callback, datas[i % wals.size()].get());
+
+        assert(!res.err);
+        if (res.err)
         {
-            auto res = wal->addSubscription(tpo, callback, datas[jobid].get());
-
-            assert(!res);
-            if (res)
-            {
-                cout << "failed to subscribe, error=" << res << "\n";
-            }
-
-            ++jobid;
+            cout << "failed to subscribe, error=" << res.err << "\n";
         }
+        ++i;
     }
 
     /// Remove a topic/partition at a time
+    i = 0;
     for (const auto & tpo : bench_settings.consumer_settings.kafka_topic_partition_offsets)
     {
         this_thread::sleep_for(20000ms);
@@ -973,10 +973,14 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
         cout << "Removing topic=" << tpo.topic << " partition=" << tpo.partition << " offset=" << tpo.offset
              << "\n";
 
-        for (auto & wal : wals)
+        auto & wal = wals[i % wals.size()];
+        auto res = wal->removeSubscription(tpo);
+        assert(!res);
+        if (res)
         {
-            wal->removeSubscription(tpo);
+            cout << "failed to unsubscribe, error=" << res << "\n";
         }
+        ++i;
     }
 
     while (consumed <= bench_settings.consumer_settings.max_messages)

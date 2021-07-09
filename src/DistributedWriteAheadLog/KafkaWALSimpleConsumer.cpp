@@ -181,7 +181,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
         KafkaWALContext & ctx;
         Poco::Logger * log;
 
-        Int64 current_size = 0;
+        Int64 current_bytes = 0;
         Int64 current_rows = 0;
 
         WrappedData(
@@ -208,10 +208,12 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
                 return;
             }
 
+            auto bytes = rkmessage->len;
             auto record = kafkaMsgToRecord(rkmessage);
+
             if (likely(record))
             {
-                wrapped->current_size += record->block.bytes();
+                wrapped->current_bytes += bytes;
                 wrapped->current_rows += record->block.rows();
                 wrapped->records.push_back(std::move(record));
                 assert(!record);
@@ -225,7 +227,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
                     wrapped->ctx.partition);
             }
 
-            if (wrapped->current_size >= wrapped->ctx.consume_callback_max_messages_size || wrapped->current_rows >= wrapped->ctx.consume_callback_max_rows)
+            if (wrapped->current_bytes >= wrapped->ctx.consume_callback_max_bytes || wrapped->current_rows >= wrapped->ctx.consume_callback_max_rows)
             {
                 if (likely(wrapped->callback))
                 {
@@ -235,7 +237,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, K
                         wrapped->callback(std::move(wrapped->records), wrapped->data);
                         assert(wrapped->records.empty());
                         wrapped->records.reserve(size);
-                        wrapped->current_size = 0;
+                        wrapped->current_bytes = 0;
                         wrapped->current_rows = 0;
                     }
                     catch (...)
@@ -311,6 +313,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
 
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
         static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free};
+
     auto res = rd_kafka_consume_batch(ctx.topic_handle.get(), ctx.partition, timeout_ms, rkmessages.get(), count);
 
     if (res >= 0)

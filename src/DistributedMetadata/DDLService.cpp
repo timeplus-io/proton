@@ -56,7 +56,7 @@ namespace
     {
         for (const auto & err_code : UNRETRIABLE_ERROR_CODES)
         {
-            if (err_msg.find("Code: " + err_code) != String::npos)
+            if (err_msg.find("code:" + err_code) != String::npos || err_msg.find("Code: " + err_code) != String::npos)
             {
                 return true;
             }

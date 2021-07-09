@@ -18,6 +18,8 @@ void DistributedMergeTreeCallbackData::wait() const
 
 void DistributedMergeTreeCallbackData::commit(DWAL::RecordPtrs records)
 {
+    ++outstanding_commits;
+
     if (finishRecovery())
     {
         doCommit(std::move(records));
@@ -39,6 +41,7 @@ void DistributedMergeTreeCallbackData::commit(DWAL::RecordPtrs records)
         /// than max committed sn
         if (recovery_records.back()->sn < storage->maxCommittedSN())
         {
+            --outstanding_commits;
             return;
         }
 
@@ -59,11 +62,12 @@ void DistributedMergeTreeCallbackData::commit(DWAL::RecordPtrs records)
         recovery_records.clear();
         missing_sequence_ranges.clear();
     }
+
+    --outstanding_commits;
 }
 
 inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges)
 {
-    ++outstanding_commits;
     try
     {
         storage->commit(std::move(records), std::move(sequence_ranges), ctx);
@@ -73,7 +77,6 @@ inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records,
         LOG_ERROR(
             storage->log, "Failed to commit data for shard={}, exception={}", storage->shard, getCurrentExceptionMessage(true, true));
     }
-    --outstanding_commits;
 }
 
 std::vector<RecordsSequenceRangesPair> DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(

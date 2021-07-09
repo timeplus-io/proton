@@ -1,10 +1,12 @@
 #pragma once
 
+#include "DistributedMergeTreeCallbackData.h"
 #include "IngestingBlocks.h"
 
 #include <pcg_random.hpp>
 #include <ext/shared_ptr_helper.h>
 
+#include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
 #include <DistributedWriteAheadLog/WAL.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -202,7 +204,7 @@ private:
     static void writeCallback(const DWAL::AppendResult & result, void * data);
 
     DWAL::RecordSN snLoaded() const;
-    void backgroundConsumer();
+    void backgroundPoll();
     void mergeBlocks(Block & lhs, Block & rhs);
     bool dedupBlock(const DWAL::RecordPtr & record);
     void addIdempotentKey(const String & key);
@@ -221,13 +223,24 @@ private:
     void commitSN(std::any & dwal_consume_ctx);
     void commitSNLocal(DWAL::RecordSN commit_sn);
     void commitSNRemote(DWAL::RecordSN commit_sn, std::any & dwal_consume_ctx);
+
+    void finalCommit(std::any & ctx);
+    void periodicallyCommit(std::any & ctx);
+
     void progressSequences(const SequencePair & seq);
     void progressSequencesWithoutLock(const SequencePair & seq);
     Int64 maxCommittedSN() const;
 
+    static void consumeCallback(DWAL::RecordPtrs records, void * data);
+
+    /// Shared mode consumption
+    void addSubscription();
+    void removeSubscription();
+
 private:
     Int32 replication_factor;
     Int32 shards;
+    String topic;
     ExpressionActionsPtr sharding_key_expr;
 
     /// Current shard. DWAL partition and table shard is 1:1 mapped
@@ -241,7 +254,13 @@ private:
     /// Cached ctx for reuse
     std::any dwal_append_ctx;
 
+    /// For Produce and dedicated consumption
     DWAL::WALPtr dwal;
+
+    /// For shared consumption
+    DWAL::KafkaWALConsumerMultiplexerPtr multiplexer;
+    std::weak_ptr<DWAL::KafkaWALConsumerMultiplexer::CallbackContext> shared_subscription_ctx;
+
     IngestingBlocks ingesting_blocks;
 
     /// Local checkpoint threshold timer
@@ -249,7 +268,7 @@ private:
 
     /// Forwarding storage if it is not virtual
     std::shared_ptr<StorageMergeTree> storage;
-    std::optional<ThreadPool> tailer;
+    std::optional<ThreadPool> poller;
 
     ThreadPool & part_commit_pool;
 
@@ -264,10 +283,13 @@ private:
     std::deque<std::shared_ptr<String>> idempotent_keys;
     std::unordered_set<StringRef, StringRefHash> idempotent_keys_index;
 
+    std::unique_ptr<DistributedMergeTreeCallbackData> callback_data;
+
     // For random shard index generation
     mutable std::mutex rng_mutex;
     pcg64 rng;
 
+    std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 };
 }

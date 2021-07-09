@@ -38,6 +38,8 @@ private:
 
     void doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges = {});
 
+    friend StorageDistributedMergeTree;
+
 private:
     StorageDistributedMergeTree * storage;
 

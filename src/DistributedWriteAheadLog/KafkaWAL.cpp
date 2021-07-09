@@ -228,7 +228,6 @@ void KafkaWAL::shutdown()
 {
     if (stopped.test_and_set())
     {
-        LOG_ERROR(log, "Already shutdown");
         return;
     }
 

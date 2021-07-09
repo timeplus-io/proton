@@ -73,4 +73,5 @@ public:
 };
 
 using WALPtr = std::shared_ptr<WAL>;
+using WALPtrs = std::vector<WALPtr>;
 }
