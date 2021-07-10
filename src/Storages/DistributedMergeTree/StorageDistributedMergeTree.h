@@ -35,7 +35,7 @@ class StorageDistributedMergeTree final : public ext::shared_ptr_helper<StorageD
 public:
     void startup() override;
     void shutdown() override;
-    ~StorageDistributedMergeTree() override = default;
+    ~StorageDistributedMergeTree() override;
 
     String getName() const override;
 
@@ -191,15 +191,20 @@ private:
     {
         String query_status_poll_id;
         UInt16 block_id;
+
         StorageDistributedMergeTree * storage;
 
         WriteCallbackData(const String & query_status_poll_id_, UInt16 block_id_, StorageDistributedMergeTree * storage_)
             : query_status_poll_id(query_status_poll_id_), block_id(block_id_), storage(storage_)
         {
+            ++storage_->outstanding_blocks;
         }
+
+        ~WriteCallbackData() { --storage->outstanding_blocks; }
     };
 
-    WriteCallbackData * writeCallbackData(const String & query_status_poll_id, UInt16 block_id);
+    std::unique_ptr<WriteCallbackData> writeCallbackData(const String & query_status_poll_id, UInt16 block_id);
+
     void writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id);
 
     static void writeCallback(const DWAL::AppendResult & result, void * data);
@@ -289,6 +294,9 @@ private:
     // For random shard index generation
     mutable std::mutex rng_mutex;
     pcg64 rng;
+
+    /// Outstanding async ingest records
+    std::atomic_uint64_t outstanding_blocks = 0;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;

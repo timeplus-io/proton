@@ -238,6 +238,7 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
 
     if (likely(setTableStorageByName(database, table, storage)))
     {
+        storage->startup();
         return storage;
     }
     else

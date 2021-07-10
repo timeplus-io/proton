@@ -346,12 +346,12 @@ void StorageDistributedMergeTree::startup()
         return;
     }
 
+    initWal();
+
     if (storage)
     {
         LOG_INFO(log, "Starting");
         storage->startup();
-
-        initWal();
 
         if (storage_settings.get()->streaming_storage_subscription_mode.value == "shared")
         {
@@ -366,6 +366,21 @@ void StorageDistributedMergeTree::startup()
         }
         LOG_INFO(log, "Started");
     }
+}
+
+
+StorageDistributedMergeTree::~StorageDistributedMergeTree()
+{
+    shutdown();
+
+    /// Wait for outstanding blocks
+    while (outstanding_blocks != 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        LOG_INFO(log, "Waiting for outstanding_blocks={}", outstanding_blocks);
+    }
+
+    LOG_INFO(log, "Completely dtored");
 }
 
 void StorageDistributedMergeTree::shutdown()
@@ -388,7 +403,7 @@ void StorageDistributedMergeTree::shutdown()
         }
         storage->shutdown();
     }
-    LOG_INFO(log, "Stopped");
+    LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
 }
 
 String StorageDistributedMergeTree::getName() const
@@ -470,8 +485,10 @@ void StorageDistributedMergeTree::checkTableCanBeDropped() const
 void StorageDistributedMergeTree::drop()
 {
     shutdown();
-    assert(storage);
-    storage->drop();
+    if (storage)
+    {
+        storage->drop();
+    }
 }
 
 void StorageDistributedMergeTree::truncate(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
@@ -851,7 +868,8 @@ DWAL::RecordSN StorageDistributedMergeTree::lastSN() const
     return last_sn;
 }
 
-StorageDistributedMergeTree::WriteCallbackData * StorageDistributedMergeTree::writeCallbackData(const String & query_status_poll_id, UInt16 block_id)
+std::unique_ptr<StorageDistributedMergeTree::WriteCallbackData>
+StorageDistributedMergeTree::writeCallbackData(const String & query_status_poll_id, UInt16 block_id)
 {
     assert(!query_status_poll_id.empty());
 
@@ -859,7 +877,7 @@ StorageDistributedMergeTree::WriteCallbackData * StorageDistributedMergeTree::wr
     assert(added);
     (void)added;
 
-    return new WriteCallbackData{query_status_poll_id, block_id, this};
+    return std::make_unique<WriteCallbackData>(query_status_poll_id, block_id, this);
 }
 
 void StorageDistributedMergeTree::writeCallback(
@@ -878,9 +896,9 @@ void StorageDistributedMergeTree::writeCallback(
 
 void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & result, void * data)
 {
-    auto pdata = static_cast<WriteCallbackData *>(data);
+    std::unique_ptr<StorageDistributedMergeTree::WriteCallbackData> pdata(static_cast<WriteCallbackData *>(data));
+
     pdata->storage->writeCallback(result, pdata->query_status_poll_id, pdata->block_id);
-    delete pdata;
 }
 
 /// Merge `rhs` block to `lhs`
@@ -1463,14 +1481,17 @@ void StorageDistributedMergeTree::initWal()
 
     dwal = DWAL::KafkaWALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
 
-    /// Init consume context
-    dwal_consume_ctx.partition = shard;
-    dwal_consume_ctx.offset = snLoaded();
-    dwal_consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
-    dwal_consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
-    dwal_consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
-    dwal_consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
-    dwal->initConsumerTopicHandle(dwal_consume_ctx);
+    if (storage)
+    {
+        /// Init consume context only when it has backing storage
+        dwal_consume_ctx.partition = shard;
+        dwal_consume_ctx.offset = snLoaded();
+        dwal_consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
+        dwal_consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
+        dwal_consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
+        dwal_consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
+        dwal->initConsumerTopicHandle(dwal_consume_ctx);
+    }
 
     /// Init produce context
     /// Cached ctx, reused by append. Multiple threads are accessing append context

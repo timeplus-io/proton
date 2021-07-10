@@ -154,46 +154,50 @@ void KafkaWAL::initProducerTopicHandle(KafkaWALContext & ctx) const
 
 void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rkmessage, void * opaque)
 {
-    if (rkmessage->_private)
+    bool failed = false;
+    if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR && rd_kafka_message_status(rkmessage) != RD_KAFKA_MSG_STATUS_PERSISTED)
     {
-        DeliveryReport * report = static_cast<DeliveryReport *>(rkmessage->_private);
-        if (rd_kafka_message_status(rkmessage) == RD_KAFKA_MSG_STATUS_PERSISTED)
-        {
-            /// Usually for retried message and idempotent is enabled.
-            /// In this case, the message is actually persisted in Kafka broker
-            /// the `offset` in delivery report may be -1
-            report->err = DB::ErrorCodes::OK;
-        }
-        else
-        {
-            report->err = mapErrorCode(rkmessage->err);
+        auto * stats = static_cast<KafkaWALStats *>(opaque);
+        stats->failed += 1;
+        failed = true;
+    }
 
-            if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR)
-            {
-                auto * stats = static_cast<KafkaWALStats *>(opaque);
-                stats->failed += 1;
-            }
-        }
-        report->partition = rkmessage->partition;
-        report->offset = rkmessage->offset;
+    if (rkmessage->_private == nullptr)
+    {
+        return;
+    }
 
-        if (report->callback)
-        {
-            AppendResult result = {
-                .err = report->err,
-                .sn = rkmessage->offset,
-                .partition = rkmessage->partition,
-            };
-            /// Since deliveryReport is invoked in the poller thread
-            /// we will need be extremely careful the `callback` and
-            /// `data`'s lifetime are still valid here.
-            report->callback(result, report->data);
-        }
+    DeliveryReport * report = static_cast<DeliveryReport *>(rkmessage->_private);
+    if (!failed)
+    {
+        /// Usually for retried message and idempotent is enabled.
+        /// In this case, the message is actually persisted in Kafka broker
+        /// the `offset` in delivery report may be -1
+        report->err = DB::ErrorCodes::OK;
+    }
+    else
+    {
+        report->err = mapErrorCode(rkmessage->err);
+    }
+    report->partition = rkmessage->partition;
+    report->offset = rkmessage->offset;
 
-        if (report->delete_self)
-        {
-            delete report;
-        }
+    if (report->callback)
+    {
+        AppendResult result = {
+            .err = report->err,
+            .sn = rkmessage->offset,
+            .partition = rkmessage->partition,
+        };
+        /// Since deliveryReport is invoked in the poller thread
+        /// we will need be extremely careful the `callback` and
+        /// `data`'s lifetime are still valid here.
+        report->callback(result, report->data);
+    }
+
+    if (report->delete_self)
+    {
+        delete report;
     }
 }
 
@@ -333,7 +337,11 @@ int32_t KafkaWAL::append(const Record & record, AppendCallback callback, void * 
     assert(!record.empty());
     assert(ctx.topic_handle);
 
-    std::unique_ptr<DeliveryReport> dr(new DeliveryReport{callback, data, true});
+    std::unique_ptr<DeliveryReport> dr;
+    if (callback)
+    {
+        dr.reset(new DeliveryReport{callback, data, true});
+    }
 
     int32_t err = doAppend(record, dr.get(), ctx);
     if (likely(err == static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR)))

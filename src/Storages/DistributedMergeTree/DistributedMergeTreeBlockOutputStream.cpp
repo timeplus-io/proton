@@ -4,6 +4,7 @@
 #include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
+#include <common/ClockUtils.h>
 
 
 namespace DB
@@ -19,6 +20,14 @@ DistributedMergeTreeBlockOutputStream::DistributedMergeTreeBlockOutputStream(
     StorageDistributedMergeTree & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
     : storage(storage_), metadata_snapshot(metadata_snapshot_), query_context(query_context_)
 {
+}
+
+DistributedMergeTreeBlockOutputStream::~DistributedMergeTreeBlockOutputStream()
+{
+    /// We need wait for all outstanding ingesting block committed
+    /// before dtor itself. Otherwise the if the registered callback is invoked
+    /// after dtor, crash will happen
+    flush();
 }
 
 Block DistributedMergeTreeBlockOutputStream::getHeader() const
@@ -127,13 +136,18 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
         }
         else
         {
-            outstanding += 1;
+            auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
             auto ret = storage.dwal->append(
                 record,
                 &StorageDistributedMergeTree::writeCallback,
-                storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding),
+                callback_data.get(),
                 storage.dwal_append_ctx);
-            if (ret != 0)
+            if (ret == ErrorCodes::OK)
+            {
+                /// The writeCallback takes over the ownership of callback data
+                callback_data.release();
+            }
+            else
             {
                 throw Exception("Failed to insert data", ret);
             }
@@ -143,13 +157,10 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
 
 void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::AppendResult & result)
 {
+    ++committed;
     if (result.err != ErrorCodes::OK)
     {
-        err = result.err;
-    }
-    else
-    {
-        ++committed;
+        errcode = result.err;
     }
 }
 
@@ -166,28 +177,28 @@ void DistributedMergeTreeBlockOutputStream::flush()
         return;
     }
 
-    /// 3) Inplace poll append result until either all of records have been committed or error out or timed out
-    auto start = std::chrono::steady_clock::now();
+    /// 3) Inplace poll append result until either all of records have been committed
+    auto start = MonotonicSeconds::now();
     while (1)
     {
         if (committed == outstanding)
         {
-            /// Successfully ingest all data
+            if (errcode != ErrorCodes::OK)
+            {
+                throw Exception("Failed to insert data", errcode);
+            }
             return;
-        }
-        else if (err != ErrorCodes::OK)
-        {
-            throw Exception("Failed to insert data", err);
         }
         else
         {
             storage.dwal->poll(10, storage.dwal_append_ctx);
         }
 
-        /// 30 seconds timeout
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() >= 30000)
+        if (MonotonicSeconds::now() - start >= 2)
         {
-            throw Exception("Failed to insert data, timed out", ErrorCodes::TIMEOUT_EXCEEDED);
+            LOG_ERROR(
+                storage.log, "Still Waiting for data to be committed. Appended data seems getting lost. There are probably having bugs.");
+            start = MonotonicSeconds::now();
         }
     }
 }
