@@ -35,6 +35,7 @@ public:
 private:
     BlocksWithShard shardBlock(const Block & block) const;
     BlocksWithShard doShardBlock(const Block & block) const;
+    String getIngestMode() const;
 
 private:
     void writeCallback(const DWAL::AppendResult & result);

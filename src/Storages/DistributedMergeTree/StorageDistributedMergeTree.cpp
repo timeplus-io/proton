@@ -368,7 +368,6 @@ void StorageDistributedMergeTree::startup()
     }
 }
 
-
 StorageDistributedMergeTree::~StorageDistributedMergeTree()
 {
     shutdown();
@@ -1478,6 +1477,8 @@ void StorageDistributedMergeTree::initWal()
     }
 
     shard = ssettings->shard.value;
+
+    default_ingest_mode = ssettings->distributed_ingest_mode.value;
 
     dwal = DWAL::KafkaWALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
 

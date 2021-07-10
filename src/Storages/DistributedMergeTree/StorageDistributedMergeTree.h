@@ -251,6 +251,8 @@ private:
     /// Current shard. DWAL partition and table shard is 1:1 mapped
     Int32 shard = -1;
 
+    String default_ingest_mode;
+
     /// For sharding
     bool sharding_key_is_deterministic = false;
     std::vector<UInt64> slot_to_shard;

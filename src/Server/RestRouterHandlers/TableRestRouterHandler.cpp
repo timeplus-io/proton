@@ -29,6 +29,7 @@ namespace
         "streaming_storage_auto_offset_reset",
         "streaming_storage_request_required_acks",
         "streaming_storage_request_timeout_ms",
+        "distributed_ingest_mode",
         "distributed_flush_threshold_ms",
         "distributed_flush_threshold_count",
         "distributed_flush_threshold_bytes",
@@ -336,6 +337,14 @@ String TableRestRouterHandler::getAndValidateStorageSetting(const String & key) 
     else if (key == "streaming_storage_auto_offset_reset")
     {
         if (value != "earliest" && value != "latest")
+        {
+            return "";
+        }
+        return fmt::format("{}='{}'", key, value);
+    }
+    else if (key == "distributed_ingest_mode")
+    {
+        if (value != "async" && value != "sync" && value != "fire_and_forget" && value != "ordered")
         {
             return "";
         }

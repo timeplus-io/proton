@@ -161,6 +161,7 @@ struct Settings;
     M(Int64, distributed_flush_threshold_ms, 1000, "Time threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_count, 1000000, "Row count threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
+    M(String, distributed_ingest_mode, "async", "Data ingestion mode for DistributedMergeTree", 0) \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

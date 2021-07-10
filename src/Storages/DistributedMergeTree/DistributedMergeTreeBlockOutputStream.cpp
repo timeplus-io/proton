@@ -91,6 +91,19 @@ BlocksWithShard DistributedMergeTreeBlockOutputStream::shardBlock(const Block & 
     return {BlockWithShard{Block(block), shard}};
 }
 
+inline String DistributedMergeTreeBlockOutputStream::getIngestMode() const
+{
+    auto ingest_mode = query_context->getIngestMode();
+
+    if (!ingest_mode.empty())
+        return ingest_mode;
+
+    if (!storage.default_ingest_mode.empty())
+        return storage.default_ingest_mode;
+
+    return "async";
+}
+
 void DistributedMergeTreeBlockOutputStream::write(const Block & block)
 {
     if (block.rows() == 0)
@@ -104,7 +117,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
     /// FIXME, if one block is too large in size (bigger than max size of a Kafka record can have),
     /// further split the bock
 
-    const auto & ingest_mode = query_context->getIngestMode();
+    auto ingest_mode = getIngestMode();
 
     /// 2) Commit each sharded block to corresponding Kafka partition
     /// we failed the whole insert whenever single block failed
@@ -117,24 +130,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
             record.setIdempotentKey(query_context->getIdempotentKey());
         }
 
-        if (ingest_mode == "sync")
-        {
-            auto ret = storage.dwal->append(record, &DistributedMergeTreeBlockOutputStream::writeCallback, this, storage.dwal_append_ctx);
-            if (ret != 0)
-            {
-                throw Exception("Failed to insert data", ret);
-            }
-            outstanding += 1;
-        }
-        else if (ingest_mode == "ordered")
-        {
-            auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
-            if (ret.err != ErrorCodes::OK)
-            {
-                throw Exception("Failed to insert data", ret.err);
-            }
-        }
-        else
+        if (ingest_mode == "async")
         {
             auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
             auto ret = storage.dwal->append(
@@ -149,7 +145,33 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
             }
             else
             {
-                throw Exception("Failed to insert data", ret);
+                throw Exception("Failed to insert data async", ret);
+            }
+        }
+        else if (ingest_mode == "sync")
+        {
+            auto ret = storage.dwal->append(record, &DistributedMergeTreeBlockOutputStream::writeCallback, this, storage.dwal_append_ctx);
+            if (ret != 0)
+            {
+                throw Exception("Failed to insert data sync", ret);
+            }
+            outstanding += 1;
+        }
+        else if (ingest_mode == "fire_and_forget")
+        {
+            auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
+            if (ret != 0)
+            {
+                throw Exception("Failed to insert data fire_and_forget", ret);
+            }
+        }
+        else
+        {
+            /// ordered
+            auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
+            if (ret.err != ErrorCodes::OK)
+            {
+                throw Exception("Failed to insert data ordered", ret.err);
             }
         }
     }
