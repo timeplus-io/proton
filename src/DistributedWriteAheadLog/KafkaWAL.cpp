@@ -144,7 +144,7 @@ void KafkaWAL::initProducerTopicHandle(KafkaWALContext & ctx) const
         /// std::make_pair("delivery.timeout.ms", std::to_string(kLocalMessageTimeout)),
         /// FIXME, partitioner
         std::make_pair("partitioner", "consistent_random"),
-        std::make_pair("compression.codec", "snappy"),
+        std::make_pair("compression.codec", ctx.client_side_compression ? "none" : "snappy"),
     };
 
     /// rd_kafka_topic_conf_set_partitioner_cb;
@@ -279,7 +279,6 @@ void KafkaWAL::initProducerHandle()
         std::make_pair("message.send.max.retries", std::to_string(settings->message_send_max_retries)),
         std::make_pair("retry.backoff.ms", std::to_string(settings->retry_backoff_ms)),
         std::make_pair("enable.idempotence", std::to_string(settings->enable_idempotence)),
-        std::make_pair("compression.codec", settings->compression_codec),
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
         std::make_pair("message.max.bytes", std::to_string(settings->message_max_bytes)),
     };
@@ -382,7 +381,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const Kaf
         headers.swap(header_ptr);
     }
 
-    ByteVector data{Record::write(record)};
+    ByteVector data{Record::write(record, ctx.client_side_compression)};
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -487,7 +486,7 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
     }
 
     KConfParams params = {
-        std::make_pair("compression.type", "snappy"),
+        std::make_pair("compression.type", ctx.client_side_compression ? "none" : "snappy"),
         std::make_pair("cleanup.policy", ctx.cleanup_policy),
     };
 

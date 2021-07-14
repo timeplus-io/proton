@@ -40,9 +40,9 @@ struct Record
     std::string & idempotentKey() { return headers.at(IDEMPOTENT_KEY); }
     void setIdempotentKey(const std::string & key) { headers[IDEMPOTENT_KEY] = key; }
 
-    static uint8_t version(uint64_t flags) { return flags & 0x1F; }
+    static uint8_t ALWAYS_INLINE version(uint64_t flags) { return flags & 0x1F; }
 
-    static OpCode opcode(uint64_t flags)
+    static OpCode ALWAYS_INLINE opcode(uint64_t flags)
     {
         auto opcode = (flags >> 5ul) & 0x3F;
         if (likely(opcode < static_cast<uint64_t>(OpCode::MAX_OPS_CODE)))
@@ -52,7 +52,9 @@ struct Record
         return OpCode::UNKNOWN;
     }
 
-    static ByteVector write(const Record & record);
+    static uint8_t ALWAYS_INLINE compression(uint64_t flags) { return (flags >> 11ul) & 0x01; }
+
+    static ByteVector write(const Record & record, bool compressed = false);
     static std::shared_ptr<Record> read(const char * data, size_t size);
 
     Record(OpCode op_code_, DB::Block && block_) : op_code(op_code_), block(std::move(block_)) { }

@@ -1352,6 +1352,7 @@
             <replication_factor>1</replication_factor>
             <log_roll_size>100</log_roll_size>
             <log_roll_period>7200</log_roll_period>
+            <client_side_compression>true</client_side_compression>
         </system_catalogs>
 
         <system_node_metrics>

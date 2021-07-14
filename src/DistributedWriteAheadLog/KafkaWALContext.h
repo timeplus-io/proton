@@ -30,6 +30,9 @@ struct KafkaWALContext
     /// none, gzip, snappy, lz4, zstd, inherit
     std::string compression_codec = "snappy";
 
+    /// Enable compression for internal kafka topics and message
+    bool client_side_compression = false;
+
     /// Data retention for cleanup_policy `delete`
     int64_t retention_ms = -1;
 
@@ -71,6 +74,7 @@ struct KafkaWALContext
         ctxes.push_back("partitions=" + std::to_string(partitions));
         ctxes.push_back("replication_factor=" + std::to_string(replication_factor));
         ctxes.push_back("compression_codec=" + compression_codec);
+        ctxes.push_back("client_side_compression=" + std::to_string(client_side_compression));
         ctxes.push_back("retention_ms=" + std::to_string(retention_ms));
         ctxes.push_back("segment_bytes=" + std::to_string(segment_bytes));
         ctxes.push_back("segment_ms=" + std::to_string(segment_ms));
