@@ -38,6 +38,7 @@ protected:
 
     virtual void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const = 0;
     virtual void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_ast) const;
+    virtual void buildTablePlacements(Poco::JSON::Object & resp_table, const String & table) const;
 
     virtual String getDefaultPartitionGranularity() const = 0;
     virtual String getDefaultOrderByGranularity() const = 0;

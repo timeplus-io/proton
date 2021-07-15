@@ -247,6 +247,35 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
     resp_table.set("columns", columns_mapping_json);
 }
 
+void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_table, const String & table) const
+{
+    const auto & catalog_service = CatalogService::instance(query_context);
+    const auto & table_nodes = catalog_service.findTableByName(database, table);
+
+    std::multimap<int, String> nodes;
+    for (auto node : table_nodes)
+    {
+        nodes.emplace(node->shard, node->host);
+    }
+
+    Poco::JSON::Array shards;
+    for (auto it = nodes.begin(); it != nodes.end(); it = nodes.upper_bound(it->first))
+    {
+        Poco::JSON::Object placement;
+        placement.set("shard", it->first);
+
+        auto range = nodes.equal_range(it->first);
+        Poco::JSON::Array replicas;
+        while (range.first != range.second)
+        {
+            replicas.add(range.first++->second);
+        }
+        placement.set("replicas", replicas);
+        shards.add(placement);
+    }
+    resp_table.set("shards", shards);
+}
+
 String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const
 {
     if (query_context->isDistributed())

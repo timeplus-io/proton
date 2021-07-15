@@ -77,6 +77,7 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         }
 
         buildColumnsJSON(table_mapping_json, create.columns_list);
+        buildTablePlacements(table_mapping_json, table->name);
         tables_mapping_json.add(table_mapping_json);
 
         table_names.insert(table->name);

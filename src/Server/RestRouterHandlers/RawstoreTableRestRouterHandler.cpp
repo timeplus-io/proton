@@ -57,6 +57,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
             table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
         }
 
+        buildTablePlacements(table_mapping_json, table->name);
         tables_mapping_json.add(table_mapping_json);
         table_names.insert(table->name);
     }
