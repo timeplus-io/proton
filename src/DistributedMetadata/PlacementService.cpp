@@ -265,14 +265,14 @@ void PlacementService::doBroadcast()
     record.headers["_broadcast_time"] = std::to_string(UTCMilliseconds::now());
 
     const auto & result = dwal->append(record, dwal_append_ctx);
-    if (result.err == ErrorCodes::OK)
+    if (result.err != ErrorCodes::OK)
     {
-        LOG_DEBUG(log, "Appended node metrics");
-    }
-    else
-    {
+        /// FIXME: Error handling
         LOG_ERROR(log, "Failed to append node metrics error={}", result.err);
+        return;
     }
+
+    LOG_DEBUG(log, "Appended node metrics");
 }
 
 }

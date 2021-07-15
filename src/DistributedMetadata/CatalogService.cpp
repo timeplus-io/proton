@@ -125,19 +125,14 @@ void CatalogService::append(Block && block)
     record.partition_key = 0;
     setupRecordHeaders(record, "1");
 
-    /// FIXME : reschedule
-    for (int i = 0; i < 3; ++i)
+    const auto & result = dwal->append(record, dwal_append_ctx);
+    if (result.err != ErrorCodes::OK)
     {
-        const auto & result = dwal->append(record, dwal_append_ctx);
-        if (result.err == ErrorCodes::OK)
-        {
-            LOG_INFO(log, "Appended {} table definitions in one block", record.block.rows());
-            return;
-        }
-
-        LOG_ERROR(log, "Failed to append table definition block, error={}", result.err);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        LOG_ERROR(log, "Failed to appended {} tables to DWAL", record.block.rows());
+        return;
     }
+
+    LOG_INFO(log, "Appended {} table definitions in one block", record.block.rows());
 }
 
 std::vector<String> CatalogService::databases() const

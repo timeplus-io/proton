@@ -136,17 +136,13 @@ Int32 TaskStatusService::append(TaskStatusPtr task)
 {
     auto record = buildRecord(task);
 
-    for (auto i = 0; i < RETRY_TIMES; ++i)
+    const auto & result = dwal->append(record, dwal_append_ctx);
+    if (result.err != ErrorCodes::OK)
     {
-        auto result = dwal->append(record, dwal_append_ctx);
-        if (result.err == ErrorCodes::OK)
-        {
-            return 0;
-        }
+        LOG_ERROR(log, "Failed to commit task {}", task->id);
+        return result.err;
     }
 
-    /// FIXME: Error handling
-    LOG_ERROR(log, "Failed to commit task {}", task->id);
     return 0;
 }
 

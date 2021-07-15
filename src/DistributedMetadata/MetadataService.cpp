@@ -16,6 +16,7 @@ namespace ErrorCodes
     extern const int OK;
     extern const int RESOURCE_ALREADY_EXISTS;
     extern const int RESOURCE_NOT_FOUND;
+    extern const int MSG_SIZE_TOO_LARGE;
 }
 
 namespace

@@ -12,14 +12,8 @@
 
 namespace DB
 {
-namespace
-{
-    constexpr Int32 MAX_RETRIES = 3;
-}
-
 namespace ErrorCodes
 {
-    extern const int CONFIG_ERROR;
     extern const int OK;
 }
 
@@ -124,28 +118,15 @@ void appendDDLBlock(
     /// Depending on DDLService is not ideal here, but it is convenient
     auto & ddl_service = DDLService::instance(context);
 
-    auto result_code = ErrorCodes::OK;
     const auto & query_id = context->getCurrentQueryId();
-    for (auto i = 0; i < MAX_RETRIES; ++i)
+    const auto & result_code = ddl_service.append(record);
+    if (result_code != ErrorCodes::OK)
     {
-        result_code = ddl_service.append(record);
-        if (result_code == ErrorCodes::OK)
-        {
-            LOG_INFO(log, "Successfully append record to WAL, query_id={}", query_id);
-            return;
-        }
-
-        LOG_WARNING(log, "Failed to append record to WAL, query_id={}, error={}, tried_times={}", query_id, result_code, i + 1);
-
-        if (i < MAX_RETRIES - 1)
-        {
-            LOG_INFO(log, "Sleep for a while and will try to append record again, query_id={}", query_id);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
-        }
+        LOG_ERROR(log, "Failed to append record to WAL, query_id={}, error={}", query_id, result_code);
+        throw Exception("Failed to append record to WAL, error={}", result_code);
     }
 
-    LOG_ERROR(log, "Failed to append record to WAL, query_id={}, error={}", query_id, result_code);
-    throw Exception("Failed to append record to WAL, error={}", result_code);
+    LOG_INFO(log, "Successfully append record to WAL, query_id={}", query_id);
 }
 
 }

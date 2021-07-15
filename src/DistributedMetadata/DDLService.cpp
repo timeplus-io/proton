@@ -351,27 +351,16 @@ void DDLService::createTable(DWAL::RecordPtr record)
         String hosts{boost::algorithm::join(target_hosts, ",")};
         record->headers["hosts"] = hosts;
 
-        for (auto i = 0; i < MAX_RETRIES; ++i)
+        auto result = append(*record.get());
+        if (result != ErrorCodes::OK)
         {
-            auto result = append(*record.get());
-            if (result == ErrorCodes::OK)
-            {
-                LOG_INFO(log, "Successfully find placement for create table payload={} placement={}", payload, hosts);
-                progressDDL(query_id, user, payload, "shard replicas placed");
-                return;
-            }
-
-            LOG_WARNING(log, "Failed to commit placement decision for create table payload={}, tried {} times", payload, i + 1);
-
-            if (i < MAX_RETRIES - 1)
-            {
-                LOG_INFO(log, "Sleep for a while and will try again.");
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
-            }
+            LOG_ERROR(log, "Failed to commit placement decision for create table payload={}", payload);
+            failDDL(query_id, user, payload, "Internal server error");
+            return;
         }
 
-        LOG_ERROR(log, "Failed to commit placement decision for create table payload={}", payload);
-        failDDL(query_id, user, payload, "Internal server error");
+        LOG_INFO(log, "Successfully find placement for create table payload={} placement={}", payload, hosts);
+        progressDDL(query_id, user, payload, "shard replicas placed");
     }
 }
 

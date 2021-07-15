@@ -16,6 +16,7 @@ namespace ErrorCodes
     extern const int DWAL_FATAL_ERROR;
     extern const int DWAL_RETRIABLE_ERROR;
     extern const int INVALID_CONFIG_PARAMETER;
+    extern const int MSG_SIZE_TOO_LARGE;
 }
 }
 
@@ -55,6 +56,9 @@ int32_t mapErrorCode(rd_kafka_resp_err_t err, bool retriable)
 
         case RD_KAFKA_RESP_ERR__FATAL:
             throw DB::Exception("Fatal error occurred, shall tear down the whole program", DB::ErrorCodes::DWAL_FATAL_ERROR);
+
+        case RD_KAFKA_RESP_ERR_MSG_SIZE_TOO_LARGE:
+            return DB::ErrorCodes::MSG_SIZE_TOO_LARGE;
 
         default:
             return DB::ErrorCodes::UNKNOWN_EXCEPTION;
