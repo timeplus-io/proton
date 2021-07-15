@@ -387,6 +387,7 @@ dbms_target_link_libraries (
         Poco::JSON
         Poco::MongoDB
         string_utils
+        yaml-cpp
     PUBLIC
         boost::system
         clickhouse_common_io

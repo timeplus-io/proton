@@ -1,5 +1,6 @@
 #pragma once
 
+#include "APISpecHandler.h"
 #include "ClusterInfoHandler.h"
 #include "ColumnRestRouterHandler.h"
 #include "DatabaseRestRouterHandler.h"
@@ -150,6 +151,13 @@ public:
             "GET",
             [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::ClusterInfoHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
+            "/dae/apis",
+            "GET",
+            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<DB::APISpecHandler>(query_context);
             });
     }
 

@@ -30,6 +30,9 @@ ccache --show-config ||:
 ccache --show-stats ||:
 
 mv ./programs/clickhouse* /output
+# Daisy : starts
+cp -r ../spec  /output/clickhouse-spec
+# Daisy : ends
 mv ./src/unit_tests_dbms /output ||: # may not exist for some binary builds
 find . -name '*.so' -print -exec mv '{}' /output \;
 find . -name '*.so.*' -print -exec mv '{}' /output \;
