@@ -36,6 +36,8 @@ private:
     void mutateTable(DWAL::RecordPtr record, const String & method) const;
     void mutateDatabase(DWAL::RecordPtr record, const String & method) const;
     void commit(Int64 last_sn);
+    void
+    createDWAL(const String & database, const String & table, Int32 shards, Int32 replication_factor, const String * url_parameters) const;
 
 private:
     void updateDDLStatus(

@@ -158,6 +158,10 @@ struct Settings;
     M(String, streaming_storage_subscription_mode, "shared", "Mode of subscribing / polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \
     M(Int64, streaming_storage_request_required_acks, 1, "Waited ack during data ingestion to the backend write-ahead log", 0) \
     M(Int64, streaming_storage_request_timeout_ms, 30000, "Time out value for an ingest request to the backend write-ahead log", 0) \
+    M(Int64, streaming_storage_retention_bytes, -1, "When this threshold reaches, streaming storage deletes old data", 0) \
+    M(Int64, streaming_storage_retention_ms, -1, "when this threshold reaches, streaming storage delete old data", 0) \
+    M(Int64, streaming_storage_flush_messages, -1, "Tell streaming storage to call fsync per flush messages", 0) \
+    M(Int64, streaming_storage_flush_ms, -1, "Tell streaming storage to call fsync every flush_ms interval", 0) \
     M(Int64, distributed_flush_threshold_ms, 1000, "Time threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_count, 1000000, "Row count threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \

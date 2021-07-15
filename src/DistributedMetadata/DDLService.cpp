@@ -285,11 +285,15 @@ void DDLService::createTable(DWAL::RecordPtr record)
         /// If `hosts` exists in the block, we already placed the replicas
         /// then we move to the execution stage
 
-        /// Create a DWAL for this table. FIXME: retention_ms
-        DWAL::KafkaWALContext ctx{DWAL::escapeDWalName(database, table), shards, replication_factor, "delete"};
-        doCreateDWal(ctx);
+        const String * url_parameters = nullptr;
+        if (record->headers.contains("url_parameters"))
+        {
+            url_parameters = &record->headers.at("url_parameters");
+        }
+        /// Create a DWAL for this table.
+        createDWAL(database, table, shards, replication_factor, url_parameters);
 
-        String hosts_val = record->headers.at("hosts");
+        const String & hosts_val = record->headers.at("hosts");
         std::vector<String> hosts;
         boost::algorithm::split(hosts, hosts_val, boost::is_any_of(","));
         assert(!hosts.empty());
@@ -302,9 +306,9 @@ void DDLService::createTable(DWAL::RecordPtr record)
             for (Int32 j = 0; j < shards; ++j)
             {
                 auto & uri = target_hosts[i * shards + j];
-                if (record->headers.contains("url_paramaters"))
+                if (url_parameters != nullptr)
                 {
-                    uri.setRawQuery(record->headers.at("url_paramaters"));
+                    uri.setRawQuery(*url_parameters);
                 }
                 uri.addQueryParameter("distributed_ddl", "false");
                 uri.addQueryParameter("shard", std::to_string(j));
@@ -598,6 +602,46 @@ std::vector<Poco::URI> DDLService::getTargetURIs(
         /// Table DDL request
         return toURIs(placement.placed(database, table), getTableApiPath(record->headers, table, method));
     }
+}
+
+void DDLService::createDWAL(
+    const String & database, const String & table, Int32 shards, Int32 replication_factor, const String * url_parameters) const
+{
+    DWAL::KafkaWALContext ctx{DWAL::escapeDWalName(database, table), shards, replication_factor, "delete"};
+
+    /// Parse these settings from url parameters
+    /// streaming_storage_retention_bytes,
+    /// streaming_storage_retention_ms,
+    /// streaming_storage_flush_messages,
+    /// streaming_storage_flush_ms
+    if (url_parameters != nullptr)
+    {
+        Poco::URI  uri;
+        uri.setRawQuery(*url_parameters);
+        auto params = uri.getQueryParameters();
+
+        for (const auto & kv : params)
+        {
+            if (kv.first == "streaming_storage_retention_bytes")
+            {
+                ctx.retention_bytes = std::stoll(kv.second);
+            }
+            else if (kv.first == "streaming_storage_retention_ms")
+            {
+                ctx.retention_ms = std::stoll(kv.second);
+            }
+            else if (kv.first == "streaming_storage_flush_messages")
+            {
+                ctx.flush_messages = std::stoll(kv.second);
+            }
+            else if (kv.first == "streaming_storage_flush_ms")
+            {
+                ctx.flush_ms = std::stoll(kv.second);
+            }
+        }
+    }
+
+    doCreateDWal(ctx);
 }
 
 }

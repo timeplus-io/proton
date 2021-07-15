@@ -17,6 +17,7 @@ namespace ErrorCodes
     extern const int DWAL_RETRIABLE_ERROR;
     extern const int INVALID_CONFIG_PARAMETER;
     extern const int MSG_SIZE_TOO_LARGE;
+    extern const int INTERNAL_INGEST_BUFFER_FULL;
 }
 }
 
@@ -59,6 +60,9 @@ int32_t mapErrorCode(rd_kafka_resp_err_t err, bool retriable)
 
         case RD_KAFKA_RESP_ERR_MSG_SIZE_TOO_LARGE:
             return DB::ErrorCodes::MSG_SIZE_TOO_LARGE;
+
+        case RD_KAFKA_RESP_ERR__QUEUE_FULL:
+            return DB::ErrorCodes::INTERNAL_INGEST_BUFFER_FULL;
 
         default:
             return DB::ErrorCodes::UNKNOWN_EXCEPTION;

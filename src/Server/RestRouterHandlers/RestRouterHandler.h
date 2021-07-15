@@ -221,9 +221,9 @@ private:
     void setupQueryParams(const HTTPServerRequest & request) { query_parameters = std::make_unique<HTMLForm>(request); }
 
     void setupRawQuery(const HTTPServerRequest & request)
-    { 
+    {
         Poco::URI uri(request.getURI());
-        query_context->setQueryParameter("url_paramaters", uri.getRawQuery());
+        query_context->setQueryParameter("url_parameters", uri.getRawQuery());
     }
 
 protected:

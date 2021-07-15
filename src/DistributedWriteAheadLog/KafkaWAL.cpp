@@ -401,8 +401,8 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const Kaf
         RD_KAFKA_V_RKT(ctx.topic_handle.get()),
         /// Use builtin partitioner which is consistent hashing to select partition
         /// RD_KAFKA_V_PARTITION(RD_KAFKA_PARTITION_UA),
-        /// Block if internal queue is full
-        RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_BLOCK),
+        /// Return RD_KAFKA_RESP_ERR__QUEUE_FULL if internal queue is full
+        RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_FREE),
         /// Message payload and length. Note we didn't copy the data so the ownership
         /// of data will move moved to producev if it succeeds
         RD_KAFKA_V_VALUE(data.data(), data.size()),
@@ -512,6 +512,16 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
     else
     {
         params.emplace_back("max.message.bytes", std::to_string(settings->message_max_bytes));
+    }
+
+    if (ctx.flush_messages > 0)
+    {
+        params.emplace_back("flush.messages", std::to_string(ctx.flush_messages));
+    }
+
+    if (ctx.flush_ms > 0)
+    {
+        params.emplace_back("flush.ms", std::to_string(ctx.flush_ms));
     }
 
     for (const auto & param : params)

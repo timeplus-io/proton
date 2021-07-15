@@ -35,12 +35,19 @@ struct KafkaWALContext
 
     /// Data retention for cleanup_policy `delete`
     int64_t retention_ms = -1;
+    int64_t retention_bytes = -1;
 
     /// Segments roll over size
     int64_t segment_bytes = -1;
 
     /// Segments roll over time
     int64_t segment_ms = -1;
+
+    /// Call fsync per flush_messages
+    int64_t flush_messages = -1;
+
+    /// Call fsync every flush_ms
+    int64_t flush_ms = -1;
 
     /// `compact` or `delete`
     std::string cleanup_policy = "delete";
@@ -76,8 +83,11 @@ struct KafkaWALContext
         ctxes.push_back("compression_codec=" + compression_codec);
         ctxes.push_back("client_side_compression=" + std::to_string(client_side_compression));
         ctxes.push_back("retention_ms=" + std::to_string(retention_ms));
+        ctxes.push_back("retention_bytes=" + std::to_string(retention_bytes));
         ctxes.push_back("segment_bytes=" + std::to_string(segment_bytes));
         ctxes.push_back("segment_ms=" + std::to_string(segment_ms));
+        ctxes.push_back("flush_messages=" + std::to_string(flush_messages));
+        ctxes.push_back("flush_ms=" + std::to_string(flush_ms));
         ctxes.push_back("cleanup_policy=" + cleanup_policy);
         ctxes.push_back("request_required_acks=" + std::to_string(request_required_acks));
         ctxes.push_back("request_timeout_ms=" + std::to_string(request_timeout_ms));

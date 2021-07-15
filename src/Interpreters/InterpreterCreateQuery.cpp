@@ -944,7 +944,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor)
     Block block = buildBlock(string_cols, int32_cols, uint64_cols);
 
-    appendDDLBlock(std::move(block), ctx, {"table_type", "url_paramaters"}, DWAL::OpCode::CREATE_TABLE, log);
+    appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, DWAL::OpCode::CREATE_TABLE, log);
 
     LOG_INFO(log, "Request of creating DistributedMergeTree query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
