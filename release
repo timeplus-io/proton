@@ -71,6 +71,9 @@ then
 elif [[ $BUILD_TYPE == 'debug' ]]; then
     CMAKE_BUILD_TYPE=Debug
     VERSION_POSTFIX+="+debug"
+elif [[ $BUILD_TYPE == 'RelWithDebInfo' ]]; then
+    CMAKE_BUILD_TYPE=RelWithDebInfo
+    VERSION_POSTFIX+="+RelWithDebInfo"
 fi
 
 CMAKE_FLAGS=" $MALLOC_OPTS -DSANITIZE=$SANITIZER -DENABLE_CHECK_HEAVY_BUILDS=1 $CMAKE_FLAGS"

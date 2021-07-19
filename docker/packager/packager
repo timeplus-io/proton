@@ -227,7 +227,7 @@ if __name__ == "__main__":
     parser.add_argument("--package-type", choices=['deb', 'binary', 'performance'], required=True)
     parser.add_argument("--clickhouse-repo-path", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--build-type", choices=("debug", ""), default="")
+    parser.add_argument("--build-type", choices=("debug", "RelWithDebInfo", ""), default="")
     parser.add_argument("--compiler", choices=("clang-11", "clang-11-darwin", "clang-11-darwin-aarch64", "clang-11-aarch64",
                                                "clang-12", "clang-12-darwin", "clang-12-darwin-aarch64", "clang-12-aarch64",
                                                "clang-13", "clang-13-darwin", "clang-13-darwin-aarch64", "clang-13-aarch64", "clang-13-ppc64le",
