@@ -144,7 +144,7 @@ void KafkaWAL::initProducerTopicHandle(KafkaWALContext & ctx) const
         /// std::make_pair("delivery.timeout.ms", std::to_string(kLocalMessageTimeout)),
         /// FIXME, partitioner
         std::make_pair("partitioner", "consistent_random"),
-        std::make_pair("compression.codec", ctx.client_side_compression ? "none" : "snappy"),
+        std::make_pair("compression.codec", ctx.client_side_compression ? "uncompressed" : "snappy"),
     };
 
     /// rd_kafka_topic_conf_set_partitioner_cb;
@@ -486,7 +486,7 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
     }
 
     KConfParams params = {
-        std::make_pair("compression.type", ctx.client_side_compression ? "none" : "snappy"),
+        std::make_pair("compression.type", ctx.client_side_compression ? "uncompressed" : "snappy"),
         std::make_pair("cleanup.policy", ctx.cleanup_policy),
     };
 
