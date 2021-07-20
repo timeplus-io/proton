@@ -215,12 +215,17 @@ bool TaskStatusService::validateSchema(const Block & block, const std::vector<St
     return true;
 }
 
-bool TaskStatusService::tableExists() const
+bool TaskStatusService::tableExists()
 {
+    if (table_exists)
+    {
+        return true;
+    }
     StorageID sid{"system", "tasks"};
     /// Try local catalog
     if (DatabaseCatalog::instance().isTableExist(sid, global_context))
     {
+        table_exists = true;
         return true;
     }
 
@@ -230,13 +235,15 @@ bool TaskStatusService::tableExists() const
     auto & catalog_service = CatalogService::instance(global_context);
     if (catalog_service.tableExists(sid.getDatabaseName(), sid.getTableName()))
     {
+        table_exists = true;
         return true;
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     /// Try topic name
     auto result = dwal->describe(DWAL::escapeDWalName("system", "tasks"), dwal_append_ctx);
-    return result.err == ErrorCodes::OK;
+    table_exists = (result.err == ErrorCodes::OK);
+    return table_exists;
 }
 
 TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const
@@ -311,6 +318,11 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInMemory(const Strin
 
 TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String & id)
 {
+    if (!tableExists())
+    {
+        return nullptr;
+    }
+
     CurrentThread::detachQueryIfNotDetached();
     /// FIXME: Remove DISTINCT when we resolve the checkpointing issue
     auto query_template = "SELECT DISTINCT id, status, progress, "
@@ -368,6 +380,11 @@ void TaskStatusService::findByUserInMemory(const String & user, std::vector<Task
 
 void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskStatusService::TaskStatusPtr> & res)
 {
+    if (!tableExists())
+    {
+        return;
+    }
+
     assert(!user.empty());
     CurrentThread::detachQueryIfNotDetached();
     auto query_template = "SELECT DISTINCT id, status, progress, "
@@ -480,7 +497,7 @@ void TaskStatusService::persistentFinishedTask()
     (*persistent_task)->scheduleAfter(RESCHEDULE_TIME_MS);
 }
 
-bool TaskStatusService::createTaskTable() const
+bool TaskStatusService::createTaskTable()
 {
     const auto & config = global_context->getConfigRef();
     const auto & conf = configSettings();

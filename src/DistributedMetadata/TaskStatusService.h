@@ -70,8 +70,8 @@ private:
     bool validateSchema(const Block & block, const std::vector<String> & col_names) const;
     void updateTaskStatus(TaskStatusPtr & task);
 
-    bool tableExists() const;
-    bool createTaskTable() const;
+    bool tableExists();
+    bool createTaskTable();
 
     bool persistentTaskStatuses(const std::vector<TaskStatusPtr> & tasks);
     void persistentFinishedTask();
@@ -85,6 +85,8 @@ private:
     std::deque<std::pair<SteadyClock, String>> timed_tasks;
     std::unordered_map<Int64, std::vector<TaskStatusPtr>> finished_tasks;
     std::unique_ptr<BackgroundSchedulePoolTaskHolder> persistent_task;
+
+    bool table_exists = false;
 
     static constexpr size_t RESCHEDULE_TIME_MS = 120000;
     static constexpr Int32 RETRY_TIMES = 3;
