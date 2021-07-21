@@ -21,7 +21,7 @@ String getSpecPath(const String & config_path)
     if (config_path_.depth() > 1)
     {
         spec_path_ = config_path_.parent().parent();
-        spec_path_ = spec_path_.append("clickhouse-spec");
+        spec_path_ = spec_path_.append("daisy-spec");
         if (Poco::File(spec_path_).exists())
             return spec_path_.toString();
     }
@@ -33,13 +33,13 @@ String getSpecPath(const String & config_path)
             return spec_path_.toString();
 
         spec_path_ = getenv("HOME");
-        spec_path_ = spec_path_.append("clickhouse-spec");
+        spec_path_ = spec_path_.append("daisy-spec");
         if (Poco::File(spec_path_).exists())
             return spec_path_.toString();
 
-        if (Poco::File("/etc/clickhouse-spec/").exists())
+        if (Poco::File("/etc/daisy-spec/").exists())
         {
-            return "/etc/clickhouse-spec/";
+            return "/etc/daisy-spec/";
         }
     }
     return "";
@@ -54,8 +54,8 @@ std::pair<String, Int32> APISpecHandler::executeGet(const Poco::JSON::Object::Pt
     {
         return {
             jsonErrorResponse(
-                "The clickhouse-spec file : '" + spec_path
-                    + "' could not be found, please keep it consistent with the clickhouse-server path",
+                "The daisy-spec file : '" + spec_path
+                    + "' could not be found, please keep it consistent with the daisy-server path",
                 ErrorCodes::RESOURCE_NOT_FOUND),
             HTTPResponse::HTTP_NOT_FOUND};
     }
@@ -66,7 +66,7 @@ std::pair<String, Int32> APISpecHandler::executeGet(const Poco::JSON::Object::Pt
     {
         return {
             jsonErrorResponse(
-                "Failed to find the rest-api under the clickhouse-spec , path is : " + path.toString(), ErrorCodes::RESOURCE_NOT_FOUND),
+                "Failed to find the rest-api under the daisy-spec , path is : " + path.toString(), ErrorCodes::RESOURCE_NOT_FOUND),
             HTTPResponse::HTTP_NOT_FOUND};
     }
 

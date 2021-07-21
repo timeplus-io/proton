@@ -203,7 +203,7 @@ void SearchHandler::setQuerySettings() const
         return false;
     };
 
-    const auto & query_id = getQueryParameter("x-bdg-request-id");
+    const auto & query_id = getQueryParameter("x-daisy-request-id");
     if (!query_id.empty())
         query_context->setCurrentQueryId(query_id);
 

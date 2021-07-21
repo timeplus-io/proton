@@ -3,5 +3,5 @@ usr/bin/clickhouse-copier
 usr/bin/clickhouse-report
 etc/clickhouse-server/config.xml
 etc/clickhouse-server/users.xml
-etc/clickhouse-spec/
+etc/daisy-spec/
 etc/systemd/system/clickhouse-server.service

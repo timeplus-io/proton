@@ -42,13 +42,13 @@ void WriteBufferFromHTTPServerResponse::writeSummary()
     {
         /// Sent summary via header
         if (response_header_ostr)
-            *response_header_ostr << "X-ClickHouse-Summary: " << progress_string_writer.str() << "\r\n" << std::flush;
+            *response_header_ostr << "x-daisy-summary: " << progress_string_writer.str() << "\r\n" << std::flush;
     }
     else
     {
         /// Sent summary via body
         if (response_body_ostr)
-            *response_body_ostr << "X-ClickHouse-Summary: " << progress_string_writer.str() << "\n" << std::flush;
+            *response_body_ostr << "x-daisy-summary: " << progress_string_writer.str() << "\n" << std::flush;
     }
     /// Daisy : ends
 }
@@ -68,7 +68,7 @@ void WriteBufferFromHTTPServerResponse::writeProgress()
     if (send_progress_mode == SendProgressMode::progress_via_header)
     {
         if (response_header_ostr)
-            *response_header_ostr << "X-ClickHouse-Progress: " << progress_string_writer.str() << "\r\n" << std::flush;
+            *response_header_ostr << "x-daisy-progress: " << progress_string_writer.str() << "\r\n" << std::flush;
     }
     else if (send_progress_mode == SendProgressMode::progress_via_body)
     {
@@ -80,7 +80,7 @@ void WriteBufferFromHTTPServerResponse::writeProgress()
         }
 
         if (response_body_ostr)
-            *response_body_ostr << "X-ClickHouse-Progress: " << progress_string_writer.str() << "\n" << std::flush;
+            *response_body_ostr << "x-daisy-progress: " << progress_string_writer.str() << "\n" << std::flush;
     }
     /// Daisy : ends
 }
