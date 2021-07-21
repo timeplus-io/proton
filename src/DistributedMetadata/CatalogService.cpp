@@ -305,6 +305,12 @@ std::pair<CatalogService::TablePtr, StoragePtr> CatalogService::findTableStorage
     return {table_p, nullptr};
 }
 
+inline void CatalogService::deleteTableStorageByName(const String & database, const String & table)
+{
+    std::shared_lock storage_guard{storage_rwlock};
+    storages.erase(std::make_pair(database, table));
+}
+
 CatalogService::TablePtrs CatalogService::findTableByName(const String & database, const String & table) const
 {
     std::vector<TablePtr> results;
@@ -386,6 +392,8 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
     {
         auto iter_by_name = indexed_by_name.find(std::make_pair(p.second->database, p.second->name));
         assert(iter_by_name != indexed_by_name.end());
+
+        deleteTableStorageByName(p.second->database, p.second->name);
 
         /// Deleted table, remove from `indexed_by_name` and `indexed_by_id`
         auto removed = iter_by_name->second.erase(std::make_pair(p.second->node_identity, p.second->shard));
@@ -650,6 +658,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             auto iter_by_name = indexed_by_name.find(std::make_pair(p.second->database, p.second->name));
             assert(iter_by_name != indexed_by_name.end());
 
+            deleteTableStorageByName(p.second->database, p.second->name);
             /// Deleted table, remove from `indexed_by_name` and `indexed_by_id`
             auto removed = iter_by_name->second.erase(std::make_pair(p.second->node_identity, p.second->shard));
             assert(removed == 1);
@@ -699,6 +708,8 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             std::unique_lock storage_guard{storage_rwlock};
             if (uuid != UUIDHelpers::Nil)
             {
+                deleteTableStorageByName(p.second->database, p.second->name);
+
                 auto removed = indexed_by_id.erase(uuid);
                 (void)removed;
                 assert(removed);

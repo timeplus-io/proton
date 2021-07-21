@@ -62,6 +62,7 @@ public:
 
     std::pair<TablePtr, StoragePtr> findTableStorageById(const UUID & uuid) const;
     std::pair<TablePtr, StoragePtr> findTableStorageByName(const String & database, const String & table) const;
+    void deleteTableStorageByName(const String & database, const String & table);
 
     TablePtrs findTableByName(const String & database, const String & table) const;
     TablePtrs findTableByNode(const String & node_identity) const;
