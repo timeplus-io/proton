@@ -703,13 +703,16 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             iter_by_name->second.insert_or_assign(std::move(node_shard), p.second);
         }
 
+        /// FIXME, if table definition changed, we will need update the storage inline
+        if (uuid != UUIDHelpers::Nil)
         {
-            /// FIXME, if table definition changed, we will need update the storage inline
+            deleteTableStorageByName(p.second->database, p.second->name);
+        }
+
+        {
             std::unique_lock storage_guard{storage_rwlock};
             if (uuid != UUIDHelpers::Nil)
             {
-                deleteTableStorageByName(p.second->database, p.second->name);
-
                 auto removed = indexed_by_id.erase(uuid);
                 (void)removed;
                 assert(removed);

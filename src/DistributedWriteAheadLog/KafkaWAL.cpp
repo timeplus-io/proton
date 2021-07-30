@@ -273,14 +273,26 @@ void KafkaWAL::backgroundPollProducer() const
 void KafkaWAL::initProducerHandle()
 {
     std::vector<std::pair<std::string, std::string>> producer_params = {
+        /// Alias for `metadata.broker.list`
         std::make_pair("bootstrap.servers", settings->brokers.c_str()),
+        /// Maximum number of messages allowed on the producer queue.
         std::make_pair("queue.buffering.max.messages", std::to_string(settings->queue_buffering_max_messages)),
+        std::make_pair("queue.buffering.max.kbytes", std::to_string(settings->queue_buffering_max_kbytes)),
         std::make_pair("queue.buffering.max.ms", std::to_string(settings->queue_buffering_max_ms)),
         std::make_pair("message.send.max.retries", std::to_string(settings->message_send_max_retries)),
+        /// The backoff time in milliseconds before retrying a protocol request.
         std::make_pair("retry.backoff.ms", std::to_string(settings->retry_backoff_ms)),
+        /// the producer will ensure that messages are successfully produced exactly once
         std::make_pair("enable.idempotence", std::to_string(settings->enable_idempotence)),
+        /// librdkafka statistics emit interval time.
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
+        /// Maximum Kafka protocol request message size
         std::make_pair("message.max.bytes", std::to_string(settings->message_max_bytes)),
+        std::make_pair("message.timeout.ms", std::to_string(settings->message_timeout_ms)),
+        /// Protocol used to communicate with brokers.
+        std::make_pair("security.protocol", settings->security_protocol.c_str()),
+        std::make_pair("topic.metadata.refresh.interval.ms", std::to_string(settings->topic_metadata_refresh_interval_ms)),
+        std::make_pair("compression.codec", settings->compression_codec.c_str()),
     };
 
     if (!settings->debug.empty())

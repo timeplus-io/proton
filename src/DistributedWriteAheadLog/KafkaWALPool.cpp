@@ -129,7 +129,6 @@ void KafkaWALPool::init(const std::string & key)
         {".message_delivery_async_poll_ms", "Int32", &kafka_settings.message_delivery_async_poll_ms},
         {".message_delivery_sync_poll_ms", "Int32", &kafka_settings.message_delivery_sync_poll_ms},
         {".group_id", "String", &kafka_settings.group_id},
-        {".enable_auto_commit", "Bool", &kafka_settings.enable_auto_commit},
         {".check_crcs", "Bool", &kafka_settings.check_crcs},
         {".auto_commit_interval_ms", "Int32", &kafka_settings.auto_commit_interval_ms},
         {".fetch_message_max_bytes", "Int32", &kafka_settings.fetch_message_max_bytes},
