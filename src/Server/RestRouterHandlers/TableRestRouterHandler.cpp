@@ -7,6 +7,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
+#include <common/string.h>
 
 #include <boost/algorithm/string/join.hpp>
 
@@ -152,7 +153,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
 {
     const String & table = getPathParameter("table");
 
-    if (!CatalogService::instance(query_context).tableExists(database, table))
+    if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
             jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
@@ -178,7 +179,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
 {
     const String & table = getPathParameter("table");
 
-    if (!CatalogService::instance(query_context).tableExists(database, table))
+    if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
             jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
@@ -222,7 +223,13 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
         {
             if (col_decl.default_specifier == "DEFAULT")
             {
-                cloumn_mapping_json.set("default", queryToString(col_decl.default_expression));
+                String default_str = queryToString(col_decl.default_expression);
+                if (type == "String")
+                {
+                    default_str = default_str.substr(1, default_str.length() - 2);
+                }
+
+                cloumn_mapping_json.set("default", default_str);
             }
             else if (col_decl.default_specifier == "ALIAS")
             {
@@ -232,7 +239,8 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
 
         if (col_decl.comment)
         {
-            cloumn_mapping_json.set("comment", queryToString(col_decl.comment));
+            const String & comment = queryToString(col_decl.comment);
+            cloumn_mapping_json.set("comment", comment.substr(1, comment.length() - 2));
         }
 
         if (col_decl.codec)

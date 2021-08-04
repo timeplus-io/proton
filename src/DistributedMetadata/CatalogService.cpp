@@ -7,6 +7,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
@@ -30,6 +31,7 @@ std::pair<String, StoragePtr> createTableFromAST(
 namespace ErrorCodes
 {
     extern const int OK;
+    extern const int NO_SUCH_COLUMN_IN_TABLE;
 }
 
 namespace
@@ -378,6 +380,25 @@ std::pair<bool, bool> CatalogService::columnExists(const String & database, cons
     return {true, false};
 }
 
+String CatalogService::getColumnType(const String & database, const String & table, const String & column) const
+{
+    const auto & tables = findTableByName(database, table);
+    const auto & query_ptr = parseQuery(tables[0]->create_table_query, global_context);
+    const auto & create = query_ptr->as<const ASTCreateQuery &>();
+    const auto & columns_ast = create.columns_list->columns;
+
+    for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
+    {
+        const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
+        if (col_decl.name == column)
+        {
+            return queryToString(col_decl.type);
+        }
+    }
+
+    throw Exception("Could not found the column : " + column + " in table : " + table, ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+}
+
 void CatalogService::deleteCatalogForNode(const NodePtr & node)
 {
     std::unique_lock guard{catalog_rwlock};
@@ -700,13 +721,14 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
                 /// If uuid changed (table with same name got deleted and recreatd), delete it from indexed_by_id
                 uuid = node_shard_iter->second->uuid;
             }
-            iter_by_name->second.insert_or_assign(std::move(node_shard), p.second);
-        }
 
-        /// FIXME, if table definition changed, we will need update the storage inline
-        if (uuid != UUIDHelpers::Nil)
-        {
-            deleteTableStorageByName(p.second->database, p.second->name);
+            /// if table definition changed , delete the storage
+            if (node_shard_iter != iter_by_name->second.end() && *node_shard_iter->second != *p.second)
+            {
+                deleteTableStorageByName(p.second->database, p.second->name);
+            }
+
+            iter_by_name->second.insert_or_assign(std::move(node_shard), p.second);
         }
 
         {

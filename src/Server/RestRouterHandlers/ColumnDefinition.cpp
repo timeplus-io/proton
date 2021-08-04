@@ -1,5 +1,7 @@
 #include "ColumnDefinition.h"
 
+#include <DistributedMetadata/CatalogService.h>
+
 #include <boost/algorithm/string/join.hpp>
 
 namespace DB
@@ -21,7 +23,19 @@ String getCreateColumnDefination(const Poco::JSON::Object::Ptr & column)
 
     if (column->has("default"))
     {
-        column_definition.push_back(" DEFAULT " + column->get("default").toString());
+        String default_str = column->get("default").toString();
+
+        if (column->get("type").toString() == "String")
+        {
+            default_str = "'" + default_str + "'";
+        }
+
+        column_definition.push_back(" DEFAULT " + default_str);
+    }
+
+    if (column->has("comment"))
+    {
+        column_definition.push_back(" COMMENT '" + column->get("comment").toString() + "'");
     }
     else if (column->has("alias"))
     {
@@ -46,42 +60,52 @@ String getCreateColumnDefination(const Poco::JSON::Object::Ptr & column)
     return boost::algorithm::join(column_definition, " ");
 }
 
-String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, String & column_name)
+String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const String & database, const String & table, String & column)
 {
     std::vector<String> update_segments;
     if (payload->has("name"))
     {
-        update_segments.push_back(" RENAME COLUMN " + column_name + " TO " + payload->get("name").toString());
-        column_name = payload->get("name").toString();
-    }
-
-    if (payload->has("comment"))
-    {
-        update_segments.push_back(" COMMENT COLUMN " + column_name + " COMMENT " + payload->get("comment").toString());
+        update_segments.push_back(" RENAME COLUMN " + column + " TO " + payload->get("name").toString());
+        column = payload->get("name").toString();
     }
 
     if (payload->has("type"))
     {
-        update_segments.push_back(" MODIFY COLUMN " + column_name + " " + payload->get("type").toString());
+        update_segments.push_back(" MODIFY COLUMN " + column + " " + payload->get("type").toString());
     }
 
     if (payload->has("default"))
     {
-        update_segments.push_back(" MODIFY COLUMN " + column_name + " DEFAULT " + payload->get("default").toString());
+        const auto & catalog_service = CatalogService::instance(nullptr);
+        const auto & type = catalog_service.getColumnType(database, table, column);
+
+        String default_str = payload->get("default").toString();
+
+        if (type == "String")
+        {
+            default_str = "'" + default_str + "'";
+        }
+
+        update_segments.push_back(" MODIFY COLUMN " + column + " DEFAULT " + default_str);
+    }
+
+    if (payload->has("comment"))
+    {
+        update_segments.push_back(" COMMENT COLUMN " + column + "'" + payload->get("comment").toString() + "'");
     }
     else if (payload->has("alias"))
     {
-        update_segments.push_back(" MODIFY COLUMN " + column_name + " ALIAS " + payload->get("alias").toString());
+        update_segments.push_back(" MODIFY COLUMN " + column + " ALIAS " + payload->get("alias").toString());
     }
 
     if (payload->has("ttl_expression"))
     {
-        update_segments.push_back(" MODIFY COLUMN " + column_name + " TTL " + payload->get("ttl_expression").toString());
+        update_segments.push_back(" MODIFY COLUMN " + column + " TTL " + payload->get("ttl_expression").toString());
     }
 
     if (payload->has("compression_codec"))
     {
-        update_segments.push_back(" MODIFY COLUMN " + column_name + " CODEC(" + payload->get("compression_codec").toString() + ")");
+        update_segments.push_back(" MODIFY COLUMN " + column + " CODEC(" + payload->get("compression_codec").toString() + ")");
     }
 
     return boost::algorithm::join(update_segments, ",");

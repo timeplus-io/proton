@@ -67,14 +67,14 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePost(const Poco::JSON::
     const String & table = getPathParameter("table");
     const String & column = payload->get("name");
 
-    auto [result, message] = assertColumnNotExists(table, column);
-    if (!result)
-    {
-        return {message, HTTPResponse::HTTP_CONFLICT};
-    }
-
     if (isDistributedDDL())
     {
+        auto [result, message] = assertColumnNotExists(table, column);
+        if (!result)
+        {
+            return {message, HTTPResponse::HTTP_CONFLICT};
+        }
+
         setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_POST}, {"column", column}}, payload);
     }
 
@@ -92,20 +92,20 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePatch(const Poco::JSON:
     const String & table = getPathParameter("table");
     String column = getPathParameter("column");
 
-    auto [result, message] = assertColumnExists(table, column);
-    if (!result)
-    {
-        return {message, HTTPResponse::HTTP_NOT_FOUND};
-    }
-
     if (isDistributedDDL())
     {
+        auto [result, message] = assertColumnExists(table, column);
+        if (!result)
+        {
+            return {message, HTTPResponse::HTTP_NOT_FOUND};
+        }
+
         setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_PATCH}, {"column", column}}, payload);
     }
 
     std::vector<String> update_segments;
     update_segments.push_back("ALTER TABLE " + database + "." + table);
-    update_segments.push_back(getUpdateColumnDefination(payload, column));
+    update_segments.push_back(getUpdateColumnDefination(payload, database, table, column));
     const String & query = boost::algorithm::join(update_segments, " ");
 
     return {processQuery(query), HTTPResponse::HTTP_OK};
@@ -116,14 +116,14 @@ std::pair<String, Int32> ColumnRestRouterHandler::executeDelete(const Poco::JSON
     const String & column = getPathParameter("column");
     const String & table = getPathParameter("table");
 
-    auto [assert, message] = assertColumnExists(table, column);
-    if (!assert)
-    {
-        return {message, HTTPResponse::HTTP_NOT_FOUND};
-    }
-
     if (isDistributedDDL())
     {
+        auto [assert, message] = assertColumnExists(table, column);
+        if (!assert)
+        {
+            return {message, HTTPResponse::HTTP_NOT_FOUND};
+        }
+
         setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_DELETE}, {"column", column}});
     }
 
