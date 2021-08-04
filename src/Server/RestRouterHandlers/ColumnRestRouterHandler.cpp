@@ -27,6 +27,7 @@ std::map<String, std::map<String, String> > CREATE_SCHEMA = {
     {"optional", {
                     {"nullable", "bool"},
                     {"default", "string"},
+                    {"alias", "string"},
                     {"compression_codec", "string"},
                     {"ttl_expression", "string"},
                     {"skipping_index_expression", "string"}
@@ -44,6 +45,7 @@ std::map<String, std::map<String, String> > UPDATE_SCHEMA = {
                     {"type", "string"},
                     {"ttl_expression", "string"},
                     {"default", "string"},
+                    {"alias", "string"},
                     {"skipping_index_expression", "string"}
                 }
     }

@@ -39,6 +39,7 @@ std::map<String, std::map<String, String> > TabularTableRestRouterHandler::colum
     {"optional", {
                     {"nullable", "bool"},
                     {"default", "string"},
+                    {"alias", "string"},
                     {"compression_codec", "string"},
                     {"ttl_expression", "string"},
                     {"skipping_index_expression", "string"}

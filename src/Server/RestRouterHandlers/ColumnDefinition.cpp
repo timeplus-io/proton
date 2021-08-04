@@ -23,6 +23,10 @@ String getCreateColumnDefination(const Poco::JSON::Object::Ptr & column)
     {
         column_definition.push_back(" DEFAULT " + column->get("default").toString());
     }
+    else if (column->has("alias"))
+    {
+        column_definition.push_back(" ALIAS " + column->get("alias").toString());
+    }
 
     if (column->has("compression_codec"))
     {
@@ -64,6 +68,10 @@ String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, String
     if (payload->has("default"))
     {
         update_segments.push_back(" MODIFY COLUMN " + column_name + " DEFAULT " + payload->get("default").toString());
+    }
+    else if (payload->has("alias"))
+    {
+        update_segments.push_back(" MODIFY COLUMN " + column_name + " ALIAS " + payload->get("alias").toString());
     }
 
     if (payload->has("ttl_expression"))
