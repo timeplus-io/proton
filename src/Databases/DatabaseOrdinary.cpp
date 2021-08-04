@@ -51,6 +51,11 @@ namespace
                 force_restore);
 
             database.attachTable(context, table_name, table, database.getTableDataPath(query));
+
+            /// Daisy: starts.
+            const auto & new_create_query = parseCreateQueryFromAST(&query, database_name, table_name);
+            table->setInMemoryCreateQuery(new_create_query);
+            /// Daisy: ends.
         }
         catch (Exception & e)
         {
@@ -301,6 +306,15 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
     DatabaseCatalog::instance().updateLoadingDependencies(table_id, std::move(new_dependencies));
 
     commitAlterTable(table_id, table_metadata_tmp_path, table_metadata_path, statement, local_context);
+
+    /// Daisy: starts.
+    StoragePtr table = tryGetTable(table_name, local_context);
+    if (!table)
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist",
+                    backQuote(database_name), backQuote(table_name));
+    const auto & new_create_query = parseCreateQueryFromAST(ast, database_name, table_id.table_name);
+    table->setInMemoryCreateQuery(new_create_query);
+    /// Daisy: ends.
 }
 
 void DatabaseOrdinary::commitAlterTable(const StorageID &, const String & table_metadata_tmp_path, const String & table_metadata_path, const String & /*statement*/, ContextPtr /*query_context*/)

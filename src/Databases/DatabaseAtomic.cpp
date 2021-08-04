@@ -270,6 +270,18 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
     if (exchange)
         other_table->renameInMemory({database_name, table_name, other_table->getStorageID().uuid});
 
+    /// Daisy: starts.
+    auto new_ast = parseQueryFromMetadata(log, getContext(), new_metadata_path);
+    const auto & new_create_query = parseCreateQueryFromAST(new_ast, other_db.database_name, to_table_name);
+    table->setInMemoryCreateQuery(new_create_query);
+    if (exchange)
+    {
+        auto other_ast = parseQueryFromMetadata(log, getContext(), old_metadata_path);
+        const auto & other_create_query = parseCreateQueryFromAST(other_ast, database_name, table_name);
+        other_table->setInMemoryCreateQuery(other_create_query);
+    }
+    /// Daisy: ends.
+
     if (!inside_database)
     {
         DatabaseCatalog::instance().updateUUIDMapping(old_table_id.uuid, other_db.shared_from_this(), table);
@@ -554,6 +566,12 @@ void DatabaseAtomic::renameDatabase(ContextPtr query_context, const String & new
             auto table_id = table.second->getStorageID();
             table_id.database_name = database_name;
             table.second->renameInMemory(table_id);
+
+            /// Daisy: start.
+            auto ast = parseQueryFromMetadata(log, getContext(), new_database_metadata_path);
+            const auto & new_create_query = parseCreateQueryFromAST(ast, database_name, table_id.table_name);
+            table.second->setInMemoryCreateQuery(new_create_query);
+            /// Daisy: ends.
         }
 
         path_to_metadata_symlink = getContext()->getPath() + "metadata/" + new_name_escaped;

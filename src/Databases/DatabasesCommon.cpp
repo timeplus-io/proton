@@ -5,6 +5,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/queryToString.h>
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageFactory.h>
 #include <Common/typeid_cast.h>
@@ -300,4 +301,64 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
                     backQuote(database_name), backQuote(table_name));
 }
 
+/// Daisy: starts.
+StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const ASTPtr & query, const String & database_, const String & table_)
+{
+    return parseCreateQueryFromAST(query.get(), database_, table_);
+}
+
+StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const String & database_, const String & table_)
+{
+    assert (query != nullptr);
+    ASTPtr query_clone = query->clone();
+    auto * create = query_clone->as<ASTCreateQuery>();
+
+    if (!create)
+    {
+        WriteBufferFromOwnString query_buf;
+        formatAST(*query, query_buf, true);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query '{}' is not CREATE query", query_buf.str());
+    }
+
+    create->attach = false;
+    create->database = database_;
+    create->table = table_;
+
+    /// We remove everything that is not needed for ATTACH from the query.
+    assert(!create->temporary);
+    create->as_database.clear();
+    create->as_table.clear();
+    create->if_not_exists = false;
+    create->is_populate = false;
+    create->replace_view = false;
+    create->replace_table = false;
+    create->create_or_replace = false;
+
+    /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
+    if (!create->isView())
+        create->select = nullptr;
+
+    create->format = nullptr;
+    create->out_file = nullptr;
+
+    /// parse 'query_uuid'
+    String query_uuid_str = queryToString(*create);
+
+    /// parse 'query'
+    create->uuid = UUIDHelpers::Nil;
+    create->to_inner_uuid = UUIDHelpers::Nil;
+    String query_str = queryToString(*create);
+
+    /// parse 'engine_full'
+    String engine_full_str;
+    if (create->storage)
+    {
+        engine_full_str = queryToString(*(create->storage));
+        const char * const extra_head = " ENGINE = ";
+        if (startsWith(engine_full_str, extra_head))
+            engine_full_str = engine_full_str.substr(strlen(extra_head));
+    }
+    return std::make_shared<StorageInMemoryCreateQuery>(query_str, query_uuid_str, engine_full_str);
+}
+/// Daisy: starts.
 }

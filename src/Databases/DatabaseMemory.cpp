@@ -33,6 +33,10 @@ void DatabaseMemory::createTable(
     std::unique_lock lock{mutex};
     attachTableUnlocked(table_name, table, lock);
     create_queries.emplace(table_name, query);
+    /// Daisy: starts.
+    const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
+    table->setInMemoryCreateQuery(new_create_query);
+    /// Daisy: ends.
 }
 
 void DatabaseMemory::dropTable(
