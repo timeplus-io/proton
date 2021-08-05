@@ -28,11 +28,15 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
 
     String query = "INSERT into " + database + "." + table + " FORMAT RawStoreEachRow ";
 
+    /// Request body can be compressed using algorithm specified in the Content-Encoding header.
+    auto input_maybe_compressed = wrapReadBufferWithCompressionMethod(
+        wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
+
     /// Parse JSON into ReadBuffers
     PODArray<char> parse_buf;
     JSONReadBuffers buffers;
     String error;
-    if (!readIntoBuffers(input, parse_buf, buffers, error))
+    if (!readIntoBuffers(*input_maybe_compressed, parse_buf, buffers, error))
     {
         LOG_ERROR(
             log,

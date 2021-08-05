@@ -49,7 +49,7 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/dae/v1/ingest/rawstores/(?P<rawstore>\\w+)",
+            "/dae/v1/ingest/rawstores/(?P<rawstore>\\w+)(\\?mode=\\w+){0,1}",
             "POST",
             [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRawStoreHandler>(query_context);
