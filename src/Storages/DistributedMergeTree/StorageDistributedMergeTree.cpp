@@ -885,11 +885,12 @@ void StorageDistributedMergeTree::writeCallback(
     if (result.err)
     {
         ingesting_blocks.fail(query_status_poll_id, result.err);
-        LOG_ERROR(log, "Failed to write block={} for query_status_poll_id={} error={}", block_id, query_status_poll_id, result.err);
+        LOG_ERROR(log, "[async] Failed to write block={} for query_status_poll_id={} error={}", block_id, query_status_poll_id, result.err);
     }
     else
     {
         ingesting_blocks.remove(query_status_poll_id, block_id);
+        LOG_TRACE(log, "[async] Writed block={} for query_status_poll_id={}", block_id, query_status_poll_id);
     }
 }
 

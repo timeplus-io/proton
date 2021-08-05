@@ -132,6 +132,9 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
 
         if (ingest_mode == "async")
         {
+            LOG_TRACE(storage.log,
+                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
+                    outstanding, current_block.block.rows(), current_block.shard, query_context->getQueryStatusPollId());
             auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
             auto ret = storage.dwal->append(
                 record,
@@ -150,15 +153,20 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
         }
         else if (ingest_mode == "sync")
         {
+            LOG_TRACE(storage.log,
+                    "[sync] write a block={} rows={} shard={} committed={} ...",
+                    outstanding + 1, current_block.block.rows(), current_block.shard, committed);
             auto ret = storage.dwal->append(record, &DistributedMergeTreeBlockOutputStream::writeCallback, this, storage.dwal_append_ctx);
             if (ret != 0)
             {
                 throw Exception("Failed to insert data sync", ret);
             }
-            outstanding += 1;
         }
         else if (ingest_mode == "fire_and_forget")
         {
+            LOG_TRACE(storage.log,
+                    "[fire_and_forget] write a block={} rows={} shard={} ...",
+                    outstanding, current_block.block.rows(), current_block.shard);
             auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
             if (ret != 0)
             {
@@ -168,12 +176,19 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
         else
         {
             /// ordered
+            LOG_TRACE(storage.log,
+                    "[ordered] write a block={} rows={} shard={} ...",
+                    outstanding, current_block.block.rows(), current_block.shard);
             auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
             if (ret.err != ErrorCodes::OK)
             {
                 throw Exception("Failed to insert data ordered", ret.err);
             }
+            LOG_TRACE(storage.log,
+                    "[ordered] write a block={} rows={} shard={} done",
+                    outstanding, current_block.block.rows(), current_block.shard);
         }
+        outstanding += 1;
     }
 }
 
@@ -184,6 +199,7 @@ void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::AppendResu
     {
         errcode = result.err;
     }
+    LOG_TRACE(storage.log, "[sync] write a block done, and current committed={}, error={}", committed, errcode);
 }
 
 void DistributedMergeTreeBlockOutputStream::writeCallback(const DWAL::AppendResult & result, void * data)
@@ -205,6 +221,7 @@ void DistributedMergeTreeBlockOutputStream::flush()
     {
         if (committed == outstanding)
         {
+            LOG_DEBUG(storage.log, "[sync] write a block done, writed blocks={}, committed={}, error={}", outstanding, committed, errcode);
             if (errcode != ErrorCodes::OK)
             {
                 throw Exception("Failed to insert data", errcode);
