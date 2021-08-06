@@ -65,15 +65,8 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
         }
     }
 
-    /// Prepare ReadBuffer for executeQuery
     it = buffers.find("data");
-    std::unique_ptr<ReadBuffer> in;
-    if (it != buffers.end())
-    {
-        ReadBufferFromString query_buf(query);
-        in = std::make_unique<ConcatReadBuffer>(query_buf, *it->second);
-    }
-    else
+    if (it == buffers.end())
     {
         LOG_ERROR(
             log,
@@ -84,6 +77,11 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
             ErrorCodes::INCORRECT_DATA);
         return {jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
+
+    /// Prepare ReadBuffer for executeQuery
+    std::unique_ptr<ReadBuffer> in;
+    ReadBufferFromString query_buf(query);
+    in = std::make_unique<ConcatReadBuffer>(query_buf, *it->second);
 
     if (hasQueryParameter("mode"))
     {

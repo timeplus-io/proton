@@ -68,13 +68,7 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     query = "INSERT into " + database + "." + table + " " + cols + " FORMAT JSONCompactEachRow ";
 
     auto it = buffers.find("data");
-    std::unique_ptr<ReadBuffer> in;
-    if (it != buffers.end())
-    {
-        ReadBufferFromString query_buf(query);
-        in = std::make_unique<ConcatReadBuffer>(query_buf, *it->second);
-    }
-    else
+    if (it == buffers.end())
     {
         LOG_ERROR(
             log,
@@ -85,6 +79,11 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
             ErrorCodes::INCORRECT_DATA);
         return {jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
+
+    /// Prepare ReadBuffer for executeQuery
+    std::unique_ptr<ReadBuffer> in;
+    ReadBufferFromString query_buf(query);
+    in = std::make_unique<ConcatReadBuffer>(query_buf, *it->second);
 
     String dummy_string;
     WriteBufferFromString out(dummy_string);
