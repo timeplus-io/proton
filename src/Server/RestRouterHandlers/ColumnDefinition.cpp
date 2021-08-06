@@ -32,14 +32,14 @@ String getCreateColumnDefination(const Poco::JSON::Object::Ptr & column)
 
         column_definition.push_back(" DEFAULT " + default_str);
     }
+    else if (column->has("alias"))
+    {
+        column_definition.push_back(" ALIAS " + column->get("alias").toString());
+    }
 
     if (column->has("comment"))
     {
         column_definition.push_back(" COMMENT '" + column->get("comment").toString() + "'");
-    }
-    else if (column->has("alias"))
-    {
-        column_definition.push_back(" ALIAS " + column->get("alias").toString());
     }
 
     if (column->has("compression_codec"))
@@ -88,14 +88,14 @@ String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const 
 
         update_segments.push_back(" MODIFY COLUMN " + column + " DEFAULT " + default_str);
     }
+    else if (payload->has("alias"))
+    {
+        update_segments.push_back(" MODIFY COLUMN " + column + " ALIAS " + payload->get("alias").toString());
+    }
 
     if (payload->has("comment"))
     {
         update_segments.push_back(" COMMENT COLUMN " + column + "'" + payload->get("comment").toString() + "'");
-    }
-    else if (payload->has("alias"))
-    {
-        update_segments.push_back(" MODIFY COLUMN " + column + " ALIAS " + payload->get("alias").toString());
     }
 
     if (payload->has("ttl_expression"))

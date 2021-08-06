@@ -200,24 +200,24 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
     Poco::JSON::Array columns_mapping_json;
     for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
     {
-        Poco::JSON::Object cloumn_mapping_json;
+        Poco::JSON::Object column_mapping_json;
 
         const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
         const auto & column_type = DataTypeFactory::instance().get(col_decl.type);
 
-        cloumn_mapping_json.set("name", col_decl.name);
+        column_mapping_json.set("name", col_decl.name);
 
         String type = column_type->getName();
         if (column_type->isNullable())
         {
             type = removeNullable(column_type)->getName();
-            cloumn_mapping_json.set("nullable", true);
+            column_mapping_json.set("nullable", true);
         }
         else
         {
-            cloumn_mapping_json.set("nullable", false);
+            column_mapping_json.set("nullable", false);
         }
-        cloumn_mapping_json.set("type", type);
+        column_mapping_json.set("type", type);
 
         if (col_decl.default_expression)
         {
@@ -229,31 +229,31 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
                     default_str = default_str.substr(1, default_str.length() - 2);
                 }
 
-                cloumn_mapping_json.set("default", default_str);
+                column_mapping_json.set("default", default_str);
             }
             else if (col_decl.default_specifier == "ALIAS")
             {
-                cloumn_mapping_json.set("alias", queryToString(col_decl.default_expression));
+                column_mapping_json.set("alias", queryToString(col_decl.default_expression));
             }
         }
 
         if (col_decl.comment)
         {
             const String & comment = queryToString(col_decl.comment);
-            cloumn_mapping_json.set("comment", comment.substr(1, comment.length() - 2));
+            column_mapping_json.set("comment", comment.substr(1, comment.length() - 2));
         }
 
         if (col_decl.codec)
         {
-            cloumn_mapping_json.set("codec", queryToString(col_decl.codec));
+            column_mapping_json.set("codec", queryToString(col_decl.codec));
         }
 
         if (col_decl.ttl)
         {
-            cloumn_mapping_json.set("ttl", queryToString(col_decl.ttl));
+            column_mapping_json.set("ttl", queryToString(col_decl.ttl));
         }
 
-        columns_mapping_json.add(cloumn_mapping_json);
+        columns_mapping_json.add(column_mapping_json);
     }
     resp_table.set("columns", columns_mapping_json);
 }
