@@ -331,13 +331,13 @@ AppendResult KafkaWAL::append(const Record & record, const KafkaWALContext & ctx
     {
         /// instead of busy loop, do a timed poll
         rd_kafka_poll(producer_handle.get(), settings->message_delivery_sync_poll_ms);
-        if (dr->offset.load() != -1)
-        {
-            return {.sn = dr->offset.load(), .partition = dr->partition.load()};
-        }
-        else if (dr->err != static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR))
+        if (dr->err != static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR))
         {
             return handleError(dr->err.load(), record, ctx);
+        }
+        else if (dr->offset.load() != -1)
+        {
+            return {.sn = dr->offset.load(), .partition = dr->partition.load()};
         }
     }
     __builtin_unreachable();
