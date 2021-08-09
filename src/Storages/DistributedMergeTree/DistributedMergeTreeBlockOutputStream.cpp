@@ -14,6 +14,7 @@ namespace ErrorCodes
 {
     extern const int TIMEOUT_EXCEEDED;
     extern const int OK;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 
 DistributedMergeTreeBlockOutputStream::DistributedMergeTreeBlockOutputStream(
@@ -134,7 +135,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
         {
             LOG_TRACE(storage.log,
                     "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
-                    outstanding, current_block.block.rows(), current_block.shard, query_context->getQueryStatusPollId());
+                    outstanding, record.block.rows(), current_block.shard, query_context->getQueryStatusPollId());
             auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
             auto ret = storage.dwal->append(
                 record,
@@ -155,7 +156,7 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
         {
             LOG_TRACE(storage.log,
                     "[sync] write a block={} rows={} shard={} committed={} ...",
-                    outstanding + 1, current_block.block.rows(), current_block.shard, committed);
+                    outstanding, record.block.rows(), current_block.shard, committed);
             auto ret = storage.dwal->append(record, &DistributedMergeTreeBlockOutputStream::writeCallback, this, storage.dwal_append_ctx);
             if (ret != 0)
             {
@@ -166,19 +167,19 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
         {
             LOG_TRACE(storage.log,
                     "[fire_and_forget] write a block={} rows={} shard={} ...",
-                    outstanding, current_block.block.rows(), current_block.shard);
+                    outstanding, record.block.rows(), current_block.shard);
             auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
             if (ret != 0)
             {
                 throw Exception("Failed to insert data fire_and_forget", ret);
             }
         }
-        else
+        else if (ingest_mode == "ordered")
         {
             /// ordered
             LOG_TRACE(storage.log,
                     "[ordered] write a block={} rows={} shard={} ...",
-                    outstanding, current_block.block.rows(), current_block.shard);
+                    outstanding, record.block.rows(), current_block.shard);
             auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
             if (ret.err != ErrorCodes::OK)
             {
@@ -186,7 +187,11 @@ void DistributedMergeTreeBlockOutputStream::write(const Block & block)
             }
             LOG_TRACE(storage.log,
                     "[ordered] write a block={} rows={} shard={} done",
-                    outstanding, current_block.block.rows(), current_block.shard);
+                    outstanding, record.block.rows(), current_block.shard);
+        }
+        else
+        {
+            throw Exception("Failed to insert data, non-support ingest mode: " + ingest_mode, ErrorCodes::UNSUPPORTED_PARAMETER);
         }
         outstanding += 1;
     }
