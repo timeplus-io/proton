@@ -14,6 +14,7 @@ namespace ErrorCodes
 {
     extern const int INCORRECT_DATA;
     extern const int INVALID_CONFIG_PARAMETER;
+    extern const int BAD_REQUEST_PARAMETER;
 }
 
 std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) const
@@ -25,6 +26,23 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     {
         return {jsonErrorResponse("Table is empty", ErrorCodes::INVALID_CONFIG_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
+
+    if (hasQueryParameter("mode"))
+    {
+        const auto & mode = getQueryParameter("mode");
+        if (mode.empty()
+            || mode == "async"
+            || mode == "sync"
+            || mode == "fire_and_forget"
+            || mode == "ordered")
+            /// only support ingest mode as above.
+            query_context->setIngestMode(mode);
+        else
+            return {jsonErrorResponse("No support ingest mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+    }
+
+    query_context->setSetting("output_format_parallel_formatting", false);
+    query_context->setSetting("date_time_input_format", String{"best_effort"});
 
     String query = "INSERT into " + database + "." + table + " FORMAT RawStoreEachRow ";
 
@@ -83,20 +101,9 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     ReadBufferFromString query_buf(query);
     in = std::make_unique<ConcatReadBuffer>(query_buf, *it->second);
 
-    if (hasQueryParameter("mode"))
-    {
-        query_context->setIngestMode(getQueryParameter("mode"));
-    }
-    else
-    {
-        query_context->setIngestMode("async");
-    }
-
     String dummy_string;
     WriteBufferFromString out(dummy_string);
 
-    query_context->setSetting("output_format_parallel_formatting", false);
-    query_context->setSetting("date_time_input_format", String{"best_effort"});
     executeQuery(*in, out, /* allow_into_outfile = */ false, query_context, {});
 
     Poco::JSON::Object resp;

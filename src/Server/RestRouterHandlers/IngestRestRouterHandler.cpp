@@ -40,12 +40,11 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     query_context->setSetting("output_format_parallel_formatting", false);
     query_context->setSetting("date_time_input_format", String{"best_effort"});
     
-    /// Parse JSON into ReadBuffers
-
     /// Request body can be compressed using algorithm specified in the Content-Encoding header.
     auto input_maybe_compressed = wrapReadBufferWithCompressionMethod(
         wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
 
+    /// Parse JSON into ReadBuffers
     PODArray<char> parse_buf;
     JSONReadBuffers buffers;
     String error;
