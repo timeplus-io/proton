@@ -68,7 +68,7 @@ public:
 
     bool getQueryParameterBool(const String & name, bool default_value = false) const
     {
-        const auto & default_str = "";
+        const String & default_str = "";
         const auto & val = query_parameters->get(name, default_str);
         if (val.empty())
         {
