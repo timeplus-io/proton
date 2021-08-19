@@ -1540,9 +1540,10 @@ if (ThreadFuzzer::instance().isEffective())
 
         /// Daisy : starts
         initDistributedMetadataServicesPost(global_context);
-        if (global_context->isDistributed())
+        auto & task_status_service = DB::TaskStatusService::instance(global_context);
+        if (global_context->isDistributed() && task_status_service.nodeRoles().find("task") != String::npos)
         {
-            DB::TaskStatusService::instance(global_context).schedulePersistentTask();
+            task_status_service.schedulePersistentTask();
         }
         /// Daisy : ends
 
