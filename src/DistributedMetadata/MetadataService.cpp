@@ -19,6 +19,7 @@ namespace ErrorCodes
     extern const int DWAL_FATAL_ERROR;
     extern const int RESOURCE_NOT_FOUND;
     extern const int MSG_SIZE_TOO_LARGE;
+    extern const int INVALID_REPLICATION_FACTOR;
 }
 
 namespace
@@ -166,7 +167,12 @@ void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
         }
         else if (err == ErrorCodes::DWAL_FATAL_ERROR)
         {
-            throw Exception("Topic " + ctx.topic + " create failed", ErrorCodes::DWAL_FATAL_ERROR);
+            throw Exception("Topic " + ctx.topic + " create failed due to fatal error.", ErrorCodes::DWAL_FATAL_ERROR);
+        }
+        else if (err == ErrorCodes::INVALID_REPLICATION_FACTOR)
+        {
+            throw Exception("Topic " + ctx.topic + " create failed due to invalid replication factor.",
+                            ErrorCodes::INVALID_REPLICATION_FACTOR);
         }
         else
         {
