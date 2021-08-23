@@ -31,6 +31,8 @@ private:
 
 private:
     Int32 doDDL(const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const;
+    void doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const String & payload, const String & method,
+                      const String & query_id, const String & user) const;
 
     void createTable(DWAL::RecordPtr record);
     void mutateTable(DWAL::RecordPtr record, const String & method) const;

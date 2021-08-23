@@ -245,8 +245,14 @@ Int32 DDLService::doDDL(
         auto [response, http_code] = sendRequest(uri, method, query_id, user, password, payload, log);
 
         err = toErrorCode(http_code, response);
-        if (err == ErrorCodes::OK || err == ErrorCodes::UNRETRIABLE_ERROR)
+        if (err == ErrorCodes::OK)
         {
+            return err;
+        }
+
+        if (err == ErrorCodes::UNRETRIABLE_ERROR)
+        {
+            LOG_ERROR(log, "Failed to request uri={} due to unrecoverable failure, error_code={}", uri.toString(), err);
             return err;
         }
 
@@ -258,6 +264,31 @@ Int32 DDLService::doDDL(
 
     LOG_ERROR(log, "Failed to send request to uri={} error_code={}", uri.toString(), err);
     return err;
+}
+
+void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const String & payload,
+                              const String & method, const String & query_id, const String & user) const
+{
+    std::vector<String> failed_hosts;
+    /// FIXME : Parallelize doDDL on the uris
+    for (auto & uri : target_hosts)
+    {
+        uri.addQueryParameter("distributed_ddl", "false");
+        auto err = doDDL(payload, uri, method, query_id, user);
+        if (err != ErrorCodes::OK)
+        {
+            failed_hosts.push_back(uri.getHost() + ":" + toString(uri.getPort()));
+        }
+    }
+
+    if (failed_hosts.empty())
+    {
+        succeedDDL(query_id, user, payload);
+    }
+    else
+    {
+        failDDL(query_id, user, payload, "Failed to do DDL on hosts: " + boost::algorithm::join(failed_hosts, ","));
+    }
 }
 
 void DDLService::createTable(DWAL::RecordPtr record)
@@ -300,7 +331,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
 
         std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST))};
 
-        /// Create table on each target host according to placement
+        /// Set the parameters in uris
         for (Int32 i = 0; i < replication_factor; ++i)
         {
             for (Int32 j = 0; j < shards; ++j)
@@ -310,19 +341,11 @@ void DDLService::createTable(DWAL::RecordPtr record)
                 {
                     uri.setRawQuery(*url_parameters);
                 }
-                uri.addQueryParameter("distributed_ddl", "false");
                 uri.addQueryParameter("shard", std::to_string(j));
-
-                auto err = doDDL(payload, target_hosts[i * shards + j], Poco::Net::HTTPRequest::HTTP_POST, query_id, user);
-                if (err == ErrorCodes::UNRETRIABLE_ERROR)
-                {
-                    failDDL(query_id, user, payload, "Unable to fulfill the request due to unrecoverable failure");
-                    return;
-                }
             }
         }
-
-        succeedDDL(query_id, user, payload);
+        /// Create table on each target host according to placement
+        doDDLOnHosts(target_hosts, payload, Poco::Net::HTTPRequest::HTTP_POST, query_id, user);
     }
     else
     {
@@ -413,13 +436,7 @@ void DDLService::mutateTable(DWAL::RecordPtr record, const String & method) cons
         return;
     }
 
-    for (auto & uri : target_hosts)
-    {
-        uri.setQueryParameters(Poco::URI::QueryParameters{{"distributed_ddl", "false"}});
-        doDDL(payload, uri, method, query_id, user);
-    }
-
-    succeedDDL(query_id, user, payload);
+    doDDLOnHosts(target_hosts, payload, method, query_id, user);
 }
 
 void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) const
@@ -478,14 +495,7 @@ void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) c
 
     std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(*api_path_fmt, database))};
 
-    /// FIXME : Parallelize doDDL on the uris
-    for (auto & uri : target_hosts)
-    {
-        uri.setQueryParameters(Poco::URI::QueryParameters{{"distributed_ddl", "false"}});
-        doDDL(payload, uri, method, query_id, user);
-    }
-
-    succeedDDL(query_id, user, payload);
+    doDDLOnHosts(target_hosts, payload, method, query_id, user);
 }
 
 void DDLService::commit(Int64 last_sn)
