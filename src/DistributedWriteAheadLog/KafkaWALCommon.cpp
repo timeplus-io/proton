@@ -2,6 +2,7 @@
 #include "KafkaWALStats.h"
 
 #include <Common/Exception.h>
+#include <Common/hex.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -19,14 +20,36 @@ namespace ErrorCodes
     extern const int MSG_SIZE_TOO_LARGE;
     extern const int INTERNAL_INGEST_BUFFER_FULL;
 }
+
+/// Allowed chars are ASCII alphanumerics, '.', '_' and '-'. '_' is used as escaped char in the form '_xx' where xx
+/// is the hexadecimal value of the byte(s) needed to represent an illegal char in utf8.
+std::string escapeName(const std::string & s)
+{
+    std::string escaped;
+    escaped.reserve(s.size());
+
+    for (const auto & b : s)
+    {
+        if ((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || (b == '.' || b == '-'))
+        {
+            escaped += b;
+        }
+        else
+        {
+            char out[3] = "_";
+            writeHexByteUppercase(b, out + 1);
+            escaped += out;
+        }
+    }
+    return escaped;
+}
 }
 
 namespace DWAL
 {
-std::string escapeDWalName(const std::string & namespace_, const std::string & name_)
+std::string escapeDWALName(const std::string & ns, const std::string & name)
 {
-    /// FIXME : normalize name according to Kafka topic name "[a-zA-Z0-9\\._\\-]"
-    return namespace_ + "." + name_;
+    return DB::escapeName(ns) + "." + DB::escapeName(name);
 }
 
 int32_t mapErrorCode(rd_kafka_resp_err_t err, bool retriable)
@@ -121,8 +144,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
     char errstr[512] = {'\0'};
     for (const auto & param : params)
     {
-        auto ret = rd_kafka_topic_conf_set(tconf.get(), param.first.c_str(), param.second.c_str(),
-                                           errstr, sizeof(errstr));
+        auto ret = rd_kafka_topic_conf_set(tconf.get(), param.first.c_str(), param.second.c_str(), errstr, sizeof(errstr));
         if (ret != RD_KAFKA_CONF_OK)
         {
             LOG_ERROR(
@@ -141,8 +163,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
     std::shared_ptr<rd_kafka_topic_t> topic_handle{rd_kafka_topic_new(rd_kafka, topic.c_str(), tconf.release()), rd_kafka_topic_destroy};
     if (!topic_handle)
     {
-        LOG_ERROR(
-            stats->log, "Failed to create kafka topic handle, topic={} error={}", topic, rd_kafka_err2str(rd_kafka_last_error()));
+        LOG_ERROR(stats->log, "Failed to create kafka topic handle, topic={} error={}", topic, rd_kafka_err2str(rd_kafka_last_error()));
         throw DB::Exception("Failed to create kafka topic handle", mapErrorCode(rd_kafka_last_error()));
     }
 
@@ -167,7 +188,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
         record->topic = rd_kafka_topic_name(msg->rkt);
     }
 
-    rd_kafka_headers_t *hdrs = nullptr;
+    rd_kafka_headers_t * hdrs = nullptr;
     if (rd_kafka_message_headers(msg, &hdrs) == RD_KAFKA_RESP_ERR_NO_ERROR)
     {
         /// Has headers
@@ -180,7 +201,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
 
             if (rd_kafka_header_get_all(hdrs, i, &name, &value, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
             {
-                record->headers.emplace(name, std::string{static_cast<const char*>(value), size});
+                record->headers.emplace(name, std::string{static_cast<const char *>(value), size});
             }
         }
     }

@@ -226,7 +226,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
-    , topic(DWAL::escapeDWalName(table_id_.getDatabaseName(), table_id_.getTableName()))
+    , topic(DWAL::escapeDWALName(table_id_.getDatabaseName(), table_id_.getTableName()))
     , dwal_append_ctx(topic, shards_, replication_factor_)
     , dwal_consume_ctx(topic, shards_, replication_factor_)
     , ingesting_blocks(120)

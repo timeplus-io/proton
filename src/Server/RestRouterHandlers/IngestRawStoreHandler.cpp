@@ -44,7 +44,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     query_context->setSetting("output_format_parallel_formatting", false);
     query_context->setSetting("date_time_input_format", String{"best_effort"});
 
-    String query = "INSERT into " + database + "." + table + " FORMAT RawStoreEachRow ";
+    String query = "INSERT into " + database + ".`" + table + "` FORMAT RawStoreEachRow ";
 
     /// Request body can be compressed using algorithm specified in the Content-Encoding header.
     auto input_maybe_compressed = wrapReadBufferWithCompressionMethod(

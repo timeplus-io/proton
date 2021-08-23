@@ -73,7 +73,7 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
             ErrorCodes::INCORRECT_DATA);
         return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
-    query = "INSERT into " + database + "." + table + " " + cols + " FORMAT JSONCompactEachRow ";
+    query = "INSERT into " + database + ".`" + table + "` " + cols + " FORMAT JSONCompactEachRow ";
 
     auto it = buffers.find("data");
     if (it == buffers.end())

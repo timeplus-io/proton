@@ -79,7 +79,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePost(const Poco::JSON::
     }
 
     std::vector<String> create_segments;
-    create_segments.push_back("ALTER TABLE " + database + "." + table);
+    create_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
     create_segments.push_back("ADD COLUMN ");
     create_segments.push_back(getCreateColumnDefination(payload));
     const String & query = boost::algorithm::join(create_segments, " ");
@@ -104,7 +104,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePatch(const Poco::JSON:
     }
 
     std::vector<String> update_segments;
-    update_segments.push_back("ALTER TABLE " + database + "." + table);
+    update_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
     update_segments.push_back(getUpdateColumnDefination(payload, database, table, column));
     const String & query = boost::algorithm::join(update_segments, " ");
 
@@ -128,7 +128,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executeDelete(const Poco::JSON
     }
 
     std::vector<String> delete_segments;
-    delete_segments.push_back("ALTER TABLE " + database + "." + table);
+    delete_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
     delete_segments.push_back("DROP COLUMN " + column);
     const String & query = boost::algorithm::join(delete_segments, " ");
 
