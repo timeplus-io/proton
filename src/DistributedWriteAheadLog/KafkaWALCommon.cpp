@@ -37,7 +37,7 @@ std::string escapeName(const std::string & s)
         }
         else
         {
-            char out[3] = "_";
+            char out[4] = {"_"};
             writeHexByteUppercase(b, out + 1);
             escaped += out;
         }
