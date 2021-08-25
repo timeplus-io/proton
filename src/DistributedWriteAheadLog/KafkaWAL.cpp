@@ -414,7 +414,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const Kaf
         /// Use builtin partitioner which is consistent hashing to select partition
         /// RD_KAFKA_V_PARTITION(RD_KAFKA_PARTITION_UA),
         /// Return RD_KAFKA_RESP_ERR__QUEUE_FULL if internal queue is full
-        RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_FREE),
+        RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_BLOCK),
         /// Message payload and length. Note we didn't copy the data so the ownership
         /// of data will move moved to producev if it succeeds
         RD_KAFKA_V_VALUE(data.data(), data.size()),
