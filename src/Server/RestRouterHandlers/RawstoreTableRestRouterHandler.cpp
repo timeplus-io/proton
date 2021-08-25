@@ -37,8 +37,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
         if (table_names.contains(table->name))
             continue;
 
-        /// FIXME : Later based on engine setting to distinguish rawstore
-        if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") == String::npos)
+        if (table->engine_full.find("subtype = 'rawstore'") == String::npos)
         {
             continue;
         }
@@ -85,7 +84,7 @@ String RawstoreTableRestRouterHandler::getOrderByExpr(
 String RawstoreTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Object::Ptr & /*payload*/) const
 {
     std::vector<String> columns_definition;
-    columns_definition.push_back("`_raw` String COMMENT 'rawstore'");
+    columns_definition.push_back("`_raw` String");
     columns_definition.push_back("`_time` DateTime64(3) DEFAULT now64(3) CODEC (DoubleDelta, LZ4)");
     columns_definition.push_back("`_index_time` DateTime64(3) DEFAULT now64(3) CODEC (DoubleDelta, LZ4)");
     columns_definition.push_back("`sourcetype` LowCardinality(String)");

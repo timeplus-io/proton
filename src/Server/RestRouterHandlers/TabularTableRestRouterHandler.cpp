@@ -57,8 +57,7 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         if (table_names.contains(table->name))
             continue;
 
-        /// FIXME : Later based on engin seting distinguish table
-        if (table->create_table_query.find("`_raw` String COMMENT 'rawstore'") != String::npos)
+        if (table->engine_full.find("subtype = 'rawstore'") != String::npos)
         {
             continue;
         }

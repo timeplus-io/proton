@@ -129,7 +129,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executeDelete(const Poco::JSON
 
     std::vector<String> delete_segments;
     delete_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
-    delete_segments.push_back("DROP COLUMN " + column);
+    delete_segments.push_back("DROP COLUMN `" + column + "`");
     const String & query = boost::algorithm::join(delete_segments, " ");
 
     return {processQuery(query), HTTPResponse::HTTP_OK};
