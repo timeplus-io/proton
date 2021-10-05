@@ -9,7 +9,7 @@ namespace DB
 class SearchHandler final : public RestRouterHandler
 {
 public:
-    explicit SearchHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "Search") { }
+    explicit SearchHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "Search") { }
     ~SearchHandler() override = default;
 
     void execute(const Poco::JSON::Object::Ptr & payload, HTTPServerResponse & response) const override;

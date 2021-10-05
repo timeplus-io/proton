@@ -632,6 +632,10 @@ bool MergeTask::MergeProjectionsStage::finalizeProjectionsAndWholeMerge() const
         global_ctx->new_data_part->addProjectionPart(part->name, std::move(part));
     }
 
+    /// Daisy : starts
+    global_ctx->new_data_part->seq_info = mergeSequenceInfo();
+    /// Daisy : ends
+
     if (global_ctx->chosen_merge_algorithm != MergeAlgorithm::Vertical)
         global_ctx->to->writeSuffixAndFinalizePart(global_ctx->new_data_part, ctx->need_sync);
     else
@@ -643,6 +647,25 @@ bool MergeTask::MergeProjectionsStage::finalizeProjectionsAndWholeMerge() const
     return false;
 }
 
+/// Daisy : starts
+/// Merge sequence info from parts in a partition to new part
+SequenceInfoPtr MergeTask::MergeProjectionsStage::mergeSequenceInfo() const
+{
+    std::vector<SequenceInfoPtr> sequences;
+
+    for (const auto & part : global_ctx->future_part->parts)
+    {
+        if (part->seq_info)
+        {
+            if (!part->seq_info->sequence_ranges.empty() || (part->seq_info->idempotent_keys && !part->seq_info->idempotent_keys->empty()))
+            {
+                sequences.push_back(part->seq_info);
+            }
+        }
+    }
+    return DB::mergeSequenceInfo(sequences, global_ctx->data->committedSN(), global_ctx->context->getSettingsRef().max_idempotent_ids, nullptr);
+}
+/// Daisy : ends
 
 bool MergeTask::VerticalMergeStage::execute()
 {

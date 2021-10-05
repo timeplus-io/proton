@@ -1,6 +1,5 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
-#include <Storages/MergeTree/SequenceInfo.h>
 #include <Columns/ColumnConst.h>
 #include <Common/HashTable/HashMap.h>
 #include <Common/Exception.h>

@@ -14,6 +14,7 @@
 #include <Common/OpenTelemetryTraceContext.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/isLocalAddress.h>
+#include <Common/ThreadPool.h>
 #include <base/types.h>
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
 
@@ -559,7 +560,8 @@ public:
     String getConfigPath() const { return config_path; }
     const String & getIdempotentKey() const { return idempotent_key; }
     const String & getIngestMode() const { return ingest_mode; }
-    bool isDistributed() const;
+    /// If proton is a distributed deployment
+    bool isDistributedEnv() const;
     bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
     ThreadPool & getPartCommitPool() const;
     /// Daisy : ends

@@ -27,17 +27,17 @@ const size_t RESCHEDULE_INTERVAL_MS = 5000;
 const Int64 STALENESS_THRESHOLD_MS = 10000;
 }
 
-PlacementService & PlacementService::instance(const ContextPtr & context)
+PlacementService & PlacementService::instance(const ContextMutablePtr & context)
 {
     static PlacementService placement{context};
     return placement;
 }
 
-PlacementService::PlacementService(const ContextPtr & global_context_) : PlacementService(global_context_, std::make_shared<DiskStrategy>())
+PlacementService::PlacementService(const ContextMutablePtr & global_context_) : PlacementService(global_context_, std::make_shared<DiskStrategy>())
 {
 }
 
-PlacementService::PlacementService(const ContextPtr & global_context_, PlacementStrategyPtr strategy_)
+PlacementService::PlacementService(const ContextMutablePtr & global_context_, PlacementStrategyPtr strategy_)
     : MetadataService(global_context_, "PlacementService"), catalog(CatalogService::instance(global_context_)), strategy(strategy_)
 {
     const auto & config = global_context->getConfigRef();
@@ -198,7 +198,7 @@ void PlacementService::mergeMetrics(const String & node_identity, const DWAL::Re
 
 void PlacementService::scheduleBroadcast()
 {
-    if (!global_context->isDistributed())
+    if (!global_context->isDistributedEnv())
     {
         return;
     }
@@ -227,8 +227,8 @@ void PlacementService::doBroadcast()
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-    auto string_type = data_type_factory.get(getTypeName(TypeIndex::String));
-    auto uint64_type = data_type_factory.get(getTypeName(TypeIndex::UInt64));
+    auto string_type = data_type_factory.get("String", nullptr);
+    auto uint64_type = data_type_factory.get("UInt64", nullptr);
 
     auto policy_name_col = string_type->createColumn();
     auto disk_space_col = uint64_type->createColumn();
@@ -257,7 +257,7 @@ void PlacementService::doBroadcast()
     /// FIXME, QueryScope
     auto context = Context::createCopy(global_context);
     context->makeQueryContext();
-    executeSelectQuery(table_count_query, context, [&record](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    executeNonInsertQuery(table_count_query, context, [&record](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         const auto & table_counts_col = block.findByName("table_counts")->column;
         record.headers["_tables"] = std::to_string(table_counts_col->getUInt(0));
     });

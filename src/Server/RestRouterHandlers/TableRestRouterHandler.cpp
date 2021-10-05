@@ -79,7 +79,7 @@ bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payloa
     }
 
     /// For non-distributed env or user force to create a `local` MergeTree table
-    if (!query_context->isDistributed() || getQueryParameterBool("distributed", false))
+    if (!query_context->isDistributedEnv() || getQueryParameterBool("distributed", false))
     {
         int shards = payload->has("shards") ? payload->get("shards").convert<Int32>() : 1;
         int replication_factor = payload->has("replication_factor") ? payload->get("replication_factor").convert<Int32>() : 1;
@@ -289,7 +289,7 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
 
 String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const
 {
-    if (query_context->isDistributed())
+    if (query_context->isDistributedEnv())
     {
         if (getQueryParameter("distributed") != "false")
         {

@@ -7,7 +7,7 @@ namespace DB
 class PingHandler final : public RestRouterHandler
 {
 public:
-    explicit PingHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "Status") { }
+    explicit PingHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "Status") { }
     ~PingHandler() override { }
 
 private:

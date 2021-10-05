@@ -1231,7 +1231,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
         {
             result.aggregates = getAggregates(query, *select_query);
             result.window_function_asts = getWindowFunctions(query, *select_query);
-            result.collectUsedColumns(query, true);
+            result.collectUsedColumns(query, true, getContext());
         }
     }
 

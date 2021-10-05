@@ -147,4 +147,16 @@ void InterpreterSelectIntersectExceptQuery::ignoreWithTotals()
         interpreter->ignoreWithTotals();
 }
 
+/// Daisy : starts
+bool InterpreterSelectIntersectExceptQuery::hasAggregation() const
+{
+    for (auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasAggregation())
+            return true;
+    }
+    return false;
+}
+/// Daisy : ends
+
 }

@@ -10,7 +10,7 @@ class ASTColumns;
 class TableRestRouterHandler : public RestRouterHandler
 {
 public:
-    TableRestRouterHandler(ContextPtr query_context_, const String & router_name) : RestRouterHandler(query_context_, router_name) { }
+    TableRestRouterHandler(ContextMutablePtr query_context_, const String & router_name) : RestRouterHandler(query_context_, router_name) { }
     ~TableRestRouterHandler() override { }
 
 protected:

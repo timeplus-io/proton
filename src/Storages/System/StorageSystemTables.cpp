@@ -378,6 +378,15 @@ protected:
                         res_columns[res_index++]->insert(engine_full);
                     }
                     /// Daisy: ends.
+
+                    if (columns_mask[src_index++])
+                    {
+                        /// FIXME: XXX
+                        String as_select;
+//                        if (ast_create && ast_create->select)
+//                            as_select = queryToString(*ast_create->select);
+                        res_columns[res_index++]->insert(as_select);
+                    }
                 }
                 else
                     src_index += 3;

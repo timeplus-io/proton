@@ -15,8 +15,7 @@ namespace
 {
     const String CLUSTER_INFO_URL = "http://{}:{}/dae/v1/clusterinfo";
 
-
-    Poco::JSON::Array streaming_clusters(ContextPtr query_context)
+    Poco::JSON::Array streamingClusters(ContextMutablePtr query_context)
     {
         auto clusters{CatalogService::instance(query_context).clusters()};
 
@@ -105,7 +104,7 @@ String ClusterInfoHandler::getClusterInfoLocally() const
 
     Poco::JSON::Object resp;
     resp.set("nodes", json_nodes);
-    resp.set("streaming_clusters", streaming_clusters(query_context));
+    resp.set("streaming_clusters", streamingClusters(query_context));
     resp.set("request_id", query_context->getCurrentQueryId());
 
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM

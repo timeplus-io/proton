@@ -7,7 +7,7 @@ namespace DB
 class TabularTableRestRouterHandler final : public TableRestRouterHandler
 {
 public:
-    explicit TabularTableRestRouterHandler(ContextPtr query_context_) : TableRestRouterHandler(query_context_, "Tabular") { }
+    explicit TabularTableRestRouterHandler(ContextMutablePtr query_context_) : TableRestRouterHandler(query_context_, "Tabular") { }
     ~TabularTableRestRouterHandler() override { }
 
 private:

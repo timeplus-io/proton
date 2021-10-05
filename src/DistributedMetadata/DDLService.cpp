@@ -147,13 +147,13 @@ namespace
     }
 }
 
-DDLService & DDLService::instance(const ContextPtr & global_context_)
+DDLService & DDLService::instance(const ContextMutablePtr & global_context_)
 {
     static DDLService ddl_service{global_context_};
     return ddl_service;
 }
 
-DDLService::DDLService(const ContextPtr & global_context_)
+DDLService::DDLService(const ContextMutablePtr & global_context_)
     : MetadataService(global_context_, "DDLService")
     , catalog(CatalogService::instance(global_context_))
     , placement(PlacementService::instance(global_context_))

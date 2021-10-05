@@ -11,6 +11,7 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Common/checkStackSize.h>
 
 
@@ -43,105 +44,71 @@ void addConvertingActions(QueryPlan & plan, const Block & header)
     plan.addStep(std::move(converting));
 }
 
-void addConvertingActions(Pipe & pipe, const Block & header)
-{
-    if (blocksHaveEqualStructure(pipe.getHeader(), header))
-        return;
-
-    auto convert_actions = std::make_shared<ExpressionActions>(getConvertingDAG(pipe.getHeader(), header));
-    pipe.addSimpleTransform([&](const Block & cur_header, Pipe::StreamType) -> ProcessorPtr
-    {
-        return std::make_shared<ExpressionTransform>(cur_header, convert_actions);
-    });
-}
-
 std::unique_ptr<QueryPlan> createLocalPlan(
     const ASTPtr & query_ast,
     const Block & header,
     ContextPtr context,
-    QueryProcessingStage::Enum processed_stage)
+    QueryProcessingStage::Enum processed_stage,
+    UInt32 shard_num,
+    UInt32 shard_count)
 {
     checkStackSize();
 
     auto query_plan = std::make_unique<QueryPlan>();
 
-    InterpreterSelectQuery interpreter(query_ast, context, SelectQueryOptions(processed_stage));
+    InterpreterSelectQuery interpreter(query_ast, context, SelectQueryOptions(processed_stage).setShardInfo(shard_num, shard_count));
     interpreter.buildQueryPlan(*query_plan);
 
     addConvertingActions(*query_plan, header);
 
     return query_plan;
 }
-
-String formattedAST(const ASTPtr & ast)
-{
-    if (!ast)
-        return {};
-
-    WriteBufferFromOwnString buf;
-    formatAST(*ast, buf, false, true);
-    return buf.str();
-}
 }
 
 DistributedSelectStreamFactory::DistributedSelectStreamFactory(
     const Block & header_,
     QueryProcessingStage::Enum processed_stage_,
-    StorageID main_table_,
-    const Scalars & scalars_,
-    const Tables & external_tables_)
+    bool has_virtual_shard_num_column_)
     : header(header_)
     , processed_stage{processed_stage_}
-    , main_table(std::move(main_table_))
-    , scalars{scalars_}
-    , external_tables{external_tables_}
+    , has_virtual_shard_num_column(has_virtual_shard_num_column_)
 {
 }
 
 void DistributedSelectStreamFactory::createForShard(
     const Cluster::ShardInfo & shard_info,
     const ASTPtr & query_ast,
+    const StorageID & /* main_table */,
+    const ASTPtr & /* table_func_ptr */,
     ContextPtr context,
-    const ThrottlerPtr & throttler,
-    const SelectQueryInfo &,
-    std::vector<QueryPlanPtr> & plans,
-    Pipes & remote_pipes,
-    Pipes & /* delayed_pipes */,
-    Poco::Logger * log)
+    std::vector<QueryPlanPtr> & local_plans,
+    Shards & remote_shards,
+    UInt32 shard_count)
 {
-    bool add_agg_info = processed_stage == QueryProcessingStage::WithMergeableState;
-    bool add_totals = false;
-    bool add_extremes = false;
-    bool async_read = context->getSettingsRef().async_socket_for_remote;
+    auto modified_query_ast = query_ast->clone();
+    if (has_virtual_shard_num_column)
+        VirtualColumnUtils::rewriteEntityInAst(modified_query_ast, "_shard_num", shard_info.shard_num, "toUInt32");
 
-    if (processed_stage == QueryProcessingStage::Complete)
+    auto emplace_local_stream = [&]()
     {
-        add_totals = query_ast->as<ASTSelectQuery &>().group_by_with_totals;
-        add_extremes = context->getSettingsRef().extremes;
-    }
-
-    auto emplace_local_stream = [&]() { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        /// HACKY : Setup query_kind to break infinit query forwarding loop
-        auto & client_info = context->getClientInfo();
+        /// HACKY : Setup query_kind to break infinite query forwarding loop
+        auto mutable_context = std::const_pointer_cast<Context>(context);
+        auto & client_info = mutable_context->getClientInfo();
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
 
-        plans.emplace_back(createLocalPlan(query_ast, header, context, processed_stage));
-        addConvertingActions(*plans.back(), header);
+        local_plans.emplace_back(createLocalPlan(modified_query_ast, header, context, processed_stage, shard_info.shard_num, shard_count));
     };
 
-    String query = formattedAST(query_ast);
-
-    auto emplace_remote_stream = [&]() { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(
-            shard_info.pool, query, header, context, throttler, scalars, external_tables, processed_stage);
-        remote_query_executor->setLogger(log);
-
-        remote_query_executor->setPoolMode(PoolMode::GET_MANY);
-        remote_query_executor->setMainTable(main_table);
-
-        remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read));
-        remote_pipes.back().addInterpreterContext(context);
-        addConvertingActions(remote_pipes.back(), header);
+    auto emplace_remote_stream = [&](bool lazy = false, UInt32 local_delay = 0)
+    {
+        remote_shards.emplace_back(Shard{
+            .query = modified_query_ast,
+            .header = header,
+            .shard_num = shard_info.shard_num,
+            .pool = shard_info.pool,
+            .lazy = lazy,
+            .local_delay = local_delay,
+        });
     };
 
     const auto & settings = context->getSettingsRef();

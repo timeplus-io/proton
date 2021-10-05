@@ -160,6 +160,7 @@ if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
     message(STATUS "ClickHouse keeper-converter mode: ON")
 else()
     message(STATUS "ClickHouse keeper-converter mode: OFF")
+endif()
 
 if (ENABLE_CLICKHOUSE_DWAL_BENCHMARK)
     message(STATUS "ClickHouse dwal-benchmark: ON")

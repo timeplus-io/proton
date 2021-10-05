@@ -25,7 +25,7 @@ Block buildBlock(
     Block block;
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-    auto string_type = data_type_factory.get(getTypeName(TypeIndex::String));
+    auto string_type = data_type_factory.get("String", nullptr);
     for (const auto & p : string_cols)
     {
         auto col = string_type->createColumn();
@@ -34,7 +34,7 @@ Block buildBlock(
         block.insert(col_with_type);
     }
 
-    auto int32_type = data_type_factory.get(getTypeName(TypeIndex::Int32));
+    auto int32_type = data_type_factory.get("Int32", nullptr);
     for (const auto & p : int32_cols)
     {
         auto col = int32_type->createColumn();
@@ -44,7 +44,7 @@ Block buildBlock(
         block.insert(col_with_type);
     }
 
-    auto uint64_type = data_type_factory.get(getTypeName(TypeIndex::UInt64));
+    auto uint64_type = data_type_factory.get("UInt64", nullptr);
     for (const auto & p : uint64_cols)
     {
         auto col = uint64_type->createColumn();
@@ -64,7 +64,7 @@ Block buildBlock(
     Block block;
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-    auto string_type = data_type_factory.get(getTypeName(TypeIndex::String));
+    auto string_type = data_type_factory.get("String", nullptr);
     for (const auto & p : string_cols)
     {
         auto col = string_type->createColumn();
@@ -77,7 +77,7 @@ Block buildBlock(
         block.insert(col_with_type);
     }
 
-    auto int64_type = data_type_factory.get(getTypeName(TypeIndex::Int64));
+    auto int64_type = data_type_factory.get("Int64", nullptr);
     for (const auto & p : int64_cols)
     {
         auto col = int64_type->createColumn();
@@ -104,11 +104,10 @@ void appendDDLBlock(
     DWAL::Record record{opCode, std::move(block)};
     record.headers["_version"] = "1";
 
+    const auto & query_params = context->getQueryParameters();
     for (const auto & parameter_name : parameter_names)
     {
-        const auto & query_params = context->getQueryParameters();
         auto iter = query_params.find(parameter_name);
-
         if (iter != query_params.end())
         {
             record.headers[parameter_name] = iter->second;
@@ -116,7 +115,7 @@ void appendDDLBlock(
     }
 
     /// Depending on DDLService is not ideal here, but it is convenient
-    auto & ddl_service = DDLService::instance(context);
+    auto & ddl_service = DDLService::instance(context->getGlobalContext());
 
     const auto & query_id = context->getCurrentQueryId();
     const auto & result_code = ddl_service.append(record);

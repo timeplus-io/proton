@@ -618,7 +618,7 @@ StoragePtr DatabaseAtomic::tryGetTable(const String & table_name, ContextPtr ctx
     }
 
     /// Try `CatalogService`
-    auto & catalog_service = CatalogService::instance(getContext());
+    auto & catalog_service = CatalogService::instance(getContext()->getGlobalContext());
     auto [table, table_storage] = catalog_service.findTableStorageByName(getDatabaseName(), table_name);
 
     if (table_storage != nullptr)

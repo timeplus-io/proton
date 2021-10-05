@@ -136,8 +136,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INVALID_SETTING_VALUE;
     extern const int UNKNOWN_READ_METHOD;
-    extern const int ACCESS_DENIED;
     /// Daisy : starts
+    extern const int ACCESS_DENIED;
     extern const int INVALID_POLL_ID;
     /// Daisy : ends
 }
@@ -3199,7 +3199,7 @@ ReadSettings Context::getReadSettings() const
 }
 
 /// Daisy starts.
-bool Context::isDistributed() const
+bool Context::isDistributedEnv() const
 {
     if (getSettingsRef().disable_distributed)
     {

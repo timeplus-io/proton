@@ -270,7 +270,7 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 ///     -> Catalog
 ///     -> Placement
 ///     -> Task
-void initDistributedMetadataServices(DB::ContextPtr & global_context)
+void initDistributedMetadataServices(DB::ContextMutablePtr & global_context)
 {
     auto & pool = DWAL::KafkaWALPool::instance(global_context);
     pool.startup();
@@ -287,13 +287,13 @@ void initDistributedMetadataServices(DB::ContextPtr & global_context)
 
 /// DDL service depends on REST server
 /// so it will need initialize after REST server
-void initDistributedMetadataServicesPost(DB::ContextPtr & global_context)
+void initDistributedMetadataServicesPost(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);
     ddl_service.startup();
 }
 
-void deinitDistributedMetadataServices(DB::ContextPtr & global_context)
+void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);
     ddl_service.shutdown();
@@ -1334,7 +1334,7 @@ if (ThreadFuzzer::instance().isEffective())
     LOG_DEBUG(log, "Loaded metadata.");
 
     /// Daisy : start.
-    if (global_context->isDistributed())
+    if (global_context->isDistributedEnv())
     {
         DB::CatalogService::instance(global_context).broadcast();
         DB::PlacementService::instance(global_context).scheduleBroadcast();

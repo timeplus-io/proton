@@ -110,13 +110,13 @@ const String TaskStatusService::TaskStatus::SUCCEEDED = "SUCCEEDED";
 const String TaskStatusService::TaskStatus::FAILED = "FAILED";
 
 
-TaskStatusService & TaskStatusService::instance(const ContextPtr & global_context_)
+TaskStatusService & TaskStatusService::instance(const ContextMutablePtr & global_context_)
 {
     static TaskStatusService task_status_service{global_context_};
     return task_status_service;
 }
 
-TaskStatusService::TaskStatusService(const ContextPtr & global_context_) : MetadataService(global_context_, "TaskStatusService")
+TaskStatusService::TaskStatusService(const ContextMutablePtr & global_context_) : MetadataService(global_context_, "TaskStatusService")
 {
 }
 
@@ -334,10 +334,10 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String
 
     std::vector<TaskStatusService::TaskStatusPtr> res;
 
-    ContextPtr query_context = Context::createCopy(global_context);
+    auto query_context = Context::createCopy(global_context);
     CurrentThread::QueryScope query_scope{query_context};
 
-    executeSelectQuery(query, query_context, [this, &res](Block && block) { this->buildTaskStatusFromBlock(block, res); });
+    executeNonInsertQuery(query, query_context, [this, &res](Block && block) { this->buildTaskStatusFromBlock(block, res); });
     if (res.empty())
         return nullptr;
     return res[0];
@@ -394,10 +394,10 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
                           "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, user);
 
-    ContextPtr query_context = Context::createCopy(global_context);
+    auto query_context = Context::createCopy(global_context);
     CurrentThread::QueryScope query_scope{query_context};
 
-    executeSelectQuery(query, query_context, [this, &res](Block && block) { this->buildTaskStatusFromBlock(block, res); });
+    executeNonInsertQuery(query, query_context, [this, &res](Block && block) { this->buildTaskStatusFromBlock(block, res); });
 }
 
 void TaskStatusService::schedulePersistentTask()
@@ -571,16 +571,20 @@ bool TaskStatusService::createTaskTable()
         }
     )d";
 
-    ContextPtr context = Context::createCopy(global_context);
+    auto context = Context::createCopy(global_context);
     context->setCurrentQueryId("");
     context->setQueryParameter("_payload", query_payload);
-    context->setUser("system", context->getPasswordByUserName("system"), Poco::Net::SocketAddress("127.0.0.1", 0));
+
+    /// FIXME, internal system credentials
+    /// auto user_id = global_context->getAccessControlManager().login(BasicCredentials{"system", ""}, SocketAddress{"127.0.0.1"});
+    /// FIXME, context->setUser() interface has been changed
+    /// context->setUser("system");
     context->setDistributedDDLOperation(true);
     CurrentThread::QueryScope query_scope{context};
 
     try
     {
-        executeSelectQuery(query, context, [](Block &&) {}, true);
+        executeNonInsertQuery(query, context, [](Block &&) {}, true);
     }
     catch (...)
     {
@@ -599,7 +603,7 @@ bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> 
                     (id, status, progress, reason, user, context, created, last_modified) \
                     VALUES ";
 
-    ContextPtr context = Context::createCopy(global_context);
+    auto context = Context::createCopy(global_context);
     context->setCurrentQueryId("");
     CurrentThread::QueryScope query_scope{context};
 

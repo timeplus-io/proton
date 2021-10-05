@@ -9,7 +9,7 @@ using TablePollIdMap = std::unordered_map<std::pair<String, String>, std::vector
 class IngestStatusHandler final : public RestRouterHandler
 {
 public:
-    explicit IngestStatusHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "IngestStatus") { }
+    explicit IngestStatusHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "IngestStatus") { }
     ~IngestStatusHandler() override = default;
 
 private:

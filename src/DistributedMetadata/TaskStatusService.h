@@ -37,9 +37,9 @@ public:
     using TaskStatusPtr = std::shared_ptr<TaskStatus>;
 
 public:
-    static TaskStatusService & instance(const ContextPtr & global_context_);
+    static TaskStatusService & instance(const ContextMutablePtr & global_context_);
 
-    explicit TaskStatusService(const ContextPtr & global_context_);
+    explicit TaskStatusService(const ContextMutablePtr & global_context_);
     virtual ~TaskStatusService() override = default;
 
     Int32 append(TaskStatusPtr task);

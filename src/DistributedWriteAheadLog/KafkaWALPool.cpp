@@ -41,7 +41,7 @@ KafkaWALPool::~KafkaWALPool()
 
 void KafkaWALPool::startup()
 {
-    if (!global_context->isDistributed())
+    if (!global_context->isDistributedEnv())
     {
         return;
     }

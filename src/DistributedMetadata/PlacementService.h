@@ -12,10 +12,10 @@ class CatalogService;
 class PlacementService final : public MetadataService
 {
 public:
-    static PlacementService & instance(const ContextPtr & global_context);
+    static PlacementService & instance(const ContextMutablePtr & global_context);
 
-    explicit PlacementService(const ContextPtr & global_context_);
-    PlacementService(const ContextPtr & global_context_, PlacementStrategyPtr strategy_);
+    explicit PlacementService(const ContextMutablePtr & global_context_);
+    PlacementService(const ContextMutablePtr & global_context_, PlacementStrategyPtr strategy_);
     virtual ~PlacementService() override = default;
 
     void scheduleBroadcast();

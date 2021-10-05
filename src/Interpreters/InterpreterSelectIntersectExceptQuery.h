@@ -30,6 +30,10 @@ public:
 
     void ignoreWithTotals() override;
 
+    /// Daisy : starts
+    bool hasAggregation() const override;
+    /// Daisy : ends
+
 private:
     static String getName() { return "SelectIntersectExceptQuery"; }
 

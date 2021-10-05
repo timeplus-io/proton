@@ -309,7 +309,10 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const ASTPtr & query, cons
 
 StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const String & database_, const String & table_)
 {
-    assert (query != nullptr);
+    /// if AST is nullptr, return empty create query string.
+    if (!query)
+        return std::make_shared<StorageInMemoryCreateQuery>("", "", "");
+
     ASTPtr query_clone = query->clone();
     auto * create = query_clone->as<ASTCreateQuery>();
 
@@ -360,5 +363,5 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
     }
     return std::make_shared<StorageInMemoryCreateQuery>(query_str, query_uuid_str, engine_full_str);
 }
-/// Daisy: starts.
+/// Daisy: ends.
 }

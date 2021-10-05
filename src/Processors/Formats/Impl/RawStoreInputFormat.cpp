@@ -162,7 +162,7 @@ void RawStoreInputFormat::skipUnknownField(const StringRef & name_ref)
     if (!format_settings.skip_unknown_fields)
         throw Exception("Unknown field found while parsing JSONEachRow format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
 
-    skipJSONField(in, name_ref);
+    skipJSONField(*in, name_ref);
 }
 
 void RawStoreInputFormat::readField(size_t index, MutableColumns & columns)
@@ -179,7 +179,7 @@ void RawStoreInputFormat::readField(size_t index, MutableColumns & columns)
         if (yield_strings)
         {
             String str;
-            readJSONString(str, in);
+            readJSONString(str, *in);
 
             ReadBufferFromString buf(str);
 
@@ -191,9 +191,9 @@ void RawStoreInputFormat::readField(size_t index, MutableColumns & columns)
         else
         {
             if (format_settings.null_as_default && !type->isNullable())
-                read_columns[index] = SerializationNullable::deserializeTextJSONImpl(*columns[index], in, format_settings, serialization);
+                read_columns[index] = SerializationNullable::deserializeTextJSONImpl(*columns[index], *in, format_settings, serialization);
             else
-                serialization->deserializeTextJSON(*columns[index], in, format_settings);
+                serialization->deserializeTextJSON(*columns[index], *in, format_settings);
         }
     }
     catch (Exception & e)
@@ -205,31 +205,31 @@ void RawStoreInputFormat::readField(size_t index, MutableColumns & columns)
 
 inline bool RawStoreInputFormat::advanceToNextKey(size_t key_index)
 {
-    skipWhitespaceIfAny(in);
+    skipWhitespaceIfAny(*in);
 
-    if (in.eof())
+    if (in->eof())
         throw ParsingException("Unexpected end of stream while parsing JSONEachRow format", ErrorCodes::CANNOT_READ_ALL_DATA);
-    else if (*in.position() == '}')
+    else if (*in->position() == '}')
     {
-        ++in.position();
+        ++in->position();
         return false;
     }
 
     if (key_index > 0)
     {
-        assertChar(',', in);
-        skipWhitespaceIfAny(in);
+        assertChar(',', *in);
+        skipWhitespaceIfAny(*in);
     }
     return true;
 }
 
 void RawStoreInputFormat::readJSONObject(MutableColumns & columns)
 {
-    assertChar('{', in);
+    assertChar('{', *in);
 
     for (size_t key_index = 0; advanceToNextKey(key_index); ++key_index)
     {
-        StringRef name_ref = readColumnName(in);
+        StringRef name_ref = readColumnName(*in);
         const size_t column_index = columnIndex(name_ref, key_index);
 
         if (unlikely(ssize_t(column_index) < 0))
@@ -241,7 +241,7 @@ void RawStoreInputFormat::readJSONObject(MutableColumns & columns)
             current_column_name.assign(name_ref.data, name_ref.size);
             name_ref = StringRef(current_column_name);
 
-            skipColonDelimeter(in);
+            skipColonDelimeter(*in);
 
             if (column_index == UNKNOWN_FIELD)
                 skipUnknownField(name_ref);
@@ -250,7 +250,7 @@ void RawStoreInputFormat::readJSONObject(MutableColumns & columns)
         }
         else
         {
-            skipColonDelimeter(in);
+            skipColonDelimeter(*in);
             readField(column_index, columns);
         }
     }
@@ -396,7 +396,7 @@ bool RawStoreInputFormat::readRow(MutableColumns & columns, RowReadExtension & e
 {
     if (!allow_new_rows)
         return false;
-    skipWhitespaceIfAny(in);
+    skipWhitespaceIfAny(*in);
 
     /// We consume , or \n before scanning a new row, instead scanning to next row at the end.
     /// The reason is that if we want an exact number of rows read with LIMIT x
@@ -405,25 +405,25 @@ bool RawStoreInputFormat::readRow(MutableColumns & columns, RowReadExtension & e
 
     /// Semicolon is added for convenience as it could be used at end of INSERT query.
     bool is_first_row = getCurrentUnitNumber() == 0 && getTotalRows() == 1;
-    if (!in.eof())
+    if (!in->eof())
     {
         /// There may be optional ',' (but not before the first row)
-        if (!is_first_row && *in.position() == ',')
-            ++in.position();
-        else if (!data_in_square_brackets && *in.position() == ';')
+        if (!is_first_row && *in->position() == ',')
+            ++in->position();
+        else if (!data_in_square_brackets && *in->position() == ';')
         {
             /// ';' means the end of query (but it cannot be before ']')
             return allow_new_rows = false;
         }
-        else if (data_in_square_brackets && *in.position() == ']')
+        else if (data_in_square_brackets && *in->position() == ']')
         {
             /// ']' means the end of query
             return allow_new_rows = false;
         }
     }
 
-    skipWhitespaceIfAny(in);
-    if (in.eof())
+    skipWhitespaceIfAny(*in);
+    if (in->eof())
         return false;
 
     size_t num_columns = columns.size();
@@ -447,7 +447,7 @@ bool RawStoreInputFormat::readRow(MutableColumns & columns, RowReadExtension & e
 
 void RawStoreInputFormat::syncAfterError()
 {
-    skipToUnescapedNextLineOrEOF(in);
+    skipToUnescapedNextLineOrEOF(*in);
 }
 
 void RawStoreInputFormat::resetParser()
@@ -461,32 +461,31 @@ void RawStoreInputFormat::resetParser()
 void RawStoreInputFormat::readPrefix()
 {
     /// In this format, BOM at beginning of stream cannot be confused with value, so it is safe to skip it.
-    skipBOMIfExists(in);
+    skipBOMIfExists(*in);
 
-    skipWhitespaceIfAny(in);
-    if (!in.eof() && *in.position() == '[')
+    skipWhitespaceIfAny(*in);
+    if (!in->eof() && *in->position() == '[')
     {
-        ++in.position();
+        ++in->position();
         data_in_square_brackets = true;
     }
 }
 
 void RawStoreInputFormat::readSuffix()
 {
-    skipWhitespaceIfAny(in);
+    skipWhitespaceIfAny(*in);
     if (data_in_square_brackets)
     {
-        assertChar(']', in);
-        skipWhitespaceIfAny(in);
+        assertChar(']', *in);
+        skipWhitespaceIfAny(*in);
     }
-    if (!in.eof() && *in.position() == ';')
+    if (!in->eof() && *in->position() == ';')
     {
-        ++in.position();
-        skipWhitespaceIfAny(in);
+        ++in->position();
+        skipWhitespaceIfAny(*in);
     }
     //    assertEOF(in);
 }
-
 
 void registerInputFormatProcessorRawStoreEachRow(FormatFactory & factory)
 {

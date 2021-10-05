@@ -25,7 +25,7 @@ std::pair<String, StoragePtr> createTableFromAST(
     ASTCreateQuery ast_create_query,
     const String & database_name,
     const String & table_data_path_relative,
-    ContextPtr context,
+    ContextMutablePtr context,
     bool has_force_restore_data_flag);
 
 namespace ErrorCodes
@@ -56,14 +56,14 @@ Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
 }
 }
 
-CatalogService & CatalogService::instance(const ContextPtr & context)
+CatalogService & CatalogService::instance(const ContextMutablePtr & context)
 {
     static CatalogService catalog{context};
     return catalog;
 }
 
 
-CatalogService::CatalogService(const ContextPtr & global_context_) : MetadataService(global_context_, "CatalogService")
+CatalogService::CatalogService(const ContextMutablePtr & global_context_) : MetadataService(global_context_, "CatalogService")
 {
 }
 
@@ -81,7 +81,7 @@ MetadataService::ConfigSettings CatalogService::configSettings() const
 
 void CatalogService::broadcast()
 {
-    if (!global_context->isDistributed())
+    if (!global_context->isDistributedEnv())
     {
         return;
     }
@@ -115,7 +115,7 @@ void CatalogService::doBroadcast()
     auto context = Context::createCopy(global_context);
     context->makeQueryContext();
 
-    executeSelectQuery(query, context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    executeNonInsertQuery(query, context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         append(std::move(block));
         assert(!block);
     });
@@ -645,7 +645,11 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
         /// New host. Add all tables from this host to `indexed_by_name`
         for (const auto & p : snapshot)
         {
-            assert(p.second->uuid != UUIDHelpers::Nil);
+            if (p.second->engine == "View" && p.second->uuid == UUIDHelpers::Nil)
+            {
+                continue;
+            }
+
 
             indexed_by_name[std::make_pair(p.second->database, p.second->name)].emplace(
                 std::make_pair(p.second->node_identity, p.second->shard), p.second);

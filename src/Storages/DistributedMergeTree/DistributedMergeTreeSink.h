@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DataStreams/IBlockOutputStream.h>
+#include <Processors/Sinks/SinkToStorage.h>
 #include <DistributedWriteAheadLog/Results.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
@@ -21,16 +21,16 @@ struct BlockWithShard
 
 using BlocksWithShard = std::vector<BlockWithShard>;
 
-class DistributedMergeTreeBlockOutputStream final : public IBlockOutputStream
+class DistributedMergeTreeSink final : public SinkToStorage
 {
 public:
-    DistributedMergeTreeBlockOutputStream(
+    DistributedMergeTreeSink(
         StorageDistributedMergeTree & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_);
-    ~DistributedMergeTreeBlockOutputStream() override;
+    ~DistributedMergeTreeSink() override = default;
 
-    Block getHeader() const override;
-    void write(const Block & block) override;
-    void flush() override;
+    void consume(Chunk chunk) override;
+    void onFinish() override;
+    String getName() const override { return "DistributedMergeTreeSink"; }
 
 private:
     BlocksWithShard shardBlock(const Block & block) const;

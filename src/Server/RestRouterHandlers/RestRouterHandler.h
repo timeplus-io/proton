@@ -27,7 +27,7 @@ namespace ErrorCodes
 class RestRouterHandler : private boost::noncopyable
 {
 public:
-    RestRouterHandler(ContextPtr query_context_, const String & router_name)
+    RestRouterHandler(ContextMutablePtr query_context_, const String & router_name)
         : query_context(query_context_), log(&Poco::Logger::get(router_name))
     {
         database = query_context->getCurrentDatabase();
@@ -57,7 +57,7 @@ public:
     void setupDistributedQueryParameters(const std::map<String, String> & parameters, const Poco::JSON::Object::Ptr & payload = nullptr) const;
 
 
-    inline bool isDistributedDDL() const { return query_context->isDistributed() && getQueryParameterBool("distributed_ddl", true); }
+    inline bool isDistributedDDL() const { return query_context->isDistributedEnv() && getQueryParameterBool("distributed_ddl", true); }
 
     void setPathParameter(const String & name, const String & value) { path_parameters[name] = value; }
 
@@ -219,7 +219,7 @@ private:
         }
     }
 
-    void setupQueryParams(const HTTPServerRequest & request) { query_parameters = std::make_unique<HTMLForm>(request); }
+    void setupQueryParams(const HTTPServerRequest & request) { query_parameters = std::make_unique<HTMLForm>(query_context->getSettingsRef(), request); }
 
     void setupRawQuery(const HTTPServerRequest & request)
     {
@@ -228,7 +228,7 @@ private:
     }
 
 protected:
-    ContextPtr query_context;
+    ContextMutablePtr query_context;
     Poco::Logger * log;
 
     std::unordered_map<String, String> path_parameters;

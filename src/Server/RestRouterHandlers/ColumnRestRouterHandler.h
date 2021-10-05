@@ -7,7 +7,7 @@ namespace DB
 class ColumnRestRouterHandler final : public RestRouterHandler
 {
 public:
-    explicit ColumnRestRouterHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "Column") { }
+    explicit ColumnRestRouterHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "Column") { }
     ~ColumnRestRouterHandler() override { }
 
 private:

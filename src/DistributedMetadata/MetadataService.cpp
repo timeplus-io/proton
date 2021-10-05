@@ -37,7 +37,7 @@ namespace
     constexpr Int32 DWAL_MAX_RETRIES = 3;
 }
 
-MetadataService::MetadataService(const ContextPtr & global_context_, const String & service_name)
+MetadataService::MetadataService(const ContextMutablePtr & global_context_, const String & service_name)
     : global_context(global_context_)
     , dwal_append_ctx("")
     , dwal_consume_ctx("")
@@ -246,7 +246,7 @@ void MetadataService::doTailingRecords()
 
 void MetadataService::startup()
 {
-    if (!global_context->isDistributed())
+    if (!global_context->isDistributedEnv())
     {
         return;
     }

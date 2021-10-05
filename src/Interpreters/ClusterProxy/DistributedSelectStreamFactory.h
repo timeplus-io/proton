@@ -20,27 +20,23 @@ public:
     DistributedSelectStreamFactory(
         const Block & header_,
         QueryProcessingStage::Enum processed_stage_,
-        StorageID main_table_,
-        const Scalars & scalars_,
-        const Tables & external_tables);
+        bool has_virtual_shard_num_column_);
 
     void createForShard(
         const Cluster::ShardInfo & shard_info,
         const ASTPtr & query_ast,
+        const StorageID & main_table,
+        const ASTPtr & table_func_ptr,
         ContextPtr context,
-        const ThrottlerPtr & throttler,
-        const SelectQueryInfo & query_info,
-        std::vector<QueryPlanPtr> & plans,
-        Pipes & remote_pipes,
-        Pipes & delayed_pipes,
-        Poco::Logger * log) override;
+        std::vector<QueryPlanPtr> & local_plans,
+        Shards & remote_shards,
+        UInt32 shard_count) override;
 
 private:
     const Block header;
     QueryProcessingStage::Enum processed_stage;
-    StorageID main_table = StorageID::createEmpty();
-    Scalars scalars;
-    Tables external_tables;
+    /// StorageID main_table = StorageID::createEmpty();
+    bool has_virtual_shard_num_column;
 };
 }
 }

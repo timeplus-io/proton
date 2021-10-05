@@ -233,7 +233,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
 {
     auto ctx = getContext();
-    if (!ctx->isDistributed())
+    if (!ctx->isDistributedEnv())
     {
         return false;
     }
@@ -248,7 +248,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
 
     if (ctx->isDistributedDDLOperation())
     {
-        const auto & catalog_service = CatalogService::instance(ctx);
+        const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
         auto tables = catalog_service.findTableByName(query.database, query.table);
         if (tables.empty())
         {

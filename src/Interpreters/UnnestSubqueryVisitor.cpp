@@ -4,6 +4,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/formatAST.h>
 
 namespace DB
 {
@@ -71,6 +72,12 @@ void UnnestSubqueryVisitorData::visit(ASTTableExpression & table, ASTSelectQuery
     }
 
     /// Rewrite selects of parent query
+    ASTPtr new_parent_group_by = std::make_shared<ASTExpressionList>();
+    if (parent_select.groupBy())
+    {
+        setParentColumns(new_parent_group_by->children, false, parent_select.groupBy()->children, subquery_selects_map, subquery_selects);
+    }
+
     ASTPtr new_parent_select = std::make_shared<ASTExpressionList>();
     setParentColumns(
         new_parent_select->children, asterisk_in_subquery, parent_select.select()->children, subquery_selects_map, subquery_selects);
@@ -95,13 +102,18 @@ void UnnestSubqueryVisitorData::visit(ASTTableExpression & table, ASTSelectQuery
         parent_select.setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(sub_query->refPrewhere()));
     }
 
+    if (parent_select.groupBy())
+    {
+        parent_select.setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(new_parent_group_by));
+    }
+
     parent_select.setExpression(ASTSelectQuery::Expression::TABLES, std::move(sub_query->refTables()));
 
     parent_select.setExpression(ASTSelectQuery::Expression::SELECT, std::move(new_parent_select));
 }
 
 void UnnestSubqueryVisitorData::rewriteColumn(
-    ASTPtr & ast, const std::unordered_map<String, ASTPtr> & subquery_selects_map, bool drop_alias /*= false*/)
+    ASTPtr & ast, std::unordered_map<String, ASTPtr> & subquery_selects_map, bool drop_alias /*= false*/)
 {
     if (auto * identifier = ast->as<ASTIdentifier>())
     {
@@ -118,13 +130,26 @@ void UnnestSubqueryVisitorData::rewriteColumn(
             {
                 ast->setAlias(alias);
             }
+            subquery_selects_map.erase(it);
         }
     }
     else
     {
+        String alias = ast->tryGetAlias();
+
+        if (alias.empty() && ast->as<ASTFunction>())
+        {
+            alias = serializeAST(*ast);
+        }
+
         for (auto & child : ast->children)
         {
             rewriteColumn(child, subquery_selects_map, true);
+        }
+
+        if (alias != serializeAST(*ast) && ast->as<ASTFunction>())
+        {
+            ast->setAlias(alias);
         }
     }
 }
@@ -209,7 +234,7 @@ void UnnestSubqueryVisitorData::setParentColumns(
     ASTs & new_parent_selects,
     bool asterisk_in_subquery,
     const ASTs & parent_selects,
-    const std::unordered_map<String, ASTPtr> & subquery_selects_map,
+    std::unordered_map<String, ASTPtr> & subquery_selects_map,
     const ASTs & subquery_selects)
 {
     /// Subquery selects having alias

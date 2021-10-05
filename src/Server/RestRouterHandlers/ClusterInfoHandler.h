@@ -7,7 +7,7 @@ namespace DB
 class ClusterInfoHandler final : public RestRouterHandler
 {
 public:
-    explicit ClusterInfoHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "ClusterInfo") { }
+    explicit ClusterInfoHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "ClusterInfo") { }
     ~ClusterInfoHandler() override = default;
 
 private:

@@ -4,6 +4,6 @@
 
 namespace DB
 {
-void executeSelectQuery(
-    const String & query, ContextPtr query_context, const std::function<void(Block &&)> & callback, bool internal = true);
+void executeNonInsertQuery(
+    const String & query, ContextMutablePtr query_context, const std::function<void(Block &&)> & callback, bool internal = true);
 }

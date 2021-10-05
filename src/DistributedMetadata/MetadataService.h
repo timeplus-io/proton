@@ -16,7 +16,7 @@ class MetadataService : private boost::noncopyable
 {
 
 public:
-    MetadataService(const ContextPtr & global_context_, const String & service_name);
+    MetadataService(const ContextMutablePtr & global_context_, const String & service_name);
     virtual ~MetadataService();
     void startup();
     void shutdown();
@@ -68,7 +68,7 @@ protected:
     virtual ConfigSettings configSettings() const = 0;
 
 protected:
-    ContextPtr global_context;
+    ContextMutablePtr global_context;
 
     DWAL::KafkaWALContext dwal_append_ctx;
     DWAL::KafkaWALContext dwal_consume_ctx;

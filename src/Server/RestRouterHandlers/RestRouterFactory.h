@@ -45,125 +45,125 @@ public:
         factory.registerRouterHandler(
             "/dae/v1/ingest/tables/(?P<table>[%\\w]+)(\\?mode=\\w+){0,1}",
             "POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ingest/rawstores/(?P<rawstore>[%\\w]+)(\\?mode=\\w+){0,1}",
             "POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRawStoreHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/search(\\?[\\w\\-=&#]+){0,1}",
             "POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::SearchHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ingest/statuses",
             "POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestStatusHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/tables(\\?[\\w\\-=&#]+){0,1}",
             "GET/POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/tables/(?P<table>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
             "PATCH/DELETE",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/rawstores(\\?[\\w\\-=&#]+){0,1}",
             "GET/POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<RawstoreTableRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/rawstores/(?P<table>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
             "PATCH/DELETE",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<RawstoreTableRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/(?P<table>[%\\w]+)/columns(\\?[\\w\\-=&#]+){0,1}",
             "GET/POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<ColumnRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/(?P<table>[%\\w]+)/columns/(?P<column>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
             "PATCH/DELETE",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<ColumnRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/databases(\\?[\\w\\-=&#]+){0,1}",
             "GET/POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::DatabaseRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/ddl/databases/(?P<database>\\w+)(\\?[\\w\\-=&#]+){0,1}",
             "DELETE",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::DatabaseRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/sqlanalyzer",
             "POST",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<SQLAnalyzerRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/tasks(/?$|/(?P<task_id>[-\\w]+))",
             "GET",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::TaskRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/(?P<status>ping|info)$",
             "GET",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::PingHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/v1/clusterinfo",
             "GET",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::ClusterInfoHandler>(query_context);
             });
 
         factory.registerRouterHandler(
             "/dae/apis",
             "GET",
-            [](ContextPtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::APISpecHandler>(query_context);
             });
     }
 
 public:
-    RestRouterHandlerPtr get(const String & url, const String & method, ContextPtr query_context) const
+    RestRouterHandlerPtr get(const String & url, const String & method, ContextMutablePtr query_context) const
     {
         for (auto & router_handler : router_handlers)
         {
@@ -200,7 +200,7 @@ public:
         return nullptr;
     }
 
-    void registerRouterHandler(const String & route, const String & method, std::function<RestRouterHandlerPtr(ContextPtr)> func)
+    void registerRouterHandler(const String & route, const String & method, std::function<RestRouterHandlerPtr(ContextMutablePtr)> func)
     {
         auto regex = compileRegex(route);
         router_handlers.emplace_back(RouterHandler(method, regex, func));
@@ -226,9 +226,9 @@ private:
     {
         String method;
         CompiledRegexPtr regex;
-        std::function<RestRouterHandlerPtr(ContextPtr)> handler;
+        std::function<RestRouterHandlerPtr(ContextMutablePtr)> handler;
 
-        RouterHandler(const String & method_, const CompiledRegexPtr & regex_, std::function<RestRouterHandlerPtr(ContextPtr)> handler_)
+        RouterHandler(const String & method_, const CompiledRegexPtr & regex_, std::function<RestRouterHandlerPtr(ContextMutablePtr)> handler_)
             : method(method_), regex(regex_), handler(handler_)
         {
         }

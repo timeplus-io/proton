@@ -188,7 +188,7 @@ curl  http://daisy-ip:8123/dae/v1/ddl/tables -X POST -d '{
     shard_by_expression": <sharding-expression-for-table, String>,
     index_time_bucket_granularity": <String>,
     partition_time_bucket_granularity": <String>,
-    _time_column: <column-for-time, String>,
+    _time_column: <column-for-time, String>
 }'
 ```
 
@@ -197,7 +197,7 @@ The following example is creating a `testtable` with 2 columns and all other set
 ```
 $ curl http://localhost:8123/dae/v1/ddl/tables -X POST -d '{
     "name" : "testtable",
-    "columns": [{"name": "i", "type": "Int32"}, {"name": "timestamp", "type": "Datetime64(3)", "default" : "now64(3)"}],
+    "columns": [{"name": "i", "type": "Int32"}, {"name": "timestamp", "type": "Datetime64(3)", "default" : "now64(3)"}]
 }'
 ```
 

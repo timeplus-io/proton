@@ -1,4 +1,5 @@
 #include "RestHTTPRequestHandler.h"
+#include "IServer.h"
 
 #include "RestRouterHandlers/RestRouterFactory.h"
 #include "RestRouterHandlers/RestRouterHandler.h"
@@ -6,8 +7,9 @@
 #include <Access/Authentication.h>
 #include <Access/ExternalAuthenticators.h>
 #include <IO/HTTPCommon.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
-#include <Server/IServer.h>
+#include <Interpreters/Session.h>
 #include <Common/setThreadName.h>
 
 #include <Poco/Base64Decoder.h>
@@ -65,6 +67,7 @@ namespace ErrorCodes
     extern const int AUTHENTICATION_FAILED;
 
     extern const int HTTP_LENGTH_REQUIRED;
+    extern const int INVALID_SESSION_TIMEOUT;
 }
 
 namespace
@@ -138,10 +141,34 @@ namespace
 
         return HTTPResponse::HTTP_INTERNAL_SERVER_ERROR;
     }
+
+    std::chrono::steady_clock::duration parseSessionTimeout(
+        const Poco::Util::AbstractConfiguration & config,
+        const HTMLForm & params)
+    {
+        unsigned session_timeout = config.getInt("default_session_timeout", 60);
+
+        if (params.has("session_timeout"))
+        {
+            unsigned max_session_timeout = config.getUInt("max_session_timeout", 3600);
+            std::string session_timeout_str = params.get("session_timeout");
+
+            ReadBufferFromString buf(session_timeout_str);
+            if (!tryReadIntText(session_timeout, buf) || !buf.eof())
+                throw Exception("Invalid session timeout: '" + session_timeout_str + "'", ErrorCodes::INVALID_SESSION_TIMEOUT);
+
+            if (session_timeout > max_session_timeout)
+                throw Exception("Session timeout '" + session_timeout_str + "' is larger than max_session_timeout: " + toString(max_session_timeout)
+                                    + ". Maximum session timeout could be modified in configuration file.",
+                                ErrorCodes::INVALID_SESSION_TIMEOUT);
+        }
+
+        return std::chrono::seconds(session_timeout);
+    }
 }
 
 bool RestHTTPRequestHandler::authenticateUser(
-    ContextPtr context, HTTPServerRequest & request, HTMLForm & params, HTTPServerResponse & response)
+    HTTPServerRequest & request, HTMLForm & params, HTTPServerResponse & response)
 {
     using namespace Poco::Net;
 
@@ -203,8 +230,7 @@ bool RestHTTPRequestHandler::authenticateUser(
         /// It is prohibited to mix different authorization schemes.
         if (request.hasCredentials() || params.has("user") || params.has("password") || params.has("quota_key"))
             throw Exception(
-                "Invalid authentication: it is not allowed to use x-daisy HTTP headers and other authentication methods "
-                "simultaneously",
+                "Invalid authentication: it is not allowed to use x-daisy HTTP headers and other authentication methods simultaneously",
                 ErrorCodes::AUTHENTICATION_FAILED);
     }
 
@@ -223,7 +249,7 @@ bool RestHTTPRequestHandler::authenticateUser(
     else
     {
         if (!request_credentials)
-            request_credentials = request_context->makeGSSAcceptorContext();
+            request_credentials = server.context()->makeGSSAcceptorContext();
 
         auto * gss_acceptor_context = dynamic_cast<GSSAcceptorContext *>(request_credentials.get());
         if (!gss_acceptor_context)
@@ -250,10 +276,12 @@ bool RestHTTPRequestHandler::authenticateUser(
     }
 
     /// Set client info. It will be used for quota accounting parameters in 'setUser' method.
-
-    ClientInfo & client_info = context->getClientInfo();
-    client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
-    client_info.interface = ClientInfo::Interface::HTTP;
+    ClientInfo & client_info = session->getClientInfo();
+    /// client_info.interface = ClientInfo::Interface::HTTP;
+    /// Query sent through HTTP interface is initial.
+    /// client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+    /// client_info.initial_user = client_info.current_user;
+    /// client_info.initial_address = client_info.current_address;
 
     ClientInfo::HTTPMethod http_method = ClientInfo::HTTPMethod::UNKNOWN;
     if (request.getMethod() == HTTPServerRequest::HTTP_GET)
@@ -269,10 +297,11 @@ bool RestHTTPRequestHandler::authenticateUser(
     client_info.http_user_agent = request.get("User-Agent", "");
     client_info.http_referer = request.get("Referer", "");
     client_info.forwarded_for = request.get("X-Forwarded-For", "");
+    client_info.quota_key = quota_key;
 
     try
     {
-        context->setUser(*request_credentials, request.clientAddress());
+        session->authenticate(*request_credentials, request.clientAddress());
     }
     catch (const Authentication::Require<BasicCredentials> & required_credentials)
     {
@@ -289,7 +318,7 @@ bool RestHTTPRequestHandler::authenticateUser(
     }
     catch (const Authentication::Require<GSSAcceptorContext> & required_credentials)
     {
-        request_credentials = request_context->makeGSSAcceptorContext();
+        request_credentials = server.context()->makeGSSAcceptorContext();
 
         if (required_credentials.getRealm().empty())
             response.set("WWW-Authenticate", "Negotiate");
@@ -302,14 +331,6 @@ bool RestHTTPRequestHandler::authenticateUser(
     }
 
     request_credentials.reset();
-
-    if (!quota_key.empty())
-        context->setQuotaKey(quota_key);
-
-    /// Query sent through HTTP interface is initial.
-    client_info.initial_user = client_info.current_user;
-    client_info.initial_address = client_info.current_address;
-
     return true;
 }
 
@@ -318,68 +339,22 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
     setThreadName("RestHandler");
     ThreadStatus thread_status;
 
-    SCOPE_EXIT({
-        // If there is no request_credentials instance waiting for the next round, then the request is processed,
-        // so no need to preserve request_context either.
-        // Needs to be performed with respect to the other destructors in the scope though.
-        if (!request_credentials)
-            request_context.reset();
-    });
-
-    if (!request_context)
-    {
-        // Context should be initialized before anything, for correct memory accounting.
-        request_context = Context::createCopy(server.context());
-        request_credentials.reset();
-    }
-
-    HTMLForm params(request);
     LOG_TRACE(log, "Request uri: {}", request.getURI());
 
-    /// Set the query id supplied by the user, if any, and also update the OpenTelemetry fields.
-    ClientInfo & client_info = request_context->getClientInfo();
-    request_context->setCurrentQueryId(request.get("x-daisy-request-id", request.get("x-daisy-query-id", "")));
-    client_info.initial_query_id = client_info.current_query_id;
+    session = std::make_unique<Session>(server.context(), ClientInfo::Interface::HTTP);
+    SCOPE_EXIT({ session.reset(); });
+    std::optional<CurrentThread::QueryScope> query_scope;
 
-    /// Setup idemopotent key if it is passed by user
-    String idem_key = request.get("x-daisy-idempotent-id", "");
-
-    if (!idem_key.empty())
-    {
-        request_context->setIdempotentKey(idem_key);
-    }
-
-    CurrentThread::QueryScope query_scope{request_context};
-    /// Setup common response headers etc
     response.setContentType("application/json; charset=UTF-8");
-    response.add("x-daisy-query-id", request_context->getCurrentQueryId());
 
-    /// Set keep alive timeout
-    const auto & config = server.config();
-
-    setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
+    /// For keep-alive to work.
+    if (request.getVersion() == HTTPServerRequest::HTTP_1_1)
+        response.setChunkedTransferEncoding(true);
 
     try
     {
-        if (!authenticateUser(request_context, request, params, response))
-            return; // '401 Unauthorized' response with 'Negotiate' has been sent at this point.
-
-        const auto & database = getDatabaseByUser(client_info.current_user);
-        request_context->setCurrentDatabase(database);
-
-        auto router_handler = RestRouterFactory::instance().get(request.getURI(), request.getMethod(), request_context);
-        if (router_handler == nullptr)
-        {
-            response.setStatusAndReason(HTTPResponse::HTTP_NOT_FOUND);
-            const auto & resp
-                = RestRouterHandler::jsonErrorResponse("Unknown URI", ErrorCodes::UNKNOWN_TYPE_OF_QUERY, client_info.current_query_id);
-            *response.send() << resp << std::endl;
-            return;
-        }
-
-        LOG_DEBUG(log, "Start processing query_id={} user={}", client_info.current_query_id, client_info.current_user);
-        router_handler->execute(request, response);
-        LOG_DEBUG(log, "End of processing query_id={} user={}", client_info.current_query_id, client_info.current_user);
+        HTMLForm params(default_settings, request);
+        processQuery(request, params, response, query_scope);
     }
     catch (...)
     {
@@ -391,13 +366,92 @@ void RestHTTPRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
         int exception_code = getCurrentExceptionCode();
 
         const auto & resp
-            = RestRouterHandler::jsonErrorResponse(getCurrentExceptionMessage(false, true), exception_code, client_info.current_query_id);
+            = RestRouterHandler::jsonErrorResponse(getCurrentExceptionMessage(false, true), exception_code, session->getClientInfo().current_query_id);
 
         trySendExceptionToClient(resp, exception_code, request, response);
     }
 }
 
-RestHTTPRequestHandler::RestHTTPRequestHandler(IServer & server_, const String & name) : server(server_), log(&Poco::Logger::get(name))
+void RestHTTPRequestHandler::processQuery(
+    HTTPServerRequest & request,
+    HTMLForm & params,
+    HTTPServerResponse & response,
+    std::optional<CurrentThread::QueryScope> & query_scope)
+{
+    using namespace Poco::Net;
+
+    if (!authenticateUser(request, params, response))
+        return; // '401 Unauthorized' response with 'Negotiate' has been sent at this point.
+
+    /// The user could specify session identifier and session timeout.
+    /// It allows to modify settings, create temporary tables and reuse them in subsequent requests.
+    String session_id;
+    std::chrono::steady_clock::duration session_timeout;
+    bool session_is_set = params.has("session_id");
+    const auto & config = server.config();
+
+    if (session_is_set)
+    {
+        session_id = params.get("session_id");
+        session_timeout = parseSessionTimeout(config, params);
+        std::string session_check = params.get("session_check", "");
+        session->makeSessionContext(session_id, session_timeout, session_check == "1");
+    }
+
+    // Parse the OpenTelemetry traceparent header.
+    // Disable in Arcadia -- it interferes with the
+    // test_clickhouse.TestTracing.test_tracing_via_http_proxy[traceparent] test.
+    ClientInfo client_info = session->getClientInfo();
+#if !defined(ARCADIA_BUILD)
+    if (request.has("traceparent"))
+    {
+        std::string opentelemetry_traceparent = request.get("traceparent");
+        std::string error;
+        if (!client_info.client_trace_context.parseTraceparentHeader(
+                opentelemetry_traceparent, error))
+        {
+            throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER,
+                            "Failed to parse OpenTelemetry traceparent header '{}': {}",
+                            opentelemetry_traceparent, error);
+        }
+        client_info.client_trace_context.tracestate = request.get("tracestate", "");
+    }
+#endif
+
+    auto context = session->makeQueryContext(std::move(client_info));
+    context->setCurrentQueryId(request.get("x-daisy-request-id", request.get("x-daisy-query-id", "")));
+    response.add("x-daisy-query-id", context->getCurrentQueryId());
+
+    /// Setup idempotent key if it is passed by user
+    String idem_key = request.get("x-daisy-idempotent-id", "");
+    if (!idem_key.empty())
+    {
+        context->setIdempotentKey(idem_key);
+    }
+
+    /// Set keep alive timeout
+    setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
+
+    const auto & database = getDatabaseByUser(context->getUserName());
+    context->setCurrentDatabase(database);
+
+    auto router_handler = RestRouterFactory::instance().get(request.getURI(), request.getMethod(), context);
+    if (router_handler == nullptr)
+    {
+        response.setStatusAndReason(HTTPResponse::HTTP_NOT_FOUND);
+        const auto & resp
+            = RestRouterHandler::jsonErrorResponse("Unknown URI", ErrorCodes::UNKNOWN_TYPE_OF_QUERY, context->getCurrentQueryId());
+        *response.send() << resp << std::endl;
+        return;
+    }
+
+    LOG_DEBUG(log, "Start processing query_id={} user={}", context->getCurrentQueryId(), context->getUserName());
+    query_scope.emplace(context);
+    router_handler->execute(request, response);
+    LOG_DEBUG(log, "End of processing query_id={} user={}", context->getCurrentQueryId(), context->getUserName());
+}
+
+RestHTTPRequestHandler::RestHTTPRequestHandler(IServer & server_, const String & name) : server(server_), default_settings(server.context()->getSettingsRef()), log(&Poco::Logger::get(name))
 {
 }
 
@@ -466,5 +520,4 @@ void RestHTTPRequestHandler::trySendExceptionToClient(
         tryLogCurrentException(log, "Cannot send exception to client");
     }
 }
-
 }

@@ -79,7 +79,7 @@ void MergeTreeSink::consume(Chunk chunk)
 }
 
 /// Daisy : starts
-inline bool MergeTreeBlockOutputStream::ignorePartBlock(Int32 parts, Int32 part_index) const
+inline bool MergeTreeSink::ignorePartBlock(Int32 parts, Int32 part_index) const
 {
     if (missing_seq_ranges.empty())
     {

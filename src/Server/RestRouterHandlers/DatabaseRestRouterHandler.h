@@ -7,7 +7,7 @@ namespace DB
 class DatabaseRestRouterHandler final : public RestRouterHandler
 {
 public:
-    explicit DatabaseRestRouterHandler(ContextPtr query_context_) : RestRouterHandler(query_context_, "Database") { }
+    explicit DatabaseRestRouterHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "Database") { }
     ~DatabaseRestRouterHandler() override { }
 
 private:

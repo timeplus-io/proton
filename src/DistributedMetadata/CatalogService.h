@@ -61,9 +61,9 @@ public:
     using TablePtrs = std::vector<TablePtr>;
 
 public:
-    static CatalogService & instance(const ContextPtr & context_);
+    static CatalogService & instance(const ContextMutablePtr & context_);
 
-    explicit CatalogService(const ContextPtr & context_);
+    explicit CatalogService(const ContextMutablePtr & context_);
     virtual ~CatalogService() override = default;
 
     /// `broadcast` broadcasts the table catalog metadata on this node

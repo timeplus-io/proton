@@ -18,14 +18,14 @@ namespace DB
 {
 bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, ContextPtr & context)
 {
-    if (!node->as<ASTIdentifier>())
+
+    auto * table_identifier_node = node->as<ASTTableIdentifier>();
+    if (!table_identifier_node)
     {
         return false;
     }
 
-    ASTIdentifier * table_identifier_node = node->as<ASTIdentifier>();
-    auto storage_id(*table_identifier_node);
-    auto table_id = context->resolveStorageID(storage_id);
+    auto table_id = context->resolveStorageID(StorageID(*table_identifier_node));
     auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
     auto table = db->tryGetTable(table_id.table_name, context);
 

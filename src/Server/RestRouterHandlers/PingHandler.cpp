@@ -25,7 +25,7 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
         String query = "SELECT name, value FROM system.build_options WHERE name IN ('VERSION_FULL','VERSION_DESCRIBE','BUILD_TIME');";
 
         String resp = "";
-        executeSelectQuery(query, query_context, [this, &resp](Block && block) { return this->buildResponse(block, resp); });
+        executeNonInsertQuery(query, query_context, [this, &resp](Block && block) { return this->buildResponse(block, resp); });
 
         return {resp, HTTPResponse::HTTP_OK};
     }

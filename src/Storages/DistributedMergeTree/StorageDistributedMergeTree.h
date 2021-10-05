@@ -4,11 +4,10 @@
 #include "IngestingBlocks.h"
 
 #include <pcg_random.hpp>
-#include <ext/shared_ptr_helper.h>
+#include <common/shared_ptr_helper.h>
 
 #include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
 #include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
@@ -28,9 +27,9 @@ class StorageMergeTree;
   *   2. Streaming query
   *   3. Simplified usabilities (from end users point of view)
   */
-class StorageDistributedMergeTree final : public ext::shared_ptr_helper<StorageDistributedMergeTree>, public MergeTreeData
+class StorageDistributedMergeTree final : public shared_ptr_helper<StorageDistributedMergeTree>, public MergeTreeData
 {
-    friend struct ext::shared_ptr_helper<StorageDistributedMergeTree>;
+    friend struct shared_ptr_helper<StorageDistributedMergeTree>;
 
 public:
     void startup() override;
@@ -68,7 +67,7 @@ public:
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
     std::optional<UInt64> totalBytes(const Settings &) const override;
 
-    BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
+    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
 
     /** Perform the next step in combining the parts.
       */
@@ -101,14 +100,17 @@ public:
 
     CheckResults checkData(const ASTPtr & query, ContextPtr context) override;
 
-    std::optional<JobAndPool> getDataProcessingJob() override;
+    bool scheduleDataProcessingJob(BackgroundJobsAssignee & assignee) override;
 
     QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo &) const override;
 
 private:
     /// Partition helpers
 
-    void dropPartition(const ASTPtr & partition, bool detach, bool drop_part, ContextPtr context, bool throw_if_noop = true) override;
+    /// Tries to drop part in background without any waits or throwing exceptions in case of errors.
+    void dropPartNoWaitNoThrow(const String & part_name) override;
+    void dropPart(const String & part_name, bool detach, ContextPtr context) override;
+    void dropPartition(const ASTPtr & partition, bool detach, ContextPtr context) override;
 
     PartitionCommandsResultInfo
     attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context) override;
@@ -130,6 +132,9 @@ private:
 
     void startBackgroundMovesIfNeeded() override;
 
+    /// Returns default settings for storage with possible changes from global config.
+    std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
+
     /// Distributed query
     QueryProcessingStage::Enum
     getQueryProcessingStageRemote(ContextPtr context, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const;
@@ -141,7 +146,13 @@ private:
     ClusterPtr
     skipUnusedShards(ClusterPtr cluster, const ASTPtr & query_ptr, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) const;
 
-    void readRemote(QueryPlan & query_plan, SelectQueryInfo & query_info, ContextPtr context, QueryProcessingStage::Enum processed_stage);
+    void readRemote(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage);
 
 public:
     IColumn::Selector createSelector(const ColumnWithTypeAndName & result) const;
@@ -164,7 +175,7 @@ public:
     DWAL::RecordSN lastSN() const;
 
     friend struct DistributedMergeTreeCallbackData;
-    friend class DistributedMergeTreeBlockOutputStream;
+    friend class DistributedMergeTreeSink;
     friend class MergeTreeData;
 
 protected:
@@ -176,7 +187,7 @@ protected:
         const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata,
         bool attach_,
-        ContextPtr context_,
+        ContextMutablePtr context_,
         const String & date_column_name_,
         const MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> settings_,

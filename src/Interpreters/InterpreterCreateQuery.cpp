@@ -875,7 +875,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
         return false;
     }
 
-    if (!ctx->isDistributed())
+    if (!ctx->isDistributedEnv())
     {
         if (create.storage->engine->name == "DistributedMergeTree")
         {
@@ -889,7 +889,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     auto * log = &Poco::Logger::get("InterpreterCreateQuery");
 
-    TableProperties properties = setProperties(create);
+    TableProperties properties = getTablePropertiesAndNormalizeCreateQuery(create);
 
     if (create.database.empty())
     {
@@ -955,7 +955,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
 {
     auto ctx = getContext();
-    if (!ctx->isDistributed())
+    if (!ctx->isDistributedEnv())
     {
         return false;
     }

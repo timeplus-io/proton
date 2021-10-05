@@ -3,61 +3,46 @@
 #include <Interpreters/executeSelectQuery.h>
 #include <Interpreters/executeQuery.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
-
-namespace
-{
-void executeQueryWithProcessors(DB::QueryPipeline & pipeline, const std::function<void(DB::Block &&)> & callback)
-{
-    DB::PullingAsyncPipelineExecutor executor(pipeline);
-    DB::Block block;
-
-    while (executor.pull(block, 100))
-    {
-        if (block)
-        {
-            callback(std::move(block));
-        }
-    }
-}
-
-void executeQueryWithoutProcessor(DB::BlockInputStreamPtr & in, const std::function<void(DB::Block &&)> & callback)
-{
-    DB::AsynchronousBlockInputStream async_in(in);
-    async_in.readPrefix();
-
-    while (true)
-    {
-        if (async_in.poll(100))
-        {
-            DB::Block block{async_in.read()};
-            if (!block)
-            {
-                break;
-            }
-
-            callback(std::move(block));
-        }
-    }
-    async_in.readSuffix();
-}
-
-}
+#include <Processors/Executors/CompletedPipelineExecutor.h>
 
 namespace DB
 {
-void executeSelectQuery(const String & query, ContextPtr query_context, const std::function<void(Block &&)> & callback, bool internal)
+void executeNonInsertQuery(const String & query, ContextMutablePtr query_context, const std::function<void(Block &&)> & callback, bool internal)
 {
     BlockIO io{executeQuery(query, query_context, internal)};
 
-    if (io.pipeline.initialized())
+    assert (!io.pipeline.pushing());
+
+    if (io.pipeline.pulling())
     {
-        executeQueryWithProcessors(io.pipeline, callback);
+        DB::PullingAsyncPipelineExecutor executor(io.pipeline);
+        DB::Block block;
+
+        while (executor.pull(block, 100))
+        {
+            if (block && callback)
+            {
+                callback(std::move(block));
+            }
+        }
     }
-    else if (io.in)
+    else if (io.pipeline.completed())
     {
-        executeQueryWithoutProcessor(io.in, callback);
+        CompletedPipelineExecutor executor(io.pipeline);
+        executor.execute();
+        if (callback)
+        {
+            callback({});
+        }
     }
+    else
+    {
+        if (callback)
+        {
+            callback({});
+        }
+    }
+
     io.onFinish();
 }
-
 }

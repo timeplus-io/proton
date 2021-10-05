@@ -1,5 +1,5 @@
 #include "StorageDistributedMergeTree.h"
-#include "DistributedMergeTreeBlockOutputStream.h"
+#include "DistributedMergeTreeSink.h"
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/KafkaWALCommon.h>
@@ -17,8 +17,9 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sources/NullSource.h>
-#include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
+#include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <Common/randomSeed.h>
 #include <common/logger_useful.h>
@@ -209,7 +210,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
     const String & relative_data_path_,
     const StorageInMemoryMetadata & metadata_,
     bool attach_,
-    ContextPtr context_,
+    ContextMutablePtr context_,
     const String & date_column_name_,
     const MergingParams & merging_params_,
     std::unique_ptr<MergeTreeSettings> settings_,
@@ -273,7 +274,12 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
 }
 
 void StorageDistributedMergeTree::readRemote(
-    QueryPlan & query_plan, SelectQueryInfo & query_info, ContextPtr context_, QueryProcessingStage::Enum processed_stage)
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context_,
+    QueryProcessingStage::Enum processed_stage)
 {
     Block header = InterpreterSelectQuery(query_info.query, context_, SelectQueryOptions(processed_stage)).getSampleBlock();
 
@@ -287,13 +293,19 @@ void StorageDistributedMergeTree::readRemote(
         return;
     }
 
-    const Scalars & scalars = context_->hasQueryContext() ? context_->getQueryContext()->getScalars() : Scalars{};
+    bool has_virtual_shard_num_column = std::find(column_names.begin(), column_names.end(), "_shard_num") != column_names.end();
+    if (has_virtual_shard_num_column && !isVirtualColumn("_shard_num", metadata_snapshot))
+        has_virtual_shard_num_column = false;
 
     ClusterProxy::DistributedSelectStreamFactory select_stream_factory
-        = ClusterProxy::DistributedSelectStreamFactory(header, processed_stage, getStorageID(), scalars, context_->getExternalTables());
+        = ClusterProxy::DistributedSelectStreamFactory(header, processed_stage, has_virtual_shard_num_column);
 
     ClusterProxy::executeQuery(
         query_plan,
+        header,
+        processed_stage,
+        getStorageID(),
+        nullptr,
         select_stream_factory,
         log,
         query_info.query,
@@ -317,7 +329,7 @@ void StorageDistributedMergeTree::read(
     if (requireDistributedQuery(context_))
     {
         /// This is a distributed query
-        readRemote(query_plan, query_info, context_, processed_stage);
+        readRemote(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage);
     }
     else
     {
@@ -469,10 +481,10 @@ std::optional<UInt64> StorageDistributedMergeTree::totalBytes(const Settings & s
     return storage->totalBytes(settings);
 }
 
-BlockOutputStreamPtr
+SinkToStoragePtr
 StorageDistributedMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
-    return std::make_shared<DistributedMergeTreeBlockOutputStream>(*this, metadata_snapshot, context_);
+    return std::make_shared<DistributedMergeTreeSink>(*this, metadata_snapshot, context_);
 }
 
 void StorageDistributedMergeTree::checkTableCanBeDropped() const
@@ -553,10 +565,10 @@ CheckResults StorageDistributedMergeTree::checkData(const ASTPtr & query, Contex
     return storage->checkData(query, context_);
 }
 
-std::optional<JobAndPool> StorageDistributedMergeTree::getDataProcessingJob()
+bool StorageDistributedMergeTree::scheduleDataProcessingJob(BackgroundJobsAssignee & assignee)
 {
     assert(storage);
-    return storage->getDataProcessingJob();
+    return storage->scheduleDataProcessingJob(assignee);
 }
 
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
@@ -572,10 +584,22 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
     }
 }
 
-void StorageDistributedMergeTree::dropPartition(const ASTPtr & partition, bool detach, bool drop_part, ContextPtr context_, bool throw_if_noop)
+void StorageDistributedMergeTree::dropPartNoWaitNoThrow(const String & part_name)
 {
     assert(storage);
-    storage->dropPartition(partition, detach, drop_part, context_, throw_if_noop);
+    storage->dropPartNoWaitNoThrow(part_name);
+}
+
+void StorageDistributedMergeTree::dropPart(const String & part_name, bool detach, ContextPtr context_)
+{
+    assert(storage);
+    storage->dropPart(part_name, detach, context_);
+}
+
+void StorageDistributedMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr context_)
+{
+    assert(storage);
+    storage->dropPartition(partition, detach, context_);
 }
 
 PartitionCommandsResultInfo StorageDistributedMergeTree::attachPartition(
@@ -620,6 +644,11 @@ void StorageDistributedMergeTree::startBackgroundMovesIfNeeded()
 {
     assert(storage);
     return storage->startBackgroundMovesIfNeeded();
+}
+
+std::unique_ptr<MergeTreeSettings> StorageDistributedMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
 }
 
 /// Distributed query related functions
@@ -1112,17 +1141,15 @@ void StorageDistributedMergeTree::doCommit(
         {
             try
             {
-                auto output_stream = storage->write(nullptr, storage->getInMemoryMetadataPtr(), getContext());
+                auto sink = storage->write(nullptr, storage->getInMemoryMetadataPtr(), getContext());
 
                 /// Setup sequence numbers to persistent them to file system
-                auto merge_tree_output = static_cast<MergeTreeBlockOutputStream *>(output_stream.get());
-                merge_tree_output->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
-                merge_tree_output->setMissingSequenceRanges(std::move(moved_sequence_ranges));
+                auto merge_tree_sink = static_cast<MergeTreeSink*>(sink.get());
+                merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
+                merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
 
-                output_stream->writePrefix();
-                output_stream->write(moved_block);
-                output_stream->writeSuffix();
-                output_stream->flush();
+                merge_tree_sink->onStart();
+                merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                 break;
             }
             catch (...)

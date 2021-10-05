@@ -88,7 +88,7 @@ void InterpreterDropQuery::waitForTableToBeActuallyDroppedOrDetached(const ASTDr
 bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
 {
     auto ctx = getContext();
-    if (!ctx->isDistributed())
+    if (!ctx->isDistributedEnv())
     {
         return false;
     }
@@ -149,7 +149,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
 bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
 {
     auto ctx = getContext();
-    if (!ctx->isDistributed())
+    if (!ctx->isDistributedEnv())
     {
         return false;
     }

@@ -19,12 +19,12 @@ public:
 
 private:
     void visit(ASTTableExpression & table, ASTSelectQuery & parent_select);
-    void rewriteColumn(ASTPtr & ast, const std::unordered_map<String, ASTPtr> & child_select, bool drop_alias = false);
+    void rewriteColumn(ASTPtr & ast, std::unordered_map<String, ASTPtr> & child_select, bool drop_alias = false);
     void setParentColumns(
         ASTs & new_parent_selects,
         bool asterisk_in_subquery,
         const ASTs & parent_selects,
-        const std::unordered_map<String, ASTPtr> & subquery_selects_map,
+        std::unordered_map<String, ASTPtr> & subquery_selects_map,
         const ASTs & subquery_selects);
     bool mergeable(
         const ASTSelectQuery & child_query,

@@ -102,7 +102,7 @@ namespace
 /// broadcast the table definitions to notify all CatalogService
 void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
 {
-    if (!context->isDistributed() || context->isDistributedDDLOperation())
+    if (!context->isDistributedEnv() || context->isDistributedDDLOperation())
     {
         return;
     }
@@ -111,7 +111,7 @@ void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
     {
         if (!create->database.empty() || !create->table.empty())
         {
-            CatalogService::instance(context).broadcast();
+            CatalogService::instance(context->getGlobalContext()).broadcast();
         }
     }
 
@@ -587,7 +587,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// Daisy : starts. Add time param into AST
         if (!context->getTimeParam().empty())
         {
-            AddTimeParamVisitor visitor(context);
+            auto const_context = std::const_pointer_cast<const Context>(context);
+            AddTimeParamVisitor visitor(const_context);
             visitor.visit(ast);
             query = serializeAST(*ast);
         }
@@ -972,7 +973,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
 
                 /// Daisy : starts
-                broadcastCatalogIfNecessary(ast, context);
+                auto const_context = std::const_pointer_cast<const Context>(context);
+                broadcastCatalogIfNecessary(ast, const_context);
                 /// Daisy : ends
             };
 
@@ -1253,24 +1255,8 @@ ASTPtr parseQuery(const String & query, ContextPtr query_context)
     const char * begin = query.data();
     const char * end = query.data() + query.size();
 
-    ASTPtr ast;
-
-#if !defined(ARCADIA_BUILD)
-    if (query_context->getSettingsRef().use_antlr_parser)
-    {
-        ast = parseQuery(begin, end, max_query_size, max_parser_depth, query_context->getCurrentDatabase());
-    }
-    else
-    {
-        ParserQuery parser(end);
-        ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
-    }
-#else
     ParserQuery parser(end);
-    ast = parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
-#endif
-
-    return ast;
+    return parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
 }
 /// Daisy : ends
 
