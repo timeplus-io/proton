@@ -4,17 +4,17 @@ set -eo pipefail
 shopt -s nullglob
 
 DO_CHOWN=1
-if [ "${CLICKHOUSE_DO_NOT_CHOWN:-0}" = "1" ]; then
+if [ "${PROTON_DO_NOT_CHOWN:-0}" = "1" ]; then
     DO_CHOWN=0
 fi
 
-CLICKHOUSE_UID="${CLICKHOUSE_UID:-"$(id -u clickhouse)"}"
-CLICKHOUSE_GID="${CLICKHOUSE_GID:-"$(id -g clickhouse)"}"
+PROTON_UID="${PROTON_UID:-"$(id -u proton)"}"
+PROTON_GID="${PROTON_GID:-"$(id -g proton)"}"
 
 # support --user
 if [ "$(id -u)" = "0" ]; then
-    USER=$CLICKHOUSE_UID
-    GROUP=$CLICKHOUSE_GID
+    USER=$PROTON_UID
+    GROUP=$PROTON_GID
     if command -v gosu &> /dev/null; then
         gosu="gosu $USER:$GROUP"
     elif command -v su-exec &> /dev/null; then
@@ -31,29 +31,29 @@ else
 fi
 
 # set some vars
-CLICKHOUSE_CONFIG="${CLICKHOUSE_CONFIG:-/etc/clickhouse-server/config.xml}"
+PROTON_CONFIG="${PROTON_CONFIG:-/etc/proton-server/config.yaml}"
 
-if ! $gosu test -f "$CLICKHOUSE_CONFIG" -a -r "$CLICKHOUSE_CONFIG"; then
-    echo "Configuration file '$CLICKHOUSE_CONFIG' isn't readable by user with id '$USER'"
+if ! $gosu test -f "$PROTON_CONFIG" -a -r "$PROTON_CONFIG"; then
+    echo "Configuration file '$PROTON_CONFIG' isn't readable by user with id '$USER'"
     exit 1
 fi
 
-# get CH directories locations
-DATA_DIR="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=path || true)"
-TMP_DIR="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=tmp_path || true)"
-USER_PATH="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=user_files_path || true)"
-LOG_PATH="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=logger.log || true)"
+# get `proton` directories locations
+DATA_DIR="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=path || true)"
+TMP_DIR="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=tmp_path || true)"
+USER_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=user_files_path || true)"
+LOG_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=logger.log || true)"
 LOG_DIR=""
 if [ -n "$LOG_PATH" ]; then LOG_DIR="$(dirname "$LOG_PATH")"; fi
-ERROR_LOG_PATH="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=logger.errorlog || true)"
+ERROR_LOG_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=logger.errorlog || true)"
 ERROR_LOG_DIR=""
 if [ -n "$ERROR_LOG_PATH" ]; then ERROR_LOG_DIR="$(dirname "$ERROR_LOG_PATH")"; fi
-FORMAT_SCHEMA_PATH="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=format_schema_path || true)"
+FORMAT_SCHEMA_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=format_schema_path || true)"
 
-CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
-CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-}"
-CLICKHOUSE_DB="${CLICKHOUSE_DB:-}"
-CLICKHOUSE_ACCESS_MANAGEMENT="${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-0}"
+PROTON_USER="${PROTON_USER:-default}"
+PROTON_PASSWORD="${PROTON_PASSWORD:-}"
+PROTON_DB="${PROTON_DB:-}"
+PROTON_ACCESS_MANAGEMENT="${PROTON_DEFAULT_ACCESS_MANAGEMENT:-0}"
 
 for dir in "$DATA_DIR" \
   "$ERROR_LOG_DIR" \
@@ -87,42 +87,42 @@ do
     fi
 done
 
-# if clickhouse user is defined - create it (user "default" already exists out of box)
-if [ -n "$CLICKHOUSE_USER" ] && [ "$CLICKHOUSE_USER" != "default" ] || [ -n "$CLICKHOUSE_PASSWORD" ]; then
-    echo "$0: create new user '$CLICKHOUSE_USER' instead 'default'"
-    cat <<EOT > /etc/clickhouse-server/users.d/default-user.xml
+# if proton user is defined - create it (user "default" already exists out of box)
+if [ -n "$PROTON_USER" ] && [ "$PROTON_USER" != "default" ] || [ -n "$PROTON_PASSWORD" ]; then
+    echo "$0: create new user '$PROTON_USER' instead 'default'"
+    cat <<EOT > /etc/proton-server/users.d/default-user.xml
     <clickhouse>
-      <!-- Docs: <https://clickhouse.com/docs/en/operations/settings/settings_users/> -->
+      <!-- Docs: <https://proton.tech/docs/en/operations/settings/settings_users/> -->
       <users>
         <!-- Remove default user -->
         <default remove="remove">
         </default>
 
-        <${CLICKHOUSE_USER}>
+        <${PROTON_USER}>
           <profile>default</profile>
           <networks>
             <ip>::/0</ip>
           </networks>
-          <password>${CLICKHOUSE_PASSWORD}</password>
+          <password>${PROTON_PASSWORD}</password>
           <quota>default</quota>
-          <access_management>${CLICKHOUSE_ACCESS_MANAGEMENT}</access_management>
-        </${CLICKHOUSE_USER}>
+          <access_management>${PROTON_ACCESS_MANAGEMENT}</access_management>
+        </${PROTON_USER}>
       </users>
     </clickhouse>
 EOT
 fi
 
-if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$CLICKHOUSE_DB" ]; then
-    # port is needed to check if clickhouse-server is ready for connections
-    HTTP_PORT="$(clickhouse extract-from-config --config-file "$CLICKHOUSE_CONFIG" --key=http_port)"
+if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$PROTON_DB" ]; then
+    # port is needed to check if proton-server is ready for connections
+    HTTP_PORT="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=http_port)"
 
     # Listen only on localhost until the initialization is done
-    $gosu /usr/bin/clickhouse-server --config-file="$CLICKHOUSE_CONFIG" -- --listen_host=127.0.0.1 &
+    $gosu /usr/bin/proton-server --config-file="$PROTON_CONFIG" -- --listen_host=127.0.0.1 &
     pid="$!"
 
-    # check if clickhouse is ready to accept connections
-    # will try to send ping clickhouse via http_port (max 12 retries by default, with 1 sec timeout and 1 sec delay between retries)
-    tries=${CLICKHOUSE_INIT_TIMEOUT:-12}
+    # check if proton is ready to accept connections
+    # will try to send ping proton via http_port (max 12 retries by default, with 1 sec timeout and 1 sec delay between retries)
+    tries=${PROTON_INIT_TIMEOUT:-12}
     while ! wget --spider -T 1 -q "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null; do
         if [ "$tries" -le "0" ]; then
             echo >&2 'ClickHouse init process failed.'
@@ -132,14 +132,14 @@ if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$CLICKHOUSE_DB" ]; then
         sleep 1
     done
 
-    clickhouseclient=( clickhouse-client --multiquery --host "127.0.0.1" -u "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" )
+    protonclient=( proton-client --multiquery --host "127.0.0.1" -u "$PROTON_USER" --password "$PROTON_PASSWORD" )
 
     echo
 
     # create default database, if defined
-    if [ -n "$CLICKHOUSE_DB" ]; then
-        echo "$0: create database '$CLICKHOUSE_DB'"
-        "${clickhouseclient[@]}" -q "CREATE DATABASE IF NOT EXISTS $CLICKHOUSE_DB";
+    if [ -n "$PROTON_DB" ]; then
+        echo "$0: create database '$PROTON_DB'"
+        "${protonclient[@]}" -q "CREATE DATABASE IF NOT EXISTS $PROTON_DB";
     fi
 
     for f in /docker-entrypoint-initdb.d/*; do
@@ -154,26 +154,35 @@ if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$CLICKHOUSE_DB" ]; then
                     . "$f"
                 fi
                 ;;
-            *.sql)    echo "$0: running $f"; "${clickhouseclient[@]}" < "$f" ; echo ;;
-            *.sql.gz) echo "$0: running $f"; gunzip -c "$f" | "${clickhouseclient[@]}"; echo ;;
+            *.sql)    echo "$0: running $f"; "${protonclient[@]}" < "$f" ; echo ;;
+            *.sql.gz) echo "$0: running $f"; gunzip -c "$f" | "${protonclient[@]}"; echo ;;
             *)        echo "$0: ignoring $f" ;;
         esac
         echo
     done
 
     if ! kill -s TERM "$pid" || ! wait "$pid"; then
-        echo >&2 'Finishing of ClickHouse init process failed.'
+        echo >&2 'Finishing of proton init process failed.'
         exit 1
     fi
 fi
 
-# if no args passed to `docker run` or first argument start with `--`, then the user is passing clickhouse-server arguments
+if [ -n "$STREAM_STORAGE_BROKERS" ]; then
+    # Replace `brokers: localhost:9092` in config.yaml with customized one
+    sed -i"" "s/brokers: localhost:9092/brokers: $STREAM_STORAGE_BROKERS/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup stream storage brokers.'
+        exit 1
+    fi
+fi
+
+# if no args passed to `docker run` or first argument start with `--`, then the user is passing proton-server arguments
 if [[ $# -lt 1 ]] || [[ "$1" == "--"* ]]; then
     # Watchdog is launched by default, but does not send SIGINT to the main process,
     # so the container can't be finished by ctrl+c
-    CLICKHOUSE_WATCHDOG_ENABLE=${CLICKHOUSE_WATCHDOG_ENABLE:-0}
-    export CLICKHOUSE_WATCHDOG_ENABLE
-    exec $gosu /usr/bin/clickhouse-server --config-file="$CLICKHOUSE_CONFIG" "$@"
+    PROTON_WATCHDOG_ENABLE=${PROTON_WATCHDOG_ENABLE:-0}
+    export PROTON_WATCHDOG_ENABLE
+    exec $gosu /usr/bin/proton-server --config-file="$PROTON_CONFIG" "$@"
 fi
 
 # Otherwise, we assume the user want to run his own process, for example a `bash` shell to explore this image

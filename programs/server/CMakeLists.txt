@@ -30,10 +30,10 @@ endif()
 
 clickhouse_program_add(server)
 
-install(FILES config.xml users.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT clickhouse)
+install(FILES config.yaml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT proton)
 
 clickhouse_embed_binaries(
     TARGET clickhouse_server_configs
-    RESOURCES config.xml users.xml embedded.xml play.html
+    RESOURCES config.yaml users.yaml embedded.xml play.html
 )
 add_dependencies(clickhouse-server-lib clickhouse_server_configs)

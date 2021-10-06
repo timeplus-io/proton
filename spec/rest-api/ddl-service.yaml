@@ -1,7 +1,7 @@
 openapi: 3.0.0
 
 servers:
-  - url: http://{host}:{port}/dae/v1/ddl
+  - url: http://{host}:{port}/proton/v1/ddl
 info:
   version: "1.0.0"
   title: "DDL service"
@@ -697,7 +697,7 @@ components:
           description: Number of replicas of per shard.
         _time_column:
           type: string
-          description: Which column shall be used for internal time partitioning in Daisy. Default is now() if it is not sepcified.
+          description: Which column shall be used for internal time partitioning in proton. Default is now() if it is not sepcified.
         order_by_expression:
           type: string
           description: The first order by column is specified with order_by_granularity. It will append other expressions if it is specified.

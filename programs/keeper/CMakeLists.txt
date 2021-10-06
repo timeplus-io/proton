@@ -21,7 +21,7 @@ set (CLICKHOUSE_KEEPER_LINK
 
 clickhouse_program_add(keeper)
 
-install (FILES keeper_config.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-keeper" COMPONENT clickhouse-keeper)
+install (FILES keeper_config.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-keeper" COMPONENT proton-keeper)
 
 clickhouse_embed_binaries(
     TARGET clickhouse_keeper_configs

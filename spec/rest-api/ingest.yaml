@@ -1,9 +1,12 @@
 openapi: 3.0.0
+
+servers:
+  - url: http://{host}:{port}/proton/v1/ingest
 info:
   title: ingest
   version: '1.0'
 paths:
-  '/dae/v1/ingest/{table}':
+  '/{table}':
     parameters:
       - schema:
           type: string
@@ -13,7 +16,7 @@ paths:
         description: table to insert data into
     post:
       summary: Insert data into a normal table
-      operationId: post-dae-v1-ingest-table
+      operationId: post-proton-v1-ingest-table
       responses:
         '200':
           $ref: '#/components/responses/insertResp'
@@ -157,7 +160,7 @@ paths:
                     - - 2
                       - 2021-04
         description: 'insert request, include columns and data'
-  '/dae/v1/ingest/rawstores/{store}':
+  '/rawstores/{store}':
     post:
       summary: Insert data into a rawstore table
       operationId: insert-rawstore
@@ -375,7 +378,7 @@ paths:
         in: path
         required: true
         description: rawstore name to insert data into
-  /dae/v1/ingest/statuses:
+  /statuses:
     parameters:
       - name: x-daisy-request-id
         in: header
@@ -421,7 +424,7 @@ paths:
           type: string
     post:
       summary: Batch query insert status
-      operationId: post-dae-v1-ingest-statuses
+      operationId: post-proton-v1-ingest-statuses
       responses:
         '200':
           description: OK
@@ -453,7 +456,7 @@ paths:
                           minLength: 1
                         progress:
                           type: number
-                          description: 'progess in percentage, 100 means complete'
+                          description: 'progress in percentage, 100 means complete'
                         status:
                           type: string
                           minLength: 1

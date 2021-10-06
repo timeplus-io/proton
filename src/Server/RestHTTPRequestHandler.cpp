@@ -174,9 +174,9 @@ bool RestHTTPRequestHandler::authenticateUser(
 
     /// The user and password can be passed by headers (similar to X-Auth-*),
     /// which is used by load balancers to pass authentication information.
-    std::string user = request.get("x-daisy-user", "");
-    std::string password = request.get("x-daisy-key", "");
-    std::string quota_key = request.get("x-daisy-quota", "");
+    std::string user = request.get("x-proton-user", "");
+    std::string password = request.get("x-proton-key", "");
+    std::string quota_key = request.get("x-proton-quota", "");
 
     std::string spnego_challenge;
 
@@ -230,7 +230,7 @@ bool RestHTTPRequestHandler::authenticateUser(
         /// It is prohibited to mix different authorization schemes.
         if (request.hasCredentials() || params.has("user") || params.has("password") || params.has("quota_key"))
             throw Exception(
-                "Invalid authentication: it is not allowed to use x-daisy HTTP headers and other authentication methods simultaneously",
+                "Invalid authentication: it is not allowed to use x-proton HTTP headers and other authentication methods simultaneously",
                 ErrorCodes::AUTHENTICATION_FAILED);
     }
 
@@ -419,11 +419,11 @@ void RestHTTPRequestHandler::processQuery(
 #endif
 
     auto context = session->makeQueryContext(std::move(client_info));
-    context->setCurrentQueryId(request.get("x-daisy-request-id", request.get("x-daisy-query-id", "")));
-    response.add("x-daisy-query-id", context->getCurrentQueryId());
+    context->setCurrentQueryId(request.get("x-proton-request-id", request.get("x-proton-query-id", "")));
+    response.add("x-proton-query-id", context->getCurrentQueryId());
 
     /// Setup idempotent key if it is passed by user
-    String idem_key = request.get("x-daisy-idempotent-id", "");
+    String idem_key = request.get("x-proton-idempotent-id", "");
     if (!idem_key.empty())
     {
         context->setIdempotentKey(idem_key);
@@ -480,7 +480,7 @@ void RestHTTPRequestHandler::trySendExceptionToClient(
 {
     try
     {
-        response.set("x-daisy-exception-code", std::to_string(exception_code));
+        response.set("x-proton-exception-code", std::to_string(exception_code));
 
         /// FIXME: make sure that no one else is reading from the same stream at the moment.
 

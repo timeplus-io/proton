@@ -1,10 +1,11 @@
 openapi: 3.0.0
+
 info:
-  title: daisy api
+  title: proton search API
   version: '1.0'
-  description: daisy api
+  description: REST API for search
 paths:
-  /dae/v1/search:
+  /proton/v1/search:
     parameters: []
     post:
       summary: Excute SQL query
@@ -27,34 +28,34 @@ paths:
                       - name: _index_time
                         type: DateTime64(3)
                     data:
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:41.290486 [ 7891 ] {} <Debug> DNSResolver: Updating DNS cache'
                         - '2020-12-16 07:57:50.347'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:41.290638 [ 7891 ] {} <Debug> DNSResolver: Updated DNS cache'
                         - '2020-12-16 07:57:52.935'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.489261 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushing system log, 7 entries to flush'
                         - '2020-12-16 07:57:52.935'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.491133 [ 7910 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 466.97 GiB.'
                         - '2020-12-16 07:57:52.935'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492519 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected 2 parts from 202008_1_8832_2713 to 202008_8833_8833_0'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492558 [ 7880 ] {} <Debug> DiskLocal: Reserving 2.01 MiB on disk `default`, having unreserved 466.97 GiB.'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492571 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Merging 2 parts: from 202008_1_8832_2713 to 202008_8833_8833_0 into Wide'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492741 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushed system log'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.496145 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected MergeAlgorithm: Horizontal'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.496457 [ 7880 ] {} <Trace> MergeTreeSequentialSource: Reading 14 marks from part 202008_1_8832_2713, total 66268 rows starting from the beginning of the part'
                         - '2020-12-16 07:57:52.937'
                     rows: 10
@@ -118,34 +119,34 @@ paths:
                       - name: _index_time
                         type: DateTime64(3)
                     data:
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:41.290486 [ 7891 ] {} <Debug> DNSResolver: Updating DNS cache'
                         - '2020-12-16 07:57:50.347'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:41.290638 [ 7891 ] {} <Debug> DNSResolver: Updated DNS cache'
                         - '2020-12-16 07:57:52.935'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.489261 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushing system log, 7 entries to flush'
                         - '2020-12-16 07:57:52.935'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.491133 [ 7910 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 466.97 GiB.'
                         - '2020-12-16 07:57:52.935'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492519 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected 2 parts from 202008_1_8832_2713 to 202008_8833_8833_0'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492558 [ 7880 ] {} <Debug> DiskLocal: Reserving 2.01 MiB on disk `default`, having unreserved 466.97 GiB.'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492571 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Merging 2 parts: from 202008_1_8832_2713 to 202008_8833_8833_0 into Wide'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.492741 [ 7910 ] {} <Trace> SystemLog (system.metric_log): Flushed system log'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.496145 [ 7880 ] {} <Debug> system.metric_log (MergerMutator): Selected MergeAlgorithm: Horizontal'
                         - '2020-12-16 07:57:52.937'
-                      - - daisy
+                      - - proton
                         - '2020.08.14 23:54:46.496457 [ 7880 ] {} <Trace> MergeTreeSequentialSource: Reading 14 marks from part 202008_1_8832_2713, total 66268 rows starting from the beginning of the part'
                         - '2020-12-16 07:57:52.937'
                     rows: 10
@@ -162,13 +163,13 @@ paths:
           in: query
           name: default_format
           description: 'query result output format, like CSV, JSONEachRow, et al. The default value is ''JSONCompact'''
-        - name: x-daisy-request-id
+        - name: x-proton-request-id
           in: header
           required: false
           description: the unique id to identify a ddl request
           schema:
             type: string
-        - name: x-daisy-query-id
+        - name: x-proton-query-id
           in: header
           required: false
           description: the unique id to identify a ddl request
@@ -179,7 +180,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-user
+        - name: x-proton-user
           in: header
           required: false
           schema:
@@ -189,7 +190,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-key
+        - name: x-proton-key
           in: header
           required: false
           schema:
@@ -199,7 +200,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-quota
+        - name: x-proton-quota
           in: header
           required: false
           schema:

@@ -35,17 +35,17 @@
 #include <Poco/Util/XMLConfiguration.h>
 
 
-/** This tool can be used to install ClickHouse without a deb/rpm/tgz package, having only "clickhouse" binary.
+/** This tool can be used to install `proton` without a deb/rpm/tgz package, having only "proton" binary.
   * It also allows to avoid dependency on systemd, upstart, SysV init.
   *
   * The following steps are performed:
   *
   * - copying the binary to binary directory (/usr/bin).
   * - creation of symlinks for tools.
-  * - creation of clickhouse user and group.
-  * - creation of config directory (/etc/clickhouse-server).
+  * - creation of proton user and group.
+  * - creation of config directory (/etc/proton-server).
   * - creation of default configuration files.
-  * - creation of a directory for logs (/var/log/clickhouse-server).
+  * - creation of a directory for logs (/var/log/proton-server).
   * - creation of a data directory if not exists.
   * - setting a password for default user.
   * - choose an option to listen connections.
@@ -54,7 +54,7 @@
   * - setting ulimits for the user.
   * - (todo) put service in cron.
   *
-  * It does not install clickhouse-odbc-bridge.
+  * It does not install proton-odbc-bridge.
   */
 
 namespace DB
@@ -83,10 +83,10 @@ static constexpr auto DEFAULT_CLICKHOUSE_SERVER_GROUP = "";
 static constexpr auto DEFAULT_CLICKHOUSE_BRIDGE_USER = "";
 static constexpr auto DEFAULT_CLICKHOUSE_BRIDGE_GROUP = "";
 #else
-static constexpr auto DEFAULT_CLICKHOUSE_SERVER_USER = "clickhouse";
-static constexpr auto DEFAULT_CLICKHOUSE_SERVER_GROUP = "clickhouse";
-static constexpr auto DEFAULT_CLICKHOUSE_BRIDGE_USER = "clickhouse-bridge";
-static constexpr auto DEFAULT_CLICKHOUSE_BRIDGE_GROUP = "clickhouse-bridge";
+static constexpr auto DEFAULT_CLICKHOUSE_SERVER_USER = "proton";
+static constexpr auto DEFAULT_CLICKHOUSE_SERVER_GROUP = "proton";
+static constexpr auto DEFAULT_CLICKHOUSE_BRIDGE_USER = "proton-bridge";
+static constexpr auto DEFAULT_CLICKHOUSE_BRIDGE_GROUP = "proton-bridge";
 #endif
 
 using namespace DB;
@@ -214,12 +214,12 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
             ("binary-path", po::value<std::string>()->default_value("usr/bin"), "where to install binaries")
-            ("config-path", po::value<std::string>()->default_value("etc/clickhouse-server"), "where to install configs")
-            ("log-path", po::value<std::string>()->default_value("var/log/clickhouse-server"), "where to create log directory")
-            ("data-path", po::value<std::string>()->default_value("var/lib/clickhouse"), "directory for data")
-            ("pid-path", po::value<std::string>()->default_value("var/run/clickhouse-server"), "directory for pid file")
-            ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "clickhouse user to create")
-            ("group", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_GROUP), "clickhouse group to create")
+            ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "where to install configs")
+            ("log-path", po::value<std::string>()->default_value("var/log/proton-server"), "where to create log directory")
+            ("data-path", po::value<std::string>()->default_value("var/lib/proton"), "directory for data")
+            ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
+            ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "proton user to create")
+            ("group", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_GROUP), "proton group to create")
         ;
 
         po::variables_map options;
@@ -270,9 +270,9 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         fs::path prefix = options["prefix"].as<std::string>();
         fs::path bin_dir = prefix / options["binary-path"].as<std::string>();
 
-        fs::path main_bin_path = bin_dir / "clickhouse";
-        fs::path main_bin_tmp_path = bin_dir / "clickhouse.new";
-        fs::path main_bin_old_path = bin_dir / "clickhouse.old";
+        fs::path main_bin_path = bin_dir / "proton";
+        fs::path main_bin_tmp_path = bin_dir / "proton.new";
+        fs::path main_bin_old_path = bin_dir / "proton.old";
 
         size_t binary_size = fs::file_size(binary_self_path);
 
@@ -283,18 +283,18 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         if (old_binary_exists && binary_self_canonical_path == fs::canonical(main_bin_path))
         {
             already_installed = true;
-            fmt::print("ClickHouse binary is already located at {}\n", main_bin_path.string());
+            fmt::print("proton binary is already located at {}\n", main_bin_path.string());
         }
         /// Check if binary has the same content.
         else if (old_binary_exists && binary_size == fs::file_size(main_bin_path))
         {
-            fmt::print("Found already existing ClickHouse binary at {} having the same size. Will check its contents.\n",
+            fmt::print("Found already existing proton binary at {} having the same size. Will check its contents.\n",
                 main_bin_path.string());
 
             if (filesEqual(binary_self_path.string(), main_bin_path.string()))
             {
                 already_installed = true;
-                fmt::print("ClickHouse binary is already located at {} and it has the same content as {}\n",
+                fmt::print("proton binary is already located at {} and it has the same content as {}\n",
                     main_bin_path.string(), binary_self_canonical_path.string());
             }
         }
@@ -314,10 +314,10 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
 
             size_t available_space = fs::space(bin_dir).available;
             if (available_space < binary_size)
-                throw Exception(ErrorCodes::NOT_ENOUGH_SPACE, "Not enough space for clickhouse binary in {}, required {}, available {}.",
+                throw Exception(ErrorCodes::NOT_ENOUGH_SPACE, "Not enough space for proton binary in {}, required {}, available {}.",
                     bin_dir.string(), ReadableSize(binary_size), ReadableSize(available_space));
 
-            fmt::print("Copying ClickHouse binary to {}\n", main_bin_tmp_path.string());
+            fmt::print("Copying proton binary to {}\n", main_bin_tmp_path.string());
 
             try
             {
@@ -334,7 +334,7 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             catch (const Exception & e)
             {
                 if (e.code() == ErrorCodes::CANNOT_OPEN_FILE && geteuid() != 0)
-                    std::cerr << "Install must be run as root: " << formatWithSudo("./clickhouse install") << '\n';
+                    std::cerr << "Install must be run as root: " << formatWithSudo("./proton install") << '\n';
                 throw;
             }
 
@@ -355,18 +355,16 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
 
         std::initializer_list<const char *> tools
         {
-            "clickhouse-server",
-            "clickhouse-client",
-            "clickhouse-local",
-            "clickhouse-benchmark",
-            "clickhouse-copier",
-            "clickhouse-obfuscator",
-            "clickhouse-git-import",
-            "clickhouse-compressor",
-            "clickhouse-format",
-            "clickhouse-extract-from-config",
-            "clickhouse-keeper",
-            "clickhouse-keeper-converter",
+            "proton-server",
+            "proton-client",
+            "proton-local",
+            "proton-benchmark",
+            "proton-copier",
+            "proton-obfuscator",
+            "proton-git-import",
+            "proton-compressor",
+            "proton-format",
+            "proton-extract-from-config"
         };
 
         for (const auto & tool : tools)
@@ -410,22 +408,22 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             }
         }
 
-        /// Creation of clickhouse user and group.
+        /// Creation of proton user and group.
 
         std::string user = options["user"].as<std::string>();
         std::string group = options["group"].as<std::string>();
 
         if (!group.empty())
         {
-            fmt::print("Creating clickhouse group if it does not exist.\n");
+            fmt::print("Creating proton group if it does not exist.\n");
             createGroup(group);
         }
         else
-            fmt::print("Will not create a dedicated clickhouse group.\n");
+            fmt::print("Will not create a dedicated proton group.\n");
 
         if (!user.empty())
         {
-            fmt::print("Creating clickhouse user if it does not exist.\n");
+            fmt::print("Creating proton user if it does not exist.\n");
             createUser(user, group);
 
             if (group.empty())
@@ -460,7 +458,7 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             }
         }
         else
-            fmt::print("Will not create a dedicated clickhouse user.\n");
+            fmt::print("Will not create a dedicated proton user.\n");
 
         /// Creating configuration files and directories.
 
@@ -472,8 +470,8 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             fs::create_directories(config_dir);
         }
 
-        fs::path main_config_file = config_dir / "config.xml";
-        fs::path users_config_file = config_dir / "users.xml";
+        fs::path main_config_file = config_dir / "config.yaml";
+        fs::path users_config_file = config_dir / "users.yaml";
         fs::path config_d = config_dir / "config.d";
         fs::path users_d = config_dir / "users.d";
 
@@ -497,10 +495,10 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
 
         if (!fs::exists(main_config_file))
         {
-            std::string_view main_config_content = getResource("config.xml");
+            std::string_view main_config_content = getResource("config.yaml");
             if (main_config_content.empty())
             {
-                fmt::print("There is no default config.xml, you have to download it and place to {}.\n", main_config_file.string());
+                fmt::print("There is no default config.yaml, you have to download it and place to {}.\n", main_config_file.string());
             }
             else
             {
@@ -609,10 +607,10 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
 
         if (!fs::exists(users_config_file))
         {
-            std::string_view users_config_content = getResource("users.xml");
+            std::string_view users_config_content = getResource("users.yaml");
             if (users_config_content.empty())
             {
-                fmt::print("There is no default users.xml, you have to download it and place to {}.\n", users_config_file.string());
+                fmt::print("There is no default users.yaml, you have to download it and place to {}.\n", users_config_file.string());
             }
             else
             {
@@ -677,17 +675,17 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         /// Not recursive, because there can be a huge number of files and it will be slow.
         changeOwnership(data_path, user, group, /* recursive= */ false);
 
-        /// All users are allowed to read pid file (for clickhouse status command).
+        /// All users are allowed to read pid file (for proton status command).
         fs::permissions(pid_path, fs::perms::owner_all | fs::perms::group_read | fs::perms::others_read, fs::perm_options::replace);
 
-        /// Other users in clickhouse group are allowed to read and even delete logs.
+        /// Other users in proton group are allowed to read and even delete logs.
         fs::permissions(log_path, fs::perms::owner_all | fs::perms::group_all, fs::perm_options::replace);
 
-        /// Data directory is not accessible to anyone except clickhouse.
+        /// Data directory is not accessible to anyone except proton.
         fs::permissions(data_path, fs::perms::owner_all, fs::perm_options::replace);
 
-        fs::path odbc_bridge_path = bin_dir / "clickhouse-odbc-bridge";
-        fs::path library_bridge_path = bin_dir / "clickhouse-library-bridge";
+        fs::path odbc_bridge_path = bin_dir / "proton-odbc-bridge";
+        fs::path library_bridge_path = bin_dir / "proton-library-bridge";
 
         if (fs::exists(odbc_bridge_path) || fs::exists(library_bridge_path))
         {
@@ -789,12 +787,12 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
           */
 
 #if defined(__linux__)
-        fmt::print("Setting capabilities for clickhouse binary. This is optional.\n");
+        fmt::print("Setting capabilities for proton binary. This is optional.\n");
         std::string command = fmt::format("command -v setcap >/dev/null"
             " && command -v capsh >/dev/null"
             " && capsh --has-p=cap_net_admin,cap_ipc_lock,cap_sys_nice+ep >/dev/null 2>&1"
             " && setcap 'cap_net_admin,cap_ipc_lock,cap_sys_nice+ep' {0}"
-            " || echo \"Cannot set 'net_admin' or 'ipc_lock' or 'sys_nice' capability for clickhouse binary."
+            " || echo \"Cannot set 'net_admin' or 'ipc_lock' or 'sys_nice' capability for proton binary."
                 " This is optional. Taskstats accounting will be disabled."
                 " To enable taskstats accounting you may add the required capability later manually.\"",
             fs::canonical(main_bin_path).string());
@@ -840,27 +838,27 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
         if (has_password_for_default_user)
             maybe_password = " --password";
 
-        fs::path pid_file = pid_path / "clickhouse-server.pid";
+        fs::path pid_file = pid_path / "proton-server.pid";
         if (fs::exists(pid_file))
         {
             fmt::print(
-                "\nClickHouse has been successfully installed.\n"
-                "\nRestart clickhouse-server with:\n"
+                "\nproton has been successfully installed.\n"
+                "\nRestart proton-server with:\n"
                 " {}\n"
-                "\nStart clickhouse-client with:\n"
-                " clickhouse-client{}\n\n",
-                formatWithSudo("clickhouse restart"),
+                "\nStart proton-client with:\n"
+                " proton-client{}\n\n",
+                formatWithSudo("proton restart"),
                 maybe_password);
         }
         else
         {
             fmt::print(
-                "\nClickHouse has been successfully installed.\n"
-                "\nStart clickhouse-server with:\n"
+                "\nproton has been successfully installed.\n"
+                "\nStart proton-server with:\n"
                 " {}\n"
-                "\nStart clickhouse-client with:\n"
-                " clickhouse-client{}\n\n",
-                formatWithSudo("clickhouse start"),
+                "\nStart proton-client with:\n"
+                " proton-client{}\n\n",
+                formatWithSudo("proton start"),
                 maybe_password);
         }
     }
@@ -910,11 +908,11 @@ namespace
         else
         {
             /// Create a directory for pid file.
-            /// It's created by "install" but we also support cases when ClickHouse is already installed different way.
+            /// It's created by "install" but we also support cases when proton is already installed different way.
             fs::path pid_path = pid_file;
             pid_path.remove_filename();
             fs::create_directories(pid_path);
-            /// All users are allowed to read pid file (for clickhouse status command).
+            /// All users are allowed to read pid file (for proton status command).
             fs::permissions(pid_path, fs::perms::owner_all | fs::perms::group_read | fs::perms::others_read, fs::perm_options::replace);
 
             changeOwnership(pid_path, user);
@@ -1022,7 +1020,7 @@ namespace
 
         if (!pid)
         {
-            auto sh = ShellCommand::execute("pidof clickhouse-server");
+            auto sh = ShellCommand::execute("pidof proton-server");
 
             if (tryReadIntText(pid, sh->out))
             {
@@ -1056,7 +1054,7 @@ namespace
 
         if (!pid)
         {
-            fmt::print("Now there is no clickhouse-server process.\n");
+            fmt::print("Now there is no proton-server process.\n");
         }
 
         return pid;
@@ -1151,9 +1149,9 @@ int mainEntryClickHouseStart(int argc, char ** argv)
         std::string user = options["user"].as<std::string>();
 
         fs::path prefix = options["prefix"].as<std::string>();
-        fs::path executable = prefix / options["binary-path"].as<std::string>() / "clickhouse-server";
-        fs::path config = prefix / options["config-path"].as<std::string>() / "config.xml";
-        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "clickhouse-server.pid";
+        fs::path executable = prefix / options["binary-path"].as<std::string>() / "proton-server";
+        fs::path config = prefix / options["config-path"].as<std::string>() / "config.yaml";
+        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "proton-server.pid";
 
         return start(user, executable, config, pid_file);
     }
@@ -1173,7 +1171,7 @@ int mainEntryClickHouseStop(int argc, char ** argv)
         desc.add_options()
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
-            ("pid-path", po::value<std::string>()->default_value("var/run/clickhouse-server"), "directory for pid file")
+            ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
             ("force", po::bool_switch(), "Stop with KILL signal instead of TERM")
         ;
 
@@ -1187,7 +1185,7 @@ int mainEntryClickHouseStop(int argc, char ** argv)
         }
 
         fs::path prefix = options["prefix"].as<std::string>();
-        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "clickhouse-server.pid";
+        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "proton-server.pid";
 
         return stop(pid_file, options["force"].as<bool>());
     }
@@ -1207,7 +1205,7 @@ int mainEntryClickHouseStatus(int argc, char ** argv)
         desc.add_options()
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
-            ("pid-path", po::value<std::string>()->default_value("var/run/clickhouse-server"), "directory for pid file")
+            ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
         ;
 
         po::variables_map options;
@@ -1220,7 +1218,7 @@ int mainEntryClickHouseStatus(int argc, char ** argv)
         }
 
         fs::path prefix = options["prefix"].as<std::string>();
-        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "clickhouse-server.pid";
+        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "proton-server.pid";
 
         isRunning(pid_file);
     }
@@ -1243,9 +1241,9 @@ int mainEntryClickHouseRestart(int argc, char ** argv)
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
             ("binary-path", po::value<std::string>()->default_value("usr/bin"), "directory with binary")
-            ("config-path", po::value<std::string>()->default_value("etc/clickhouse-server"), "directory with configs")
-            ("pid-path", po::value<std::string>()->default_value("var/run/clickhouse-server"), "directory for pid file")
-            ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "clickhouse user")
+            ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "directory with configs")
+            ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
+            ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "proton user")
             ("force", po::value<bool>()->default_value(false), "Stop with KILL signal instead of TERM")
         ;
 
@@ -1261,9 +1259,9 @@ int mainEntryClickHouseRestart(int argc, char ** argv)
         std::string user = options["user"].as<std::string>();
 
         fs::path prefix = options["prefix"].as<std::string>();
-        fs::path executable = prefix / options["binary-path"].as<std::string>() / "clickhouse-server";
-        fs::path config = prefix / options["config-path"].as<std::string>() / "config.xml";
-        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "clickhouse-server.pid";
+        fs::path executable = prefix / options["binary-path"].as<std::string>() / "proton-server";
+        fs::path config = prefix / options["config-path"].as<std::string>() / "config.yaml";
+        fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "proton-server.pid";
 
         if (int res = stop(pid_file, options["force"].as<bool>()))
             return res;

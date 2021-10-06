@@ -1,9 +1,9 @@
 openapi: 3.0.0
 servers:
-  - url: 'http://{host}:{port}/dae'
+  - url: 'http://{host}:{port}/proton'
 info:
   version: 1.0.0
-  title: Daisy status
+  title: proton status
   description: >-
     Check whether the daisy cluster is alive, and to query the packaging
     information of the current service.

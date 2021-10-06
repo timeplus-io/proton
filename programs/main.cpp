@@ -150,7 +150,7 @@ int printHelp(int, char **)
 {
     std::cerr << "Use one of the following commands:" << std::endl;
     for (auto & application : clickhouse_applications)
-        std::cerr << "clickhouse " << application.first << " [args] " << std::endl;
+        std::cerr << "proton " << application.first << " [args] " << std::endl;
     return -1;
 }
 
@@ -161,7 +161,7 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
     {
         auto first_arg = argv.begin() + 1;
 
-        /// 'clickhouse --client ...' and 'clickhouse client ...' are Ok
+        /// 'proton --client ...' and 'proton client ...' are Ok
         if (*first_arg == "--" + app_suffix || *first_arg == app_suffix)
         {
             argv.erase(first_arg);
@@ -169,8 +169,8 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
         }
     }
 
-    /// Use app if clickhouse binary is run through symbolic link with name clickhouse-app
-    std::string app_name = "clickhouse-" + app_suffix;
+    /// Use app if proton binary is run through symbolic link with name clickhouse-app
+    std::string app_name = "proton-" + app_suffix;
     return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name));
 }
 #endif

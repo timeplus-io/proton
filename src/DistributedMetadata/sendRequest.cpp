@@ -46,12 +46,12 @@ std::pair<String, Int32> sendRequest(
         request.setContentLength(payload.size());
         request.setContentType("application/json");
         /// FIXME : query ID chain. Change the query ID to avoid same query ID issue
-        request.add("x-daisy-query-id", "from-" + query_id);
-        request.add("x-daisy-user", user);
+        request.add("x-proton-query-id", "from-" + query_id);
+        request.add("x-proton-user", user);
 
         if (!password.empty())
         {
-            request.add("x-daisy-key", password);
+            request.add("x-proton-key", password);
         }
 
         auto & ostr = session->sendRequest(request);

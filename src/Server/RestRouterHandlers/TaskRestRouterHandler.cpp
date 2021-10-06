@@ -17,7 +17,7 @@ namespace ErrorCodes
 
 namespace
 {
-    const String TASK_URL = "http://{}:{}/dae/v1/tasks/{}";
+    const String TASK_URL = "http://{}:{}/proton/v1/tasks/{}";
 
     Poco::JSON::Array buildTaskResponse(const std::vector<DB::TaskStatusService::TaskStatusPtr> & tasks)
     {

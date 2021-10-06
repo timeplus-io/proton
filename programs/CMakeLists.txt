@@ -2,170 +2,170 @@ if (USE_CLANG_TIDY)
     set (CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_PATH}")
 endif ()
 
-# The `clickhouse` binary is a multi purpose tool that contains multiple execution modes (client, server, etc.),
+# The `proton` binary is a multi purpose tool that contains multiple execution modes (client, server, etc.),
 # each of them may be built and linked as a separate library.
 # If you do not know what modes you need, turn this option OFF and enable SERVER and CLIENT only.
-option (ENABLE_CLICKHOUSE_ALL "Enable all ClickHouse modes by default" ON)
+option (ENABLE_PROTON_ALL "Enable all proton modes by default" ON)
 
-option (ENABLE_CLICKHOUSE_SERVER "Server mode (main mode)" ${ENABLE_CLICKHOUSE_ALL})
-option (ENABLE_CLICKHOUSE_CLIENT "Client mode (interactive tui/shell that connects to the server)"
-    ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_SERVER "Server mode (main mode)" ${ENABLE_PROTON_ALL})
+option (ENABLE_PROTON_CLIENT "Client mode (interactive tui/shell that connects to the server)"
+    ${ENABLE_PROTON_ALL})
 
-# https://clickhouse.com/docs/en/operations/utilities/clickhouse-local/
-option (ENABLE_CLICKHOUSE_LOCAL "Local files fast processing mode" ${ENABLE_CLICKHOUSE_ALL})
+# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-local/
+option (ENABLE_PROTON_LOCAL "Local files fast processing mode" ${ENABLE_PROTON_ALL})
 
-# https://clickhouse.com/docs/en/operations/utilities/clickhouse-benchmark/
-option (ENABLE_CLICKHOUSE_BENCHMARK "Queries benchmarking mode" ${ENABLE_CLICKHOUSE_ALL})
+# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-benchmark/
+option (ENABLE_PROTON_BENCHMARK "Queries benchmarking mode" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG "Configs processor (extract values etc.)" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_EXTRACT_FROM_CONFIG "Configs processor (extract values etc.)" ${ENABLE_PROTON_ALL})
 
-# https://clickhouse.com/docs/en/operations/utilities/clickhouse-compressor/
-option (ENABLE_CLICKHOUSE_COMPRESSOR "Data compressor and decompressor" ${ENABLE_CLICKHOUSE_ALL})
+# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-compressor/
+option (ENABLE_PROTON_COMPRESSOR "Data compressor and decompressor" ${ENABLE_PROTON_ALL})
 
-# https://clickhouse.com/docs/en/operations/utilities/clickhouse-copier/
-option (ENABLE_CLICKHOUSE_COPIER "Inter-cluster data copying mode" ${ENABLE_CLICKHOUSE_ALL})
+# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-copier/
+option (ENABLE_PROTON_COPIER "Inter-cluster data copying mode" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_CLICKHOUSE_FORMAT "Queries pretty-printer and formatter with syntax highlighting"
-    ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_FORMAT "Queries pretty-printer and formatter with syntax highlighting"
+    ${ENABLE_PROTON_ALL})
 
-# https://clickhouse.com/docs/en/operations/utilities/clickhouse-obfuscator/
-option (ENABLE_CLICKHOUSE_OBFUSCATOR "Table data obfuscator (convert real data to benchmark-ready one)"
-    ${ENABLE_CLICKHOUSE_ALL})
+# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-obfuscator/
+option (ENABLE_PROTON_OBFUSCATOR "Table data obfuscator (convert real data to benchmark-ready one)"
+    ${ENABLE_PROTON_ALL})
 
 # https://clickhouse.com/docs/en/operations/utilities/odbc-bridge/
 # TODO Also needs NANODBC.
 if (ENABLE_ODBC)
-    option (ENABLE_CLICKHOUSE_ODBC_BRIDGE "HTTP-server working like a proxy to ODBC driver"
-        ${ENABLE_CLICKHOUSE_ALL})
+    option (ENABLE_PROTON_ODBC_BRIDGE "HTTP-server working like a proxy to ODBC driver"
+        ${ENABLE_PROTON_ALL})
 else ()
-    option (ENABLE_CLICKHOUSE_ODBC_BRIDGE "HTTP-server working like a proxy to ODBC driver" OFF)
+    option (ENABLE_PROTON_ODBC_BRIDGE "HTTP-server working like a proxy to ODBC driver" OFF)
 endif ()
 
-option (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE "HTTP-server working like a proxy to Library dictionary source"
-    ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_LIBRARY_BRIDGE "HTTP-server working like a proxy to Library dictionary source"
+    ${ENABLE_PROTON_ALL})
 
-# https://presentations.clickhouse.com/matemarketing_2020/
-option (ENABLE_CLICKHOUSE_DWAL_BENCHMARK "Distributed write ahead log benchmark" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_DWAL_BENCHMARK "Distributed write ahead log benchmark" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_CLICKHOUSE_GIT_IMPORT "A tool to analyze Git repositories" ${ENABLE_CLICKHOUSE_ALL})
+# https://presentations.clickhouse.tech/matemarketing_2020/
+option (ENABLE_PROTON_GIT_IMPORT "A tool to analyze Git repositories" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_CLICKHOUSE_STATIC_FILES_DISK_UPLOADER "A tool to export table data files to be later put to a static files web server" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER "A tool to export table data files to be later put to a static files web server" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_CLICKHOUSE_KEEPER "ClickHouse alternative to ZooKeeper" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_KEEPER "proton alternative to ZooKeeper" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into clickhouse-keeper snapshot" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_PROTON_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into proton-keeper snapshot" ${ENABLE_PROTON_ALL})
 
 if (NOT ENABLE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
     # since ENABLE_NURAFT is set to OFF for FreeBSD and Darwin.
-    message (STATUS "clickhouse-keeper and clickhouse-keeper-converter will not be built (lack of NuRaft)")
-    set(ENABLE_CLICKHOUSE_KEEPER OFF)
-    set(ENABLE_CLICKHOUSE_KEEPER_CONVERTER OFF)
+    message (STATUS "proton-keeper and proton-keeper-converter will not be built (lack of NuRaft)")
+    set(ENABLE_PROTON_KEEPER OFF)
+    set(ENABLE_PROTON_KEEPER_CONVERTER OFF)
 endif()
 
 if (CLICKHOUSE_SPLIT_BINARY)
-    option(ENABLE_CLICKHOUSE_INSTALL "Install ClickHouse without .deb/.rpm/.tgz packages (having the binary only)" OFF)
+    option(ENABLE_PROTON_INSTALL "Install proton without .deb/.rpm/.tgz packages (having the binary only)" OFF)
 else ()
-    option(ENABLE_CLICKHOUSE_INSTALL "Install ClickHouse without .deb/.rpm/.tgz packages (having the binary only)"
-        ${ENABLE_CLICKHOUSE_ALL})
+    option(ENABLE_PROTON_INSTALL "Install proton without .deb/.rpm/.tgz packages (having the binary only)"
+        ${ENABLE_PROTON_ALL})
 endif ()
 
-message(STATUS "ClickHouse modes:")
+message(STATUS "proton modes:")
 
-if (NOT ENABLE_CLICKHOUSE_SERVER)
-    message(WARNING "ClickHouse server mode is not going to be built.")
+if (NOT ENABLE_PROTON_SERVER)
+    message(WARNING "proton server mode is not going to be built.")
 else()
     message(STATUS "Server mode: ON")
 endif()
 
-if (NOT ENABLE_CLICKHOUSE_CLIENT)
-    message(WARNING "ClickHouse client mode is not going to be built. You won't be able to connect to the server and run tests")
+if (NOT ENABLE_PROTON_CLIENT)
+    message(WARNING "proton client mode is not going to be built. You won't be able to connect to the server and run tests")
 else()
     message(STATUS "Client mode: ON")
 endif()
 
-if (ENABLE_CLICKHOUSE_LOCAL)
+if (ENABLE_PROTON_LOCAL)
     message(STATUS "Local mode: ON")
 else()
     message(STATUS "Local mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_BENCHMARK)
+if (ENABLE_PROTON_BENCHMARK)
     message(STATUS "Benchmark mode: ON")
 else()
     message(STATUS "Benchmark mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG)
+if (ENABLE_PROTON_EXTRACT_FROM_CONFIG)
     message(STATUS "Extract from config mode: ON")
 else()
     message(STATUS "Extract from config mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_COMPRESSOR)
+if (ENABLE_PROTON_COMPRESSOR)
     message(STATUS "Compressor mode: ON")
 else()
     message(STATUS "Compressor mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_COPIER)
+if (ENABLE_PROTON_COPIER)
     message(STATUS "Copier mode: ON")
 else()
     message(STATUS "Copier mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_FORMAT)
+if (ENABLE_PROTON_FORMAT)
     message(STATUS "Format mode: ON")
 else()
     message(STATUS "Format mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_OBFUSCATOR)
+if (ENABLE_PROTON_OBFUSCATOR)
     message(STATUS "Obfuscator mode: ON")
 else()
     message(STATUS "Obfuscator mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
+if (ENABLE_PROTON_ODBC_BRIDGE)
     message(STATUS "ODBC bridge mode: ON")
 else()
     message(STATUS "ODBC bridge mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE)
+if (ENABLE_PROTON_LIBRARY_BRIDGE)
     message(STATUS "Library bridge mode: ON")
 else()
     message(STATUS "Library bridge mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_INSTALL)
-    message(STATUS "ClickHouse install: ON")
+if (ENABLE_PROTON_INSTALL)
+    message(STATUS "proton install: ON")
 else()
-    message(STATUS "ClickHouse install: OFF")
+    message(STATUS "proton install: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_GIT_IMPORT)
-    message(STATUS "ClickHouse git-import: ON")
+if (ENABLE_PROTON_GIT_IMPORT)
+    message(STATUS "proton git-import: ON")
 else()
-    message(STATUS "ClickHouse git-import: OFF")
+    message(STATUS "proton git-import: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_KEEPER)
-    message(STATUS "ClickHouse keeper mode: ON")
+if (ENABLE_PROTON_KEEPER)
+    message(STATUS "proton keeper mode: ON")
 else()
-    message(STATUS "ClickHouse keeper mode: OFF")
+    message(STATUS "proton keeper mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
-    message(STATUS "ClickHouse keeper-converter mode: ON")
+if (ENABLE_PROTON_KEEPER_CONVERTER)
+    message(STATUS "proton keeper-converter mode: ON")
 else()
-    message(STATUS "ClickHouse keeper-converter mode: OFF")
+    message(STATUS "proton keeper-converter mode: OFF")
 endif()
 
-if (ENABLE_CLICKHOUSE_DWAL_BENCHMARK)
-    message(STATUS "ClickHouse dwal-benchmark: ON")
+if (ENABLE_PROTON_DWAL_BENCHMARK)
+    message(STATUS "proton dwal-benchmark: ON")
 else()
-    message(STATUS "ClickHouse dwal-benchmark: OFF")
+    message(STATUS "proton dwal-benchmark: OFF")
 endif()
 
 if(NOT (USE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
@@ -212,9 +212,9 @@ endmacro()
 
 macro(clickhouse_program_add_executable name)
     if(CLICKHOUSE_SPLIT_BINARY)
-        add_executable(clickhouse-${name} clickhouse-${name}.cpp)
+        add_executable(proton-${name} clickhouse-${name}.cpp)
         clickhouse_program_link_split_binary(${name})
-        install(TARGETS clickhouse-${name} ${CLICKHOUSE_ALL_TARGETS} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        install(TARGETS proton-${name} ${CLICKHOUSE_ALL_TARGETS} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     endif()
 endmacro()
 
@@ -238,19 +238,19 @@ add_subdirectory (bash-completion)
 add_subdirectory (static-files-disk-uploader)
 add_subdirectory (distributed-wal)
 
-if (ENABLE_CLICKHOUSE_KEEPER)
+if (ENABLE_PROTON_KEEPER)
     add_subdirectory (keeper)
 endif()
 
-if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
+if (ENABLE_PROTON_KEEPER_CONVERTER)
     add_subdirectory (keeper-converter)
 endif()
 
-if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
+if (ENABLE_PROTON_ODBC_BRIDGE)
     add_subdirectory (odbc-bridge)
 endif ()
 
-if (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE)
+if (ENABLE_PROTON_LIBRARY_BRIDGE)
     add_subdirectory (library-bridge)
 endif ()
 
@@ -303,194 +303,194 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_KEEPER_INCLUDE}
       ${CLICKHOUSE_KEEPER_CONVERTER_INCLUDE})
 
-    set_target_properties(clickhouse-lib PROPERTIES SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR} VERSION ${VERSION_SO} OUTPUT_NAME clickhouse DEBUG_POSTFIX "")
-    install (TARGETS clickhouse-lib LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
+    set_target_properties(clickhouse-lib PROPERTIES SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR} VERSION ${VERSION_SO} OUTPUT_NAME proton DEBUG_POSTFIX "")
+    install (TARGETS clickhouse-lib LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT proton)
 endif()
 
 if (CLICKHOUSE_SPLIT_BINARY)
     set (CLICKHOUSE_ALL_TARGETS
-        clickhouse-server
-        clickhouse-client
-        clickhouse-local
-        clickhouse-benchmark
-        clickhouse-extract-from-config
-        clickhouse-compressor
-        clickhouse-format
-        clickhouse-obfuscator
-        clickhouse-git-import
-        clickhouse-copier
-        clickhouse-static-files-disk-uploader
-        clickhouse-dwal-benchmark
+        proton-server
+        proton-client
+        proton-local
+        proton-benchmark
+        proton-extract-from-config
+        proton-compressor
+        proton-format
+        proton-obfuscator
+        proton-git-import
+        proton-copier
+        proton-static-files-disk-uploader
+        proton-dwal-benchmark
     )
 
-    if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
-        list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-odbc-bridge)
+    if (ENABLE_PROTON_ODBC_BRIDGE)
+        list (APPEND CLICKHOUSE_ALL_TARGETS proton-odbc-bridge)
     endif ()
 
-    if (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE)
-        list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-library-bridge)
+    if (ENABLE_PROTON_LIBRARY_BRIDGE)
+        list (APPEND CLICKHOUSE_ALL_TARGETS proton-library-bridge)
     endif ()
 
-    if (ENABLE_CLICKHOUSE_KEEPER)
-        list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-keeper)
+    if (ENABLE_PROTON_KEEPER)
+        list (APPEND CLICKHOUSE_ALL_TARGETS proton-keeper)
     endif ()
 
-    if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
-        list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-keeper-converter)
+    if (ENABLE_PROTON_KEEPER_CONVERTER)
+        list (APPEND CLICKHOUSE_ALL_TARGETS proton-keeper-converter)
     endif ()
 
     set_target_properties(${CLICKHOUSE_ALL_TARGETS} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ..)
 
-    add_custom_target (clickhouse-bundle ALL DEPENDS ${CLICKHOUSE_ALL_TARGETS})
-    add_custom_target (clickhouse ALL DEPENDS clickhouse-bundle)
+    add_custom_target (proton-bundle ALL DEPENDS ${CLICKHOUSE_ALL_TARGETS})
+    add_custom_target (proton ALL DEPENDS proton-bundle)
 
-    install(PROGRAMS clickhouse-split-helper DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME clickhouse COMPONENT clickhouse)
+    install(PROGRAMS proton-split-helper DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME proton COMPONENT proton)
 else ()
-    add_executable (clickhouse main.cpp)
+    add_executable (proton main.cpp)
 
     # A library that prevent usage of several functions from libc.
     if (ARCH_AMD64 AND OS_LINUX AND NOT OS_ANDROID)
         set (HARMFUL_LIB harmful)
     endif ()
 
-    target_link_libraries (clickhouse PRIVATE clickhouse_common_io string_utils ${HARMFUL_LIB})
-    target_include_directories (clickhouse PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries (proton PRIVATE clickhouse_common_io string_utils ${HARMFUL_LIB})
+    target_include_directories (proton PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-    if (ENABLE_CLICKHOUSE_SERVER)
-        clickhouse_target_link_split_lib(clickhouse server)
+    if (ENABLE_PROTON_SERVER)
+        clickhouse_target_link_split_lib(proton server)
     endif ()
-    if (ENABLE_CLICKHOUSE_CLIENT)
-        clickhouse_target_link_split_lib(clickhouse client)
+    if (ENABLE_PROTON_CLIENT)
+        clickhouse_target_link_split_lib(proton client)
     endif ()
-    if (ENABLE_CLICKHOUSE_LOCAL)
-        clickhouse_target_link_split_lib(clickhouse local)
+    if (ENABLE_PROTON_LOCAL)
+        clickhouse_target_link_split_lib(proton local)
     endif ()
-    if (ENABLE_CLICKHOUSE_BENCHMARK)
-        clickhouse_target_link_split_lib(clickhouse benchmark)
+    if (ENABLE_PROTON_BENCHMARK)
+        clickhouse_target_link_split_lib(proton benchmark)
     endif ()
-    if (ENABLE_CLICKHOUSE_COPIER)
-        clickhouse_target_link_split_lib(clickhouse copier)
+    if (ENABLE_PROTON_COPIER)
+        clickhouse_target_link_split_lib(proton copier)
     endif ()
-    if (ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG)
-        clickhouse_target_link_split_lib(clickhouse extract-from-config)
+    if (ENABLE_PROTON_EXTRACT_FROM_CONFIG)
+        clickhouse_target_link_split_lib(proton extract-from-config)
     endif ()
-    if (ENABLE_CLICKHOUSE_COMPRESSOR)
-        clickhouse_target_link_split_lib(clickhouse compressor)
+    if (ENABLE_PROTON_COMPRESSOR)
+        clickhouse_target_link_split_lib(proton compressor)
     endif ()
-    if (ENABLE_CLICKHOUSE_FORMAT)
-        clickhouse_target_link_split_lib(clickhouse format)
+    if (ENABLE_PROTON_FORMAT)
+        clickhouse_target_link_split_lib(proton format)
     endif ()
-    if (ENABLE_CLICKHOUSE_OBFUSCATOR)
-        clickhouse_target_link_split_lib(clickhouse obfuscator)
+    if (ENABLE_PROTON_OBFUSCATOR)
+        clickhouse_target_link_split_lib(proton obfuscator)
     endif ()
-    if (ENABLE_CLICKHOUSE_GIT_IMPORT)
-        clickhouse_target_link_split_lib(clickhouse git-import)
+    if (ENABLE_PROTON_GIT_IMPORT)
+        clickhouse_target_link_split_lib(proton git-import)
     endif ()
-    if (ENABLE_CLICKHOUSE_STATIC_FILES_DISK_UPLOADER)
-        clickhouse_target_link_split_lib(clickhouse static-files-disk-uploader)
+    if (ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER)
+        clickhouse_target_link_split_lib(proton static-files-disk-uploader)
     endif ()
-    if (ENABLE_CLICKHOUSE_KEEPER)
-        clickhouse_target_link_split_lib(clickhouse keeper)
+    if (ENABLE_PROTON_KEEPER)
+        clickhouse_target_link_split_lib(proton keeper)
     endif()
-    if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
-        clickhouse_target_link_split_lib(clickhouse keeper-converter)
+    if (ENABLE_PROTON_KEEPER_CONVERTER)
+        clickhouse_target_link_split_lib(proton keeper-converter)
     endif()
-    if (ENABLE_CLICKHOUSE_INSTALL)
-        clickhouse_target_link_split_lib(clickhouse install)
+    if (ENABLE_PROTON_INSTALL)
+        clickhouse_target_link_split_lib(proton install)
     endif ()
-    if (ENABLE_CLICKHOUSE_DWAL_BENCHMARK)
-        clickhouse_target_link_split_lib(clickhouse dwal-benchmark)
-    endif ()
-
-    set (CLICKHOUSE_BUNDLE)
-    if (ENABLE_CLICKHOUSE_SERVER)
-        add_custom_target (clickhouse-server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-server DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-server)
-    endif ()
-    if (ENABLE_CLICKHOUSE_CLIENT)
-        add_custom_target (clickhouse-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-client DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-client" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-client)
-    endif ()
-    if (ENABLE_CLICKHOUSE_LOCAL)
-        add_custom_target (clickhouse-local ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-local DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-local" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-local)
-    endif ()
-    if (ENABLE_CLICKHOUSE_BENCHMARK)
-        add_custom_target (clickhouse-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-benchmark DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-benchmark" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-benchmark)
-    endif ()
-    if (ENABLE_CLICKHOUSE_COPIER)
-        add_custom_target (clickhouse-copier ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-copier DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-copier" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-copier)
-    endif ()
-    if (ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG)
-        add_custom_target (clickhouse-extract-from-config ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-extract-from-config DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-extract-from-config" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-extract-from-config)
-    endif ()
-    if (ENABLE_CLICKHOUSE_COMPRESSOR)
-        add_custom_target (clickhouse-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-compressor DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-compressor" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-compressor)
-    endif ()
-    if (ENABLE_CLICKHOUSE_FORMAT)
-        add_custom_target (clickhouse-format ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-format DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-format" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-format)
-    endif ()
-    if (ENABLE_CLICKHOUSE_OBFUSCATOR)
-        add_custom_target (clickhouse-obfuscator ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-obfuscator DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-obfuscator" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-obfuscator)
-    endif ()
-    if (ENABLE_CLICKHOUSE_GIT_IMPORT)
-        add_custom_target (clickhouse-git-import ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-git-import DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-git-import" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-git-import)
-    endif ()
-    if (ENABLE_CLICKHOUSE_STATIC_FILES_DISK_UPLOADER)
-        add_custom_target (clickhouse-static-files-disk-uploader ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-static-files-disk-uploader DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-static-files-disk-uploader" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-static-files-disk-uploader)
-    endif ()
-    if (ENABLE_CLICKHOUSE_KEEPER)
-        add_custom_target (clickhouse-keeper ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-keeper DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-keeper" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-keeper)
-    endif ()
-    if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
-        add_custom_target (clickhouse-keeper-converter ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-keeper-converter DEPENDS clickhouse)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-keeper-converter" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-keeper-converter)
-    endif ()
-    if (ENABLE_CLICKHOUSE_DWAL_BENCHMARK)
-        add_custom_target (clickhouse-dwal-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-dwal-benchmark DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-dwal-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
-        list(APPEND CLICKHOUSE_BUNDLE clickhouse-dwal-benchmark)
+    if (ENABLE_PROTON_DWAL_BENCHMARK)
+        clickhouse_target_link_split_lib(proton dwal-benchmark)
     endif ()
 
-    install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+    set (PROTON_BUNDLE)
+    if (ENABLE_PROTON_SERVER)
+        add_custom_target (proton-server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-server DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-server" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-server)
+    endif ()
+    if (ENABLE_PROTON_CLIENT)
+        add_custom_target (proton-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-client DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-client" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-client)
+    endif ()
+    if (ENABLE_PROTON_LOCAL)
+        add_custom_target (proton-local ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-local DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-local" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-local)
+    endif ()
+    if (ENABLE_PROTON_BENCHMARK)
+        add_custom_target (proton-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-benchmark DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-benchmark" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-benchmark)
+    endif ()
+    if (ENABLE_PROTON_COPIER)
+        add_custom_target (proton-copier ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-copier DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-copier" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-copier)
+    endif ()
+    if (ENABLE_PROTON_EXTRACT_FROM_CONFIG)
+        add_custom_target (proton-extract-from-config ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-extract-from-config DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-extract-from-config" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-extract-from-config)
+    endif ()
+    if (ENABLE_PROTON_COMPRESSOR)
+        add_custom_target (proton-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-compressor DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-compressor" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-compressor)
+    endif ()
+    if (ENABLE_PROTON_FORMAT)
+        add_custom_target (proton-format ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-format DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-format" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-format)
+    endif ()
+    if (ENABLE_PROTON_OBFUSCATOR)
+        add_custom_target (proton-obfuscator ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-obfuscator DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-obfuscator" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-obfuscator)
+    endif ()
+    if (ENABLE_PROTON_GIT_IMPORT)
+        add_custom_target (proton-git-import ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-git-import DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-git-import" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-git-import)
+    endif ()
+    if (ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER)
+        add_custom_target (proton-static-files-disk-uploader ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-static-files-disk-uploader DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-static-files-disk-uploader" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-static-files-disk-uploader)
+    endif ()
+    if (ENABLE_PROTON_KEEPER)
+        add_custom_target (proton-keeper ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-keeper DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-keeper)
+    endif ()
+    if (ENABLE_PROTON_KEEPER_CONVERTER)
+        add_custom_target (proton-keeper-converter ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-keeper-converter DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper-converter" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-keeper-converter)
+    endif ()
+    if (ENABLE_PROTON_DWAL_BENCHMARK)
+        add_custom_target (proton-dwal-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-dwal-benchmark DEPENDS proton)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/proton-dwal-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-dwal-benchmark)
+    endif ()
 
-    add_custom_target (clickhouse-bundle ALL DEPENDS ${CLICKHOUSE_BUNDLE})
+    install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+
+    add_custom_target (proton-bundle ALL DEPENDS ${PROTON_BUNDLE})
 
     if (USE_GDB_ADD_INDEX)
-        add_custom_command(TARGET clickhouse POST_BUILD COMMAND ${GDB_ADD_INDEX_EXE} clickhouse COMMENT "Adding .gdb-index to clickhouse" VERBATIM)
+        add_custom_command(TARGET proton POST_BUILD COMMAND ${GDB_ADD_INDEX_EXE} proton COMMENT "Adding .gdb-index to proton" VERBATIM)
     endif()
 
     if (USE_BINARY_HASH)
-        add_custom_command(TARGET clickhouse POST_BUILD COMMAND ./clickhouse hash-binary > hash && ${OBJCOPY_PATH} --add-section .note.ClickHouse.hash=hash clickhouse COMMENT "Adding .note.ClickHouse.hash to clickhouse" VERBATIM)
+        add_custom_command(TARGET proton POST_BUILD COMMAND ./proton hash-binary > hash && ${OBJCOPY_PATH} --add-section .note.proton .hash=hash proton COMMENT "Adding .note.proton.hash to proton" VERBATIM)
     endif()
 endif ()
 
 if (ENABLE_TESTS)
     set (CLICKHOUSE_UNIT_TESTS_TARGETS unit_tests_dbms)
-    add_custom_target (clickhouse-tests ALL DEPENDS ${CLICKHOUSE_UNIT_TESTS_TARGETS})
-    add_dependencies(clickhouse-bundle clickhouse-tests)
+    add_custom_target (proton-tests ALL DEPENDS ${CLICKHOUSE_UNIT_TESTS_TARGETS})
+    add_dependencies(proton-bundle proton-tests)
 endif()
 
 if (ENABLE_FUZZING)

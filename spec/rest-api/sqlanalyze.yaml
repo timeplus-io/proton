@@ -2,9 +2,9 @@ openapi: 3.0.0
 info:
   title: daisy api
   version: '1.0'
-  description: daisy api
+  description: REST API for SQL analyzing
 paths:
-  /dae/v1/sqlanalyzer:
+  /proton/v1/sqlanalyzer:
     post:
       summary: Analyze SQL Query Result
       operationId: sqlanalyzer

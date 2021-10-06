@@ -26,7 +26,7 @@ foreach(default_policy_var_name
     set(${default_policy_var_name} NEW)
 endforeach()
 
-project(ClickHouse)
+project(proton)
 
 # If turned off: e.g. when ENABLE_FOO is ON, but FOO tool was not found, the CMake will continue.
 option(FAIL_ON_UNSUPPORTED_OPTIONS_COMBINATION

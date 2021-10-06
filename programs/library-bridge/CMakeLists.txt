@@ -12,14 +12,14 @@ if (OS_LINUX)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-export-dynamic")
 endif ()
 
-add_executable(clickhouse-library-bridge ${CLICKHOUSE_LIBRARY_BRIDGE_SOURCES})
+add_executable(proton-library-bridge ${CLICKHOUSE_LIBRARY_BRIDGE_SOURCES})
 
-target_link_libraries(clickhouse-library-bridge PRIVATE
+target_link_libraries(proton-library-bridge PRIVATE
     daemon
     dbms
     bridge
 )
 
-set_target_properties(clickhouse-library-bridge PROPERTIES RUNTIME_OUTPUT_DIRECTORY ..)
+set_target_properties(proton-library-bridge PROPERTIES RUNTIME_OUTPUT_DIRECTORY ..)
 
-install(TARGETS clickhouse-library-bridge RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+install(TARGETS proton-library-bridge RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)

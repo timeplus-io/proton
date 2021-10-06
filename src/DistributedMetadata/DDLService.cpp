@@ -33,14 +33,14 @@ namespace
     const String DDL_KEY_PREFIX = "cluster_settings.system_ddls.";
     const String DDL_DEFAULT_TOPIC = "__system_ddls";
 
-    const String DDL_TABLE_POST_API_PATH_FMT = "/dae/v1/ddl/{}";
-    const String DDL_TABLE_PATCH_API_PATH_FMT = "/dae/v1/ddl/{}/{}";
-    const String DDL_TABLE_DELETE_API_PATH_FMT = "/dae/v1/ddl/{}/{}";
-    const String DDL_COLUMN_POST_API_PATH_FMT = "/dae/v1/ddl/{}/columns";
-    const String DDL_COLUMN_PATCH_API_PATH_FMT = "/dae/v1/ddl/{}/columns/{}";
-    const String DDL_COLUMN_DELETE_API_PATH_FMT = "/dae/v1/ddl/{}/columns/{}";
-    const String DDL_DATABSE_POST_API_PATH_FMT = "/dae/v1/ddl/databases";
-    const String DDL_DATABSE_DELETE_API_PATH_FMT = "/dae/v1/ddl/databases/{}";
+    const String DDL_TABLE_POST_API_PATH_FMT = "/proton/v1/ddl/{}";
+    const String DDL_TABLE_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/{}";
+    const String DDL_TABLE_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/{}";
+    const String DDL_COLUMN_POST_API_PATH_FMT = "/proton/v1/ddl/{}/columns";
+    const String DDL_COLUMN_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
+    const String DDL_COLUMN_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
+    const String DDL_DATABSE_POST_API_PATH_FMT = "/proton/v1/ddl/databases";
+    const String DDL_DATABSE_DELETE_API_PATH_FMT = "/proton/v1/ddl/databases/{}";
 
     constexpr Int32 MAX_RETRIES = 3;
 

@@ -403,6 +403,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const Kaf
 #ifdef __clang__
 #pragma clang diagnostic push
 #    pragma clang diagnostic ignored "-Wgnu-statement-expression"
+#    pragma clang diagnostic ignored "-Wreserved-identifier"
 #endif /// __clang__
 
     /// TODO: without block if queue is full and retry with backoff
