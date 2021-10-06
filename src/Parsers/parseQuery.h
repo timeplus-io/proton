@@ -62,7 +62,7 @@ std::pair<const char *, bool> splitMultipartQuery(
     size_t max_query_size,
     size_t max_parser_depth);
 
-/// Daisy : starts
+/// proton: starts
 String getSyntaxErrorMessage(
     const char * begin,
     const char * end,
@@ -84,6 +84,6 @@ String getUnmatchedParenthesesErrorMessage(
     const UnmatchedParentheses & unmatched_parens,
     bool hilite,
     const String & query_description);
-/// Daisy : ends
+/// proton: ends
 
 }

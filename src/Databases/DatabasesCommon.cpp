@@ -301,7 +301,7 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
                     backQuote(database_name), backQuote(table_name));
 }
 
-/// Daisy: starts.
+/// proton: starts.
 StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const ASTPtr & query, const String & database_, const String & table_)
 {
     return parseCreateQueryFromAST(query.get(), database_, table_);
@@ -363,5 +363,5 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
     }
     return std::make_shared<StorageInMemoryCreateQuery>(query_str, query_uuid_str, engine_full_str);
 }
-/// Daisy: ends.
+/// proton: ends.
 }

@@ -56,7 +56,7 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
             build_info.set(it->second, value->getDataAt(i).toString());
         }
     }
-    build_info.set("name", "Daisy");
+    build_info.set("name", "proton");
 
     Poco::JSON::Object json_resp;
     json_resp.set("build", build_info);

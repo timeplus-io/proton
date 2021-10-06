@@ -38,9 +38,9 @@ if(Git_FOUND)
       ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 
-# Daisy: start.
+# proton: start.
 string (TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S" UTC)
-# Daisy: end.
+# proton: end.
 
 configure_file (StorageSystemBuildOptions.generated.cpp.in ${CONFIG_BUILD})
 

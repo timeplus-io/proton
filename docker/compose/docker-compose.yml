@@ -15,7 +15,7 @@ services:
     environment:
       - STREAM_STORAGE_BROKERS=stream-store:9092
     command: >
-      /bin/bash -c "echo sleeping; sleep 4; /entrypoint.sh"
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
     depends_on:
       - stream-store
 

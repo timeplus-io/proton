@@ -247,7 +247,7 @@ struct StorageInMemoryMetadata
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 using MultiVersionStorageMetadataPtr = MultiVersion<StorageInMemoryMetadata>;
 
-/// Daisy: starts.
+/// proton: starts.
 /// Common CreateQuery for all storages. Contains all possible parts of CREATE
 /// query from all storages.
 struct StorageInMemoryCreateQuery
@@ -270,5 +270,5 @@ struct StorageInMemoryCreateQuery
 
 using StorageInMemoryCreateQueryPtr = std::shared_ptr<const StorageInMemoryCreateQuery>;
 using MultiVersionStorageCreateQueryPtr = MultiVersion<StorageInMemoryCreateQuery>;
-/// Daisy: ends.
+/// proton: ends.
 }

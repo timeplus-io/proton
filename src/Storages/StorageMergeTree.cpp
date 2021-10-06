@@ -98,10 +98,10 @@ StorageMergeTree::StorageMergeTree(
     loadMutations();
 
     loadDeduplicationLog();
-    /// Daisy : starts
+    /// proton: starts
     locateSNFile();
     populateCommittedSNFromParts();
-    /// Daisy : ends
+    /// proton: ends
 }
 
 
@@ -1677,7 +1677,7 @@ std::unique_ptr<MergeTreeSettings> StorageMergeTree::getDefaultSettings() const
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
 }
 
-/// Daisy : starts
+/// proton: starts
 void StorageMergeTree::locateSNFile()
 {
     for (const auto & [path, disk] : getRelativeDataPathsWithDisks())
@@ -1805,5 +1805,5 @@ void StorageMergeTree::populateCommittedSNFromParts()
         LOG_DEBUG(log, "Loading idempotent key={}", *keys_iter->second);
     }
 }
-/// Daisy : ends
+/// proton: ends
 }

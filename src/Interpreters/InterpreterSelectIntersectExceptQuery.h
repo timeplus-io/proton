@@ -30,9 +30,9 @@ public:
 
     void ignoreWithTotals() override;
 
-    /// Daisy : starts
+    /// proton: starts
     bool hasAggregation() const override;
-    /// Daisy : ends
+    /// proton: ends
 
 private:
     static String getName() { return "SelectIntersectExceptQuery"; }

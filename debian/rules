@@ -119,7 +119,7 @@ override_dh_install:
 	# systemd compatibility
 	mkdir -p $(DESTDIR)/etc/systemd/system/
 	cp debian/clickhouse-server.service $(DESTDIR)/etc/systemd/system/
-	cp -r spec/ $(DESTDIR)/etc/daisy-spec
+	cp -r spec/ $(DESTDIR)/etc/proton-spec
 
 	dh_install --list-missing --sourcedir=$(DESTDIR)
 

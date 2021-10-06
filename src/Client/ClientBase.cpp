@@ -271,12 +271,12 @@ ASTPtr ClientBase::parseQuery(const char *& pos, const char * end, bool allow_mu
     if (is_interactive || ignore_error)
     {
         String message;
-        /// Daisy : starts
+        /// proton: starts
         if (settings.enable_query_pipe)
             res = tryParseQueryPipe(parser, pos, end, message, true, max_length, settings.max_parser_depth);
         else
             res = tryParseQuery(parser, pos, end, message, true, "", allow_multi_statements, max_length, settings.max_parser_depth);
-        /// Daisy : ends
+        /// proton: ends
 
         if (!res)
         {

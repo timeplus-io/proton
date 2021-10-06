@@ -136,10 +136,10 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INVALID_SETTING_VALUE;
     extern const int UNKNOWN_READ_METHOD;
-    /// Daisy : starts
+    /// proton: starts
     extern const int ACCESS_DENIED;
     extern const int INVALID_POLL_ID;
-    /// Daisy : ends
+    /// proton: ends
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -225,7 +225,7 @@ struct ContextSharedPart
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
 
-    mutable std::optional<ThreadPool> part_commit_pool; /// Daisy: A thread pool that can build part and commit in background (used for DistributedMergeTree table engine)
+    mutable std::optional<ThreadPool> part_commit_pool; /// proton: A thread pool that can build part and commit in background (used for DistributedMergeTree table engine)
     mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
     mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
@@ -391,7 +391,7 @@ struct ContextSharedPart
             schedule_pool.reset();
             distributed_schedule_pool.reset();
             message_broker_schedule_pool.reset();
-            part_commit_pool.reset(); /// Daisy :
+            part_commit_pool.reset(); /// proton:
             ddl_worker.reset();
             access_control.reset();
 
@@ -722,7 +722,7 @@ std::optional<UUID> Context::getUserID() const
     return user_id;
 }
 
-/// Daisy : starts
+/// proton: starts
 String Context::getPasswordByUserName(const String & user_name) const
 {
     if (auto id = getAccessControlManager().find<User>(user_name))
@@ -734,7 +734,7 @@ String Context::getPasswordByUserName(const String & user_name) const
     }
     return "";
 }
-/// Daisy : ends
+/// proton: ends
 
 void Context::setQuotaKey(String quota_key_)
 {
@@ -3198,7 +3198,7 @@ ReadSettings Context::getReadSettings() const
     return res;
 }
 
-/// Daisy starts.
+/// proton: starts.
 bool Context::isDistributedEnv() const
 {
     if (getSettingsRef().disable_distributed)
@@ -3313,6 +3313,6 @@ std::vector<String> Context::parseQueryStatusPollId(const String & poll_id) cons
     /// FIXME, check timestamp etc
     return result;
 }
-/// Daisy ends.
+/// proton: ends.
 
 }

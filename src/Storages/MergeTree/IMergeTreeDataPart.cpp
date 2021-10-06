@@ -631,9 +631,9 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
 
     loadDefaultCompressionCodec();
 
-    /// Daisy : starts
+    /// proton: starts
     loadSequenceInfo();
-    /// Daisy : ends
+    /// proton: ends
 }
 
 void IMergeTreeDataPart::loadProjections(bool require_columns_checksums, bool check_consistency)
@@ -1098,7 +1098,7 @@ void IMergeTreeDataPart::loadColumns(bool require)
     setSerializationInfos(infos);
 }
 
-/// Daisy : starts
+/// proton: starts
 void IMergeTreeDataPart::loadSequenceInfo()
 {
     String path = getFullRelativePath() + "sn.txt";
@@ -1108,7 +1108,7 @@ void IMergeTreeDataPart::loadSequenceInfo()
         seq_info = SequenceInfo::read(*in);
     }
 }
-/// Daisy : ends
+/// proton: ends
 
 bool IMergeTreeDataPart::shallParticipateInMerges(const StoragePolicyPtr & storage_policy) const
 {

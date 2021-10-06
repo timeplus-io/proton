@@ -44,7 +44,7 @@ public:
 
     /** All rows must correspond to same partition.
       * Returns part with unique name starting with 'tmp_', yet not added to MergeTreeData.
-      * If seq_info is not null, commit the sequence info as well. Added by Daisy
+      * If seq_info is not null, commit the sequence info as well. Added by proton
       */
     MergeTreeData::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, const SequenceInfoPtr & seq_info, ContextPtr context);
 

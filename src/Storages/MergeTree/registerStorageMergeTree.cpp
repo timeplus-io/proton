@@ -23,10 +23,10 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
-/// Daisy : starts
+/// proton: starts
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-/// Daisy : ends
+/// proton: ends
 
 
 namespace DB
@@ -37,12 +37,9 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_STORAGE;
     extern const int NO_REPLICA_NAME_GIVEN;
-<<<<<<< HEAD
     extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
-=======
     extern const int INCORRECT_NUMBER_OF_COLUMNS;
     extern const int TYPE_MISMATCH;
->>>>>>> DistributedMergeTree table engine (#2)
 }
 
 
@@ -101,7 +98,6 @@ If you use the Replicated version of engines, see https://clickhouse.com/docs/en
     return help;
 }
 
-<<<<<<< HEAD
 static ColumnsDescription getColumnsDescriptionFromZookeeper(const String & raw_zookeeper_path, ContextMutablePtr context)
 {
     String zookeeper_name = zkutil::extractZooKeeperName(raw_zookeeper_path);
@@ -130,8 +126,7 @@ static ColumnsDescription getColumnsDescriptionFromZookeeper(const String & raw_
     return ColumnsDescription::parse(zookeeper->get(fs::path(zookeeper_path) / "columns", &columns_stat));
 }
 
-=======
-/// Daisy : starts
+/// proton: starts
 static ExpressionActionsPtr buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns, bool project)
 {
     ASTPtr query = sharding_key;
@@ -195,8 +190,7 @@ static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFac
 
     return {replication_factor, shards, engine_args[2]};
 }
-/// Daisy : ends
->>>>>>> DistributedMergeTree table engine (#2)
+/// proton: ends
 
 static StoragePtr create(const StorageFactory::Arguments & args)
 {
@@ -379,7 +373,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def && !distributed) /// Daisy : exclude DistributedMergeTree
+    if (is_extended_storage_def && !distributed) /// proton: exclude DistributedMergeTree
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.

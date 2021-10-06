@@ -825,7 +825,7 @@ struct RewriteShardNum
 };
 using RewriteShardNumVisitor = InDepthNodeVisitor<RewriteShardNum, true>;
 
-/// Daisy : starts
+/// proton: starts
 void collectRequiredColumns(ConstStoragePtr & storage, const NameSet & required, ContextPtr context)
 {
     StorageID id = storage->getStorageID();
@@ -843,7 +843,7 @@ void collectRequiredColumns(ConstStoragePtr & storage, const NameSet & required,
             std::make_tuple(id.getDatabaseName(), id.getTableName(), storage->isView(), column.name, column.type->getName()));
     }
 }
-/// Daisy : ends
+/// proton: ends
 }
 
 TreeRewriterResult::TreeRewriterResult(
@@ -1003,10 +1003,10 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     NameSet unknown_required_source_columns = required;
 
-    /// Daisy : starts
+    /// proton: starts
     if (context->collectRequiredColumns() && storage && is_select)
         collectRequiredColumns(storage, required, context);
-    /// Daisy : ends
+    /// proton: ends
 
     for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end();)
     {

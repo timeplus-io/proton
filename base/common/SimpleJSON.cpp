@@ -177,13 +177,13 @@ void SimpleJSON::checkInit() const
 
 SimpleJSON::ElementType SimpleJSON::getType() const
 {
-    /// Daisy : starts
+    /// proton: starts
     Pos pos = skipWhitespaceIfAny();
     return getType(pos);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::ElementType SimpleJSON::getType(Pos pos) const
 {
     switch (*pos)
@@ -222,7 +222,7 @@ SimpleJSON::ElementType SimpleJSON::getType(Pos pos) const
             throw SimpleJSONException(std::string("JSON: unexpected char ") + *ptr_begin + ", expected one of '{[tfn-0123456789\"'");
     }
 }
-/// Daisy : ends
+/// proton: ends
 
 void SimpleJSON::checkPos(Pos pos) const
 {
@@ -236,7 +236,7 @@ SimpleJSON::Pos SimpleJSON::skipString() const
     //std::cerr << "skipString()\t" << data() << std::endl;
     /// Dasiy : starts
     return skipString(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
 /// Dasiy : starts
@@ -276,16 +276,16 @@ SimpleJSON::Pos SimpleJSON::skipString(Pos start) const
 
     return pos;
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipNumber() const
 {
-    /// Daisy : starts
+    /// proton: starts
     return skipNumber(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::Pos SimpleJSON::skipNumber(Pos begin) const
 {
     Pos pos = skipWhitespaceIfAny(begin);
@@ -309,17 +309,17 @@ SimpleJSON::Pos SimpleJSON::skipNumber(Pos begin) const
 
     return pos;
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipBool() const
 {
     //std::cerr << "skipBool()\t" << data() << std::endl;
-    /// Daisy : starts
+    /// proton: starts
     return skipBool(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::Pos SimpleJSON::skipBool(Pos begin) const
 {
     Pos pos = skipWhitespaceIfAny(begin);
@@ -334,32 +334,32 @@ SimpleJSON::Pos SimpleJSON::skipBool(Pos begin) const
 
     return pos;
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipNull() const
 {
     //std::cerr << "skipNull()\t" << data() << std::endl;
 
-    /// Daisy : starts
+    /// proton: starts
     return skipBool(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::Pos SimpleJSON::skipNull(Pos begin) const
 {
     return begin + 4;
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipNameValuePair() const
 {
-    /// Daisy : starts
+    /// proton: starts
     return skipNameValuePair(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::Pos SimpleJSON::skipNameValuePair(Pos begin) const
 {
     Pos pos = skipString(begin);
@@ -372,17 +372,17 @@ SimpleJSON::Pos SimpleJSON::skipNameValuePair(Pos begin) const
 
     return SimpleJSON(pos, ptr_end, level + 1).skipElement();
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipArray() const
 {
     //std::cerr << "skipArray()\t" << data() << std::endl;
-    /// Daisy : starts
+    /// proton: starts
     return skipArray(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::Pos SimpleJSON::skipArray(Pos begin) const
 {
     //std::cerr << "skipArray()\t" << data() << std::endl;
@@ -413,17 +413,17 @@ SimpleJSON::Pos SimpleJSON::skipArray(Pos begin) const
         }
     }
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipObject() const
 {
     //std::cerr << "skipObject()\t" << data() << std::endl;
-    /// Daisy : starts
+    /// proton: starts
     return skipObject(ptr_begin);
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 SimpleJSON::Pos SimpleJSON::skipObject(const Pos begin) const
 {
     Pos pos = skipWhitespaceIfAny(begin);
@@ -454,12 +454,12 @@ SimpleJSON::Pos SimpleJSON::skipObject(const Pos begin) const
         }
     }
 }
-/// Daisy : ends
+/// proton: ends
 
 SimpleJSON::Pos SimpleJSON::skipElement() const
 {
     //std::cerr << "skipElement()\t" << data() << std::endl;
-    /// Daisy : starts
+    /// proton: starts
     Pos pos = skipWhitespaceIfAny();
     ElementType type = getType(pos);
 
@@ -482,10 +482,10 @@ SimpleJSON::Pos SimpleJSON::skipElement() const
         default:
             throw SimpleJSONException("Logical error in JSON: unknown element type: " + std::to_string(type));
     }
-    /// Daisy : ends
+    /// proton: ends
 }
 
-/// Daisy : starts
+/// proton: starts
 /// Skip whitespace characters.
 SimpleJSON::Pos SimpleJSON::skipWhitespaceIfAny() const
 {
@@ -504,7 +504,7 @@ SimpleJSON::Pos SimpleJSON::skipWhitespaceIfAny(Pos begin) const
     }
     return pos;
 }
-/// Daisy : ends
+/// proton: ends
 
 size_t SimpleJSON::size() const
 {
@@ -652,9 +652,9 @@ bool SimpleJSON::getBool() const
 
 std::string SimpleJSON::getString() const
 {
-    /// Daisy : starts
+    /// proton: starts
     Pos s = skipWhitespaceIfAny();
-    /// Daisy : ends
+    /// proton: ends
 
     if (*s != '"')
         throw SimpleJSONException(std::string("JSON: expected \", got ") + *s);
@@ -768,14 +768,14 @@ SimpleJSON SimpleJSON::getValue() const
 {
     Pos pos = skipString();
     checkPos(pos);
-    /// Daisy : starts
+    /// proton: starts
     pos = skipWhitespaceIfAny(pos);
     if (*pos != ':')
         throw SimpleJSONException("JSON: expected :.");
     ++pos;
     checkPos(pos);
     pos = skipWhitespaceIfAny(pos);
-    /// Daisy : ends
+    /// proton: ends
     return SimpleJSON(pos, ptr_end, level + 1);
 }
 
@@ -832,18 +832,18 @@ std::string SimpleJSON::toString() const
 
 SimpleJSON::iterator SimpleJSON::iterator::begin() const
 {
-    /// Daisy : starts
+    /// proton: starts
     Pos pos = skipWhitespaceIfAny();
     ElementType type = getType(pos);
-    /// Daisy : ends
+    /// proton: ends
 
     if (type != TYPE_ARRAY && type != TYPE_OBJECT)
         throw SimpleJSONException("JSON: not array or object when calling begin() method.");
 
     //std::cerr << "begin()\t" << data() << std::endl;
-    /// Daisy : starts
+    /// proton: starts
     ++pos;
-    /// Daisy : ends
+    /// proton: ends
     checkPos(pos);
     if (*pos == '}' || *pos == ']')
         return end();
@@ -858,10 +858,10 @@ SimpleJSON::iterator SimpleJSON::iterator::end() const
 
 SimpleJSON::iterator & SimpleJSON::iterator::operator++()
 {
-    /// Daisy : starts
+    /// proton: starts
     ptr_begin = skipWhitespaceIfAny();
     Pos pos = skipElement();
-    /// Daisy : ends
+    /// proton: ends
 
     checkPos(pos);
 

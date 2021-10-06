@@ -341,10 +341,10 @@ private:
         bool executeProjections() const;
         bool finalizeProjectionsAndWholeMerge() const;
 
-        /// Daisy : starts
+        /// proton: starts
         /// Merge sequence info of parts in a partition
         SequenceInfoPtr mergeSequenceInfo() const;
-        /// Daisy : ends
+        /// proton: ends
 
         using MergeProjectionsStageSubtasks = std::array<std::function<bool()>, 3>;
 

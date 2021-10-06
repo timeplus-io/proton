@@ -3,7 +3,7 @@
 
 #include <common/logger_useful.h>
 
-/// Daisy : starts. Added for Daisy
+/// proton: starts. Added for proton
 
 namespace DB
 {

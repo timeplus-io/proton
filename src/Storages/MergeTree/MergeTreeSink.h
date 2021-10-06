@@ -33,13 +33,13 @@ public:
     void consume(Chunk chunk) override;
     void onStart() override;
 
-    /// Daisy : starts
+    /// proton: starts
     void setSequenceInfo(const SequenceInfoPtr & seq_info_) { seq_info = seq_info_; }
     void setMissingSequenceRanges(SequenceRanges missing_seq_ranges_) { missing_seq_ranges.swap(missing_seq_ranges_); }
 
 private:
     bool ignorePartBlock(Int32 parts, Int32 part_index) const;
-    /// Daisy : ends
+    /// proton: ends
 
 private:
     StorageMergeTree & storage;
@@ -48,10 +48,10 @@ private:
     ContextPtr context;
     uint64_t chunk_dedup_seqnum = 0; /// input chunk ordinal number in case of dedup token
 
-    /// Daisy : starts
+    /// proton: starts
     SequenceInfoPtr seq_info;
     SequenceRanges missing_seq_ranges;
-    /// Daisy : ends
+    /// proton: ends
 };
 
 }

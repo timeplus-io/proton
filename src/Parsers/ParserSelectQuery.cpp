@@ -161,7 +161,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
     /// FROM database.table or FROM table or FROM (subquery) or FROM tableFunction(...)
-    /// Daisy : starts
+    /// proton: starts
     if (!pipe_mode)
     {
         if (s_from.ignore(pos, expected))
@@ -178,7 +178,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
         }
     }
-    /// Daisy : ends
+    /// proton: ends
 
     /// PREWHERE expr
     if (s_prewhere.ignore(pos, expected))

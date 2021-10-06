@@ -24,15 +24,15 @@ ccache --show-stats ||:
 ccache --zero-stats ||:
 
 # shellcheck disable=SC2086 # No quotes because I want it to expand to nothing if empty.
-ninja $NINJA_FLAGS clickhouse-bundle
+ninja $NINJA_FLAGS proton-bundle
 
 ccache --show-config ||:
 ccache --show-stats ||:
 
-mv ./programs/clickhouse* /output
-# Daisy : starts
-cp -r ../spec  /output/daisy-spec
-# Daisy : ends
+mv ./programs/proton* /output
+# proton: starts
+cp -r ../spec  /output/proton-spec
+# proton: ends
 mv ./src/unit_tests_dbms /output ||: # may not exist for some binary builds
 find . -name '*.so' -print -exec mv '{}' /output \;
 find . -name '*.so.*' -print -exec mv '{}' /output \;
@@ -44,7 +44,7 @@ then
     cp -r ../tests/config/top_level_domains  /output
     cp -r ../docker/test/performance-comparison/config /output ||:
     rm /output/unit_tests_dbms ||:
-    rm /output/clickhouse-odbc-bridge ||:
+    rm /output/proton-odbc-bridge ||:
 
     cp -r ../docker/test/performance-comparison /output/scripts ||:
 
@@ -72,8 +72,8 @@ fi
 if [ "" != "$COMBINED_OUTPUT" ]
 then
     mkdir -p /output/config
-    cp ../programs/server/config.xml /output/config
-    cp ../programs/server/users.xml /output/config
+    cp ../programs/server/config.yaml /output/config
+    cp ../programs/server/users.yaml /output/config
     cp -r --dereference ../programs/server/config.d /output/config
     tar -cv -I pigz -f "$COMBINED_OUTPUT.tgz" /output
     rm -r /output/*

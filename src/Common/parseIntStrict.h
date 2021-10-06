@@ -7,7 +7,7 @@
 #include <charconv>
 
 
-/// Daisy : starts
+/// proton: starts
 
 namespace DB
 {
@@ -39,4 +39,4 @@ Integer parseIntStrict(const String & s, String::size_type lpos, String::size_ty
 }
 }
 
-/// Daisy : ends
+/// proton: ends

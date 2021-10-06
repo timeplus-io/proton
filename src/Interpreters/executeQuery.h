@@ -60,8 +60,8 @@ BlockIO executeQuery(
 /// if built pipeline does not require any input and does not produce any output.
 void executeTrivialBlockIO(BlockIO & streams, ContextPtr context);
 
-/// Daisy : starts
+/// proton: starts
 ASTPtr parseQuery(const String & query, ContextPtr query_context);
-/// Daisy : ends
+/// proton: ends
 
 }

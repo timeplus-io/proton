@@ -255,13 +255,13 @@ if (TARGET ch_contrib::nuraft)
     add_object_library(clickhouse_coordination Coordination)
 endif()
 
-# Daisy : begin
+# proton: begin
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
 
 if(USE_RDKAFKA)
     add_object_library(clickhouse_distributed_write_ahead_log DistributedWriteAheadLog)
 endif ()
-# Daisy : end
+# proton: end
 
 set (DBMS_COMMON_LIBRARIES)
 

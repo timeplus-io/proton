@@ -28,9 +28,9 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/parseQuery.h>
-/// Daisy : starts
+/// proton: starts
 #include <Parsers/parseQueryPipe.h>
-/// Daisy : ends
+/// proton: ends
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryNormalization.h>
 #include <Parsers/queryToString.h>
@@ -97,7 +97,7 @@ namespace ErrorCodes
 
 namespace
 {
-/// Daisy : starts
+/// proton: starts
 /// If there are any table definition changes locally on the node
 /// broadcast the table definitions to notify all CatalogService
 void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
@@ -120,7 +120,7 @@ void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
         CatalogService::instance(context->getGlobalContext()).broadcast();
     }
 }
-/// Daisy : ends
+/// proton: ends
 }
 
 static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
@@ -458,12 +458,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         ParserQuery parser(end);
 
         /// TODO: parser should fail early when max_query_size limit is reached.
-        /// Daisy : starts
+        /// proton: starts
         if (settings.enable_query_pipe)
             ast = parseQueryPipe(parser, begin, end, max_query_size, settings.max_parser_depth);
         else
             ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
-        /// Daisy : ends
+        /// proton: ends
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
@@ -584,7 +584,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
         }
 
-        /// Daisy : starts. Add time param into AST
+        /// proton: starts. Add time param into AST
         if (!context->getTimeParam().empty())
         {
             auto const_context = std::const_pointer_cast<const Context>(context);
@@ -592,7 +592,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             visitor.visit(ast);
             query = serializeAST(*ast);
         }
-        /// Daisy : ends.
+        /// proton: ends.
 
         /// Check the limits.
         checkASTSizeLimits(*ast, settings);
@@ -740,14 +740,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             if (!table_id.empty())
             {
                 context->setInsertionTable(std::move(table_id));
+<<<<<<< HEAD
 
                 /// Daisy : starts
+=======
+                /// proton: starts
+>>>>>>> more cleanup (#4)
                 /// Setup poll ID for ingestion status querying
                 if (context->getIngestMode() == "async" || context->getIngestMode().empty())
                 {
                     context->getQueryContext()->setupQueryStatusPollId();
                 }
-                /// Daisy : ends
+                /// proton: ends
             }
         }
 
@@ -972,10 +976,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     opentelemetry_span_log->add(span);
                 }
 
-                /// Daisy : starts
+                /// proton: starts
                 auto const_context = std::const_pointer_cast<const Context>(context);
                 broadcastCatalogIfNecessary(ast, const_context);
-                /// Daisy : ends
+                /// proton: ends
             };
 
             auto exception_callback = [elem, context, ast,
@@ -1247,7 +1251,7 @@ void executeTrivialBlockIO(BlockIO & streams, ContextPtr context)
     streams.onFinish();
 }
 
-/// Daisy : starts
+/// proton: starts
 ASTPtr parseQuery(const String & query, ContextPtr query_context)
 {
     const size_t & max_query_size = query_context->getSettingsRef().max_query_size;
@@ -1258,6 +1262,6 @@ ASTPtr parseQuery(const String & query, ContextPtr query_context)
     ParserQuery parser(end);
     return parseQuery(parser, begin, end, "", max_query_size, max_parser_depth);
 }
-/// Daisy : ends
+/// proton: ends
 
 }

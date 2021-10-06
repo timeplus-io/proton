@@ -311,13 +311,13 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         ApplyWithSubqueryVisitor().visit(query_ptr);
     }
 
-    /// Daisy : starts. Try to eliminate subquery
+    /// proton: starts. Try to eliminate subquery
     if (settings.unnest_subqueries)
     {
         UnnestSubqueryVisitorData data;
         UnnestSubqueryVisitor(data).visit(query_ptr);
     }
-    /// Daisy : ends.
+    /// proton: ends.
 
     JoinedTables joined_tables(getSubqueryContext(context), getSelectQuery(), options.with_all_cols);
 
@@ -332,7 +332,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     {
         table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
         table_id = storage->getStorageID();
-        /// Daisy : starts
+        /// proton: starts
         if (!metadata_snapshot)
         {
             if (storage->getName() != "Distributed")
@@ -350,7 +350,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                     metadata_snapshot = storage->getInMemoryMetadataPtr();
             }
         }
-        /// Daisy : ends
+        /// proton: ends
     }
 
     if (has_input || !joined_tables.resolveTables())

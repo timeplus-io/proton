@@ -70,10 +70,10 @@ public:
     bool yieldStrings() const { return yield_strings; }
 private:
     bool yield_strings;
-    /// Daisy : starts
+    /// proton: starts
     /// Wrapped with square brackets
     bool with_bracket;
-    /// Daisy : ends
+    /// proton: ends
 };
 
 class JSONCompactEachRowRowSchemaReader : public FormatWithNamesAndTypesSchemaReader

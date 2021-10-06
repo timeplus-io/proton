@@ -15,9 +15,9 @@ void registerFileSegmentationEngineRegexp(FormatFactory & factory);
 void registerFileSegmentationEngineJSONAsString(FormatFactory & factory);
 void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory);
 
-/// Daisy : starts
+/// proton: starts
 void registerFileSegmentationEngineRawStoreEachRow(FormatFactory & factory);
-/// Daisy : ends
+/// proton: ends
 
 /// Formats for both input/output.
 
@@ -85,9 +85,9 @@ void registerInputFormatCapnProto(FormatFactory & factory);
 void registerInputFormatHiveText(FormatFactory & factory);
 #endif
 
-/// Daisy : starts
+/// proton: starts
 void registerInputFormatProcessorRawStoreEachRow(FormatFactory & factory);
-/// Daisy : ends
+/// proton: ends
 
 /// Non trivial prefix and suffix checkers for disabling parallel parsing.
 void registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(FormatFactory & factory);
@@ -128,9 +128,9 @@ void registerFormats()
     registerFileSegmentationEngineJSONAsString(factory);
     registerFileSegmentationEngineJSONCompactEachRow(factory);
 
-    /// Daisy : starts
+    /// proton: starts
     registerFileSegmentationEngineRawStoreEachRow(factory);
-    /// Daisy : ends
+    /// proton: ends
 
     registerInputFormatNative(factory);
     registerOutputFormatNative(factory);
@@ -179,9 +179,9 @@ void registerFormats()
     registerOutputFormatXML(factory);
     registerOutputFormatODBCDriver2(factory);
 
-    /// Daisy : starts
+    /// proton: starts
     registerInputFormatProcessorRawStoreEachRow(factory);
-    /// Daisy : ends
+    /// proton: ends
 
     registerOutputFormatNull(factory);
     registerOutputFormatMySQLWire(factory);

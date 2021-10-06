@@ -37,9 +37,9 @@ public:
         ContextPtr context_,
         bool is_subquery = false);
 
-    /// Daisy : starts
+    /// proton: starts
     bool hasAggregation() const override;
-    /// Daisy : ends
+    /// proton: ends
 
     virtual void ignoreWithTotals() override;
 

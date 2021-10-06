@@ -251,7 +251,7 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     }
 }
 
-/// Daisy : starts
+/// proton: starts
 bool InterpreterSelectWithUnionQuery::hasAggregation() const
 {
     for (auto & interpreter : nested_interpreters)
@@ -261,7 +261,7 @@ bool InterpreterSelectWithUnionQuery::hasAggregation() const
     }
     return false;
 }
-/// Daisy : ends
+/// proton: ends
 
 void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
 {

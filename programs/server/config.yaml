@@ -982,7 +982,7 @@ cluster_settings:
             # Group ID used internally. Once it is setup, can't be changed.
             # Otherwise, there may have data duplication as proton uses it
             # for checkpointing
-            group_id: daisy
+            group_id: proton
             replication_factor: 1
             # Refer to https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
             debug: # generic, broker, topic etc

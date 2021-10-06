@@ -756,7 +756,7 @@ void TCPHandler::processTablesStatusRequest()
             status.is_replicated = true;
             status.absolute_delay = replicated_table->getAbsoluteDelay();
         }
-        else if (auto * distributed_merge_tree = dynamic_cast<StorageDistributedMergeTree *>(table.get())) /// Daisy : starts
+        else if (auto * distributed_merge_tree = dynamic_cast<StorageDistributedMergeTree *>(table.get())) /// proton: starts
         {
             /// If it is just a virtual table, no table status
             if (distributed_merge_tree->isRemote())
@@ -768,7 +768,7 @@ void TCPHandler::processTablesStatusRequest()
             /// of the last sequence number it commits
             status.is_replicated = true;
             status.absolute_delay = distributed_merge_tree->lastSN() & 0XFFFFFFFF;
-        } /// Daisy : ends
+        } /// proton: ends
         else
             status.is_replicated = false; //-V1048
 

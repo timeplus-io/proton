@@ -5,7 +5,7 @@
 #include <common/StringRef.h>
 #include <common/types.h>
 
-/// Daisy : starts. It is a duplication of 'JSON.h' to isolate our changes and make merge process easier.
+/// proton: starts. It is a duplication of 'JSON.h' to isolate our changes and make merge process easier.
 
 /** Очень простой класс для чтения JSON (или его кусочков).
   * Представляет собой ссылку на кусок памяти, в котором содержится JSON (или его кусочек).
@@ -178,7 +178,7 @@ private:
     Pos skipObject() const;
     Pos skipArray() const;
 
-    /// Daisy : starts
+    /// proton: starts
     bool isObject(Pos begin) const { return getType(begin) == TYPE_OBJECT; }
     bool isArray(Pos begin) const { return getType(begin) == TYPE_ARRAY; }
     bool isNumber(Pos begin) const { return getType(begin) == TYPE_NUMBER; }
@@ -198,7 +198,7 @@ private:
     Pos skipArray(Pos begin) const;
 
     ElementType getType(Pos pos) const;
-    /// Daisy : ends
+    /// proton: ends
 
     Pos skipElement() const;
 

@@ -270,7 +270,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
     if (exchange)
         other_table->renameInMemory({database_name, table_name, other_table->getStorageID().uuid});
 
-    /// Daisy: starts.
+    /// proton: starts.
     auto new_ast = parseQueryFromMetadata(log, getContext(), new_metadata_path);
     const auto & new_create_query = parseCreateQueryFromAST(new_ast, other_db.database_name, to_table_name);
     table->setInMemoryCreateQuery(new_create_query);
@@ -280,7 +280,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
         const auto & other_create_query = parseCreateQueryFromAST(other_ast, database_name, table_name);
         other_table->setInMemoryCreateQuery(other_create_query);
     }
-    /// Daisy: ends.
+    /// proton: ends.
 
     if (!inside_database)
     {
@@ -567,11 +567,11 @@ void DatabaseAtomic::renameDatabase(ContextPtr query_context, const String & new
             table_id.database_name = database_name;
             table.second->renameInMemory(table_id);
 
-            /// Daisy: start.
+            /// proton: start.
             auto ast = parseQueryFromMetadata(log, getContext(), new_database_metadata_path);
             const auto & new_create_query = parseCreateQueryFromAST(ast, database_name, table_id.table_name);
             table.second->setInMemoryCreateQuery(new_create_query);
-            /// Daisy: ends.
+            /// proton: ends.
         }
 
         path_to_metadata_symlink = getContext()->getPath() + "metadata/" + new_name_escaped;
@@ -608,7 +608,7 @@ void DatabaseAtomic::checkDetachedTableNotInUse(const UUID & uuid)
     assertDetachedTableNotInUse(uuid);
 }
 
-/// Daisy : starts
+/// proton: starts
 StoragePtr DatabaseAtomic::tryGetTable(const String & table_name, ContextPtr ctx) const
 {
     auto storage = DatabaseOrdinary::tryGetTable(table_name, ctx);
@@ -634,6 +634,6 @@ StoragePtr DatabaseAtomic::tryGetTable(const String & table_name, ContextPtr ctx
 
     return catalog_service.createVirtualTableStorage(table->create_table_query, table->database, table_name);
 }
-/// Daisy : ends
+/// proton: ends
 
 }

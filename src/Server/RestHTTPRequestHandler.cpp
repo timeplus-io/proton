@@ -497,7 +497,7 @@ void RestHTTPRequestHandler::trySendExceptionToClient(
 
         if (auth_fail)
         {
-            response.requireAuthentication("Daisy server HTTP API");
+            response.requireAuthentication("proton server HTTP API");
         }
         else
         {

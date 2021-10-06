@@ -10,18 +10,18 @@ namespace DB
 class ParserSelectQuery : public IParserBase
 {
 public:
-    /// Daisy : starts
+    /// proton: starts
     void setPipeMode(bool pipe_mode_) { pipe_mode = pipe_mode_; }
-    /// Daisy : ends
+    /// proton: ends
 
 protected:
     const char * getName() const override { return "SELECT query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 private:
-    /// Daisy : starts
+    /// proton: starts
     bool pipe_mode = false;
-    /// Daisy : ends
+    /// proton: ends
 };
 
 }

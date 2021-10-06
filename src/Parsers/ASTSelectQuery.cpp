@@ -93,10 +93,10 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         ? select()->formatImpl(s, state, frame)
         : select()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
 
-    /// Daisy: starts. HACK. When subquery_pipe is not empty, tables() will be empty
+    /// proton: starts. HACK. When subquery_pipe is not empty, tables() will be empty
     if (!subquery_pipe.empty())
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FROM (" << (s.hilite ? hilite_none : "") << subquery_pipe << ")";
-    /// Daisy: ends
+    /// proton: ends
 
     if (tables())
     {

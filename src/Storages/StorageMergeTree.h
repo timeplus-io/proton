@@ -242,7 +242,7 @@ private:
     friend class MergePlainMergeTreeTask;
     friend class MutatePlainMergeTreeTask;
 
-    /// Daisy : starts
+    /// proton: starts
     friend class StorageDistributedMergeTree;
     void commitSN(Int64 sn);
     Int64 loadSN() const;
@@ -260,7 +260,7 @@ private:
     SequenceRanges missing_sequence_ranges;
     /// Used for recovery
     Int64 max_committed_sn = -1;
-    /// Daisy : ends
+    /// proton: ends
 
 protected:
 

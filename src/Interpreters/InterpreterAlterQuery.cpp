@@ -41,13 +41,13 @@ namespace ErrorCodes
     extern const int INCORRECT_QUERY;
     extern const int NOT_IMPLEMENTED;
     extern const int TABLE_IS_READ_ONLY;
-    /// Daisy : start
+    /// proton: start
     extern const int UNKNOWN_TABLE;
-    /// Daisy : end
+    /// proton: end
 }
 
 
-/// Daisy : start
+/// proton: start
 namespace
 {
 DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
@@ -78,7 +78,7 @@ DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std:
     return DWAL::OpCode::ALTER_TABLE;
 }
 }
-/// Daisy : end
+/// proton: end
 
 
 InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextPtr context_) : WithContext(context_), query_ptr(query_ptr_)
@@ -216,12 +216,12 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
 
-        /// Daisy : start
+        /// proton: start
         if (alterTableDistributed(alter))
         {
             return {};
         }
-        /// Daisy : end
+        /// proton: end
 
         table->alter(alter_commands, getContext(), alter_lock);
     }
@@ -229,7 +229,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     return res;
 }
 
-/// Daisy : start
+/// proton: start
 bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
 {
     auto ctx = getContext();
@@ -297,7 +297,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
     }
     return false;
 }
-/// Daisy : end
+/// proton: end
 
 BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
 {

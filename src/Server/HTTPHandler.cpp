@@ -984,7 +984,7 @@ bool DynamicQueryHandler::customizeQueryParam(ContextMutablePtr context, const s
         return true;
     }
 
-    /// Daisy : starts. Add time param into context
+    /// proton: starts. Add time param into context
     if (key == "time_start")
     {
         context->setTimeParamStart(value);
@@ -995,7 +995,7 @@ bool DynamicQueryHandler::customizeQueryParam(ContextMutablePtr context, const s
         context->setTimeParamEnd(value);
         return true;
     }
-    /// Daisy : ends.
+    /// proton: ends.
 
     return false;
 }

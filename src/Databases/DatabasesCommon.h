@@ -48,10 +48,10 @@ protected:
     StoragePtr getTableUnlocked(const String & table_name, std::unique_lock<std::mutex> & lock) const;
 };
 
-/// Daisy: start.
+/// proton: start.
 struct StorageInMemoryCreateQuery;
 using StorageInMemoryCreateQueryPtr = std::shared_ptr<const StorageInMemoryCreateQuery>;
 StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const String & database_, const String & table_);
 StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const ASTPtr & query, const String & database_, const String & table_);
-/// Daisy: ends.
+/// proton: ends.
 }

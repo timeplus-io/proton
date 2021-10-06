@@ -195,10 +195,10 @@ void DatabaseOnDisk::createTable(
         removeDetachedPermanentlyFlag(local_context, table_name, table_metadata_path, true);
         attachTable(local_context, table_name, table, getTableDataPath(create));
 
-        /// Daisy: starts.
+        /// proton: starts.
         const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
         table->setInMemoryCreateQuery(new_create_query);
-        /// Daisy: ends.
+        /// proton: ends.
         return;
     }
 
@@ -238,10 +238,10 @@ void DatabaseOnDisk::createTable(
 
     removeDetachedPermanentlyFlag(local_context, table_name, table_metadata_path, false);
 
-    /// Daisy: starts.
+    /// proton: starts.
     const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
     table->setInMemoryCreateQuery(new_create_query);
-    /// Daisy: ends.
+    /// proton: ends.
 }
 
 /// If the table was detached permanently we will have a flag file with

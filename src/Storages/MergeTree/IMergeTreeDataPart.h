@@ -323,9 +323,9 @@ public:
 
     CompressionCodecPtr default_codec;
 
-    /// Daisy : starts
+    /// proton: starts
     SequenceInfoPtr seq_info;
-    /// Daisy : ends
+    /// proton: ends
 
     /// For data in RAM ('index')
     UInt64 getIndexSizeInBytes() const;
@@ -510,9 +510,9 @@ private:
     /// for this column with default parameters.
     CompressionCodecPtr detectDefaultCompressionCodec() const;
 
-    /// Daisy : starts
+    /// proton: starts
     void loadSequenceInfo();
-    /// Daisy : ends
+    /// proton: ends
 
     mutable State state{State::Temporary};
 };

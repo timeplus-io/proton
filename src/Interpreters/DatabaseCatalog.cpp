@@ -202,7 +202,7 @@ void DatabaseCatalog::shutdownImpl()
     view_dependencies.clear();
 }
 
-/// Daisy : starts
+/// proton: starts
 DatabaseAndTable DatabaseCatalog::tryGetByUUIDFromCatalogService(const UUID & uuid) const
 {
     auto & catalog_service = CatalogService::instance(getContext());
@@ -236,12 +236,12 @@ DatabaseAndTable DatabaseCatalog::tryGetByUUIDFromCatalogService(const UUID & uu
     }
     return {};
 }
-/// Daisy : ends
+/// proton: ends
 
 DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid) const
 {
     assert(uuid != UUIDHelpers::Nil && getFirstLevelIdx(uuid) < uuid_map.size());
-    /// Daisy : starts
+    /// proton: starts
     const UUIDToStorageMapPart & map_part = uuid_map[getFirstLevelIdx(uuid)];
     {
         std::lock_guard lock{map_part.mutex};
@@ -253,7 +253,7 @@ DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid) const
     }
 
     return tryGetByUUIDFromCatalogService(uuid);
-    /// Daisy : ends
+    /// proton: ends
 }
 
 DatabaseAndTable DatabaseCatalog::getTableImpl(

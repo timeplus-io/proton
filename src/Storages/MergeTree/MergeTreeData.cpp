@@ -256,10 +256,10 @@ MergeTreeData::MergeTreeData(
 
     checkTTLExpressions(metadata_, metadata_);
 
-    /// Daisy: start. If relative_data_path is empty, it is a virtual table
+    /// proton: start. If relative_data_path is empty, it is a virtual table
     if (relative_data_path.empty())
         return;
-    /// Daisy: end.
+    /// proton: end.
 
     /// format_file always contained on any data path
     PathWithDisk version_file;

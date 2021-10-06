@@ -37,7 +37,7 @@ void WriteBufferFromHTTPServerResponse::writeSummary()
     WriteBufferFromOwnString progress_string_writer;
     accumulated_progress.writeJSON(progress_string_writer);
 
-    /// Daisy : starts
+    /// proton: starts
     if (send_progress_mode < SendProgressMode::progress_via_body)
     {
         /// Sent summary via header
@@ -50,7 +50,7 @@ void WriteBufferFromHTTPServerResponse::writeSummary()
         if (response_body_ostr)
             *response_body_ostr << "x-proton-summary: " << progress_string_writer.str() << "\n" << std::flush;
     }
-    /// Daisy : ends
+    /// proton: ends
 }
 
 void WriteBufferFromHTTPServerResponse::writeProgress()
@@ -64,7 +64,7 @@ void WriteBufferFromHTTPServerResponse::writeProgress()
     WriteBufferFromOwnString progress_string_writer;
     accumulated_progress.writeJSON(progress_string_writer);
 
-    /// Daisy : starts
+    /// proton: starts
     if (send_progress_mode == SendProgressMode::progress_via_header)
     {
         if (response_header_ostr)
@@ -82,7 +82,7 @@ void WriteBufferFromHTTPServerResponse::writeProgress()
         if (response_body_ostr)
             *response_body_ostr << "x-proton-progress: " << progress_string_writer.str() << "\n" << std::flush;
     }
-    /// Daisy : ends
+    /// proton: ends
 }
 
 void WriteBufferFromHTTPServerResponse::finishSendHeaders()

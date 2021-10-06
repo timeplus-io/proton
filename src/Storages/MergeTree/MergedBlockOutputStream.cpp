@@ -210,7 +210,7 @@ void MergedBlockOutputStream::finalizePartOnDisk(
             out->sync();
     }
 
-    /// Daisy : starts
+    /// proton: starts
     if (new_part->seq_info && new_part->seq_info->valid())
     {
         auto out = volume->getDisk()->writeFile(part_path + "sn.txt", 4096);
@@ -218,7 +218,7 @@ void MergedBlockOutputStream::finalizePartOnDisk(
         if (sync)
             out->sync();
     }
-    /// Daisy : ends
+    /// proton: ends
 }
 
 void MergedBlockOutputStream::writeImpl(const Block & block, const IColumn::Permutation * permutation)

@@ -194,7 +194,7 @@ public:
         metadata.set(std::make_unique<StorageInMemoryMetadata>(metadata_));
     }
 
-    /// Daisy: start.
+    /// proton: start.
     /// Get immutable version (snapshot) of storage CreateQuery. CreateQuery object is
     /// multiversion, so it can be concurrently changed, but returned copy can be
     /// used without any locks.
@@ -207,7 +207,7 @@ public:
     {
         create_query.set(std::make_unique<StorageInMemoryCreateQuery>(*create_query_));
     }
-    /// Daisy: ends.
+    /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast
     /// majority of cases virtual columns are static constant part of Storage
@@ -246,9 +246,9 @@ private:
     MultiVersionStorageMetadataPtr metadata;
 
 protected:
-    /// Daisy: starts.
+    /// proton: starts.
     MultiVersionStorageCreateQueryPtr create_query;
-    /// Daisy: ends.
+    /// proton: ends.
 
     RWLockImpl::LockHolder tryLockTimed(
         const RWLock & rwlock, RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;

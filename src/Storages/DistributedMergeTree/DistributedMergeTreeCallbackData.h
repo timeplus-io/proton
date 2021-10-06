@@ -1,6 +1,6 @@
 #pragma once
 
-/// Daisy : starts. Added for Daisy
+/// proton: starts. Added for proton
 
 #include <DistributedWriteAheadLog/Record.h>
 #include <Storages/MergeTree/SequenceInfo.h>

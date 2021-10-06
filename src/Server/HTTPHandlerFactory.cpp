@@ -181,11 +181,11 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
 {
     addCommonDefaultHandlersFactory(factory, server);
 
-    /// Daisy: start. Add rest request process handler
+    /// proton: start. Add rest request process handler
     auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "proton");
     rest_handler->attachNonStrictPath("/proton");
     factory.addHandler(rest_handler);
-    /// Daisy: end.
+    /// proton: end.
 
     auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, "query");
     query_handler->allowPostAndGetParamsAndOptionsRequest();

@@ -38,9 +38,9 @@ public:
 
     size_t getMaxStreams() const { return max_streams; }
 
-    /// Daisy : starts
+    /// proton: starts
     virtual bool hasAggregation() const = 0;
-    /// Daisy : ends
+    /// proton: ends
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override;
 

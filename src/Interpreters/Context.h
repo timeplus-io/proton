@@ -228,7 +228,7 @@ private:
     /// some ranges from some part and initiator will tell the replica about whether it is accepted or denied.
     std::optional<MergeTreeReadTaskCallback> merge_tree_read_task_callback;
 
-    /// Daisy : starts
+    /// proton: starts
     String node_identity;
     String channel_id;
     String query_status_poll_id;
@@ -236,7 +236,7 @@ private:
     String ingest_mode;
     String config_path;
     bool distributed_ddl_operation = false;
-    /// Daisy : ends
+    /// proton: ends
 
     /// Record entities accessed by current query, and store this information in system.query_log.
     struct QueryAccessInfo
@@ -313,14 +313,14 @@ private:
     bool is_internal_query = false;
 
 
-    /// Daisy: begin
+    /// proton: begin
     /// (database, table, is_view, column name, column type) tuple
     using RequiredColumnTuple = std::tuple<std::string, std::string, bool, std::string, std::string>;
     /// We don't need hold a lock to access required_columns as the required column
     /// is collected in a single thread
     std::set<RequiredColumnTuple> required_columns;
     mutable bool collect_required_columns = false;
-    /// Daisy: end
+    /// proton: end
 
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
@@ -348,9 +348,9 @@ private:
                                                     /// thousands of signatures.
                                                     /// And I hope it will be replaced with more common Transaction sometime.
 
-    /// Daisy : starts. Parameters for time predicates of main table
+    /// proton: starts. Parameters for time predicates of main table
     TimeParam time_param;
-    /// Daisy : end.
+    /// proton: end.
 
     Context();
     Context(const Context &);
@@ -366,13 +366,13 @@ public:
 
     ~Context();
 
-    /// Daisy: start
+    /// proton: start
     bool collectRequiredColumns() const { return collect_required_columns; }
     void setCollectRequiredColumns(bool collect) { collect_required_columns = collect; }
 
     const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
     void addRequiredColumns(RequiredColumnTuple && columnTuple) { required_columns.insert(std::move(columnTuple)); }
-    /// Daisy: end
+    /// proton: end
 
     String getPath() const;
     String getFlagsPath() const;
@@ -428,9 +428,9 @@ public:
 
     void setQuotaKey(String quota_key_);
 
-    /// Daisy : starts
+    /// proton: starts
     String getPasswordByUserName(const String & user_name) const;
-    /// Daisy : ends
+    /// proton: ends
 
     void setCurrentRoles(const std::vector<UUID> & current_roles_);
     void setCurrentRolesDefault();
@@ -551,7 +551,7 @@ public:
 
     String getCurrentDatabase() const;
     String getCurrentQueryId() const { return client_info.current_query_id; }
-    /// Daisy : starts
+    /// proton: starts
     String getQueryStatusPollId() const { return query_status_poll_id; }
     /// Parse poll id and return `host` in ID, throws if poll_id is invalid or validations didn't pass
     std::vector<String> parseQueryStatusPollId(const String & poll_id) const;
@@ -564,7 +564,7 @@ public:
     bool isDistributedEnv() const;
     bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
     ThreadPool & getPartCommitPool() const;
-    /// Daisy : ends
+    /// proton: ends
 
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
     String getInitialQueryId() const;
@@ -574,7 +574,7 @@ public:
     /// exists because it should be set before databases loading.
     void setCurrentDatabaseNameInGlobalContext(const String & name);
     void setCurrentQueryId(const String & query_id);
-    /// Daisy : starts
+    /// proton: starts
     void setupNodeIdentity();
     void setupQueryStatusPollId();
     void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
@@ -582,7 +582,7 @@ public:
     void setConfigPath(const String & config_path_) { config_path = config_path_; }
     /// Kinda hacky
     void setDistributedDDLOperation(bool distributed) { distributed_ddl_operation = distributed; }
-    /// Daisy : ends
+    /// proton: ends
 
     void killCurrentQuery();
 
@@ -915,11 +915,11 @@ public:
     void setQueryParameter(const String & name, const String & value);
     void setQueryParameters(const NameToNameMap & parameters) { query_parameters = parameters; }
 
-    /// Daisy : starts. Getter and setter method for time param
+    /// proton: starts. Getter and setter method for time param
     const TimeParam & getTimeParam() const { return time_param; }
     void setTimeParamStart(const String & start) { time_param.setStart(start); }
     void setTimeParamEnd(const String & end) { time_param.setEnd(end); }
-    /// Daisy : ends.
+    /// proton: ends.
 
     /// Add started bridge command. It will be killed after context destruction
     void addBridgeCommand(std::unique_ptr<ShellCommand> cmd) const;

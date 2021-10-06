@@ -89,6 +89,17 @@
 #include "config_core.h"
 #include "Common/config_version.h"
 
+/// proton: starts
+#include <DistributedMetadata/TaskStatusService.h>
+#include <DistributedMetadata/CatalogService.h>
+#include <DistributedMetadata/DDLService.h>
+#include <DistributedMetadata/PlacementService.h>
+#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
+#include <DistributedWriteAheadLog/WALPool.h>
+#include <DistributedWriteAheadLog/KafkaWALPool.h>
+#include <Server/RestRouterHandlers/RestRouterFactory.h>
+/// proton: ends
+
 #if defined(OS_LINUX)
 #    include <sys/mman.h>
 #    include <sys/ptrace.h>
@@ -261,7 +272,7 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
     return current_connections;
 }
 
-/// Daisy : starts
+/// proton: starts
 /// Service dependencies :
 /// All meta services and StorageDistributedMergeTree depend on DWAL
 /// Placement -> Catalog
@@ -310,7 +321,7 @@ void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
     auto & pool = DWAL::KafkaWALPool::instance(global_context);
     pool.shutdown();
 }
-/// Daisy : ends
+/// proton: ends
 
 }
 
@@ -1296,11 +1307,11 @@ if (ThreadFuzzer::instance().isEffective())
 
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
-    /// Daisy: start. init Distributed metadata services for DistributedMergeTree table engine
+    /// proton: start. init Distributed metadata services for DistributedMergeTree table engine
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
     initDistributedMetadataServices(global_context);
-    /// Daisy: end.
+    /// proton: end.
 
     try
     {
@@ -1333,13 +1344,13 @@ if (ThreadFuzzer::instance().isEffective())
     }
     LOG_DEBUG(log, "Loaded metadata.");
 
-    /// Daisy : start.
+    /// proton: start.
     if (global_context->isDistributedEnv())
     {
         DB::CatalogService::instance(global_context).broadcast();
         DB::PlacementService::instance(global_context).scheduleBroadcast();
     }
-    /// Daisy : end.
+    /// proton: end.
 
     /// Init trace collector only after trace_log system table was created
     /// Disable it if we collect test coverage information, because it will work extremely slow.
@@ -1428,9 +1439,9 @@ if (ThreadFuzzer::instance().isEffective())
     {
         attachSystemTablesAsync(global_context, *DatabaseCatalog::instance().getSystemDatabase(), async_metrics);
 
-        /// Daisy : start. Register Rest api route handlers
+        /// proton: start. Register Rest api route handlers
         RestRouterFactory::registerRestRouterHandlers();
-        /// Daisy : end.
+        /// proton: end.
 
         {
             std::lock_guard lock(servers_lock);
@@ -1538,14 +1549,14 @@ if (ThreadFuzzer::instance().isEffective())
             tryLogCurrentException(log, "Caught exception while starting cluster discovery");
         }
 
-        /// Daisy : starts
+        /// proton: starts
         initDistributedMetadataServicesPost(global_context);
         auto & task_status_service = DB::TaskStatusService::instance(global_context);
         if (global_context->isDistributed() && task_status_service.nodeRoles().find("task") != String::npos)
         {
             task_status_service.schedulePersistentTask();
         }
-        /// Daisy : ends
+        /// proton: ends
 
         SCOPE_EXIT_SAFE({
             LOG_DEBUG(log, "Received termination signal.");
@@ -1581,9 +1592,9 @@ if (ThreadFuzzer::instance().isEffective())
             else
                 LOG_INFO(log, "Closed connections.");
 
-            /// Daisy : start.
+            /// proton: start.
             deinitDistributedMetadataServices(global_context);
-            /// Daisy : end.
+            /// proton: end.
 
             dns_cache_updater.reset();
 

@@ -42,6 +42,9 @@ void JSONCompactEachRowRowInputFormat::syncAfterError()
 
 JSONCompactEachRowFormatReader::JSONCompactEachRowFormatReader(ReadBuffer & in_, bool yield_strings_, const FormatSettings & format_settings_)
     : FormatWithNamesAndTypesReader(in_, format_settings_), yield_strings(yield_strings_)
+    /// proton: starts
+    , with_bracket(false)
+    /// proton: ends
 {
 }
 

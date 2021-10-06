@@ -488,10 +488,10 @@ void DatabaseMySQL::createTable(ContextPtr local_context, const String & table_n
 
     attachTable(local_context, table_name, storage, {});
 
-    /// Daisy: starts.
+    /// proton: starts.
     const auto & new_create_query = parseCreateQueryFromAST(create_query, database_name, table_name);
     storage->setInMemoryCreateQuery(new_create_query);
-    /// Daisy: ends.
+    /// proton: ends.
 }
 
 }

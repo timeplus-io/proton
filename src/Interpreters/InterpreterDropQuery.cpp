@@ -84,7 +84,7 @@ void InterpreterDropQuery::waitForTableToBeActuallyDroppedOrDetached(const ASTDr
         db->waitDetachedTableNotInUse(uuid_to_wait);
 }
 
-/// Daisy : start
+/// proton: start
 bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
 {
     auto ctx = getContext();
@@ -198,18 +198,18 @@ bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
     }
     return false;
 }
-/// Daisy : end
+/// proton: end
 
 BlockIO InterpreterDropQuery::executeToTable(ASTDropQuery & query)
 {
     DatabasePtr database;
 
-    /// Daisy : start
+    /// proton: start
     if (deleteTableDistributed(query))
     {
         return {};
     }
-    /// Daisy : end
+    /// proton: end
 
     UUID table_to_wait_on = UUIDHelpers::Nil;
     auto res = executeToTableImpl(getContext(), query, database, table_to_wait_on);
@@ -406,12 +406,12 @@ BlockIO InterpreterDropQuery::executeToTemporaryTable(const String & table_name,
 
 BlockIO InterpreterDropQuery::executeToDatabase(const ASTDropQuery & query)
 {
-    /// Daisy : start
+    /// proton: start
     if (deleteDatabaseDistributed(query))
     {
         return {};
     }
-    /// Daisy : end
+    /// proton: end
 
     DatabasePtr database;
     std::vector<UUID> tables_to_wait;

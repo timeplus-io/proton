@@ -102,10 +102,10 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
     extern const int PATH_ACCESS_DENIED;
     extern const int NOT_IMPLEMENTED;
-    /// Daisy : starts
+    /// proton: starts
     extern const int UNKNOWN_TABLE;
     extern const int CONFIG_ERROR;
-    /// Daisy : ends
+    /// proton: ends
 }
 
 namespace fs = std::filesystem;
@@ -118,12 +118,12 @@ InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Contex
 
 BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
-    /// Daisy : start
+    /// proton: start
     if (createDatabaseDistributed(create))
     {
         return {};
     }
-    /// Daisy : end
+    /// proton: end
 
     String database_name = create.getDatabase();
 
@@ -865,7 +865,7 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
     }
 }
 
-/// Daisy : starts
+/// proton: starts
 bool InterpreterCreateQuery::createTableDistributed(const String & current_database, ASTCreateQuery & create)
 {
     auto ctx = getContext();
@@ -1004,7 +1004,7 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
     }
     return false;
 }
-/// Daisy : ends
+/// proton: ends
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
@@ -1016,12 +1016,12 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     String current_database = getContext()->getCurrentDatabase();
     auto database_name = create.database ? create.getDatabase() : current_database;
 
-    /// Daisy : start
+    /// proton: start
     if (createTableDistributed(database_name, create))
     {
         return {};
     }
-    /// Daisy : end
+    /// proton: end
 
     // If this is a stub ATTACH query, read the query definition from the database
     if (create.attach && !create.storage && !create.columns_list)

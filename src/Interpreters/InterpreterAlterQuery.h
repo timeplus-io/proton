@@ -35,9 +35,9 @@ private:
     BlockIO executeToDatabase(const ASTAlterQuery & alter);
 
     ASTPtr query_ptr;
-    /// Daisy : start
+    /// proton: start
     bool alterTableDistributed(const ASTAlterQuery & query);
-    /// Daisy : end
+    /// proton: end
 };
 
 }

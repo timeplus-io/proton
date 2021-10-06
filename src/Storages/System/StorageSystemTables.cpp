@@ -360,7 +360,7 @@ protected:
 
                 if (columns_mask[src_index] || columns_mask[src_index + 1] || columns_mask[src_index + 2])
                 {
-                    /// Daisy: starts.
+                    /// proton: starts.
                     StorageInMemoryCreateQueryPtr create_query_snapshot;
                     if (table)
                         create_query_snapshot = table->getInMemoryCreateQuery();
@@ -377,7 +377,7 @@ protected:
                         const auto & engine_full = create_query_snapshot ? create_query_snapshot->getEngineFull() : "";
                         res_columns[res_index++]->insert(engine_full);
                     }
-                    /// Daisy: ends.
+                    /// proton: ends.
 
                     if (columns_mask[src_index++])
                     {
