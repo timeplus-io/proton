@@ -86,8 +86,8 @@ TEST(EliminateSubquery, OptimizedQuery)
         optimizeSubquery("SELECT a, ssp FROM (SELECT sum(show_pv) ssp, a FROM (SELECT * FROM infoflow_url_data_dws))"),
         "SELECT a, ssp FROM (SELECT sum(show_pv) AS ssp, a FROM infoflow_url_data_dws)");
     EXPECT_EQ(
-        optimizeSubquery("SELECT a, b from (select * from users1) UNION SELECT c, d from (select * from users2)"),
-        "SELECT a, b FROM users1 UNION SELECT c, d FROM users2");
+        optimizeSubquery("SELECT a, b from (select * from users1) UNION ALL SELECT c, d from (select * from users2)"),
+        "SELECT a, b FROM users1 UNION ALL SELECT c, d FROM users2");
     EXPECT_EQ(
         optimizeSubquery("SELECT * FROM (SELECT avg(price) FROM (SELECT price, product_name FROM product)  GROUP BY product_name)"),
         "SELECT * FROM (SELECT avg(price) FROM product GROUP BY product_name)");

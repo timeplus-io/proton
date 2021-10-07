@@ -24,12 +24,12 @@ void checkJSON(SimpleJSON & obj, ExpectInfo & info)
         if (pre != begin)
         {
             size_t size = it.data() - pre;
-//            std::cout << "Value:" << String{pre, size} << "\t";
-//            std::cout << "Buffer size: " << size << std::endl;
+            /// std::cout << "Value: `" << String{pre, size} << "`;";
+            /// std::cout << "Buffer size: " << size << std::endl;
             buffers.emplace(name, std::make_shared<ReadBuffer>(const_cast<char *>(pre), size));
         }
         name = it.getName();
-//        std::cout << "Name: " << name << "\t";
+        /// std::cout << "Name: `" << name << "`;";
         auto val = it.getValue();
         pre = val.data();
     }
@@ -37,10 +37,12 @@ void checkJSON(SimpleJSON & obj, ExpectInfo & info)
     if (pre != begin)
     {
         size_t size = end - pre;
-//        std::cout << "Value:" << String{pre, size} << "\t";
-//        std::cout << "Buffer size: " << size << std::endl;
+        /// std::cout << "Value: `" << String{pre, size} << "`;";
+        /// std::cout << "Buffer size: " << size << std::endl;
         buffers.emplace(name, std::make_shared<ReadBuffer>(const_cast<char *>(pre), size));
     }
+
+    /// std::cout << "-----------------\n";
 
     for (auto idx = info.begin(); idx != info.end(); ++idx)
     {
@@ -113,7 +115,7 @@ TEST(SimpleJSON, Search)
     info.emplace("arr_string", 21);
     info.emplace("arr_number", 28);
     info.emplace("arr_bool", 20);
-    info.emplace("arr_null", 22);
+    info.emplace("arr_null", 20);
     info.emplace("arr_empty", 3);
     info.emplace("arr_arr", 15);
     info.emplace("arr_obj", 34);
@@ -129,6 +131,6 @@ TEST(SimpleJSON, Search)
           }
        }
     })###";
-    info.emplace("obj", 49);
+    info.emplace("obj", 93);
     checkJSON(req, info);
 }
