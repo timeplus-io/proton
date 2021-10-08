@@ -24,49 +24,49 @@
 
 
 /// Universal executable for various clickhouse applications
-#if ENABLE_CLICKHOUSE_SERVER
+#if ENABLE_PROTON_SERVER
 int mainEntryClickHouseServer(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_CLIENT
+#if ENABLE_PROTON_CLIENT
 int mainEntryClickHouseClient(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_LOCAL
+#if ENABLE_PROTON_LOCAL
 int mainEntryClickHouseLocal(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_BENCHMARK
+#if ENABLE_PROTON_BENCHMARK
 int mainEntryClickHouseBenchmark(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG
+#if ENABLE_PROTON_EXTRACT_FROM_CONFIG
 int mainEntryClickHouseExtractFromConfig(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_COMPRESSOR
+#if ENABLE_PROTON_COMPRESSOR
 int mainEntryClickHouseCompressor(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_FORMAT
+#if ENABLE_PROTON_FORMAT
 int mainEntryClickHouseFormat(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_COPIER
+#if ENABLE_PROTON_COPIER
 int mainEntryClickHouseClusterCopier(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_OBFUSCATOR
+#if ENABLE_PROTON_OBFUSCATOR
 int mainEntryClickHouseObfuscator(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_GIT_IMPORT
+#if ENABLE_PROTON_GIT_IMPORT
 int mainEntryClickHouseGitImport(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_KEEPER
+#if ENABLE_PROTON_KEEPER
 int mainEntryClickHouseKeeper(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_KEEPER
+#if ENABLE_PROTON_KEEPER
 int mainEntryClickHouseKeeperConverter(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_STATIC_FILES_DISK_UPLOADER
+#if ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
 int mainEntryClickHouseStaticFilesDiskUploader(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_DWAL_BENCHMARK
+#if ENABLE_PROTON_DWAL_BENCHMARK
 int mainEntryClickHouseDWal(int argc, char ** argv);
 #endif
-#if ENABLE_CLICKHOUSE_INSTALL
+#if ENABLE_PROTON_INSTALL
 int mainEntryClickHouseInstall(int argc, char ** argv);
 int mainEntryClickHouseStart(int argc, char ** argv);
 int mainEntryClickHouseStop(int argc, char ** argv);
@@ -94,53 +94,53 @@ using MainFunc = int (*)(int, char**);
 /// Add an item here to register new application
 std::pair<const char *, MainFunc> clickhouse_applications[] =
 {
-#if ENABLE_CLICKHOUSE_LOCAL
+#if ENABLE_PROTON_LOCAL
     {"local", mainEntryClickHouseLocal},
 #endif
-#if ENABLE_CLICKHOUSE_CLIENT
+#if ENABLE_PROTON_CLIENT
     {"client", mainEntryClickHouseClient},
 #endif
-#if ENABLE_CLICKHOUSE_BENCHMARK
+#if ENABLE_PROTON_BENCHMARK
     {"benchmark", mainEntryClickHouseBenchmark},
 #endif
-#if ENABLE_CLICKHOUSE_SERVER
+#if ENABLE_PROTON_SERVER
     {"server", mainEntryClickHouseServer},
 #endif
-#if ENABLE_CLICKHOUSE_EXTRACT_FROM_CONFIG
+#if ENABLE_PROTON_EXTRACT_FROM_CONFIG
     {"extract-from-config", mainEntryClickHouseExtractFromConfig},
 #endif
-#if ENABLE_CLICKHOUSE_COMPRESSOR
+#if ENABLE_PROTON_COMPRESSOR
     {"compressor", mainEntryClickHouseCompressor},
 #endif
-#if ENABLE_CLICKHOUSE_FORMAT
+#if ENABLE_PROTON_FORMAT
     {"format", mainEntryClickHouseFormat},
 #endif
-#if ENABLE_CLICKHOUSE_COPIER
+#if ENABLE_PROTON_COPIER
     {"copier", mainEntryClickHouseClusterCopier},
 #endif
-#if ENABLE_CLICKHOUSE_OBFUSCATOR
+#if ENABLE_PROTON_OBFUSCATOR
     {"obfuscator", mainEntryClickHouseObfuscator},
 #endif
-#if ENABLE_CLICKHOUSE_GIT_IMPORT
+#if ENABLE_PROTON_GIT_IMPORT
     {"git-import", mainEntryClickHouseGitImport},
 #endif
-#if ENABLE_CLICKHOUSE_KEEPER
+#if ENABLE_PROTON_KEEPER
     {"keeper", mainEntryClickHouseKeeper},
 #endif
-#if ENABLE_CLICKHOUSE_KEEPER_CONVERTER
+#if ENABLE_PROTON_KEEPER_CONVERTER
     {"keeper-converter", mainEntryClickHouseKeeperConverter},
 #endif
-#if ENABLE_CLICKHOUSE_DWAL_BENCHMARK
+#if ENABLE_PROTON_DWAL_BENCHMARK
     {"dwal-benchmark", mainEntryClickHouseDWal},
 #endif
-#if ENABLE_CLICKHOUSE_INSTALL
+#if ENABLE_PROTON_INSTALL
     {"install", mainEntryClickHouseInstall},
     {"start", mainEntryClickHouseStart},
     {"stop", mainEntryClickHouseStop},
     {"status", mainEntryClickHouseStatus},
     {"restart", mainEntryClickHouseRestart},
 #endif
-#if ENABLE_CLICKHOUSE_STATIC_FILES_DISK_UPLOADER
+#if ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
     {"static-files-disk-uploader", mainEntryClickHouseStaticFilesDiskUploader},
 #endif
     {"hash-binary", mainEntryClickHouseHashBinary},
