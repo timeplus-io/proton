@@ -7,7 +7,6 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
-#include <common/string.h>
 
 #include <boost/algorithm/string/join.hpp>
 
