@@ -63,7 +63,7 @@ if (NOT ENABLE_NURAFT)
     set(ENABLE_PROTON_KEEPER_CONVERTER OFF)
 endif()
 
-if (CLICKHOUSE_SPLIT_BINARY)
+if (PROTON_SPLIT_BINARY)
     option(ENABLE_PROTON_INSTALL "Install proton without .deb/.rpm/.tgz packages (having the binary only)" OFF)
 else ()
     option(ENABLE_PROTON_INSTALL "Install proton without .deb/.rpm/.tgz packages (having the binary only)"
@@ -183,7 +183,7 @@ macro(clickhouse_target_link_split_lib target name)
 endmacro()
 
 macro(clickhouse_program_link_split_binary name)
-    clickhouse_target_link_split_lib(clickhouse-${name} ${name})
+    clickhouse_target_link_split_lib(proton-${name} ${name})
 endmacro()
 
 macro(clickhouse_program_add_library name)
@@ -211,7 +211,7 @@ macro(clickhouse_program_add_library name)
 endmacro()
 
 macro(clickhouse_program_add_executable name)
-    if(CLICKHOUSE_SPLIT_BINARY)
+    if(PROTON_SPLIT_BINARY)
         add_executable(proton-${name} clickhouse-${name}.cpp)
         clickhouse_program_link_split_binary(${name})
         install(TARGETS proton-${name} ${CLICKHOUSE_ALL_TARGETS} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
@@ -307,7 +307,7 @@ if (CLICKHOUSE_ONE_SHARED)
     install (TARGETS clickhouse-lib LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT proton)
 endif()
 
-if (CLICKHOUSE_SPLIT_BINARY)
+if (PROTON_SPLIT_BINARY)
     set (CLICKHOUSE_ALL_TARGETS
         proton-server
         proton-client
