@@ -94,7 +94,7 @@ curl http://localhost:8123/proton/v1/ingest/tables/devices -X POST -H "content-t
     "data": [
         ["dev1", "ca", 57.3, "2020-02-02 20:00:00"],
         ["dev2", "sh", 37.3, "2020-02-03 12:00:00"],
-        ["dev3", "van", 17.3,, "2020-02-02 20:00:00"]
+        ["dev3", "van", 17.3, "2020-02-02 20:00:00"]
     ]
 }'
 ```
@@ -131,7 +131,7 @@ docker run --rm --network=timeplus-net timeplus/proton \
 Run `proton-client` console interactively
 
 ```
-docker run --rm --network=timeplus-net timeplus/proton -it /bin/bash
+docker run --rm --network=timeplus-net -it timeplus/proton /bin/bash
 proton-client --host proton-server -m
 
 # Tumbling aggregation
