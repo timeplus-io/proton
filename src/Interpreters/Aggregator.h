@@ -911,6 +911,9 @@ public:
 
         bool compile_aggregate_expressions;
         size_t min_count_to_compile_aggregate_expression;
+        /// proton: starts
+        bool streaming = false;
+        /// proton: ends
 
         Params(
             const Block & src_header_,
@@ -923,7 +926,8 @@ public:
             size_t min_free_disk_space_,
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
-            const Block & intermediate_header_ = {})
+            const Block & intermediate_header_ = {},
+            bool streaming_ = false)
             : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -934,7 +938,8 @@ public:
             tmp_volume(tmp_volume_), max_threads(max_threads_),
             min_free_disk_space(min_free_disk_space_),
             compile_aggregate_expressions(compile_aggregate_expressions_),
-            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
+            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
+            streaming(streaming_)
         {
         }
 
@@ -1039,6 +1044,11 @@ private:
     friend class ConvertingAggregatedToChunksTransform;
     friend class ConvertingAggregatedToChunksSource;
     friend class AggregatingInOrderTransform;
+    /// proton: starts
+    friend class StreamingConvertingAggregatedToChunksTransform;
+    friend class StreamingConvertingAggregatedToChunksSource;
+    friend class StreamingAggregatingTransform;
+    /// proton: ends
 
     Params params;
 

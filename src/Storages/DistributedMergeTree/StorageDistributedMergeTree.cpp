@@ -1,5 +1,7 @@
 #include "StorageDistributedMergeTree.h"
 #include "DistributedMergeTreeSink.h"
+#include "DistributedMergeTreeCallbackData.h"
+#include "StreamingBlockInputStream.h"
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/KafkaWALCommon.h>
@@ -19,6 +21,7 @@
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sources/NullSource.h>
+#include <Processors/Sources/SourceFromInputStream.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <Common/randomSeed.h>
@@ -316,6 +319,30 @@ void StorageDistributedMergeTree::readRemote(
         query_info.cluster);
 }
 
+void StorageDistributedMergeTree::readStreaming(
+    QueryPlan & query_plan,
+    const SelectQueryInfo & /* query_info */,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    ContextPtr context_,
+    size_t /* max_block_size */,
+    unsigned /* num_streams */)
+{
+    Pipes pipes;
+    pipes.reserve(shards);
+
+    auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
+
+    for (Int32 i = 0; i < shards; ++i)
+    {
+        pipes.emplace_back(std::make_shared<SourceFromInputStream>(
+            std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log)));
+    }
+
+    auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
+    query_plan.addStep(std::move(read_step));
+}
+
 void StorageDistributedMergeTree::read(
     QueryPlan & query_plan,
     const Names & column_names,
@@ -326,7 +353,11 @@ void StorageDistributedMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    if (requireDistributedQuery(context_))
+    if (query_info.syntax_analyzer_result->streaming_tables.contains(getStorageID()))
+    {
+        readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams);
+    }
+    else if (requireDistributedQuery(context_))
     {
         /// This is a distributed query
         readRemote(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage);
@@ -574,7 +605,11 @@ bool StorageDistributedMergeTree::scheduleDataProcessingJob(BackgroundJobsAssign
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
     ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
 {
-    if (requireDistributedQuery(context_))
+    if (query_info.syntax_analyzer_result->streaming_tables.contains(getStorageID()))
+    {
+        return QueryProcessingStage::Enum::FetchColumns;
+    }
+    else if (requireDistributedQuery(context_))
     {
         return getQueryProcessingStageRemote(context_, to_stage, metadata_snapshot, query_info);
     }
@@ -1473,6 +1508,11 @@ void StorageDistributedMergeTree::removeSubscription()
     LOG_INFO(log, "Removed subscription for shard={}", shard);
 
     finalCommit();
+}
+
+String StorageDistributedMergeTree::streamingStorageClusterId() const
+{
+    return storage_settings.get()->streaming_storage_cluster_id.value;
 }
 
 void StorageDistributedMergeTree::initWal()

@@ -30,4 +30,6 @@ std::shared_ptr<rd_kafka_topic_t>
 initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka_t * rd_kafka, KafkaWALStats * stats);
 
 RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic = false);
+
+std::string boolToString(bool val);
 }

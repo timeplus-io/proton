@@ -212,4 +212,9 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
 
     return record;
 }
+
+std::string boolToString(bool val)
+{
+    return val ? "true" : "false";
+}
 }

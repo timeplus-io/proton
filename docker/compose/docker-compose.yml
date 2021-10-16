@@ -3,6 +3,7 @@ version: "3"
 services:
   proton-server:
     image: timeplus/proton:latest
+    pull_policy: always
     ports:
       - "8123:8123" # HTTP
       - "9000:9000" # TCP
@@ -10,20 +11,25 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
+    networks:
+      - timeplus
     # `proton` depends on STREAM_STORAGE_BROKERS env variable
     # to discover stream store
     environment:
       - STREAM_STORAGE_BROKERS=stream-store:9092
     command: >
-      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+      /bin/bash -c "sleep 2; /entrypoint.sh"
     depends_on:
       - stream-store
 
   stream-store:
     image: docker.vectorized.io/vectorized/redpanda:latest
+    pull_policy: always
     ports:
       - "9092:9092"
       - "29092:29092"
+    networks:
+      - timeplus
     command:
       - redpanda
       - start
@@ -46,3 +52,7 @@ services:
       - "redpanda.enable_idempotence=true"
       - --check=false
     container_name: redpanda-1
+
+networks:
+  timeplus:
+    name: timeplus-net

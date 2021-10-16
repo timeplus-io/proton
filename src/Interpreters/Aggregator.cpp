@@ -1316,7 +1316,12 @@ void Aggregator::convertToBlockImpl(
         convertToBlockImplNotFinal(method, data, std::move(raw_key_columns), aggregate_columns);
     }
     /// In order to release memory early.
-    data.clearAndShrink();
+    /// proton: starts. For streaming aggr, we hold on to the states
+    if (!params.streaming)
+    {
+        data.clearAndShrink();
+    }
+    /// proton: ends
 }
 
 
@@ -1362,6 +1367,17 @@ inline void Aggregator::insertAggregatesIntoColumns(
     {
         exception = std::current_exception();
     }
+
+    /// proton: starts
+    /// For streaming aggregation, we hold up to the states
+    if (params.streaming)
+    {
+        if (exception)
+            std::rethrow_exception(exception);
+
+        return;
+    }
+    /// proton: ends
 
     /** Destroy states that are no longer needed. This loop does not throw.
         *
@@ -1417,7 +1433,12 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         places.emplace_back(mapped);
 
         /// Mark the cell as destroyed so it will not be destroyed in destructor.
-        mapped = nullptr;
+        /// proton: starts. Here we push the `mapped` to `places`, for streaming
+        /// case, we don't want aggregate function to destroy the places
+        /// FIXME, State aggregation
+        if (!params.streaming)
+            mapped = nullptr;
+        /// proton: ends
     });
 
     std::exception_ptr exception;
@@ -1472,8 +1493,31 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             ++aggregate_functions_destroy_index;
 
             /// For State AggregateFunction ownership of aggregate place is passed to result column after insert
+            /// proton: starts.
+            /// For non-streaming cases, after calling `insertResultIntoBatch`, aggregator / data should not maintain the places
+            /// anymore (to avoid double free). We have 2 cases here:
+            /// 1. For non `-State` aggregations, the ownership of places doesn't get transferred to result column after insert.
+            ///    So we need a way to clean the places up: either the `insertResultIntoBatch` function destroys them or
+            ///    the dtor of `data` destroys them. Here we ask `insertResultIntoBatch` to destroy them by setting .
+            ///    `destroy_place_after_insert` to true. The behaviors of `insertResultIntoBatch` are:
+            ///    If `DB::IAggregateFunctionHelper::insertResultIntoBatch` doesn't throw, it destroys to free dtor the places since
+            ///    we set `destroy_place_after_insert` to true to tell it to destroy the places. Otherwise if it throws,
+            ///    it also destroys the places no matter `destroy_place_after_insert` is set or not.
+            ///    This is correct behavior for non-streaming non-State aggregations.
+            /// 2. For `-State` aggregations, the ownership of places gets transferred to result column after insert. So aggregator / data doesn't
+            ///    need to maintain them anymore. If `insertResultIntoBatch` throws, it cleans up the places which are not inserted yet
+            ///
+            /// For streaming cases (FIXME window recycling / projection):
+            /// 1. For non `-State` aggregations, there are different cases
+            ///    a. aggregator / data still need maintain the places if it is doing non-window based incremental aggregation
+            ///       and periodical projection
+            ///       For example: `SELECT avg(n) FROM STREAM(table) GROUP BY xxx`.
+            ///    b. aggregator / data don't need maintain the places if it is doing window-based aggregation and when windows get sealed
+            /// 2. For `-State` aggregations, since the ownership of the places are transferred to the result column, aggregator / data
+            ///    don't need maintain them anymore after insert.
             bool is_state = aggregate_functions[destroy_index]->isState();
-            bool destroy_place_after_insert = !is_state;
+            bool destroy_place_after_insert = !is_state && !params.streaming;
+            /// proton: ends
 
             aggregate_functions[destroy_index]->insertResultIntoBatch(places.size(), places.data(), offset, *final_aggregate_column, arena, destroy_place_after_insert);
         }
@@ -1533,7 +1577,12 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_columns[i]->push_back(mapped + offsets_of_aggregate_states[i]);
 
-        mapped = nullptr;
+        /// proton: starts. For streaming aggr, we hold on to the states
+        if (!params.streaming)
+        {
+            mapped = nullptr;
+        }
+        /// proton: ends.
     });
 }
 
@@ -1567,6 +1616,10 @@ Block Aggregator::prepareBlockAndFill(
 
             /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
             ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
+
+            /// proton: starts
+            column_aggregate_func.setStreaming(params.streaming);
+            /// proton: ends
 
             for (auto & pool : data_variants.aggregates_pools)
                 column_aggregate_func.addArena(pool);
@@ -1683,7 +1736,13 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
             {
                 for (size_t i = 0; i < params.aggregates_size; ++i)
                     aggregate_columns[i]->push_back(data + offsets_of_aggregate_states[i]);
-                data = nullptr;
+
+                /// proton: starts
+                if (!params.streaming)
+                {
+                    data = nullptr;
+                }
+                /// proton: ends
             }
             else
             {
@@ -1702,8 +1761,10 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
     if (is_overflows)
         block.info.is_overflows = true;
 
-    if (final)
+    /// proton: starts
+    if (final && !params.streaming)
         destroyWithoutKey(data_variants);
+    /// proton: ends
 
     return block;
 }
@@ -1857,12 +1918,14 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
             blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get()));
     }
 
-    if (!final)
+    /// proton: starts
+    if (!final && !params.streaming)
     {
         /// data_variants will not destroy the states of aggregate functions in the destructor.
         /// Now ColumnAggregateFunction owns the states.
         data_variants.aggregator = nullptr;
     }
+    /// proton: ends
 
     size_t rows = 0;
     size_t bytes = 0;
@@ -2603,7 +2666,7 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
         block = prepareBlockAndFillSingleLevel(result, final);
     /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
 
-    if (!final)
+    if (!final && !params.streaming)
     {
         /// Pass ownership of aggregate function states from result to ColumnAggregateFunction objects in the resulting block.
         result.aggregator = nullptr;

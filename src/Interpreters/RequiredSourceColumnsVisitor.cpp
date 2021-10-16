@@ -159,6 +159,17 @@ void RequiredSourceColumnsMatcher::visit(const ASTIdentifier & node, const ASTPt
 
 void RequiredSourceColumnsMatcher::visit(const ASTFunction & node, const ASTPtr &, Data & data)
 {
+    /// proton: starts
+    auto streamingWindowFunction = [](const auto & name)
+    {
+        return (name == "TUMBLE" || name == "tumble" ||
+                name == "TUMBLE_START" || name == "tumble_start" ||
+                name == "TUMBLE_END" || name == "tumble_end" ||
+                name == "HOP" || name == "hop" ||
+                name == "HOP_START" || name == "hop_start" ||
+                name == "HOP_END" || name == "hop_end");
+    };
+
     /// Do not add formal parameters of the lambda expression
     if (node.name == "lambda")
     {
@@ -172,7 +183,11 @@ void RequiredSourceColumnsMatcher::visit(const ASTFunction & node, const ASTPtr 
 
         for (const auto & name : local_aliases)
             data.private_aliases.erase(name);
+    } else if (streamingWindowFunction(node.name)) {
+        /// FIXME proton, unconditionally read _time column
+        data.required_names["_time"].addInclusion("");
     }
+    /// proton: ends
 }
 
 void RequiredSourceColumnsMatcher::visit(const ASTTablesInSelectQueryElement & node, const ASTPtr &, Data & data)
@@ -183,8 +198,20 @@ void RequiredSourceColumnsMatcher::visit(const ASTTablesInSelectQueryElement & n
 }
 
 /// ASTIdentifiers here are tables. Do not visit them as generic ones.
-void RequiredSourceColumnsMatcher::visit(const ASTTableExpression &, const ASTPtr &, Data &)
+void RequiredSourceColumnsMatcher::visit(const ASTTableExpression & node, const ASTPtr &, Data & data)
 {
+    /// proton: starts
+    if (node.database_and_table_name)
+    {
+        if (const auto * t = node.database_and_table_name->as<ASTTableIdentifier>())
+        {
+            if (t->streaming)
+            {
+                data.streaming_tables.push_back(t->getTableId());
+            }
+        }
+    }
+    /// proton: ends
 }
 
 void RequiredSourceColumnsMatcher::visit(const ASTArrayJoin & node, const ASTPtr &, Data & data)

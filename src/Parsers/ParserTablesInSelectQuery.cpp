@@ -16,6 +16,24 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
 }
 
+/// proton: starts
+namespace
+{
+    void handleStreamingTable(const std::shared_ptr<ASTTableExpression> & res)
+    {
+        if (!res->table_function)
+            return;
+
+        auto function_node = res->table_function->as<ASTFunction>();
+        if (function_node)
+            return;
+
+        /// STREAM(table) get parsed as a function, but it is actually a table identifier
+        /// Please see the special parsing logic in `ParserFunction`
+        res->database_and_table_name = std::move(res->table_function);
+    }
+}
+/// proton: ends
 
 bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -26,6 +44,10 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true)
                 .parse(pos, res->database_and_table_name, expected))
         return false;
+
+    /// proton: starts
+    handleStreamingTable(res);
+    /// proton: ends
 
     /// FINAL
     if (ParserKeyword("FINAL").ignore(pos, expected))

@@ -3,6 +3,11 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
+
+/// proton: starts
+#include <Processors/Transforms/StreamingAggregatingTransform.h>
+/// proton: ends
+
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 
@@ -155,9 +160,18 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         auto many_data = std::make_shared<ManyAggregatedData>(pipeline.getNumStreams());
 
         size_t counter = 0;
-        pipeline.addSimpleTransform([&](const Block & header)
+        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor>
         {
-            return std::make_shared<AggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            /// proton: starts
+            if (transform_params->params.streaming)
+            {
+                return std::make_shared<StreamingAggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            }
+            else
+            {
+                return std::make_shared<AggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            }
+            /// proton: ends
         });
 
         pipeline.resize(1);
@@ -168,9 +182,18 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     {
         pipeline.resize(1);
 
-        pipeline.addSimpleTransform([&](const Block & header)
+        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor>
         {
-            return std::make_shared<AggregatingTransform>(header, transform_params);
+            /// proton: starts
+            if (transform_params->params.streaming)
+            {
+                return std::make_shared<StreamingAggregatingTransform>(header, transform_params);
+            }
+            else
+            {
+                return std::make_shared<AggregatingTransform>(header, transform_params);
+            }
+            /// proton: ends
         });
 
         aggregating = collector.detachProcessors(0);

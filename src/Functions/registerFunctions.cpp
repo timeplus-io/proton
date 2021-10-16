@@ -52,6 +52,15 @@ void registerFunctionTupleHammingDistance(FunctionFactory & factory);
 void registerFunctionsStringHash(FunctionFactory & factory);
 void registerFunctionValidateNestedArraySizes(FunctionFactory & factory);
 void registerFunctionsSnowflake(FunctionFactory & factory);
+
+/// proton: starts
+void registerFunctionsStreamingWindow(FunctionFactory &);
+/// proton: ends
+
+#if !defined(ARCADIA_BUILD)
+void registerFunctionBayesAB(FunctionFactory &);
+#endif
+
 void registerFunctionTid(FunctionFactory & factory);
 void registerFunctionLogTrace(FunctionFactory & factory);
 void registerFunctionsTimeWindow(FunctionFactory &);
@@ -118,6 +127,10 @@ void registerFunctions()
     registerFunctionsSnowflake(factory);
     registerFunctionsTimeWindow(factory);
     registerFunctionToBool(factory);
+
+    /// proton: starts
+    registerFunctionsStreamingWindow(factory);
+    /// proton: ends
 
 #if USE_SSL
     registerFunctionEncrypt(factory);

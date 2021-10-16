@@ -6,6 +6,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/SelectQueryOptions.h>
+#include <Interpreters/StorageID.h>
 #include <Storages/IStorage_fwd.h>
 
 namespace DB
@@ -50,6 +51,10 @@ struct TreeRewriterResult
     /// For example, for `ARRAY JOIN [1,2] AS b` "b" -> "array(1,2)" will enter here.
     /// Note: not used further.
     NameToNameMap array_join_alias_to_name;
+
+    /// proton: starts
+    std::set<StorageID> streaming_tables;
+    /// proton: ends
 
     /// The backward mapping for array_join_alias_to_name.
     /// Note: not used further.

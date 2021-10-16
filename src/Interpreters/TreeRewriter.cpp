@@ -1108,6 +1108,19 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     {
         source_column_names.insert(column.name);
     }
+
+    /// proton: starts
+    if (storage)
+    {
+        const auto & sid = storage->getStorageID();
+        assert(columns_context.streaming_tables.size() <= 1);
+        if (!columns_context.streaming_tables.empty())
+        {
+            assert(columns_context.streaming_tables[0].table_name == sid.table_name);
+            streaming_tables.insert(sid);
+        }
+    }
+    /// proton: ends
 }
 
 NameSet TreeRewriterResult::getArrayJoinSourceNameSet() const

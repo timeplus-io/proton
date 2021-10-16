@@ -11,6 +11,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
 }
 }
 
@@ -83,7 +84,7 @@ void KafkaWALPool::shutdown()
 
     for (auto & cluster_wals : wals)
     {
-        for (auto & wal : cluster_wals.second)
+        for (auto & wal : cluster_wals.second.second)
         {
             wal->shutdown();
         }
@@ -92,6 +93,17 @@ void KafkaWALPool::shutdown()
     if (meta_wal)
     {
         meta_wal->shutdown();
+    }
+
+    {
+        std::lock_guard lock{streaming_lock};
+        for (auto & cluster_consumers: streaming_consumers)
+        {
+            for (auto & consumer : cluster_consumers.second.second)
+            {
+                consumer->shutdown();
+            }
+        }
     }
 
     LOG_INFO(log, "Stopped");
@@ -107,6 +119,7 @@ void KafkaWALPool::init(const std::string & key)
     KafkaWALSettings kafka_settings;
     int32_t dedicated_subscription_wal_pool_size = 2;
     int32_t shared_subscription_wal_pool_max_size = 10;
+    int32_t streaming_wal_pool_size = 100;
     bool system_default = false;
 
     std::vector<std::tuple<String, String, void *>> settings = {
@@ -142,6 +155,7 @@ void KafkaWALPool::init(const std::string & key)
         {".shared_subscription_flush_threshold_count", "Int32", &kafka_settings.shared_subscription_flush_threshold_count},
         {".shared_subscription_flush_threshold_bytes", "Int32", &kafka_settings.shared_subscription_flush_threshold_bytes},
         {".shared_subscription_flush_threshold_ms", "Int32", &kafka_settings.shared_subscription_flush_threshold_ms},
+        {".streaming_processing_pool_size", "Int32", &streaming_wal_pool_size},
     };
 
     for (const auto & t : settings)
@@ -198,12 +212,15 @@ void KafkaWALPool::init(const std::string & key)
         auto kwal = std::make_shared<KafkaWAL>(std::move(ksettings));
 
         kwal->startup();
-        wals[kafka_settings.cluster_id].push_back(kwal);
-    }
-    indexes[kafka_settings.cluster_id] = 0;
 
-    multiplexers.emplace(
-        kafka_settings.cluster_id, std::make_pair<size_t, KafkaWALConsumerMultiplexerPtrs>(shared_subscription_wal_pool_max_size, {}));
+        wals[kafka_settings.cluster_id].first = 0;
+        wals[kafka_settings.cluster_id].second.push_back(kwal);
+    }
+
+    streaming_consumers.insert({kafka_settings.cluster_id, {static_cast<size_t> (streaming_wal_pool_size), {}}});
+
+    multiplexers.insert({kafka_settings.cluster_id, {static_cast<size_t>(shared_subscription_wal_pool_max_size), {}}});
+
     cluster_kafka_settings.emplace(kafka_settings.cluster_id, kafka_settings.clone());
 
     if (system_default)
@@ -219,7 +236,7 @@ void KafkaWALPool::init(const std::string & key)
     }
 }
 
-KafkaWALPtr KafkaWALPool::get(const std::string & cluster_id) const
+KafkaWALPtr KafkaWALPool::get(const std::string & cluster_id)
 {
     if (cluster_id.empty() && !default_cluster.empty())
     {
@@ -229,13 +246,67 @@ KafkaWALPtr KafkaWALPool::get(const std::string & cluster_id) const
     auto iter = wals.find(cluster_id);
     if (iter == wals.end())
     {
+        LOG_ERROR(log, "Unknown streaming storage cluster_id={}", cluster_id);
         throw DB::Exception("Unknown kafka cluster_id=" + cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
     }
 
-    return iter->second[indexes[cluster_id]++ % iter->second.size()];
+    /// Round robin
+    return iter->second.second[iter->second.first.fetch_add(1) % iter->second.second.size()];
 }
 
 KafkaWALPtr KafkaWALPool::getMeta() const { return meta_wal; }
+
+KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreaming(const String & cluster_id)
+{
+    if (cluster_id.empty() && !default_cluster.empty())
+    {
+        return getOrCreateStreaming(default_cluster);
+    }
+
+    std::lock_guard lock{streaming_lock};
+
+    auto iter = streaming_consumers.find(cluster_id);
+    if (iter == streaming_consumers.end())
+    {
+        LOG_ERROR(log, "Unknown streaming storage cluster_id={}", cluster_id);
+        throw DB::Exception("Unknown streaming storage cluster id", DB::ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    for (const auto & consumer : iter->second.second)
+    {
+        if (consumer.use_count() == 1)
+        {
+            return consumer;
+        }
+    }
+
+    /// consumer is used up and if we didn't reach maximum
+    if (iter->second.second.size() < iter->second.first)
+    {
+        /// Create one
+        auto siter = cluster_kafka_settings.find(cluster_id);
+        assert(siter != cluster_kafka_settings.end());
+
+        auto ksettings = siter->second->clone();
+
+        /// Streaming WALs have a different group ID
+        ksettings->group_id += "-streaming-query-" + std::to_string(iter->second.second.size() + 1);
+
+        /// We don't care offset checkpointing for WALs used for streaming processing,
+        /// No auto commit
+        ksettings->enable_auto_commit = false;
+
+        auto consumer = std::make_shared<KafkaWALSimpleConsumer>(std::move(ksettings));
+        consumer->startup();
+        iter->second.second.push_back(consumer);
+        return consumer;
+    }
+    else
+    {
+        LOG_ERROR(log, "Streaming processing pool in cluster={} is used up, size={}", cluster_id, iter->second.first);
+        throw DB::Exception("Max streaming processing pool size has been reached", DB::ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
+    }
+}
 
 KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(const std::string & cluster_id)
 {
@@ -307,7 +378,7 @@ std::vector<KafkaWALClusterPtr> KafkaWALPool::clusters(const KafkaWALContext & c
 
     for (const auto & cluster_wal : wals)
     {
-        auto result{cluster_wal.second.back()->cluster(ctx)};
+        auto result{cluster_wal.second.second.back()->cluster(ctx)};
         if (result)
         {
             results.push_back(std::move(result));

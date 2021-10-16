@@ -5,6 +5,7 @@
 
 #include <Core/Names.h>
 #include <base/types.h>
+#include <Interpreters/StorageID.h>
 #include <Parsers/IAST_fwd.h>
 
 namespace DB
@@ -27,6 +28,10 @@ struct RequiredSourceColumnsData
             ++appears;
         }
     };
+
+    /// proton: starts
+    std::vector<StorageID> streaming_tables;
+    /// proton: ends
 
     std::unordered_map<String, NameInfo> required_names;
     NameSet private_aliases; /// lambda aliases that should not be interpreted as required columns

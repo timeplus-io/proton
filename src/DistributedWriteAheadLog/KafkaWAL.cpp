@@ -283,7 +283,7 @@ void KafkaWAL::initProducerHandle()
         /// The backoff time in milliseconds before retrying a protocol request.
         std::make_pair("retry.backoff.ms", std::to_string(settings->retry_backoff_ms)),
         /// the producer will ensure that messages are successfully produced exactly once
-        std::make_pair("enable.idempotence", std::to_string(settings->enable_idempotence)),
+        std::make_pair("enable.idempotence", boolToString(settings->enable_idempotence)),
         /// librdkafka statistics emit interval time.
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
         /// Maximum Kafka protocol request message size

@@ -389,6 +389,58 @@ SetPtr makeExplicitSet(
     return set;
 }
 
+namespace
+{
+    void handleStreamingWindowFunctions(
+        const String & func_name, DataTypes & argument_types, Names & argument_names, ActionsMatcher::Data & data)
+    {
+        if (argument_types.empty())
+        {
+            return;
+        }
+
+        bool missing_time_col = false;
+        if (func_name == "TUMBLE" || func_name == "tumble" || func_name == "HOP" || func_name == "hop")
+        {
+            if (!isDateTime64(argument_types[0]) && !isDateTime(argument_types[0]))
+            {
+                /// The first argument is not datetime type, insert default time column
+                missing_time_col = true;
+            }
+        }
+        else if (func_name == "TUMBLE_START" || func_name == "tumble_start" ||
+                 func_name == "TUMBLE_END" || func_name == "TUMBLE_END" ||
+                 func_name == "HOP_START" || func_name == "hop_start" ||
+                 func_name == "HOP_END" || func_name == "hop_end")
+        {
+            /// FIXME, window ID
+            auto type_ = WhichDataType(argument_types[0]);
+            if (!type_.isTuple() && !isDateTime64(argument_types[0]) && !isDateTime(argument_types[0]))
+            {
+                /// The first argument is not datetime type, nor a tuple
+                auto time_col = data.source_columns.tryGetByName("_time");
+                assert(time_col);
+                if (time_col)
+                {
+                    argument_types.insert(argument_types.begin(), time_col->type);
+                    argument_names.insert(argument_names.begin(), time_col->name);
+                }
+            }
+        }
+
+        if (missing_time_col)
+        {
+            auto time_col = data.source_columns.tryGetByName("_time");
+            assert(time_col);
+            if (time_col)
+            {
+                argument_types.insert(argument_types.begin(), time_col->type);
+                argument_names.insert(argument_names.begin(), time_col->name);
+            }
+        }
+    }
+}
+
 ScopeStack::Level::~Level() = default;
 ScopeStack::Level::Level() = default;
 ScopeStack::Level::Level(Level &&) = default;
@@ -991,6 +1043,10 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                     arguments_present = false;
             }
         }
+
+        /// proton: starts
+        handleStreamingWindowFunctions(node.name, argument_types, argument_names, data);
+        /// proton: ends
 
         if (data.only_consts && !arguments_present)
             return;

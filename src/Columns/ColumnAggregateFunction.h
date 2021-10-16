@@ -84,6 +84,10 @@ private:
 
     std::optional<size_t> version;
 
+    /// proton: starts
+    bool streaming = false;
+    /// proton: ends
+
     ColumnAggregateFunction() = default;
 
     /// Create a new column that has another column as a source.
@@ -242,5 +246,9 @@ public:
     bool structureEquals(const IColumn &) const override;
 
     MutableColumnPtr cloneResized(size_t size) const override;
+
+    /// proton: starts
+    void setStreaming(bool streaming_) { streaming = streaming_; }
+    /// proton: ends
 };
 }

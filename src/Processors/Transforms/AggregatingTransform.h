@@ -70,6 +70,9 @@ struct ManyAggregatedData
     ManyAggregatedDataVariants variants;
     std::vector<std::unique_ptr<std::mutex>> mutexes;
     std::atomic<UInt32> num_finished = 0;
+    /// proton: starts
+    std::atomic<UInt32> finalizations = 0;
+    /// proton: ends
 
     explicit ManyAggregatedData(size_t num_threads = 0) : variants(num_threads), mutexes(num_threads)
     {

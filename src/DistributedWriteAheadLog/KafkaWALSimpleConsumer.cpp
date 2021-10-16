@@ -141,6 +141,8 @@ void KafkaWALSimpleConsumer::initTopicHandle(KafkaWALContext & ctx) const
 
 inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALContext & ctx) const
 {
+    assert(ctx.topic_handle);
+
     if (unlikely(!ctx.topic_consuming_started))
     {
         /// Always starts from broker stored offset. Since for simple consumer, if we specify a

@@ -79,4 +79,7 @@ private:
 
     KafkaWALStatsPtr stats;
 };
+
+using KafkaWALSimpleConsumerPtr = std::shared_ptr<KafkaWALSimpleConsumer>;
+using KafkaWALSimpleConsumerPtrs = std::vector<KafkaWALSimpleConsumerPtr>;
 }

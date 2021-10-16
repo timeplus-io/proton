@@ -12,6 +12,7 @@
 /build
 /build_*
 /build-*
+/*-build*
 /tests/venv
 /obj-x86_64-linux-gnu/
 

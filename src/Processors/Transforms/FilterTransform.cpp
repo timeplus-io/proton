@@ -111,7 +111,10 @@ void FilterTransform::transform(Chunk & chunk)
         columns = block.getColumns();
     }
 
-    if (constant_filter_description.always_true || on_totals)
+    /// proton: starts
+    /// If it is an empty chunk, propagate it through.
+    /// Streaming processing need this watermarker
+    if (constant_filter_description.always_true || on_totals || num_rows_before_filtration == 0)
     {
         chunk.setColumns(std::move(columns), num_rows_before_filtration);
         removeFilterIfNeed(chunk);

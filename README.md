@@ -2,7 +2,7 @@
 
 # Architecture
 
-In distributed mode, `proton` depends on a high throughput and low latency distributed write ahead log for data ingestion and streaming query. It also depends on this distributed write ahead log for metadata management and node membership management etc tasks. This architecture is inspired by lots of prior work in academic and industry, to name a few [LinkedIn Databus](https://dl.acm.org/doi/10.1145/2391229.2391247), [SLOG](http://www.vldb.org/pvldb/vol12/p1747-ren.pdf), and lots of work from [Martin Kleppmann](https://martin.kleppmann.com/)
+In distributed mode, `proton` depends on a high throughput and low latency distributed write ahead log for data ingestion and streaming query. It also depends on this distributed write ahead log for metadata management and node membership management etc tasks.
 
 architecture highlights
 
@@ -11,16 +11,22 @@ architecture highlights
 3. Built-in streaming query capability
 4. At least once delivery semantic by default. Can eliminate data duplication in practical scenarios in distributed mode
 5. Automatic data shard placement
-6. Mininum operation overhead if running in K8S
+6. Minimal operation overhead if running in K8S
 
 ![Proton Architecture](https://github.com/timeplus-io/proton/raw/develop/design/proton-high-level-arch.png)
 
 # Build
 
+## Clone proton
+
+```
+git clone --recurse-submodules git@github.com:timeplus-io/proton.git
+```
+
 ## Build with Docker
 
 ```
-$ cd proton/docker/server
+$ cd proton/docker/builder
 $ make build
 ```
 
@@ -36,7 +42,7 @@ After build, you can find the compiled `proton` binaries in `build_docker` direc
 ### Ad-hoc build
 
 ```
-$ cd proton 
+$ cd proton
 $ mkdir -p build && cd build && cmake ..
 $ ninja
 ```
@@ -53,33 +59,28 @@ $ docker-compose up
 
 Note for a complete REST APIs, please refer to `proton/spec/rest-api`.
 
-```
-curl  http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
-    "name": <table-name, String>,
-    "shards": <number-of-shards, Integer>,
-    "replication_factor": <number-of-replicas-per-shard, Integer>,
-    "columns": [{"name" : <column-name, String>, "type" : <column-type, String>, "default" : <default-value-or-expression, String>}, ...],
-    shard_by_expression": <sharding-expression-for-table, String>,
-    index_time_bucket_granularity": <String>,
-    partition_time_bucket_granularity": <String>,
-    _time_column: <column-for-time, String>
-}'
-```
-
-The following example is creating a `testtable` with 2 columns and all other settings are default
+The following example is creating a `devices` with several columns and all other settings are default
 
 ```
-$ curl http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
-   "name":"testtable",
-   "columns":[
+curl http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
+   "name": "devices",
+   "columns": [
       {
-         "name":"i",
-         "type":"Int32"
+         "name": "device",
+         "type": "String"
       },
       {
-         "name":"timestamp",
-         "type":"Datetime64(3)",
-         "default":"now64(3)"
+         "name": "location",
+         "type": "String"
+      },
+      {
+         "name": "temperature",
+         "type": "Float32"
+      },
+      {
+         "name": "timestamp",
+         "type": "Datetime64(3)",
+         "default": "now64(3)"
       }
    ]
 }'
@@ -88,9 +89,13 @@ $ curl http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
 ## Ingest Data
 
 ```
-$ curl http://localhost:8123/proton/v1/ingest/tables/testtable -X POST -H "content-type: application/json" -d '{
-    "columns": ["i"], 
-    "data": [[1],[2],[3],[4],[5],[6],[7],[8],[9],[10]]
+curl http://localhost:8123/proton/v1/ingest/tables/devices -X POST -H "content-type: application/json" -d '{
+    "columns": ["device", "location", "temperature", "timestamp"],
+    "data": [
+        ["dev1", "ca", 57.3, "2020-02-02 20:00:00"],
+        ["dev2", "sh", 37.3, "2020-02-03 12:00:00"],
+        ["dev3", "van", 17.3,, "2020-02-02 20:00:00"]
+    ]
 }'
 ```
 
@@ -108,7 +113,36 @@ And query like `SELECT * FROM testtable`
 ### Query Data via REST API
 
 ```
-$ curl http://localhost:8123/proton/v1/search -X POST -H "content-type: application/json" -d '{"query": "SELECT * FROM testtable"}'
+curl http://localhost:8123/proton/v1/search -H "content-type: application/json" -d '{"query": "SELECT * FROM devices"}'
 ```
 
 ### Query Data via CLI
+
+### Streaming Query
+
+Simple tail
+
+```
+docker run --rm --network=timeplus-net timeplus/proton \
+    proton-client --host proton-server \
+    --query 'SELECT * FROM STREAM(devices) WHERE temperature > 50.0'
+```
+
+Run `proton-client` console interactively
+
+```
+docker run --rm --network=timeplus-net timeplus/proton -it /bin/bash
+proton-client --host proton-server -m
+
+# Tumbling aggregation
+
+timeplus :) SELECT device, avg(temperature) as avg_temp,
+:-] TUMBLE(INTERVAL 3 SECOND) AS time_win
+:-] FROM STREAM(devices) WHERE temperature > 50.0 GROUP BY device, time_win;
+
+# Use a different time column for windowing
+
+timeplus :) SELECT device, avg(temperature) as avg_temp,
+:-] TUMBLE(timestamp, INTERVAL 3 SECOND) AS time_win
+:-] FROM STREAM(devices) WHERE temperature > 50.0 GROUP BY device, time_win;
+```

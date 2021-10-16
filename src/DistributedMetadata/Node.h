@@ -79,22 +79,23 @@ struct Node
 
     String string() const
     {
-        return "identity=" + identity + ",host=" + host + ",channel=" + channel + ",http_port" + std::to_string(http_port) + ",tcp_port="
-            + std::to_string(tcp_port) + ",https_port=" + std::to_string(https_port) + "tcp_port_secure=" + std::to_string(tcp_port_secure);
+        return "identity=" + identity + ",host=" + host + ",channel=" + channel + ",http_port=" + std::to_string(http_port)
+            + ",tcp_port=" + std::to_string(tcp_port) + ",https_port=" + std::to_string(https_port)
+            + ",tcp_port_secure=" + std::to_string(tcp_port_secure);
     }
 
     Poco::JSON::Object::Ptr json() const
     {
-         Poco::JSON::Object::Ptr json_obj(new Poco::JSON::Object());
-         json_obj->set("identity", identity);
-         json_obj->set("host", host);
-         json_obj->set("channel", channel);
-         json_obj->set("roles", roles);
-         json_obj->set("https_port", https_port);
-         json_obj->set("http_port", http_port);
-         json_obj->set("tcp_port", tcp_port);
-         json_obj->set("tcp_port_secure", tcp_port_secure);
-         return json_obj;
+        Poco::JSON::Object::Ptr json_obj(new Poco::JSON::Object());
+        json_obj->set("identity", identity);
+        json_obj->set("host", host);
+        json_obj->set("channel", channel);
+        json_obj->set("roles", roles);
+        json_obj->set("https_port", https_port);
+        json_obj->set("http_port", http_port);
+        json_obj->set("tcp_port", tcp_port);
+        json_obj->set("tcp_port_secure", tcp_port_secure);
+        return json_obj;
     }
 };
 

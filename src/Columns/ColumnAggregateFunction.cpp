@@ -83,7 +83,7 @@ void ColumnAggregateFunction::set(const AggregateFunctionPtr & func_, size_t ver
 
 ColumnAggregateFunction::~ColumnAggregateFunction()
 {
-    if (!func->hasTrivialDestructor() && !src)
+    if (!func->hasTrivialDestructor() && !src && !streaming)
         for (auto * val : data)
             func->destroy(val);
 }
