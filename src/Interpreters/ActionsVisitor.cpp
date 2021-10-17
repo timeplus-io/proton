@@ -419,7 +419,6 @@ namespace
             {
                 /// The first argument is not datetime type, nor a tuple
                 auto time_col = data.source_columns.tryGetByName("_time");
-                assert(time_col);
                 if (time_col)
                 {
                     argument_types.insert(argument_types.begin(), time_col->type);

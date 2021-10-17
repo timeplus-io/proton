@@ -891,7 +891,17 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     /// We calculate required_source_columns with source_columns modifications and swap them on exit
     required_source_columns = source_columns;
 
-    RequiredSourceColumnsVisitor::Data columns_context;
+    /// proton: starts
+    bool has_reserved_time = false;
+    if (storage)
+    {
+        auto time_col = source_columns.tryGetByName("_time");
+        if (time_col && (isDateTime64(time_col->type) || isDateTime(time_col->type)))
+            has_reserved_time = true;
+    }
+    /// proton: ends
+
+    RequiredSourceColumnsVisitor::Data columns_context{has_reserved_time};
     RequiredSourceColumnsVisitor(columns_context).visit(query);
 
     NameSet source_column_names;

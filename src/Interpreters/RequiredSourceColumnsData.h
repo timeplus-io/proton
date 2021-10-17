@@ -30,7 +30,10 @@ struct RequiredSourceColumnsData
     };
 
     /// proton: starts
+    RequiredSourceColumnsData(bool has_reserved_time_ = false) : has_reserved_time(has_reserved_time_) { }
+
     std::vector<StorageID> streaming_tables;
+    bool has_reserved_time;
     /// proton: ends
 
     std::unordered_map<String, NameInfo> required_names;

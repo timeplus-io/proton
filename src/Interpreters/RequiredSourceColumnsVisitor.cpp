@@ -183,8 +183,7 @@ void RequiredSourceColumnsMatcher::visit(const ASTFunction & node, const ASTPtr 
 
         for (const auto & name : local_aliases)
             data.private_aliases.erase(name);
-    } else if (streamingWindowFunction(node.name)) {
-        /// FIXME proton, unconditionally read _time column
+    } else if (streamingWindowFunction(node.name) && data.has_reserved_time) {
         data.required_names["_time"].addInclusion("");
     }
     /// proton: ends
