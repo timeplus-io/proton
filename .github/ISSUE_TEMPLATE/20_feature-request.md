@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for ClickHouse
+about: Suggest an idea for proton
 title: ''
 labels: feature
 assignees: ''

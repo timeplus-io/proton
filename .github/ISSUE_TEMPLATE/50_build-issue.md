@@ -1,13 +1,13 @@
 ---
 name: Build issue
-about: Report failed ClickHouse build from master
+about: Report failed proton build from main
 title: ''
 labels: build
 assignees: ''
 
 ---
 
-> Make sure that `git diff` result is empty and you've just pulled fresh master. Try cleaning up cmake cache. Just in case, official build instructions are published here: https://clickhouse.yandex/docs/en/development/build/
+> Make sure that `git diff` result is empty and you've just pulled fresh main. Try cleaning up cmake cache.
 
 **Operating system**
 
