@@ -2,6 +2,8 @@
 #include "DistributedMergeTreeSink.h"
 #include "DistributedMergeTreeCallbackData.h"
 #include "StreamingBlockInputStream.h"
+#include "StreamingBlockReader.h"
+#include "WatermarkBlockInputStream.h"
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/KafkaWALCommon.h>
@@ -321,7 +323,7 @@ void StorageDistributedMergeTree::readRemote(
 
 void StorageDistributedMergeTree::readStreaming(
     QueryPlan & query_plan,
-    const SelectQueryInfo & /* query_info */,
+    const SelectQueryInfo & query_info,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_,
@@ -336,7 +338,9 @@ void StorageDistributedMergeTree::readStreaming(
     for (Int32 i = 0; i < shards; ++i)
     {
         pipes.emplace_back(std::make_shared<SourceFromInputStream>(
-            std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log)));
+            std::make_shared<WatermarkBlockInputStream>(
+                std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log),
+                    query_info, topic + std::to_string(i), log)));
     }
 
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());

@@ -23,7 +23,7 @@ public:
         DWAL::KafkaWALSimpleConsumerPtr consumer_,
         Poco::Logger * log_);
 
-    ~StreamingBlockInputStream() override;
+    ~StreamingBlockInputStream() override = default;
 
     String getName() const override { return "StreamingBlockInputStream"; }
     Block getHeader() const override;

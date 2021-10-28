@@ -10,7 +10,9 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
-
+/// proton: starts
+#include <Parsers/ParserEmitQuery.h>
+/// proton: ends
 
 namespace DB
 {
@@ -47,6 +49,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_order_by("ORDER BY");
     ParserKeyword s_limit("LIMIT");
     ParserKeyword s_settings("SETTINGS");
+    /// proton: starts
+    ParserKeyword s_emit("EMIT");
+    /// proton: ends
     ParserKeyword s_by("BY");
     ParserKeyword s_rollup("ROLLUP");
     ParserKeyword s_cube("CUBE");
@@ -62,7 +67,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserNotEmptyExpressionList exp_list(false);
     ParserNotEmptyExpressionList exp_list_for_with_clause(false);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(true);    /// Allows aliases without AS keyword.
+    ParserNotEmptyExpressionList exp_list_for_select_clause(false);    /// proton: starts don't allows aliases without AS keyword.
     ParserExpressionWithOptionalAlias exp_elem(false);
     ParserOrderByExpressionList order_list;
 
@@ -85,6 +90,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr limit_offset;
     ASTPtr limit_length;
     ASTPtr top_length;
+    /// proton: starts
+    ASTPtr emit;
+    /// proton: ends
     ASTPtr settings;
 
     /// WITH expr_list
@@ -419,6 +427,15 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (!order_expression_list && select_query->limit_with_ties)
         throw Exception("Can not use WITH TIES without ORDER BY", ErrorCodes::WITH_TIES_WITHOUT_ORDER_BY);
 
+    /// proton: starts
+    if (s_emit.ignore(pos, expected))
+    {
+        ParserEmitQuery parser_emit(true);
+        if (!parser_emit.parse(pos, emit, expected))
+            return false;
+    }
+    /// proton: ends
+
     /// SETTINGS key1 = value1, key2 = value2, ...
     if (s_settings.ignore(pos, expected))
     {
@@ -442,6 +459,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     select_query->setExpression(ASTSelectQuery::Expression::LIMIT_BY, std::move(limit_by_expression_list));
     select_query->setExpression(ASTSelectQuery::Expression::LIMIT_OFFSET, std::move(limit_offset));
     select_query->setExpression(ASTSelectQuery::Expression::LIMIT_LENGTH, std::move(limit_length));
+    select_query->setExpression(ASTSelectQuery::Expression::EMIT, std::move(emit));
     select_query->setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(settings));
     return true;
 }

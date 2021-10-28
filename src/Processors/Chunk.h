@@ -11,6 +11,8 @@ class ChunkInfo
 public:
     virtual ~ChunkInfo() = default;
     ChunkInfo() = default;
+
+    Int64 watermark = 0;
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;

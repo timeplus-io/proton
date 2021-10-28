@@ -25,10 +25,6 @@ StreamingBlockInputStream::StreamingBlockInputStream(
 {
 }
 
-StreamingBlockInputStream::~StreamingBlockInputStream()
-{
-}
-
 Block StreamingBlockInputStream::getHeader() const
 {
     return header;

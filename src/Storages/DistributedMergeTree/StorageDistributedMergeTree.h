@@ -6,8 +6,8 @@
 #include <pcg_random.hpp>
 #include <common/shared_ptr_helper.h>
 
-#include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
 #include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
@@ -104,7 +104,8 @@ public:
 
     bool scheduleDataProcessingJob(BackgroundJobsAssignee & assignee) override;
 
-    QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo &) const override;
+    QueryProcessingStage::Enum getQueryProcessingStage(
+        ContextPtr, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo &) const override;
 
 private:
     /// Partition helpers
@@ -138,8 +139,11 @@ private:
     std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 
     /// Distributed query
-    QueryProcessingStage::Enum
-    getQueryProcessingStageRemote(ContextPtr context, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const;
+    QueryProcessingStage::Enum getQueryProcessingStageRemote(
+        ContextPtr context,
+        QueryProcessingStage::Enum to_stage,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info) const;
 
     ClusterPtr getOptimizedCluster(ContextPtr context, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const;
 
@@ -245,11 +249,7 @@ private:
 
     using SequencePair = std::pair<DWAL::RecordSN, DWAL::RecordSN>;
 
-    void doCommit(
-        Block block,
-        SequencePair seq_pair,
-        std::shared_ptr<IdempotentKeys> keys,
-        SequenceRanges missing_sequence_ranges);
+    void doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges);
     void commitSN();
     void commitSNLocal(DWAL::RecordSN commit_sn);
     void commitSNRemote(DWAL::RecordSN commit_sn);

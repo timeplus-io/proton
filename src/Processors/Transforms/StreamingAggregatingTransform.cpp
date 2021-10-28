@@ -1,5 +1,4 @@
 #include "StreamingAggregatingTransform.h"
-#include "StreamingAggregatedChunkInfo.h"
 
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Processors/ISource.h>
@@ -7,7 +6,7 @@
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 #include <DataStreams/materializeBlock.h>
 
-/// Daisy : starts. Added by Daisy
+/// proton: starts.
 
 namespace ProfileEvents
 {
@@ -511,7 +510,7 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
     if (num_rows == 0 && params->params.empty_result_for_aggregation_by_empty_set)
         return;
 
-    if (needsFinalization(chunk, num_rows))
+    if (needsFinalization(chunk))
     {
         finalize();
         return;
@@ -632,13 +631,8 @@ void StreamingAggregatingTransform::initGenerate()
     }
 }
 
-bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk, UInt64 num_rows) const
+bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 {
-    if (num_rows != 0)
-    {
-        return false;
-    }
-
     if (!finalizing)
     {
         /// If any other aggr streaming initiated a finalization
@@ -650,27 +644,12 @@ bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk, UInt6
     }
 
     const auto & chunk_info = chunk.getChunkInfo();
-    if (!chunk_info)
+    /// FIXME, only finalize windows before watermark
+    if (chunk_info && chunk_info->watermark != 0)
     {
-        return rows_since_last_finalization != 0;
+        return true;
     }
-
-    const auto * aggr_info = typeid_cast<const StreamingAggregatedChunkInfo *>(chunk_info.get());
-    if (aggr_info)
-    {
-        switch (aggr_info->event)
-        {
-            case StreamingAggregatedChunkInfo::Event::LATE_EVENT:
-                /// For LATE_EVENT, we will do a force finalization
-                return true;
-            case StreamingAggregatedChunkInfo::Event::HEART_BEAT:
-                return rows_since_last_finalization != 0;
-        }
-    }
-    else
-    {
-        return rows_since_last_finalization != 0;
-    }
+    return false;
 }
 
 /// Finalize what we have in memory and produce a finalized Block

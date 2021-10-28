@@ -32,6 +32,9 @@ public:
         LIMIT_BY,
         LIMIT_OFFSET,
         LIMIT_LENGTH,
+        /// proton: starts
+        EMIT,
+        /// proton: ends
         SETTINGS
     };
 
@@ -67,6 +70,10 @@ public:
                 return "LIMIT OFFSET";
             case Expression::LIMIT_LENGTH:
                 return "LIMIT LENGTH";
+            /// proton: starts
+            case Expression::EMIT:
+                return "EMIT";
+            /// proton: ends
             case Expression::SETTINGS:
                 return "SETTINGS";
         }
@@ -105,6 +112,9 @@ public:
     const ASTPtr limitBy()        const { return getExpression(Expression::LIMIT_BY); }
     const ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
     const ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
+    /// proton: starts
+    const ASTPtr emit()           const { return getExpression(Expression::EMIT); }
+    /// proton: ends
     const ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
 
     bool hasFiltration() const { return where() || prewhere() || having(); }

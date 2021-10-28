@@ -39,6 +39,11 @@ struct BlockInfo
 
 #undef DECLARE_FIELD
 
+    /// proton: starts
+    Int64 watermark = 0;
+    Int64 enqueued_time = 0;
+    /// proton: ends
+
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.
     void write(WriteBuffer & out) const;
 

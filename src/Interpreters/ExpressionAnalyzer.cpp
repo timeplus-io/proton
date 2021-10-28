@@ -517,6 +517,11 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_subqueries, 
                                    no_subqueries, false, only_consts, !isRemoteStorage());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
+
+    /// proton: starts
+    if (visitor_data.streaming_win_func)
+        streaming_win_func = std::move(visitor_data.streaming_win_func);
+    /// proton: ends
 }
 
 

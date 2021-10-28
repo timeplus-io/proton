@@ -5,7 +5,6 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsStreamingWindow.h>
@@ -96,7 +95,7 @@ namespace
 
     void checkTimeZoneArgument(const ColumnWithTypeAndName & argument, const String & function_name)
     {
-        if (!WhichDataType(argument.type).isString())
+        if (!isString(argument.type))
             throw Exception(
                 "Illegal type " + argument.type->getName() + " of argument of function " + function_name
                     + ". This argument is optional and must be a constant string with timezone name",
@@ -106,7 +105,7 @@ namespace
     bool checkIntervalOrTimeZoneArgument(
         const ColumnWithTypeAndName & argument, const String & function_name, IntervalKind & interval_kind, bool & result_type_is_date)
     {
-        if (WhichDataType(argument.type).isString())
+        if (isString(argument.type))
         {
             checkTimeZoneArgument(argument, function_name);
             return false;
@@ -124,7 +123,7 @@ namespace
 
         size_t time_zone_arg_num = 0;
         if (time_zone_arg_num_check != 0 && static_cast<size_t>(arguments.size()) == time_zone_arg_num_check + 1
-            && WhichDataType(arguments[time_zone_arg_num_check].type).isString())
+            && isString(arguments[time_zone_arg_num_check].type))
             /// check pos `time_zone_arg_num_check` to see if it is a string, if yes, try to treat it as time zone
             time_zone_arg_num = time_zone_arg_num_check;
 
@@ -179,11 +178,11 @@ struct WindowImpl<TUMBLE>
     {
         const auto & time_column = arguments[0];
         const auto & from_datatype = *time_column.type.get();
-        if (WhichDataType(from_datatype).isDateTime64())
+        if (isDateTime64(from_datatype))
         {
             return dispatchForColumnsDateTime64(arguments, function_name);
         }
-        else if (WhichDataType(from_datatype).isDateTime())
+        else if (isDateTime(from_datatype))
         {
             return dispatchForColumnsDateTime32(arguments, function_name);
         }
@@ -343,8 +342,7 @@ struct WindowImpl<TUMBLE_START>
         if (arguments.size() == 1)
         {
             /// Referencing a window ID which points a tuple
-            auto type_ = WhichDataType(arguments[0].type);
-            if (type_.isTuple())
+            if (isTuple(arguments[0].type))
             {
                 auto tuple_type = checkAndGetDataType<DataTypeTuple>(arguments[0].type.get());
                 if (tuple_type)
@@ -363,9 +361,9 @@ struct WindowImpl<TUMBLE_START>
 
     [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        const auto which_type = WhichDataType(arguments[0].type);
+        const auto first_arg_type = WhichDataType(arguments[0].type);
         ColumnPtr result_column_;
-        if (which_type.isDateTime64() || which_type.isDateTime())
+        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
             result_column_ = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
@@ -385,9 +383,9 @@ struct WindowImpl<TUMBLE_END>
 
     [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        const auto which_type = WhichDataType(arguments[0].type);
+        const auto first_arg_type = WhichDataType(arguments[0].type);
         ColumnPtr result_column_;
-        if (which_type.isDateTime64() || which_type.isDateTime())
+        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
             result_column_ = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
@@ -440,11 +438,12 @@ struct WindowImpl<HOP>
     {
         const auto & time_column = arguments[0];
         const auto & from_datatype = *time_column.type.get();
-        if (WhichDataType(from_datatype).isDateTime64())
+        auto time_col_type = WhichDataType(from_datatype);
+        if (time_col_type.isDateTime64())
         {
             return dispatchForColumnsDateTime64(arguments, function_name);
         }
-        else if (WhichDataType(from_datatype).isDateTime())
+        else if (time_col_type.isDateTime())
         {
             return dispatchForColumnsDateTime32(arguments, function_name);
         }
@@ -673,8 +672,7 @@ struct WindowImpl<HOP_START>
         /// FIXME WINDOW_ID
         if (arguments.size() == 1)
         {
-            auto type_ = WhichDataType(arguments[0].type);
-            if (type_.isTuple())
+            if (isTuple(arguments[0].type))
             {
                 auto tuple_type = checkAndGetDataType<DataTypeTuple>(arguments[0].type.get());
                 return tuple_type->getElements()[0];
@@ -695,9 +693,9 @@ struct WindowImpl<HOP_START>
 
     [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        const auto which_type = WhichDataType(arguments[0].type);
+        const auto first_arg_type = WhichDataType(arguments[0].type);
         ColumnPtr result_column_;
-        if (which_type.isDateTime64() || which_type.isDateTime())
+        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
             result_column_ = WindowImpl<HOP>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
@@ -717,9 +715,9 @@ struct WindowImpl<HOP_END>
 
     [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        const auto which_type = WhichDataType(arguments[0].type);
+        const auto first_arg_type = WhichDataType(arguments[0].type);
         ColumnPtr result_column_;
-        if (which_type.isDateTime64() || which_type.isDateTime())
+        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
             result_column_ = WindowImpl<HOP>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
@@ -791,11 +789,11 @@ struct WindowImpl<WINDOW_ID>
     {
         const auto & time_column = arguments[0];
         const auto & from_datatype = *time_column.type.get();
-        if (WhichDataType(from_datatype).isDateTime64())
+        if (isDateTime64(from_datatype))
         {
             return dispatchForHopColumnsDateTime64(arguments, function_name);
         }
-        else if (WhichDataType(from_datatype).isDateTime())
+        else if (isDateTime64(from_datatype))
         {
             return dispatchForHopColumnsDateTime32(arguments, function_name);
         }
@@ -1012,7 +1010,7 @@ struct WindowImpl<WINDOW_ID>
         else
         {
             const auto & third_column = arguments[2];
-            if (arguments.size() == 3 && WhichDataType(third_column.type).isString())
+            if (arguments.size() == 3 && isString(third_column.type))
                 return dispatchForTumbleColumns(arguments, function_name);
             else
                 return dispatchForHopColumns(arguments, function_name);

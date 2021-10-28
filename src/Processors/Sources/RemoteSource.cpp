@@ -95,13 +95,16 @@ std::optional<Chunk> RemoteSource::tryGenerate()
     UInt64 num_rows = block.rows();
     Chunk chunk(block.getColumns(), num_rows);
 
-    if (add_aggregation_info)
+    /// proton: starts
+    if (add_aggregation_info || block.info.watermark != 0)
     {
         auto info = std::make_shared<AggregatedChunkInfo>();
         info->bucket_num = block.info.bucket_num;
         info->is_overflows = block.info.is_overflows;
+        info->watermark = block.info.watermark;
         chunk.setChunkInfo(std::move(info));
     }
+    /// proton: ends
 
     return chunk;
 }

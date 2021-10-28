@@ -26,6 +26,9 @@ Chunk convertToChunk(const Block & block)
     auto info = std::make_shared<AggregatedChunkInfo>();
     info->bucket_num = block.info.bucket_num;
     info->is_overflows = block.info.is_overflows;
+    /// proton: starts
+    info->watermark = block.info.watermark;
+    /// proton: ends
 
     UInt64 num_rows = block.rows();
     Chunk chunk(block.getColumns(), num_rows);

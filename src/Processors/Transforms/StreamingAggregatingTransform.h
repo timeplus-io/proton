@@ -8,7 +8,7 @@
 #include <Processors/IAccumulatingTransform.h>
 #include <Common/Stopwatch.h>
 
-/// Daisy : starts. Added by Daisy
+/// proton: starts.
 
 namespace DB
 {
@@ -39,7 +39,7 @@ public:
 
 private:
     void consume(Chunk chunk);
-    bool needsFinalization(const Chunk & chunk, UInt64 num_rows) const;
+    bool needsFinalization(const Chunk & chunk) const;
     void finalize();
     void doFinalize();
     void initialize(ManyAggregatedDataVariantsPtr & data);

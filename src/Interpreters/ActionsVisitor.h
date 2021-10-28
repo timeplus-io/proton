@@ -4,6 +4,9 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/PreparedSets.h>
 #include <Interpreters/SubqueryForSet.h>
+/// proton: starts
+#include <Interpreters/StreamingWindowDescription.h>
+/// proton: ends
 #include <Parsers/IAST.h>
 
 
@@ -131,6 +134,10 @@ public:
          * prefixes is good enough.
          */
         int next_unique_suffix;
+
+        /// proton: starts. FIXME, multiple streaming window funcs
+        std::optional<StreamingWindowDescription> streaming_win_func;
+        /// proton: ends
 
         Data(
             ContextPtr context_,

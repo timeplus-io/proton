@@ -51,6 +51,9 @@ ASTPtr ASTSelectQuery::clone() const
     CLONE(Expression::LIMIT_BY);
     CLONE(Expression::LIMIT_OFFSET);
     CLONE(Expression::LIMIT_LENGTH);
+    /// proton: starts
+    CLONE(Expression::EMIT);
+    /// proton: ends
     CLONE(Expression::SETTINGS);
 
 #undef CLONE
@@ -186,6 +189,14 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "OFFSET " << (s.hilite ? hilite_none : "");
         limitOffset()->formatImpl(s, state, frame);
     }
+
+    /// proton: starts
+    if (emit())
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "EMIT " << (s.hilite ? hilite_none : "");
+        emit()->formatImpl(s, state, frame);
+    }
+    /// proton: ends
 
     if (settings())
     {
