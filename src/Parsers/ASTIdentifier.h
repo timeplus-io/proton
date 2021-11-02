@@ -81,6 +81,8 @@ public:
     UUID uuid = UUIDHelpers::Nil;  // FIXME(ilezhankin): make private
 
     /// proton: starts
+    ASTPtr streaming_function;
+    ASTPtr origin_streaming_function;
     bool streaming = false;
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     /// proton: ends

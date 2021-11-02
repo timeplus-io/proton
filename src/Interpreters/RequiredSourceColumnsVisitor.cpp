@@ -8,6 +8,10 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+/// proton: starts
+#include <Parsers/ASTEmitQuery.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -103,6 +107,12 @@ void RequiredSourceColumnsMatcher::visit(const ASTPtr & ast, Data & data)
     }
 
     /// other
+    /// proton: starts
+    if (auto * t = ast->as<ASTEmitQuery>())
+    {
+        visit(*t, ast, data);
+    }
+    /// proton: ends;
 
     if (auto * t = ast->as<ASTArrayJoin>())
     {
@@ -159,17 +169,6 @@ void RequiredSourceColumnsMatcher::visit(const ASTIdentifier & node, const ASTPt
 
 void RequiredSourceColumnsMatcher::visit(const ASTFunction & node, const ASTPtr &, Data & data)
 {
-    /// proton: starts
-    auto streamingWindowFunction = [](const auto & name)
-    {
-        return (name == "TUMBLE" || name == "tumble" ||
-                name == "TUMBLE_START" || name == "tumble_start" ||
-                name == "TUMBLE_END" || name == "tumble_end" ||
-                name == "HOP" || name == "hop" ||
-                name == "HOP_START" || name == "hop_start" ||
-                name == "HOP_END" || name == "hop_end");
-    };
-
     /// Do not add formal parameters of the lambda expression
     if (node.name == "lambda")
     {
@@ -183,10 +182,7 @@ void RequiredSourceColumnsMatcher::visit(const ASTFunction & node, const ASTPtr 
 
         for (const auto & name : local_aliases)
             data.private_aliases.erase(name);
-    } else if (streamingWindowFunction(node.name) && data.has_reserved_time) {
-        data.required_names["_time"].addInclusion("");
     }
-    /// proton: ends
 }
 
 void RequiredSourceColumnsMatcher::visit(const ASTTablesInSelectQueryElement & node, const ASTPtr &, Data & data)
@@ -204,14 +200,29 @@ void RequiredSourceColumnsMatcher::visit(const ASTTableExpression & node, const 
     {
         if (const auto * t = node.database_and_table_name->as<ASTTableIdentifier>())
         {
-            if (t->streaming)
+            if (t->streaming_function)
             {
-                data.streaming_tables.push_back(t->getTableId());
+                data.streaming_func_asts.emplace_back(t->getTableId(), t->streaming_function);
+                if (data.has_reserved_time)
+                {
+                    /// FIXME, SELECT * FROM TUMBLE(...)
+                    /// add `wstart, wend, _time` only necessary
+                    if (!data.required_names.contains("_time"))
+                        data.required_names["_time"].addInclusion("");
+                }
             }
         }
     }
     /// proton: ends
 }
+
+/// proton: starts
+void RequiredSourceColumnsMatcher::visit(const ASTEmitQuery & node, const ASTPtr &, Data & data)
+{
+    if (node.streaming)
+        data.streaming = true;
+}
+/// proton: ends
 
 void RequiredSourceColumnsMatcher::visit(const ASTArrayJoin & node, const ASTPtr &, Data & data)
 {

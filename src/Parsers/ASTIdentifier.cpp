@@ -192,13 +192,10 @@ ASTPtr ASTTableIdentifier::clone() const
 /// proton: starts
 void ASTTableIdentifier::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    if (streaming)
-        settings.ostr << "STREAM(";
-
-    ASTIdentifier::formatImplWithoutAlias(settings, state, frame);
-
-    if (streaming)
-        settings.ostr << ")";
+    if (origin_streaming_function)
+        origin_streaming_function->format(settings);
+    else
+        ASTIdentifier::formatImplWithoutAlias(settings, state, frame);
 }
 /// proton: ends
 

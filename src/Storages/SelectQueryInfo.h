@@ -152,7 +152,8 @@ struct SelectQueryInfo
 
     TreeRewriterResultPtr syntax_analyzer_result;
 
-    std::optional<StreamingWindowDescription> streaming_win_func;
+    std::optional<StreamingWindowDescription> streaming_win_desc;
+    std::optional<ExpressionActionsPtr> streaming_win_expr;
 
     PrewhereInfoPtr prewhere_info;
 

@@ -35,7 +35,6 @@ private:
 
 private:
     std::shared_ptr<IStorage> storage;
-    StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
     Names column_names;
 
@@ -44,6 +43,8 @@ private:
     Poco::Logger * log;
 
     Block header;
+    ColumnWithTypeAndName * wend_type = nullptr;
+
     std::unique_ptr<StreamingBlockReader> reader;
 
     Blocks result_blocks;

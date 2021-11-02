@@ -151,7 +151,7 @@ public:
     SetPtr isPlainStorageSetInSubquery(const ASTPtr & subquery_or_table_name);
 
     /// proton: starts. FIXME, is this the best way ?
-    std::optional<StreamingWindowDescription> streaming_win_func;
+    std::optional<StreamingWindowDescription> streaming_win_desc;
     /// proton: ends
 
 protected:

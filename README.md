@@ -125,7 +125,7 @@ Simple tail
 ```
 docker run --rm --network=timeplus-net timeplus/proton \
     proton-client --host proton-server \
-    --query 'SELECT * FROM STREAM(devices) WHERE temperature > 50.0'
+    --query 'SELECT * FROM devices WHERE temperature > 50.0 EMIT STREAM'
 ```
 
 Run `proton-client` console interactively
@@ -137,12 +137,16 @@ proton-client --host proton-server -m
 # Tumbling aggregation
 
 timeplus :) SELECT device, avg(temperature) as avg_temp,
-:-] TUMBLE(INTERVAL 3 SECOND) AS time_win
-:-] FROM STREAM(devices) WHERE temperature > 50.0 GROUP BY device, time_win;
+FROM TUMBLE(devices, INTERVAL 3 SECOND)
+WHERE temperature > 50.0 GROUP BY device, wstart, wend
+EMIT STREAM;
 
 # Use a different time column for windowing
 
 timeplus :) SELECT device, avg(temperature) as avg_temp,
-:-] TUMBLE(timestamp, INTERVAL 3 SECOND) AS time_win
-:-] FROM STREAM(devices) WHERE temperature > 50.0 GROUP BY device, time_win;
+FROM TUMBLE(devices, timestamp, INTERVAL 3 SECOND)
+WHERE temperature > 50.0 GROUP BY device, wstart, wend
+EMIT STREAM;
 ```
+
+For more streaming query, please refer to [Proton Streaming Processing Spec](spec/streaming.md)

@@ -15,7 +15,6 @@ StreamingBlockInputStream::StreamingBlockInputStream(
     DWAL::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
     : storage(storage_)
-    , metadata_snapshot(metadata_snapshot_)
     , context(context_)
     , column_names(column_names_)
     , shard(shard_)
@@ -23,6 +22,9 @@ StreamingBlockInputStream::StreamingBlockInputStream(
     , log(log_)
     , header(metadata_snapshot_->getSampleBlockForColumns(column_names, storage->getVirtuals(), storage->getStorageID()))
 {
+    wend_type = header.findByName("wend");
+    if (!wend_type)
+        wend_type = header.findByName("wstart");
 }
 
 Block StreamingBlockInputStream::getHeader() const
@@ -89,7 +91,7 @@ void StreamingBlockInputStream::readAndProcess()
 
     /// 1) Insert raw blocks to in-memory aggregation table
     /// 2) Select the final result from the aggregated table
-    /// 3) Update reesult_blocks and iterator
+    /// 3) Update result_blocks and iterator
     result_blocks.clear();
     result_blocks.reserve(records.size());
 
@@ -98,9 +100,20 @@ void StreamingBlockInputStream::readAndProcess()
        Block block;
        /// Only select required columns.
        /// FIXME, move the columns filtered logic to deserialization ?
+       auto rows = record->block.rows();
+
        for (const auto & name : column_names)
        {
-           block.insert(std::move(record->block.getByName(name)));
+           if (name == "wstart" || name == "wend")
+           {
+               assert (wend_type);
+               ColumnWithTypeAndName col{wend_type->cloneEmpty()};
+               col.name = name;
+               col.column->assumeMutable()->insertManyDefaults(rows);
+               block.insert(std::move(col));
+           }
+           else
+               block.insert(std::move(record->block.getByName(name)));
        }
 
        result_blocks.push_back(std::move(block));

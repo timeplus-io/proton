@@ -510,28 +510,29 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
     if (num_rows == 0 && params->params.empty_result_for_aggregation_by_empty_set)
         return;
 
+    rows_since_last_finalization += num_rows;
+
+    if (num_rows > 0)
+    {
+        src_rows += num_rows;
+        src_bytes += chunk.bytes();
+        if (params->only_merge)
+        {
+            auto block = getInputs().front().getHeader().cloneWithColumns(chunk.detachColumns());
+            block = materializeBlock(block);
+            if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
+                is_consume_finished = true;
+        }
+        else
+        {
+            if (!params->aggregator.executeOnBlock(chunk.detachColumns(), num_rows, variants, key_columns, aggregate_columns, no_more_keys))
+                is_consume_finished = true;
+        }
+    }
+
     if (needsFinalization(chunk))
     {
         finalize();
-        return;
-    }
-
-    rows_since_last_finalization += num_rows;
-
-    src_rows += num_rows;
-    src_bytes += chunk.bytes();
-
-    if (params->only_merge)
-    {
-        auto block = getInputs().front().getHeader().cloneWithColumns(chunk.detachColumns());
-        block = materializeBlock(block);
-        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
-            is_consume_finished = true;
-    }
-    else
-    {
-        if (!params->aggregator.executeOnBlock(chunk.detachColumns(), num_rows, variants, key_columns, aggregate_columns, no_more_keys))
-            is_consume_finished = true;
     }
 }
 
@@ -683,6 +684,9 @@ void StreamingAggregatingTransform::doFinalize()
     /// FIXME 2-level, spill to disk, aggr without key, overflow_row etc cases
     auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
     auto prepared_data_ptr = std::make_shared<ManyAggregatedDataVariants>(std::move(prepared_data));
+
+    if (prepared_data_ptr->empty())
+        return;
 
     initialize(prepared_data_ptr);
 

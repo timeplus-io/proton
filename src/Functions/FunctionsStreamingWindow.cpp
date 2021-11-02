@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeArray.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsStreamingWindow.h>
@@ -48,7 +49,7 @@ namespace
 
     ColumnPtr executeWindowBound(const ColumnPtr & column, int index, const String & function_name)
     {
-        if (const ColumnTuple * col_tuple = checkAndGetColumn<ColumnTuple>(column.get()); col_tuple)
+        if (const ColumnTuple * col_tuple = checkAndGetColumn<ColumnTuple>(column.get()))
         {
             if (!checkColumn<ColumnDate>(*col_tuple->getColumnPtr(index)) && !checkColumn<ColumnDateTime32>(*col_tuple->getColumnPtr(index))
                 && !checkColumn<ColumnDateTime64>(*col_tuple->getColumnPtr(index)))
@@ -83,8 +84,8 @@ namespace
                     + ". Should be an interval of time",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         interval_kind = interval_type->getKind();
-        result_type_is_date = (interval_type->getKind() == IntervalKind::Year) || (interval_type->getKind() == IntervalKind::Quarter)
-            || (interval_type->getKind() == IntervalKind::Month) || (interval_type->getKind() == IntervalKind::Week);
+        result_type_is_date = (interval_kind == IntervalKind::Year) || (interval_kind == IntervalKind::Quarter)
+            || (interval_kind == IntervalKind::Month) || (interval_kind == IntervalKind::Week);
     }
 
     void checkIntervalArgument(const ColumnWithTypeAndName & argument, const String & function_name, bool & result_type_is_date)
@@ -144,7 +145,7 @@ namespace
 template <>
 struct WindowImpl<TUMBLE>
 {
-    static constexpr auto name = "TUMBLE";
+    static constexpr auto name = "__TUMBLE";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -334,7 +335,7 @@ struct WindowImpl<TUMBLE>
 template <>
 struct WindowImpl<TUMBLE_START>
 {
-    static constexpr auto name = "TUMBLE_START";
+    static constexpr auto name = "__TUMBLE_START";
 
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -374,7 +375,7 @@ struct WindowImpl<TUMBLE_START>
 template <>
 struct WindowImpl<TUMBLE_END>
 {
-    static constexpr auto name = "TUMBLE_END";
+    static constexpr auto name = "__TUMBLE_END";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -396,7 +397,7 @@ struct WindowImpl<TUMBLE_END>
 template <>
 struct WindowImpl<HOP>
 {
-    static constexpr auto name = "HOP";
+    static constexpr auto name = "__HOP";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -430,7 +431,7 @@ struct WindowImpl<HOP>
                 "Illegal type of window and hop column of function " + function_name + ", must be same", ErrorCodes::ILLEGAL_COLUMN);
 
         size_t time_zone_arg_num_check = arguments.size() == 4 ? 3 : 0;
-        DataTypePtr data_type = getReturnDataType(result_type_is_date, arguments, time_zone_arg_num_check);
+        DataTypePtr data_type = std::make_shared<DataTypeArray>(getReturnDataType(result_type_is_date, arguments, time_zone_arg_num_check));
         return std::make_shared<DataTypeTuple>(DataTypes{data_type, data_type});
     }
 
@@ -509,34 +510,65 @@ struct WindowImpl<HOP>
         size_t size = time_column.size();
 
         auto scale = time_column.getScale();
-        auto start = ColumnDateTime64::create(size, scale);
-        auto end = ColumnDateTime64::create(size, scale);
 
+        /// FIXME, size
+        auto start = ColumnArray::create(ColumnDateTime64::create(0, scale));
+        auto end = ColumnArray::create(ColumnDateTime64::create(0, scale));
+
+        /// In order to avoid memory copy, we manipulate array and offsets by ourselves
         auto & start_data = start->getData();
+        auto & start_offsets = start->getOffsets();
+
         auto & end_data = end->getData();
+        auto & end_offsets = end->getOffsets();
+
+        UInt64 offset = 0;
 
         for (size_t i = 0; i < size; ++i)
         {
             auto components = DecimalUtils::split(time_data[i], scale);
             components.fractional = 0;
 
-            auto wstart = ToStartOfTransform<unit>::execute(components.whole, hop_num_units, time_zone);
-            auto wend = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
+            UInt32 event_ts = components.whole;
+            UInt32 wstart = ToStartOfTransform<unit>::execute(event_ts, window_num_units, time_zone);
+            UInt32 wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
 
-            auto wend_current = wend;
-            auto wend_latest = wend;
+            UInt32 wstart_l = wstart;
+            UInt32 wend_l = wend;
 
             do
             {
-                wend_latest = wend_current;
-                wend_current = AddTime<unit>::execute(wend_current, -1 * hop_num_units, time_zone);
-            } while (wend_current > components.whole);
+                components.whole = wstart_l;
+                start_data.insert(DecimalUtils::decimalFromComponents(components, scale));
 
-            components.whole = AddTime<unit>::execute(wend_latest, -1 * window_num_units, time_zone);
-            start_data[i] = DecimalUtils::decimalFromComponents(components, scale);
+                components.whole = wend_l;
+                end_data.insert(DecimalUtils::decimalFromComponents(components, scale));
+                ++offset;
 
-            components.whole = wend_latest;
-            end_data[i] = DecimalUtils::decimalFromComponents(components, scale);
+                /// Slide to left until the right of the window passes (<) `component.whole`
+                wstart_l = AddTime<unit>::execute(wstart_l, -1 * hop_num_units, time_zone);
+                wend_l = AddTime<unit>::execute(wend_l, -1 * hop_num_units, time_zone);
+            } while (wend_l > event_ts);
+
+            UInt32 wstart_r = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
+            UInt32 wend_r = AddTime<unit>::execute(wend, hop_num_units, time_zone);
+
+            while (wstart_r <= event_ts)
+            {
+                components.whole = wstart_r;
+                start_data.insert(DecimalUtils::decimalFromComponents(components, scale));
+
+                components.whole = wend_r;
+                end_data.insert(DecimalUtils::decimalFromComponents(components, scale));
+                ++offset;
+
+                /// Slide to right until the left of the window passes (>) `component.whole`
+                wstart_r = AddTime<unit>::execute(wstart_r, hop_num_units, time_zone);
+                wend_r = AddTime<unit>::execute(wend_r, hop_num_units, time_zone);
+            }
+
+            start_offsets.push_back(offset);
+            end_offsets.push_back(offset);
         }
         MutableColumns result;
         result.emplace_back(std::move(start));
@@ -552,28 +584,56 @@ struct WindowImpl<HOP>
         size_t size = time_column.size();
 
         auto scale = time_column.getScale();
-        auto start = ColumnDate::create(size);
-        auto end = ColumnDate::create(size);
+
+        /// FIXME, size to avoid reallocation as much as possible
+        auto start = ColumnArray::create(ColumnDate::create(0));
+        auto end = ColumnArray::create(ColumnDate::create(0));
+
         auto & start_data = start->getData();
+        auto & start_offsets = start->getOffsets();
+
         auto & end_data = end->getData();
+        auto & end_offsets = end->getOffsets();
+
+        UInt64 offset = 0;
 
         for (size_t i = 0; i < size; ++i)
         {
-            auto whole = DecimalUtils::getWholePart(time_data[i], scale);
-            auto wstart = ToStartOfTransform<unit>::execute(whole, hop_num_units, time_zone);
-            auto wend = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
+            UInt32 whole = DecimalUtils::getWholePart(time_data[i], scale);
+            UInt16 event_ts = ToStartOfTransform<unit>::execute(whole, 1, time_zone);
+            UInt16 wstart = ToStartOfTransform<unit>::execute(whole, window_num_units, time_zone);
+            UInt16 wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
 
-            auto wend_current = wend;
-            auto wend_latest = wend;
+            UInt16 wstart_l = wstart;
+            UInt16 wend_l = wend;
 
             do
             {
-                wend_latest = wend_current;
-                wend_current = AddTime<unit>::execute(wend_current, -1 * hop_num_units, time_zone);
-            } while (wend_current > whole);
+                start_data.insert(Field(wstart_l));
+                end_data.insert(Field(wend_l));
+                ++offset;
 
-            start_data[i] = AddTime<unit>::execute(wend_latest, -1 * window_num_units, time_zone);
-            end_data[i] = wend_latest;
+                /// Slide to left until the right of the window passes (<) `component.whole`
+                wstart_l = AddTime<unit>::execute(wstart_l, -1 * hop_num_units, time_zone);
+                wend_l = AddTime<unit>::execute(wend_l, -1 * hop_num_units, time_zone);
+            } while (wend_l > event_ts);
+
+            UInt16 wstart_r = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
+            UInt16 wend_r = AddTime<unit>::execute(wend, hop_num_units, time_zone);
+
+            while (wstart_r <= event_ts)
+            {
+                start_data.insert(Field(wstart_r));
+                end_data.insert(Field(wend_r));
+                ++offset;
+
+                /// Slide to right until the left of the window passes (>) `component.whole`
+                wstart_r = AddTime<unit>::execute(wstart_r, hop_num_units, time_zone);
+                wend_r = AddTime<unit>::execute(wend_r, hop_num_units, time_zone);
+            }
+
+            start_offsets.push_back(offset);
+            end_offsets.push_back(offset);
         }
         MutableColumns result;
         result.emplace_back(std::move(start));
@@ -626,34 +686,63 @@ struct WindowImpl<HOP>
         __builtin_unreachable();
     }
 
-    template <typename ToType, IntervalKind::Kind kind>
+    template <typename ToType, IntervalKind::Kind unit>
     static ColumnPtr
     executeHop(const ColumnDateTime32 & time_column, UInt64 hop_num_units, UInt64 window_num_units, const DateLUTImpl & time_zone)
     {
         const auto & time_data = time_column.getData();
         size_t size = time_column.size();
-        auto start = ColumnVector<ToType>::create(size);
-        auto end = ColumnVector<ToType>::create(size);
+
+        /// FIXME, size
+        auto start = ColumnArray::create(ColumnVector<ToType>::create(0));
+        auto end = ColumnArray::create(ColumnVector<ToType>::create(0));
+
         auto & start_data = start->getData();
+        auto & start_offsets = start->getOffsets();
+
         auto & end_data = end->getData();
+        auto & end_offsets = end->getOffsets();
+
+        UInt64 offset = 0;
 
         for (size_t i = 0; i < size; ++i)
         {
-            ToType wstart = ToStartOfTransform<kind>::execute(time_data[i], hop_num_units, time_zone);
-            ToType wend = AddTime<kind>::execute(wstart, hop_num_units, time_zone);
-            wstart = AddTime<kind>::execute(wend, -1 * window_num_units, time_zone);
+            /// event_ts is a round down to the latest unit which will be its
+            /// current second, minute, hour, day, week, month, quarter, year etc
+            ToType event_ts = ToStartOfTransform<unit>::execute(time_data[i], 1, time_zone);
+            ToType wstart = ToStartOfTransform<unit>::execute(time_data[i], window_num_units, time_zone);
+            ToType wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
 
-            ToType wend_ = wend;
-            ToType wend_latest;
+            ToType wstart_l = wstart;
+            ToType wend_l = wend;
 
             do
             {
-                wend_latest = wend_;
-                wend_ = AddTime<kind>::execute(wend_, -1 * hop_num_units, time_zone);
-            } while (wend_ > time_data[i]);
+                start_data.insert(Field(wstart_l));
+                end_data.insert(Field(wend_l));
+                ++offset;
 
-            end_data[i] = wend_latest;
-            start_data[i] = AddTime<kind>::execute(wend_latest, -1 * window_num_units, time_zone);
+                /// Slide to left until the right of the window passes (<) `component.whole`
+                wstart_l = AddTime<unit>::execute(wstart_l, -1 * hop_num_units, time_zone);
+                wend_l = AddTime<unit>::execute(wend_l, -1 * hop_num_units, time_zone);
+            } while (wend_l > event_ts);
+
+            ToType wstart_r = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
+            ToType wend_r = AddTime<unit>::execute(wend, hop_num_units, time_zone);
+
+            while (wstart_r <= event_ts)
+            {
+                start_data.insert(Field(wstart_r));
+                end_data.insert(Field(wend_r));
+                ++offset;
+
+                /// Slide to right until the left of the window passes (>) `component.whole`
+                wstart_r = AddTime<unit>::execute(wstart_r, hop_num_units, time_zone);
+                wend_r = AddTime<unit>::execute(wend_r, hop_num_units, time_zone);
+            }
+
+            start_offsets.push_back(offset);
+            end_offsets.push_back(offset);
         }
         MutableColumns result;
         result.emplace_back(std::move(start));
@@ -665,7 +754,7 @@ struct WindowImpl<HOP>
 template <>
 struct WindowImpl<HOP_START>
 {
-    static constexpr auto name = "HOP_START";
+    static constexpr auto name = "__HOP_START";
 
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -706,7 +795,7 @@ struct WindowImpl<HOP_START>
 template <>
 struct WindowImpl<HOP_END>
 {
-    static constexpr auto name = "HOP_END";
+    static constexpr auto name = "__HOP_END";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -741,7 +830,7 @@ ColumnPtr FunctionWindow<type>::executeImpl(
 template <>
 struct WindowImpl<WINDOW_ID>
 {
-    static constexpr auto name = "WINDOW_ID";
+    static constexpr auto name = "__WINDOW_ID";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -1020,12 +1109,12 @@ struct WindowImpl<WINDOW_ID>
 
 void registerFunctionsStreamingWindow(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionTumble>();
-    factory.registerFunction<FunctionTumbleStart>();
-    factory.registerFunction<FunctionTumbleEnd>();
-    factory.registerFunction<FunctionHop>();
-    factory.registerFunction<FunctionHopStart>();
-    factory.registerFunction<FunctionHopEnd>();
-    factory.registerFunction<FunctionWindowId>();
+    factory.registerFunction<FunctionTumble>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionTumbleStart>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionTumbleEnd>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionHop>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionHopStart>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionHopEnd>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionWindowId>(FunctionFactory::CaseInsensitive);
 }
 }

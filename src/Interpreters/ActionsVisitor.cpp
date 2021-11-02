@@ -396,55 +396,12 @@ namespace
         const ASTFunction & node, DataTypes & argument_types, Names & argument_names, ActionsMatcher::Data & data)
     {
         if (argument_types.empty())
-        {
-            return;
-        }
-
-        const auto & func_name = node.name;
-
-        const auto first_arg_type = WhichDataType(argument_types[0]);
-
-        bool missing_time_col = false;
-        if (func_name == "TUMBLE" || func_name == "tumble" || func_name == "HOP" || func_name == "hop")
-        {
-            if (!first_arg_type.isDateTime64() && !first_arg_type.isDateTime())
-            {
-                /// The first argument is not datetime type, insert default time column
-                missing_time_col = true;
-            }
-        }
-        else if (func_name == "TUMBLE_START" || func_name == "tumble_start" ||
-                 func_name == "TUMBLE_END" || func_name == "tumble_end" ||
-                 func_name == "HOP_START" || func_name == "hop_start" ||
-                 func_name == "HOP_END" || func_name == "hop_end")
-        {
-            /// FIXME, window ID
-            if (!first_arg_type.isTuple() && !first_arg_type.isDateTime64() && !first_arg_type.isDateTime())
-            {
-                /// The first argument is not datetime type, nor a tuple
-                auto time_col = data.source_columns.tryGetByName("_time");
-                if (time_col)
-                {
-                    argument_types.insert(argument_types.begin(), time_col->type);
-                    argument_names.insert(argument_names.begin(), time_col->name);
-                }
-            }
-        }
-        else
             return;
 
-        if (missing_time_col)
-        {
-            auto time_col = data.source_columns.tryGetByName("_time");
-            assert(time_col);
-            if (time_col)
-            {
-                argument_types.insert(argument_types.begin(), time_col->type);
-                argument_names.insert(argument_names.begin(), time_col->name);
-            }
-        }
+        if (node.name != "__TUMBLE" && node.name != "__HOP")
+            return;
 
-        data.streaming_win_func = {std::dynamic_pointer_cast<ASTFunction>(node.clone()), argument_names, argument_types};
+        data.streaming_win_desc = {std::dynamic_pointer_cast<ASTFunction>(node.clone()), argument_names, argument_types};
     }
     /// proton: ends
 }

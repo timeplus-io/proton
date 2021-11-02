@@ -519,8 +519,8 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_subqueries, 
     actions = visitor_data.getActions();
 
     /// proton: starts
-    if (visitor_data.streaming_win_func)
-        streaming_win_func = std::move(visitor_data.streaming_win_func);
+    if (visitor_data.streaming_win_desc)
+        streaming_win_desc = std::move(visitor_data.streaming_win_desc);
     /// proton: ends
 }
 

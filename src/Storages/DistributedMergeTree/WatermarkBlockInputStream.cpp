@@ -16,6 +16,9 @@
 #include <common/DateLUT.h>
 #include <common/logger_useful.h>
 
+/// FIXME: convert to Watermark transform ?
+/// FIXME: refactor into Tumble / Hop watermark class
+/// FIXME: Week / Month / Quarter / Year cases don't work yet
 namespace DB
 {
 namespace ErrorCodes
@@ -33,6 +36,8 @@ namespace
     {
         switch (mode)
         {
+            case ASTEmitQuery::Mode::TAIL:
+                return WatermarkBlockInputStream::EmitMode::TAIL;
             case ASTEmitQuery::Mode::PERIODIC:
                 return WatermarkBlockInputStream::EmitMode::PERIODIC;
             case ASTEmitQuery::Mode::DELAY:
@@ -185,22 +190,23 @@ namespace
     {
         WatermarkBlockInputStream::EmitSettings emit_settings;
         emit_settings.func_name = "Global";
+        emit_settings.global_aggr = true;
 
         if (emit_query)
         {
             mergeEmitQuerySettings(emit_query, emit_settings);
+            if (emit_settings.mode == WatermarkBlockInputStream::EmitMode::PERIODIC)
+                return emit_settings;
         }
-        else
-        {
-            emit_settings.mode = WatermarkBlockInputStream::EmitMode::PERIODIC;
-            emit_settings.emit_query_interval = 2;
-            emit_settings.emit_query_interval_kind = IntervalKind::Second;
-        }
+
+        emit_settings.mode = WatermarkBlockInputStream::EmitMode::PERIODIC;
+        emit_settings.emit_query_interval = 2;
+        emit_settings.emit_query_interval_kind = IntervalKind::Second;
         return emit_settings;
     }
 
     template <typename TargetColumnType>
-    void processBlock(
+    void doProcessBlock(
         Block & block, const ColumnWithTypeAndName & time_col, Int64 last_project_watermark_ts, Int64 & max_event_ts, UInt64 & late_events)
     {
         /// FIXME, use simple FilterTransform to do this ?
@@ -233,9 +239,7 @@ namespace
 void WatermarkBlockInputStream::readPrefixImpl()
 {
     if (emit_settings.mode == EmitMode::PERIODIC)
-        watermark_ts = MonotonicMilliseconds::now();
-
-    input->readPrefix();
+        watermark_ts = UTCSeconds::now();
 }
 
 WatermarkBlockInputStream::WatermarkBlockInputStream(
@@ -253,74 +257,85 @@ Block WatermarkBlockInputStream::readImpl()
         return {};
     }
 
-    /// FIXME, we assume it is `StreamingBlockInputStream` here
+    /// We assume it is `StreamingBlockInputStream` here
     /// which emits a header only block if there is no records from streaming store
+    /// we leverage this side effect as a timer to check idleness source
     Block block = input->read();
 
-    Int64 shrinked_max_event_ts = 0;
-    if (block.rows())
+    if (emit_settings.mode == EmitMode::TAIL)
+        return block;
+
+    if (emit_settings.global_aggr)
     {
-        const auto & time_col = block.getByName(emit_settings.time_col_name);
-        /// We don't support column type changes in the middle of a streaming query
-        if (emit_settings.time_col_is_datetime64)
-        {
-            /// const auto & datetime64_col = static_cast<const ColumnDateTime64 &>(*time_col.column);
-            /// const ColumnDateTime64::Container & time_vec = datetime64_col.getData();
-            /// auto scale = datetime64_col.getScale();
-            Int64 scaled_watermark_ts = DecimalUtils::decimalFromComponents<DateTime64>(last_projected_watermark_ts, 0, emit_settings.scale);
-            processBlock<ColumnDateTime64>(block, time_col, scaled_watermark_ts, max_event_ts, late_events);
-
-            if (max_event_ts > 0)
-            {
-                shrinked_max_event_ts = DecimalUtils::getWholePart(DateTime64(max_event_ts), emit_settings.scale);
-            }
-        }
-        else
-        {
-            processBlock<ColumnDateTime32>(block, time_col, last_projected_watermark_ts, max_event_ts, late_events);
-            shrinked_max_event_ts = max_event_ts;
-        }
-
-        if (late_events > last_logged_late_events)
-        {
-            if (MonotonicSeconds::now() - last_logged_late_events_ts >= 5)
-            {
-                LOG_INFO(
-                    log, "Found {} late events for data partition {}. Current last projected watermark={}",
-                    late_events, partition_key, last_projected_watermark_ts);
-                last_logged_late_events_ts = MonotonicSeconds::now();
-                last_logged_late_events = late_events;
-            }
-        }
+        /// global aggr emitted by using wall clock time of the current server
+        last_event_seen_ts = UTCSeconds::now();
+        emitWatermark(block, UTCSeconds::now());
+        return block;
     }
 
     if (block.rows())
-    {
-        last_event_seen_ts = MonotonicSeconds::now();
-        emitWatermark(block, shrinked_max_event_ts);
-    }
-//    else
+        processBlock(block);
+
+    /// If after filtering, block is empty, we handle idleness
+//    if (!block.rows())
 //        handleIdleness(block);
 
     return block;
 }
 
-Int64 WatermarkBlockInputStream::getWindowUpperBound(Int64 time_sec)
+void WatermarkBlockInputStream::processBlock(Block & block)
 {
-    Int64 window_interval = emit_settings.window_interval;
-    IntervalKind window_interval_kind = emit_settings.window_interval_kind;
-    if (emit_settings.hop_interval != 0)
+    Int64 shrinked_max_event_ts = 0;
+    const auto & time_col = block.getByName(emit_settings.time_col_name);
+
+    /// We don't support column type changes in the middle of a streaming query
+    if (emit_settings.time_col_is_datetime64)
     {
-        window_interval = emit_settings.hop_interval;
-        window_interval_kind = emit_settings.hop_interval_kind;
+        /// const auto & datetime64_col = static_cast<const ColumnDateTime64 &>(*time_col.column);
+        /// const ColumnDateTime64::Container & time_vec = datetime64_col.getData();
+        /// auto scale = datetime64_col.getScale();
+        Int64 scaled_watermark_ts = DecimalUtils::decimalFromComponents<DateTime64>(last_projected_watermark_ts, 0, emit_settings.scale);
+        doProcessBlock<ColumnDateTime64>(block, time_col, scaled_watermark_ts, max_event_ts, late_events);
+
+        if (max_event_ts > 0)
+        {
+            shrinked_max_event_ts = DecimalUtils::getWholePart(DateTime64(max_event_ts), emit_settings.scale);
+        }
+    }
+    else
+    {
+        doProcessBlock<ColumnDateTime32>(block, time_col, last_projected_watermark_ts, max_event_ts, late_events);
+        shrinked_max_event_ts = max_event_ts;
     }
 
-    switch (window_interval_kind)
+    if (late_events > last_logged_late_events)
+    {
+        if (MonotonicSeconds::now() - last_logged_late_events_ts >= 5)
+        {
+            LOG_INFO(
+                log, "Found {} late events for data partition {}. Current last projected watermark={}",
+                late_events, partition_key, last_projected_watermark_ts);
+                last_logged_late_events_ts = MonotonicSeconds::now();
+                last_logged_late_events = late_events;
+        }
+    }
+
+    if (block.rows())
+    {
+        last_event_seen_ts = UTCSeconds::now();
+        emitWatermark(block, shrinked_max_event_ts);
+    }
+}
+
+Int64 WatermarkBlockInputStream::getWindowUpperBoundTumble(Int64 time_sec)
+{
+    switch (emit_settings.window_interval_kind)
     {
 #define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        UInt32 w_start = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, window_interval, *emit_settings.timezone); \
-        return AddTime<IntervalKind::KIND>::execute(w_start, window_interval, *emit_settings.timezone); \
+    case IntervalKind::KIND:   \
+    { \
+        UInt32 w_start = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, emit_settings.window_interval, *emit_settings.timezone); \
+        return AddTime<IntervalKind::KIND>::execute(w_start, emit_settings.window_interval, *emit_settings.timezone); \
     }
 
         CASE_WINDOW_KIND(Second)
@@ -336,13 +351,54 @@ Int64 WatermarkBlockInputStream::getWindowUpperBound(Int64 time_sec)
     __builtin_unreachable();
 }
 
+Int64 WatermarkBlockInputStream::getWindowUpperBoundHop(Int64 time_sec)
+{
+    switch (emit_settings.window_interval_kind)
+    {
+#define CASE_WINDOW_KIND(KIND) \
+    case IntervalKind::KIND:   \
+    { \
+        auto w_start = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, emit_settings.window_interval, *emit_settings.timezone); \
+        auto event_ts = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, 1, *emit_settings.timezone); \
+        auto wend = AddTime<IntervalKind::KIND>::execute(w_start, emit_settings.window_interval, *emit_settings.timezone); \
+        auto prev_wend = wend; \
+        do \
+        { \
+            prev_wend = wend; \
+            wend = AddTime<IntervalKind::KIND>::execute(wend, -1 * emit_settings.hop_interval, *emit_settings.timezone); \
+        } while (wend > event_ts); \
+        return prev_wend; \
+    }
+
+        CASE_WINDOW_KIND(Second)
+        CASE_WINDOW_KIND(Minute)
+        CASE_WINDOW_KIND(Hour)
+        CASE_WINDOW_KIND(Day)
+        CASE_WINDOW_KIND(Week)
+        CASE_WINDOW_KIND(Month)
+        CASE_WINDOW_KIND(Quarter)
+        CASE_WINDOW_KIND(Year)
+#undef CASE_WINDOW_KIND
+    }
+    __builtin_unreachable();
+}
+
+Int64 WatermarkBlockInputStream::getWindowUpperBound(Int64 ts)
+{
+    if (emit_settings.hop_interval)
+        return getWindowUpperBoundHop(ts);
+    return getWindowUpperBoundTumble(ts);
+}
+
 void WatermarkBlockInputStream::handleIdleness(Block & block)
 {
     switch (emit_settings.mode)
     {
+        case EmitMode::TAIL:
+            break;
         case EmitMode::PERIODIC:
         {
-            auto now = MonotonicSeconds::now();
+            auto now = UTCSeconds::now();
             auto next_watermark_ts
                 = addTime(watermark_ts, emit_settings.emit_query_interval_kind, emit_settings.emit_query_interval, DateLUT::instance());
 
@@ -371,7 +427,7 @@ void WatermarkBlockInputStream::handleIdleness(Block & block)
                 auto next_watermark_ts
                     = addTime(last_event_seen_ts, emit_settings.window_interval_kind, emit_settings.window_interval_kind, DateLUT::instance());
 
-                if (MonotonicSeconds::now() > next_watermark_ts)
+                if (UTCSeconds::now() > next_watermark_ts)
                 {
                     /// idle source
                     block.info.watermark = watermark_ts;
@@ -396,9 +452,11 @@ void WatermarkBlockInputStream::emitWatermark(Block & block, Int64 shrinked_max_
 {
     switch (emit_settings.mode)
     {
+        case EmitMode::TAIL:
+            break;
         case EmitMode::PERIODIC:
         {
-            auto now = MonotonicSeconds::now();
+            auto now = UTCSeconds::now();
             auto next_watermark_ts
                 = addTime(watermark_ts, emit_settings.emit_query_interval_kind, emit_settings.emit_query_interval, DateLUT::instance());
             if (now >= next_watermark_ts)
@@ -406,6 +464,7 @@ void WatermarkBlockInputStream::emitWatermark(Block & block, Int64 shrinked_max_
                 block.info.watermark = shrinked_max_event_ts;
                 last_projected_watermark_ts = shrinked_max_event_ts;
                 watermark_ts = now;
+                LOG_INFO(log, "periodic time={}, rows={}", block.info.watermark, block.rows());
             }
             break;
         }
@@ -429,11 +488,12 @@ void WatermarkBlockInputStream::emitWatermark(Block & block, Int64 shrinked_max_
                         watermark_ts = addTime(
                             watermark_ts, emit_settings.window_interval_kind, emit_settings.window_interval, *emit_settings.timezone);
                 }
+                LOG_INFO(log, "emitted watermark={}", block.info.watermark);
             }
             else
             {
                 if (shrinked_max_event_ts > 0)
-                    watermark_ts = getWindowUpperBound(shrinked_max_event_ts - 1);
+                    watermark_ts = getWindowUpperBound(shrinked_max_event_ts);
             }
             break;
         }
@@ -463,11 +523,12 @@ void WatermarkBlockInputStream::emitWatermark(Block & block, Int64 shrinked_max_
                             watermark_ts, emit_settings.window_interval_kind, emit_settings.window_interval, *emit_settings.timezone);
                     }
                 }
+                LOG_INFO(log, "emitted watermark={}", block.info.watermark);
             }
             else
             {
                 if (shrinked_max_event_ts > 0)
-                    watermark_ts = getWindowUpperBound(shrinked_max_event_ts - 1);
+                    watermark_ts = getWindowUpperBound(shrinked_max_event_ts);
             }
             break;
         }
@@ -480,6 +541,7 @@ void WatermarkBlockInputStream::initWatermark(const SelectQueryInfo & query_info
     {
         /// if there is no aggregation, we don't need project watermark
         /// we don't support `order by` a stream
+        emit_settings.mode= EmitMode::TAIL;
         return;
     }
 
@@ -488,11 +550,9 @@ void WatermarkBlockInputStream::initWatermark(const SelectQueryInfo & query_info
 
     auto emit_query = select_query->emit();
 
-    if (query_info.streaming_win_func)
+    if (query_info.streaming_win_desc)
     {
-        /// has aggregates + streaming window function
-        /// FIXME, is the aggregate over streaming window function ?
-        emit_settings = initWatermarkForAggrStreamWindowFunc(emit_query, *query_info.streaming_win_func);
+        emit_settings = initWatermarkForAggrStreamWindowFunc(emit_query, *query_info.streaming_win_desc);
     }
     else
     {

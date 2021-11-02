@@ -1,8 +1,9 @@
 #include "StorageDistributedMergeTree.h"
-#include "DistributedMergeTreeSink.h"
 #include "DistributedMergeTreeCallbackData.h"
+#include "DistributedMergeTreeSink.h"
 #include "StreamingBlockInputStream.h"
 #include "StreamingBlockReader.h"
+#include "StreamingWindowAssignmentBlockInputStream.h"
 #include "WatermarkBlockInputStream.h"
 
 #include <DistributedMetadata/CatalogService.h>
@@ -20,8 +21,8 @@
 #include <Processors/Pipe.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
@@ -45,166 +46,163 @@ namespace ErrorCodes
 
 namespace
 {
-const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
-const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS = 2;
-const UInt64 DISTRIBUTED_GROUP_BY_NO_MERGE_AFTER_AGGREGATION = 2;
+    const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
+    const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS = 2;
+    const UInt64 DISTRIBUTED_GROUP_BY_NO_MERGE_AFTER_AGGREGATION = 2;
 
-ExpressionActionsPtr
-buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns, bool project)
-{
-    ASTPtr query = sharding_key;
-    auto syntax_result = TreeRewriter(context).analyze(query, columns);
-    return ExpressionAnalyzer(query, syntax_result, context).getActions(project);
-}
-
-bool isExpressionActionsDeterministics(const ExpressionActionsPtr & actions)
-{
-    for (const auto & action : actions->getActions())
+    ExpressionActionsPtr
+    buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns, bool project)
     {
-        if (action.node->type != ActionsDAG::ActionType::FUNCTION)
-            continue;
-
-        if (!action.node->function_base->isDeterministic())
-            return false;
+        ASTPtr query = sharding_key;
+        auto syntax_result = TreeRewriter(context).analyze(query, columns);
+        return ExpressionAnalyzer(query, syntax_result, context).getActions(project);
     }
-    return true;
-}
 
-class ReplacingConstantExpressionsMatcher
-{
-public:
-    using Data = Block;
-
-    static bool needChildVisit(ASTPtr &, const ASTPtr &)
+    bool isExpressionActionsDeterministics(const ExpressionActionsPtr & actions)
     {
+        for (const auto & action : actions->getActions())
+        {
+            if (action.node->type != ActionsDAG::ActionType::FUNCTION)
+                continue;
+
+            if (!action.node->function_base->isDeterministic())
+                return false;
+        }
         return true;
     }
 
-    static void visit(ASTPtr & node, Block & block_with_constants)
+    class ReplacingConstantExpressionsMatcher
     {
-        if (!node->as<ASTFunction>())
-            return;
+    public:
+        using Data = Block;
 
-        std::string name = node->getColumnName();
-        if (block_with_constants.has(name))
+        static bool needChildVisit(ASTPtr &, const ASTPtr &) { return true; }
+
+        static void visit(ASTPtr & node, Block & block_with_constants)
         {
-            auto result = block_with_constants.getByName(name);
-            if (!isColumnConst(*result.column))
+            if (!node->as<ASTFunction>())
                 return;
 
-            node = std::make_shared<ASTLiteral>(assert_cast<const ColumnConst &>(*result.column).getField());
+            std::string name = node->getColumnName();
+            if (block_with_constants.has(name))
+            {
+                auto result = block_with_constants.getByName(name);
+                if (!isColumnConst(*result.column))
+                    return;
+
+                node = std::make_shared<ASTLiteral>(assert_cast<const ColumnConst &>(*result.column).getField());
+            }
         }
-    }
-};
-
-void replaceConstantExpressions(
-    ASTPtr & node,
-    ContextPtr context,
-    const NamesAndTypesList & columns,
-    ConstStoragePtr storage,
-    const StorageMetadataPtr & metadata_snapshot)
-{
-    auto syntax_result = TreeRewriter(context).analyze(node, columns, storage, metadata_snapshot);
-    Block block_with_constants = KeyCondition::getBlockWithConstants(node, syntax_result, context);
-
-    InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(block_with_constants);
-    visitor.visit(node);
-}
-
-/// Returns one of the following:
-/// - QueryProcessingStage::Complete
-/// - QueryProcessingStage::WithMergeableStateAfterAggregation
-/// - none (in this case regular WithMergeableState should be used)
-std::optional<QueryProcessingStage::Enum> getOptimizedQueryProcessingStage(const ASTPtr & query_ptr, bool extremes, const Block & sharding_key_block)
-{
-    const auto & select = query_ptr->as<ASTSelectQuery &>();
-
-    auto sharding_block_has = [&](const auto & exprs, size_t limit = SIZE_MAX) -> bool
-    {
-        size_t i = 0;
-        for (auto & expr : exprs)
-        {
-            ++i;
-            if (i > limit)
-                break;
-
-            auto id = expr->template as<ASTIdentifier>();
-            if (!id)
-                return false;
-            /// TODO: if GROUP BY contains multiIf()/if() it should contain only columns from sharding_key
-            if (!sharding_key_block.has(id->name()))
-                return false;
-        }
-        return true;
     };
 
-    // GROUP BY qualifiers
-    // - TODO: WITH TOTALS can be implemented
-    // - TODO: WITH ROLLUP can be implemented (I guess)
-    if (select.group_by_with_totals || select.group_by_with_rollup || select.group_by_with_cube)
-        return {};
-
-    // TODO: extremes support can be implemented
-    if (extremes)
-        return {};
-
-    // DISTINCT
-    if (select.distinct)
+    void replaceConstantExpressions(
+        ASTPtr & node,
+        ContextPtr context,
+        const NamesAndTypesList & columns,
+        ConstStoragePtr storage,
+        const StorageMetadataPtr & metadata_snapshot)
     {
-        if (!sharding_block_has(select.select()->children))
+        auto syntax_result = TreeRewriter(context).analyze(node, columns, storage, metadata_snapshot);
+        Block block_with_constants = KeyCondition::getBlockWithConstants(node, syntax_result, context);
+
+        InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(block_with_constants);
+        visitor.visit(node);
+    }
+
+    /// Returns one of the following:
+    /// - QueryProcessingStage::Complete
+    /// - QueryProcessingStage::WithMergeableStateAfterAggregation
+    /// - none (in this case regular WithMergeableState should be used)
+    std::optional<QueryProcessingStage::Enum>
+    getOptimizedQueryProcessingStage(const ASTPtr & query_ptr, bool extremes, const Block & sharding_key_block)
+    {
+        const auto & select = query_ptr->as<ASTSelectQuery &>();
+
+        auto sharding_block_has = [&](const auto & exprs, size_t limit = SIZE_MAX) -> bool {
+            size_t i = 0;
+            for (auto & expr : exprs)
+            {
+                ++i;
+                if (i > limit)
+                    break;
+
+                auto id = expr->template as<ASTIdentifier>();
+                if (!id)
+                    return false;
+                /// TODO: if GROUP BY contains multiIf()/if() it should contain only columns from sharding_key
+                if (!sharding_key_block.has(id->name()))
+                    return false;
+            }
+            return true;
+        };
+
+        // GROUP BY qualifiers
+        // - TODO: WITH TOTALS can be implemented
+        // - TODO: WITH ROLLUP can be implemented (I guess)
+        if (select.group_by_with_totals || select.group_by_with_rollup || select.group_by_with_cube)
             return {};
-    }
 
-    // GROUP BY
-    const ASTPtr group_by = select.groupBy();
-    if (!group_by)
-    {
-        if (!select.distinct)
+        // TODO: extremes support can be implemented
+        if (extremes)
             return {};
+
+        // DISTINCT
+        if (select.distinct)
+        {
+            if (!sharding_block_has(select.select()->children))
+                return {};
+        }
+
+        // GROUP BY
+        const ASTPtr group_by = select.groupBy();
+        if (!group_by)
+        {
+            if (!select.distinct)
+                return {};
+        }
+        else
+        {
+            if (!sharding_block_has(group_by->children, 1))
+                return {};
+        }
+
+        // ORDER BY
+        const ASTPtr order_by = select.orderBy();
+        if (order_by)
+            return QueryProcessingStage::WithMergeableStateAfterAggregation;
+
+        // LIMIT BY
+        // LIMIT
+        // OFFSET
+        if (select.limitBy() || select.limitLength() || select.limitOffset())
+            return QueryProcessingStage::WithMergeableStateAfterAggregation;
+
+        // Only simple SELECT FROM GROUP BY sharding_key can use Complete state.
+        return QueryProcessingStage::Complete;
     }
-    else
+
+    size_t getClusterQueriedNodes(const Settings & settings, const ClusterPtr & cluster)
     {
-        if (!sharding_block_has(group_by->children, 1))
-            return {};
+        size_t num_local_shards = cluster->getLocalShardCount();
+        size_t num_remote_shards = cluster->getRemoteShardCount();
+        return (num_remote_shards * settings.max_parallel_replicas) + num_local_shards;
     }
 
-    // ORDER BY
-    const ASTPtr order_by = select.orderBy();
-    if (order_by)
-        return QueryProcessingStage::WithMergeableStateAfterAggregation;
-
-    // LIMIT BY
-    // LIMIT
-    // OFFSET
-    if (select.limitBy() || select.limitLength() || select.limitOffset())
-        return QueryProcessingStage::WithMergeableStateAfterAggregation;
-
-    // Only simple SELECT FROM GROUP BY sharding_key can use Complete state.
-    return QueryProcessingStage::Complete;
-}
-
-size_t getClusterQueriedNodes(const Settings & settings, const ClusterPtr & cluster)
-{
-    size_t num_local_shards = cluster->getLocalShardCount();
-    size_t num_remote_shards = cluster->getRemoteShardCount();
-    return (num_remote_shards * settings.max_parallel_replicas) + num_local_shards;
-}
-
-String makeFormattedListOfShards(const ClusterPtr & cluster)
-{
-    WriteBufferFromOwnString buf;
-
-    bool head = true;
-    buf << "[";
-    for (const auto & shard_info : cluster->getShardsInfo())
+    String makeFormattedListOfShards(const ClusterPtr & cluster)
     {
-        (head ? buf : buf << ", ") << shard_info.shard_num;
-        head = false;
-    }
-    buf << "]";
+        WriteBufferFromOwnString buf;
 
-    return buf.str();
-}
+        bool head = true;
+        buf << "[";
+        for (const auto & shard_info : cluster->getShardsInfo())
+        {
+            (head ? buf : buf << ", ") << shard_info.shard_num;
+            head = false;
+        }
+        buf << "]";
+
+        return buf.str();
+    }
 }
 
 StorageDistributedMergeTree::StorageDistributedMergeTree(
@@ -335,12 +333,24 @@ void StorageDistributedMergeTree::readStreaming(
 
     auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
 
+    ASTPtr streaming_func_ast;
+    auto it = query_info.syntax_analyzer_result->streaming_tables.find(getStorageID());
+    if (it != query_info.syntax_analyzer_result->streaming_tables.end())
+        streaming_func_ast = it->second;
+
     for (Int32 i = 0; i < shards; ++i)
     {
-        pipes.emplace_back(std::make_shared<SourceFromInputStream>(
-            std::make_shared<WatermarkBlockInputStream>(
-                std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log),
-                    query_info, topic + std::to_string(i), log)));
+        BlockInputStreamPtr input_stream = std::make_shared<WatermarkBlockInputStream>(
+            std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log),
+            query_info,
+            topic + std::to_string(i),
+            log);
+
+        if (streaming_func_ast)
+            input_stream = std::make_shared<StreamingWindowAssignmentBlockInputStream>(
+                input_stream, query_info, getStorageID(), column_names, context_);
+
+        pipes.emplace_back(std::make_shared<SourceFromInputStream>(input_stream));
     }
 
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
@@ -357,7 +367,8 @@ void StorageDistributedMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    if (query_info.syntax_analyzer_result->streaming_tables.contains(getStorageID()))
+    //// if (query_info.syntax_analyzer_result->streaming && query_info.syntax_analyzer_result->streaming_func_asts.contains(getStorageID()))
+    if (query_info.syntax_analyzer_result->streaming)
     {
         readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams);
     }
@@ -537,7 +548,8 @@ void StorageDistributedMergeTree::drop()
     }
 }
 
-void StorageDistributedMergeTree::truncate(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
+void StorageDistributedMergeTree::truncate(
+    const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
 {
     assert(storage);
     storage->truncate(query, metadata_snapshot, context_, holder);
@@ -607,7 +619,10 @@ bool StorageDistributedMergeTree::scheduleDataProcessingJob(BackgroundJobsAssign
 }
 
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
-    ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
+    ContextPtr context_,
+    QueryProcessingStage::Enum to_stage,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info) const
 {
     if (query_info.syntax_analyzer_result->streaming_tables.contains(getStorageID()))
     {
@@ -648,7 +663,8 @@ PartitionCommandsResultInfo StorageDistributedMergeTree::attachPartition(
     return storage->attachPartition(partition, metadata_snapshot, part, context_);
 }
 
-void StorageDistributedMergeTree::replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
+void StorageDistributedMergeTree::replacePartitionFrom(
+    const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
 {
     assert(storage);
     storage->replacePartitionFrom(source_table, partition, replace, context_);
@@ -731,7 +747,8 @@ ClusterPtr StorageDistributedMergeTree::skipUnusedShards(
 
     if (!limit)
     {
-        LOG_TRACE(log,
+        LOG_TRACE(
+            log,
             "Number of values for sharding key exceeds optimize_skip_unused_shards_limit={}, "
             "try to increase it, but note that this may increase query processing time.",
             context_->getSettingsRef().optimize_skip_unused_shards_limit);
@@ -811,7 +828,10 @@ ClusterPtr StorageDistributedMergeTree::getOptimizedCluster(
 }
 
 QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageRemote(
-    ContextPtr context_, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const
+    ContextPtr context_,
+    QueryProcessingStage::Enum to_stage,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info) const
 {
     const auto & settings = context_->getSettingsRef();
 
@@ -824,7 +844,10 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageR
         ClusterPtr optimized_cluster = getOptimizedCluster(context_, metadata_snapshot, query_info.query);
         if (optimized_cluster)
         {
-            LOG_DEBUG(log, "Skipping irrelevant shards - the query will be sent to the following shards of the cluster (shard numbers): {}", makeFormattedListOfShards(optimized_cluster));
+            LOG_DEBUG(
+                log,
+                "Skipping irrelevant shards - the query will be sent to the following shards of the cluster (shard numbers): {}",
+                makeFormattedListOfShards(optimized_cluster));
             cluster = optimized_cluster;
             query_info.optimized_cluster = cluster;
         }
@@ -875,11 +898,11 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageR
 IColumn::Selector StorageDistributedMergeTree::createSelector(const ColumnWithTypeAndName & result) const
 {
 /// If result.type is DataTypeLowCardinality, do shard according to its dictionaryType
-#define CREATE_FOR_TYPE(TYPE)                                                                                       \
-    if (typeid_cast<const DataType##TYPE *>(result.type.get()))                                                     \
-        return createBlockSelector<TYPE>(*result.column, slot_to_shard);                                            \
-    else if (auto * type_low_cardinality = typeid_cast<const DataTypeLowCardinality *>(result.type.get()))          \
-        if (typeid_cast<const DataType ## TYPE *>(type_low_cardinality->getDictionaryType().get()))                 \
+#define CREATE_FOR_TYPE(TYPE) \
+    if (typeid_cast<const DataType##TYPE *>(result.type.get())) \
+        return createBlockSelector<TYPE>(*result.column, slot_to_shard); \
+    else if (auto * type_low_cardinality = typeid_cast<const DataTypeLowCardinality *>(result.type.get())) \
+        if (typeid_cast<const DataType##TYPE *>(type_low_cardinality->getDictionaryType().get())) \
             return createBlockSelector<TYPE>(*result.column->convertToFullColumnIfLowCardinality(), slot_to_shard);
 
     CREATE_FOR_TYPE(UInt8)
@@ -947,8 +970,7 @@ StorageDistributedMergeTree::writeCallbackData(const String & query_status_poll_
     return std::make_unique<WriteCallbackData>(query_status_poll_id, block_id, this);
 }
 
-void StorageDistributedMergeTree::writeCallback(
-    const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
+void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
 {
     if (result.err)
     {
@@ -1009,8 +1031,7 @@ void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSN commit_sn)
         storage->commitSN(commit_sn);
         last_commit_ts = MonotonicSeconds::now();
 
-        LOG_INFO(
-            log, "Committed offset={} for shard={} to local file system", commit_sn, shard);
+        LOG_INFO(log, "Committed offset={} for shard={} to local file system", commit_sn, shard);
 
         std::lock_guard lock(sns_mutex);
         local_sn = commit_sn;
@@ -1146,10 +1167,7 @@ inline void StorageDistributedMergeTree::progressSequences(const SequencePair & 
 }
 
 void StorageDistributedMergeTree::doCommit(
-    Block block,
-    SequencePair seq_pair,
-    std::shared_ptr<IdempotentKeys> keys,
-    SequenceRanges missing_sequence_ranges)
+    Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges)
 {
     {
         std::lock_guard lock(sns_mutex);
@@ -1183,7 +1201,7 @@ void StorageDistributedMergeTree::doCommit(
                 auto sink = storage->write(nullptr, storage->getInMemoryMetadataPtr(), getContext());
 
                 /// Setup sequence numbers to persistent them to file system
-                auto merge_tree_sink = static_cast<MergeTreeSink*>(sink.get());
+                auto merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
                 merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
                 merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
 
@@ -1318,10 +1336,7 @@ void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRange
         log, "Committing records={} rows={} bytes={} for shard={} to file system", records.size(), block.rows(), block.bytes(), shard);
 
     doCommit(
-        std::move(block),
-        std::make_pair(records.front()->sn, records.back()->sn),
-        std::move(keys),
-        std::move(missing_sequence_ranges));
+        std::move(block), std::make_pair(records.front()->sn, records.back()->sn), std::move(keys), std::move(missing_sequence_ranges));
     assert(!block);
     assert(!keys);
     assert(missing_sequence_ranges.empty());
@@ -1525,7 +1540,9 @@ void StorageDistributedMergeTree::initWal()
     const auto & offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
     if (offset_reset != "earliest" && offset_reset != "latest")
     {
-        throw Exception("Invalid streaming_storage_auto_offset_reset, only 'earliest' and 'latest' are supported", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(
+            "Invalid streaming_storage_auto_offset_reset, only 'earliest' and 'latest' are supported",
+            ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
 
     Int32 dwal_request_required_acks = 1;

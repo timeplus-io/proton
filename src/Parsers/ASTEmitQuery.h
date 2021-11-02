@@ -4,11 +4,12 @@
 
 namespace DB
 {
-class ASTEmitQuery : public IAST
+struct ASTEmitQuery : public IAST
 {
 public:
     enum Mode
     {
+        TAIL,
         PERIODIC,
         DELAY,
         WATERMARK,

@@ -904,6 +904,20 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     RequiredSourceColumnsVisitor::Data columns_context{has_reserved_time};
     RequiredSourceColumnsVisitor(columns_context).visit(query);
 
+    /// proton: starts
+    if (storage)
+    {
+        const auto & sid = storage->getStorageID();
+        assert(columns_context.streaming_func_asts.size() <= 1);
+        if (!columns_context.streaming_func_asts.empty())
+        {
+            assert(columns_context.streaming_func_asts[0].first.table_name == sid.table_name);
+            streaming_tables[sid] = columns_context.streaming_func_asts[0].second;
+        }
+        streaming = columns_context.streaming;
+    }
+    /// proton: ends
+
     NameSet source_column_names;
     for (const auto & column : source_columns)
         source_column_names.insert(column.name);
@@ -1118,19 +1132,6 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     {
         source_column_names.insert(column.name);
     }
-
-    /// proton: starts
-    if (storage)
-    {
-        const auto & sid = storage->getStorageID();
-        assert(columns_context.streaming_tables.size() <= 1);
-        if (!columns_context.streaming_tables.empty())
-        {
-            assert(columns_context.streaming_tables[0].table_name == sid.table_name);
-            streaming_tables.insert(sid);
-        }
-    }
-    /// proton: ends
 }
 
 NameSet TreeRewriterResult::getArrayJoinSourceNameSet() const

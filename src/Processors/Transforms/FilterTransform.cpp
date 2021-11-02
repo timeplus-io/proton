@@ -164,9 +164,18 @@ void FilterTransform::transform(Chunk & chunk)
         num_filtered_rows = countBytesInFilter(*filter_and_holder.data);
 
     /// If the current block is completely filtered out, let's move on to the next one.
+    /// proton: starts
     if (num_filtered_rows == 0)
+    {
+        /// if watermark is not empty, still keep the column header in chunk to avoid emptiness
+        auto chunk_info = chunk.getChunkInfo();
+        if (chunk_info && chunk_info->watermark != 0)
+            chunk.setColumns(output.getHeader().getColumns(), 0);
+
         /// SimpleTransform will skip it.
         return;
+    }
+    /// proton: ends
 
     /// If all the rows pass through the filter.
     if (num_filtered_rows == num_rows_before_filtration)

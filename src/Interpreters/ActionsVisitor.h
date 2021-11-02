@@ -136,7 +136,7 @@ public:
         int next_unique_suffix;
 
         /// proton: starts. FIXME, multiple streaming window funcs
-        std::optional<StreamingWindowDescription> streaming_win_func;
+        std::optional<StreamingWindowDescription> streaming_win_desc;
         /// proton: ends
 
         Data(

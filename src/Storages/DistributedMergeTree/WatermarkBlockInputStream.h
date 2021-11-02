@@ -14,7 +14,7 @@ namespace DB
 
 struct SelectQueryInfo;
 
-class WatermarkBlockInputStream : public IBlockInputStream
+class WatermarkBlockInputStream final: public IBlockInputStream
 {
 public:
     WatermarkBlockInputStream(
@@ -33,6 +33,7 @@ public:
 public:
     enum class EmitMode
     {
+        TAIL,
         PERIODIC,
         DELAY,
         WATERMARK,
@@ -47,7 +48,7 @@ public:
 
         const DateLUTImpl * timezone = nullptr;
 
-        EmitMode mode = EmitMode::PERIODIC;
+        EmitMode mode = EmitMode::TAIL;
 
         Int64 window_interval = 0;
         IntervalKind::Kind window_interval_kind = IntervalKind::Second;
@@ -62,6 +63,7 @@ public:
         UInt32 scale = 0;
 
         bool streaming = false;
+        bool global_aggr = false;
     };
 
 private:
@@ -69,9 +71,12 @@ private:
     Block readImpl() override;
 
     /// Calculate watermark and attach it to Block
+    void processBlock(Block & block);
     void emitWatermark(Block & block, Int64 shrinked_max_event_ts);
     void handleIdleness(Block & block);
     void initWatermark(const SelectQueryInfo & query_info);
+    Int64 getWindowUpperBoundTumble(Int64 ts);
+    Int64 getWindowUpperBoundHop(Int64 ts);
     Int64 getWindowUpperBound(Int64 ts);
 
 private:

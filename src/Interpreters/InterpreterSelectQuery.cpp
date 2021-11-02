@@ -1,6 +1,12 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeInterval.h>
 
+/// proton: starts
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <Interpreters/RequiredSourceColumnsVisitor.h>
+/// proton: ends
+
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -335,11 +341,61 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         /// proton: starts
         if (!metadata_snapshot)
         {
-            if (storage->getName() != "Distributed")
+            /// proton: starts, patch metadata for streaming window function
+            if (storage->getName() == "DistributedMergeTree")
             {
-                metadata_snapshot = storage->getInMemoryMetadataPtr();
+                RequiredSourceColumnsVisitor::Data columns_context{true};
+                RequiredSourceColumnsVisitor(columns_context).visit(query_ptr);
+
+                if (!columns_context.streaming_func_asts.empty())
+                {
+                    auto streaming_func_ast = columns_context.streaming_func_asts[0].second;
+
+                    /// detach it from main storage
+                    metadata_snapshot = std::make_shared<const StorageInMemoryMetadata>(storage->getInMemoryMetadata());
+
+                    /// If streaming table function is used, we will need project `wstart, wend` columns to metadata
+                    auto streaming_func_syntax_analyzer_result = TreeRewriter(context).analyze(
+                        streaming_func_ast, metadata_snapshot->getColumns().getAll(),
+                        storage, metadata_snapshot);
+
+                    additional_required_columns = streaming_func_syntax_analyzer_result->requiredSourceColumns();
+
+                    ExpressionAnalyzer streaming_func_expr_analyzer(
+                        streaming_func_ast, streaming_func_syntax_analyzer_result, context);
+
+                    query_info.streaming_win_expr = streaming_func_expr_analyzer.getActions(true);
+                    query_info.streaming_win_desc = std::move(streaming_func_expr_analyzer.streaming_win_desc);
+
+                    /// Parsing the result type of the streaming win function
+                    const auto & streaming_win_block = (*query_info.streaming_win_expr)->getSampleBlock();
+                    assert (streaming_win_block.columns() >= 1);
+                    const auto & result_type_and_name = streaming_win_block.getByPosition(streaming_win_block.columns() - 1);
+                    auto tuple_result_type = checkAndGetDataType<DataTypeTuple>(result_type_and_name.type.get());
+                    assert (tuple_result_type);
+                    assert (tuple_result_type->getElements().size() == 2);
+
+                    DataTypePtr element_type = tuple_result_type->getElements()[0];
+                    if (isArray(element_type))
+                    {
+                        /// Hop
+                        auto array_type = checkAndGetDataType<DataTypeArray>(element_type.get());
+                        assert (tuple_result_type);
+                        element_type = array_type->getNestedType();
+                    }
+
+                    ColumnDescription wstart("wstart", element_type);
+                    const_cast<StorageInMemoryMetadata *>(metadata_snapshot.get())->columns.add(wstart);
+
+                    ColumnDescription wend("wend", element_type);
+                    const_cast<StorageInMemoryMetadata *>(metadata_snapshot.get())->columns.add(wend);
+                }
+                else
+                {
+                    metadata_snapshot = storage->getInMemoryMetadataPtr();
+                }
             }
-            else
+            else if (storage->getName() == "Distributed")
             {
                 const StorageDistributed * storage_distributed = static_cast<const StorageDistributed *>(storage.get());
                 StoragePtr storage_replicated = DatabaseCatalog::instance().getTable(
@@ -348,6 +404,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                     metadata_snapshot = storage_replicated->getInMemoryMetadataPtr();
                 else
                     metadata_snapshot = storage->getInMemoryMetadataPtr();
+            }
+            else
+            {
+                metadata_snapshot = storage->getInMemoryMetadataPtr();
             }
         }
         /// proton: ends
@@ -509,6 +569,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         }
 
         required_columns = syntax_analyzer_result->requiredSourceColumns();
+        /// proton: starts
+        for (const auto & name : additional_required_columns)
+        {
+            if (std::find(required_columns.begin(), required_columns.end(), name) == required_columns.end())
+            {
+                required_columns.push_back(name);
+            }
+        }
+        /// proton: ends
 
         if (storage)
         {
@@ -1785,7 +1854,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
     /// Optimization for trivial query like SELECT count() FROM table.
     bool optimize_trivial_count =
         syntax_analyzer_result->optimize_trivial_count
-        && syntax_analyzer_result->streaming_tables.empty()
+        && !syntax_analyzer_result->streaming
         && (settings.max_parallel_replicas <= 1)
         && storage
         && storage->getName() != "MaterializedMySQL"
@@ -2116,7 +2185,7 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
         {},
-        !query_info.syntax_analyzer_result->streaming_tables.empty()); /// proton: starts. FIXME, more robust streaming checking
+        query_info.syntax_analyzer_result->streaming); /// proton: starts. FIXME, more robust streaming checking
 
     SortDescription group_by_sort_description;
 

@@ -8,6 +8,7 @@ namespace DB
 
 bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    /// EMIT [STREAM]
     /// EMIT [STREAM] PERIODIC INTERVAL '3' SECONDS
     /// EMIT [STREAM] AFTER DELAY INTERVAL '3' SECONDS
     /// EMIT [STREAM] AFTER WATERMARK
@@ -21,7 +22,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     /// FIXME AND order
     ASTPtr interval;
-    ASTEmitQuery::Mode mode = ASTEmitQuery::PERIODIC;
+    ASTEmitQuery::Mode mode = ASTEmitQuery::TAIL;
     bool streaming = false;
 
     if (ParserKeyword("STREAM").ignore(pos, expected))
@@ -67,7 +68,8 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         else
             return false;
     }
-    else
+
+    if (!streaming && mode == ASTEmitQuery::Mode::TAIL)
         return false;
 
     auto query = std::make_shared<ASTEmitQuery>();

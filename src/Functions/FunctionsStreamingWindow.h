@@ -29,7 +29,7 @@ namespace DB
   *
   * HOP_END(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
   *
-  * WINDOW_ID(time_attr, interval[, timezone]) -- TUMPLE
+  * WINDOW_ID(time_attr, interval[, timezone]) -- TUMBLE
   * WINDOW_ID(time_attr, hop_interval, window_interval[, timezone]) -- HOP
   *
   */
