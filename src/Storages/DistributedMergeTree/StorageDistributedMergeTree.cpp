@@ -321,7 +321,7 @@ void StorageDistributedMergeTree::readRemote(
 
 void StorageDistributedMergeTree::readStreaming(
     QueryPlan & query_plan,
-    const SelectQueryInfo & query_info,
+    SelectQueryInfo & query_info,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_,
