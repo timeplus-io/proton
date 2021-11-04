@@ -48,6 +48,11 @@ void registerTableFunctionSQLite(TableFunctionFactory & factory);
 
 void registerTableFunctionDictionary(TableFunctionFactory & factory);
 
+/// proton: starts
+void registerTableFunctionHop(TableFunctionFactory & factory);
+void registerTableFunctionTumble(TableFunctionFactory & factory);
+/// proton: ends
+
 void registerTableFunctions();
 
 }

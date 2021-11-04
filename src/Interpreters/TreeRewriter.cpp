@@ -906,16 +906,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     /// proton: starts
     if (storage)
-    {
-        const auto & sid = storage->getStorageID();
-        assert(columns_context.streaming_func_asts.size() <= 1);
-        if (!columns_context.streaming_func_asts.empty())
-        {
-            assert(columns_context.streaming_func_asts[0].first.table_name == sid.table_name);
-            streaming_tables[sid] = columns_context.streaming_func_asts[0].second;
-        }
         streaming = columns_context.streaming;
-    }
     /// proton: ends
 
     NameSet source_column_names;

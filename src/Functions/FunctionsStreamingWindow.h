@@ -29,9 +29,6 @@ namespace DB
   *
   * HOP_END(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
   *
-  * WINDOW_ID(time_attr, interval[, timezone]) -- TUMBLE
-  * WINDOW_ID(time_attr, hop_interval, window_interval[, timezone]) -- HOP
-  *
   */
 enum WindowFunctionName
 {
@@ -135,6 +132,8 @@ class FunctionWindow : public IFunction
 {
 public:
     static constexpr auto name = WindowImpl<type>::name;
+    static constexpr auto external_name = WindowImpl<type>::external_name;
+
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionWindow>(); }
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
@@ -155,5 +154,4 @@ using FunctionTumbleEnd = FunctionWindow<TUMBLE_END>;
 using FunctionHop = FunctionWindow<HOP>;
 using FunctionHopStart = FunctionWindow<HOP_START>;
 using FunctionHopEnd = FunctionWindow<HOP_END>;
-using FunctionWindowId = FunctionWindow<WINDOW_ID>;
 }

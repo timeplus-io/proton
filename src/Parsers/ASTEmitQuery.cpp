@@ -11,6 +11,8 @@ void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, Form
 
     switch (mode)
     {
+        case Mode::NONE:
+            break;
         case Mode::TAIL:
             break;
         case Mode::DELAY:

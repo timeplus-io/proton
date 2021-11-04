@@ -49,6 +49,11 @@ void registerTableFunctions()
 #endif
 
     registerTableFunctionDictionary(factory);
+
+    /// proton: starts
+    registerTableFunctionHop(factory);
+    registerTableFunctionTumble(factory);
+    /// proton: ends
 }
 
 }

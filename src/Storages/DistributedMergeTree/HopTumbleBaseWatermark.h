@@ -12,7 +12,7 @@ public:
 
 protected:
     void init(Int64 & interval);
-    void initTimezone();
+    void initTimezone(size_t timezone_pos);
 
     void doProcess(Block & block) override;
 
@@ -25,7 +25,6 @@ protected:
 
     String time_col_name;
 
-    size_t win_arg_pos = 0;
     const DateLUTImpl * timezone = nullptr;
 };
 }

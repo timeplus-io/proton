@@ -4,7 +4,7 @@
 
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/StreamingFunctionDescription.h>
 #include <Parsers/IAST_fwd.h>
 
 namespace DB
@@ -22,9 +22,8 @@ class StreamingWindowAssignmentBlockInputStream final : public IBlockInputStream
 public:
     StreamingWindowAssignmentBlockInputStream(
         BlockInputStreamPtr input_,
-        const SelectQueryInfo & query_info,
-        const StorageID & storage_id,
         const Names & column_names,
+        StreamingFunctionDescriptionPtr desc,
         ContextPtr context_);
 
     ~StreamingWindowAssignmentBlockInputStream() override = default;
@@ -40,15 +39,20 @@ public:
 private:
     Block readImpl() override;
     void assignWindow(Block & block);
+    void assignTumbleWindow(Block & block, Block & expr_block);
+    void assignHopWindow(Block & block, Block & expr_block);
+    /// Calculate the positions of columns required by window expr
+    void calculateColumns(const Names & column_names);
 
 private:
     BlockInputStreamPtr input;
     ContextPtr context;
 
-    bool require_wstart = false;
-    bool require_wend = false;
+    std::vector<size_t> expr_column_positions;
+    Int32 wstart_pos = -1;
+    Int32 wend_pos = -1;
     String func_name;
 
-    ExpressionActionsPtr streaming_win_expr;
+    StreamingFunctionDescriptionPtr func_desc;
 };
 }

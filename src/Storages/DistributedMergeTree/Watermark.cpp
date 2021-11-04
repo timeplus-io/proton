@@ -2,7 +2,7 @@
 
 #include <Core/Block.h>
 #include <Functions/FunctionsStreamingWindow.h>
-#include <Interpreters/StreamingWindowDescription.h>
+#include <Interpreters/StreamingFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTEmitQuery.h>
 #include <Parsers/ASTLiteral.h>
@@ -47,6 +47,8 @@ namespace
     {
         switch (mode)
         {
+            case ASTEmitQuery::Mode::NONE:
+                return WatermarkSettings::EmitMode::NONE;
             case ASTEmitQuery::Mode::TAIL:
                 return WatermarkSettings::EmitMode::TAIL;
             case ASTEmitQuery::Mode::PERIODIC:
@@ -87,9 +89,9 @@ Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const Da
     switch (kind)
     {
 #define CASE_WINDOW_KIND(KIND) \
-        case IntervalKind::KIND: { \
-            return AddTime<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
-        }
+    case IntervalKind::KIND: { \
+        return AddTime<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
+    }
         CASE_WINDOW_KIND(Second)
         CASE_WINDOW_KIND(Minute)
         CASE_WINDOW_KIND(Hour)
@@ -105,30 +107,30 @@ Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const Da
 
 namespace
 {
-void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
-{
-    if (!emit_query)
+    void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
     {
-        return;
-    }
+        if (!emit_query)
+        {
+            return;
+        }
 
-    auto emit = emit_query->as<ASTEmitQuery>();
-    assert(emit);
+        auto emit = emit_query->as<ASTEmitQuery>();
+        assert(emit);
 
-    watermark_settings.streaming = emit->streaming;
-    watermark_settings.mode = mapMode(emit->mode);
+        watermark_settings.streaming = emit->streaming;
+        watermark_settings.mode = mapMode(emit->mode);
 
-    if (emit->interval)
-    {
-        extractInterval(
-            emit->interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
+        if (emit->interval)
+        {
+            extractInterval(
+                emit->interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
+        }
     }
 }
-}
 
-WatermarkSettings::WatermarkSettings(SelectQueryInfo & query_info)
+WatermarkSettings::WatermarkSettings(const SelectQueryInfo & query_info, StreamingFunctionDescriptionPtr desc)
 {
-    window_desc = std::move(query_info.streaming_win_desc);
+    window_desc = std::move(desc);
 
     const auto * select_query = query_info.query->as<ASTSelectQuery>();
     assert(select_query);
@@ -145,7 +147,10 @@ WatermarkSettings::WatermarkSettings(SelectQueryInfo & query_info)
     {
         if (window_desc)
         {
-            func_name = window_desc->func_node->name;
+            func_name = window_desc->func_ast->as<ASTFunction>()->name;
+
+            if (mode == WatermarkSettings::EmitMode::NONE)
+                mode = WatermarkSettings::EmitMode::WATERMARK;
         }
         else
         {
@@ -157,7 +162,7 @@ WatermarkSettings::WatermarkSettings(SelectQueryInfo & query_info)
 
 void WatermarkSettings::initWatermarkForGlobalAggr()
 {
-    func_name = "Global";
+    func_name = "GlobalAggr";
     global_aggr = true;
 
     if (mode == EmitMode::NONE)
@@ -206,11 +211,10 @@ void Watermark::assignWatermark(Block & block, Int64 max_event_ts_secs)
         case WatermarkSettings::EmitMode::TAIL:
             assert(0);
             break;
-        case WatermarkSettings::EmitMode::PERIODIC:
-        {
+        case WatermarkSettings::EmitMode::PERIODIC: {
             auto now = UTCSeconds::now();
-            auto next_watermark_ts
-                = addTime(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
+            auto next_watermark_ts = addTime(
+                watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
             if (now >= next_watermark_ts)
             {
                 block.info.watermark = max_event_ts_secs;

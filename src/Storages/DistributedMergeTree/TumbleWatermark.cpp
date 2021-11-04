@@ -11,7 +11,7 @@ TumbleWatermark::TumbleWatermark(WatermarkSettings && watermark_settings_, const
     : HopTumbleBaseWatermark(std::move(watermark_settings_), partition_key_, log_)
 {
     HopTumbleBaseWatermark::init(window_interval);
-    initTimezone();
+    initTimezone(2);
 }
 
 void TumbleWatermark::processWatermarkWithDelay(Block & block, Int64 max_event_ts_secs)

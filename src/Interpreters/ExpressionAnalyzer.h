@@ -7,9 +7,6 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/WindowDescription.h>
 #include <Interpreters/join_common.h>
-/// proton: starts
-#include <Interpreters/StreamingWindowDescription.h>
-/// proton: ends
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
@@ -149,10 +146,6 @@ public:
       * Returns valid SetPtr from StorageSet if the latter is used after IN or nullptr otherwise.
       */
     SetPtr isPlainStorageSetInSubquery(const ASTPtr & subquery_or_table_name);
-
-    /// proton: starts. FIXME, is this the best way ?
-    std::optional<StreamingWindowDescription> streaming_win_desc;
-    /// proton: ends
 
 protected:
     ExpressionAnalyzer(

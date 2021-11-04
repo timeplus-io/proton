@@ -389,23 +389,6 @@ SetPtr makeExplicitSet(
     return set;
 }
 
-namespace
-{
-    /// proton: starts
-    void handleStreamingWindowFunctions(
-        const ASTFunction & node, DataTypes & argument_types, Names & argument_names, ActionsMatcher::Data & data)
-    {
-        if (argument_types.empty())
-            return;
-
-        if (node.name != "__TUMBLE" && node.name != "__HOP")
-            return;
-
-        data.streaming_win_desc = {std::dynamic_pointer_cast<ASTFunction>(node.clone()), argument_names, argument_types};
-    }
-    /// proton: ends
-}
-
 ScopeStack::Level::~Level() = default;
 ScopeStack::Level::Level() = default;
 ScopeStack::Level::Level(Level &&) = default;
@@ -1008,10 +991,6 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                     arguments_present = false;
             }
         }
-
-        /// proton: starts
-        handleStreamingWindowFunctions(node, argument_types, argument_names, data);
-        /// proton: ends
 
         if (data.only_consts && !arguments_present)
             return;

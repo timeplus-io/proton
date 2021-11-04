@@ -8,6 +8,7 @@
 
 #include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
+#include <Interpreters/StreamingFunctionDescription.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
@@ -64,6 +65,16 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
+
+    void readStreaming(
+        QueryPlan & query_plan,
+        SelectQueryInfo & query_info,
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        ContextPtr context_,
+        size_t /* max_block_size */,
+        unsigned /* num_streams */,
+        StreamingFunctionDescriptionPtr streaming_func_desc);
 
     std::optional<UInt64> totalRows(const Settings &) const override;
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
@@ -160,15 +171,6 @@ private:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage);
 
-    void readStreaming(
-        QueryPlan & query_plan,
-        SelectQueryInfo & query_info,
-        const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
-        ContextPtr context_,
-        size_t max_block_size,
-        unsigned /* num_streams */);
-
 public:
     IColumn::Selector createSelector(const ColumnWithTypeAndName & result) const;
     IColumn::Selector createSelector(const Block & block) const;
@@ -177,6 +179,7 @@ public:
 
     const String & getShardingKeyColumnName() const { return sharding_key_column_name; }
 
+    String getTopic() const { return topic; }
     Int32 getShards() const { return shards; }
     Int32 getReplicationFactor() const { return replication_factor; }
 
@@ -193,7 +196,6 @@ public:
 
     friend struct DistributedMergeTreeCallbackData;
     friend class DistributedMergeTreeSink;
-    friend class StreamingBlockInputStream;
     friend class MergeTreeData;
 
 protected:

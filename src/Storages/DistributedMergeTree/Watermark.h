@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Interpreters/StreamingWindowDescription.h>
+#include <Interpreters/StreamingFunctionDescription.h>
+#include <Parsers/ASTFunction.h>
 #include <Common/IntervalKind.h>
 
 class DateLUTImpl;
@@ -19,7 +20,7 @@ class Block;
 struct WatermarkSettings
 {
 public:
-    explicit WatermarkSettings(SelectQueryInfo & query_info);
+    explicit WatermarkSettings(const SelectQueryInfo & query_info, StreamingFunctionDescriptionPtr desc_);
 
     enum class EmitMode
     {
@@ -44,7 +45,7 @@ public:
     bool global_aggr = false;
 
     /// privates
-    std::optional<StreamingWindowDescription> window_desc;
+    StreamingFunctionDescriptionPtr window_desc;
 
 private:
     void initWatermarkForGlobalAggr();
@@ -68,10 +69,10 @@ protected:
 
 private:
     /// EMIT STREAM AFTER WATERMARK
-    virtual void processWatermarkWithDelay(Block & /* block */, Int64 /* max_event_ts_secs */) {}
+    virtual void processWatermarkWithDelay(Block & /* block */, Int64 /* max_event_ts_secs */) { }
 
     /// EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL <n> <UNIT>
-    virtual void processWatermark(Block & /* block */, Int64 /* max_event_ts_secs */) {}
+    virtual void processWatermark(Block & /* block */, Int64 /* max_event_ts_secs */) { }
 
     void handleIdleness(Block & block);
 

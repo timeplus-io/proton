@@ -6,9 +6,6 @@
 #include <Core/Names.h>
 #include <Storages/ProjectionsDescription.h>
 #include <Interpreters/AggregateDescription.h>
-/// proton: starts
-#include <Interpreters/StreamingWindowDescription.h>
-/// proton: ends
 
 #include <memory>
 
@@ -151,9 +148,6 @@ struct SelectQueryInfo
     ClusterPtr optimized_cluster;
 
     TreeRewriterResultPtr syntax_analyzer_result;
-
-    std::optional<StreamingWindowDescription> streaming_win_desc;
-    std::optional<ExpressionActionsPtr> streaming_win_expr;
 
     PrewhereInfoPtr prewhere_info;
 

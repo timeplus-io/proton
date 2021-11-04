@@ -32,7 +32,6 @@ struct RequiredSourceColumnsData
     /// proton: starts
     RequiredSourceColumnsData(bool has_reserved_time_ = false) : has_reserved_time(has_reserved_time_) { }
 
-    std::vector<std::pair<StorageID, ASTPtr>> streaming_func_asts;
     bool streaming = false;
     bool has_reserved_time;
     /// proton: ends

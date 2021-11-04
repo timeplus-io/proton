@@ -13,11 +13,15 @@ void WatermarkBlockInputStream::readPrefixImpl()
 }
 
 WatermarkBlockInputStream::WatermarkBlockInputStream(
-    BlockInputStreamPtr input_, SelectQueryInfo & query_info, const String & partition_key_, Poco::Logger * log_)
+    BlockInputStreamPtr input_,
+    const SelectQueryInfo & query_info,
+    StreamingFunctionDescriptionPtr desc,
+    const String & partition_key,
+    Poco::Logger * log)
     : input(input_)
 {
     assert(input);
-    initWatermark(query_info, partition_key_, log_);
+    initWatermark(query_info, desc, partition_key, log);
 }
 
 Block WatermarkBlockInputStream::readImpl()
@@ -35,9 +39,10 @@ Block WatermarkBlockInputStream::readImpl()
     return block;
 }
 
-void WatermarkBlockInputStream::initWatermark(SelectQueryInfo & query_info, const String & partition_key, Poco::Logger * log)
+void WatermarkBlockInputStream::initWatermark(
+    const SelectQueryInfo & query_info, StreamingFunctionDescriptionPtr desc, const String & partition_key, Poco::Logger * log)
 {
-    WatermarkSettings watermark_settings(query_info);
+    WatermarkSettings watermark_settings(query_info, desc);
     if (watermark_settings.func_name == "__TUMBLE")
     {
         watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), partition_key, log);

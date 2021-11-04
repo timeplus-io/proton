@@ -13,13 +13,13 @@ HopWatermark::HopWatermark(WatermarkSettings && watermark_settings_, const Strin
 {
     HopTumbleBaseWatermark::init(hop_interval);
 
-    ++win_arg_pos;
+    auto * func_ast = watermark_settings.window_desc->func_ast->as<ASTFunction>();
     extractInterval(
-        watermark_settings.window_desc->func_node->arguments->children[win_arg_pos]->as<ASTFunction>(),
+        func_ast->arguments->children[2]->as<ASTFunction>(),
         window_interval,
         window_interval_kind);
 
-    initTimezone();
+    initTimezone(3);
 }
 
 void HopWatermark::processWatermarkWithDelay(Block & block, Int64 max_event_ts_secs)

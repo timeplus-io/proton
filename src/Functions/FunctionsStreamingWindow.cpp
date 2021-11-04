@@ -2,10 +2,10 @@
 
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeArray.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsStreamingWindow.h>
@@ -47,22 +47,56 @@ namespace
         return {interval_type->getKind(), num_units};
     }
 
-    ColumnPtr executeWindowBound(const ColumnPtr & column, int index, const String & function_name)
+    ColumnPtr executeWindowBoundTumble(const ColumnPtr & column, int index, const String & function_name)
     {
         if (const ColumnTuple * col_tuple = checkAndGetColumn<ColumnTuple>(column.get()))
         {
-            if (!checkColumn<ColumnDate>(*col_tuple->getColumnPtr(index)) && !checkColumn<ColumnDateTime32>(*col_tuple->getColumnPtr(index))
-                && !checkColumn<ColumnDateTime64>(*col_tuple->getColumnPtr(index)))
+            auto nested = col_tuple->getColumnPtr(index);
+            if (!checkColumn<ColumnDate>(*nested) && !checkColumn<ColumnDateTime32>(*nested) && !checkColumn<ColumnDateTime64>(*nested))
                 throw Exception(
                     "Illegal column for first argument of function " + function_name
-                        + ". Must be a Tuple(DataTime64, DataTime64) or a Tuple(ColumnVectorUInt16, ColumnVectorUInt16)",
+                        + ". Must be a Tuple(DataTime64, DataTime64) or a Tuple(DataTime32, DataTime32) "
+                        + "or a Tuple(ColumnVectorUInt16, ColumnVectorUInt16)",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             return col_tuple->getColumnPtr(index);
         }
         else
         {
             throw Exception(
-                "Illegal column for first argument of function " + function_name + ". Must be Tuple", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Illegal column for first argument of function " + function_name + ". Must be Tuple(DateTime, DateTime)",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+    ColumnPtr executeWindowBoundHop(const ColumnPtr & column, int index, const String & function_name)
+    {
+        if (const ColumnTuple * col_tuple = checkAndGetColumn<ColumnTuple>(column.get()))
+        {
+            const auto * col_array = checkAndGetColumn<ColumnArray>(*col_tuple->getColumnPtr(index));
+            if (!col_array)
+            {
+                throw Exception(
+                    "Illegal column for first argument of function " + function_name
+                        + ". Must be an Array(DataTime64, DataTime64) or an Array(DataTime32, DataTime32) "
+                        + "or an Array(ColumnVectorUInt16, ColumnVectorUInt16)",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            }
+
+            const auto & nested = col_array->getData();
+
+            if (!checkColumn<ColumnDate>(nested) && !checkColumn<ColumnDateTime32>(nested) && !checkColumn<ColumnDateTime64>(nested))
+                throw Exception(
+                    "Illegal column for first argument of function " + function_name
+                        + ". Must be an Array(DataTime64, DataTime64) or an Array(DataTime32, DataTime32) "
+                        + "or an Array(ColumnVectorUInt16, ColumnVectorUInt16)",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            return col_tuple->getColumnPtr(index);
+        }
+        else
+        {
+            throw Exception(
+                "Illegal column for first argument of function " + function_name + ". Must be Tuple(Array, Array)",
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
@@ -103,18 +137,6 @@ namespace
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    bool checkIntervalOrTimeZoneArgument(
-        const ColumnWithTypeAndName & argument, const String & function_name, IntervalKind & interval_kind, bool & result_type_is_date)
-    {
-        if (isString(argument.type))
-        {
-            checkTimeZoneArgument(argument, function_name);
-            return false;
-        }
-        checkIntervalArgument(argument, function_name, interval_kind, result_type_is_date);
-        return true;
-    }
-
     DataTypePtr getReturnDataType(bool result_type_is_date, const ColumnsWithTypeAndName & arguments, size_t time_zone_arg_num_check)
     {
         if (result_type_is_date)
@@ -146,6 +168,7 @@ template <>
 struct WindowImpl<TUMBLE>
 {
     static constexpr auto name = "__TUMBLE";
+    static constexpr auto external_name = "TUMBLE";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -336,6 +359,7 @@ template <>
 struct WindowImpl<TUMBLE_START>
 {
     static constexpr auto name = "__TUMBLE_START";
+    static constexpr auto external_name = "TUMBLE_START";
 
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -368,7 +392,7 @@ struct WindowImpl<TUMBLE_START>
             result_column_ = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
-        return executeWindowBound(result_column_, 0, function_name);
+        return executeWindowBoundTumble(result_column_, 0, function_name);
     }
 };
 
@@ -376,6 +400,7 @@ template <>
 struct WindowImpl<TUMBLE_END>
 {
     static constexpr auto name = "__TUMBLE_END";
+    static constexpr auto external_name = "TUMBLE_END";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -390,7 +415,7 @@ struct WindowImpl<TUMBLE_END>
             result_column_ = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
-        return executeWindowBound(result_column_, 1, function_name);
+        return executeWindowBoundTumble(result_column_, 1, function_name);
     }
 };
 
@@ -398,6 +423,7 @@ template <>
 struct WindowImpl<HOP>
 {
     static constexpr auto name = "__HOP";
+    static constexpr auto external_name = "HOP";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -511,9 +537,11 @@ struct WindowImpl<HOP>
 
         auto scale = time_column.getScale();
 
-        /// FIXME, size
+        auto final_size = size * (window_num_units / hop_num_units + 1);
         auto start = ColumnArray::create(ColumnDateTime64::create(0, scale));
+        start->reserve(final_size);
         auto end = ColumnArray::create(ColumnDateTime64::create(0, scale));
+        end->reserve(final_size);
 
         /// In order to avoid memory copy, we manipulate array and offsets by ourselves
         auto & start_data = start->getData();
@@ -755,10 +783,10 @@ template <>
 struct WindowImpl<HOP_START>
 {
     static constexpr auto name = "__HOP_START";
+    static constexpr auto external_name = "HOP_START";
 
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        /// FIXME WINDOW_ID
         if (arguments.size() == 1)
         {
             if (isTuple(arguments[0].type))
@@ -788,7 +816,7 @@ struct WindowImpl<HOP_START>
             result_column_ = WindowImpl<HOP>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
-        return executeWindowBound(result_column_, 0, function_name);
+        return executeWindowBoundHop(result_column_, 0, function_name);
     }
 };
 
@@ -796,6 +824,7 @@ template <>
 struct WindowImpl<HOP_END>
 {
     static constexpr auto name = "__HOP_END";
+    static constexpr auto external_name = "HOP_END";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -810,302 +839,22 @@ struct WindowImpl<HOP_END>
             result_column_ = WindowImpl<HOP>::dispatchForColumns(arguments, function_name);
         else
             result_column_ = arguments[0].column;
-        return executeWindowBound(result_column_, 1, function_name);
+        return executeWindowBoundHop(result_column_, 1, function_name);
     }
 };
 
 template <WindowFunctionName type>
 DataTypePtr FunctionWindow<type>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
-    return WindowImpl<type>::getReturnType(arguments, name);
+    return WindowImpl<type>::getReturnType(arguments, external_name);
 }
 
 template <WindowFunctionName type>
 ColumnPtr FunctionWindow<type>::executeImpl(
     const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const
 {
-    return WindowImpl<type>::dispatchForColumns(arguments, name);
+    return WindowImpl<type>::dispatchForColumns(arguments, external_name);
 }
-
-template <>
-struct WindowImpl<WINDOW_ID>
-{
-    static constexpr auto name = "__WINDOW_ID";
-
-    [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        bool result_type_is_date;
-        IntervalKind interval_kind_1;
-        IntervalKind interval_kind_2;
-
-        if (arguments.size() == 2)
-        {
-            checkFirstArgument(arguments[0], function_name);
-            checkIntervalArgument(arguments[1], function_name, interval_kind_1, result_type_is_date);
-        }
-        else if (arguments.size() == 3)
-        {
-            checkFirstArgument(arguments[0], function_name);
-            checkIntervalArgument(arguments[1], function_name, interval_kind_1, result_type_is_date);
-            if (checkIntervalOrTimeZoneArgument(arguments[2], function_name, interval_kind_2, result_type_is_date))
-            {
-                if (interval_kind_1 != interval_kind_2)
-                    throw Exception(
-                        "Illegal type of window and hop column of function " + function_name + ", must be same",
-                        ErrorCodes::ILLEGAL_COLUMN);
-            }
-        }
-        else if (arguments.size() == 4)
-        {
-            checkFirstArgument(arguments[0], function_name);
-            checkIntervalArgument(arguments[1], function_name, interval_kind_1, result_type_is_date);
-            checkIntervalArgument(arguments[2], function_name, interval_kind_2, result_type_is_date);
-            checkTimeZoneArgument(arguments[3], function_name);
-        }
-        else
-        {
-            throw Exception(
-                "Number of arguments for function " + function_name + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be 2, 3 or 4",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        }
-
-        size_t time_zone_arg_num_check = arguments.size() > 2 ? arguments.size() - 1 : 0;
-        return getReturnDataType(result_type_is_date, arguments, time_zone_arg_num_check);
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForHopColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto & time_column = arguments[0];
-        const auto & from_datatype = *time_column.type.get();
-        if (isDateTime64(from_datatype))
-        {
-            return dispatchForHopColumnsDateTime64(arguments, function_name);
-        }
-        else if (isDateTime64(from_datatype))
-        {
-            return dispatchForHopColumnsDateTime32(arguments, function_name);
-        }
-        else
-        {
-            throw Exception(
-                "Illegal column " + time_column.name + " argument of function " + function_name + ". Must contain dates or dates with time",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
-    }
-
-    static ColumnPtr dispatchForHopColumnsDateTime64(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto & time_column = arguments[0];
-        const auto & hop_interval_column = arguments[1];
-        const auto & window_interval_column = arguments[2];
-        const auto * time_column_vec = checkAndGetColumn<ColumnDateTime64>(time_column.column.get());
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
-
-        auto hop_interval = dispatchForIntervalColumns(hop_interval_column, function_name);
-        auto window_interval = dispatchForIntervalColumns(window_interval_column, function_name);
-
-        if (std::get<1>(hop_interval) > std::get<1>(window_interval))
-            throw Exception(
-                "Value for hop interval of function " + function_name + " must not larger than window interval",
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        switch (std::get<0>(window_interval))
-        {
-            case IntervalKind::Second:
-                return executeHopSliceDateTime64<IntervalKind::Second>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Minute:
-                return executeHopSliceDateTime64<IntervalKind::Minute>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Hour:
-                return executeHopSliceDateTime64<IntervalKind::Hour>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Day:
-                return executeHopSliceDateTime64<IntervalKind::Day>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Week:
-                return executeHopSliceDate<IntervalKind::Week>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Month:
-                return executeHopSliceDate<IntervalKind::Month>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Quarter:
-                return executeHopSliceDate<IntervalKind::Quarter>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Year:
-                return executeHopSliceDate<IntervalKind::Year>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-        }
-        __builtin_unreachable();
-    }
-
-    template <IntervalKind::Kind unit>
-    static ColumnPtr executeHopSliceDateTime64(
-        const ColumnDateTime64 & time_column, UInt64 hop_num_units, UInt64 window_num_units, const DateLUTImpl & time_zone)
-    {
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-
-        auto scale = time_column.getScale();
-        auto end = ColumnDateTime64::create(size, scale);
-        auto & end_data = end->getData();
-
-        Int64 gcd_num_units = std::gcd(hop_num_units, window_num_units);
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            auto components = DecimalUtils::split(time_data[i], scale);
-            components.fractional = 0;
-
-            auto wstart = ToStartOfTransform<unit>::execute(components.whole, hop_num_units, time_zone);
-            auto wend = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
-
-            auto wend_current = wend;
-            auto wend_latest = wend;
-
-            do
-            {
-                wend_latest = wend_current;
-                wend_current = AddTime<unit>::execute(wend_current, -1 * gcd_num_units, time_zone);
-            } while (wend_current > components.whole);
-
-            components.whole = wend_latest;
-            end_data[i] = DecimalUtils::decimalFromComponents(components, scale);
-        }
-        return end;
-    }
-
-    template <IntervalKind::Kind unit>
-    static ColumnPtr
-    executeHopSliceDate(const ColumnDateTime64 & time_column, UInt64 hop_num_units, UInt64 window_num_units, const DateLUTImpl & time_zone)
-    {
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-
-        auto scale = time_column.getScale();
-        auto end = ColumnDate::create(size);
-        auto & end_data = end->getData();
-
-        Int64 gcd_num_units = std::gcd(hop_num_units, window_num_units);
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            auto whole = DecimalUtils::getWholePart(time_data[i], scale);
-            auto wstart = ToStartOfTransform<unit>::execute(whole, hop_num_units, time_zone);
-            auto wend = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
-
-            auto wend_current = wend;
-            auto wend_latest = wend;
-
-            do
-            {
-                wend_latest = wend_current;
-                wend_current = AddTime<unit>::execute(wend_current, -1 * gcd_num_units, time_zone);
-            } while (wend_current > whole);
-
-            end_data[i] = wend_latest;
-        }
-        return end;
-    }
-
-    static ColumnPtr dispatchForHopColumnsDateTime32(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto & time_column = arguments[0];
-        const auto & hop_interval_column = arguments[1];
-        const auto & window_interval_column = arguments[2];
-        const auto * time_column_vec = checkAndGetColumn<ColumnDateTime32>(time_column.column.get());
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
-
-        auto hop_interval = dispatchForIntervalColumns(hop_interval_column, function_name);
-        auto window_interval = dispatchForIntervalColumns(window_interval_column, function_name);
-
-        if (std::get<1>(hop_interval) > std::get<1>(window_interval))
-            throw Exception(
-                "Value for hop interval of function " + function_name + " must not larger than window interval",
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        switch (std::get<0>(window_interval))
-        {
-            case IntervalKind::Second:
-                return executeHopSlice<UInt32, IntervalKind::Second>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Minute:
-                return executeHopSlice<UInt32, IntervalKind::Minute>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Hour:
-                return executeHopSlice<UInt32, IntervalKind::Hour>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Day:
-                return executeHopSlice<UInt32, IntervalKind::Day>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Week:
-                return executeHopSlice<UInt16, IntervalKind::Week>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Month:
-                return executeHopSlice<UInt16, IntervalKind::Month>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Quarter:
-                return executeHopSlice<UInt16, IntervalKind::Quarter>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-            case IntervalKind::Year:
-                return executeHopSlice<UInt16, IntervalKind::Year>(
-                    *time_column_vec, std::get<1>(hop_interval), std::get<1>(window_interval), time_zone);
-        }
-        __builtin_unreachable();
-    }
-
-    template <typename ToType, IntervalKind::Kind unit>
-    static ColumnPtr
-    executeHopSlice(const ColumnDateTime32 & time_column, UInt64 hop_num_units, UInt64 window_num_units, const DateLUTImpl & time_zone)
-    {
-        Int64 gcd_num_units = std::gcd(hop_num_units, window_num_units);
-
-        const auto & time_data = time_column.getData();
-        size_t size = time_column.size();
-
-        auto end = ColumnVector<ToType>::create(size);
-        auto & end_data = end->getData();
-
-        for (size_t i = 0; i < size; ++i)
-        {
-            ToType wstart = ToStartOfTransform<unit>::execute(time_data[i], hop_num_units, time_zone);
-            ToType wend = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
-
-            ToType wend_current = wend;
-            ToType wend_latest = wend;
-
-            do
-            {
-                wend_latest = wend_current;
-                wend_current = AddTime<unit>::execute(wend_current, -1 * gcd_num_units, time_zone);
-            } while (wend_current > time_data[i]);
-
-            end_data[i] = wend_latest;
-        }
-        return end;
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForTumbleColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        ColumnPtr column = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
-        return executeWindowBound(column, 1, function_name);
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        if (arguments.size() == 2)
-            return dispatchForTumbleColumns(arguments, function_name);
-        else
-        {
-            const auto & third_column = arguments[2];
-            if (arguments.size() == 3 && isString(third_column.type))
-                return dispatchForTumbleColumns(arguments, function_name);
-            else
-                return dispatchForHopColumns(arguments, function_name);
-        }
-    }
-};
 
 void registerFunctionsStreamingWindow(FunctionFactory & factory)
 {
@@ -1115,6 +864,5 @@ void registerFunctionsStreamingWindow(FunctionFactory & factory)
     factory.registerFunction<FunctionHop>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionHopStart>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionHopEnd>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionWindowId>(FunctionFactory::CaseInsensitive);
 }
 }

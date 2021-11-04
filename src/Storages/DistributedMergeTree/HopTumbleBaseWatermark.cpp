@@ -70,25 +70,18 @@ void HopTumbleBaseWatermark::init(Int64 & interval)
         scale = checkAndGetDataType<DataTypeDateTime64>(desc.argument_types[0].get())->getScale();
     }
 
-    /// By default, the first argument is interval and we injected `_time` to streaming window function
-    if (desc.argument_names.size() == desc.func_node->arguments->children.size())
-    {
-        /// Tricky part, desc.argument_names can have one more element then desc.func_node->arguments->children
-        /// since we does additional processing to stuff in `_time` when user omits the timestamp parameter. FIXME
-        /// User explicitly specifies a time column for streaming window function in the first argument
-        win_arg_pos = 1;
-    }
-
+    auto * func_ast = desc.func_ast->as<ASTFunction>();
     extractInterval(
-        desc.func_node->arguments->children[win_arg_pos]->as<ASTFunction>(), interval, window_interval_kind);
+        func_ast->arguments->children[1]->as<ASTFunction>(), interval, window_interval_kind);
 }
 
-void HopTumbleBaseWatermark::initTimezone()
+void HopTumbleBaseWatermark::initTimezone(size_t timezone_pos)
 {
     const auto & desc = *watermark_settings.window_desc;
-    if (desc.func_node->arguments->children.size() > win_arg_pos + 1)
+    auto * func_ast = desc.func_ast->as<ASTFunction>();
+    if (func_ast->arguments->children.size() == timezone_pos + 1)
     {
-        const auto * ast = desc.func_node->arguments->children[win_arg_pos + 1]->as<ASTLiteral>();
+        const auto * ast = func_ast->arguments->children[timezone_pos]->as<ASTLiteral>();
         if (!ast || ast->value.getType() != Field::Types::String)
             throw Exception("Invalid timezone", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 

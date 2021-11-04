@@ -53,7 +53,6 @@ struct TreeRewriterResult
     NameToNameMap array_join_alias_to_name;
 
     /// proton: starts
-    std::map<StorageID, ASTPtr> streaming_tables;
     bool streaming = false;
     /// proton: ends
 

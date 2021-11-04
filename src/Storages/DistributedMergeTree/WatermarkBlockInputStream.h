@@ -15,11 +15,15 @@ namespace DB
 
 struct SelectQueryInfo;
 
-class WatermarkBlockInputStream final: public IBlockInputStream
+class WatermarkBlockInputStream final : public IBlockInputStream
 {
 public:
     WatermarkBlockInputStream(
-        BlockInputStreamPtr input_, SelectQueryInfo & query_info, const String & partition_key_, Poco::Logger * log_);
+        BlockInputStreamPtr input_,
+        const SelectQueryInfo & query_info,
+        StreamingFunctionDescriptionPtr desc,
+        const String & partition_key,
+        Poco::Logger * log);
 
     ~WatermarkBlockInputStream() override = default;
 
@@ -35,7 +39,11 @@ private:
     void readPrefixImpl() override;
     Block readImpl() override;
 
-    void initWatermark(SelectQueryInfo & query_info, const String & partition_key, Poco::Logger * log);
+    void initWatermark(
+        const SelectQueryInfo & query_info,
+        StreamingFunctionDescriptionPtr desc,
+        const String & partition_key,
+        Poco::Logger * log);
 
     BlockInputStreamPtr input;
     WatermarkPtr watermark;

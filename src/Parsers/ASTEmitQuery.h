@@ -9,6 +9,7 @@ struct ASTEmitQuery : public IAST
 public:
     enum Mode
     {
+        NONE,
         TAIL,
         PERIODIC,
         DELAY,
@@ -17,7 +18,7 @@ public:
     };
 
     bool streaming = false;
-    Mode mode;
+    Mode mode = NONE;
     ASTPtr interval;
 
     String getID(char) const override { return "Emit"; }

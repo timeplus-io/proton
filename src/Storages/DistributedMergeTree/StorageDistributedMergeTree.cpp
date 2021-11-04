@@ -23,8 +23,8 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
+#include <Processors/Sources/NullSource.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <Common/randomSeed.h>
@@ -326,29 +326,29 @@ void StorageDistributedMergeTree::readStreaming(
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_,
     size_t /* max_block_size */,
-    unsigned /* num_streams */)
+    unsigned /* num_streams */,
+    StreamingFunctionDescriptionPtr streaming_func_desc)
 {
+    /// We have 2 paths here. FIXME, use one path
+    /// 1. Called directly on StorageDistributedMergeTree for streaming tail / global aggr cases
+    /// 2. Called from streaming table function like HOP / TUMBLE via StreamingDistributedMergeTree
     Pipes pipes;
     pipes.reserve(shards);
 
     auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
-
-    ASTPtr streaming_func_ast;
-    auto it = query_info.syntax_analyzer_result->streaming_tables.find(getStorageID());
-    if (it != query_info.syntax_analyzer_result->streaming_tables.end())
-        streaming_func_ast = it->second;
 
     for (Int32 i = 0; i < shards; ++i)
     {
         BlockInputStreamPtr input_stream = std::make_shared<WatermarkBlockInputStream>(
             std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log),
             query_info,
+            streaming_func_desc,
             topic + std::to_string(i),
             log);
 
-        if (streaming_func_ast)
+        if (streaming_func_desc)
             input_stream = std::make_shared<StreamingWindowAssignmentBlockInputStream>(
-                input_stream, query_info, getStorageID(), column_names, context_);
+                input_stream, column_names, streaming_func_desc, context_);
 
         pipes.emplace_back(std::make_shared<SourceFromInputStream>(input_stream));
     }
@@ -367,10 +367,10 @@ void StorageDistributedMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    //// if (query_info.syntax_analyzer_result->streaming && query_info.syntax_analyzer_result->streaming_func_asts.contains(getStorageID()))
+    /// Non streaming window function: tail or global streaming aggr
     if (query_info.syntax_analyzer_result->streaming)
     {
-        readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams);
+        readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams, nullptr);
     }
     else if (requireDistributedQuery(context_))
     {
@@ -624,11 +624,7 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info) const
 {
-    if (query_info.syntax_analyzer_result->streaming_tables.contains(getStorageID()))
-    {
-        return QueryProcessingStage::Enum::FetchColumns;
-    }
-    else if (requireDistributedQuery(context_))
+    if (requireDistributedQuery(context_))
     {
         return getQueryProcessingStageRemote(context_, to_stage, metadata_snapshot, query_info);
     }

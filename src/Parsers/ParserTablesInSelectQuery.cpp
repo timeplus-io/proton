@@ -1,19 +1,9 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
-/// proton: starts
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-/// proton: ends
-#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
-
-/// proton: starts
-#include <boost/algorithm/string.hpp>
-/// proton: ends
 
 namespace DB
 {
@@ -21,90 +11,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int SYNTAX_ERROR;
-    /// proton: starts
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
-    /// proton: ends
 }
-
-/// proton: starts. FIXME, this is hacky, switch to table function
-namespace
-{
-    void handleStreamingTable(const std::shared_ptr<ASTTableExpression> & res)
-    {
-        if (!res->table_function)
-            return;
-
-        auto * node = res->table_function->as<ASTFunction>();
-        auto name = boost::to_upper_copy(node->name);
-        if (name != "TUMBLE" && name != "HOP")
-            return;
-
-        /// first argument is expected to be table
-        /// the rest of the arguments are streaming window arguments
-        String table;
-        if (!tryGetIdentifierNameInto(node->arguments->children[0], table))
-            throw Exception("First argument must be table name", ErrorCodes::SYNTAX_ERROR);
-
-        auto func_cloned = node->clone();
-        /// change the name to call the internal streaming window functions
-        node->name = "__" + name;
-        node->alias = "____SWIN";
-
-        auto table_identifier = std::make_shared<ASTTableIdentifier>(table);
-        node->arguments->children.erase(node->arguments->children.begin());
-
-        table_identifier->streaming_function = std::move(res->table_function);
-        table_identifier->origin_streaming_function = func_cloned;
-        res->database_and_table_name = table_identifier;
-
-        if (name == "TUMBLE")
-        {
-            if (node->arguments->children.size() == 1)
-            {
-                /// assume the first argument is interval, insert `_time`
-                node->arguments->children.insert(node->arguments->children.begin(), std::make_shared<ASTIdentifier>("_time"));
-            }
-            else if (node->arguments->children.size() == 2)
-            {
-                if (node->arguments->children[1]->as<ASTLiteral>())
-                {
-                    /// the last argument is a literal, assume it is a timezone string
-                    node->arguments->children.insert(node->arguments->children.begin(), std::make_shared<ASTIdentifier>("_time"));
-                }
-            }
-
-            if (node->arguments->children.size() == 0)
-                throw Exception("Too few arguments for TUMBLE function", ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
-
-            if (node->arguments->children.size() > 3)
-                throw Exception("Too many arguments for TUMBLE function", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
-        }
-        else if (name == "HOP")
-        {
-            if (node->arguments->children.size() == 2)
-            {
-                /// assume the first / second arguments are interval, insert `_time`
-                node->arguments->children.insert(node->arguments->children.begin(), std::make_shared<ASTIdentifier>("_time"));
-            }
-            else if (node->arguments->children.size() == 3)
-            {
-                if (node->arguments->children[2]->as<ASTLiteral>())
-                {
-                    /// the last argument is a literal, assume it is a timezone string
-                    node->arguments->children.insert(node->arguments->children.begin(), std::make_shared<ASTIdentifier>("_time"));
-                }
-            }
-
-            if (node->arguments->children.size() < 2)
-                throw Exception("Too few arguments for HOP function", ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
-
-            if (node->arguments->children.size() > 4)
-                throw Exception("Too many arguments for HOP function", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
-        }
-    }
-}
-/// proton: ends
 
 bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -116,8 +23,6 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), false)
                 .parse(pos, res->database_and_table_name, expected))
         return false;
-
-    handleStreamingTable(res);
     /// proton: ends
 
     /// FINAL

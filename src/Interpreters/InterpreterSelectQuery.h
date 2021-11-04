@@ -185,9 +185,6 @@ private:
 
     /// List of columns to read to execute the query.
     Names required_columns;
-    /// proton: starts
-    Names additional_required_columns;
-    /// proton: ends
     /// Structure of query source (table, subquery, etc).
     Block source_header;
 

@@ -7,14 +7,14 @@
 namespace DB
 {
 StreamingBlockInputStream::StreamingBlockInputStream(
-    const std::shared_ptr<IStorage> & storage_,
+    std::shared_ptr<IStorage> storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const Names & column_names_,
     ContextPtr context_,
     Int32 shard_,
     DWAL::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
-    : storage(storage_)
+    : storage(std::move(storage_))
     , context(context_)
     , column_names(column_names_)
     , shard(shard_)

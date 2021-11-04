@@ -22,13 +22,13 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     /// FIXME AND order
     ASTPtr interval;
-    ASTEmitQuery::Mode mode = ASTEmitQuery::TAIL;
+    ASTEmitQuery::Mode mode = ASTEmitQuery::NONE;
     bool streaming = false;
 
-    if (ParserKeyword("STREAM").ignore(pos, expected))
-    {
-        streaming = true;
-    }
+    if (!ParserKeyword("STREAM").ignore(pos, expected))
+        return false;
+
+    streaming = true;
 
     ParserIntervalOperatorExpression interval_p;
 
@@ -68,9 +68,6 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         else
             return false;
     }
-
-    if (!streaming && mode == ASTEmitQuery::Mode::TAIL)
-        return false;
 
     auto query = std::make_shared<ASTEmitQuery>();
     query->streaming = streaming;

@@ -15,7 +15,7 @@ class StreamingBlockInputStream final : public IBlockInputStream
 {
 public:
     StreamingBlockInputStream(
-        const std::shared_ptr<IStorage> & storage_,
+        std::shared_ptr<IStorage> storage_,
         const StorageMetadataPtr & metadata_snapshot_,
         const Names & column_names_,
         ContextPtr context_,

@@ -193,27 +193,9 @@ void RequiredSourceColumnsMatcher::visit(const ASTTablesInSelectQueryElement & n
 }
 
 /// ASTIdentifiers here are tables. Do not visit them as generic ones.
-void RequiredSourceColumnsMatcher::visit(const ASTTableExpression & node, const ASTPtr &, Data & data)
+void RequiredSourceColumnsMatcher::visit(const ASTTableExpression &, const ASTPtr &, Data &)
 {
-    /// proton: starts
-    if (node.database_and_table_name)
-    {
-        if (const auto * t = node.database_and_table_name->as<ASTTableIdentifier>())
-        {
-            if (t->streaming_function)
-            {
-                data.streaming_func_asts.emplace_back(t->getTableId(), t->streaming_function);
-                if (data.has_reserved_time)
-                {
-                    /// FIXME, SELECT * FROM TUMBLE(...)
-                    /// add `wstart, wend, _time` only necessary
-                    if (!data.required_names.contains("_time"))
-                        data.required_names["_time"].addInclusion("");
-                }
-            }
-        }
-    }
-    /// proton: ends
+
 }
 
 /// proton: starts
