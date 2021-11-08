@@ -136,15 +136,15 @@ proton-client --host proton-server -m
 
 # Tumbling aggregation
 
-timeplus :) SELECT device, avg(temperature) as avg_temp,
-FROM TUMBLE(devices, INTERVAL 3 SECOND)
+timeplus :) SELECT device, avg(temperature) as avg_temp
+FROM tumble(devices, INTERVAL 3 SECOND)
 WHERE temperature > 50.0 GROUP BY device, wstart, wend
 EMIT STREAM;
 
 # Use a different time column for windowing
 
-timeplus :) SELECT device, avg(temperature) as avg_temp,
-FROM TUMBLE(devices, timestamp, INTERVAL 3 SECOND)
+timeplus :) SELECT device, avg(temperature) as avg_temp
+FROM tumble(devices, timestamp, INTERVAL 3 SECOND)
 WHERE temperature > 50.0 GROUP BY device, wstart, wend
 EMIT STREAM;
 ```

@@ -1,6 +1,5 @@
 #include "TableFunctionStreamingWindow.h"
 
-#include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>

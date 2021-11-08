@@ -94,7 +94,7 @@ comparing to last projection.
 
 ```sql
 SELECT <aggr-function>
-FROM TUMBLE(<table>, [<timestamp-column>], <tumble-window-size>, [<time-zone>])
+FROM tumble(<table>, [<timestamp-column>], <tumble-window-size>, [<time-zone>])
 [WHERE clause]
 GROUP BY <wstart | wend>, ...
 EMIT STREAM <window-emit-policy>
@@ -110,14 +110,14 @@ Tumble window means a fixed non-overlapped time window. Here is one example for 
 ...
 ```
 
-`TUMBLE` window in Proton is left closed and right open `[)` meaning it includes all events which have timestamps
+`tumble` window in Proton is left closed and right open `[)` meaning it includes all events which have timestamps
 **greater or equal** to the **lower bound** of the window, but **less** than the **upper bound** of the window.
 
-`TUMBLE` in the above SQL spec is a table function whose core responsibility is assigning tumble window to each event in
-a streaming way. The `TUMBLE` table function will generate 2 new columns: `wstart, wend` which corresponds to the low and high
+`tumble` in the above SQL spec is a table function whose core responsibility is assigning tumble window to each event in
+a streaming way. The `tumble` table function will generate 2 new columns: `wstart, wend` which corresponds to the low and high
 bounds of a tumble window.
 
-`TUMBLE` table function accepts 4 parameters: `<timestamp-column>` and `<time-zone>` are optional, the others are mandatory.
+`tumble` table function accepts 4 parameters: `<timestamp-column>` and `<time-zone>` are optional, the others are mandatory.
 
 When `<timestamp-column>` parameter is omitted from the query, the table's default time column which is `_time` will be used.
 
@@ -173,7 +173,7 @@ Same as the above delayed tumble window aggregation, except in this query, user 
 
 ```sql
 SELECT <aggr-function>
-FROM HOP(<table>, [<timestamp-column>], <hop-slide-size>, [hop-windows-size], [<time-zone>])
+FROM hop(<table>, [<timestamp-column>], <hop-slide-size>, [hop-windows-size], [<time-zone>])
 [WHERE clause]
 GROUP BY <wstart | wend>, ...
 EMIT STREAM <window-emit-policy>
