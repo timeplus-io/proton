@@ -1,0 +1,16 @@
+logger: 
+    level: trace
+    console: true
+
+metastore_server:
+    http_port: 9444
+    server_id: 1
+    log_storage_path: ./metastore_log
+    snapshot_storage_path: ./metastore_snapshot
+
+    raft_configuration:
+        server:
+            id: 1
+            hostname: localhost
+            port: 44444
+

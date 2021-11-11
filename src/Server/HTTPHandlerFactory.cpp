@@ -151,6 +151,17 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, Asynchronous
     throw Exception("LOGICAL ERROR: Unknown HTTP handler factory name.", ErrorCodes::LOGICAL_ERROR);
 }
 
+/// proton: starts.
+HTTPRequestHandlerFactoryPtr createMetaStoreHandlerFactory(IServer & server, const std::string & name)
+{
+    auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
+    auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "metastore");
+    rest_handler->attachNonStrictPath("/proton/metastore");
+    factory->addHandler(rest_handler);
+    return factory;
+}
+/// proton: ends.
+
 static const auto ping_response_expression = "Ok.\n";
 static const auto root_response_expression = "config://http_server_default_response";
 

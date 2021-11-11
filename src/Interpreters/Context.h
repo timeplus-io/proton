@@ -119,6 +119,11 @@ class KeeperDispatcher;
 class Session;
 
 class IInputFormat;
+
+/// proton: starts.
+class MetaStoreDispatcher;
+/// proton: ends.
+
 class IOutputFormat;
 using InputFormatPtr = std::shared_ptr<IInputFormat>;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -745,6 +750,14 @@ public:
     void shutdownKeeperDispatcher() const;
     void updateKeeperConfiguration(const Poco::Util::AbstractConfiguration & config);
 
+/// proton: starts.
+#if USE_NURAFT
+    std::shared_ptr<MetaStoreDispatcher> & getMetaStoreDispatcher() const;
+#endif
+    void initializeMetaStoreDispatcher() const;
+    void shutdownMetaStoreDispatcher() const;
+/// proton: ends.
+
     /// Set auxiliary zookeepers configuration at server starting or configuration reloading.
     void reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & config);
     /// Has ready or expired ZooKeeper
@@ -893,6 +906,10 @@ public:
         CLIENT,         /// clickhouse-client
         LOCAL,          /// clickhouse-local
         KEEPER,         /// clickhouse-keeper (also daemon)
+
+        /// proton: starts.
+        METASTORE,      /// proton-metastore (also daemon)
+        /// proton: ends.
     };
 
     ApplicationType getApplicationType() const;

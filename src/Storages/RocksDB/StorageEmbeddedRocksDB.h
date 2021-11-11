@@ -53,6 +53,12 @@ public:
     std::vector<rocksdb::Status> multiGet(const std::vector<rocksdb::Slice> & slices_keys, std::vector<String> & values) const;
     const String & getPrimaryKey() const { return primary_key; }
 
+    /// proton: starts.
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
+
+    void mutate(const MutationCommands & commands, ContextPtr context) override;
+    /// proton: ends.
+
 protected:
     StorageEmbeddedRocksDB(const StorageID & table_id_,
         const String & relative_data_path_,

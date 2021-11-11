@@ -747,7 +747,7 @@ if (ThreadFuzzer::instance().isEffective())
         }
     }
     else
-        executable_path = "/usr/bin/clickhouse";    /// It is used for information messages.
+        executable_path = "/usr/bin/proton";    /// It is used for information messages.
 
     /// After full config loaded
     {
@@ -783,7 +783,7 @@ if (ThreadFuzzer::instance().isEffective())
             else
             {
                 LOG_INFO(log, "It looks like the process has no CAP_IPC_LOCK capability, binary mlock will be disabled."
-                    " It could happen due to incorrect ClickHouse package installation."
+                    " It could happen due to incorrect proton package installation."
                     " You could resolve the problem manually with 'sudo setcap cap_ipc_lock=+ep {}'."
                     " Note that it will not work on 'nosuid' mounted filesystems.", executable_path);
             }
@@ -1230,7 +1230,6 @@ if (ThreadFuzzer::instance().isEffective())
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
 
-
     /// try set up encryption. There are some errors in config, error will be printed and server wouldn't start.
     CompressionCodecEncrypted::Configuration::instance().load(config(), "encryption_codecs");
 
@@ -1276,6 +1275,10 @@ if (ThreadFuzzer::instance().isEffective())
                 LOG_INFO(log, "Closed connections to servers for tables.");
 
             global_context->shutdownKeeperDispatcher();
+
+            /// proton: starts.
+            global_context->shutdownMetaStoreDispatcher();
+            /// proton: ends.
         }
 
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
@@ -1438,10 +1441,6 @@ if (ThreadFuzzer::instance().isEffective())
 
     {
         attachSystemTablesAsync(global_context, *DatabaseCatalog::instance().getSystemDatabase(), async_metrics);
-
-        /// proton: start. Register Rest api route handlers
-        RestRouterFactory::registerRestRouterHandlers();
-        /// proton: end.
 
         {
             std::lock_guard lock(servers_lock);
@@ -1640,6 +1639,41 @@ void Server::createServers(
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
     http_params->setTimeout(settings.http_receive_timeout);
     http_params->setKeepAliveTimeout(keep_alive_timeout);
+
+    /// proton: starts.
+    /// Register REST API handler in advance
+    RestRouterFactory::registerRestRouterHandlers();
+    if (config.has("metastore_server"))
+    {
+#if USE_NURAFT
+        /// Register MetaStore Rest api route handlers
+        RestRouterFactory::registerMetaStoreRestRouterHandlers();
+
+        /// Initialize test metastore RAFT. Do nothing if no metastore_server in config.
+        global_context->initializeMetaStoreDispatcher();
+        for (const auto & listen_host : listen_hosts)
+        {
+            /// HTTP MetaStoreServer
+            const char * port_name = "metastore_server.http_port";
+            createServer(config, listen_host, port_name, listen_try, true, servers, [&](UInt16 port) -> ProtocolServerAdapter
+                         {
+                             Poco::Net::ServerSocket socket;
+                             auto address = socketBindListen(socket, listen_host, port);
+                             socket.setReceiveTimeout(settings.http_receive_timeout);
+                             socket.setSendTimeout(settings.http_send_timeout);
+                             return ProtocolServerAdapter(
+                                 listen_host,
+                                 port_name,
+                                 "http://" + address.toString(),
+                                 std::make_unique<HTTPServer>(
+                                     context(), createMetaStoreHandlerFactory(*this, "MetaStoreHTTPHandler-factory"), server_pool, socket, http_params));
+                         });
+        }
+#else
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "proton server built without NuRaft library. Cannot use internal coordination.");
+#endif
+    }
+    /// proton: ends.
 
     for (const auto & listen_host : listen_hosts)
     {

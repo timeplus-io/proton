@@ -1,6 +1,8 @@
 #include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
 #include <Storages/RocksDB/EmbeddedRocksDBSink.h>
-
+/// proton: starts.
+#include <Storages/MutationCommands.h>
+/// proton:ends.
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Storages/SelectQueryInfo.h>
@@ -49,6 +51,7 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int ROCKSDB_ERROR;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int NOT_IMPLEMENTED;
 }
 
 using FieldVectorPtr = std::shared_ptr<FieldVector>;
@@ -537,5 +540,131 @@ void registerStorageEmbeddedRocksDB(StorageFactory & factory)
     factory.registerStorage("EmbeddedRocksDB", create, features);
 }
 
+/// proton: starts.
+void StorageEmbeddedRocksDB::checkMutationIsPossible(const MutationCommands & commands, const Settings & /**/) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type != MutationCommand::UPDATE && command.type != MutationCommand::DELETE)
+            throw Exception("Table engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+        if (command.partition)
+            throw Exception("Table engine EmbeddedRocksDB mutations in partition is not supports", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+
+void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPtr /**/)
+{
+    assert(rocksdb_ptr);
+    /// [get_key], We get key by where clause
+    /// Supported where clause: 'key = literal' or 'literal = key'
+    auto get_key = [this](const auto & command, const auto & sample_block, auto * wb_key) -> bool { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        if (!command.predicate)
+            return false;
+        const auto * function = command.predicate->template as<ASTFunction>();
+        if (!function || function->name != "equals")
+            return false;
+
+        const auto & args = function->arguments->template as<ASTExpressionList &>();
+        const ASTIdentifier * ident;
+        const IAST * value;
+
+        if (args.children.size() != 2)
+            return false;
+
+        if ((ident = args.children.at(0)->template as<ASTIdentifier>()))
+            value = args.children.at(1).get();
+        else if ((ident = args.children.at(1)->template as<ASTIdentifier>()))
+            value = args.children.at(0).get();
+        else
+            return false;
+
+        if (ident->name() != primary_key)
+            return false;
+
+        if (const auto * literal = value->template as<ASTLiteral>())
+        {
+            sample_block.getByName(primary_key).type->getDefaultSerialization()->serializeBinary(literal->value, *wb_key);
+            return true;
+        }
+
+        return false;
+    };
+
+    /// [update_value], We get new value by update clause
+    /// Supported update clause: 'value1 = literal', 'value2 = literal' ...
+    /// In Rocksdb:
+    ///     key = column(key)
+    ///     value = columns(value1, value2 ...)
+    /// so, we need to partial update with new value on old value
+    auto update_value = [this](const auto & command, const auto & sample_block, const auto & old_value, auto * wb_value) -> bool { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        std::unordered_map<String, Field> new_values_index_by_name;
+        for (const auto & kv : command.column_to_update_expression)
+        {
+            if (kv.first == primary_key)
+                return false;
+
+            const auto * literal = kv.second->template as<ASTLiteral>();
+            if (!literal)
+                return false;
+
+            new_values_index_by_name.emplace(kv.first, literal->value);
+        }
+
+        ReadBufferFromString old_value_buffer(old_value);
+        Field replaced_value;
+        for (const auto & elem : sample_block)
+        {
+            if (elem.name == primary_key)
+                continue;
+
+            elem.type->getDefaultSerialization()->deserializeBinary(replaced_value, old_value_buffer);
+
+            /// if the column in update list, we replace old value to new value.
+            auto iter = new_values_index_by_name.find(elem.name);
+            if (iter != new_values_index_by_name.end())
+                replaced_value = iter->second;
+
+            elem.type->getDefaultSerialization()->serializeBinary(replaced_value, *wb_value);
+        }
+
+        return true;
+    };
+
+    const auto & sample_block = getInMemoryMetadataPtr()->getSampleBlock();
+    WriteBufferFromOwnString wb_key;
+    WriteBufferFromOwnString wb_value;
+    for (const auto & command : commands)
+    {
+        wb_key.restart();
+        /// get key
+        if (!get_key(command, sample_block, &wb_key))
+            throw Exception("Table engine EmbeddedRocksDB DELETE mutations key is invalid", ErrorCodes::BAD_ARGUMENTS);
+
+        if (command.type == MutationCommand::DELETE)
+        {
+            auto status = rocksdb_ptr->Delete(rocksdb::WriteOptions(), wb_key.str());
+            if (!status.ok())
+                throw Exception("RocksDB write error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+        }
+        else if (command.type == MutationCommand::UPDATE)
+        {
+            wb_value.restart();
+            String old_value;
+            auto get_status = rocksdb_ptr->Get(rocksdb::ReadOptions(), wb_key.str(), &old_value);
+            if (!get_status.ok())
+                throw Exception("RocksDB get error: " + get_status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+
+            if (!update_value(command, sample_block, old_value, &wb_value))
+                throw Exception("Table engine EmbeddedRocksDB UPDATE mutations values is invalid", ErrorCodes::BAD_ARGUMENTS);
+
+            auto update_status = rocksdb_ptr->Put(rocksdb::WriteOptions(), wb_key.str(), wb_value.str());
+            if (!update_status.ok())
+                throw Exception("RocksDB write error: " + update_status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+        }
+        else
+            throw Exception("Table engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+    }
+}
+/// proton: ends.
 
 }

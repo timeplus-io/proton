@@ -10,6 +10,9 @@ set (CLICKHOUSE_LOCAL_LINK
         clickhouse_parsers
         clickhouse_storages_system
         clickhouse_table_functions
+        # proton: starts.
+        readpassphrase
+        # proton: ends.
 )
 
 clickhouse_program_add(local)

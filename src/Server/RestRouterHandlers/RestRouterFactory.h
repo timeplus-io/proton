@@ -7,6 +7,7 @@
 #include "IngestRawStoreHandler.h"
 #include "IngestRestRouterHandler.h"
 #include "IngestStatusHandler.h"
+#include "MetaStoreHandler.h"
 #include "PingHandler.h"
 #include "RawstoreTableRestRouterHandler.h"
 #include "RestRouterHandler.h"
@@ -41,7 +42,6 @@ public:
     static void registerRestRouterHandlers()
     {
         auto & factory = RestRouterFactory::instance();
-
         factory.registerRouterHandler(
             "/proton/v1/ingest/tables/(?P<table>[%\\w]+)(\\?mode=\\w+){0,1}",
             "POST",
@@ -160,6 +160,19 @@ public:
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::APISpecHandler>(query_context);
             });
+    }
+
+    static void registerMetaStoreRestRouterHandlers()
+    {
+        auto & factory = RestRouterFactory::instance();
+#if USE_NURAFT
+        factory.registerRouterHandler(
+            "/proton/metastore(\\?[\\w\\-=&#]+){0,1}",
+            "GET/POST/DELETE",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<DB::MetaStoreHandler>(query_context);
+            });
+#endif
     }
 
 public:

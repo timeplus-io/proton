@@ -52,7 +52,10 @@
 /// the number is unmotivated
 #define DEFAULT_COUNT_OF_HTTP_CONNECTIONS_PER_ENDPOINT 15
 
-#define DBMS_DEFAULT_PATH "/var/lib/clickhouse/"
+/// proton: starts.
+#define DBMS_DEFAULT_PATH "/var/lib/proton/"
+#define METASTORE_DEFAULT_PATH "/var/lib/proton-metastore/"
+/// proton: ends.
 
 /// Actually, there may be multiple acquisitions of different locks for a given table within one query.
 /// Check with IStorage class for the list of possible locks

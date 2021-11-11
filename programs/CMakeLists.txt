@@ -63,6 +63,16 @@ if (NOT ENABLE_NURAFT)
     set(ENABLE_PROTON_KEEPER_CONVERTER OFF)
 endif()
 
+# proton: starts.
+option (ENABLE_PROTON_METASTORE "Proton alternative to MetaStore" ${ENABLE_PROTON_ALL})
+if (NOT USE_NURAFT)
+    # RECONFIGURE_MESSAGE_LEVEL should not be used here,
+    # since USE_NURAFT is set to OFF for FreeBSD and Darwin.
+    message (STATUS "proton-metastore will not be built (lack of NuRaft)")
+    set(ENABLE_PROTON_METASTORE OFF)
+endif()
+# proton: ends.
+
 if (PROTON_SPLIT_BINARY)
     option(ENABLE_PROTON_INSTALL "Install proton without .deb/.rpm/.tgz packages (having the binary only)" OFF)
 else ()
@@ -156,6 +166,14 @@ else()
     message(STATUS "proton keeper mode: OFF")
 endif()
 
+# proton: starts.
+if (ENABLE_PROTON_METASTORE)
+    message(STATUS "proton metastore mode: ON")
+else()
+    message(STATUS "proton metastore mode: OFF")
+endif()
+# proton: ends.
+
 if (ENABLE_PROTON_KEEPER_CONVERTER)
     message(STATUS "proton keeper-converter mode: ON")
 else()
@@ -245,6 +263,12 @@ endif()
 if (ENABLE_PROTON_KEEPER_CONVERTER)
     add_subdirectory (keeper-converter)
 endif()
+
+# proton: starts.
+if (ENABLE_PROTON_METASTORE)
+    add_subdirectory (metastore)
+endif()
+# proton: ends.
 
 if (ENABLE_PROTON_ODBC_BRIDGE)
     add_subdirectory (odbc-bridge)
@@ -339,6 +363,12 @@ if (PROTON_SPLIT_BINARY)
         list (APPEND CLICKHOUSE_ALL_TARGETS proton-keeper-converter)
     endif ()
 
+    # proton: starts.
+    if (ENABLE_PROTON_METASTORE)
+        list (APPEND CLICKHOUSE_ALL_TARGETS proton-metastore)
+    endif ()
+    # proton: ends.
+
     set_target_properties(${CLICKHOUSE_ALL_TARGETS} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ..)
 
     add_custom_target (proton-bundle ALL DEPENDS ${CLICKHOUSE_ALL_TARGETS})
@@ -395,6 +425,11 @@ else ()
     if (ENABLE_PROTON_KEEPER_CONVERTER)
         clickhouse_target_link_split_lib(proton keeper-converter)
     endif()
+    # proton: starts.
+    if (ENABLE_PROTON_METASTORE)
+        clickhouse_target_link_split_lib(proton metastore)
+    endif()
+    # proton: ends.
     if (ENABLE_PROTON_INSTALL)
         clickhouse_target_link_split_lib(proton install)
     endif ()
@@ -468,6 +503,13 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper-converter" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-keeper-converter)
     endif ()
+    # proton: starts.
+    if (ENABLE_PROTON_METASTORE)
+        add_custom_target (proton-metastore ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-metastore DEPENDS proton)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-metastore" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-metastore)
+    endif ()
+    # proton: ends.
     if (ENABLE_PROTON_DWAL_BENCHMARK)
         add_custom_target (proton-dwal-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-dwal-benchmark DEPENDS proton)
         install (FILES ${CMAKE_CURRENT_BINARY_DIR}/proton-dwal-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)

@@ -31,7 +31,6 @@ public:
         : query_context(query_context_), log(&Poco::Logger::get(router_name))
     {
         database = query_context->getCurrentDatabase();
-        assert(!database.empty());
     }
     virtual ~RestRouterHandler() = default;
 

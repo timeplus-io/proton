@@ -19,4 +19,7 @@
 #cmakedefine01 ENABLE_PROTON_KEEPER
 #cmakedefine01 ENABLE_PROTON_KEEPER_CONVERTER
 #cmakedefine01 ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
+/// proton : starts.
+#cmakedefine01 ENABLE_PROTON_METASTORE
+/// proton : ends.
 #cmakedefine01 ENABLE_PROTON_DWAL_BENCHMARK

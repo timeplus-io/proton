@@ -63,6 +63,11 @@ int mainEntryClickHouseKeeperConverter(int argc, char ** argv);
 #if ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
 int mainEntryClickHouseStaticFilesDiskUploader(int argc, char ** argv);
 #endif
+/// proton: starts.
+#if ENABLE_PROTON_METASTORE
+int mainEntryClickHouseMetaStore(int argc, char ** argv);
+#endif
+/// proton: ends.
 #if ENABLE_PROTON_DWAL_BENCHMARK
 int mainEntryClickHouseDWal(int argc, char ** argv);
 #endif
@@ -130,6 +135,11 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_PROTON_KEEPER_CONVERTER
     {"keeper-converter", mainEntryClickHouseKeeperConverter},
 #endif
+/// proton: starts.
+#if ENABLE_PROTON_METASTORE
+    {"metastore", mainEntryClickHouseMetaStore},
+#endif
+/// proton: ends.
 #if ENABLE_PROTON_DWAL_BENCHMARK
     {"dwal-benchmark", mainEntryClickHouseDWal},
 #endif

@@ -432,8 +432,11 @@ void RestHTTPRequestHandler::processQuery(
     /// Set keep alive timeout
     setResponseDefaultHeaders(response, config.getUInt("keep_alive_timeout", 10));
 
-    const auto & database = getDatabaseByUser(context->getUserName());
-    context->setCurrentDatabase(database);
+    if (!request.getURI().starts_with("/proton/metastore"))
+    {
+        const auto & database = getDatabaseByUser(context->getUserName());
+        context->setCurrentDatabase(database);
+    }
 
     auto router_handler = RestRouterFactory::instance().get(request.getURI(), request.getMethod(), context);
     if (router_handler == nullptr)
