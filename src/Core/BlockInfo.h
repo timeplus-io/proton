@@ -40,6 +40,9 @@ struct BlockInfo
 #undef DECLARE_FIELD
 
     /// proton: starts
+    /// watermark = 0 => no watermark setup
+    /// watermark = -1 => force flush
+    /// watermark > 0 => timestamp watermark
     Int64 watermark = 0;
     Int64 enqueued_time = 0;
     /// proton: ends

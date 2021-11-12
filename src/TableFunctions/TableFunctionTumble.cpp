@@ -1,5 +1,6 @@
 #include "TableFunctionTumble.h"
 
+#include <Common/StreamingCommon.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
@@ -52,7 +53,7 @@ void TableFunctionTumble::parseArguments(const ASTPtr & func_ast, ContextPtr con
     /// Change the name to call the internal streaming window functions
     auto func_name = boost::to_upper_copy(node->name);
     node->name = "__" + func_name;
-    node->alias = "____SWIN";
+    node->alias = STREAMING_WINDOW_FUNC_ALIAS;
 
     /// Prune the arguments to fit the internal hop function
     node->arguments->children.erase(node->arguments->children.begin());
@@ -85,10 +86,10 @@ void TableFunctionTumble::handleResultType(const ColumnWithTypeAndName & type_an
     /// If streaming table function is used, we will need project `wstart, wend` columns to metadata
     DataTypePtr element_type = tuple_result_type->getElements()[0];
 
-    ColumnDescription wstart("wstart", element_type);
+    ColumnDescription wstart(STREAMING_WINDOW_START, element_type);
     columns.add(wstart);
 
-    ColumnDescription wend("wend", element_type);
+    ColumnDescription wend(STREAMING_WINDOW_END, element_type);
     columns.add(wend);
 }
 

@@ -14,9 +14,9 @@ namespace DB
 {
 /** It is for streaming query only. Streaming query never ends.
   * It aggregate streams of blocks in memory and finalize (project) intermediate
-  * results perodically or on demand
+  * results periodically or on demand
   */
-class StreamingAggregatingTransform final: public IProcessor
+class StreamingAggregatingTransform final : public IProcessor
 {
 public:
     StreamingAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
@@ -40,10 +40,11 @@ public:
 private:
     void consume(Chunk chunk);
     bool needsFinalization(const Chunk & chunk) const;
-    void finalize();
-    void doFinalize();
+    void finalize(Int64 watermark);
+    void doFinalize(Int64 watermark);
     void initialize(ManyAggregatedDataVariantsPtr & data);
     void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data);
+    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark);
     void setCurrentChunk(Chunk chunk);
     IProcessor::Status preparePushToOutput();
 

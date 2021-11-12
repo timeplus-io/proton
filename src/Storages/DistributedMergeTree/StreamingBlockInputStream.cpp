@@ -2,6 +2,7 @@
 #include "StorageDistributedMergeTree.h"
 #include "StreamingBlockReader.h"
 
+#include <Common/StreamingCommon.h>
 #include <common/ClockUtils.h>
 
 namespace DB
@@ -22,9 +23,9 @@ StreamingBlockInputStream::StreamingBlockInputStream(
     , log(log_)
     , header(metadata_snapshot_->getSampleBlockForColumns(column_names, storage->getVirtuals(), storage->getStorageID()))
 {
-    wend_type = header.findByName("wend");
+    wend_type = header.findByName(STREAMING_WINDOW_END);
     if (!wend_type)
-        wend_type = header.findByName("wstart");
+        wend_type = header.findByName(STREAMING_WINDOW_START);
 }
 
 Block StreamingBlockInputStream::getHeader() const
@@ -104,7 +105,7 @@ void StreamingBlockInputStream::readAndProcess()
 
        for (const auto & name : column_names)
        {
-           if (name == "wstart" || name == "wend")
+           if (name == STREAMING_WINDOW_START || name == STREAMING_WINDOW_END)
            {
                assert (wend_type);
                ColumnWithTypeAndName col{wend_type->cloneEmpty()};

@@ -11,18 +11,8 @@ public:
     ~HopWatermark() override = default;
 
 private:
-    /// EMIT STREAM AFTER WATERMARK
-    void processWatermarkWithDelay(Block & block, Int64 max_event_ts_secs) override;
-
-    /// EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL <n> <UNIT>
-    void processWatermark(Block & block, Int64 max_event_ts_secs) override;
-
-    void handleIdlenessWatermark(Block & block) override;
-
-    void handleIdlenessWatermarkWithDelay(Block & block) override;
-
-private:
-    Int64 getWindowUpperBound(Int64 time_sec) const;
+    Int64 getProgressingInterval() const override { return hop_interval; }
+    Int64 getWindowUpperBound(Int64 time_sec) const override;
 
 private:
     Int64 hop_interval = 0;

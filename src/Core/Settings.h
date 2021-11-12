@@ -683,6 +683,7 @@ class IColumn;
     M(UInt64, max_idempotent_ids, 1000, "Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion", 0) \
     M(String, rawstore_time_extraction_type, "", "_time extraction type (string, json, regex)", 0) \
     M(String, rawstore_time_extraction_rule, "", "_time extraction rule (string, json, regex)", 0) \
+    M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

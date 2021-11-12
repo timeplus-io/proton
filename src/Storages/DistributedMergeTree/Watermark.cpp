@@ -189,7 +189,8 @@ void Watermark::process(Block & block)
     {
         /// global aggr emitted by using wall clock time of the current server
         last_event_seen_ts = UTCSeconds::now();
-        assignWatermark(block, UTCSeconds::now());
+        max_event_ts = UTCSeconds::now();
+        assignWatermark(block);
         return;
     }
 
@@ -201,7 +202,7 @@ void Watermark::process(Block & block)
     //        handleIdleness(block);
 }
 
-void Watermark::assignWatermark(Block & block, Int64 max_event_ts_secs)
+void Watermark::assignWatermark(Block & block)
 {
     switch (watermark_settings.mode)
     {
@@ -217,8 +218,8 @@ void Watermark::assignWatermark(Block & block, Int64 max_event_ts_secs)
                 watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
             if (now >= next_watermark_ts)
             {
-                block.info.watermark = max_event_ts_secs;
-                last_projected_watermark_ts = max_event_ts_secs;
+                block.info.watermark = max_event_ts;
+                last_projected_watermark_ts = max_event_ts;
                 watermark_ts = now;
                 LOG_INFO(log, "Periodic time={}, rows={}", block.info.watermark, block.rows());
             }
@@ -228,11 +229,11 @@ void Watermark::assignWatermark(Block & block, Int64 max_event_ts_secs)
             throw Exception("DELAY emit doesn't implement yet", ErrorCodes::NOT_IMPLEMENTED);
         }
         case WatermarkSettings::EmitMode::WATERMARK:
-            processWatermark(block, max_event_ts_secs);
+            processWatermark(block);
             break;
 
         case WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY:
-            processWatermarkWithDelay(block, max_event_ts_secs);
+            processWatermarkWithDelay(block);
             break;
     }
 }

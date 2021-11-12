@@ -1,5 +1,6 @@
 #include "TableFunctionHop.h"
 
+#include <Common/StreamingCommon.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
@@ -53,7 +54,7 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     /// Change the name to call the internal streaming window functions
     auto func_name = boost::to_upper_copy(node->name);
     node->name = "__" + func_name;
-    node->alias = "____SWIN";
+    node->alias = STREAMING_WINDOW_FUNC_ALIAS;
 
     /// Prune the arguments to fit the internal hop function
     node->arguments->children.erase(node->arguments->children.begin());
@@ -83,7 +84,7 @@ void TableFunctionHop::handleResultType(const ColumnWithTypeAndName & type_and_n
     assert(tuple_result_type);
     assert(tuple_result_type->getElements().size() == 2);
 
-    /// If streaming table function is used, we will need project `wstart, wend` columns to metadata
+    /// If streaming table function is used, we will need project `window_start, window_end` columns to metadata
     DataTypePtr element_type = tuple_result_type->getElements()[0];
     assert(isArray(element_type));
 
@@ -91,10 +92,10 @@ void TableFunctionHop::handleResultType(const ColumnWithTypeAndName & type_and_n
     assert(tuple_result_type);
     element_type = array_type->getNestedType();
 
-    ColumnDescription wstart("wstart", element_type);
+    ColumnDescription wstart(STREAMING_WINDOW_START, element_type);
     columns.add(wstart);
 
-    ColumnDescription wend("wend", element_type);
+    ColumnDescription wend(STREAMING_WINDOW_END, element_type);
     columns.add(wend);
 }
 

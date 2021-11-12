@@ -6,7 +6,7 @@
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 #include <DataStreams/materializeBlock.h>
 
-/// proton: starts.
+/// proton: starts. Added by proton
 
 namespace ProfileEvents
 {
@@ -532,7 +532,7 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
 
     if (needsFinalization(chunk))
     {
-        finalize();
+        finalize(chunk.getChunkInfo()->watermark);
     }
 }
 
@@ -547,7 +547,7 @@ void StreamingAggregatingTransform::initGenerate()
     /// To do this, we pass a block with zero rows to aggregate.
     if (variants.empty() && params->params.keys_size == 0 && !params->params.empty_result_for_aggregation_by_empty_set)
     {
-        if (params->only_merge)
+        if (params->only_merge) /// FIXME, only_merge case
             params->aggregator.mergeOnBlock(getInputs().front().getHeader(), variants, no_more_keys);
         else
             params->aggregator.executeOnBlock(getInputs().front().getHeader(), variants, key_columns, aggregate_columns, no_more_keys);
@@ -634,18 +634,8 @@ void StreamingAggregatingTransform::initGenerate()
 
 bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 {
-    if (!finalizing)
-    {
-        /// If any other aggr streaming initiated a finalization
-        /// enter `finalizing` state as well
-        if (many_data->finalizations.load() > 0)
-        {
-            return true;
-        }
-    }
-
+    /// FIXME, watermark alignment with other parallel aggr streams
     const auto & chunk_info = chunk.getChunkInfo();
-    /// FIXME, only finalize windows before watermark
     if (chunk_info && chunk_info->watermark != 0)
     {
         return true;
@@ -656,18 +646,19 @@ bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
 /// Only for streaming aggregation case
-void StreamingAggregatingTransform::finalize()
+void StreamingAggregatingTransform::finalize(Int64 watermark)
 {
     if (!finalizing)
     {
         finalizing = true;
+
         if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
         {
             /// The current transform is the last one in this round of
             /// finalization
-            doFinalize();
+            doFinalize(watermark);
 
-            // Clear the finization count
+            // Clear the finalization count
             many_data->finalizations.store(0);
             finalizing = false;
 
@@ -675,13 +666,13 @@ void StreamingAggregatingTransform::finalize()
         }
     }
 
-    /// Wait for the last aggregation stream to do aggregation finalization
+    /// FIXME: Wait for the last aggregation stream to do aggregation finalization
     /// condition wait or spin ?
 }
 
-void StreamingAggregatingTransform::doFinalize()
+void StreamingAggregatingTransform::doFinalize(Int64 watermark)
 {
-    /// FIXME 2-level, spill to disk, aggr without key, overflow_row etc cases
+    /// FIXME spill to disk, aggr without key, overflow_row etc cases
     auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
     auto prepared_data_ptr = std::make_shared<ManyAggregatedDataVariants>(std::move(prepared_data));
 
@@ -692,8 +683,7 @@ void StreamingAggregatingTransform::doFinalize()
 
     if (prepared_data_ptr->at(0)->isTwoLevel())
     {
-        /// FIXME
-        assert(0);
+        mergeTwoLevel(prepared_data_ptr, watermark);
     }
     else
     {
@@ -752,6 +742,53 @@ void StreamingAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsP
     auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
 
     setCurrentChunk(convertToChunk(block));
+}
+
+void StreamingAggregatingTransform::mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark)
+{
+    /// FIXME, parallelization
+    auto & first = data->at(0);
+
+    std::atomic<bool> is_cancelled{false};
+
+    Block merged_block;
+
+    for (size_t thread = 0; thread < max_threads; ++thread)
+    {
+        Arena * arena = first->aggregates_pools.at(thread).get();
+
+        /// Figure out which buckets need get merged
+        auto & data_variant = data->at(thread);
+        std::vector<size_t> buckets = data_variant->aggregator->bucketsBefore(*data_variant, watermark);
+
+        for (auto bucket : buckets)
+        {
+            Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket, &is_cancelled);
+            if (is_cancelled)
+                return;
+
+            if (merged_block)
+            {
+                assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
+                for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
+                {
+                    const auto source_column = block.getByPosition(i).column;
+                    auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
+                    mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+                    merged_block.getByPosition(i).column = std::move(mutable_column);
+                }
+            }
+            else
+                merged_block = std::move(block);
+        }
+    }
+
+    if (merged_block)
+        setCurrentChunk(convertToChunk(merged_block));
+
+    auto [removed, remaining] = variants.aggregator->removeBucketsBefore(variants, watermark);
+    LOG_INFO(log, "StreamingAggregated. removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}",
+             removed, watermark, params->aggregator.params.streaming_window_count, remaining);
 }
 
 void StreamingAggregatingTransform::setCurrentChunk(Chunk chunk)

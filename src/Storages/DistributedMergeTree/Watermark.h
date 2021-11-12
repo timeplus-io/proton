@@ -65,14 +65,14 @@ public:
 
 protected:
     virtual void doProcess(Block & /* block */) { }
-    void assignWatermark(Block & block, Int64 max_event_ts_secs);
+    void assignWatermark(Block & block);
 
 private:
     /// EMIT STREAM AFTER WATERMARK
-    virtual void processWatermarkWithDelay(Block & /* block */, Int64 /* max_event_ts_secs */) { }
+    virtual void processWatermarkWithDelay(Block & /* block */) { }
 
     /// EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL <n> <UNIT>
-    virtual void processWatermark(Block & /* block */, Int64 /* max_event_ts_secs */) { }
+    virtual void processWatermark(Block & /* block */) { }
 
     void handleIdleness(Block & block);
 

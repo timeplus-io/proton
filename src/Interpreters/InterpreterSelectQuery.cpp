@@ -2128,7 +2128,9 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
         {},
-        query_info.syntax_analyzer_result->streaming); /// proton: starts. FIXME, more robust streaming checking
+        query_info.syntax_analyzer_result->streaming, /// proton: starts. FIXME, more robust streaming checking
+        settings.keep_windows);
+    /// proton: ends
 
     SortDescription group_by_sort_description;
 

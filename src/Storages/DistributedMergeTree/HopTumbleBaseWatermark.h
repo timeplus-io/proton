@@ -16,6 +16,24 @@ protected:
 
     void doProcess(Block & block) override;
 
+    /// EMIT STREAM AFTER WATERMARK
+    void processWatermark(Block & block) override;
+
+    /// EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL <n> <UNIT>
+    void processWatermarkWithDelay(Block & block) override;
+
+    void handleIdlenessWatermark(Block & block) override;
+
+    void handleIdlenessWatermarkWithDelay(Block & block) override;
+
+    Int64 initFirstWatermark() const;
+
+    virtual Int64 getProgressingInterval() const { return window_interval; }
+
+    virtual Int64 getWindowUpperBound(Int64 time_sec) const = 0;
+
+    Int64 addTimeWithAutoScale(Int64 datetime64, IntervalKind::Kind kind, Int64 interval);
+
 protected:
     Int64 window_interval = 0;
     IntervalKind::Kind window_interval_kind = IntervalKind::Second;

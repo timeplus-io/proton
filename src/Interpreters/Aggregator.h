@@ -34,6 +34,11 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnLowCardinality.h>
 
+/// proton: starts
+#include <Interpreters/StreamingAggregator.h>
+
+#include <numeric>
+/// proton: ends
 
 namespace DB
 {
@@ -573,6 +578,35 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel, false, true>> low_cardinality_keys128_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel, false, true>> low_cardinality_keys256_two_level;
 
+    /// proton: starts
+    /// Single key
+    std::unique_ptr<AggregationMethodOneNumber<UInt16, StreamingAggregatedDataWithUInt64KeyTwoLevel>> streaming_key16_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt32, StreamingAggregatedDataWithUInt64KeyTwoLevel>> streaming_key32_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt64, StreamingAggregatedDataWithUInt64KeyTwoLevel>> streaming_key64_two_level;
+
+    /// Multiple keys
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithUInt32KeyTwoLevel>>  streaming_keys32_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithUInt64KeyTwoLevel>>  streaming_keys64_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys128TwoLevel>>    streaming_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys256TwoLevel>>    streaming_keys256_two_level;
+
+    /// Nullable
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys128TwoLevel, true>>  streaming_nullable_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys256TwoLevel, true>>  streaming_nullable_keys256_two_level;
+
+    /// Low cardinality
+//    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodOneNumber<UInt32, StreamingAggregatedDataWithNullableUInt64KeyTwoLevel>>> streaming_low_cardinality_key32_two_level;
+//    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodOneNumber<UInt64, StreamingAggregatedDataWithNullableUInt64KeyTwoLevel>>> streaming_low_cardinality_key64_two_level;
+//    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodString<StreamingAggregatedDataWithNullableStringKeyTwoLevel>>> streaming_low_cardinality_key_string_two_level;
+//    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodFixedString<StreamingAggregatedDataWithNullableStringKeyTwoLevel>>> streaming_low_cardinality_key_fixed_string_two_level;
+
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys128TwoLevel, false, true>> streaming_low_cardinality_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<StreamingAggregatedDataWithKeys256TwoLevel, false, true>> streaming_low_cardinality_keys256_two_level;
+
+    /// Fallback
+    std::unique_ptr<AggregationMethodSerialized<StreamingAggregatedDataWithStringKeyTwoLevel>>  streaming_serialized_two_level;
+    /// proton: ends
+
     /// In this and similar macros, the option without_key is not considered.
     #define APPLY_FOR_AGGREGATED_VARIANTS(M) \
         M(key8,                       false) \
@@ -620,6 +654,18 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_keys256_two_level, true) \
         M(low_cardinality_key_string_two_level, true) \
         M(low_cardinality_key_fixed_string_two_level, true) \
+        M(streaming_key16_two_level, true) \
+        M(streaming_key32_two_level, true) \
+        M(streaming_key64_two_level, true) \
+        M(streaming_keys32_two_level, true) \
+        M(streaming_keys64_two_level, true) \
+        M(streaming_keys128_two_level, true) \
+        M(streaming_keys256_two_level, true) \
+        M(streaming_nullable_keys128_two_level, true) \
+        M(streaming_nullable_keys256_two_level, true) \
+        M(streaming_low_cardinality_keys128_two_level, true) \
+        M(streaming_low_cardinality_keys256_two_level, true) \
+        M(streaming_serialized_two_level, true) \
 
     enum class Type
     {
@@ -638,6 +684,20 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     ~AggregatedDataVariants();
 
+    #define APPLY_FOR_STREAMING_AGGREGATED_VARIANTS(M) \
+        M(streaming_key16_two_level, true) \
+        M(streaming_key32_two_level, true) \
+        M(streaming_key64_two_level, true) \
+        M(streaming_keys32_two_level, true) \
+        M(streaming_keys64_two_level, true) \
+        M(streaming_keys128_two_level, true) \
+        M(streaming_keys256_two_level, true) \
+        M(streaming_nullable_keys128_two_level, true) \
+        M(streaming_nullable_keys256_two_level, true) \
+        M(streaming_low_cardinality_keys128_two_level, true) \
+        M(streaming_low_cardinality_keys256_two_level, true) \
+        M(streaming_serialized_two_level, true) \
+
     void init(Type type_)
     {
         switch (type_)
@@ -652,6 +712,19 @@ struct AggregatedDataVariants : private boost::noncopyable
         }
 
         type = type_;
+
+        /// proton: start
+        switch (type)
+        {
+        #define M(NAME, IS_TWO_LEVEL) \
+            case Type::NAME: NAME->data.setKeySizes(key_sizes); break;
+            APPLY_FOR_STREAMING_AGGREGATED_VARIANTS(M)
+        #undef M
+
+            default:
+                break;
+        }
+        /// proton: ends;
     }
 
     /// Number of rows (different keys).
@@ -773,6 +846,7 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void convertToTwoLevel();
 
+    /// proton: starts
     #define APPLY_FOR_VARIANTS_TWO_LEVEL(M) \
         M(key32_two_level)            \
         M(key64_two_level)            \
@@ -792,6 +866,37 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_key_string_two_level) \
         M(low_cardinality_key_fixed_string_two_level) \
 
+    #define APPLY_FOR_VARIANTS_TWO_LEVEL_FULL(M) \
+        M(key32_two_level)            \
+        M(key64_two_level)            \
+        M(key_string_two_level)       \
+        M(key_fixed_string_two_level) \
+        M(keys32_two_level)           \
+        M(keys64_two_level)           \
+        M(keys128_two_level)          \
+        M(keys256_two_level)          \
+        M(serialized_two_level)       \
+        M(nullable_keys128_two_level) \
+        M(nullable_keys256_two_level) \
+        M(low_cardinality_key32_two_level) \
+        M(low_cardinality_key64_two_level) \
+        M(low_cardinality_keys128_two_level) \
+        M(low_cardinality_keys256_two_level) \
+        M(low_cardinality_key_string_two_level) \
+        M(low_cardinality_key_fixed_string_two_level) \
+        M(streaming_key16_two_level) \
+        M(streaming_key32_two_level) \
+        M(streaming_key64_two_level) \
+        M(streaming_keys32_two_level) \
+        M(streaming_keys64_two_level) \
+        M(streaming_keys128_two_level) \
+        M(streaming_keys256_two_level) \
+        M(streaming_nullable_keys128_two_level) \
+        M(streaming_nullable_keys256_two_level) \
+        M(streaming_low_cardinality_keys128_two_level) \
+        M(streaming_low_cardinality_keys256_two_level) \
+        M(streaming_serialized_two_level) \
+
     #define APPLY_FOR_LOW_CARDINALITY_VARIANTS(M) \
         M(low_cardinality_key8) \
         M(low_cardinality_key16) \
@@ -806,8 +911,11 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_keys128_two_level) \
         M(low_cardinality_keys256_two_level) \
         M(low_cardinality_key_string_two_level) \
-        M(low_cardinality_key_fixed_string_two_level)
+        M(low_cardinality_key_fixed_string_two_level) \
+        M(streaming_low_cardinality_keys128_two_level) \
+        M(streaming_low_cardinality_keys256_two_level) \
 
+    /// proton ends
     bool isLowCardinality() const
     {
         switch (type)
@@ -913,6 +1021,8 @@ public:
         size_t min_count_to_compile_aggregate_expression;
         /// proton: starts
         bool streaming = false;
+        /// How many streaming windows to keep from recycling
+        size_t streaming_window_count = 0;
         /// proton: ends
 
         Params(
@@ -927,8 +1037,9 @@ public:
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
             const Block & intermediate_header_ = {},
-            bool streaming_ = false)
-            : src_header(src_header_),
+            bool streaming_ = false,
+            size_t streaming_window_count_ = 0)
+        : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
             overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
@@ -939,7 +1050,8 @@ public:
             min_free_disk_space(min_free_disk_space_),
             compile_aggregate_expressions(compile_aggregate_expressions_),
             min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
-            streaming(streaming_)
+            streaming(streaming_),
+            streaming_window_count(streaming_window_count_)
         {
         }
 
@@ -1107,6 +1219,12 @@ private:
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();
+
+    /// proton: starts
+    AggregatedDataVariants::Type chooseAggregationMethodStreaming(
+        const DataTypes & types_removed_nullable, bool has_nullable_key,
+        bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes);
+    /// proton: ends
 
     /** Create states of aggregate functions for one key.
       */
@@ -1330,6 +1448,11 @@ private:
         MutableColumns & final_key_columns) const;
 
     static bool hasSparseArguments(AggregateFunctionInstruction * aggregate_instructions);
+
+    /// proton: starts
+    std::pair<size_t, size_t> removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark) const;
+    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, Int64 watermark) const;
+    /// proton: ends
 };
 
 

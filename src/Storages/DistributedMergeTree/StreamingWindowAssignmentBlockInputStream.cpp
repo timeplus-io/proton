@@ -1,21 +1,17 @@
 #include "StreamingWindowAssignmentBlockInputStream.h"
 
+#include <Columns/ColumnArray.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
-#include <Columns/ColumnArray.h>
+#include <Common/StreamingCommon.h>
 
 namespace DB
 {
 StreamingWindowAssignmentBlockInputStream::StreamingWindowAssignmentBlockInputStream(
-    BlockInputStreamPtr input_,
-    const Names & column_names,
-    StreamingFunctionDescriptionPtr desc,
-    ContextPtr context_)
-    : input(input_)
-    , context(context_)
-    , func_desc(desc)
+    BlockInputStreamPtr input_, const Names & column_names, StreamingFunctionDescriptionPtr desc, ContextPtr context_)
+    : input(input_), context(context_), func_desc(desc)
 {
     assert(input);
     assert(func_desc);
@@ -47,7 +43,7 @@ void StreamingWindowAssignmentBlockInputStream::assignWindow(Block & block)
 
     func_desc->expr->execute(expr_block);
 
-    /// auto * col_with_type = expr_block.findByName("____SWIN");
+    /// auto * col_with_type = expr_block.findByName(STREAMING_WINDOW_FUNC_ALIAS);
     /// So far we assume, the streaming function produces only one column
     assert(expr_block);
 
@@ -97,7 +93,7 @@ void StreamingWindowAssignmentBlockInputStream::assignHopWindow(Block & block, B
     {
         /// const ColumnArray & src = assert_cast<const ColumnArray &>(*wstart_result);
         auto src_wstarts = checkAndGetColumn<ColumnArray>(col_tuple->getColumnPtr(0).get());
-        const auto & offsets  = src_wstarts->getOffsets();
+        const auto & offsets = src_wstarts->getOffsets();
         for (auto & column_with_type : block)
             column_with_type.column = column_with_type.column->replicate(offsets);
 
@@ -117,7 +113,7 @@ void StreamingWindowAssignmentBlockInputStream::assignHopWindow(Block & block, B
         if (wstart_pos < 0)
         {
             /// The block is not replicated yet
-            const auto & offsets  = src_wends->getOffsets();
+            const auto & offsets = src_wends->getOffsets();
             for (auto & column_with_type : block)
                 column_with_type.column = column_with_type.column->replicate(offsets);
         }
@@ -141,10 +137,10 @@ void StreamingWindowAssignmentBlockInputStream::calculateColumns(const Names & c
 
     for (size_t i = 0; i < column_names.size(); ++i)
     {
-        if (column_names[i] == "wstart")
+        if (column_names[i] == STREAMING_WINDOW_START)
             wstart_pos = i;
 
-        if (column_names[i] == "wend")
+        if (column_names[i] == STREAMING_WINDOW_END)
             wend_pos = i;
 
         if (std::find(input_begin, input_end, column_names[i]) != input_end)

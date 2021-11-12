@@ -14,49 +14,6 @@ TumbleWatermark::TumbleWatermark(WatermarkSettings && watermark_settings_, const
     initTimezone(2);
 }
 
-void TumbleWatermark::processWatermarkWithDelay(Block & block, Int64 max_event_ts_secs)
-{
-    if (watermark_ts != 0)
-    {
-        UInt32 watermark_ts_bias = addTime(
-            watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
-
-        while (watermark_ts_bias <= max_event_ts_secs)
-        {
-            block.info.watermark = watermark_ts;
-            last_projected_watermark_ts = watermark_ts;
-            watermark_ts = addTime(watermark_ts, window_interval_kind, window_interval, *timezone);
-            watermark_ts_bias = addTime(watermark_ts, window_interval_kind, window_interval, *timezone);
-        }
-        LOG_INFO(log, "Emitted watermark={}", block.info.watermark);
-    }
-    else
-    {
-        if (max_event_ts_secs > 0)
-            watermark_ts = getWindowUpperBound(max_event_ts_secs);
-    }
-}
-
-void TumbleWatermark::processWatermark(Block & block, Int64 max_event_ts_secs)
-{
-    if (watermark_ts != 0)
-    {
-        while (watermark_ts <= max_event_ts_secs)
-        {
-            /// emit the max watermark
-            block.info.watermark = watermark_ts;
-            last_projected_watermark_ts = watermark_ts;
-            watermark_ts = addTime(watermark_ts, window_interval_kind, window_interval, *timezone);
-        }
-        LOG_INFO(log, "Emitted watermark={}", block.info.watermark);
-    }
-    else
-    {
-        if (max_event_ts_secs > 0)
-            watermark_ts = getWindowUpperBound(max_event_ts_secs);
-    }
-}
-
 Int64 TumbleWatermark::getWindowUpperBound(Int64 time_sec) const
 {
     switch (window_interval_kind)
@@ -79,30 +36,5 @@ Int64 TumbleWatermark::getWindowUpperBound(Int64 time_sec) const
 #undef CASE_WINDOW_KIND
     }
     __builtin_unreachable();
-}
-
-void TumbleWatermark::handleIdlenessWatermark(Block & block)
-{
-    if (watermark_ts != 0)
-    {
-        auto next_watermark_ts
-            = addTime(last_event_seen_ts, window_interval_kind, window_interval_kind, DateLUT::instance());
-
-        if (UTCSeconds::now() > next_watermark_ts)
-        {
-            /// idle source
-            block.info.watermark = watermark_ts;
-            last_projected_watermark_ts = watermark_ts;
-            last_event_seen_ts = next_watermark_ts;
-
-            /// Force watermark progressing
-            watermark_ts = addTime(watermark_ts, window_interval_kind, window_interval, *timezone);
-        }
-    }
-}
-
-void TumbleWatermark::handleIdlenessWatermarkWithDelay(Block & block)
-{
-    handleIdlenessWatermark(block);
 }
 }

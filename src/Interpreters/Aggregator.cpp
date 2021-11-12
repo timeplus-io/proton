@@ -27,6 +27,10 @@
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Core/ProtocolDefines.h>
 
+/// proton: starts
+#include <Common/StreamingCommon.h>
+/// proton: ends
+
 
 namespace ProfileEvents
 {
@@ -427,6 +431,16 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         }
     }
 
+    /// proton: starts
+    if (params.streaming)
+    {
+        auto method_type = chooseAggregationMethodStreaming(
+            types_removed_nullable, has_nullable_key, has_low_cardinality, num_fixed_contiguous_keys, keys_bytes);
+        if (method_type != AggregatedDataVariants::Type::EMPTY)
+            return method_type;
+    }
+    /// proton: ends
+
     if (has_nullable_key)
     {
         if (params.keys_size == num_fixed_contiguous_keys && !has_low_cardinality)
@@ -540,6 +554,82 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 
     return AggregatedDataVariants::Type::serialized;
 }
+
+/// proton: starts
+AggregatedDataVariants::Type Aggregator::chooseAggregationMethodStreaming(
+    const DataTypes & types_removed_nullable, bool has_nullable_key,
+    bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes)
+{
+    /// FIXME, better way?
+    const auto & col_with_type_and_name = (params.src_header ? params.src_header : params.intermediate_header).safeGetByPosition(params.keys[0]);
+    /// If the first aggregation column is not `window_start or window_end or date/time/time64 type`, fallback to normal aggregation method
+    if (col_with_type_and_name.name != STREAMING_WINDOW_START && col_with_type_and_name.name != STREAMING_WINDOW_END)
+        return AggregatedDataVariants::Type::EMPTY;
+
+    if (!isDate(col_with_type_and_name.type) && !isDateTime(col_with_type_and_name.type) && !isDateTime64(col_with_type_and_name.type))
+        return AggregatedDataVariants::Type::EMPTY;
+
+    if (has_nullable_key)
+    {
+        if (params.keys_size == num_fixed_contiguous_keys && !has_low_cardinality)
+        {
+            /// Pack if possible all the keys along with information about which key values are nulls
+            /// into a fixed 16- or 32-byte blob.
+            if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= 16)
+                return AggregatedDataVariants::Type::streaming_nullable_keys128_two_level;
+            if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= 32)
+                return AggregatedDataVariants::Type::streaming_nullable_keys256_two_level;
+        }
+
+        /// Fallback case.
+        return AggregatedDataVariants::Type::serialized;
+    }
+
+    /// No key has been found to be nullable.
+
+    /// Single numeric key.
+    if (params.keys_size == 1)
+    {
+        assert(types_removed_nullable[0]->isValueRepresentedByNumber());
+
+        size_t size_of_field = types_removed_nullable[0]->getSizeOfValueInMemory();
+
+        if (size_of_field == 2)
+            return AggregatedDataVariants::Type::streaming_key16_two_level;
+        if (size_of_field == 4)
+            return AggregatedDataVariants::Type::streaming_key32_two_level;
+        if (size_of_field == 8)
+            return AggregatedDataVariants::Type::streaming_key64_two_level;
+
+        Exception("Logical error: the first streaming aggregation column has sizeOfField not in 2, 4, 8.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
+    if (params.keys_size == num_fixed_contiguous_keys)
+    {
+        assert(keys_bytes > 2);
+
+        if (has_low_cardinality)
+        {
+            if (keys_bytes <= 16)
+                return AggregatedDataVariants::Type::streaming_low_cardinality_keys128_two_level;
+            if (keys_bytes <= 32)
+                return AggregatedDataVariants::Type::streaming_low_cardinality_keys256_two_level;
+        }
+
+        if (keys_bytes <= 4)
+            return AggregatedDataVariants::Type::streaming_keys32_two_level;
+        if (keys_bytes <= 8)
+            return AggregatedDataVariants::Type::streaming_keys64_two_level;
+        if (keys_bytes <= 16)
+            return AggregatedDataVariants::Type::streaming_keys128_two_level;
+        if (keys_bytes <= 32)
+            return AggregatedDataVariants::Type::streaming_keys256_two_level;
+    }
+
+    return AggregatedDataVariants::Type::streaming_serialized_two_level;
+}
+/// proton: ends
 
 template <bool skip_compiled_aggregate_functions>
 void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
@@ -952,9 +1042,12 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     /// How to perform the aggregation?
     if (result.empty())
     {
-        result.init(method_chosen);
+        /// proton: starts. First init the key_sizes, and then the method since method init
+        /// may depend on the key_sizes
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
+        result.init(method_chosen);
+        /// proton: ends
         LOG_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
 
@@ -1200,7 +1293,7 @@ Block Aggregator::mergeAndConvertOneBucketToBlock(
         block = convertOneBucketToBlock(merged_data, *merged_data.NAME, arena, final, bucket); \
     }
 
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_TWO_LEVEL_FULL(M)
 #undef M
 
     return block;
@@ -2011,8 +2104,10 @@ void NO_INLINE Aggregator::mergeDataImpl(
 
                     for (size_t i = 0; i < params.aggregates_size; ++i)
                     {
-                        if (!is_aggregate_function_compiled[i])
+                        /// proton: starts
+                        if (!is_aggregate_function_compiled[i] && !params.streaming)
                             aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                        /// proton: ends
                     }
                 }
             }
@@ -2023,7 +2118,10 @@ void NO_INLINE Aggregator::mergeDataImpl(
                     aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
 
                 for (size_t i = 0; i < params.aggregates_size; ++i)
-                    aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                    /// proton: starts
+                    if (!params.streaming)
+                        aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                    /// proton: ends
             }
         }
         else
@@ -2031,10 +2129,16 @@ void NO_INLINE Aggregator::mergeDataImpl(
             dst = src;
         }
 
-        src = nullptr;
+        /// proton: starts
+        if (!params.streaming)
+            src = nullptr;
+        /// proton: ends
     });
 
-    table_src.clearAndShrink();
+    /// proton: starts
+    if (!params.streaming)
+        table_src.clearAndShrink();
+    /// proton: ends
 }
 
 
@@ -2857,5 +2961,64 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result) cons
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 }
 
+/// proton: starts. for streaming processing
+std::pair<size_t, size_t> Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark) const
+{
+    if (watermark <= 0)
+        return {0, 0};
 
+    auto destroy = [&](AggregateDataPtr & data)
+    {
+        if (nullptr == data)
+            return;
+
+        for (size_t i = 0; i < params.aggregates_size; ++i)
+            aggregate_functions[i]->destroy(data + offsets_of_aggregate_states[i]);
+
+        data = nullptr;
+    };
+
+    switch (result.type)
+    {
+#define M(NAME, IS_TWO_LEVEL) \
+            case AggregatedDataVariants::Type::NAME: return result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
+        APPLY_FOR_STREAMING_AGGREGATED_VARIANTS(M)
+#undef M
+
+        default:
+            break;
+    }
+    return {0, 0};
+}
+
+std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, Int64 watermark) const
+{
+    auto get_defaults = []()
+    {
+        /// By default, we are using 256 buckets for 2 level hash table
+        /// and ConvertingAggregatedToChunksSource is using this default value / convention
+        /// This is a fallback to normal 2 level hashtable
+
+        std::vector<size_t> defaults(256);
+        std::iota(defaults.begin(), defaults.end(), 0);
+        return defaults;
+    };
+
+    if (watermark <= 0)
+        return get_defaults();
+
+    switch (result.type)
+    {
+#define M(NAME, IS_TWO_LEVEL) \
+            case AggregatedDataVariants::Type::NAME: return result.NAME->data.bucketsBefore(watermark);
+        APPLY_FOR_STREAMING_AGGREGATED_VARIANTS(M)
+#undef M
+
+        default:
+            break;
+    }
+
+    return get_defaults();
+}
+/// proton: ends
 }
