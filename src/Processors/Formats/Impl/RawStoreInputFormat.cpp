@@ -489,7 +489,7 @@ void RawStoreInputFormat::readSuffix()
 
 void registerInputFormatProcessorRawStoreEachRow(FormatFactory & factory)
 {
-    factory.registerInputFormatProcessor(
+    factory.registerInputFormat(
         "RawStoreEachRow",
         [](ReadBuffer & buf,
            const Block & sample,
@@ -501,7 +501,7 @@ void registerInputFormatProcessorRawStoreEachRow(FormatFactory & factory)
 
 void registerFileSegmentationEngineRawStoreEachRow(FormatFactory & factory)
 {
-    factory.registerFileSegmentationEngine("RawStoreEachRow", &fileSegmentationEngineJSONEachRowImpl);
+    factory.registerFileSegmentationEngine("RawStoreEachRow", &fileSegmentationEngineJSONEachRow);
 }
 
 }

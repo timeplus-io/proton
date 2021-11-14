@@ -5,7 +5,7 @@
 #include <IO/WriteHelpers.h>
 #include <Common/Exception.h>
 #include <Common/parseIntStrict.h>
-#include <common/logger_useful.h>
+#include <base/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <Poco/Logger.h>

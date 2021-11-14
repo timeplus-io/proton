@@ -2,15 +2,15 @@
 
 #include <sys/stat.h>
 #include <pwd.h>
-#include <Access/AccessControlManager.h>
+#include <Access/AccessControl.h>
 #include <Common/ClickHouseRevision.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Common/DNSResolver.h>
 #include <Interpreters/DNSCacheUpdater.h>
-#include <common/defines.h>
-#include <common/logger_useful.h>
-#include <common/ErrorHandlers.h>
-#include <common/scope_guard.h>
+#include <base/defines.h>
+#include <base/logger_useful.h>
+#include <base/ErrorHandlers.h>
+#include <base/scope_guard.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Version.h>
 #include <Poco/Environment.h>
@@ -321,7 +321,7 @@ int MetaStore::main(const std::vector<std::string> & /*args*/)
 
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
 
-    auto & access_control = global_context->getAccessControlManager();
+    auto & access_control = global_context->getAccessControl();
 
     /// Initialize access storages.
     access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });

@@ -1,14 +1,16 @@
 #pragma once
 
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
 #include <Coordination/InMemoryLogStore.h>
 #include <Coordination/KVRequest.h>
 #include <Coordination/KVResponse.h>
 #include <Coordination/MetaStateManager.h>
 #include <Coordination/MetaStateMachine.h>
 #include <Coordination/CoordinationSettings.h>
+#include <base/logger_useful.h>
+
+#include <libnuraft/nuraft.hxx>
+
 #include <unordered_map>
-#include <common/logger_useful.h>
 
 namespace DB
 {

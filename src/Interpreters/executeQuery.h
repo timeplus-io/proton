@@ -2,9 +2,9 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <QueryPipeline/BlockIO.h>
+#include <QueryPipeline/QueryPipeline.h>
 #include <Interpreters/Context_fwd.h>
 #include <Formats/FormatSettings.h>
-#include <Processors/QueryPipeline.h>
 #include <Parsers/IAST.h>
 
 namespace DB

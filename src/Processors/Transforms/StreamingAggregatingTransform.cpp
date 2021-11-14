@@ -1,16 +1,16 @@
 #include "StreamingAggregatingTransform.h"
 
-#include <DataStreams/NativeBlockInputStream.h>
+#include <Core/ProtocolDefines.h>
+#include <Formats/NativeReader.h>
 #include <Processors/ISource.h>
-#include <Processors/Pipe.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
-#include <DataStreams/materializeBlock.h>
+#include <QueryPipeline/Pipe.h>
 
 /// proton: starts. Added by proton
 
 namespace ProfileEvents
 {
-    extern const Event ExternalAggregationMerge;
+extern const Event ExternalAggregationMerge;
 }
 
 namespace DB
@@ -41,8 +41,10 @@ namespace
     {
     public:
         SourceFromNativeStream(const Block & header, const std::string & path)
-            : ISource(header), file_in(path), compressed_in(file_in),
-            block_in(std::make_shared<NativeBlockInputStream>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
+            : ISource(header)
+            , file_in(path)
+            , compressed_in(file_in)
+            , block_in(std::make_unique<NativeReader>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
         {
             block_in->readPrefix();
         }
@@ -95,16 +97,14 @@ public:
     using SharedDataPtr = std::shared_ptr<SharedData>;
 
     StreamingConvertingAggregatedToChunksSource(
-        AggregatingTransformParamsPtr params_,
-        ManyAggregatedDataVariantsPtr data_,
-        SharedDataPtr shared_data_,
-        Arena * arena_)
+        AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, SharedDataPtr shared_data_, Arena * arena_)
         : ISource(params_->getHeader())
         , params(std::move(params_))
         , data(std::move(data_))
         , shared_data(std::move(shared_data_))
         , arena(arena_)
-        {}
+    {
+    }
 
     String getName() const override { return "StreamingConvertingAggregatedToChunksSource"; }
 
@@ -116,7 +116,8 @@ protected:
         if (bucket_num >= NUM_BUCKETS)
             return {};
 
-        Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket_num, &shared_data->is_cancelled);
+        Block block
+            = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket_num, &shared_data->is_cancelled);
         Chunk chunk = convertToChunk(block);
 
         shared_data->is_bucket_processed[bucket_num] = true;
@@ -143,9 +144,11 @@ private:
 class StreamingConvertingAggregatedToChunksTransform : public IProcessor
 {
 public:
-    StreamingConvertingAggregatedToChunksTransform(AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, size_t num_threads_)
-        : IProcessor({}, {params_->getHeader()})
-        , params(std::move(params_)), data(std::move(data_)), num_threads(num_threads_) {}
+    StreamingConvertingAggregatedToChunksTransform(
+        AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, size_t num_threads_)
+        : IProcessor({}, {params_->getHeader()}), params(std::move(params_)), data(std::move(data_)), num_threads(num_threads_)
+    {
+    }
 
     String getName() const override { return "ConvertingAggregatedToChunksTransform"; }
 
@@ -301,8 +304,10 @@ private:
     void setCurrentChunk(Chunk chunk)
     {
         if (has_input)
-            throw Exception("Current chunk was already set in "
-                            "StreamingConvertingAggregatedToChunksTransform.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Current chunk was already set in "
+                "StreamingConvertingAggregatedToChunksTransform.",
+                ErrorCodes::LOGICAL_ERROR);
 
         has_input = true;
         current_chunk = std::move(chunk);
@@ -344,14 +349,15 @@ private:
 
         ++current_bucket_num;
 
-    #define M(NAME) \
-                else if (first->type == AggregatedDataVariants::Type::NAME) \
-                    params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
-        if (false) {} // NOLINT
+#define M(NAME) \
+    else if (first->type == AggregatedDataVariants::Type::NAME) \
+        params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
+        if (false)
+        {
+        } // NOLINT
         APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
-    #undef M
-        else
-            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+#undef M
+        else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
         auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
 
@@ -376,15 +382,19 @@ private:
 };
 
 StreamingAggregatingTransform::StreamingAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
-    : StreamingAggregatingTransform(std::move(header), std::move(params_)
-    , std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
+    : StreamingAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
 {
 }
 
 StreamingAggregatingTransform::StreamingAggregatingTransform(
-    Block header, AggregatingTransformParamsPtr params_, ManyAggregatedDataPtr many_data_,
-    size_t current_variant, size_t max_threads_, size_t temporary_data_merge_threads_)
-    : IProcessor({std::move(header)}, {params_->getHeader()}), params(std::move(params_))
+    Block header,
+    AggregatingTransformParamsPtr params_,
+    ManyAggregatedDataPtr many_data_,
+    size_t current_variant,
+    size_t max_threads_,
+    size_t temporary_data_merge_threads_)
+    : IProcessor({std::move(header)}, {params_->getHeader()})
+    , params(std::move(params_))
     , key_columns(params->params.keys_size)
     , aggregate_columns(params->params.aggregates_size)
     , many_data(std::move(many_data_))
@@ -556,9 +566,14 @@ void StreamingAggregatingTransform::initGenerate()
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = variants.sizeWithoutOverflowRow();
 
-    LOG_DEBUG(log, "StreamingAggregated. {} to {} rows (from {}) in {} sec. ({:.3f} rows/sec., {}/sec.)",
-        src_rows, rows, ReadableSize(src_bytes),
-        elapsed_seconds, src_rows / elapsed_seconds,
+    LOG_DEBUG(
+        log,
+        "StreamingAggregated. {} to {} rows (from {}) in {} sec. ({:.3f} rows/sec., {}/sec.)",
+        src_rows,
+        rows,
+        ReadableSize(src_bytes),
+        elapsed_seconds,
+        src_rows / elapsed_seconds,
         ReadableSize(src_bytes / elapsed_seconds));
 
     if (params->aggregator.hasTemporaryFiles())
@@ -583,7 +598,8 @@ void StreamingAggregatingTransform::initGenerate()
     {
         auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
         auto prepared_data_ptr = std::make_shared<ManyAggregatedDataVariants>(std::move(prepared_data));
-        processors.emplace_back(std::make_shared<StreamingConvertingAggregatedToChunksTransform>(params, std::move(prepared_data_ptr), max_threads));
+        processors.emplace_back(
+            std::make_shared<StreamingConvertingAggregatedToChunksTransform>(params, std::move(prepared_data_ptr), max_threads));
     }
     else
     {
@@ -731,13 +747,14 @@ void StreamingAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsP
     }
 
 #define M(NAME) \
-            else if (first->type == AggregatedDataVariants::Type::NAME) \
-                params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
-    if (false) {} // NOLINT
+    else if (first->type == AggregatedDataVariants::Type::NAME) \
+        params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
+    if (false)
+    {
+    } // NOLINT
     APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
 
@@ -787,8 +804,13 @@ void StreamingAggregatingTransform::mergeTwoLevel(ManyAggregatedDataVariantsPtr 
         setCurrentChunk(convertToChunk(merged_block));
 
     auto [removed, remaining] = variants.aggregator->removeBucketsBefore(variants, watermark);
-    LOG_INFO(log, "StreamingAggregated. removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}",
-             removed, watermark, params->aggregator.params.streaming_window_count, remaining);
+    LOG_INFO(
+        log,
+        "StreamingAggregated. removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}",
+        removed,
+        watermark,
+        params->aggregator.params.streaming_window_count,
+        remaining);
 }
 
 void StreamingAggregatingTransform::setCurrentChunk(Chunk chunk)

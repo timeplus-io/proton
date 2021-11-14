@@ -10,9 +10,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/executeSelectQuery.h>
-#include <common/ClockUtils.h>
-#include <common/DateLUT.h>
-#include <common/logger_useful.h>
+#include <base/ClockUtils.h>
+#include <base/DateLUT.h>
+#include <base/logger_useful.h>
 
 #include <Poco/Util/Application.h>
 

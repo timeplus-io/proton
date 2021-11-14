@@ -6,10 +6,10 @@
 #include <Functions/FunctionHelpers.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <base/ClockUtils.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <common/ClockUtils.h>
-#include <common/DateLUT.h>
-#include <common/logger_useful.h>
+#include <base/DateLUT.h>
+#include <base/logger_useful.h>
 
 namespace DB
 {

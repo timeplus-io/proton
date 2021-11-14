@@ -8,8 +8,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/SelectQueryInfo.h>
-#include <common/ClockUtils.h>
-#include <common/logger_useful.h>
+#include <base/ClockUtils.h>
+#include <base/logger_useful.h>
 
 namespace DB
 {

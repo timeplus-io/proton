@@ -2,7 +2,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/ColumnWithTypeAndName.h>
-#include <DataStreams/MaterializingBlockOutputStream.h>
+/// #include <DataStreams/MaterializingBlockOutputStream.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>

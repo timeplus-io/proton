@@ -1,7 +1,7 @@
 #pragma once
 
-#include <common/types.h>
 #include <Poco/JSON/Object.h>
+#include <base/types.h>
 
 namespace DB
 {

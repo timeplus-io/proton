@@ -732,11 +732,13 @@ std::optional<UUID> Context::getUserID() const
 /// proton: starts
 String Context::getPasswordByUserName(const String & user_name) const
 {
-    if (auto id = getAccessControlManager().find<User>(user_name))
+    if (auto id = getAccessControl().find<User>(user_name))
     {
-        if (auto user = getAccessControlManager().tryRead<User>(*id))
+        if (auto user = getAccessControl().tryRead<User>(*id))
         {
-            return user->authentication.getPassword();
+            /// return user->authentication.getPassword();
+            /// FIXME...
+            return "";
         }
     }
     return "";

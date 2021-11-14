@@ -555,10 +555,10 @@ void StorageDistributedMergeTree::truncate(
     storage->truncate(query, metadata_snapshot, context_, holder);
 }
 
-void StorageDistributedMergeTree::alter(const AlterCommands & commands, ContextPtr context_, TableLockHolder & table_lock_holder)
+void StorageDistributedMergeTree::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
 {
     assert(storage);
-    storage->alter(commands, context_, table_lock_holder);
+    storage->alter(commands, context_, alter_lock_holder);
     setInMemoryMetadata(storage->getInMemoryMetadata());
 }
 

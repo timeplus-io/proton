@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeInterval.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/Context_fwd.h>
-#include <common/DateLUT.h>
+#include <base/DateLUT.h>
 
 namespace DB
 {

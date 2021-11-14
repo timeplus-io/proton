@@ -3,7 +3,7 @@
 #include <Server/HTTP/HTTPRequestHandler.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Common/CurrentThread.h>
-#include <common/types.h>
+#include <base/types.h>
 
 namespace Poco
 {

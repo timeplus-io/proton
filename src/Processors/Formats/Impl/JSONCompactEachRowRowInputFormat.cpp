@@ -46,6 +46,8 @@ JSONCompactEachRowFormatReader::JSONCompactEachRowFormatReader(ReadBuffer & in_,
     , with_bracket(false)
     /// proton: ends
 {
+    /// FIXME
+    (void) with_bracket;
 }
 
 void JSONCompactEachRowFormatReader::skipRowStartDelimiter()

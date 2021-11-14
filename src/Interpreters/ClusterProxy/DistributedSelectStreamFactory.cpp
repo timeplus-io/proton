@@ -1,16 +1,16 @@
 #include "DistributedSelectStreamFactory.h"
 
-#include <DataStreams/RemoteQueryExecutor.h>
+/// #include <DataStreams/RemoteQueryExecutor.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/formatAST.h>
-#include <Processors/Pipe.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <QueryPipeline/Pipe.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/checkStackSize.h>
 

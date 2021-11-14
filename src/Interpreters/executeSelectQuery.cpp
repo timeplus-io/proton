@@ -1,4 +1,4 @@
-#include <DataStreams/AsynchronousBlockInputStream.h>
+/// #include <DataStreams/AsynchronousBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Interpreters/executeQuery.h>

@@ -3,9 +3,9 @@
 #include "MetadataService.h"
 #include "Node.h"
 
-#include <DataStreams/IBlockStream_fwd.h>
+/// #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/Cluster.h>
-#include <Processors/QueryPipeline.h>
+#include <QueryPipeline/QueryPipeline.h>
 
 #include <boost/functional/hash.hpp>
 
@@ -107,8 +107,8 @@ private:
 
 private:
     void doBroadcast();
-    void processQuery(BlockInputStreamPtr & in);
-    void processQueryWithProcessors(QueryPipeline & pipeline);
+    /// void processQuery(BlockInputStreamPtr & in);
+    /// void processQueryWithProcessors(QueryPipeline & pipeline);
     void append(Block && block);
 
 private:

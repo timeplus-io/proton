@@ -3,7 +3,7 @@
 #include <Storages/MergeTree/SequenceInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Interpreters/PartLog.h>
-#include <common/logger_useful.h>
+#include <base/logger_useful.h>
 
 
 namespace DB

@@ -3,7 +3,7 @@
 #include "MetadataService.h"
 
 #include <Core/BackgroundSchedulePool.h>
-#include <DataStreams/IBlockStream_fwd.h>
+/// #include <DataStreams/IBlockStream_fwd.h>
 
 #include <optional>
 

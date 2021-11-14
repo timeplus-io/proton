@@ -3,8 +3,8 @@
 #include <Interpreters/Context.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Server/HTTP/HTTPRequestHandler.h>
-#include <common/logger_useful.h>
-#include <common/types.h>
+#include <base/logger_useful.h>
+#include <base/types.h>
 
 #include <boost/noncopyable.hpp>
 #include <Poco/File.h>

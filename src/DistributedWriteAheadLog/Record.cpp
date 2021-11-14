@@ -1,8 +1,7 @@
 #include "Record.h"
 
-#include <DataStreams/NativeBlockInputStream.h>
-#include <DataStreams/NativeBlockOutputStream.h>
-/// #include <DataStreams/materializeBlock.h>
+#include <Formats//NativeReader.h>
+#include <Formats/NativeWriter.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <Compression/CompressionFactory.h>
@@ -33,15 +32,15 @@ ByteVector Record::write(const Record & record, bool compressed)
     {
         DB::CompressedWriteBuffer compressed_out
             = DB::CompressedWriteBuffer(wb, DB::CompressionCodecFactory::instance().get("LZ4", {}), DBMS_DEFAULT_BUFFER_SIZE);
-        DB::NativeBlockOutputStream output(compressed_out, 0, DB::Block{});
-        output.write(record.block);
-        output.flush();
+        DB::NativeWriter writer(compressed_out, 0, DB::Block{});
+        writer.write(record.block);
+        writer.flush();
     }
     else
     {
-        DB::NativeBlockOutputStream output(wb, 0, DB::Block{});
-        output.write(record.block);
-        output.flush();
+        DB::NativeWriter writer(wb, 0, DB::Block{});
+        writer.write(record.block);
+        writer.flush();
     }
 
     /// Shrink to what has been written
@@ -62,13 +61,13 @@ RecordPtr Record::read(const char * data, size_t size)
     if (unlikely(Record::compression(flags)))
     {
         DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
-        DB::NativeBlockInputStream input(compressed_in, 0);
-        return std::make_shared<Record>(Record::opcode(flags), input.read());
+        DB::NativeReader reader(compressed_in, 0);
+        return std::make_shared<Record>(Record::opcode(flags), reader.read());
     }
     else
     {
-        DB::NativeBlockInputStream input(rb, 0);
-        return std::make_shared<Record>(Record::opcode(flags), input.read());
+        DB::NativeReader reader(rb, 0);
+        return std::make_shared<Record>(Record::opcode(flags), reader.read());
     }
 }
 }

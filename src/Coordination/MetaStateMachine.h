@@ -1,14 +1,14 @@
 #pragma once
 
-#include <memory>
-
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
-#include <common/logger_useful.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Coordination/CoordinationSettings.h>
 #include <Coordination/MetaSnapshotManager.h>
+#include <base/logger_useful.h>
 
+#include <libnuraft/nuraft.hxx>
 #include <rocksdb/db.h>
+
+#include <memory>
 
 namespace DB
 {

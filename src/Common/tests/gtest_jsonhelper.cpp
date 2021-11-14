@@ -1,6 +1,6 @@
 #include <IO/ReadBuffer.h>
 #include <IO/copyData.h>
-#include <common/SimpleJSON.h>
+#include <base/SimpleJSON.h>
 
 #include <gtest/gtest.h>
 

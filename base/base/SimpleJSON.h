@@ -1,9 +1,11 @@
 #pragma once
 
+#include "StringRef.h"
+#include "types.h"
+
 #include <typeinfo>
 #include <Poco/Exception.h>
-#include <common/StringRef.h>
-#include <common/types.h>
+
 
 /// proton: starts. It is a duplication of 'JSON.h' to isolate our changes and make merge process easier.
 

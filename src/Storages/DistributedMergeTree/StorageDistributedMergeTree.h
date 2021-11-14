@@ -4,7 +4,8 @@
 #include "IngestingBlocks.h"
 
 #include <pcg_random.hpp>
-#include <common/shared_ptr_helper.h>
+#include <base/shared_ptr_helper.h>
+#include <base/ClockUtils.h>
 
 #include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
@@ -13,7 +14,6 @@
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Common/ThreadPool.h>
-#include <common/ClockUtils.h>
 
 
 namespace DB
@@ -103,7 +103,7 @@ public:
     void drop() override;
     void truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr, TableExclusiveLockHolder &) override;
 
-    void alter(const AlterCommands & commands, ContextPtr context, TableLockHolder & table_lock_holder) override;
+    void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
 
     void checkTableCanBeDropped() const override;
 
