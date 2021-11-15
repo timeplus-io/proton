@@ -243,6 +243,11 @@ add_object_library(clickhouse_processors_executors Processors/Executors)
 add_object_library(clickhouse_processors_formats Processors/Formats)
 add_object_library(clickhouse_processors_formats_impl Processors/Formats/Impl)
 add_object_library(clickhouse_processors_transforms Processors/Transforms)
+
+# proton: starts
+add_object_library(clickhouse_processors_transforms Processors/Transforms/Streaming)
+# proton: ends
+
 add_object_library(clickhouse_processors_sources Processors/Sources)
 add_object_library(clickhouse_processors_sinks Processors/Sinks)
 add_object_library(clickhouse_processors_merges Processors/Merges)

@@ -3,8 +3,8 @@
 #include <DistributedWriteAheadLog/KafkaWALPool.h>
 #include <Interpreters/Context.h>
 #include <Common/setThreadName.h>
-#include <common/getFQDNOrHostName.h>
-#include <common/logger_useful.h>
+#include <base/getFQDNOrHostName.h>
+#include <base/logger_useful.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 

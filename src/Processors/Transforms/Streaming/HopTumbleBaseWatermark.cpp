@@ -49,8 +49,8 @@ namespace
     }
 }
 
-HopTumbleBaseWatermark::HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, const String & partition_key_, Poco::Logger * log_)
-    : Watermark(std::move(watermark_settings_), partition_key_, log_)
+HopTumbleBaseWatermark::HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, Poco::Logger * log_)
+    : Watermark(std::move(watermark_settings_), log_)
 {
     if (watermark_settings.mode == WatermarkSettings::EmitMode::NONE)
         watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
@@ -115,9 +115,8 @@ void HopTumbleBaseWatermark::doProcess(Block & block)
         {
             LOG_INFO(
                 log,
-                "Found {} late events for data partition {}. Current last projected watermark={}",
+                "Found {} late events for data. Current last projected watermark={}",
                 late_events,
-                partition_key,
                 last_projected_watermark_ts);
             last_logged_late_events_ts = MonotonicSeconds::now();
             last_logged_late_events = late_events;

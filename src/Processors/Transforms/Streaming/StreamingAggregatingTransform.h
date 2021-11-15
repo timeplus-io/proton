@@ -1,11 +1,10 @@
 #pragma once
 
-#include "AggregatingTransform.h"
-
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Aggregator.h>
 #include <Processors/IAccumulatingTransform.h>
+#include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/Stopwatch.h>
 
 /// proton: starts.

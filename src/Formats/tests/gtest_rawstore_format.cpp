@@ -1,9 +1,10 @@
 #include <Processors/Formats/Impl/RawStoreInputFormat.h>
 
-#include <DataStreams/copyData.h>
+#if 0
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <IO/copyData.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Processors/Formats/Impl/TabSeparatedRawRowOutputFormat.h>
@@ -489,3 +490,4 @@ TEST(RawStoreFormatTest, InvalidBlock)
     format_settings.rawstore.rawstore_time_extraction_rule = "log.time";
     checkException(sample3, format_settings, str);
 }
+#endif

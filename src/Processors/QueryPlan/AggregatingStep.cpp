@@ -5,7 +5,7 @@
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 
 /// proton: starts
-#include <Processors/Transforms/StreamingAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/StreamingAggregatingTransform.h>
 /// proton: ends
 
 #include <Processors/Merges/AggregatingSortedTransform.h>

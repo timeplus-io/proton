@@ -1,10 +1,8 @@
 #include "StorageDistributedMergeTree.h"
 #include "DistributedMergeTreeCallbackData.h"
 #include "DistributedMergeTreeSink.h"
-#include "StreamingBlockInputStream.h"
 #include "StreamingBlockReader.h"
-#include "StreamingWindowAssignmentBlockInputStream.h"
-#include "WatermarkBlockInputStream.h"
+#include "StreamingStoreSource.h"
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWriteAheadLog/KafkaWALCommon.h>
@@ -18,17 +16,18 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/createBlockSelector.h>
 #include <Interpreters/evaluateConstantExpression.h>
-#include <Processors/Pipe.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/Sources/SourceFromInputStream.h>
+#include <Processors/QueryPlan/StreamingWindowAssignmentStep.h>
+#include <Processors/QueryPlan/WatermarkStep.h>
 #include <Processors/Sources/NullSource.h>
+#include <QueryPipeline/Pipe.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
+#include <base/logger_useful.h>
 #include <Common/randomSeed.h>
-#include <common/logger_useful.h>
 
 
 namespace DB
@@ -339,22 +338,18 @@ void StorageDistributedMergeTree::readStreaming(
 
     for (Int32 i = 0; i < shards; ++i)
     {
-        BlockInputStreamPtr input_stream = std::make_shared<WatermarkBlockInputStream>(
-            std::make_shared<StreamingBlockInputStream>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log),
-            query_info,
-            streaming_func_desc,
-            topic + std::to_string(i),
-            log);
-
-        if (streaming_func_desc)
-            input_stream = std::make_shared<StreamingWindowAssignmentBlockInputStream>(
-                input_stream, column_names, streaming_func_desc, context_);
-
-        pipes.emplace_back(std::make_shared<SourceFromInputStream>(input_stream));
+        pipes.emplace_back(
+            std::make_shared<StreamingStoreSource>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log));
     }
 
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
+    query_plan.addStep(std::make_unique<WatermarkStep>(
+        query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, streaming_func_desc, log));
+
+    if (streaming_func_desc)
+        query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
+            query_plan.getCurrentDataStream(), column_names, streaming_func_desc, context_));
 }
 
 void StorageDistributedMergeTree::read(

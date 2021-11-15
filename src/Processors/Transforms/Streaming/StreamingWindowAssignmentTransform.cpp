@@ -1,4 +1,4 @@
-#include "StreamingWindowAssignmentBlockInputStream.h"
+#include "StreamingWindowAssignmentTransform.h"
 
 #include <Columns/ColumnArray.h>
 #include <Functions/FunctionFactory.h>
@@ -9,11 +9,12 @@
 
 namespace DB
 {
-StreamingWindowAssignmentBlockInputStream::StreamingWindowAssignmentBlockInputStream(
-    BlockInputStreamPtr input_, const Names & column_names, StreamingFunctionDescriptionPtr desc, ContextPtr context_)
-    : input(input_), context(context_), func_desc(desc)
+StreamingWindowAssignmentTransform::StreamingWindowAssignmentTransform(
+    const Block & header, const Names & column_names, StreamingFunctionDescriptionPtr desc, ContextPtr context_)
+    : ISimpleTransform(header, header, false)
+    , context(context_), func_desc(desc)
+
 {
-    assert(input);
     assert(func_desc);
 
     calculateColumns(column_names);
@@ -21,20 +22,16 @@ StreamingWindowAssignmentBlockInputStream::StreamingWindowAssignmentBlockInputSt
     func_name = func_desc->func_ast->as<ASTFunction>()->name;
 }
 
-Block StreamingWindowAssignmentBlockInputStream::readImpl()
+void StreamingWindowAssignmentTransform::transform(Chunk & chunk)
 {
-    if (isCancelled())
-        return {};
-
-    Block block = input->read();
-    if (block.rows())
-        assignWindow(block);
-
-    return block;
+    if (chunk.hasRows())
+        assignWindow(chunk);
 }
 
-void StreamingWindowAssignmentBlockInputStream::assignWindow(Block & block)
+void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
 {
+    auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
+
     Block expr_block;
 
     /// Most of the time, we copied only one column
@@ -59,9 +56,11 @@ void StreamingWindowAssignmentBlockInputStream::assignWindow(Block & block)
     {
         throw Exception(func_name + " is not supported", ErrorCodes::NOT_IMPLEMENTED);
     }
+
+    chunk.setColumns(block.getColumns(), block.rows());
 }
 
-void StreamingWindowAssignmentBlockInputStream::assignTumbleWindow(Block & block, Block & expr_block)
+void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & block, Block & expr_block)
 {
     auto & col_with_type = expr_block.getByPosition(0);
 
@@ -82,7 +81,7 @@ void StreamingWindowAssignmentBlockInputStream::assignTumbleWindow(Block & block
     }
 }
 
-void StreamingWindowAssignmentBlockInputStream::assignHopWindow(Block & block, Block & expr_block)
+void StreamingWindowAssignmentTransform::assignHopWindow(Block & block, Block & expr_block)
 {
     auto & col_with_type = expr_block.getByPosition(0);
 
@@ -128,7 +127,7 @@ void StreamingWindowAssignmentBlockInputStream::assignHopWindow(Block & block, B
     }
 }
 
-void StreamingWindowAssignmentBlockInputStream::calculateColumns(const Names & column_names)
+void StreamingWindowAssignmentTransform::calculateColumns(const Names & column_names)
 {
     expr_column_positions.reserve(func_desc->input_columns.size());
 
@@ -146,11 +145,5 @@ void StreamingWindowAssignmentBlockInputStream::calculateColumns(const Names & c
         if (std::find(input_begin, input_end, column_names[i]) != input_end)
             expr_column_positions.push_back(i);
     }
-}
-
-void StreamingWindowAssignmentBlockInputStream::cancel(bool kill)
-{
-    input->cancel(kill);
-    IBlockInputStream::cancel(kill);
 }
 }

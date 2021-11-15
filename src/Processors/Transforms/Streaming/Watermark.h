@@ -2,6 +2,7 @@
 
 #include <Core/Types.h>
 #include <Interpreters/StreamingFunctionDescription.h>
+#include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/IntervalKind.h>
 
@@ -20,7 +21,7 @@ class Block;
 struct WatermarkSettings
 {
 public:
-    explicit WatermarkSettings(const SelectQueryInfo & query_info, StreamingFunctionDescriptionPtr desc_);
+    WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc);
 
     enum class EmitMode
     {
@@ -54,8 +55,8 @@ private:
 class Watermark
 {
 public:
-    Watermark(WatermarkSettings && watermark_settings_, const String & partition_key_, Poco::Logger * log_)
-        : watermark_settings(std::move(watermark_settings_)), partition_key(partition_key_), log(log_)
+    Watermark(WatermarkSettings && watermark_settings_, Poco::Logger * log_)
+        : watermark_settings(std::move(watermark_settings_)), log(log_)
     {
     }
     virtual ~Watermark() { }
@@ -82,8 +83,6 @@ private:
 
 protected:
     WatermarkSettings watermark_settings;
-
-    String partition_key;
 
     Poco::Logger * log;
 

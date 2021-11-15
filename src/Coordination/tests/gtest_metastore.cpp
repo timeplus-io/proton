@@ -16,9 +16,9 @@
 #include <Coordination/ReadBufferFromNuraftBuffer.h>
 #include <Coordination/WriteBufferFromNuraftBuffer.h>
 #include <IO/WriteBufferFromString.h>
+#include <base/logger_useful.h>
 
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
-#include <common/logger_useful.h>
+#include <libnuraft/nuraft.hxx>
 
 #include <filesystem>
 #include <thread>
@@ -231,7 +231,7 @@ void testCreateRestoreSnapshot(Coordination::CoordinationSettingsPtr settings, u
 
             state_machine->create_snapshot(s, when_done);
             CreateMetaSnapshotTask snapshot_task;
-            snapshots_queue.pop(snapshot_task);
+            (void)snapshots_queue.pop(snapshot_task);
             snapshot_task.create_snapshot(std::move(snapshot_task.snapshot));
         }
         if (snapshot_created)
@@ -337,7 +337,7 @@ void testLogAndStateMachine1(Coordination::CoordinationSettingsPtr settings, uin
 
             state_machine->create_snapshot(s, when_done);
             CreateMetaSnapshotTask snapshot_task;
-            snapshots_queue.pop(snapshot_task);
+            (void)snapshots_queue.pop(snapshot_task);
             snapshot_task.create_snapshot(std::move(snapshot_task.snapshot));
         }
         if (snapshot_created)

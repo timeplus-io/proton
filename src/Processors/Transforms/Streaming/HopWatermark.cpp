@@ -8,8 +8,8 @@
 
 namespace DB
 {
-HopWatermark::HopWatermark(WatermarkSettings && watermark_settings_, const String & partition_key_, Poco::Logger * log_)
-    : HopTumbleBaseWatermark(std::move(watermark_settings_), partition_key_, log_)
+HopWatermark::HopWatermark(WatermarkSettings && watermark_settings_, Poco::Logger * log_)
+    : HopTumbleBaseWatermark(std::move(watermark_settings_), log_)
 {
     HopTumbleBaseWatermark::init(hop_interval);
 

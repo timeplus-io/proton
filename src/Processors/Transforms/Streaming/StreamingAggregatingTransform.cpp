@@ -46,7 +46,6 @@ namespace
             , compressed_in(file_in)
             , block_in(std::make_unique<NativeReader>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
         {
-            block_in->readPrefix();
         }
 
         String getName() const override { return "SourceFromNativeStream"; }
@@ -59,7 +58,6 @@ namespace
             auto block = block_in->read();
             if (!block)
             {
-                block_in->readSuffix();
                 block_in.reset();
                 return {};
             }
@@ -70,7 +68,7 @@ namespace
     private:
         ReadBufferFromFile file_in;
         CompressedReadBuffer compressed_in;
-        BlockInputStreamPtr block_in;
+        std::unique_ptr<NativeReader> block_in;
     };
 }
 

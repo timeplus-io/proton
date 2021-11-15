@@ -1,4 +1,4 @@
-#include "StreamingBlockInputStream.h"
+#include "StreamingStoreSource.h"
 #include "StorageDistributedMergeTree.h"
 #include "StreamingBlockReader.h"
 
@@ -7,7 +7,7 @@
 
 namespace DB
 {
-StreamingBlockInputStream::StreamingBlockInputStream(
+StreamingStoreSource::StreamingStoreSource(
     std::shared_ptr<IStorage> storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const Names & column_names_,
@@ -15,35 +15,26 @@ StreamingBlockInputStream::StreamingBlockInputStream(
     Int32 shard_,
     DWAL::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
-    : storage(std::move(storage_))
+    : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(column_names, storage_->getVirtuals(), storage_->getStorageID()))
+    , storage(std::move(storage_))
     , context(context_)
     , column_names(column_names_)
+    , header(outputs.front().getHeader())
     , shard(shard_)
     , consumer(consumer_)
     , log(log_)
-    , header(metadata_snapshot_->getSampleBlockForColumns(column_names, storage->getVirtuals(), storage->getStorageID()))
 {
     wend_type = header.findByName(STREAMING_WINDOW_END);
     if (!wend_type)
         wend_type = header.findByName(STREAMING_WINDOW_START);
-}
-
-Block StreamingBlockInputStream::getHeader() const
-{
-    return header;
-}
-
-void StreamingBlockInputStream::readPrefixImpl()
-{
-    assert(!reader);
 
     reader = std::make_unique<StreamingBlockReader>(storage->getStorageID(), context, shard, consumer, log);
-    iter = result_blocks.begin();
+    iter = result_chunks.begin();
 
     last_flush_ms = MonotonicMilliseconds::now();
 }
 
-Block StreamingBlockInputStream::readImpl()
+Chunk StreamingStoreSource::generate()
 {
     assert(reader);
 
@@ -53,7 +44,7 @@ Block StreamingBlockInputStream::readImpl()
     }
 
     /// std::unique_lock lock(result_blocks_mutex);
-    if (result_blocks.empty() || iter == result_blocks.end())
+    if (result_chunks.empty() || iter == result_chunks.end())
     {
         readAndProcess();
 
@@ -63,11 +54,11 @@ Block StreamingBlockInputStream::readImpl()
         }
 
         /// After processing blocks, check again to see if there are new results
-        if (result_blocks.empty() || iter == result_blocks.end())
+        if (result_chunks.empty() || iter == result_chunks.end())
         {
             /// Act as a heart beat and flush
             last_flush_ms = MonotonicMilliseconds::now();
-            return header;
+            return Chunk(header.getColumns(), 0);
         }
 
         /// result_blocks is not empty, fallthrough
@@ -76,13 +67,13 @@ Block StreamingBlockInputStream::readImpl()
     if (MonotonicMilliseconds::now() - last_flush_ms >= flush_interval_ms)
     {
         last_flush_ms = MonotonicMilliseconds::now();
-        return header;
+        return Chunk(header.getColumns(), 0);
     }
 
     return std::move(*iter++);
 }
 
-void StreamingBlockInputStream::readAndProcess()
+void StreamingStoreSource::readAndProcess()
 {
     auto records = reader->read(flush_interval_ms);
     if (records.empty())
@@ -93,8 +84,8 @@ void StreamingBlockInputStream::readAndProcess()
     /// 1) Insert raw blocks to in-memory aggregation table
     /// 2) Select the final result from the aggregated table
     /// 3) Update result_blocks and iterator
-    result_blocks.clear();
-    result_blocks.reserve(records.size());
+    result_chunks.clear();
+    result_chunks.reserve(records.size());
 
     for (auto & record : records)
     {
@@ -117,8 +108,8 @@ void StreamingBlockInputStream::readAndProcess()
                block.insert(std::move(record->block.getByName(name)));
        }
 
-       result_blocks.push_back(std::move(block));
+       result_chunks.emplace_back(block.getColumns(), block.rows());
     }
-    iter = result_blocks.begin();
+    iter = result_chunks.begin();
 }
 }

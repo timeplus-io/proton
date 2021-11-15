@@ -128,16 +128,16 @@ namespace
     }
 }
 
-WatermarkSettings::WatermarkSettings(const SelectQueryInfo & query_info, StreamingFunctionDescriptionPtr desc)
+WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc)
 {
     window_desc = std::move(desc);
 
-    const auto * select_query = query_info.query->as<ASTSelectQuery>();
+    const auto * select_query = query->as<ASTSelectQuery>();
     assert(select_query);
 
     mergeEmitQuerySettings(select_query->emit(), *this);
 
-    if (query_info.syntax_analyzer_result->aggregates.empty())
+    if (syntax_analyzer_result->aggregates.empty())
     {
         /// if there is no aggregation, we don't need project watermark
         /// we don't support `order by` a stream

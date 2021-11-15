@@ -1,9 +1,9 @@
 #pragma once
 
 
-#include <DataStreams/IBlockInputStream.h>
 #include <DistributedWriteAheadLog/KafkaWALSimpleConsumer.h>
 #include <Interpreters/Context_fwd.h>
+#include <Processors/Sources/SourceWithProgress.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 namespace DB
@@ -11,10 +11,10 @@ namespace DB
 class StreamingBlockReader;
 class IStorage;
 
-class StreamingBlockInputStream final : public IBlockInputStream
+class StreamingStoreSource : public SourceWithProgress
 {
 public:
-    StreamingBlockInputStream(
+    StreamingStoreSource(
         std::shared_ptr<IStorage> storage_,
         const StorageMetadataPtr & metadata_snapshot_,
         const Names & column_names_,
@@ -23,14 +23,12 @@ public:
         DWAL::KafkaWALSimpleConsumerPtr consumer_,
         Poco::Logger * log_);
 
-    ~StreamingBlockInputStream() override = default;
+    ~StreamingStoreSource() override = default;
 
-    String getName() const override { return "StreamingBlockInputStream"; }
-    Block getHeader() const override;
+    String getName() const override { return "StreamingStoreSource"; }
+    Chunk generate() override;
 
 private:
-    void readPrefixImpl() override;
-    Block readImpl() override;
     void readAndProcess();
 
 private:
@@ -38,17 +36,21 @@ private:
     ContextPtr context;
     Names column_names;
 
+    const Block & header;
+
     Int32 shard;
     DWAL::KafkaWALSimpleConsumerPtr consumer;
     Poco::Logger * log;
 
-    Block header;
-    ColumnWithTypeAndName * wend_type = nullptr;
+    const ColumnWithTypeAndName * wend_type = nullptr;
 
     std::unique_ptr<StreamingBlockReader> reader;
 
-    Blocks result_blocks;
-    Blocks::iterator iter;
+    /// Blocks result_blocks;
+    /// Blocks::iterator iter;
+
+    std::vector<Chunk> result_chunks;
+    std::vector<Chunk>::iterator iter;
 
     /// watermark, only support periodical flush for now
     // FIXME, late event etc, every second
