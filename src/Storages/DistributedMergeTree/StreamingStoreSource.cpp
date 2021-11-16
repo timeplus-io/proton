@@ -15,7 +15,7 @@ StreamingStoreSource::StreamingStoreSource(
     Int32 shard_,
     DWAL::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
-    : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(column_names, storage_->getVirtuals(), storage_->getStorageID()))
+    : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(column_names_, storage_->getVirtuals(), storage_->getStorageID()))
     , storage(std::move(storage_))
     , context(context_)
     , column_names(column_names_)

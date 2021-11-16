@@ -245,7 +245,7 @@ add_object_library(clickhouse_processors_formats_impl Processors/Formats/Impl)
 add_object_library(clickhouse_processors_transforms Processors/Transforms)
 
 # proton: starts
-add_object_library(clickhouse_processors_transforms Processors/Transforms/Streaming)
+add_object_library(clickhouse_processors_transforms_streaming Processors/Transforms/Streaming)
 # proton: ends
 
 add_object_library(clickhouse_processors_sources Processors/Sources)

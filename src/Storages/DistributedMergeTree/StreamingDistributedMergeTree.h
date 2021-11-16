@@ -44,6 +44,7 @@ public:
         unsigned num_streams) override;
 
     const Names & getAdditionalRequiredColumns() const { return streaming_func_desc->input_columns; }
+    StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
 
 private:
     StreamingDistributedMergeTree(

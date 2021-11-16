@@ -1,5 +1,6 @@
 #include <Processors/Formats/Impl/RawStoreInputFormat.h>
 
+/// FIXME, proton
 #if 0
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>

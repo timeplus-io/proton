@@ -20,7 +20,6 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/WatermarkStep.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
@@ -342,14 +341,12 @@ void StorageDistributedMergeTree::readStreaming(
             std::make_shared<StreamingStoreSource>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log));
     }
 
+    LOG_INFO(log, "Starting reading {} streams", pipes.size());
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
+
     query_plan.addStep(std::make_unique<WatermarkStep>(
         query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, streaming_func_desc, log));
-
-    if (streaming_func_desc)
-        query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
-            query_plan.getCurrentDataStream(), column_names, streaming_func_desc, context_));
 }
 
 void StorageDistributedMergeTree::read(

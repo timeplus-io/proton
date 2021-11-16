@@ -46,13 +46,37 @@ JSONCompactEachRowFormatReader::JSONCompactEachRowFormatReader(ReadBuffer & in_,
     , with_bracket(false)
     /// proton: ends
 {
-    /// FIXME
-    (void) with_bracket;
 }
 
 void JSONCompactEachRowFormatReader::skipRowStartDelimiter()
 {
     skipWhitespaceIfAny(*in);
+
+    /// proton: starts
+    (void) with_bracket;
+//    if (*in->position() == '[')
+//    {
+//        ++in->position();
+//        skipWhitespaceIfAny(*in);
+//        if (*in->position() == '[' && !with_bracket)
+//        {
+//            with_bracket = true;
+//            ++in->position();
+//            skipWhitespaceIfAny(*in);
+//        }
+//    }
+//    else
+//    {
+//        if (*in->position() == ']' && with_bracket)
+//        {
+//            return;
+//        }
+//
+//        /// Invalid format
+//        char err[2] = {'[', '\0'};
+//        throwAtAssertionFailed(err, *in);
+//    }
+    /// proton: ends
     assertChar('[', *in);
 }
 

@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeInterval.h>
 
 /// proton: starts
+#include <Processors/QueryPlan/StreamingWindowAssignmentStep.h>
 #include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
 /// proton: ends
 
@@ -1214,6 +1215,17 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
+
+            /// proton: starts. Add window assigning transform
+            if (storage)
+            {
+                if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
+                {
+                    query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
+                        query_plan.getCurrentDataStream(), required_columns, distributed->getStreamingFunctionDescription(), context));
+                }
+            }
+            /// proton: ends
 
             if (expressions.need_aggregate)
             {
