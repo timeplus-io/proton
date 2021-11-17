@@ -39,11 +39,11 @@ public:
 private:
     void consume(Chunk chunk);
     bool needsFinalization(const Chunk & chunk) const;
-    void finalize(Int64 watermark);
-    void doFinalize(Int64 watermark);
+    void finalize(const ChunkInfo & chunk_info);
+    void doFinalize(const ChunkInfo & chunk_info);
     void initialize(ManyAggregatedDataVariantsPtr & data);
     void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data);
-    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, Int64 watermark);
+    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info);
     void setCurrentChunk(Chunk chunk);
     IProcessor::Status preparePushToOutput();
 

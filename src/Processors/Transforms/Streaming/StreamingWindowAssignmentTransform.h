@@ -10,14 +10,17 @@ namespace DB
 {
 /**
  * StreamingWindowAssignmentBlockInputStream assigns window to rows in each block
- * and project `wstart, wend` columns
+ * and project `window_start, window_end` columns. It assumes the input stream doesn't
+ * have these 2 columns
  */
+
+class ColumnTuple;
 
 class StreamingWindowAssignmentTransform final : public ISimpleTransform
 {
 public:
     StreamingWindowAssignmentTransform(
-        const Block & header, const Names & column_names, StreamingFunctionDescriptionPtr desc, ContextPtr context_);
+        const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr desc);
 
     ~StreamingWindowAssignmentTransform() override = default;
 
@@ -30,11 +33,15 @@ private:
     void assignTumbleWindow(Block & block, Block & expr_block);
     void assignHopWindow(Block & block, Block & expr_block);
     /// Calculate the positions of columns required by window expr
-    void calculateColumns(const Names & column_names);
+    void calculateColumns(const Block & input_header, const Block & output_header);
 
 private:
     ContextPtr context;
     StreamingFunctionDescriptionPtr func_desc;
+
+    DataTypePtr window_start_col_data_type;
+    DataTypePtr window_end_col_data_type;
+    Chunk chunk_header;
 
     std::vector<size_t> expr_column_positions;
     Int32 wstart_pos = -1;

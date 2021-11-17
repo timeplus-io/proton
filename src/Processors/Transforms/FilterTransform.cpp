@@ -167,7 +167,7 @@ void FilterTransform::transform(Chunk & chunk)
     /// proton: starts
     if (num_filtered_rows == 0)
     {
-        /// if watermark is not empty, still keep the column header in chunk to avoid emptiness
+        /// If watermark is not empty, still keep the column header in chunk to avoid emptiness
         auto chunk_info = chunk.getChunkInfo();
         if (chunk_info && chunk_info->watermark != 0)
             chunk.setColumns(output.getHeader().getColumns(), 0);

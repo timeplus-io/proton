@@ -76,7 +76,11 @@ Chunk MergingAggregatedTransform::generate()
     auto info = std::make_shared<AggregatedChunkInfo>();
     info->bucket_num = block.info.bucket_num;
     info->is_overflows = block.info.is_overflows;
+
+    /// proton: starts
     info->watermark = block.info.watermark;
+    info->watermark_lower_bound = block.info.watermark_lower_bound;
+    /// proton: ends
 
     UInt64 num_rows = block.rows();
     Chunk chunk(block.getColumns(), num_rows);

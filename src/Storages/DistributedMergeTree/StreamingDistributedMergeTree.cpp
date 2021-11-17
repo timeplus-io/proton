@@ -5,7 +5,7 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-/// #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Common/StreamingCommon.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/SelectQueryInfo.h>
 
@@ -74,25 +74,27 @@ void StreamingDistributedMergeTree::read(
         throw Exception("Streaming table functions like HOP / TUMBLE only support streaming query for now", ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    /// We drop STREAMING_WINDOW_START/END columns before forwarding the request
+    Names updated_column_names;
+    updated_column_names.reserve(column_names.size());
+    for (const auto & column_name : column_names)
+    {
+        if (column_name == STREAMING_WINDOW_START || column_name == STREAMING_WINDOW_END)
+            continue;
+
+        updated_column_names.push_back(column_name);
+    }
+
     auto distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
     distributed->readStreaming(
         query_plan,
         query_info,
-        column_names,
+        updated_column_names,
         metadata_snapshot,
         context_,
         max_block_size,
         num_streams,
         streaming_func_desc);
-
-    //// if (query_info.syntax_analyzer_result->streaming && query_info.syntax_analyzer_result->streaming_func_asts.contains(getStorageID()))
-    /// if (query_info.syntax_analyzer_result->streaming)
-    /// {
-    /// }
-    /// else
-    /// {
-    ///    storage->read(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    /// }
 }
 }

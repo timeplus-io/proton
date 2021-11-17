@@ -44,6 +44,8 @@ struct BlockInfo
     /// watermark = -1 => force flush
     /// watermark > 0 => timestamp watermark
     Int64 watermark = 0;
+    /// watermark_start is `watermark - window_size`
+    Int64 watermark_lower_bound = 0;
     Int64 enqueued_time = 0;
     /// proton: ends
 

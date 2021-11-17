@@ -12,9 +12,8 @@ class StreamingWindowAssignmentStep final : public ITransformingStep
 public:
     StreamingWindowAssignmentStep(
         const DataStream & input_stream_,
-        const Names & column_names_,
-        StreamingFunctionDescriptionPtr desc_,
-        ContextPtr context_);
+        const Block & output_header,
+        StreamingFunctionDescriptionPtr desc_);
 
     ~StreamingWindowAssignmentStep() override = default;
 
@@ -23,8 +22,6 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    Names column_names;
     StreamingFunctionDescriptionPtr desc;
-    ContextPtr context;
 };
 }

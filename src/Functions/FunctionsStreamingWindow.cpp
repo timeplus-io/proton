@@ -537,7 +537,7 @@ struct WindowImpl<HOP>
 
         auto scale = time_column.getScale();
 
-        auto final_size = size * (window_num_units / hop_num_units + 1);
+        auto final_size = size * (window_num_units / hop_num_units);
         auto start = ColumnArray::create(ColumnDateTime64::create(0, scale));
         start->reserve(final_size);
         auto end = ColumnArray::create(ColumnDateTime64::create(0, scale));
@@ -558,46 +558,28 @@ struct WindowImpl<HOP>
             components.fractional = 0;
 
             UInt32 event_ts = components.whole;
-            UInt32 wstart = ToStartOfTransform<unit>::execute(event_ts, window_num_units, time_zone);
+            /// Note: hop_num_units as the starting of the `last` window of the hopping
+            UInt32 wstart = ToStartOfTransform<unit>::execute(event_ts, hop_num_units, time_zone);
             UInt32 wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
-
-            UInt32 wstart_l = wstart;
-            UInt32 wend_l = wend;
 
             do
             {
-                components.whole = wstart_l;
+                components.whole = wstart;
                 start_data.insert(DecimalUtils::decimalFromComponents(components, scale));
 
-                components.whole = wend_l;
+                components.whole = wend;
                 end_data.insert(DecimalUtils::decimalFromComponents(components, scale));
                 ++offset;
 
                 /// Slide to left until the right of the window passes (<) `component.whole`
-                wstart_l = AddTime<unit>::execute(wstart_l, -1 * hop_num_units, time_zone);
-                wend_l = AddTime<unit>::execute(wend_l, -1 * hop_num_units, time_zone);
-            } while (wend_l > event_ts);
-
-            UInt32 wstart_r = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
-            UInt32 wend_r = AddTime<unit>::execute(wend, hop_num_units, time_zone);
-
-            while (wstart_r <= event_ts)
-            {
-                components.whole = wstart_r;
-                start_data.insert(DecimalUtils::decimalFromComponents(components, scale));
-
-                components.whole = wend_r;
-                end_data.insert(DecimalUtils::decimalFromComponents(components, scale));
-                ++offset;
-
-                /// Slide to right until the left of the window passes (>) `component.whole`
-                wstart_r = AddTime<unit>::execute(wstart_r, hop_num_units, time_zone);
-                wend_r = AddTime<unit>::execute(wend_r, hop_num_units, time_zone);
-            }
+                wstart = AddTime<unit>::execute(wstart, -1 * hop_num_units, time_zone);
+                wend = AddTime<unit>::execute(wend, -1 * hop_num_units, time_zone);
+            } while (wend > event_ts);
 
             start_offsets.push_back(offset);
             end_offsets.push_back(offset);
         }
+
         MutableColumns result;
         result.emplace_back(std::move(start));
         result.emplace_back(std::move(end));

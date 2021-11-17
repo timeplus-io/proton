@@ -560,13 +560,8 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodStreaming(
     const DataTypes & types_removed_nullable, bool has_nullable_key,
     bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes)
 {
-    /// FIXME, better way?
-    const auto & col_with_type_and_name = (params.src_header ? params.src_header : params.intermediate_header).safeGetByPosition(params.keys[0]);
-    /// If the first aggregation column is not `window_start or window_end or date/time/time64 type`, fallback to normal aggregation method
-    if (col_with_type_and_name.name != STREAMING_WINDOW_START && col_with_type_and_name.name != STREAMING_WINDOW_END)
-        return AggregatedDataVariants::Type::EMPTY;
-
-    if (!isDate(col_with_type_and_name.type) && !isDateTime(col_with_type_and_name.type) && !isDateTime64(col_with_type_and_name.type))
+    if (params.streaming_group_by != Params::StreamingGroupBy::WINDOW_END
+        && params.streaming_group_by != Params::StreamingGroupBy::WINDOW_START)
         return AggregatedDataVariants::Type::EMPTY;
 
     if (has_nullable_key)
@@ -2962,7 +2957,7 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result) cons
 }
 
 /// proton: starts. for streaming processing
-std::pair<size_t, size_t> Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark) const
+std::pair<size_t, size_t> Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
 {
     if (watermark <= 0)
         return {0, 0};
@@ -2978,20 +2973,33 @@ std::pair<size_t, size_t> Aggregator::removeBucketsBefore(AggregatedDataVariants
         data = nullptr;
     };
 
+    if (params.streaming_group_by == Params::StreamingGroupBy::WINDOW_START)
+        watermark = watermark_lower_bound;
+
+    std::pair<Int64, Int64> res;
+
     switch (result.type)
     {
 #define M(NAME, IS_TWO_LEVEL) \
-            case AggregatedDataVariants::Type::NAME: return result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
+            case AggregatedDataVariants::Type::NAME: res = result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
         APPLY_FOR_STREAMING_AGGREGATED_VARIANTS(M)
 #undef M
 
         default:
             break;
     }
-    return {0, 0};
+
+    LOG_INFO(
+        log,
+        "Removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}",
+        res.first,
+        watermark,
+        params.streaming_window_count,
+        res.second);
+    return res;
 }
 
-std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, Int64 watermark) const
+std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
 {
     auto get_defaults = []()
     {
@@ -3006,6 +3014,9 @@ std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, I
 
     if (watermark <= 0)
         return get_defaults();
+
+    if (params.streaming_group_by == Params::StreamingGroupBy::WINDOW_START)
+        watermark = watermark_lower_bound;
 
     switch (result.type)
     {

@@ -35,15 +35,28 @@ After build, you can find the compiled `proton` binaries in `build_docker` direc
 ## Bare Metal Build
 
 ### Build Tools
-- clang-12/13
+- clang-13 and above
 - cmake
 - ninja
 
-### Ad-hoc build
+### MacOS
+We don't support build proton by using Apple Clang. Please use `brew install llvm` to install 
+clang-13 / clang++-13.
+
+### Ad-hoc Build with Default C/C++ Compilers
 
 ```
 $ cd proton
 $ mkdir -p build && cd build && cmake ..
+$ ninja
+```
+
+### Ad-hoc build with Customized C/C++ Compilers
+
+The following is an example on MacOS after installing clang by using home brew.
+```
+$ cd proton
+$ mkdir -p build && cd build && cmake .. -DCMAKE_C_COMPILER=/usr/local/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/usr/local/opt/llvm/bin/clang++
 $ ninja
 ```
 
@@ -88,6 +101,26 @@ curl http://localhost:8123/proton/v1/ddl/tables -X POST -d '{
 
 ## Ingest Data
 
+### Ingest Data via CLI 
+
+Run `proton-client` console interactively
+```shell
+$ docker run --rm --network=timeplus-net -it timeplus/proton /bin/bash
+$ proton-client --host proton-server -m
+```
+
+```sql
+# Launch proton-client if not yet 
+
+INSERT INTO devices (device, location, temperature, timestamp) 
+VALUES 
+('dev1', 'ca', 57.3, '2020-02-02 20:00:00'), 
+('dev2', 'sh', 37.3, '2020-02-03 12:00:00'),
+('dev3', 'van', 17.3, '2020-02-02 20:00:00');
+```
+
+### Ingest Data via REST API
+
 ```
 curl http://localhost:8123/proton/v1/ingest/tables/devices -X POST -H "content-type: application/json" -d '{
     "columns": ["device", "location", "temperature", "timestamp"],
@@ -101,22 +134,19 @@ curl http://localhost:8123/proton/v1/ingest/tables/devices -X POST -H "content-t
 
 ## Query Data
 
-### Query via client
+### Query via CLI 
 
+```sql
+# Launch proton-client if not yet 
 
+SELECT * FROM devices
 ```
-$ clickhouse-client
-```
-
-And query like `SELECT * FROM testtable`
 
 ### Query Data via REST API
 
 ```
 curl http://localhost:8123/proton/v1/search -H "content-type: application/json" -d '{"query": "SELECT * FROM devices"}'
 ```
-
-### Query Data via CLI
 
 ### Streaming Query
 
@@ -128,12 +158,10 @@ docker run --rm --network=timeplus-net timeplus/proton \
     --query 'SELECT * FROM devices WHERE temperature > 50.0 EMIT STREAM'
 ```
 
-Run `proton-client` console interactively
+Interactive streaming query
 
-```
-docker run --rm --network=timeplus-net -it timeplus/proton /bin/bash
-proton-client --host proton-server -m
-
+```sql
+# Launch proton-client if not yet
 # Tumbling aggregation
 
 timeplus :) SELECT device, avg(temperature) as avg_temp

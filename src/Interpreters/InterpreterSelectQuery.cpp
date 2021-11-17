@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeInterval.h>
 
 /// proton: starts
+#include <Common/StreamingCommon.h>
 #include <Processors/QueryPlan/StreamingWindowAssignmentStep.h>
 #include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
 /// proton: ends
@@ -522,6 +523,17 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                 for (const auto & name : distributed->getAdditionalRequiredColumns())
                     if (std::find(required_columns.begin(), required_columns.end(), name) == required_columns.end())
                         required_columns.push_back(name);
+
+                /// Move window_start/end to the end of required_columns to make it more efficient
+                /// during data window assignment transformation
+                for (const auto & col_name : STREAMING_WINDOW_COLUMN_NAMES)
+                {
+                    if (auto it = std::find(required_columns.begin(), required_columns.end(), col_name); it != required_columns.end())
+                    {
+                        required_columns.erase(it);
+                        required_columns.push_back(col_name);
+                    }
+                }
             }
             /// proton: ends
 
@@ -1215,17 +1227,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
-
-            /// proton: starts. Add window assigning transform
-            if (storage)
-            {
-                if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
-                {
-                    query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
-                        query_plan.getCurrentDataStream(), required_columns, distributed->getStreamingFunctionDescription(), context));
-                }
-            }
-            /// proton: ends
 
             if (expressions.need_aggregate)
             {
@@ -2066,6 +2067,16 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             query_plan.getCurrentDataStream(), storage, std::move(table_lock), limits, leaf_limits, std::move(quota), context);
         adding_limits_and_quota->setStepDescription("Set limits and quota after reading from storage");
         query_plan.addStep(std::move(adding_limits_and_quota));
+
+        /// proton: starts. Streaming Window
+        if (auto distributed = storage->as<StreamingDistributedMergeTree>())
+        {
+            auto output_header = metadata_snapshot->getSampleBlockForColumns(
+                required_columns, distributed->getInnerStorage()->getVirtuals(), distributed->getInnerStorage()->getStorageID());
+            query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
+                query_plan.getCurrentDataStream(), output_header, distributed->getStreamingFunctionDescription()));
+        }
+        /// proton: ends
     }
     else
         throw Exception("Logical error in InterpreterSelectQuery: nowhere to read", ErrorCodes::LOGICAL_ERROR);
@@ -2110,8 +2121,34 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
     ColumnNumbers keys;
+
+    /// proton: starts. If `window_start/end` are in aggregation columns, move them to the beginning
+    /// of the aggregation columns for later window extraction
+    Aggregator::Params::StreamingGroupBy streaming_group_by = Aggregator::Params::StreamingGroupBy::OTHER;
     for (const auto & key : query_analyzer->aggregationKeys())
-        keys.push_back(header_before_aggregation.getPositionByName(key.name));
+    {
+        if (query_info.syntax_analyzer_result->streaming)
+        {
+            if ((key.name == STREAMING_WINDOW_END)
+                && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
+            {
+                keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
+                streaming_group_by = Aggregator::Params::StreamingGroupBy::WINDOW_END;
+            }
+            else if ((key.name == STREAMING_WINDOW_START)
+                     && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
+                     && (streaming_group_by != Aggregator::Params::StreamingGroupBy::WINDOW_END))
+            {
+                keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
+                streaming_group_by = Aggregator::Params::StreamingGroupBy::WINDOW_START;
+            }
+            else
+                keys.push_back(header_before_aggregation.getPositionByName(key.name));
+        }
+        else
+            keys.push_back(header_before_aggregation.getPositionByName(key.name));
+    }
+    /// proton: ends
 
     AggregateDescriptions aggregates = query_analyzer->aggregates();
     for (auto & descr : aggregates)
@@ -2141,7 +2178,8 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         settings.min_count_to_compile_aggregate_expression,
         {},
         query_info.syntax_analyzer_result->streaming, /// proton: starts. FIXME, more robust streaming checking
-        settings.keep_windows);
+        settings.keep_windows,
+        streaming_group_by);
     /// proton: ends
 
     SortDescription group_by_sort_description;

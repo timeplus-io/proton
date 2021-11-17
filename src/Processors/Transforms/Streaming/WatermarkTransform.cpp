@@ -32,6 +32,7 @@ void WatermarkTransform::transform(Chunk & chunk)
             chunk_info = chunk.getChunkInfo();
         }
         const_cast<ChunkInfo *>(chunk_info.get())->watermark = block.info.watermark;
+        const_cast<ChunkInfo *>(chunk_info.get())->watermark_lower_bound = block.info.watermark_lower_bound;
     }
 }
 

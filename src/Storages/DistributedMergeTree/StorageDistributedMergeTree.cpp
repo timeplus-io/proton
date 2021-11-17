@@ -335,10 +335,12 @@ void StorageDistributedMergeTree::readStreaming(
 
     auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
 
+    auto header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+
     for (Int32 i = 0; i < shards; ++i)
     {
         pipes.emplace_back(
-            std::make_shared<StreamingStoreSource>(shared_from_this(), metadata_snapshot, column_names, context_, i, consumer, log));
+            std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, consumer, log));
     }
 
     LOG_INFO(log, "Starting reading {} streams", pipes.size());

@@ -9,15 +9,63 @@
 
 namespace DB
 {
-StreamingWindowAssignmentTransform::StreamingWindowAssignmentTransform(
-    const Block & header, const Names & column_names, StreamingFunctionDescriptionPtr desc, ContextPtr context_)
-    : ISimpleTransform(header, header, false)
-    , context(context_), func_desc(desc)
+namespace
+{
+    ALWAYS_INLINE void insertWindowColumnTumble(
+        Block & block,
+        const ColumnTuple * col_tuple,
+        size_t src_pos,
+        const DataTypePtr & col_data_type,
+        Int32 target_pos,
+        const String & col_name)
+    {
+        if (target_pos >= 0)
+        {
+            /// Make a `window_xxx` column and insert it
+            auto src_win_col = col_tuple->getColumnPtr(src_pos);
+            assert(col_data_type->getTypeId() == src_win_col->getDataType());
+            block.insert(target_pos, ColumnWithTypeAndName{src_win_col, col_data_type, col_name});
+        }
+    }
 
+    ALWAYS_INLINE void insertWindowColumnHop(
+        Block & block,
+        const ColumnTuple * col_tuple,
+        size_t src_pos,
+        const DataTypePtr & col_data_type,
+        Int32 target_pos,
+        const String & col_name,
+        bool & replicated)
+    {
+        if (target_pos >= 0)
+        {
+            /// const ColumnArray & src = assert_cast<const ColumnArray &>(*wstart_result);
+            auto src_win_col = checkAndGetColumn<ColumnArray>(col_tuple->getColumnPtr(src_pos).get());
+
+            if (!replicated)
+            {
+                const auto & offsets = src_win_col->getOffsets();
+                for (auto & column_with_type : block)
+                    column_with_type.column = column_with_type.column->replicate(offsets);
+                replicated = true;
+            }
+
+            /// Make a `window_xxx` column and insert it
+            const auto & src_win_col_data = src_win_col->getDataPtr();
+            assert(col_data_type->getTypeId() == src_win_col_data->getDataType());
+            block.insert(target_pos, ColumnWithTypeAndName{src_win_col_data, col_data_type, col_name});
+        }
+    }
+}
+
+StreamingWindowAssignmentTransform::StreamingWindowAssignmentTransform(
+    const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr desc)
+    : ISimpleTransform(input_header, output_header, false), func_desc(std::move(desc))
+    , chunk_header(output_header.getColumns(), 0)
 {
     assert(func_desc);
 
-    calculateColumns(column_names);
+    calculateColumns(input_header, output_header);
 
     func_name = func_desc->func_ast->as<ASTFunction>()->name;
 }
@@ -26,6 +74,10 @@ void StreamingWindowAssignmentTransform::transform(Chunk & chunk)
 {
     if (chunk.hasRows())
         assignWindow(chunk);
+    else
+        /// The downstream header is different than the output of this transform
+        /// We need use the current output header
+        chunk.setColumns(chunk_header.cloneEmptyColumns(), 0);
 }
 
 void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
@@ -60,24 +112,24 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     chunk.setColumns(block.getColumns(), block.rows());
 }
 
-void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & block, Block & expr_block)
+ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & block, Block & expr_block)
 {
+    /// Result column
     auto & col_with_type = expr_block.getByPosition(0);
 
     /// Flatten the tuple
     assert(isTuple(col_with_type.type));
     auto col_tuple = checkAndGetColumn<ColumnTuple>(col_with_type.column.get());
 
-    if (wstart_pos >= 0)
+    if (wstart_pos < wend_pos)
     {
-        auto & wstart = block.getByPosition(wstart_pos);
-        wstart.column = col_tuple->getColumnPtr(0);
+        insertWindowColumnTumble(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START);
+        insertWindowColumnTumble(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END);
     }
-
-    if (wend_pos >= 0)
+    else
     {
-        auto & wend = block.getByPosition(wend_pos);
-        wend.column = col_tuple->getColumnPtr(1);
+        insertWindowColumnTumble(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END);
+        insertWindowColumnTumble(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START);
     }
 }
 
@@ -88,62 +140,48 @@ void StreamingWindowAssignmentTransform::assignHopWindow(Block & block, Block & 
     assert(isTuple(col_with_type.type));
     auto col_tuple = checkAndGetColumn<ColumnTuple>(col_with_type.column.get());
 
-    if (wstart_pos >= 0)
+    bool replicated = false;
+    if (wstart_pos < wend_pos)
     {
-        /// const ColumnArray & src = assert_cast<const ColumnArray &>(*wstart_result);
-        auto src_wstarts = checkAndGetColumn<ColumnArray>(col_tuple->getColumnPtr(0).get());
-        const auto & offsets = src_wstarts->getOffsets();
-        for (auto & column_with_type : block)
-            column_with_type.column = column_with_type.column->replicate(offsets);
-
-        auto & target_wstarts = block.getByPosition(wstart_pos);
-
-        const auto & src_wstarts_data = src_wstarts->getDataPtr();
-        assert(target_wstarts.column->getDataType() == src_wstarts_data->getDataType());
-        assert(target_wstarts.column->size() == src_wstarts_data->size());
-
-        target_wstarts.column = src_wstarts_data;
+        insertWindowColumnHop(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START, replicated);
+        insertWindowColumnHop(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END, replicated);
     }
-
-    if (wend_pos >= 0)
+    else
     {
-        auto src_wends = checkAndGetColumn<ColumnArray>(col_tuple->getColumnPtr(1).get());
-
-        if (wstart_pos < 0)
-        {
-            /// The block is not replicated yet
-            const auto & offsets = src_wends->getOffsets();
-            for (auto & column_with_type : block)
-                column_with_type.column = column_with_type.column->replicate(offsets);
-        }
-
-        auto & target_wends = block.getByPosition(wend_pos);
-
-        const auto & src_wends_data = src_wends->getDataPtr();
-        assert(target_wends.column->getDataType() == src_wends_data->getDataType());
-        assert(target_wends.column->size() == src_wends_data->size());
-
-        target_wends.column = src_wends_data;
+        insertWindowColumnHop(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END, replicated);
+        insertWindowColumnHop(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START, replicated);
     }
 }
 
-void StreamingWindowAssignmentTransform::calculateColumns(const Names & column_names)
+void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_header, const Block & output_header)
 {
     expr_column_positions.reserve(func_desc->input_columns.size());
+
+    size_t pos = 0;
+    for (const auto & col_with_type : output_header)
+    {
+        if (col_with_type.name == STREAMING_WINDOW_START)
+        {
+            wstart_pos = pos;
+            window_start_col_data_type = col_with_type.type;
+        }
+        else if (col_with_type.name == STREAMING_WINDOW_END)
+        {
+            wend_pos = pos;
+            window_end_col_data_type = col_with_type.type;
+        }
+        ++pos;
+    }
 
     auto input_begin = func_desc->input_columns.begin();
     auto input_end = func_desc->input_columns.end();
 
-    for (size_t i = 0; i < column_names.size(); ++i)
+    pos = 0;
+    for (const auto & col_with_type : input_header)
     {
-        if (column_names[i] == STREAMING_WINDOW_START)
-            wstart_pos = i;
-
-        if (column_names[i] == STREAMING_WINDOW_END)
-            wend_pos = i;
-
-        if (std::find(input_begin, input_end, column_names[i]) != input_end)
-            expr_column_positions.push_back(i);
+        if (std::find(input_begin, input_end, col_with_type.name) != input_end)
+            expr_column_positions.push_back(pos);
+        ++pos;
     }
 }
 }

@@ -1023,6 +1023,16 @@ public:
         bool streaming = false;
         /// How many streaming windows to keep from recycling
         size_t streaming_window_count = 0;
+
+        /// StreamingGroupBy tells if the first group column is either WINDOW_START or WINDOW_END or
+        /// anything else
+        enum class StreamingGroupBy
+        {
+            WINDOW_START,
+            WINDOW_END,
+            OTHER,
+        };
+        StreamingGroupBy streaming_group_by = StreamingGroupBy::OTHER;
         /// proton: ends
 
         Params(
@@ -1038,7 +1048,8 @@ public:
             size_t min_count_to_compile_aggregate_expression_,
             const Block & intermediate_header_ = {},
             bool streaming_ = false,
-            size_t streaming_window_count_ = 0)
+            size_t streaming_window_count_ = 0,
+            StreamingGroupBy streaming_group_by_ = StreamingGroupBy::OTHER)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -1051,7 +1062,8 @@ public:
             compile_aggregate_expressions(compile_aggregate_expressions_),
             min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
             streaming(streaming_),
-            streaming_window_count(streaming_window_count_)
+            streaming_window_count(streaming_window_count_),
+            streaming_group_by(streaming_group_by_)
         {
         }
 
@@ -1450,8 +1462,8 @@ private:
     static bool hasSparseArguments(AggregateFunctionInstruction * aggregate_instructions);
 
     /// proton: starts
-    std::pair<size_t, size_t> removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark) const;
-    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, Int64 watermark) const;
+    std::pair<size_t, size_t> removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
     /// proton: ends
 };
 

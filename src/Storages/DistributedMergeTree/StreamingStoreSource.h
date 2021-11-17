@@ -16,8 +16,7 @@ class StreamingStoreSource : public SourceWithProgress
 public:
     StreamingStoreSource(
         std::shared_ptr<IStorage> storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
-        const Names & column_names_,
+        const Block & header,
         ContextPtr context_,
         Int32 shard_,
         DWAL::KafkaWALSimpleConsumerPtr consumer_,
@@ -36,18 +35,13 @@ private:
     ContextPtr context;
     Names column_names;
 
-    const Block & header;
+    Chunk header_chunk;
 
     Int32 shard;
     DWAL::KafkaWALSimpleConsumerPtr consumer;
     Poco::Logger * log;
 
-    const ColumnWithTypeAndName * wend_type = nullptr;
-
     std::unique_ptr<StreamingBlockReader> reader;
-
-    /// Blocks result_blocks;
-    /// Blocks::iterator iter;
 
     std::vector<Chunk> result_chunks;
     std::vector<Chunk>::iterator iter;

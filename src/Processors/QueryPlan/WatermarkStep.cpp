@@ -29,9 +29,9 @@ WatermarkStep::WatermarkStep(
     StreamingFunctionDescriptionPtr desc_,
     Poco::Logger * log_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
-    , query(query_)
-    , syntax_analyzer_result(syntax_analyzer_result_)
-    , desc(desc_)
+    , query(std::move(query_))
+    , syntax_analyzer_result(std::move(syntax_analyzer_result_))
+    , desc(std::move(desc_))
     , log(log_)
 {
 }

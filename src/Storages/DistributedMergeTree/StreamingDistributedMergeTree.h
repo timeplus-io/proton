@@ -45,6 +45,7 @@ public:
 
     const Names & getAdditionalRequiredColumns() const { return streaming_func_desc->input_columns; }
     StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
+    const StoragePtr & getInnerStorage() const { return storage; }
 
 private:
     StreamingDistributedMergeTree(

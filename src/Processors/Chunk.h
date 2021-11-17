@@ -13,6 +13,7 @@ public:
     ChunkInfo() = default;
 
     Int64 watermark = 0;
+    Int64 watermark_lower_bound = 0;
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;

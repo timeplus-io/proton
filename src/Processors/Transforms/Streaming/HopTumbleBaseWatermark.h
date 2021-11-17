@@ -26,11 +26,10 @@ protected:
 
     void handleIdlenessWatermarkWithDelay(Block & block) override;
 
-    Int64 initFirstWatermark() const;
-
     virtual Int64 getProgressingInterval() const { return window_interval; }
 
-    virtual Int64 getWindowUpperBound(Int64 time_sec) const = 0;
+    std::pair<Int64, Int64> initFirstWindow() const;
+    std::pair<Int64, Int64> getWindow(Int64 time_sec) const;
 
     Int64 addTimeWithAutoScale(Int64 datetime64, IntervalKind::Kind kind, Int64 interval);
 

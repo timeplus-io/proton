@@ -1,7 +1,5 @@
 #include "HopWatermark.h"
 
-#include <Core/Block.h>
-#include <Functions/FunctionsStreamingWindow.h>
 #include <Parsers/ASTFunction.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
@@ -20,36 +18,5 @@ HopWatermark::HopWatermark(WatermarkSettings && watermark_settings_, Poco::Logge
         window_interval_kind);
 
     initTimezone(3);
-}
-
-Int64 HopWatermark::getWindowUpperBound(Int64 time_sec) const
-{
-    switch (window_interval_kind)
-    {
-#define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        auto w_start = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, window_interval, *timezone); \
-        auto event_ts = ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, 1, *timezone); \
-        auto wend = AddTime<IntervalKind::KIND>::execute(w_start, window_interval, *timezone); \
-        auto prev_wend = wend; \
-        do \
-        { \
-            prev_wend = wend; \
-            wend = AddTime<IntervalKind::KIND>::execute(wend, -1 * hop_interval, *timezone); \
-        } while (wend > event_ts); \
-        return prev_wend; \
-    }
-
-        CASE_WINDOW_KIND(Second)
-        CASE_WINDOW_KIND(Minute)
-        CASE_WINDOW_KIND(Hour)
-        CASE_WINDOW_KIND(Day)
-        CASE_WINDOW_KIND(Week)
-        CASE_WINDOW_KIND(Month)
-        CASE_WINDOW_KIND(Quarter)
-        CASE_WINDOW_KIND(Year)
-#undef CASE_WINDOW_KIND
-    }
-    __builtin_unreachable();
 }
 }

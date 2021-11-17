@@ -218,6 +218,7 @@ void Watermark::assignWatermark(Block & block)
                 watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
             if (now >= next_watermark_ts)
             {
+                block.info.watermark_lower_bound = last_projected_watermark_ts;
                 block.info.watermark = max_event_ts;
                 last_projected_watermark_ts = max_event_ts;
                 watermark_ts = now;
@@ -260,6 +261,8 @@ void Watermark::handleIdleness(Block & block)
                     watermark_settings.emit_query_interval_kind,
                     watermark_settings.emit_query_interval,
                     DateLUT::instance());
+
+                block.info.watermark_lower_bound = last_projected_watermark_ts;
                 last_projected_watermark_ts = block.info.watermark;
                 watermark_ts = now;
             }
