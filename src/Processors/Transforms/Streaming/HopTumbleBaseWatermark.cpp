@@ -129,7 +129,46 @@ void HopTumbleBaseWatermark::doProcess(Block & block)
 
 void HopTumbleBaseWatermark::processWatermark(Block & block)
 {
-    if (watermark_ts != 0)
+    if (scale != 0)
+        processWatermarkWithAutoScale(block);
+    else
+        doProcessWatermark(block);
+}
+
+ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithAutoScale(Block & block)
+{
+    assert(scale != 0);
+
+    if (likely(watermark_ts != 0))
+    {
+        auto interval = getProgressingInterval();
+        /// FIXME, use multiply for optimization instead of loop ?
+        /// Multiply only has advantage when max_event_ts is way bigger than current watermark_ts
+        /// which causes quite a few loops. But this is time skew and abnormal
+        while (watermark_ts <= max_event_ts)
+        {
+            /// emit the max watermark
+            last_projected_watermark_ts = watermark_ts;
+            watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
+        }
+
+        block.info.watermark = last_projected_watermark_ts;
+        if (last_projected_watermark_ts > 0)
+        {
+            block.info.watermark_lower_bound
+                = addTimeWithAutoScale(last_projected_watermark_ts, window_interval_kind, -1 * window_interval);
+            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
+        }
+    }
+    else
+        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow();
+}
+
+ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermark(Block & block)
+{
+    assert(scale == 0);
+
+    if (likely(watermark_ts != 0))
     {
         auto interval = getProgressingInterval();
         /// FIXME, use multiply for optimization instead of loop
@@ -137,20 +176,13 @@ void HopTumbleBaseWatermark::processWatermark(Block & block)
         {
             /// emit the max watermark
             last_projected_watermark_ts = watermark_ts;
-            if (scale != 0)
-                watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
-            else
-                watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
+            watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
         }
 
         block.info.watermark = last_projected_watermark_ts;
         if (last_projected_watermark_ts > 0)
         {
-            if (scale != 0)
-                block.info.watermark_lower_bound = addTimeWithAutoScale(last_projected_watermark_ts, window_interval_kind, -1 * window_interval);
-            else
-                block.info.watermark_lower_bound = addTime(last_projected_watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
-
+            block.info.watermark_lower_bound = addTime(last_projected_watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
             LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
         }
     }
@@ -160,41 +192,61 @@ void HopTumbleBaseWatermark::processWatermark(Block & block)
 
 void HopTumbleBaseWatermark::processWatermarkWithDelay(Block & block)
 {
-    if (watermark_ts != 0)
+    if (scale != 0)
+        processWatermarkWithDelayAndWithAutoScale(block);
+    else
+        doProcessWatermarkWithDelay(block);
+}
+
+ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoScale(Block & block)
+{
+    assert(scale != 0);
+    if (likely(watermark_ts != 0))
     {
-        Int64 watermark_ts_bias = 0;
-        if (scale != 0)
-            watermark_ts_bias
-                = addTimeWithAutoScale(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
-        else
-            watermark_ts_bias
-                = addTime(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
+        Int64 watermark_ts_bias
+            = addTimeWithAutoScale(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
 
         auto interval = getProgressingInterval();
         while (watermark_ts_bias <= max_event_ts)
         {
             last_projected_watermark_ts = watermark_ts;
 
-            if (scale != 0)
-            {
-                watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
-                watermark_ts_bias = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
-            }
-            else
-            {
-                watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
-                watermark_ts_bias = addTime(watermark_ts, window_interval_kind, interval, *timezone);
-            }
+            watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
+            watermark_ts_bias = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
         }
 
         block.info.watermark = last_projected_watermark_ts;
         if (last_projected_watermark_ts > 0)
         {
-            if (scale != 0)
-                block.info.watermark_lower_bound = addTimeWithAutoScale(last_projected_watermark_ts, window_interval_kind, -1 * window_interval);
-            else
-                block.info.watermark_lower_bound = addTime(last_projected_watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
+            block.info.watermark_lower_bound
+                = addTimeWithAutoScale(last_projected_watermark_ts, window_interval_kind, -1 * window_interval);
+            LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
+        }
+    }
+    else
+        std::tie(last_projected_watermark_ts, watermark_ts) = initFirstWindow();
+}
 
+ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & block)
+{
+    assert(scale == 0);
+    if (likely(watermark_ts != 0))
+    {
+        Int64 watermark_ts_bias
+            = addTime(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
+
+        auto interval = getProgressingInterval();
+        while (watermark_ts_bias <= max_event_ts)
+        {
+            last_projected_watermark_ts = watermark_ts;
+            watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
+            watermark_ts_bias = addTime(watermark_ts, window_interval_kind, interval, *timezone);
+        }
+
+        block.info.watermark = last_projected_watermark_ts;
+        if (last_projected_watermark_ts > 0)
+        {
+            block.info.watermark_lower_bound = addTime(last_projected_watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
             LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
         }
     }
@@ -205,7 +257,7 @@ void HopTumbleBaseWatermark::processWatermarkWithDelay(Block & block)
 void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
 {
     /// FIXME, this is not a complete implementation
-    if (watermark_ts != 0)
+    if (likely(watermark_ts != 0))
     {
         auto interval = getProgressingInterval();
         auto next_watermark_ts = addTime(last_event_seen_ts, window_interval_kind, interval, DateLUT::instance());

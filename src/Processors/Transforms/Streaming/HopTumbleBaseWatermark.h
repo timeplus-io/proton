@@ -14,6 +14,7 @@ protected:
     void init(Int64 & interval);
     void initTimezone(size_t timezone_pos);
 
+private:
     void doProcess(Block & block) override;
 
     /// EMIT STREAM AFTER WATERMARK
@@ -32,6 +33,12 @@ protected:
     std::pair<Int64, Int64> getWindow(Int64 time_sec) const;
 
     Int64 addTimeWithAutoScale(Int64 datetime64, IntervalKind::Kind kind, Int64 interval);
+
+    void processWatermarkWithAutoScale(Block & block);
+    void doProcessWatermark(Block & block);
+
+    void processWatermarkWithDelayAndWithAutoScale(Block & block);
+    void doProcessWatermarkWithDelay(Block & block);
 
 protected:
     Int64 window_interval = 0;

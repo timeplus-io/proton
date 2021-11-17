@@ -84,7 +84,7 @@ void extractInterval(ASTFunction * ast, Int64 & interval, IntervalKind::Kind & k
         throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
-Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
+ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
 {
     switch (kind)
     {
