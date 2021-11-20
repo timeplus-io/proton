@@ -349,6 +349,7 @@ public:
             DB::writeChar(KEY_VALUE_SEPARATOR, wb);
             p.second.writeText(wb);
         }
+        DB::writeChar(END_BUCKET_MARKER, wb);
     }
 
     void read(DB::ReadBuffer & rb)
@@ -388,6 +389,7 @@ public:
             assert(!impls.contains(key));
             impls[key].readText(rb);
         }
+        DB::assertChar(END_BUCKET_MARKER, rb);
     }
 
     size_t size() const

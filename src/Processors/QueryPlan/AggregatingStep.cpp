@@ -3,11 +3,6 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
-
-/// proton: starts
-#include <Processors/Transforms/Streaming/StreamingAggregatingTransform.h>
-/// proton: ends
-
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 
@@ -162,16 +157,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         size_t counter = 0;
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor>
         {
-            /// proton: starts
-            if (transform_params->params.streaming)
-            {
-                return std::make_shared<StreamingAggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-            }
-            else
-            {
-                return std::make_shared<AggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-            }
-            /// proton: ends
+            return std::make_shared<AggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
         });
 
         pipeline.resize(1);
@@ -184,16 +170,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
 
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor>
         {
-            /// proton: starts
-            if (transform_params->params.streaming)
-            {
-                return std::make_shared<StreamingAggregatingTransform>(header, transform_params);
-            }
-            else
-            {
-                return std::make_shared<AggregatingTransform>(header, transform_params);
-            }
-            /// proton: ends
+            return std::make_shared<AggregatingTransform>(header, transform_params);
         });
 
         aggregating = collector.detachProcessors(0);

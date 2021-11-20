@@ -149,14 +149,14 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithAutoScale(Block &
         {
             /// emit the max watermark
             last_projected_watermark_ts = watermark_ts;
+            block.info.watermark = watermark_ts;
             watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
         }
 
-        block.info.watermark = last_projected_watermark_ts;
-        if (last_projected_watermark_ts > 0)
+        if (block.info.watermark > 0)
         {
             block.info.watermark_lower_bound
-                = addTimeWithAutoScale(last_projected_watermark_ts, window_interval_kind, -1 * window_interval);
+                = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
             LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
         }
     }
@@ -176,13 +176,13 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermark(Block & block)
         {
             /// emit the max watermark
             last_projected_watermark_ts = watermark_ts;
+            block.info.watermark = watermark_ts;
             watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
         }
 
-        block.info.watermark = last_projected_watermark_ts;
-        if (last_projected_watermark_ts > 0)
+        if (block.info.watermark > 0)
         {
-            block.info.watermark_lower_bound = addTime(last_projected_watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
+            block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
             LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
         }
     }
@@ -210,16 +210,16 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoS
         while (watermark_ts_bias <= max_event_ts)
         {
             last_projected_watermark_ts = watermark_ts;
+            block.info.watermark = watermark_ts;
 
             watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
             watermark_ts_bias = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
         }
 
-        block.info.watermark = last_projected_watermark_ts;
-        if (last_projected_watermark_ts > 0)
+        if (block.info.watermark > 0)
         {
             block.info.watermark_lower_bound
-                = addTimeWithAutoScale(last_projected_watermark_ts, window_interval_kind, -1 * window_interval);
+                = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
             LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
         }
     }
@@ -239,14 +239,15 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & b
         while (watermark_ts_bias <= max_event_ts)
         {
             last_projected_watermark_ts = watermark_ts;
+            block.info.watermark = watermark_ts;
+
             watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
             watermark_ts_bias = addTime(watermark_ts, window_interval_kind, interval, *timezone);
         }
 
-        block.info.watermark = last_projected_watermark_ts;
-        if (last_projected_watermark_ts > 0)
+        if (block.info.watermark > 0)
         {
-            block.info.watermark_lower_bound = addTime(last_projected_watermark_ts, window_interval_kind, -1 * window_interval, *timezone);
+            block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
             LOG_INFO(log, "Emitted watermark={}, watermark_lower_bound={}", block.info.watermark, block.info.watermark_lower_bound);
         }
     }

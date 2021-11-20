@@ -155,6 +155,11 @@ private:
 
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
+    /// proton: starts
+    void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
+    void checkForStreamingQuery() const;
+    /// proton: ends
+
     enum class Modificator
     {
         ROLLUP = 0,

@@ -95,7 +95,7 @@ public:
     using SharedDataPtr = std::shared_ptr<SharedData>;
 
     StreamingConvertingAggregatedToChunksSource(
-        AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, SharedDataPtr shared_data_, Arena * arena_)
+        StreamingAggregatingTransformParamsPtr params_, ManyStreamingAggregatedDataVariantsPtr data_, SharedDataPtr shared_data_, Arena * arena_)
         : ISource(params_->getHeader())
         , params(std::move(params_))
         , data(std::move(data_))
@@ -124,8 +124,8 @@ protected:
     }
 
 private:
-    AggregatingTransformParamsPtr params;
-    ManyAggregatedDataVariantsPtr data;
+    StreamingAggregatingTransformParamsPtr params;
+    ManyStreamingAggregatedDataVariantsPtr data;
     SharedDataPtr shared_data;
     Arena * arena;
 };
@@ -143,12 +143,12 @@ class StreamingConvertingAggregatedToChunksTransform : public IProcessor
 {
 public:
     StreamingConvertingAggregatedToChunksTransform(
-        AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, size_t num_threads_)
+        StreamingAggregatingTransformParamsPtr params_, ManyStreamingAggregatedDataVariantsPtr data_, size_t num_threads_)
         : IProcessor({}, {params_->getHeader()}), params(std::move(params_)), data(std::move(data_)), num_threads(num_threads_)
     {
     }
 
-    String getName() const override { return "ConvertingAggregatedToChunksTransform"; }
+    String getName() const override { return "StreamingConvertingAggregatedToChunksTransform"; }
 
     void work() override
     {
@@ -281,8 +281,8 @@ private:
         return Status::PortFull;
     }
 
-    AggregatingTransformParamsPtr params;
-    ManyAggregatedDataVariantsPtr data;
+    StreamingAggregatingTransformParamsPtr params;
+    ManyStreamingAggregatedDataVariantsPtr data;
     StreamingConvertingAggregatedToChunksSource::SharedDataPtr shared_data;
 
     size_t num_threads;
@@ -315,7 +315,7 @@ private:
     {
         is_initialized = true;
 
-        AggregatedDataVariantsPtr & first = data->at(0);
+        StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
         /// At least we need one arena in first data item per thread
         if (num_threads > first->aggregates_pools.size())
@@ -325,11 +325,11 @@ private:
                 first_pool.emplace_back(std::make_shared<Arena>());
         }
 
-        if (first->type == AggregatedDataVariants::Type::without_key || params->params.overflow_row)
+        if (first->type == StreamingAggregatedDataVariants::Type::without_key || params->params.overflow_row)
         {
             params->aggregator.mergeWithoutKeyDataImpl(*data);
             auto block = params->aggregator.prepareBlockAndFillWithoutKey(
-                *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
+                *first, params->final, first->type != StreamingAggregatedDataVariants::Type::without_key);
 
             setCurrentChunk(convertToChunk(block));
         }
@@ -337,9 +337,9 @@ private:
 
     void mergeSingleLevel()
     {
-        AggregatedDataVariantsPtr & first = data->at(0);
+        StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
-        if (current_bucket_num > 0 || first->type == AggregatedDataVariants::Type::without_key)
+        if (current_bucket_num > 0 || first->type == StreamingAggregatedDataVariants::Type::without_key)
         {
             finished = true;
             return;
@@ -348,12 +348,12 @@ private:
         ++current_bucket_num;
 
 #define M(NAME) \
-    else if (first->type == AggregatedDataVariants::Type::NAME) \
+    else if (first->type == StreamingAggregatedDataVariants::Type::NAME) \
         params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
         if (false)
         {
         } // NOLINT
-        APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+        APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
 #undef M
         else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
@@ -365,7 +365,7 @@ private:
 
     void createSources()
     {
-        AggregatedDataVariantsPtr & first = data->at(0);
+        StreamingAggregatedDataVariantsPtr & first = data->at(0);
         shared_data = std::make_shared<StreamingConvertingAggregatedToChunksSource::SharedData>();
 
         for (size_t thread = 0; thread < num_threads; ++thread)
@@ -379,15 +379,15 @@ private:
     }
 };
 
-StreamingAggregatingTransform::StreamingAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
-    : StreamingAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
+StreamingAggregatingTransform::StreamingAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_)
+    : StreamingAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyStreamingAggregatedData>(1), 0, 1, 1)
 {
 }
 
 StreamingAggregatingTransform::StreamingAggregatingTransform(
     Block header,
-    AggregatingTransformParamsPtr params_,
-    ManyAggregatedDataPtr many_data_,
+    StreamingAggregatingTransformParamsPtr params_,
+    ManyStreamingAggregatedDataPtr many_data_,
     size_t current_variant,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
@@ -400,6 +400,7 @@ StreamingAggregatingTransform::StreamingAggregatingTransform(
     , max_threads(std::min(many_data->variants.size(), max_threads_))
     , temporary_data_merge_threads(temporary_data_merge_threads_)
 {
+    (void)temporary_data_merge_threads;
 }
 
 StreamingAggregatingTransform::~StreamingAggregatingTransform() = default;
@@ -595,7 +596,7 @@ void StreamingAggregatingTransform::initGenerate()
     if (!params->aggregator.hasTemporaryFiles())
     {
         auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
-        auto prepared_data_ptr = std::make_shared<ManyAggregatedDataVariants>(std::move(prepared_data));
+        auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
         processors.emplace_back(
             std::make_shared<StreamingConvertingAggregatedToChunksTransform>(params, std::move(prepared_data_ptr), max_threads));
     }
@@ -640,7 +641,8 @@ void StreamingAggregatingTransform::initGenerate()
             ReadableSize(files.sum_size_compressed),
             ReadableSize(files.sum_size_uncompressed));
 
-        addMergingAggregatedMemoryEfficientTransform(pipe, params, temporary_data_merge_threads);
+        /// FIXME
+        /// addMergingAggregatedMemoryEfficientTransform(pipe, params, temporary_data_merge_threads);
 
         processors = Pipe::detachProcessors(std::move(pipe));
     }
@@ -688,7 +690,7 @@ void StreamingAggregatingTransform::doFinalize(const ChunkInfo & chunk_info)
 {
     /// FIXME spill to disk, aggr without key, overflow_row etc cases
     auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
-    auto prepared_data_ptr = std::make_shared<ManyAggregatedDataVariants>(std::move(prepared_data));
+    auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
 
     if (prepared_data_ptr->empty())
         return;
@@ -708,11 +710,11 @@ void StreamingAggregatingTransform::doFinalize(const ChunkInfo & chunk_info)
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::initialize
-void StreamingAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
+void StreamingAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data)
 {
     assert(params->params.streaming);
 
-    AggregatedDataVariantsPtr & first = data->at(0);
+    StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
     /// At least we need one arena in first data item per thread
     if (max_threads > first->aggregates_pools.size())
@@ -722,35 +724,35 @@ void StreamingAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & d
             first_pool.emplace_back(std::make_shared<Arena>());
     }
 
-    if (first->type == AggregatedDataVariants::Type::without_key || params->params.overflow_row)
+    if (first->type == StreamingAggregatedDataVariants::Type::without_key || params->params.overflow_row)
     {
         params->aggregator.mergeWithoutKeyDataImpl(*data);
         auto block = params->aggregator.prepareBlockAndFillWithoutKey(
-            *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
+            *first, params->final, first->type != StreamingAggregatedDataVariants::Type::without_key);
 
         setCurrentChunk(convertToChunk(block));
     }
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
-void StreamingAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsPtr & data)
+void StreamingAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data)
 {
     assert(params->params.streaming);
 
-    AggregatedDataVariantsPtr & first = data->at(0);
+    StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
-    if (first->type == AggregatedDataVariants::Type::without_key)
+    if (first->type == StreamingAggregatedDataVariants::Type::without_key)
     {
         return;
     }
 
 #define M(NAME) \
-    else if (first->type == AggregatedDataVariants::Type::NAME) \
+    else if (first->type == StreamingAggregatedDataVariants::Type::NAME) \
         params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
     if (false)
     {
     } // NOLINT
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
@@ -759,7 +761,7 @@ void StreamingAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsP
     setCurrentChunk(convertToChunk(block));
 }
 
-void StreamingAggregatingTransform::mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info)
+void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info)
 {
     /// FIXME, parallelization
     auto & first = data->at(0);
@@ -768,12 +770,13 @@ void StreamingAggregatingTransform::mergeTwoLevel(ManyAggregatedDataVariantsPtr 
 
     Block merged_block;
 
-    for (size_t thread = 0; thread < max_threads; ++thread)
+    size_t index = data->size() == 1 ? 0 : 1;
+    for (; index < first->aggregates_pools.size(); ++index)
     {
-        Arena * arena = first->aggregates_pools.at(thread).get();
+        Arena * arena = first->aggregates_pools.at(index).get();
 
         /// Figure out which buckets need get merged
-        auto & data_variant = data->at(thread);
+        auto & data_variant = data->at(index);
         std::vector<size_t> buckets = data_variant->aggregator->bucketsBefore(
             *data_variant, chunk_info.watermark_lower_bound, chunk_info.watermark);
 

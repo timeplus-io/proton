@@ -2,15 +2,63 @@
 
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
-#include <Interpreters/Aggregator.h>
+#include <Interpreters/StreamingAggregator.h>
 #include <Processors/IAccumulatingTransform.h>
-#include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/Stopwatch.h>
 
-/// proton: starts.
-
+/// proton: starts. Add by proton
 namespace DB
 {
+using StreamingAggregatorList = std::list<StreamingAggregator>;
+using StreamingAggregatorListPtr = std::shared_ptr<StreamingAggregatorList>;
+
+struct StreamingAggregatingTransformParams
+{
+    StreamingAggregator::Params params;
+
+    /// Each params holds a list of aggregators which are used in query. It's needed because we need
+    /// to use a pointer of aggregator to proper destroy complex aggregation states on exception
+    /// (See comments in AggregatedDataVariants). However, this pointer might not be valid because
+    /// we can have two different aggregators at the same time due to mixed pipeline of aggregate
+    /// projections, and one of them might gets destroyed before used.
+    StreamingAggregatorListPtr aggregator_list_ptr;
+    StreamingAggregator & aggregator;
+    bool final;
+    bool only_merge = false;
+
+    StreamingAggregatingTransformParams(const StreamingAggregator::Params & params_, bool final_)
+        : params(params_)
+        , aggregator_list_ptr(std::make_shared<StreamingAggregatorList>())
+        , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
+        , final(final_)
+    {
+    }
+
+    Block getHeader() const { return aggregator.getHeader(final); }
+
+    Block getCustomHeader(bool final_) const { return aggregator.getHeader(final_); }
+};
+
+struct ManyStreamingAggregatedData
+{
+    ManyStreamingAggregatedDataVariants variants;
+    std::vector<std::unique_ptr<std::mutex>> mutexes;
+    std::atomic<UInt32> num_finished = 0;
+    std::atomic<UInt32> finalizations = 0;
+
+    explicit ManyStreamingAggregatedData(size_t num_threads = 0) : variants(num_threads), mutexes(num_threads)
+    {
+        for (auto & elem : variants)
+            elem = std::make_shared<StreamingAggregatedDataVariants>();
+
+        for (auto & mut : mutexes)
+            mut = std::make_unique<std::mutex>();
+    }
+};
+
+using ManyStreamingAggregatedDataPtr = std::shared_ptr<ManyStreamingAggregatedData>;
+using StreamingAggregatingTransformParamsPtr = std::shared_ptr<StreamingAggregatingTransformParams>;
+
 /** It is for streaming query only. Streaming query never ends.
   * It aggregate streams of blocks in memory and finalize (project) intermediate
   * results periodically or on demand
@@ -18,13 +66,13 @@ namespace DB
 class StreamingAggregatingTransform final : public IProcessor
 {
 public:
-    StreamingAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
+    StreamingAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_);
 
     /// For Parallel aggregating.
     StreamingAggregatingTransform(
         Block header,
-        AggregatingTransformParamsPtr params_,
-        ManyAggregatedDataPtr many_data,
+        StreamingAggregatingTransformParamsPtr params_,
+        ManyStreamingAggregatedDataPtr many_data,
         size_t current_variant,
         size_t max_threads,
         size_t temporary_data_merge_threads);
@@ -41,9 +89,9 @@ private:
     bool needsFinalization(const Chunk & chunk) const;
     void finalize(const ChunkInfo & chunk_info);
     void doFinalize(const ChunkInfo & chunk_info);
-    void initialize(ManyAggregatedDataVariantsPtr & data);
-    void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data);
-    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info);
+    void initialize(ManyStreamingAggregatedDataVariantsPtr & data);
+    void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data);
+    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info);
     void setCurrentChunk(Chunk chunk);
     IProcessor::Status preparePushToOutput();
 
@@ -51,7 +99,7 @@ private:
     /// To read the data that was flushed into the temporary data file.
     Processors processors;
 
-    AggregatingTransformParamsPtr params;
+    StreamingAggregatingTransformParamsPtr params;
     Poco::Logger * log = &Poco::Logger::get("StreamingAggregatingTransform");
 
     ColumnRawPtrs key_columns;
@@ -64,8 +112,8 @@ private:
      */
     bool no_more_keys = false;
 
-    ManyAggregatedDataPtr many_data;
-    AggregatedDataVariants & variants;
+    ManyStreamingAggregatedDataPtr many_data;
+    StreamingAggregatedDataVariants & variants;
     size_t max_threads = 1;
     size_t temporary_data_merge_threads = 1;
 

@@ -1,7 +1,6 @@
 #include <future>
 #include <Poco/Util/Application.h>
 
-#include <base/sort.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Common/formatReadable.h>
@@ -10,11 +9,10 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnSparse.h>
 #include <Formats/NativeWriter.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Compression/CompressedWriteBuffer.h>
-#include <Interpreters/Aggregator.h>
+#include <Interpreters/StreamingAggregator.h>
 #include <Common/MemoryTracker.h>
 #include <Common/CurrentThread.h>
 #include <Common/typeid_cast.h>
@@ -26,6 +24,10 @@
 #include <Interpreters/JIT/compileFunction.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Core/ProtocolDefines.h>
+
+/// proton: starts
+#include <Common/StreamingCommon.h>
+/// proton: ends
 
 
 namespace ProfileEvents
@@ -49,7 +51,7 @@ namespace ErrorCodes
 }
 
 
-AggregatedDataVariants::~AggregatedDataVariants()
+StreamingAggregatedDataVariants::~StreamingAggregatedDataVariants()
 {
     if (aggregator && !aggregator->all_aggregates_has_trivial_destructor)
     {
@@ -65,7 +67,7 @@ AggregatedDataVariants::~AggregatedDataVariants()
 }
 
 
-void AggregatedDataVariants::convertToTwoLevel()
+void StreamingAggregatedDataVariants::convertToTwoLevel()
 {
     if (aggregator)
         LOG_TRACE(aggregator->log, "Converting aggregation data to two-level.");
@@ -79,7 +81,7 @@ void AggregatedDataVariants::convertToTwoLevel()
             type = Type::NAME ## _two_level; \
             break;
 
-        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
+        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M)
 
     #undef M
 
@@ -88,12 +90,12 @@ void AggregatedDataVariants::convertToTwoLevel()
     }
 }
 
-Block Aggregator::getHeader(bool final) const
+Block StreamingAggregator::getHeader(bool final) const
 {
     return params.getHeader(final);
 }
 
-Block Aggregator::Params::getHeader(
+Block StreamingAggregator::Params::getHeader(
     const Block & src_header,
     const Block & intermediate_header,
     const ColumnNumbers & keys,
@@ -142,7 +144,7 @@ Block Aggregator::Params::getHeader(
     return materializeBlock(res);
 }
 
-void Aggregator::Params::explain(WriteBuffer & out, size_t indent) const
+void StreamingAggregator::Params::explain(WriteBuffer & out, size_t indent) const
 {
     Strings res;
     const auto & header = src_header ? src_header
@@ -179,7 +181,7 @@ void Aggregator::Params::explain(WriteBuffer & out, size_t indent) const
     }
 }
 
-void Aggregator::Params::explain(JSONBuilder::JSONMap & map) const
+void StreamingAggregator::Params::explain(JSONBuilder::JSONMap & map) const
 {
     const auto & header = src_header ? src_header
                                      : intermediate_header;
@@ -237,7 +239,7 @@ public:
 
 #endif
 
-Aggregator::Aggregator(const Params & params_)
+StreamingAggregator::StreamingAggregator(const Params & params_)
     : params(params_)
 {
     /// Use query-level memory tracker
@@ -287,7 +289,7 @@ Aggregator::Aggregator(const Params & params_)
     method_chosen = chooseAggregationMethod();
     HashMethodContext::Settings cache_settings;
     cache_settings.max_threads = params.max_threads;
-    aggregation_state_cache = AggregatedDataVariants::createCache(method_chosen, cache_settings);
+    aggregation_state_cache = StreamingAggregatedDataVariants::createCache(method_chosen, cache_settings);
 
 #if USE_EMBEDDED_COMPILER
     compileAggregateFunctionsIfNeeded();
@@ -297,7 +299,7 @@ Aggregator::Aggregator(const Params & params_)
 
 #if USE_EMBEDDED_COMPILER
 
-void Aggregator::compileAggregateFunctionsIfNeeded()
+void StreamingAggregator::compileAggregateFunctionsIfNeeded()
 {
     static std::unordered_map<UInt128, UInt64, UInt128Hash> aggregate_functions_description_to_count;
     static std::mutex mtx;
@@ -362,6 +364,7 @@ void Aggregator::compileAggregateFunctionsIfNeeded()
                 auto compiled_aggregate_functions = compileAggregateFunctions(getJITInstance(), functions_to_compile, functions_description);
                 return std::make_shared<CompiledAggregateFunctionsHolder>(std::move(compiled_aggregate_functions));
             });
+
             compiled_aggregate_functions_holder = std::static_pointer_cast<CompiledAggregateFunctionsHolder>(compiled_function_cache_entry);
         }
         else
@@ -375,11 +378,11 @@ void Aggregator::compileAggregateFunctionsIfNeeded()
 
 #endif
 
-AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
+StreamingAggregatedDataVariants::Type StreamingAggregator::chooseAggregationMethod()
 {
     /// If no keys. All aggregating to single row.
     if (params.keys_size == 0)
-        return AggregatedDataVariants::Type::without_key;
+        return StreamingAggregatedDataVariants::Type::without_key;
 
     /// Check if at least one of the specified keys is nullable.
     DataTypes types_removed_nullable;
@@ -427,6 +430,16 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         }
     }
 
+    /// proton: starts
+    if (params.streaming)
+    {
+        auto method_type = chooseAggregationMethodStreaming(
+            types_removed_nullable, has_nullable_key, has_low_cardinality, num_fixed_contiguous_keys, keys_bytes);
+        if (method_type != StreamingAggregatedDataVariants::Type::EMPTY)
+            return method_type;
+    }
+    /// proton: ends
+
     if (has_nullable_key)
     {
         if (params.keys_size == num_fixed_contiguous_keys && !has_low_cardinality)
@@ -434,9 +447,9 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             /// Pack if possible all the keys along with information about which key values are nulls
             /// into a fixed 16- or 32-byte blob.
             if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= 16)
-                return AggregatedDataVariants::Type::nullable_keys128;
+                return StreamingAggregatedDataVariants::Type::nullable_keys128;
             if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= 32)
-                return AggregatedDataVariants::Type::nullable_keys256;
+                return StreamingAggregatedDataVariants::Type::nullable_keys256;
         }
 
         if (has_low_cardinality && params.keys_size == 1)
@@ -446,22 +459,22 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
                 size_t size_of_field = types_removed_nullable[0]->getSizeOfValueInMemory();
 
                 if (size_of_field == 1)
-                    return AggregatedDataVariants::Type::low_cardinality_key8;
+                    return StreamingAggregatedDataVariants::Type::low_cardinality_key8;
                 if (size_of_field == 2)
-                    return AggregatedDataVariants::Type::low_cardinality_key16;
+                    return StreamingAggregatedDataVariants::Type::low_cardinality_key16;
                 if (size_of_field == 4)
-                    return AggregatedDataVariants::Type::low_cardinality_key32;
+                    return StreamingAggregatedDataVariants::Type::low_cardinality_key32;
                 if (size_of_field == 8)
-                    return AggregatedDataVariants::Type::low_cardinality_key64;
+                    return StreamingAggregatedDataVariants::Type::low_cardinality_key64;
             }
             else if (isString(types_removed_nullable[0]))
-                return AggregatedDataVariants::Type::low_cardinality_key_string;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_key_string;
             else if (isFixedString(types_removed_nullable[0]))
-                return AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_key_fixed_string;
         }
 
         /// Fallback case.
-        return AggregatedDataVariants::Type::serialized;
+        return StreamingAggregatedDataVariants::Type::serialized;
     }
 
     /// No key has been found to be nullable.
@@ -474,36 +487,36 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         if (has_low_cardinality)
         {
             if (size_of_field == 1)
-                return AggregatedDataVariants::Type::low_cardinality_key8;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_key8;
             if (size_of_field == 2)
-                return AggregatedDataVariants::Type::low_cardinality_key16;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_key16;
             if (size_of_field == 4)
-                return AggregatedDataVariants::Type::low_cardinality_key32;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_key32;
             if (size_of_field == 8)
-                return AggregatedDataVariants::Type::low_cardinality_key64;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_key64;
         }
 
         if (size_of_field == 1)
-            return AggregatedDataVariants::Type::key8;
+            return StreamingAggregatedDataVariants::Type::key8;
         if (size_of_field == 2)
-            return AggregatedDataVariants::Type::key16;
+            return StreamingAggregatedDataVariants::Type::key16;
         if (size_of_field == 4)
-            return AggregatedDataVariants::Type::key32;
+            return StreamingAggregatedDataVariants::Type::key32;
         if (size_of_field == 8)
-            return AggregatedDataVariants::Type::key64;
+            return StreamingAggregatedDataVariants::Type::key64;
         if (size_of_field == 16)
-            return AggregatedDataVariants::Type::keys128;
+            return StreamingAggregatedDataVariants::Type::keys128;
         if (size_of_field == 32)
-            return AggregatedDataVariants::Type::keys256;
+            return StreamingAggregatedDataVariants::Type::keys256;
         throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16, 32.", ErrorCodes::LOGICAL_ERROR);
     }
 
     if (params.keys_size == 1 && isFixedString(types_removed_nullable[0]))
     {
         if (has_low_cardinality)
-            return AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
+            return StreamingAggregatedDataVariants::Type::low_cardinality_key_fixed_string;
         else
-            return AggregatedDataVariants::Type::key_fixed_string;
+            return StreamingAggregatedDataVariants::Type::key_fixed_string;
     }
 
     /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
@@ -512,37 +525,108 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         if (has_low_cardinality)
         {
             if (keys_bytes <= 16)
-                return AggregatedDataVariants::Type::low_cardinality_keys128;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_keys128;
             if (keys_bytes <= 32)
-                return AggregatedDataVariants::Type::low_cardinality_keys256;
+                return StreamingAggregatedDataVariants::Type::low_cardinality_keys256;
         }
 
         if (keys_bytes <= 2)
-            return AggregatedDataVariants::Type::keys16;
+            return StreamingAggregatedDataVariants::Type::keys16;
         if (keys_bytes <= 4)
-            return AggregatedDataVariants::Type::keys32;
+            return StreamingAggregatedDataVariants::Type::keys32;
         if (keys_bytes <= 8)
-            return AggregatedDataVariants::Type::keys64;
+            return StreamingAggregatedDataVariants::Type::keys64;
         if (keys_bytes <= 16)
-            return AggregatedDataVariants::Type::keys128;
+            return StreamingAggregatedDataVariants::Type::keys128;
         if (keys_bytes <= 32)
-            return AggregatedDataVariants::Type::keys256;
+            return StreamingAggregatedDataVariants::Type::keys256;
     }
 
     /// If single string key - will use hash table with references to it. Strings itself are stored separately in Arena.
     if (params.keys_size == 1 && isString(types_removed_nullable[0]))
     {
         if (has_low_cardinality)
-            return AggregatedDataVariants::Type::low_cardinality_key_string;
+            return StreamingAggregatedDataVariants::Type::low_cardinality_key_string;
         else
-            return AggregatedDataVariants::Type::key_string;
+            return StreamingAggregatedDataVariants::Type::key_string;
     }
 
-    return AggregatedDataVariants::Type::serialized;
+    return StreamingAggregatedDataVariants::Type::serialized;
 }
 
+/// proton: starts
+StreamingAggregatedDataVariants::Type StreamingAggregator::chooseAggregationMethodStreaming(
+    const DataTypes & types_removed_nullable, bool has_nullable_key,
+    bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes)
+{
+    if (params.group_by != Params::GroupBy::WINDOW_END
+        && params.group_by != Params::GroupBy::WINDOW_START)
+        return StreamingAggregatedDataVariants::Type::EMPTY;
+
+    if (has_nullable_key)
+    {
+        if (params.keys_size == num_fixed_contiguous_keys && !has_low_cardinality)
+        {
+            /// Pack if possible all the keys along with information about which key values are nulls
+            /// into a fixed 16- or 32-byte blob.
+            if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= 16)
+                return StreamingAggregatedDataVariants::Type::streaming_nullable_keys128_two_level;
+            if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= 32)
+                return StreamingAggregatedDataVariants::Type::streaming_nullable_keys256_two_level;
+        }
+
+        /// Fallback case.
+        return StreamingAggregatedDataVariants::Type::serialized;
+    }
+
+    /// No key has been found to be nullable.
+
+    /// Single numeric key.
+    if (params.keys_size == 1)
+    {
+        assert(types_removed_nullable[0]->isValueRepresentedByNumber());
+
+        size_t size_of_field = types_removed_nullable[0]->getSizeOfValueInMemory();
+
+        if (size_of_field == 2)
+            return StreamingAggregatedDataVariants::Type::streaming_key16_two_level;
+        if (size_of_field == 4)
+            return StreamingAggregatedDataVariants::Type::streaming_key32_two_level;
+        if (size_of_field == 8)
+            return StreamingAggregatedDataVariants::Type::streaming_key64_two_level;
+
+        Exception("Logical error: the first streaming aggregation column has sizeOfField not in 2, 4, 8.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
+    if (params.keys_size == num_fixed_contiguous_keys)
+    {
+        assert(keys_bytes > 2);
+
+        if (has_low_cardinality)
+        {
+            if (keys_bytes <= 16)
+                return StreamingAggregatedDataVariants::Type::streaming_low_cardinality_keys128_two_level;
+            if (keys_bytes <= 32)
+                return StreamingAggregatedDataVariants::Type::streaming_low_cardinality_keys256_two_level;
+        }
+
+        if (keys_bytes <= 4)
+            return StreamingAggregatedDataVariants::Type::streaming_keys32_two_level;
+        if (keys_bytes <= 8)
+            return StreamingAggregatedDataVariants::Type::streaming_keys64_two_level;
+        if (keys_bytes <= 16)
+            return StreamingAggregatedDataVariants::Type::streaming_keys128_two_level;
+        if (keys_bytes <= 32)
+            return StreamingAggregatedDataVariants::Type::streaming_keys256_two_level;
+    }
+
+    return StreamingAggregatedDataVariants::Type::streaming_serialized_two_level;
+}
+/// proton: ends
+
 template <bool skip_compiled_aggregate_functions>
-void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
+void StreamingAggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
 {
     for (size_t j = 0; j < params.aggregates_size; ++j)
     {
@@ -574,20 +658,12 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
     }
 }
 
-bool Aggregator::hasSparseArguments(AggregateFunctionInstruction * aggregate_instructions)
-{
-    for (auto * inst = aggregate_instructions; inst->that; ++inst)
-        if (inst->has_sparse_arguments)
-            return true;
-    return false;
-}
-
 /** It's interesting - if you remove `noinline`, then gcc for some reason will inline this function, and the performance decreases (~ 10%).
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
   * Inline does not make sense, since the inner loop is entirely inside this function.
   */
 template <typename Method>
-void NO_INLINE Aggregator::executeImpl(
+void NO_INLINE StreamingAggregator::executeImpl(
     Method & method,
     Arena * aggregates_pool,
     size_t rows,
@@ -601,7 +677,7 @@ void NO_INLINE Aggregator::executeImpl(
     if (!no_more_keys)
     {
 #if USE_EMBEDDED_COMPILER
-        if (compiled_aggregate_functions_holder && !hasSparseArguments(aggregate_instructions))
+        if (compiled_aggregate_functions_holder)
         {
             executeImplBatch<false, true>(method, state, aggregates_pool, rows, aggregate_instructions, overflow_row);
         }
@@ -618,7 +694,7 @@ void NO_INLINE Aggregator::executeImpl(
 }
 
 template <bool no_more_keys, bool use_compiled_functions, typename Method>
-void NO_INLINE Aggregator::executeImplBatch(
+void NO_INLINE StreamingAggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
@@ -640,7 +716,7 @@ void NO_INLINE Aggregator::executeImplBatch(
     }
 
     /// Optimization for special case when aggregating by 8bit key.
-    if constexpr (!no_more_keys && std::is_same_v<Method, typename decltype(AggregatedDataVariants::key8)::element_type>)
+    if constexpr (!no_more_keys && std::is_same_v<Method, typename decltype(StreamingAggregatedDataVariants::key8)::element_type>)
     {
         /// We use another method if there are aggregate functions with -Array combinator.
         bool has_arrays = false;
@@ -653,7 +729,7 @@ void NO_INLINE Aggregator::executeImplBatch(
             }
         }
 
-        if (!has_arrays && !hasSparseArguments(aggregate_instructions))
+        if (!has_arrays)
         {
             for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
             {
@@ -779,8 +855,6 @@ void NO_INLINE Aggregator::executeImplBatch(
 
         if (inst->offsets)
             inst->batch_that->addBatchArray(rows, places.get(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
-        else if (inst->has_sparse_arguments)
-            inst->batch_that->addBatchSparse(places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
         else
             inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
     }
@@ -788,7 +862,7 @@ void NO_INLINE Aggregator::executeImplBatch(
 
 
 template <bool use_compiled_functions>
-void NO_INLINE Aggregator::executeWithoutKeyImpl(
+void NO_INLINE StreamingAggregator::executeWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
     size_t rows,
     AggregateFunctionInstruction * aggregate_instructions,
@@ -846,15 +920,13 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
         if (inst->offsets)
             inst->batch_that->addBatchSinglePlace(
                 inst->offsets[static_cast<ssize_t>(rows - 1)], res + inst->state_offset, inst->batch_arguments, arena);
-        else if (inst->has_sparse_arguments)
-            inst->batch_that->addBatchSparseSinglePlace(res + inst->state_offset, inst->batch_arguments, arena);
         else
             inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
     }
 }
 
 
-void NO_INLINE Aggregator::executeOnIntervalWithoutKeyImpl(
+void NO_INLINE StreamingAggregator::executeOnIntervalWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
     size_t row_begin,
     size_t row_end,
@@ -872,7 +944,7 @@ void NO_INLINE Aggregator::executeOnIntervalWithoutKeyImpl(
 }
 
 
-void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns & aggregate_columns, Columns & materialized_columns,
+void StreamingAggregator::prepareAggregateInstructions(Columns columns, AggregateColumns & aggregate_columns, Columns & materialized_columns,
     AggregateFunctionInstructions & aggregate_functions_instructions, NestedColumnsHolder & nested_columns_holder) const
 {
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -883,30 +955,19 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
 
     for (size_t i = 0; i < params.aggregates_size; ++i)
     {
-        bool allow_sparse_arguments = aggregate_columns[i].size() == 1;
-        bool has_sparse_arguments = false;
-
         for (size_t j = 0; j < aggregate_columns[i].size(); ++j)
         {
             materialized_columns.push_back(columns.at(params.aggregates[i].arguments[j])->convertToFullColumnIfConst());
             aggregate_columns[i][j] = materialized_columns.back().get();
 
-            auto full_column = allow_sparse_arguments
-                ? aggregate_columns[i][j]->getPtr()
-                : recursiveRemoveSparse(aggregate_columns[i][j]->getPtr());
-
-            full_column = recursiveRemoveLowCardinality(full_column);
-            if (full_column.get() != aggregate_columns[i][j])
+            auto column_no_lc = recursiveRemoveLowCardinality(aggregate_columns[i][j]->getPtr());
+            if (column_no_lc.get() != aggregate_columns[i][j])
             {
-                materialized_columns.emplace_back(std::move(full_column));
+                materialized_columns.emplace_back(std::move(column_no_lc));
                 aggregate_columns[i][j] = materialized_columns.back().get();
             }
-
-            if (aggregate_columns[i][j]->isSparse())
-                has_sparse_arguments = true;
         }
 
-        aggregate_functions_instructions[i].has_sparse_arguments = has_sparse_arguments;
         aggregate_functions_instructions[i].arguments = aggregate_columns[i].data();
         aggregate_functions_instructions[i].state_offset = offsets_of_aggregate_states[i];
 
@@ -935,7 +996,7 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
 }
 
 
-bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result,
+bool StreamingAggregator::executeOnBlock(const Block & block, StreamingAggregatedDataVariants & result,
                                 ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys) const
 {
     UInt64 num_rows = block.rows();
@@ -943,7 +1004,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
 }
 
 
-bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedDataVariants & result,
+bool StreamingAggregator::executeOnBlock(Columns columns, UInt64 num_rows, StreamingAggregatedDataVariants & result,
     ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys) const
 {
     /// `result` will destroy the states of aggregate functions in the destructor
@@ -952,9 +1013,12 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     /// How to perform the aggregation?
     if (result.empty())
     {
-        result.init(method_chosen);
+        /// proton: starts. First init the key_sizes, and then the method since method init
+        /// may depend on the key_sizes
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
+        result.init(method_chosen);
+        /// proton: ends
         LOG_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
 
@@ -966,7 +1030,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     /// Remember the columns we will work with
     for (size_t i = 0; i < params.keys_size; ++i)
     {
-        materialized_columns.push_back(recursiveRemoveSparse(columns.at(params.keys[i]))->convertToFullColumnIfConst());
+        materialized_columns.push_back(columns.at(params.keys[i])->convertToFullColumnIfConst());
         key_columns[i] = materialized_columns.back().get();
 
         if (!result.isLowCardinality())
@@ -980,11 +1044,15 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         }
     }
 
+    /// proton: starts
+    setupAggregatesPoolTimestamps(num_rows, key_columns, result);
+    /// proton: ends
+
     NestedColumnsHolder nested_columns_holder;
     AggregateFunctionInstructions aggregate_functions_instructions;
     prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions, nested_columns_holder);
 
-    if ((params.overflow_row || result.type == AggregatedDataVariants::Type::without_key) && !result.without_key)
+    if ((params.overflow_row || result.type == StreamingAggregatedDataVariants::Type::without_key) && !result.without_key)
     {
         AggregateDataPtr place = result.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
         createAggregateStates(place);
@@ -994,7 +1062,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     /// We select one of the aggregation methods and call it.
 
     /// For the case when there are no keys (all aggregate into one row).
-    if (result.type == AggregatedDataVariants::Type::without_key)
+    if (result.type == StreamingAggregatedDataVariants::Type::without_key)
     {
         /// TODO: Enable compilation after investigation
 // #if USE_EMBEDDED_COMPILER
@@ -1014,12 +1082,12 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         AggregateDataPtr overflow_row_ptr = params.overflow_row ? result.without_key : nullptr;
 
         #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
+            else if (result.type == StreamingAggregatedDataVariants::Type::NAME) \
                 executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, aggregate_functions_instructions.data(), \
                     no_more_keys, overflow_row_ptr);
 
         if (false) {} // NOLINT
-        APPLY_FOR_AGGREGATED_VARIANTS(M)
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
         #undef M
     }
 
@@ -1077,7 +1145,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
 }
 
 
-void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, const String & tmp_path) const
+void StreamingAggregator::writeToTemporaryFile(StreamingAggregatedDataVariants & data_variants, const String & tmp_path) const
 {
     Stopwatch watch;
     size_t rows = data_variants.size();
@@ -1094,11 +1162,11 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     /// Flush only two-level data and possibly overflow data.
 
 #define M(NAME) \
-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
+    else if (data_variants.type == StreamingAggregatedDataVariants::Type::NAME) \
         writeToTemporaryFileImpl(data_variants, *data_variants.NAME, block_out);
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING(M)
 #undef M
     else
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1107,7 +1175,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     data_variants.init(data_variants.type);
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
-    if (params.overflow_row || data_variants.type == AggregatedDataVariants::Type::without_key)
+    if (params.overflow_row || data_variants.type == StreamingAggregatedDataVariants::Type::without_key)
     {
         AggregateDataPtr place = data_variants.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
         createAggregateStates(place);
@@ -1149,7 +1217,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
 }
 
 
-void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants) const
+void StreamingAggregator::writeToTemporaryFile(StreamingAggregatedDataVariants & data_variants) const
 {
     String tmp_path = params.tmp_volume->getDisk()->getPath();
     return writeToTemporaryFile(data_variants, tmp_path);
@@ -1157,8 +1225,8 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants) co
 
 
 template <typename Method>
-Block Aggregator::convertOneBucketToBlock(
-    AggregatedDataVariants & data_variants,
+Block StreamingAggregator::convertOneBucketToBlock(
+    StreamingAggregatedDataVariants & data_variants,
     Method & method,
     Arena * arena,
     bool final,
@@ -1179,8 +1247,8 @@ Block Aggregator::convertOneBucketToBlock(
     return block;
 }
 
-Block Aggregator::mergeAndConvertOneBucketToBlock(
-    ManyAggregatedDataVariants & variants,
+Block StreamingAggregator::mergeAndConvertOneBucketToBlock(
+    ManyStreamingAggregatedDataVariants & variants,
     Arena * arena,
     bool final,
     size_t bucket,
@@ -1192,7 +1260,7 @@ Block Aggregator::mergeAndConvertOneBucketToBlock(
 
     if (false) {} // NOLINT
 #define M(NAME) \
-    else if (method == AggregatedDataVariants::Type::NAME) \
+    else if (method == StreamingAggregatedDataVariants::Type::NAME) \
     { \
         mergeBucketImpl<decltype(merged_data.NAME)::element_type>(variants, bucket, arena); \
         if (is_cancelled && is_cancelled->load(std::memory_order_seq_cst)) \
@@ -1200,7 +1268,7 @@ Block Aggregator::mergeAndConvertOneBucketToBlock(
         block = convertOneBucketToBlock(merged_data, *merged_data.NAME, arena, final, bucket); \
     }
 
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING_FULL(M)
 #undef M
 
     return block;
@@ -1208,8 +1276,8 @@ Block Aggregator::mergeAndConvertOneBucketToBlock(
 
 
 template <typename Method>
-void Aggregator::writeToTemporaryFileImpl(
-    AggregatedDataVariants & data_variants,
+void StreamingAggregator::writeToTemporaryFileImpl(
+    StreamingAggregatedDataVariants & data_variants,
     Method & method,
     NativeWriter & out) const
 {
@@ -1249,7 +1317,7 @@ void Aggregator::writeToTemporaryFileImpl(
 }
 
 
-bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
+bool StreamingAggregator::checkLimits(size_t result_size, bool & no_more_keys) const
 {
     if (!no_more_keys && params.max_rows_to_group_by && result_size > params.max_rows_to_group_by)
     {
@@ -1277,7 +1345,7 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
 
 
 template <typename Method, typename Table>
-void Aggregator::convertToBlockImpl(
+void StreamingAggregator::convertToBlockImpl(
     Method & method,
     Table & data,
     MutableColumns & key_columns,
@@ -1316,12 +1384,17 @@ void Aggregator::convertToBlockImpl(
         convertToBlockImplNotFinal(method, data, std::move(raw_key_columns), aggregate_columns);
     }
     /// In order to release memory early.
-    data.clearAndShrink();
+    /// proton: starts. For streaming aggr, we hold on to the states
+//    if (!params.streaming)
+//    {
+//        data.clearAndShrink();
+//    }
+    /// proton: ends
 }
 
 
 template <typename Mapped>
-inline void Aggregator::insertAggregatesIntoColumns(
+inline void StreamingAggregator::insertAggregatesIntoColumns(
     Mapped & mapped,
     MutableColumns & final_aggregate_columns,
     Arena * arena) const
@@ -1363,6 +1436,17 @@ inline void Aggregator::insertAggregatesIntoColumns(
         exception = std::current_exception();
     }
 
+    /// proton: starts
+    /// For streaming aggregation, we hold up to the states
+    if (params.streaming)
+    {
+        if (exception)
+            std::rethrow_exception(exception);
+
+        return;
+    }
+    /// proton: ends
+
     /** Destroy states that are no longer needed. This loop does not throw.
         *
         * Don't destroy states for "-State" aggregate functions,
@@ -1389,7 +1473,7 @@ inline void Aggregator::insertAggregatesIntoColumns(
 
 
 template <typename Method, bool use_compiled_functions, typename Table>
-void NO_INLINE Aggregator::convertToBlockImplFinal(
+void NO_INLINE StreamingAggregator::convertToBlockImplFinal(
     Method & method,
     Table & data,
     std::vector<IColumn *>  key_columns,
@@ -1417,7 +1501,12 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         places.emplace_back(mapped);
 
         /// Mark the cell as destroyed so it will not be destroyed in destructor.
-        mapped = nullptr;
+        /// proton: starts. Here we push the `mapped` to `places`, for streaming
+        /// case, we don't want aggregate function to destroy the places
+        /// FIXME, State aggregation
+        if (!params.streaming)
+            mapped = nullptr;
+        /// proton: ends
     });
 
     std::exception_ptr exception;
@@ -1472,8 +1561,31 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             ++aggregate_functions_destroy_index;
 
             /// For State AggregateFunction ownership of aggregate place is passed to result column after insert
+            /// proton: starts.
+            /// For non-streaming cases, after calling `insertResultIntoBatch`, aggregator / data should not maintain the places
+            /// anymore (to avoid double free). We have 2 cases here:
+            /// 1. For non `-State` aggregations, the ownership of places doesn't get transferred to result column after insert.
+            ///    So we need a way to clean the places up: either the `insertResultIntoBatch` function destroys them or
+            ///    the dtor of `data` destroys them. Here we ask `insertResultIntoBatch` to destroy them by setting .
+            ///    `destroy_place_after_insert` to true. The behaviors of `insertResultIntoBatch` are:
+            ///    If `DB::IAggregateFunctionHelper::insertResultIntoBatch` doesn't throw, it destroys to free dtor the places since
+            ///    we set `destroy_place_after_insert` to true to tell it to destroy the places. Otherwise if it throws,
+            ///    it also destroys the places no matter `destroy_place_after_insert` is set or not.
+            ///    This is correct behavior for non-streaming non-State aggregations.
+            /// 2. For `-State` aggregations, the ownership of places gets transferred to result column after insert. So aggregator / data doesn't
+            ///    need to maintain them anymore. If `insertResultIntoBatch` throws, it cleans up the places which are not inserted yet
+            ///
+            /// For streaming cases (FIXME window recycling / projection):
+            /// 1. For non `-State` aggregations, there are different cases
+            ///    a. aggregator / data still need maintain the places if it is doing non-window based incremental aggregation
+            ///       and periodical projection
+            ///       For example: `SELECT avg(n) FROM STREAM(table) GROUP BY xxx`.
+            ///    b. aggregator / data don't need maintain the places if it is doing window-based aggregation and when windows get sealed
+            /// 2. For `-State` aggregations, since the ownership of the places are transferred to the result column, aggregator / data
+            ///    don't need maintain them anymore after insert.
             bool is_state = aggregate_functions[destroy_index]->isState();
-            bool destroy_place_after_insert = !is_state;
+            bool destroy_place_after_insert = !is_state && !params.streaming;
+            /// proton: ends
 
             aggregate_functions[destroy_index]->insertResultIntoBatch(places.size(), places.data(), offset, *final_aggregate_column, arena, destroy_place_after_insert);
         }
@@ -1503,7 +1615,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
 }
 
 template <typename Method, typename Table>
-void NO_INLINE Aggregator::convertToBlockImplNotFinal(
+void NO_INLINE StreamingAggregator::convertToBlockImplNotFinal(
     Method & method,
     Table & data,
     std::vector<IColumn *>  key_columns,
@@ -1533,14 +1645,19 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_columns[i]->push_back(mapped + offsets_of_aggregate_states[i]);
 
-        mapped = nullptr;
+        /// proton: starts. For streaming aggr, we hold on to the states
+        if (!params.streaming)
+        {
+            mapped = nullptr;
+        }
+        /// proton: ends.
     });
 }
 
 
 template <typename Filler>
-Block Aggregator::prepareBlockAndFill(
-    AggregatedDataVariants & data_variants,
+Block StreamingAggregator::prepareBlockAndFill(
+    StreamingAggregatedDataVariants & data_variants,
     bool final,
     size_t rows,
     Filler && filler) const
@@ -1567,6 +1684,10 @@ Block Aggregator::prepareBlockAndFill(
 
             /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
             ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
+
+            /// proton: starts
+            column_aggregate_func.setStreaming(params.streaming);
+            /// proton: ends
 
             for (auto & pool : data_variants.aggregates_pools)
                 column_aggregate_func.addArena(pool);
@@ -1622,8 +1743,8 @@ Block Aggregator::prepareBlockAndFill(
     return res;
 }
 
-void Aggregator::addSingleKeyToAggregateColumns(
-    const AggregatedDataVariants & data_variants,
+void StreamingAggregator::addSingleKeyToAggregateColumns(
+    const StreamingAggregatedDataVariants & data_variants,
     MutableColumns & aggregate_columns) const
 {
     const auto & data = data_variants.without_key;
@@ -1634,8 +1755,8 @@ void Aggregator::addSingleKeyToAggregateColumns(
     }
 }
 
-void Aggregator::addArenasToAggregateColumns(
-    const AggregatedDataVariants & data_variants,
+void StreamingAggregator::addArenasToAggregateColumns(
+    const StreamingAggregatedDataVariants & data_variants,
     MutableColumns & aggregate_columns) const
 {
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1646,8 +1767,8 @@ void Aggregator::addArenasToAggregateColumns(
     }
 }
 
-void Aggregator::createStatesAndFillKeyColumnsWithSingleKey(
-    AggregatedDataVariants & data_variants,
+void StreamingAggregator::createStatesAndFillKeyColumnsWithSingleKey(
+    StreamingAggregatedDataVariants & data_variants,
     Columns & key_columns,
     size_t key_row,
     MutableColumns & final_key_columns) const
@@ -1662,7 +1783,7 @@ void Aggregator::createStatesAndFillKeyColumnsWithSingleKey(
     }
 }
 
-Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const
+Block StreamingAggregator::prepareBlockAndFillWithoutKey(StreamingAggregatedDataVariants & data_variants, bool final, bool is_overflows) const
 {
     size_t rows = 1;
 
@@ -1672,7 +1793,7 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
         MutableColumns & final_aggregate_columns,
         bool final_)
     {
-        if (data_variants.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
+        if (data_variants.type == StreamingAggregatedDataVariants::Type::without_key || params.overflow_row)
         {
             AggregatedDataWithoutKey & data = data_variants.without_key;
 
@@ -1683,7 +1804,13 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
             {
                 for (size_t i = 0; i < params.aggregates_size; ++i)
                     aggregate_columns[i]->push_back(data + offsets_of_aggregate_states[i]);
-                data = nullptr;
+
+                /// proton: starts
+                if (!params.streaming)
+                {
+                    data = nullptr;
+                }
+                /// proton: ends
             }
             else
             {
@@ -1702,13 +1829,15 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
     if (is_overflows)
         block.info.is_overflows = true;
 
-    if (final)
+    /// proton: starts
+    if (final && !params.streaming)
         destroyWithoutKey(data_variants);
+    /// proton: ends
 
     return block;
 }
 
-Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const
+Block StreamingAggregator::prepareBlockAndFillSingleLevel(StreamingAggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = data_variants.sizeWithoutOverflowRow();
 
@@ -1719,12 +1848,12 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
         bool final_)
     {
     #define M(NAME) \
-        else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
+        else if (data_variants.type == StreamingAggregatedDataVariants::Type::NAME) \
             convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, \
                 key_columns, aggregate_columns, final_aggregate_columns, data_variants.aggregates_pool, final_);
 
         if (false) {} // NOLINT
-        APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+        APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
     #undef M
         else
             throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1734,14 +1863,14 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 }
 
 
-BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
+BlocksList StreamingAggregator::prepareBlocksAndFillTwoLevel(StreamingAggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
 {
 #define M(NAME) \
-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
+    else if (data_variants.type == StreamingAggregatedDataVariants::Type::NAME) \
         return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING(M)
 #undef M
     else
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1749,8 +1878,8 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & dat
 
 
 template <typename Method>
-BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
-    AggregatedDataVariants & data_variants,
+BlocksList StreamingAggregator::prepareBlocksAndFillTwoLevelImpl(
+    StreamingAggregatedDataVariants & data_variants,
     Method & method,
     bool final,
     ThreadPool * thread_pool) const
@@ -1828,7 +1957,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
 }
 
 
-BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const
+BlocksList StreamingAggregator::convertToBlocks(StreamingAggregatedDataVariants & data_variants, bool final, size_t max_threads) const
 {
     LOG_TRACE(log, "Converting aggregated data to blocks");
 
@@ -1847,9 +1976,9 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
 
     if (data_variants.without_key)
         blocks.emplace_back(prepareBlockAndFillWithoutKey(
-            data_variants, final, data_variants.type != AggregatedDataVariants::Type::without_key));
+            data_variants, final, data_variants.type != StreamingAggregatedDataVariants::Type::without_key));
 
-    if (data_variants.type != AggregatedDataVariants::Type::without_key)
+    if (data_variants.type != StreamingAggregatedDataVariants::Type::without_key)
     {
         if (!data_variants.isTwoLevel())
             blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final));
@@ -1857,12 +1986,14 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
             blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get()));
     }
 
-    if (!final)
+    /// proton: starts
+    if (!final && !params.streaming)
     {
         /// data_variants will not destroy the states of aggregate functions in the destructor.
         /// Now ColumnAggregateFunction owns the states.
         data_variants.aggregator = nullptr;
     }
+    /// proton: ends
 
     size_t rows = 0;
     size_t bytes = 0;
@@ -1885,7 +2016,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
 
 
 template <typename Method, typename Table>
-void NO_INLINE Aggregator::mergeDataNullKey(
+void NO_INLINE StreamingAggregator::mergeDataNullKey(
     Table & table_dst,
     Table & table_src,
     Arena * arena) const
@@ -1920,7 +2051,7 @@ void NO_INLINE Aggregator::mergeDataNullKey(
 
 
 template <typename Method, bool use_compiled_functions, typename Table>
-void NO_INLINE Aggregator::mergeDataImpl(
+void NO_INLINE StreamingAggregator::mergeDataImpl(
     Table & table_dst,
     Table & table_src,
     Arena * arena) const
@@ -1946,11 +2077,13 @@ void NO_INLINE Aggregator::mergeDataImpl(
                             aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
                     }
 
-                    for (size_t i = 0; i < params.aggregates_size; ++i)
-                    {
-                        if (!is_aggregate_function_compiled[i])
-                            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
-                    }
+//                    for (size_t i = 0; i < params.aggregates_size; ++i)
+//                    {
+//                        /// proton: starts
+//                        if (!is_aggregate_function_compiled[i] && !params.streaming)
+//                            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+//                        /// proton: ends
+//                    }
                 }
             }
             else
@@ -1959,8 +2092,11 @@ void NO_INLINE Aggregator::mergeDataImpl(
                 for (size_t i = 0; i < params.aggregates_size; ++i)
                     aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
 
-                for (size_t i = 0; i < params.aggregates_size; ++i)
-                    aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+//                for (size_t i = 0; i < params.aggregates_size; ++i)
+//                    /// proton: starts
+//                    if (!params.streaming)
+//                        aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+//                    /// proton: ends
             }
         }
         else
@@ -1968,15 +2104,21 @@ void NO_INLINE Aggregator::mergeDataImpl(
             dst = src;
         }
 
-        src = nullptr;
+        /// proton: starts
+        if (!params.streaming)
+            src = nullptr;
+        /// proton: ends
     });
 
-    table_src.clearAndShrink();
+    /// proton: starts
+//    if (!params.streaming)
+//        table_src.clearAndShrink();
+    /// proton: ends
 }
 
 
 template <typename Method, typename Table>
-void NO_INLINE Aggregator::mergeDataNoMoreKeysImpl(
+void NO_INLINE StreamingAggregator::mergeDataNoMoreKeysImpl(
     Table & table_dst,
     AggregatedDataWithoutKey & overflows,
     Table & table_src,
@@ -2005,7 +2147,7 @@ void NO_INLINE Aggregator::mergeDataNoMoreKeysImpl(
 }
 
 template <typename Method, typename Table>
-void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
+void NO_INLINE StreamingAggregator::mergeDataOnlyExistingKeysImpl(
     Table & table_dst,
     Table & table_src,
     Arena * arena) const
@@ -2035,10 +2177,10 @@ void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
 }
 
 
-void NO_INLINE Aggregator::mergeWithoutKeyDataImpl(
-    ManyAggregatedDataVariants & non_empty_data) const
+void NO_INLINE StreamingAggregator::mergeWithoutKeyDataImpl(
+    ManyStreamingAggregatedDataVariants & non_empty_data) const
 {
-    AggregatedDataVariantsPtr & res = non_empty_data[0];
+    StreamingAggregatedDataVariantsPtr & res = non_empty_data[0];
 
     /// We merge all aggregation results to the first.
     for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
@@ -2058,10 +2200,10 @@ void NO_INLINE Aggregator::mergeWithoutKeyDataImpl(
 
 
 template <typename Method>
-void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
-    ManyAggregatedDataVariants & non_empty_data) const
+void NO_INLINE StreamingAggregator::mergeSingleLevelDataImpl(
+    ManyStreamingAggregatedDataVariants & non_empty_data) const
 {
-    AggregatedDataVariantsPtr & res = non_empty_data[0];
+    StreamingAggregatedDataVariantsPtr & res = non_empty_data[0];
     bool no_more_keys = false;
 
     /// We merge all aggregation results to the first.
@@ -2070,7 +2212,7 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
         if (!checkLimits(res->sizeWithoutOverflowRow(), no_more_keys))
             break;
 
-        AggregatedDataVariants & current = *non_empty_data[result_num];
+        StreamingAggregatedDataVariants & current = *non_empty_data[result_num];
 
         if (!no_more_keys)
         {
@@ -2113,23 +2255,23 @@ void NO_INLINE Aggregator::mergeSingleLevelDataImpl(
 }
 
 #define M(NAME) \
-    template void NO_INLINE Aggregator::mergeSingleLevelDataImpl<decltype(AggregatedDataVariants::NAME)::element_type>( \
-        ManyAggregatedDataVariants & non_empty_data) const;
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+    template void NO_INLINE StreamingAggregator::mergeSingleLevelDataImpl<decltype(StreamingAggregatedDataVariants::NAME)::element_type>( \
+        ManyStreamingAggregatedDataVariants & non_empty_data) const;
+    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
 #undef M
 
 template <typename Method>
-void NO_INLINE Aggregator::mergeBucketImpl(
-    ManyAggregatedDataVariants & data, Int32 bucket, Arena * arena, std::atomic<bool> * is_cancelled) const
+void NO_INLINE StreamingAggregator::mergeBucketImpl(
+    ManyStreamingAggregatedDataVariants & data, size_t bucket, Arena * arena, std::atomic<bool> * is_cancelled) const
 {
     /// We merge all aggregation results to the first.
-    AggregatedDataVariantsPtr & res = data[0];
+    StreamingAggregatedDataVariantsPtr & res = data[0];
     for (size_t result_num = 1, size = data.size(); result_num < size; ++result_num)
     {
         if (is_cancelled && is_cancelled->load(std::memory_order_seq_cst))
             return;
 
-        AggregatedDataVariants & current = *data[result_num];
+        StreamingAggregatedDataVariants & current = *data[result_num];
 #if USE_EMBEDDED_COMPILER
         if (compiled_aggregate_functions_holder)
         {
@@ -2149,15 +2291,32 @@ void NO_INLINE Aggregator::mergeBucketImpl(
     }
 }
 
-ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const
+ManyStreamingAggregatedDataVariants StreamingAggregator::prepareVariantsToMerge(ManyStreamingAggregatedDataVariants & data_variants) const
 {
     if (data_variants.empty())
-        throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
+        throw Exception("Empty data passed to StreamingAggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
 
     LOG_TRACE(log, "Merging aggregated data");
 
-    ManyAggregatedDataVariants non_empty_data;
-    non_empty_data.reserve(data_variants.size());
+    ManyStreamingAggregatedDataVariants non_empty_data;
+
+    /// proton: starts:
+
+    if (data_variants.size() == 1)
+        non_empty_data.reserve(data_variants.size());
+    else
+    {
+        non_empty_data.reserve(data_variants.size() + 1);
+
+        /// When do streaming merging, we shall not touch existing memory arenas and
+        /// all memory arenas merge to the first empty one, so we need create a new resulting arena
+        /// at position 0.
+        non_empty_data.emplace_back(std::make_shared<StreamingAggregatedDataVariants>(false));
+        non_empty_data.back()->keys_size = params.keys_size;
+        non_empty_data.back()->key_sizes = key_sizes;
+        non_empty_data.back()->init(method_chosen);
+    }
+
     for (auto & data : data_variants)
         if (!data->empty())
             non_empty_data.push_back(data);
@@ -2165,22 +2324,33 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
     if (non_empty_data.empty())
         return {};
 
-    if (non_empty_data.size() > 1)
-    {
-        /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
-        ::sort(non_empty_data.begin(), non_empty_data.end(),
-            [](const AggregatedDataVariantsPtr & lhs, const AggregatedDataVariantsPtr & rhs)
-            {
-                return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
-            });
-    }
+    /// for streaming query, we don't need sort the arenas
+//    if (non_empty_data.size() > 1)
+//    {
+//        /// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).
+//        std::sort(non_empty_data.begin(), non_empty_data.end(),
+//            [](const StreamingAggregatedDataVariantsPtr & lhs, const StreamingAggregatedDataVariantsPtr & rhs)
+//            {
+//                return lhs->sizeWithoutOverflowRow() > rhs->sizeWithoutOverflowRow();
+//            });
+//    }
+    /// proton: ends
 
     /// If at least one of the options is two-level, then convert all the options into two-level ones, if there are not such.
     /// Note - perhaps it would be more optimal not to convert single-level versions before the merge, but merge them separately, at the end.
 
+    /// proton: starts. The first variant is for result aggregating
+    size_t idx = 0;
     bool has_at_least_one_two_level = false;
     for (const auto & variant : non_empty_data)
     {
+        if (data_variants.size() > 1 && idx == 0)
+            /// if there are more than 1 variants, then we have created a resulting variant in non_empty_data at idx 0
+            /// skip this resulting variant
+            continue;
+        ++idx;
+        /// proton: ends
+
         if (variant->isTwoLevel())
         {
             has_at_least_one_two_level = true;
@@ -2193,7 +2363,7 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
             if (!variant->isTwoLevel())
                 variant->convertToTwoLevel();
 
-    AggregatedDataVariantsPtr & first = non_empty_data[0];
+    StreamingAggregatedDataVariantsPtr & first = non_empty_data[0];
 
     for (size_t i = 1, size = non_empty_data.size(); i < size; ++i)
     {
@@ -2207,11 +2377,13 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
             non_empty_data[i]->aggregates_pools.begin(), non_empty_data[i]->aggregates_pools.end());
     }
 
+    assert(first->aggregates_pools.size() == non_empty_data.size());
+
     return non_empty_data;
 }
 
 template <bool no_more_keys, typename Method, typename Table>
-void NO_INLINE Aggregator::mergeStreamsImplCase(
+void NO_INLINE StreamingAggregator::mergeStreamsImplCase(
     Block & block,
     Arena * aggregates_pool,
     Method & method [[maybe_unused]],
@@ -2283,7 +2455,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
 }
 
 template <typename Method, typename Table>
-void NO_INLINE Aggregator::mergeStreamsImpl(
+void NO_INLINE StreamingAggregator::mergeStreamsImpl(
     Block & block,
     Arena * aggregates_pool,
     Method & method,
@@ -2298,9 +2470,9 @@ void NO_INLINE Aggregator::mergeStreamsImpl(
 }
 
 
-void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
+void NO_INLINE StreamingAggregator::mergeWithoutKeyStreamsImpl(
     Block & block,
-    AggregatedDataVariants & result) const
+    StreamingAggregatedDataVariants & result) const
 {
     AggregateColumnsConstData aggregate_columns(params.aggregates_size);
 
@@ -2330,7 +2502,7 @@ void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
     block.clear();
 }
 
-bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const
+bool StreamingAggregator::mergeOnBlock(Block block, StreamingAggregatedDataVariants & result, bool & no_more_keys) const
 {
     /// `result` will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
@@ -2344,16 +2516,16 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
         LOG_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
 
-    if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
+    if (result.type == StreamingAggregatedDataVariants::Type::without_key || block.info.is_overflows)
         mergeWithoutKeyStreamsImpl(block, result);
 
 #define M(NAME, IS_TWO_LEVEL) \
-    else if (result.type == AggregatedDataVariants::Type::NAME) \
+    else if (result.type == StreamingAggregatedDataVariants::Type::NAME) \
         mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, result.without_key, no_more_keys);
 
-    APPLY_FOR_AGGREGATED_VARIANTS(M)
+    APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 #undef M
-    else if (result.type != AggregatedDataVariants::Type::without_key)
+    else if (result.type != StreamingAggregatedDataVariants::Type::without_key)
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     size_t result_size = result.sizeWithoutOverflowRow();
@@ -2410,7 +2582,7 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
 }
 
 
-void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads)
+void StreamingAggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, StreamingAggregatedDataVariants & result, size_t max_threads)
 {
     if (bucket_to_blocks.empty())
         return;
@@ -2430,10 +2602,10 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
     if (has_two_level)
     {
     #define M(NAME) \
-        if (method_chosen == AggregatedDataVariants::Type::NAME) \
-            method_chosen = AggregatedDataVariants::Type::NAME ## _two_level;
+        if (method_chosen == StreamingAggregatedDataVariants::Type::NAME) \
+            method_chosen = StreamingAggregatedDataVariants::Type::NAME ## _two_level;
 
-        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
+        APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M)
 
     #undef M
     }
@@ -2465,11 +2637,11 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
             for (Block & block : bucket_to_blocks[bucket])
             {
             #define M(NAME) \
-                else if (result.type == AggregatedDataVariants::Type::NAME) \
+                else if (result.type == StreamingAggregatedDataVariants::Type::NAME) \
                     mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
 
                 if (false) {} // NOLINT
-                    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+                    APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING(M)
             #undef M
                 else
                     throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2516,16 +2688,16 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
             if (!checkLimits(result.sizeWithoutOverflowRow(), no_more_keys))
                 break;
 
-            if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
+            if (result.type == StreamingAggregatedDataVariants::Type::without_key || block.info.is_overflows)
                 mergeWithoutKeyStreamsImpl(block, result);
 
         #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
+            else if (result.type == StreamingAggregatedDataVariants::Type::NAME) \
                 mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, result.without_key, no_more_keys);
 
-            APPLY_FOR_AGGREGATED_VARIANTS(M)
+            APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
         #undef M
-            else if (result.type != AggregatedDataVariants::Type::without_key)
+            else if (result.type != StreamingAggregatedDataVariants::Type::without_key)
                 throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
 
@@ -2534,7 +2706,7 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
 }
 
 
-Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
+Block StreamingAggregator::mergeBlocks(BlocksList & blocks, bool final)
 {
     if (blocks.empty())
         return {};
@@ -2560,8 +2732,8 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
         M(serialized)       \
 
 #define M(NAME) \
-    if (merge_method == AggregatedDataVariants::Type::NAME) \
-        merge_method = AggregatedDataVariants::Type::NAME ## _hash64; \
+    if (merge_method == StreamingAggregatedDataVariants::Type::NAME) \
+        merge_method = StreamingAggregatedDataVariants::Type::NAME ## _hash64; \
 
     APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION(M)
 #undef M
@@ -2569,41 +2741,43 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
 #undef APPLY_FOR_VARIANTS_THAT_MAY_USE_BETTER_HASH_FUNCTION
 
     /// Temporary data for aggregation.
-    AggregatedDataVariants result;
+    StreamingAggregatedDataVariants result;
 
     /// result will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
 
-    result.init(merge_method);
+    /// proton: starts
     result.keys_size = params.keys_size;
     result.key_sizes = key_sizes;
+    result.init(merge_method);
+    /// proton: ends
 
     for (Block & block : blocks)
     {
         if (bucket_num >= 0 && block.info.bucket_num != bucket_num)
             bucket_num = -1;
 
-        if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
+        if (result.type == StreamingAggregatedDataVariants::Type::without_key || is_overflows)
             mergeWithoutKeyStreamsImpl(block, result);
 
     #define M(NAME, IS_TWO_LEVEL) \
-        else if (result.type == AggregatedDataVariants::Type::NAME) \
+        else if (result.type == StreamingAggregatedDataVariants::Type::NAME) \
             mergeStreamsImpl(block, result.aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
 
-        APPLY_FOR_AGGREGATED_VARIANTS(M)
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
     #undef M
-        else if (result.type != AggregatedDataVariants::Type::without_key)
+        else if (result.type != StreamingAggregatedDataVariants::Type::without_key)
             throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
     }
 
     Block block;
-    if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
+    if (result.type == StreamingAggregatedDataVariants::Type::without_key || is_overflows)
         block = prepareBlockAndFillWithoutKey(result, final, is_overflows);
     else
         block = prepareBlockAndFillSingleLevel(result, final);
     /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
 
-    if (!final)
+    if (!final && !params.streaming)
     {
         /// Pass ownership of aggregate function states from result to ColumnAggregateFunction objects in the resulting block.
         result.aggregator = nullptr;
@@ -2622,7 +2796,7 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
 }
 
 template <typename Method>
-void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
+void NO_INLINE StreamingAggregator::convertBlockToTwoLevelImpl(
     Method & method,
     Arena * pool,
     ColumnRawPtrs & key_columns,
@@ -2680,12 +2854,12 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
 }
 
 
-std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block) const
+std::vector<Block> StreamingAggregator::convertBlockToTwoLevel(const Block & block) const
 {
     if (!block)
         return {};
 
-    AggregatedDataVariants data;
+    StreamingAggregatedDataVariants data;
 
     ColumnRawPtrs key_columns(params.keys_size);
 
@@ -2693,16 +2867,16 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block) const
     for (size_t i = 0; i < params.keys_size; ++i)
         key_columns[i] = block.safeGetByPosition(i).column.get();
 
-    AggregatedDataVariants::Type type = method_chosen;
+    StreamingAggregatedDataVariants::Type type = method_chosen;
     data.keys_size = params.keys_size;
     data.key_sizes = key_sizes;
 
 #define M(NAME) \
-    else if (type == AggregatedDataVariants::Type::NAME) \
-        type = AggregatedDataVariants::Type::NAME ## _two_level;
+    else if (type == StreamingAggregatedDataVariants::Type::NAME) \
+        type = StreamingAggregatedDataVariants::Type::NAME ## _two_level;
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL_STREAMING(M)
 #undef M
     else
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2712,11 +2886,11 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block) const
     size_t num_buckets = 0;
 
 #define M(NAME) \
-    else if (data.type == AggregatedDataVariants::Type::NAME) \
+    else if (data.type == StreamingAggregatedDataVariants::Type::NAME) \
         num_buckets = data.NAME->data.NUM_BUCKETS;
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING(M)
 #undef M
     else
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2724,12 +2898,12 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block) const
     std::vector<Block> splitted_blocks(num_buckets);
 
 #define M(NAME) \
-    else if (data.type == AggregatedDataVariants::Type::NAME) \
+    else if (data.type == StreamingAggregatedDataVariants::Type::NAME) \
         convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, \
             key_columns, block, splitted_blocks);
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_TWO_LEVEL(M)
+    APPLY_FOR_VARIANTS_TWO_LEVEL_STREAMING(M)
 #undef M
     else
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2739,7 +2913,7 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block) const
 
 
 template <typename Method, typename Table>
-void NO_INLINE Aggregator::destroyImpl(Table & table) const
+void NO_INLINE StreamingAggregator::destroyImpl(Table & table) const
 {
     table.forEachMapped([&](AggregateDataPtr & data)
     {
@@ -2758,7 +2932,7 @@ void NO_INLINE Aggregator::destroyImpl(Table & table) const
 }
 
 
-void Aggregator::destroyWithoutKey(AggregatedDataVariants & result) const
+void StreamingAggregator::destroyWithoutKey(StreamingAggregatedDataVariants & result) const
 {
     AggregatedDataWithoutKey & res_data = result.without_key;
 
@@ -2772,7 +2946,7 @@ void Aggregator::destroyWithoutKey(AggregatedDataVariants & result) const
 }
 
 
-void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result) const
+void StreamingAggregator::destroyAllAggregateStates(StreamingAggregatedDataVariants & result) const
 {
     if (result.empty())
         return;
@@ -2780,19 +2954,135 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result) cons
     LOG_TRACE(log, "Destroying aggregate states");
 
     /// In what data structure is the data aggregated?
-    if (result.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
+    if (result.type == StreamingAggregatedDataVariants::Type::without_key || params.overflow_row)
         destroyWithoutKey(result);
 
 #define M(NAME, IS_TWO_LEVEL) \
-    else if (result.type == AggregatedDataVariants::Type::NAME) \
+    else if (result.type == StreamingAggregatedDataVariants::Type::NAME) \
         destroyImpl<decltype(result.NAME)::element_type>(result.NAME->data);
 
     if (false) {} // NOLINT
-    APPLY_FOR_AGGREGATED_VARIANTS(M)
+    APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 #undef M
-    else if (result.type != AggregatedDataVariants::Type::without_key)
+    else if (result.type != StreamingAggregatedDataVariants::Type::without_key)
         throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 }
 
+/// proton: starts. for streaming processing
+/// Loop the window column to find out the lower bound and set this lower bound to aggregates pool
+/// Any new memory allocation (MemoryChunk) will attach this lower bound timestamp which means
+/// the MemoryChunk contains states which is at and beyond this lower bound timestamp
+void StreamingAggregator::setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, StreamingAggregatedDataVariants & result) const
+{
+    if (params.group_by == Params::GroupBy::OTHER)
+        return;
 
+    UInt64 window_lower_bound = std::numeric_limits<UInt64>::max();
+    UInt64 window_upper_bound = 0;
+
+    /// FIXME, can we avoid this loop ?
+    for (size_t i = 0; i < num_rows; ++i)
+    {
+        auto window = key_columns[0]->get64(i);
+        if (window > window_upper_bound)
+            window_upper_bound = window;
+
+        if (window < window_lower_bound)
+            window_lower_bound = window;
+    }
+    result.aggregates_pool->setCurrentTimestamps(window_lower_bound, window_upper_bound);
+}
+
+std::pair<size_t, size_t> StreamingAggregator::removeBucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
+{
+    if (watermark <= 0)
+        return {0, 0};
+
+    auto destroy = [&](AggregateDataPtr & data)
+    {
+        if (nullptr == data)
+            return;
+
+        for (size_t i = 0; i < params.aggregates_size; ++i)
+            aggregate_functions[i]->destroy(data + offsets_of_aggregate_states[i]);
+
+        data = nullptr;
+    };
+
+    if (params.group_by == Params::GroupBy::WINDOW_START)
+        watermark = watermark_lower_bound;
+
+    std::pair<Int64, Int64> res;
+
+    switch (result.type)
+    {
+#define M(NAME, IS_TWO_LEVEL) \
+            case StreamingAggregatedDataVariants::Type::NAME: res = result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
+#undef M
+
+        default:
+            break;
+    }
+
+    Arena::Stats stats;
+
+    if (res.first)
+        stats = result.aggregates_pool->free(watermark);
+
+    LOG_INFO(
+        log,
+        "Removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}. "
+        "Arena: arena_chunks={}, arena_size={}, chunks_removed={}, bytes_removed={}. chunks_reused={}, bytes_reused={}, head_chunk_size={}, "
+        "free_list_hits={}, free_list_missed={}",
+        res.first,
+        watermark,
+        params.streaming_window_count,
+        res.second,
+        stats.chunks,
+        stats.bytes,
+        stats.chunks_removed,
+        stats.bytes_removed,
+        stats.chunks_reused,
+        stats.bytes_reused,
+        stats.head_chunk_size,
+        stats.free_list_hits,
+        stats.free_list_misses);
+
+    return res;
+}
+
+std::vector<size_t> StreamingAggregator::bucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
+{
+    auto get_defaults = []()
+    {
+        /// By default, we are using 256 buckets for 2 level hash table
+        /// and ConvertingAggregatedToChunksSource is using this default value / convention
+        /// This is a fallback to normal 2 level hashtable
+
+        std::vector<size_t> defaults(256);
+        std::iota(defaults.begin(), defaults.end(), 0);
+        return defaults;
+    };
+
+    if (watermark <= 0)
+        return get_defaults();
+
+    if (params.group_by == Params::GroupBy::WINDOW_START)
+        watermark = watermark_lower_bound;
+
+    switch (result.type)
+    {
+#define M(NAME, IS_TWO_LEVEL) \
+            case StreamingAggregatedDataVariants::Type::NAME: return result.NAME->data.bucketsBefore(watermark);
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
+#undef M
+
+        default:
+            break;
+    }
+
+    return get_defaults();
+}
+/// proton: ends
 }

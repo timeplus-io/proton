@@ -22,7 +22,7 @@ class StorageMergeTree;
 
 /** A StorageDistributedMergeTree is an table engine that uses merge tree and replicated via
   * distributed write ahead log which is now implemented by using Kafka. Users can issue
-  * distributed data ingestions and distributed queries against this single table engine directly.
+  * distributed data ingestion and distributed queries against this single table engine directly.
   * The goals of this table engine are resolving the following major requirements
   *   1. Large scale perf data ingestion
   *   2. Streaming query

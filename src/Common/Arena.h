@@ -12,6 +12,10 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Allocator.h>
 
+/// proton: starts
+#include <base/ClockUtils.h>
+#include <Common/BitHelpers.h>
+/// proton: ends
 
 namespace ProfileEvents
 {
@@ -46,7 +50,13 @@ private:
 
         MemoryChunk * prev;
 
-        MemoryChunk(size_t size_, MemoryChunk * prev_)
+        /// proton: starts. Make arena time-aware for streaming processing to allow
+        /// free MemoryChunk according to timestamp
+        uint64_t min_timestamp = 0;
+        uint64_t max_timestamp = 0;
+        /// proton: ends
+
+        MemoryChunk(size_t size_, MemoryChunk * prev_, uint64_t min_timestamp_, uint64_t max_timestamp_)
         {
             ProfileEvents::increment(ProfileEvents::ArenaAllocChunks);
             ProfileEvents::increment(ProfileEvents::ArenaAllocBytes, size_);
@@ -55,6 +65,11 @@ private:
             pos = begin;
             end = begin + size_ - pad_right;
             prev = prev_;
+
+            /// proton: starts
+            min_timestamp = min_timestamp_;
+            max_timestamp = max_timestamp_;
+            /// proton: ends
 
             ASAN_POISON_MEMORY_REGION(begin, size_);
         }
@@ -84,6 +99,28 @@ private:
     MemoryChunk * head;
     size_t size_in_bytes;
     size_t page_size;
+
+    /// proton: starts. Make arena time-aware for streaming processing to allow
+    /// free MemoryChunk according to timestamp
+    uint64_t current_max_timestamp = 0;
+    uint64_t current_min_timestamp = 0;
+
+    size_t chunks = 0;
+    size_t size_in_bytes_in_free_lists = 0;
+    size_t chunks_in_free_lists = 0;
+    size_t free_list_hits = 0;
+    size_t free_list_misses = 0;
+
+    struct MemoryChunkWrapper
+    {
+        uint64_t time_in_free_list = 0;
+        MemoryChunk * chunk = nullptr;
+    };
+
+    std::array<MemoryChunkWrapper, 21> free_lists{};
+    bool recycle_enabled = false;
+    bool last_free_list_hit = false;
+    /// proton: ends
 
     static size_t roundUpToPageSize(size_t s, size_t page_size)
     {
@@ -117,12 +154,69 @@ private:
         return roundUpToPageSize(size_after_grow, page_size);
     }
 
+    /// proton: starts
     /// Add next contiguous MemoryChunk of memory with size not less than specified.
     void NO_INLINE addMemoryChunk(size_t min_size)
     {
-        head = new MemoryChunk(nextSize(min_size + pad_right), head);
+        if (recycle_enabled)
+        {
+            auto success = allocateFromFreeLists(min_size + pad_right);
+            if (success)
+                return;
+        }
+
+        head = new MemoryChunk(nextSize(min_size + pad_right), head, current_min_timestamp,  current_max_timestamp);
         size_in_bytes += head->size();
+
+        /// proton: starts
+        ++chunks;
+        /// proton: ends
     }
+
+    bool allocateFromFreeLists(size_t size)
+    {
+        assert(recycle_enabled);
+
+        /// If last_free_list_hit is true which means the `head` shrinks
+        /// we cycle through the free list by bumping the size
+        if (last_free_list_hit)
+            size = nextSize(size);
+        else
+            size = roundUpToPageSize(size, page_size);
+
+        auto index = bitScanReverse(size / page_size);
+        if (likely(index < free_lists.size()))
+        {
+            auto * chunk = free_lists[index].chunk;
+            if (chunk)
+            {
+                chunk->min_timestamp = current_min_timestamp;
+                chunk->max_timestamp = current_max_timestamp;
+
+                free_lists[index].chunk = chunk->prev;
+                /// Since we have only one chunk in each free list slot
+                assert(free_lists[index].chunk == nullptr);
+
+                chunk->prev = head;
+                head = chunk;
+
+                free_lists[index].time_in_free_list = 0;
+                size_in_bytes_in_free_lists -= chunk->size();
+                --chunks_in_free_lists;
+
+                ++chunks;
+                size_in_bytes += chunk->size();
+
+                ++free_list_hits;
+                last_free_list_hit = true;
+                return true;
+            }
+        }
+        ++free_list_misses;
+        last_free_list_hit = false;
+        return false;
+    }
+    /// proton: ends
 
     friend class ArenaAllocator;
     template <size_t> friend class AlignedArenaAllocator;
@@ -130,14 +224,18 @@ private:
 public:
     explicit Arena(size_t initial_size_ = 4096, size_t growth_factor_ = 2, size_t linear_growth_threshold_ = 128 * 1024 * 1024)
         : growth_factor(growth_factor_), linear_growth_threshold(linear_growth_threshold_),
-        head(new MemoryChunk(initial_size_, nullptr)), size_in_bytes(head->size()),
-        page_size(static_cast<size_t>(::getPageSize()))
+        head(new MemoryChunk(initial_size_, nullptr, 0, 0)), size_in_bytes(head->size()),
+        page_size(static_cast<size_t>(::getPageSize())), chunks(1)
     {
     }
 
     ~Arena()
     {
         delete head;
+
+        if (recycle_enabled)
+            for (size_t i = 0; i < free_lists.size(); ++i)
+                delete free_lists[i].chunk;
     }
 
     /// Get piece of memory, without alignment.
@@ -148,6 +246,12 @@ public:
 
         char * res = head->pos;
         head->pos += size;
+
+        /// proton: starts
+        head->min_timestamp = current_min_timestamp;
+        head->max_timestamp = current_max_timestamp;
+        /// proton: ends
+
         ASAN_UNPOISON_MEMORY_REGION(res, size + pad_right);
         return res;
     }
@@ -165,6 +269,12 @@ public:
             {
                 head->pos = static_cast<char *>(head_pos);
                 head->pos += size;
+
+                /// proton: starts
+                head->min_timestamp = current_min_timestamp;
+                head->max_timestamp = current_max_timestamp;
+                /// proton: ends
+
                 ASAN_UNPOISON_MEMORY_REGION(res, size + pad_right);
                 return res;
             }
@@ -314,6 +424,114 @@ public:
     {
         return head->remaining();
     }
+
+    /// proton: starts
+    void enableRecycle(bool enable_recycle)
+    {
+        recycle_enabled = enable_recycle;
+    }
+
+    void setCurrentTimestamps(uint64_t min_timestamp, uint64_t max_timestamp)
+    {
+        if (max_timestamp > current_max_timestamp)
+            current_max_timestamp = max_timestamp;
+
+        if (min_timestamp < current_min_timestamp)
+            current_min_timestamp = min_timestamp;
+    }
+
+    /// If a Chunk's max timestamp < timestamp, it is good to recycle it
+    struct Stats
+    {
+        size_t chunks = 0;
+        size_t bytes = 0;
+        size_t chunks_removed = 0;
+        size_t bytes_removed = 0;
+        size_t chunks_reused = 0;
+        size_t bytes_reused = 0;
+        size_t head_chunk_size = 0;
+        size_t free_list_hits = 0;
+        size_t free_list_misses = 0;
+    };
+
+    Stats free(uint64_t timestamp)
+    {
+        assert(head);
+        assert(recycle_enabled);
+
+        Stats stats;
+
+        /// `head` points to the largest timestamp
+        auto * prev_p = head;
+        auto * p = head;
+        while (p)
+        {
+            if (p->max_timestamp >= timestamp)
+            {
+                prev_p = p;
+                p = p->prev;
+            }
+            else
+                break;
+        }
+
+        if (p)
+        {
+            auto * pp = p;
+            while (pp)
+            {
+                size_in_bytes -= pp->size();
+                --chunks;
+                pp = recycle(pp, stats);
+            }
+
+            prev_p->prev = nullptr;
+        }
+
+        stats.head_chunk_size = head->size();
+        stats.bytes = size_in_bytes;
+        stats.chunks = chunks;
+        stats.free_list_hits = free_list_hits;
+        stats.free_list_misses = free_list_misses;
+
+        return stats;
+    }
+
+private:
+    MemoryChunk * recycle(MemoryChunk * chunk, Stats & stats)
+    {
+        assert(chunk);
+        assert(recycle_enabled);
+
+        MemoryChunk * prev = chunk->prev;
+        chunk->prev = nullptr;
+
+        auto index = bitScanReverse(chunk->size() / page_size);
+        if (index >= free_lists.size() || free_lists[index].chunk)
+        {
+            /// 1) If the chunk is super big, let's free it
+            /// 2) There is already having one of this size in free list
+            /// We want to keep only one in each free list slot, so free this one
+            ++stats.chunks_removed;
+            stats.bytes_removed += chunk->size();
+            delete chunk;
+            return prev;
+        }
+
+        /// FIXME, memset it to zero ? asan
+        /// FIXME, recycle if large chunk is not reused / accessed for a long time ?
+        chunk->pos = chunk->begin;
+        free_lists[index].chunk = chunk;
+        free_lists[index].time_in_free_list = DB::MonotonicMilliseconds::now();
+        ++chunks_in_free_lists;
+        size_in_bytes_in_free_lists += chunk->size();
+
+        ++stats.chunks_reused;
+        stats.bytes_reused += chunk->size();
+
+        return prev;
+    }
+    /// proton: ends
 };
 
 using ArenaPtr = std::shared_ptr<Arena>;

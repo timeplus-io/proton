@@ -260,7 +260,10 @@ if (TARGET ch_contrib::nuraft)
     add_object_library(clickhouse_coordination Coordination)
 endif()
 
-# proton: begin
+
+# proton: starts
+add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
+
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
 
 if(USE_RDKAFKA)
