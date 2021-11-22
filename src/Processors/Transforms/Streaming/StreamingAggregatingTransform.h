@@ -39,20 +39,29 @@ struct StreamingAggregatingTransformParams
     Block getCustomHeader(bool final_) const { return aggregator.getHeader(final_); }
 };
 
+struct WatermarkBound
+{
+    Int64 watermark = 0;
+    Int64 watermark_lower_bound = 0;
+};
+
 struct ManyStreamingAggregatedData
 {
     ManyStreamingAggregatedDataVariants variants;
-    std::vector<std::unique_ptr<std::mutex>> mutexes;
+
+    /// Watermarks for all variants
+    std::vector<WatermarkBound> watermarks;
     std::atomic<UInt32> num_finished = 0;
     std::atomic<UInt32> finalizations = 0;
 
-    explicit ManyStreamingAggregatedData(size_t num_threads = 0) : variants(num_threads), mutexes(num_threads)
+    std::condition_variable finalized;
+    std::mutex finalizing_mutex;
+    WatermarkBound arena_watermark;
+
+    explicit ManyStreamingAggregatedData(size_t num_threads = 0) : variants(num_threads), watermarks(num_threads)
     {
         for (auto & elem : variants)
             elem = std::make_shared<StreamingAggregatedDataVariants>();
-
-        for (auto & mut : mutexes)
-            mut = std::make_unique<std::mutex>();
     }
 };
 
@@ -88,10 +97,12 @@ private:
     void consume(Chunk chunk);
     bool needsFinalization(const Chunk & chunk) const;
     void finalize(const ChunkInfo & chunk_info);
-    void doFinalize(const ChunkInfo & chunk_info);
+    void doFinalize(const WatermarkBound & chunk_info);
     void initialize(ManyStreamingAggregatedDataVariantsPtr & data);
     void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data);
-    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info);
+    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data);
+    void mergeTwoLevelStreamingWindow(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark);
+    void removeBuckets();
     void setCurrentChunk(Chunk chunk);
     IProcessor::Status preparePushToOutput();
 
@@ -114,6 +125,8 @@ private:
 
     ManyStreamingAggregatedDataPtr many_data;
     StreamingAggregatedDataVariants & variants;
+    WatermarkBound & watermark_bound;
+
     size_t max_threads = 1;
     size_t temporary_data_merge_threads = 1;
 
@@ -136,6 +149,5 @@ private:
     Chunk current_chunk_aggregated;
     UInt64 rows_since_last_finalization = 0;
     bool has_input = false;
-    bool finalizing = false;
 };
 }

@@ -397,6 +397,7 @@ StreamingAggregatingTransform::StreamingAggregatingTransform(
     , aggregate_columns(params->params.aggregates_size)
     , many_data(std::move(many_data_))
     , variants(*many_data->variants[current_variant])
+    , watermark_bound(many_data->watermarks[current_variant])
     , max_threads(std::min(many_data->variants.size(), max_threads_))
     , temporary_data_merge_threads(temporary_data_merge_threads_)
 {
@@ -490,14 +491,6 @@ void StreamingAggregatingTransform::work()
         initGenerate();
     else
     {
-        if (finalizing)
-        {
-            /// In `finalizing` state, we can't aggregate the current chunk
-            /// in memory because of potential race condition: there is another
-            /// thread which tries to project an intermediate aggregation result
-            /// for all in-memory aggr states
-            return;
-        }
         consume(std::move(current_chunk));
         read_current_chunk = false;
     }
@@ -650,7 +643,6 @@ void StreamingAggregatingTransform::initGenerate()
 
 bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 {
-    /// FIXME, watermark alignment with other parallel aggr streams
     const auto & chunk_info = chunk.getChunkInfo();
     if (chunk_info && chunk_info->watermark != 0)
     {
@@ -664,29 +656,70 @@ bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 /// Only for streaming aggregation case
 void StreamingAggregatingTransform::finalize(const ChunkInfo & chunk_info)
 {
-    if (!finalizing)
+    watermark_bound.watermark = chunk_info.watermark;
+    watermark_bound.watermark_lower_bound = chunk_info.watermark_lower_bound;
+
+    if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
-        finalizing = true;
+        /// The current transform is the last one in this round of
+        /// finalization. Do watermark alignment for all of the variants
+        /// pick the smallest watermark
+        WatermarkBound min_watermark{watermark_bound};
+        WatermarkBound max_watermark{watermark_bound};
 
-        if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
+        for (auto & bound : many_data->watermarks)
         {
-            /// The current transform is the last one in this round of
-            /// finalization
-            doFinalize(chunk_info);
+            if (bound.watermark < min_watermark.watermark)
+                min_watermark = bound;
 
-            // Clear the finalization count
-            many_data->finalizations.store(0);
-            finalizing = false;
+            if (bound.watermark > min_watermark.watermark)
+                max_watermark = bound;
 
-            return;
+            /// Reset watermarks
+            bound.watermark = 0;
+            bound.watermark_lower_bound = 0;
         }
-    }
 
-    /// FIXME: Wait for the last aggregation stream to do aggregation finalization
-    /// condition wait or spin ?
+        if (min_watermark.watermark != max_watermark.watermark)
+            LOG_INFO(
+                log,
+                "StreamingAggregated. Found watermark skew. min_watermark={}, max_watermark={}",
+                min_watermark.watermark, min_watermark.watermark);
+
+        auto start = MonotonicMilliseconds::now();
+        doFinalize(min_watermark);
+        auto end = MonotonicMilliseconds::now();
+
+        LOG_INFO(log, "StreamingAggregated. Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
+
+        // Clear the finalization count
+        many_data->finalizations.store(0);
+
+        /// We are done with finalization, notify all transforms start to work again
+        many_data->finalized.notify_all();
+
+        /// We first notify all other variants that the aggregation is done for this round
+        /// and then remove the project window buckets and their memory arena for the current variant.
+        /// This save a bit time and a bit more efficiency because all variants can do memory arena
+        /// recycling in parallel.
+        removeBuckets();
+    }
+    else
+    {
+        /// Condition wait for finalization transform thread to finish the aggregation
+        auto start = MonotonicMilliseconds::now();
+
+        std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
+        many_data->finalized.wait(lk);
+
+        auto end = MonotonicMilliseconds::now();
+        LOG_INFO(log, "StreamingAggregated. Took {} milliseconds to wait for finalizing {} shard aggregation", end - start, many_data->variants.size());
+
+        removeBuckets();
+    }
 }
 
-void StreamingAggregatingTransform::doFinalize(const ChunkInfo & chunk_info)
+void StreamingAggregatingTransform::doFinalize(const WatermarkBound & watermark)
 {
     /// FIXME spill to disk, aggr without key, overflow_row etc cases
     auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
@@ -699,7 +732,10 @@ void StreamingAggregatingTransform::doFinalize(const ChunkInfo & chunk_info)
 
     if (prepared_data_ptr->at(0)->isTwoLevel())
     {
-        mergeTwoLevel(prepared_data_ptr, chunk_info);
+        if (params->params.group_by != StreamingAggregator::Params::GroupBy::OTHER)
+            mergeTwoLevelStreamingWindow(prepared_data_ptr, watermark);
+        else
+            mergeTwoLevel(prepared_data_ptr);
     }
     else
     {
@@ -737,8 +773,6 @@ void StreamingAggregatingTransform::initialize(ManyStreamingAggregatedDataVarian
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
 void StreamingAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data)
 {
-    assert(params->params.streaming);
-
     StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
     if (first->type == StreamingAggregatedDataVariants::Type::without_key)
@@ -761,9 +795,15 @@ void StreamingAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedData
     setCurrentChunk(convertToChunk(block));
 }
 
-void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, const ChunkInfo & chunk_info)
+void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data)
 {
-    /// FIXME, parallelization
+    (void)data;
+}
+
+void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark)
+{
+    /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
+    /// one project window for streaming processing
     auto & first = data->at(0);
 
     std::atomic<bool> is_cancelled{false};
@@ -778,7 +818,7 @@ void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVar
         /// Figure out which buckets need get merged
         auto & data_variant = data->at(index);
         std::vector<size_t> buckets = data_variant->aggregator->bucketsBefore(
-            *data_variant, chunk_info.watermark_lower_bound, chunk_info.watermark);
+            *data_variant, watermark.watermark_lower_bound, watermark.watermark);
 
         for (auto bucket : buckets)
         {
@@ -805,7 +845,15 @@ void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVar
     if (merged_block)
         setCurrentChunk(convertToChunk(merged_block));
 
-    variants.aggregator->removeBucketsBefore(variants, chunk_info.watermark_lower_bound, chunk_info.watermark);
+    /// Tell other variants to clean up memory arena
+    many_data->arena_watermark = watermark;
+}
+
+/// Cleanup memory arena for the projected window buckets
+void StreamingAggregatingTransform::removeBuckets()
+{
+    if (params->params.group_by != StreamingAggregator::Params::GroupBy::OTHER)
+        variants.aggregator->removeBucketsBefore(variants, many_data->arena_watermark.watermark_lower_bound, many_data->arena_watermark.watermark);
 }
 
 void StreamingAggregatingTransform::setCurrentChunk(Chunk chunk)

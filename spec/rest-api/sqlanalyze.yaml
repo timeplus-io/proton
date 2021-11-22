@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  title: daisy api
+  title: proton api
   version: '1.0'
   description: REST API for SQL analyzing
 paths:
@@ -36,13 +36,13 @@ paths:
         description: Post the query to analyze
       description: Analyze the query and get the required and result columns
       parameters:
-        - name: x-daisy-request-id
+        - name: x-proton-request-id
           in: header
           required: false
           description: the unique id to identify a ddl request
           schema:
             type: string
-        - name: x-daisy-query-id
+        - name: x-proton-query-id
           in: header
           required: false
           description: the unique id to identify a ddl request
@@ -53,7 +53,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-user
+        - name: x-proton-user
           in: header
           required: false
           schema:
@@ -63,7 +63,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-key
+        - name: x-proton-key
           in: header
           required: false
           schema:
@@ -73,7 +73,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-quota
+        - name: x-proton-quota
           in: header
           required: false
           schema:

@@ -5,12 +5,12 @@ info:
   version: 1.0.0
   title: proton status
   description: >-
-    Check whether the daisy cluster is alive, and to query the packaging
+    Check whether the proton cluster is alive, and to query the packaging
     information of the current service.
 paths:
   /ping:
     get:
-      summary: Check whether the daisy cluster is alive
+      summary: Check whether the proton cluster is alive
       responses:
         '200':
           description: OK

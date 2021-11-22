@@ -73,14 +73,14 @@ paths:
             type: string
           in: query
           name: mode
-          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： daisy inserts data asynchronously but does not track the insert status.''async'' the default insert mode, daisy inserts data asynchronously but track the status and retry if insert fails. ''ordered'' daisy inserts data synchronously. '
-        - name: x-daisy-request-id
+          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： proton inserts data asynchronously but does not track the insert status.''async'' the default insert mode, proton inserts data asynchronously but track the status and retry if insert fails. ''ordered'' proton inserts data synchronously. '
+        - name: x-proton-request-id
           in: header
           required: false
           description: the unique id to identify a ddl request
           schema:
             type: string
-        - name: x-daisy-query-id
+        - name: x-proton-query-id
           in: header
           required: false
           description: the unique id to identify a ddl request
@@ -91,7 +91,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-user
+        - name: x-proton-user
           in: header
           required: false
           schema:
@@ -101,7 +101,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-key
+        - name: x-proton-key
           in: header
           required: false
           schema:
@@ -111,12 +111,12 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-quota
+        - name: x-proton-quota
           in: header
           required: false
           schema:
             type: string
-      description: insert data into a normal table. daisy automatically choose the database belongs to the user to insert.
+      description: insert data into a normal table. proton automatically choose the database belongs to the user to insert.
       requestBody:
         content:
           application/json:
@@ -328,14 +328,14 @@ paths:
             type: string
           in: query
           name: mode
-          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： daisy inserts data asynchronously but does not track the insert status.''async'' the default insert mode, daisy inserts data asynchronously but track the status and retry if insert fails. ''ordered'' daisy inserts data synchronously. '
-        - name: x-daisy-request-id
+          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： proton inserts data asynchronously but does not track the insert status.''async'' the default insert mode, proton inserts data asynchronously but track the status and retry if insert fails. ''ordered'' proton inserts data synchronously. '
+        - name: x-proton-request-id
           in: header
           required: false
           description: the unique id to identify a ddl request
           schema:
             type: string
-        - name: x-daisy-query-id
+        - name: x-proton-query-id
           in: header
           required: false
           description: the unique id to identify a ddl request
@@ -346,7 +346,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-user
+        - name: x-proton-user
           in: header
           required: false
           schema:
@@ -356,7 +356,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-key
+        - name: x-proton-key
           in: header
           required: false
           schema:
@@ -366,7 +366,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-daisy-quota
+        - name: x-proton-quota
           in: header
           required: false
           schema:
@@ -380,13 +380,13 @@ paths:
         description: rawstore name to insert data into
   /statuses:
     parameters:
-      - name: x-daisy-request-id
+      - name: x-proton-request-id
         in: header
         required: false
         description: the unique id to identify a ddl request
         schema:
           type: string
-      - name: x-daisy-query-id
+      - name: x-proton-query-id
         in: header
         required: false
         description: the unique id to identify a ddl request
@@ -397,7 +397,7 @@ paths:
         required: false
         schema:
           type: string
-      - name: x-daisy-user
+      - name: x-proton-user
         in: header
         required: false
         schema:
@@ -407,7 +407,7 @@ paths:
         required: false
         schema:
           type: string
-      - name: x-daisy-key
+      - name: x-proton-key
         in: header
         required: false
         schema:
@@ -417,7 +417,7 @@ paths:
         required: false
         schema:
           type: string
-      - name: x-daisy-quota
+      - name: x-proton-quota
         in: header
         required: false
         schema:
@@ -464,7 +464,7 @@ paths:
                             "Succeeded": completed successfully
                             "Failed": insert fail
                             "Processing": insert is still in progress
-                            "Unknown": the insert request is not found in daisy cache. It might be expired.
+                            "Unknown": the insert request is not found in proton cache. It might be expired.
                       required:
                         - poll_id
                         - progress
