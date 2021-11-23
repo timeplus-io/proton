@@ -22,18 +22,27 @@
 #if defined(VERSION_MAJOR)
 #define DBMS_VERSION_MAJOR VERSION_MAJOR
 #else
+/// proton: starts.
+#define VERSION_MAJOR 0
+/// proton: ends.
 #define DBMS_VERSION_MAJOR 0
 #endif
 
 #if defined(VERSION_MINOR)
 #define DBMS_VERSION_MINOR VERSION_MINOR
 #else
+/// proton: starts.
+#define VERSION_MINOR 0
+/// proton: ends.
 #define DBMS_VERSION_MINOR 0
 #endif
 
 #if defined(VERSION_PATCH)
 #define DBMS_VERSION_PATCH VERSION_PATCH
 #else
+/// proton: starts.
+#define VERSION_PATCH 0
+/// proton: ends.
 #define DBMS_VERSION_PATCH 0
 #endif
 

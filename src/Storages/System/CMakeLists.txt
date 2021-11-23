@@ -39,7 +39,7 @@ if(Git_FOUND)
 endif()
 
 # proton: start.
-string (TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S" UTC)
+string (TIMESTAMP BUILD_TIME "%Y-%m-%dT%H:%M:%SZ" UTC)
 # proton: end.
 
 configure_file (StorageSystemBuildOptions.generated.cpp.in ${CONFIG_BUILD})

@@ -13,7 +13,8 @@ namespace ErrorCodes
 
 namespace
 {
-    std::map<String, String> colname_bldkey_mapping = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}};
+    std::map<String, String> colname_bldkey_mapping
+        = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}};
 }
 
 std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/) const
@@ -22,7 +23,8 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
 
     if (status == "info")
     {
-        String query = "SELECT name, value FROM system.build_options WHERE name IN ('VERSION_FULL','VERSION_DESCRIBE','BUILD_TIME');";
+        String query = "SELECT name, value FROM system.build_options WHERE name IN ('VERSION_FULL','VERSION_DESCRIBE','BUILD_TIME', "
+                       "'VERSION_GITHASH');";
 
         String resp = "";
         executeNonInsertQuery(query, query_context, [this, &resp](Block && block) { return this->buildResponse(block, resp); });
@@ -53,7 +55,14 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
         const auto & it = colname_bldkey_mapping.find(name->getDataAt(i).toString());
         if (it != colname_bldkey_mapping.end())
         {
-            build_info.set(it->second, value->getDataAt(i).toString());
+            if (!it->second.compare("commit_sha"))
+            {
+                build_info.set(it->second, value->getDataAt(i).toString().substr(0, 8));
+            }
+            else
+            {
+                build_info.set(it->second, value->getDataAt(i).toString());
+            }
         }
     }
     build_info.set("name", "proton");
