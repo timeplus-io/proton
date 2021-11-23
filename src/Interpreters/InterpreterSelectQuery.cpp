@@ -8,6 +8,7 @@
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
+#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -2074,7 +2075,9 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_plan.addStep(std::move(adding_limits_and_quota));
 
         /// proton: starts. Streaming Window
-        if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
+        if (auto * streaming_distributed = storage->as<StreamingDistributedMergeTree>())
+            buildStreamingProcessingQueryPlan(query_plan, streaming_distributed);
+        else if (auto * distributed = storage->as<StorageDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan, distributed);
         /// proton: ends
     }
@@ -2819,6 +2822,13 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
                              required_columns_after_streaming_window, distributed->getInnerStorage()->getVirtuals(), distributed->getInnerStorage()->getStorageID());
     query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
         query_plan.getCurrentDataStream(), std::move(output_header), distributed->getStreamingFunctionDescription()));
+}
+
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StorageDistributedMergeTree *) const
+{
+    if (query_info.syntax_analyzer_result->streaming)
+        query_plan.addStep(std::make_unique<WatermarkStep>(
+            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, nullptr, log));
 }
 /// proton: ends
 }

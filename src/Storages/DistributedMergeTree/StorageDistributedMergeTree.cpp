@@ -325,9 +325,6 @@ void StorageDistributedMergeTree::readStreaming(
     size_t /* max_block_size */,
     unsigned /* num_streams */)
 {
-    /// We have 2 paths here. FIXME, use one path
-    /// 1. Called directly on StorageDistributedMergeTree for streaming tail / global aggr cases
-    /// 2. Called from streaming table function like HOP / TUMBLE via StreamingDistributedMergeTree
     Pipes pipes;
     pipes.reserve(shards);
 

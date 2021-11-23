@@ -17,6 +17,7 @@ namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NOT_IMPLEMENTED;
+    extern const int SYNTAX_ERROR;
 }
 
 namespace
@@ -140,7 +141,12 @@ WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_
     if (syntax_analyzer_result->aggregates.empty())
     {
         /// if there is no aggregation, we don't need project watermark
-        /// we don't support `order by` a stream
+        if (mode != EmitMode::TAIL && mode != EmitMode::NONE)
+            throw Exception("Streaming tail mode doesn't support any watermark or periodic emit policy", ErrorCodes::SYNTAX_ERROR);
+
+        if (mode == EmitMode::TAIL && emit_query_interval != 0)
+            throw Exception("Streaming tail mode doesn't support any watermark or periodic emit policy", ErrorCodes::SYNTAX_ERROR);
+
         mode = EmitMode::TAIL;
     }
     else

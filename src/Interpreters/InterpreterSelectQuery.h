@@ -32,6 +32,7 @@ using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 
 /// proton: starts
 class StreamingDistributedMergeTree;
+class StorageDistributedMergeTree;
 /// proton: ends
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
@@ -162,6 +163,7 @@ private:
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const;
+    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StorageDistributedMergeTree * distributed) const;
     /// proton: ends
 
     enum class Modificator
