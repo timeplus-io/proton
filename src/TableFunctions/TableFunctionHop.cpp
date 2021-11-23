@@ -1,6 +1,5 @@
 #include "TableFunctionHop.h"
 
-#include <Common/StreamingCommon.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
@@ -9,6 +8,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <Common/ProtonCommon.h>
 
 #include <boost/algorithm/string.hpp>
 
@@ -21,7 +21,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
-TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionStreamingWindow(name_)
+TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionHopTumbleBase(name_)
 {
     help_message = fmt::format(
         "Table function '{}' requires from 3 to 5 parameters: "
@@ -57,46 +57,51 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     node->alias = STREAMING_WINDOW_FUNC_ALIAS;
 
     /// Prune the arguments to fit the internal hop function
-    node->arguments->children.erase(node->arguments->children.begin());
+    args.erase(args.begin());
 
-    /// FIXME here...
-    if (node->arguments->children.size() == 2)
+    ASTPtr timestamp_expr_ast;
+
+    if (args.size() == 2)
     {
-        /// assume the first / second arguments are interval, insert `_time`
-        node->arguments->children.insert(node->arguments->children.begin(), std::make_shared<ASTIdentifier>("_time"));
+        /// Assume the first / second arguments are interval, insert `_time`
+        args.insert(args.begin(), std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
     }
-    else if (node->arguments->children.size() == 3)
+    else if (args.size() == 3)
     {
-        if (node->arguments->children[2]->as<ASTLiteral>())
+        if (args[2]->as<ASTLiteral>())
         {
             /// the last argument is a literal, assume it is a timezone string
-            node->arguments->children.insert(node->arguments->children.begin(), std::make_shared<ASTIdentifier>("_time"));
+            args.insert(args.begin(), std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
+        }
+        else if (auto func_node = args[0]->as<ASTFunction>(); func_node)
+        {
+            /// time column is a transformed one, for example, hop(table, toDateTime32(t), INTERVAL 5 SECOND, ...)
+            func_node->alias = STREAMING_TIMESTAMP_ALIAS;
+            timestamp_expr_ast = args[0];
+        }
+    }
+    else
+    {
+        assert(args.size() == 4);
+        if (auto func_node = args[0]->as<ASTFunction>(); func_node)
+        {
+            /// time column is a transformed one, for example, hop(table, toDateTime32(t), INTERVAL 5 SECOND, ...)
+            func_node->alias = STREAMING_TIMESTAMP_ALIAS;
+            timestamp_expr_ast = args[0];
         }
     }
 
     /// Calculate column description
-    initColumnsDescription(context, streaming_func_ast, "__HOP(");
+    init(context, std::move(streaming_func_ast), "__HOP(", std::move(timestamp_expr_ast));
 }
 
-void TableFunctionHop::handleResultType(const ColumnWithTypeAndName & type_and_name)
+DataTypePtr TableFunctionHop::getElementType(const DataTypeTuple * tuple) const
 {
-    auto tuple_result_type = checkAndGetDataType<DataTypeTuple>(type_and_name.type.get());
-    assert(tuple_result_type);
-    assert(tuple_result_type->getElements().size() == 2);
-
-    /// If streaming table function is used, we will need project `window_start, window_end` columns to metadata
-    DataTypePtr element_type = tuple_result_type->getElements()[0];
+    DataTypePtr element_type = tuple->getElements()[0];
     assert(isArray(element_type));
 
     auto array_type = checkAndGetDataType<DataTypeArray>(element_type.get());
-    assert(tuple_result_type);
-    element_type = array_type->getNestedType();
-
-    ColumnDescription wstart(STREAMING_WINDOW_START, element_type);
-    columns.add(wstart);
-
-    ColumnDescription wend(STREAMING_WINDOW_END, element_type);
-    columns.add(wend);
+    return array_type->getNestedType();
 }
 
 void registerTableFunctionHop(TableFunctionFactory & factory)

@@ -30,6 +30,9 @@ class QueryPlan;
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 
+/// proton: starts
+class StreamingDistributedMergeTree;
+/// proton: ends
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
@@ -158,6 +161,7 @@ private:
     /// proton: starts
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
+    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const;
     /// proton: ends
 
     enum class Modificator
@@ -192,6 +196,11 @@ private:
     Names required_columns;
     /// Structure of query source (table, subquery, etc).
     Block source_header;
+
+    /// proton: starts
+    /// A copy of required_columns before adding the additional ones for streaming processing
+    Names required_columns_after_streaming_window;
+    /// proton: ends
 
     /// Actions to calculate ALIAS if required.
     ActionsDAGPtr alias_actions;

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "TableFunctionStreamingWindow.h"
+#include "TableFunctionHopTumbleBase.h"
 
 namespace DB
 {
-class TableFunctionTumble final : public TableFunctionStreamingWindow
+class TableFunctionTumble final : public TableFunctionHopTumbleBase
 {
 public:
     explicit TableFunctionTumble(const String & name_);
@@ -12,6 +12,6 @@ public:
 private:
     const char * getStorageTypeName() const override { return "tumble"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
-    void handleResultType(const ColumnWithTypeAndName & type_and_name) override;
+    DataTypePtr getElementType(const DataTypeTuple * tuple) const override;
 };
 }

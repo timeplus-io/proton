@@ -43,8 +43,13 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
-    const Names & getAdditionalRequiredColumns() const { return streaming_func_desc->input_columns; }
+    Names getAdditionalRequiredColumns() const;
+
+    const Names & getRequiredColumnsForStreamingFunction() const { return streaming_func_desc->input_columns; }
     StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
+
+    const Names & getRequiredColumnsForTimestampExpr() const { return timestamp_expr_required_columns; }
+    ExpressionActionsPtr getTimestampExpr() const { return timestamp_expr; }
     const StoragePtr & getInnerStorage() const { return storage; }
 
 private:
@@ -52,9 +57,14 @@ private:
         const StorageID & id_,
         const ColumnsDescription & columns_,
         ContextPtr context_,
-        StreamingFunctionDescriptionPtr streaming_func_desc_);
+        StreamingFunctionDescriptionPtr streaming_func_desc_,
+        ExpressionActionsPtr timestamp_expr_,
+        const Names & timestamp_expr_required_columns_
+    );
 
     StreamingFunctionDescriptionPtr streaming_func_desc;
+    ExpressionActionsPtr timestamp_expr;
+    Names timestamp_expr_required_columns;
     StoragePtr storage;
 
     Poco::Logger * log;

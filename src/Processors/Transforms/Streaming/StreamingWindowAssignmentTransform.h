@@ -30,8 +30,8 @@ public:
 
 private:
     void assignWindow(Chunk & chunk);
-    void assignTumbleWindow(Block & block, Block & expr_block);
-    void assignHopWindow(Block & block, Block & expr_block);
+    void assignTumbleWindow(Block & result, Block & expr_block);
+    void assignHopWindow(Block & result, Block & expr_block);
     /// Calculate the positions of columns required by window expr
     void calculateColumns(const Block & input_header, const Block & output_header);
 
@@ -39,11 +39,11 @@ private:
     ContextPtr context;
     StreamingFunctionDescriptionPtr func_desc;
 
-    DataTypePtr window_start_col_data_type;
-    DataTypePtr window_end_col_data_type;
     Chunk chunk_header;
 
+    std::vector<size_t> input_column_positions;
     std::vector<size_t> expr_column_positions;
+
     Int32 wstart_pos = -1;
     Int32 wend_pos = -1;
     String func_name;

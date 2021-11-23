@@ -20,7 +20,6 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
@@ -319,13 +318,12 @@ void StorageDistributedMergeTree::readRemote(
 
 void StorageDistributedMergeTree::readStreaming(
     QueryPlan & query_plan,
-    SelectQueryInfo & query_info,
+    SelectQueryInfo & /* query_info */,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_,
     size_t /* max_block_size */,
-    unsigned /* num_streams */,
-    StreamingFunctionDescriptionPtr streaming_func_desc)
+    unsigned /* num_streams */)
 {
     /// We have 2 paths here. FIXME, use one path
     /// 1. Called directly on StorageDistributedMergeTree for streaming tail / global aggr cases
@@ -346,9 +344,6 @@ void StorageDistributedMergeTree::readStreaming(
     LOG_INFO(log, "Starting reading {} streams", pipes.size());
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
-
-    query_plan.addStep(std::make_unique<WatermarkStep>(
-        query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, streaming_func_desc, log));
 }
 
 void StorageDistributedMergeTree::read(
@@ -364,7 +359,7 @@ void StorageDistributedMergeTree::read(
     /// Non streaming window function: tail or global streaming aggr
     if (query_info.syntax_analyzer_result->streaming)
     {
-        readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams, nullptr);
+        readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams);
     }
     else if (requireDistributedQuery(context_))
     {

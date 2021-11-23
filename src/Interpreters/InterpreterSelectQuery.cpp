@@ -5,8 +5,10 @@
 #include <Interpreters/StreamingAggregator.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
+#include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
+#include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
-#include <Common/StreamingCommon.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends
 
 #include <Parsers/ASTFunction.h>
@@ -522,20 +524,13 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             /// proton: starts
             if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
             {
+                /// We save the required columns to project (after streaming window)
+                required_columns_after_streaming_window = required_columns;
+
+                /// Streaming window may depends on extra columns of the storage to calculate the windows
                 for (const auto & name : distributed->getAdditionalRequiredColumns())
                     if (std::find(required_columns.begin(), required_columns.end(), name) == required_columns.end())
                         required_columns.push_back(name);
-
-                /// Move window_start/end to the end of required_columns to make it more efficient
-                /// during data window assignment transformation
-                for (const auto & col_name : STREAMING_WINDOW_COLUMN_NAMES)
-                {
-                    if (auto it = std::find(required_columns.begin(), required_columns.end(), col_name); it != required_columns.end())
-                    {
-                        required_columns.erase(it);
-                        required_columns.push_back(col_name);
-                    }
-                }
             }
             /// proton: ends
 
@@ -2076,12 +2071,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         /// proton: starts. Streaming Window
         if (auto distributed = storage->as<StreamingDistributedMergeTree>())
-        {
-            auto output_header = metadata_snapshot->getSampleBlockForColumns(
-                required_columns, distributed->getInnerStorage()->getVirtuals(), distributed->getInnerStorage()->getStorageID());
-            query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
-                query_plan.getCurrentDataStream(), output_header, distributed->getStreamingFunctionDescription()));
-        }
+            buildStreamingProcessingQueryPlan(query_plan, distributed);
         /// proton: ends
     }
     else
@@ -2773,6 +2763,40 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
     if (analysis_result.hasLimitBy())
         throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const
+{
+    if (distributed->getTimestampExpr())
+    {
+        auto output_header = query_plan.getCurrentDataStream().header;
+        /// Drop timestamp expr required columns if they are not required by downstream pipe
+        const auto & timestamp_expr_columns = distributed->getRequiredColumnsForTimestampExpr();
+        auto required_begin = required_columns_after_streaming_window.begin();
+        auto required_end = required_columns_after_streaming_window.end();
+        for (const auto & name : timestamp_expr_columns)
+            if (std::find(required_begin, required_end, name) == required_end)
+                output_header.erase(name);
+
+        /// Add transformed timestamp column required by downstream pipe
+        auto timestamp_col = distributed->getTimestampExpr()->getSampleBlock().getByPosition(0);
+        assert(!output_header.findByName(timestamp_col.name));
+        timestamp_col.column = timestamp_col.type->createColumnConstWithDefaultValue(0);
+        output_header.insert(timestamp_col);
+
+        query_plan.addStep(
+            std::make_unique<TimestampTransformStep>(
+                query_plan.getCurrentDataStream(), output_header, distributed->getTimestampExpr(), timestamp_expr_columns));
+    }
+
+    if (query_info.syntax_analyzer_result->streaming)
+        query_plan.addStep(std::make_unique<WatermarkStep>(
+            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, distributed->getStreamingFunctionDescription(), log));
+
+    auto output_header = metadata_snapshot->getSampleBlockForColumns(
+                             required_columns_after_streaming_window, distributed->getInnerStorage()->getVirtuals(), distributed->getInnerStorage()->getStorageID());
+    query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
+        query_plan.getCurrentDataStream(), std::move(output_header), distributed->getStreamingFunctionDescription()));
 }
 /// proton: ends
 }

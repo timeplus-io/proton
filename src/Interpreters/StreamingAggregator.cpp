@@ -26,7 +26,7 @@
 #include <Core/ProtocolDefines.h>
 
 /// proton: starts
-#include <Common/StreamingCommon.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends
 
 

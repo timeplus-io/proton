@@ -5,37 +5,22 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
-#include <Common/StreamingCommon.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
 namespace
 {
-    ALWAYS_INLINE void insertWindowColumnTumble(
-        Block & block,
-        const ColumnTuple * col_tuple,
-        size_t src_pos,
-        const DataTypePtr & col_data_type,
-        Int32 target_pos,
-        const String & col_name)
+    ALWAYS_INLINE void setWindowColumnTumble(Block & block, const ColumnTuple * col_tuple, size_t src_pos, Int32 target_pos)
     {
         if (target_pos >= 0)
         {
-            /// Make a `window_xxx` column and insert it
-            auto src_win_col = col_tuple->getColumnPtr(src_pos);
-            assert(col_data_type->getTypeId() == src_win_col->getDataType());
-            block.insert(target_pos, ColumnWithTypeAndName{src_win_col, col_data_type, col_name});
+            assert(block.getByPosition(target_pos).column->getDataType() == col_tuple->getColumnPtr(src_pos)->getDataType());
+            block.getByPosition(target_pos).column = std::move(col_tuple->getColumnPtr(src_pos));
         }
     }
 
-    ALWAYS_INLINE void insertWindowColumnHop(
-        Block & block,
-        const ColumnTuple * col_tuple,
-        size_t src_pos,
-        const DataTypePtr & col_data_type,
-        Int32 target_pos,
-        const String & col_name,
-        bool & replicated)
+    ALWAYS_INLINE void setWindowColumnHop(Block & block, const ColumnTuple * col_tuple, size_t src_pos, Int32 target_pos, bool & replicated)
     {
         if (target_pos >= 0)
         {
@@ -46,22 +31,20 @@ namespace
             {
                 const auto & offsets = src_win_col->getOffsets();
                 for (auto & column_with_type : block)
-                    column_with_type.column = column_with_type.column->replicate(offsets);
+                    if (!column_with_type.column->empty())
+                        column_with_type.column = column_with_type.column->replicate(offsets);
                 replicated = true;
             }
 
-            /// Make a `window_xxx` column and insert it
-            const auto & src_win_col_data = src_win_col->getDataPtr();
-            assert(col_data_type->getTypeId() == src_win_col_data->getDataType());
-            block.insert(target_pos, ColumnWithTypeAndName{src_win_col_data, col_data_type, col_name});
+            assert(block.getByPosition(target_pos).column->getDataType() == src_win_col->getDataPtr()->getDataType());
+            block.getByPosition(target_pos).column = src_win_col->getDataPtr();
         }
     }
 }
 
 StreamingWindowAssignmentTransform::StreamingWindowAssignmentTransform(
     const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr desc)
-    : ISimpleTransform(input_header, output_header, false), func_desc(std::move(desc))
-    , chunk_header(output_header.getColumns(), 0)
+    : ISimpleTransform(input_header, output_header, false), func_desc(std::move(desc)), chunk_header(output_header.getColumns(), 0)
 {
     assert(func_desc);
 
@@ -96,23 +79,45 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     /// So far we assume, the streaming function produces only one column
     assert(expr_block);
 
+    /// Only select columns required by output
+    /// For example, inputs: col1, col2, col3. col3 is used to calculate windows
+    /// outputs: col1, col2, window_begin, window_end.
+    auto result = getOutputPort().getHeader().cloneEmpty();
+
+    auto wmin_pos = std::min(wstart_pos, wend_pos);
+    auto wmax_pos = std::max(wstart_pos, wend_pos);
+
+    /// Insert columns before window_begin or window_end
+    for (Int32 i = 0; i < wmin_pos; ++i)
+        result.getByPosition(i) = std::move(block.getByPosition(input_column_positions[i]));
+
+    /// Insert columns between window_begin and window_end
+    for (Int32 i = wmin_pos + 1; i < wmax_pos; ++i)
+        result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i]).column);
+
+    /// Insert columns after window_begin or window_end
+    size_t delta = wmin_pos >= 0 ? 2 : 1;
+    for (size_t i = wmax_pos + 1, num_columns = chunk_header.getNumColumns(); i < num_columns; ++i)
+        result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i - delta]).column);
+
+    /// Insert window_begin and window_end
     if (func_name == "__TUMBLE")
     {
-        assignTumbleWindow(block, expr_block);
+        assignTumbleWindow(result, expr_block);
     }
     else if (func_name == "__HOP")
     {
-        assignHopWindow(block, expr_block);
+        assignHopWindow(result, expr_block);
     }
     else
     {
         throw Exception(func_name + " is not supported", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    chunk.setColumns(block.getColumns(), block.rows());
+    chunk.setColumns(result.getColumns(), result.rows());
 }
 
-ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & block, Block & expr_block)
+ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & result, Block & expr_block)
 {
     /// Result column
     auto & col_with_type = expr_block.getByPosition(0);
@@ -123,17 +128,17 @@ ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block 
 
     if (wstart_pos < wend_pos)
     {
-        insertWindowColumnTumble(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START);
-        insertWindowColumnTumble(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END);
+        setWindowColumnTumble(result, col_tuple, 0, wstart_pos);
+        setWindowColumnTumble(result, col_tuple, 1, wend_pos);
     }
     else
     {
-        insertWindowColumnTumble(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END);
-        insertWindowColumnTumble(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START);
+        setWindowColumnTumble(result, col_tuple, 1, wend_pos);
+        setWindowColumnTumble(result, col_tuple, 0, wstart_pos);
     }
 }
 
-void StreamingWindowAssignmentTransform::assignHopWindow(Block & block, Block & expr_block)
+void StreamingWindowAssignmentTransform::assignHopWindow(Block & result, Block & expr_block)
 {
     auto & col_with_type = expr_block.getByPosition(0);
 
@@ -143,13 +148,13 @@ void StreamingWindowAssignmentTransform::assignHopWindow(Block & block, Block & 
     bool replicated = false;
     if (wstart_pos < wend_pos)
     {
-        insertWindowColumnHop(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START, replicated);
-        insertWindowColumnHop(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END, replicated);
+        setWindowColumnHop(result, col_tuple, 0, wstart_pos, replicated);
+        setWindowColumnHop(result, col_tuple, 1, wend_pos, replicated);
     }
     else
     {
-        insertWindowColumnHop(block, col_tuple, 1, window_end_col_data_type, wend_pos, STREAMING_WINDOW_END, replicated);
-        insertWindowColumnHop(block, col_tuple, 0, window_start_col_data_type, wstart_pos, STREAMING_WINDOW_START, replicated);
+        setWindowColumnHop(result, col_tuple, 1, wend_pos, replicated);
+        setWindowColumnHop(result, col_tuple, 0, wstart_pos, replicated);
     }
 }
 
@@ -163,12 +168,14 @@ void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_he
         if (col_with_type.name == STREAMING_WINDOW_START)
         {
             wstart_pos = pos;
-            window_start_col_data_type = col_with_type.type;
         }
         else if (col_with_type.name == STREAMING_WINDOW_END)
         {
             wend_pos = pos;
-            window_end_col_data_type = col_with_type.type;
+        }
+        else
+        {
+            input_column_positions.push_back(input_header.getPositionByName(col_with_type.name));
         }
         ++pos;
     }

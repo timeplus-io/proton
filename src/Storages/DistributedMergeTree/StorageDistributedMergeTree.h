@@ -73,8 +73,7 @@ public:
         const StorageMetadataPtr & metadata_snapshot,
         ContextPtr context_,
         size_t /* max_block_size */,
-        unsigned /* num_streams */,
-        StreamingFunctionDescriptionPtr streaming_func_desc);
+        unsigned /* num_streams */);
 
     std::optional<UInt64> totalRows(const Settings &) const override;
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;

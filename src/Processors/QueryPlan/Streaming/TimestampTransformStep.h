@@ -7,21 +7,23 @@
 namespace DB
 {
 /// Implement watermark assignment for streaming processing
-class StreamingWindowAssignmentStep final : public ITransformingStep
+class TimestampTransformStep final : public ITransformingStep
 {
 public:
-    StreamingWindowAssignmentStep(
+    TimestampTransformStep(
         const DataStream & input_stream_,
         Block output_header,
-        StreamingFunctionDescriptionPtr desc_);
+        ExpressionActionsPtr timestamp_expr_,
+        const Names & input_columns_);
 
-    ~StreamingWindowAssignmentStep() override = default;
+    ~TimestampTransformStep() override = default;
 
-    String getName() const override { return "StreamingWindowAssignmentStep"; }
+    String getName() const override { return "TimestampTransformStep"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    StreamingFunctionDescriptionPtr desc;
+    ExpressionActionsPtr timestamp_expr;
+    Names input_columns;
 };
 }

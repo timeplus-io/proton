@@ -5,9 +5,9 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-#include <Common/StreamingCommon.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Common/ProtonCommon.h>
 
 #include <base/logger_useful.h>
 
@@ -17,10 +17,14 @@ StreamingDistributedMergeTree::StreamingDistributedMergeTree(
     const StorageID & id_,
     const ColumnsDescription & columns_,
     ContextPtr context_,
-    StreamingFunctionDescriptionPtr streaming_func_desc_)
+    StreamingFunctionDescriptionPtr streaming_func_desc_,
+    ExpressionActionsPtr timestamp_expr_,
+    const Names & timestamp_expr_required_columns_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
     , streaming_func_desc(std::move(streaming_func_desc_))
+    , timestamp_expr(std::move(timestamp_expr_))
+    , timestamp_expr_required_columns(timestamp_expr_required_columns_)
     , storage(DatabaseCatalog::instance().getTable(id_, context_))
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
@@ -79,7 +83,7 @@ void StreamingDistributedMergeTree::read(
     updated_column_names.reserve(column_names.size());
     for (const auto & column_name : column_names)
     {
-        if (column_name == STREAMING_WINDOW_START || column_name == STREAMING_WINDOW_END)
+        if (column_name == STREAMING_WINDOW_START || column_name == STREAMING_WINDOW_END || column_name == STREAMING_TIMESTAMP_ALIAS)
             continue;
 
         updated_column_names.push_back(column_name);
@@ -94,7 +98,18 @@ void StreamingDistributedMergeTree::read(
         metadata_snapshot,
         context_,
         max_block_size,
-        num_streams,
-        streaming_func_desc);
+        num_streams);
+}
+
+Names StreamingDistributedMergeTree::getAdditionalRequiredColumns() const
+{
+    Names required(timestamp_expr_required_columns);
+
+    for (const auto & name : streaming_func_desc->input_columns)
+        if (name != STREAMING_TIMESTAMP_ALIAS)
+            /// We remove the internal dependent ____ts column
+            required.push_back(name);
+
+    return required;
 }
 }
