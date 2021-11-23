@@ -180,6 +180,8 @@ void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_he
         ++pos;
     }
 
+    assert(wstart_pos >= 0 || wend_pos >= 0);
+
     auto input_begin = func_desc->input_columns.begin();
     auto input_end = func_desc->input_columns.end();
 

@@ -111,6 +111,10 @@ namespace ErrorCodes
     extern const int INVALID_LIMIT_EXPRESSION;
     extern const int INVALID_WITH_FILL_EXPRESSION;
     extern const int ACCESS_DENIED;
+
+    /// proton: starts
+    extern const int WINDOW_COLUMN_NOT_REFERENCED;
+    /// proton: ends
 }
 
 /// Assumes `storage` is set and the table filter (row-level security) is not empty.
@@ -2070,7 +2074,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_plan.addStep(std::move(adding_limits_and_quota));
 
         /// proton: starts. Streaming Window
-        if (auto distributed = storage->as<StreamingDistributedMergeTree>())
+        if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan, distributed);
         /// proton: ends
     }
@@ -2755,14 +2759,32 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
 
 void InterpreterSelectQuery::checkForStreamingQuery() const
 {
-    if (!query_info.syntax_analyzer_result->streaming)
-        return;
+    if (query_info.syntax_analyzer_result->streaming)
+    {
+        if (analysis_result.has_order_by)
+            throw Exception("Streaming query doesn't support ORDER BY", ErrorCodes::NOT_IMPLEMENTED);
 
-    if (analysis_result.has_order_by)
-        throw Exception("Streaming query doesn't support ORDER BY", ErrorCodes::NOT_IMPLEMENTED);
+        if (analysis_result.hasLimitBy())
+            throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
-    if (analysis_result.hasLimitBy())
-        throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
+    if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
+    {
+        bool has_win_col = false;
+        for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
+        {
+            if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
+            {
+                has_win_col = true;
+                break;
+            }
+        }
+
+        if (!has_win_col)
+            throw Exception(
+                "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
+                ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
+    }
 }
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const
