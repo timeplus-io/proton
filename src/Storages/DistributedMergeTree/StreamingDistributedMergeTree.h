@@ -56,12 +56,14 @@ private:
     StreamingDistributedMergeTree(
         const StorageID & id_,
         const ColumnsDescription & columns_,
+        StorageMetadataPtr underlying_storage_metadata_snapshot_,
         ContextPtr context_,
         StreamingFunctionDescriptionPtr streaming_func_desc_,
         ExpressionActionsPtr timestamp_expr_,
         const Names & timestamp_expr_required_columns_
     );
 
+    StorageMetadataPtr underlying_storage_metadata_snapshot;
     StreamingFunctionDescriptionPtr streaming_func_desc;
     ExpressionActionsPtr timestamp_expr;
     Names timestamp_expr_required_columns;

@@ -5,6 +5,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/StreamingFunctionDescription.h>
+#include <Storages/StorageInMemoryMetadata.h>
 
 namespace DB
 {
@@ -38,6 +39,7 @@ protected:
     ExpressionActionsPtr timestamp_expr;
 
     StorageID storage_id = StorageID::createEmpty();
+    StorageMetadataPtr underlying_storage_metadata_snapshot;
     ColumnsDescription columns;
 };
 }

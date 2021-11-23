@@ -54,7 +54,7 @@ TableFunctionHopTumbleBase::TableFunctionHopTumbleBase(const String & name_) : n
 StoragePtr TableFunctionHopTumbleBase::executeImpl(
     const ASTPtr & /* func_ast */, ContextPtr context, const String & /* table_name */, ColumnsDescription /* cached_columns_ = {} */) const
 {
-    return StreamingDistributedMergeTree::create(storage_id, columns, context, streaming_func_desc, timestamp_expr, timestamp_expr_required_columns);
+    return StreamingDistributedMergeTree::create(storage_id, columns, underlying_storage_metadata_snapshot, context, streaming_func_desc, timestamp_expr, timestamp_expr_required_columns);
 }
 
 void TableFunctionHopTumbleBase::init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast)
@@ -63,13 +63,14 @@ void TableFunctionHopTumbleBase::init(ContextPtr context, ASTPtr streaming_func_
     if (storage->getName() != "DistributedMergeTree")
         throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
 
-    auto metadata_snapshot = storage->getInMemoryMetadataPtr();
-    columns = metadata_snapshot->getColumns();
+    underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
+    columns = underlying_storage_metadata_snapshot->getColumns();
 
     /// We will first need analyze time column expression since the streaming window function depends on the result of time column expr
     if (timestamp_expr_ast)
     {
-        auto syntax_analyzer_result = TreeRewriter(context).analyze(timestamp_expr_ast, columns.getAll(), storage, metadata_snapshot);
+        auto syntax_analyzer_result = TreeRewriter(context).analyze(
+            timestamp_expr_ast, columns.getAll(), storage, underlying_storage_metadata_snapshot);
         ExpressionAnalyzer expr_analyzer(timestamp_expr_ast, syntax_analyzer_result, context);
 
         timestamp_expr = expr_analyzer.getActions(true);
