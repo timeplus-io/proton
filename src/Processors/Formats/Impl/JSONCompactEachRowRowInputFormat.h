@@ -72,6 +72,8 @@ private:
     bool yield_strings;
     /// proton: starts
     /// Wrapped with square brackets
+    /// with_bracket = true, it means the input data is from ingestion REST API, which is with format "[[<value1>, <value2>], ...]"
+    /// with bracket = false, it means the input data is with format "[<value1>, <value2>],[<value1>, <value2>],..."
     bool with_bracket;
     /// proton: ends
 };

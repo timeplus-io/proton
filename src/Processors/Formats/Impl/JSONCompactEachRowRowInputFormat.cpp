@@ -51,33 +51,16 @@ JSONCompactEachRowFormatReader::JSONCompactEachRowFormatReader(ReadBuffer & in_,
 void JSONCompactEachRowFormatReader::skipRowStartDelimiter()
 {
     skipWhitespaceIfAny(*in);
+    assertChar('[', *in);
 
     /// proton: starts
-    (void) with_bracket;
-//    if (*in->position() == '[')
-//    {
-//        ++in->position();
-//        skipWhitespaceIfAny(*in);
-//        if (*in->position() == '[' && !with_bracket)
-//        {
-//            with_bracket = true;
-//            ++in->position();
-//            skipWhitespaceIfAny(*in);
-//        }
-//    }
-//    else
-//    {
-//        if (*in->position() == ']' && with_bracket)
-//        {
-//            return;
-//        }
-//
-//        /// Invalid format
-//        char err[2] = {'[', '\0'};
-//        throwAtAssertionFailed(err, *in);
-//    }
+    skipWhitespaceIfAny(*in);
+    if (*in->position() == '[' && !with_bracket)
+    {
+        with_bracket = true;
+        ++in->position();
+    }
     /// proton: ends
-    assertChar('[', *in);
 }
 
 void JSONCompactEachRowFormatReader::skipFieldDelimiter()
@@ -92,6 +75,12 @@ void JSONCompactEachRowFormatReader::skipRowEndDelimiter()
     assertChar(']', *in);
 
     skipWhitespaceIfAny(*in);
+
+    /// proton: starts
+    if (*in->position() == ']' && with_bracket)
+        ++in->position();
+    /// proton: ends
+
     if (!in->eof() && (*in->position() == ',' || *in->position() == ';'))
         ++in->position();
 

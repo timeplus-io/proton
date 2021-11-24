@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/copyData.h>
 #include <base/SimpleJSON.h>
+#include <base/find_symbols.h>
 #include <Common/PODArray.h>
 
 #include <unordered_map>
@@ -39,7 +40,10 @@ inline bool readIntoBuffers(ReadBuffer & from, PODArray<char> & to, JSONReadBuff
         }
 
         if (pre != begin)
-            buffers.emplace(name, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(pre), static_cast<size_t>(end - pre)));
+        {
+            const char * json_end = find_last_symbols_or_null<',', '}'>(pre, end);
+            buffers.emplace(name, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(pre), static_cast<size_t>(json_end - pre)));
+        }
     }
     catch (SimpleJSONException & e)
     {
