@@ -2771,22 +2771,26 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
             throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
+    if (storage)
     {
-        bool has_win_col = false;
-        for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
+        if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
         {
-            if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
+            bool has_win_col = false;
+            for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
             {
-                has_win_col = true;
-                break;
+                if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
+                {
+                    has_win_col = true;
+                    break;
+                }
             }
-        }
 
-        if (!has_win_col)
-            throw Exception(
-                "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
-                ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
+            if (!has_win_col)
+                throw Exception(
+                    "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
+                    ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
+
+        }
     }
 }
 

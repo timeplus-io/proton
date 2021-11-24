@@ -21,6 +21,8 @@ services:
       /bin/bash -c "sleep 2; /entrypoint.sh"
     depends_on:
       - stream-store
+    cap_add:
+      - SYS_PTRACE
 
   stream-store:
     image: docker.vectorized.io/vectorized/redpanda:latest

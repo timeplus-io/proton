@@ -541,13 +541,13 @@ void Client::connect()
 
         if (client_version_tuple < server_version_tuple)
         {
-            std::cout << "ClickHouse client version is older than ClickHouse server. "
+            std::cout << "proton client version is older than proton server. "
                         << "It may lack support for new features." << std::endl
                         << std::endl;
         }
         else if (client_version_tuple > server_version_tuple)
         {
-            std::cout << "ClickHouse server version is older than ClickHouse client. "
+            std::cout << "proton server version is older than proton client. "
                         << "It may indicate that the server is out of date and can be upgraded." << std::endl
                         << std::endl;
         }
