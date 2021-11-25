@@ -12,6 +12,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int BAD_REQUEST_PARAMETER;
+}
+
 std::map<String, std::map<String, String> > TabularTableRestRouterHandler::create_schema = {
     {"required",{
                     {"name","string"},
@@ -125,18 +131,29 @@ String TabularTableRestRouterHandler::getOrderByExpr(
 String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Object::Ptr & payload) const
 {
     const auto & columns = payload->getArray("columns");
+    bool custom_time_column = false;
 
     std::vector<String> columns_definition;
     for (const auto & col : *columns)
     {
         columns_definition.push_back(getCreateColumnDefination(col.extract<Poco::JSON::Object::Ptr>()));
+
+        if (!col.extract<Poco::JSON::Object::Ptr>()->get("name").toString().compare("_time"))
+        {
+            custom_time_column = true;
+        }
+    }
+
+    if(custom_time_column && payload->has("_time_column"))
+    {
+        throw Exception("There is a conflict between _time and _time_column, only one of them should be specified", ErrorCodes::BAD_REQUEST_PARAMETER);
     }
 
     if (payload->has("_time_column"))
     {
-        columns_definition.push_back("`_time` DateTime64(3) DEFAULT " + payload->get("_time_column").toString());
+        columns_definition.push_back("`_time` DateTime64(3, UTC) DEFAULT " + payload->get("_time_column").toString());
     }
-    else
+    else if (!custom_time_column)
     {
         columns_definition.push_back("`_time` DateTime64(3, UTC) DEFAULT now64(3)");
     }

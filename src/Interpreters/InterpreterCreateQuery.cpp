@@ -80,6 +80,10 @@
 
 #include <base/ClockUtils.h>
 
+/// proton: starts.
+#include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
+/// proton: ends.
+
 
 namespace DB
 {
@@ -1487,6 +1491,13 @@ void InterpreterCreateQuery::prepareOnClusterQuery(ASTCreateQuery & create, Cont
 BlockIO InterpreterCreateQuery::execute()
 {
     FunctionNameNormalizer().visit(query_ptr.get());
+
+    /// proton: starts.
+    DistributedMergeTreeColumnValidateMatcher::Data column_validate_data;
+    DistributedMergeTreeColumnValidateVisitor column_validate_visitor(column_validate_data);
+    column_validate_visitor.visit(query_ptr);
+    /// proton: ends.
+
     auto & create = query_ptr->as<ASTCreateQuery &>();
     if (!create.cluster.empty())
     {
