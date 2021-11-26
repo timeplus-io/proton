@@ -315,7 +315,7 @@ struct StreamingAggregatedDataVariants : private boost::noncopyable
         switch (type)
         {
         #define M(NAME, IS_TWO_LEVEL) \
-            case Type::NAME: NAME->data.setKeySizes(key_sizes); break;
+            case Type::NAME: NAME->data.setWinKeySize(key_sizes[0]); break;
             APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
         #undef M
 

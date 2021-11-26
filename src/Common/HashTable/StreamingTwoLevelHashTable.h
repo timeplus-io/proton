@@ -32,7 +32,7 @@ protected:
     using HashValue = size_t;
     using Self = StreamingTwoLevelHashTable;
 
-    std::vector<size_t> key_sizes;
+    size_t win_key_size;
 
 public:
     using Impl = ImplTable;
@@ -44,53 +44,24 @@ public:
 
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
-    ALWAYS_INLINE size_t windowKey(UInt16 key)
+    template<typename T>
+    ALWAYS_INLINE size_t windowKey(T key)
     {
         /// window time key is always: 2, 4 or 8 bytes
-        assert(key_sizes[0] == 2);
-        return key;
-    }
-
-    ALWAYS_INLINE size_t windowKey(UInt32 key)
-    {
-        /// window time key is always: 2, 4 or 8 bytes
-        if (key_sizes[0] == 4)
-            return key;
-
-        assert(key_sizes[0] == 2);
-        return (key >> 16);
-    }
-
-    ALWAYS_INLINE size_t windowKey(UInt64 key)
-    {
-        /// window time key is always: 2, 4 or 8 bytes
-        if (key_sizes[0] == 8)
-            return key;
-
-        return key >> (64 - (key_sizes[0] << 3));
-    }
-
-    ALWAYS_INLINE size_t windowKey(UInt128 key)
-    {
-        /// window time key is always: 2, 4 or 8 bytes
-        return key >> (128 - (key_sizes[0] << 3));
-    }
-
-    ALWAYS_INLINE size_t windowKey(UInt256 key)
-    {
-        /// window time key is always: 2, 4 or 8 bytes
-        return key >> (256 - (key_sizes[0] << 3));
+        /// window time key are always lower bits of integral type of T
+        /// key & 0xFFFF or 0xFFFFFFFF or 0xFFFFFFFFFFFFFFFF
+        return key & ((0xFFull << ((win_key_size - 1) << 3)) + ((1ull << ((win_key_size - 1) << 3)) - 1));
     }
 
     ALWAYS_INLINE size_t windowKey(const StringRef & key)
     {
-        /// deserialize the first key_sizes[0] bytes
-        if (key_sizes[0] == 8)
+        /// deserialize the first win_key_size bytes
+        if (win_key_size == 8)
         {
             assert(key.size > 8);
             return unalignedLoad<UInt64>(key.data);
         }
-        else if (key_sizes[0] == 4)
+        else if (win_key_size == 4)
         {
             assert(key.size > 4);
             return unalignedLoad<UInt32>(key.data);
@@ -98,7 +69,7 @@ public:
         else
         {
             assert(key.size > 2);
-            assert(key_sizes[0] == 2);
+            assert(win_key_size == 2);
             return unalignedLoad<UInt16>(key.data);
         }
     }
@@ -147,12 +118,10 @@ public:
 
     StreamingTwoLevelHashTable() { }
 
-    void setKeySizes(const std::vector<size_t> & key_sizes_)
+    void setWinKeySize(size_t win_key_size_)
     {
-        assert(!key_sizes_.empty());
-        assert(key_sizes_[0] == 2 || key_sizes_[0] == 4 || key_sizes_[0] == 8);
-
-        key_sizes = key_sizes_;
+        assert(win_key_size_ == 2 || win_key_size_ == 4 || win_key_size_ == 8);
+        win_key_size = win_key_size_;
     }
 
     /// Copy the data from another (normal) hash table. It should have the same hash function.
