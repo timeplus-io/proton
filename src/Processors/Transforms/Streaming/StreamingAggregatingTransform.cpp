@@ -721,7 +721,7 @@ void StreamingAggregatingTransform::finalize(const ChunkInfo & chunk_info)
 
 void StreamingAggregatingTransform::doFinalize(const WatermarkBound & watermark)
 {
-    /// FIXME spill to disk, aggr without key, overflow_row etc cases
+    /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
     auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
 

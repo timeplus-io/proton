@@ -98,8 +98,13 @@ void ISimpleTransform::work()
 
     has_input = !needInputData();
 
-    if (!skip_empty_chunks || output_data.chunk)
+    /// proton: starts. For case like SELECT count(*) FROM table WHERE expression EMIT STREAM PERIODIC INTERVAL 2 SECOND
+    /// the output.header is empty. So we need explicitly check watermark chunk info here to propagate empty chunk
+    /// with watermark
+    const auto & chunk_info = output_data.chunk.getChunkInfo();
+    if (!skip_empty_chunks || output_data.chunk || (chunk_info && chunk_info->watermark != 0))
         has_output = true;
+    /// proton: ends
 
     if (has_output && !output_data.chunk && getOutputPort().getHeader())
         /// Support invariant that chunks must have the same number of columns as header.
