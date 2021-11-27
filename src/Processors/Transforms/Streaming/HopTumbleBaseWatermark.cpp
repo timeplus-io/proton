@@ -226,7 +226,8 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoS
             block.info.watermark = watermark_ts;
 
             watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
-            watermark_ts_bias = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
+            watermark_ts_bias
+                = addTimeWithAutoScale(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
         }
 
         if (block.info.watermark > 0)
@@ -254,7 +255,8 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & b
             block.info.watermark = watermark_ts;
 
             watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
-            watermark_ts_bias = addTime(watermark_ts, window_interval_kind, interval, *timezone);
+            watermark_ts_bias
+                = addTime(watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
         }
 
         if (block.info.watermark > 0)
