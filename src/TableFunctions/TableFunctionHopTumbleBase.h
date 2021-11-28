@@ -35,8 +35,9 @@ protected:
     StreamingFunctionDescriptionPtr streaming_func_desc;
 
     /// Timestamp column expression
-    Names timestamp_expr_required_columns;
-    ExpressionActionsPtr timestamp_expr;
+    StreamingFunctionDescriptionPtr timestamp_func_desc;
+    /// Names timestamp_expr_required_columns;
+    /// ExpressionActionsPtr timestamp_expr;
 
     StorageID storage_id = StorageID::createEmpty();
     StorageMetadataPtr underlying_storage_metadata_snapshot;

@@ -2796,26 +2796,26 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const
 {
-    if (distributed->getTimestampExpr())
+    auto timestamp_func_desc = distributed->getTimestampFunctionDescription();
+    if (timestamp_func_desc)
     {
         auto output_header = query_plan.getCurrentDataStream().header;
         /// Drop timestamp expr required columns if they are not required by downstream pipe
-        const auto & timestamp_expr_columns = distributed->getRequiredColumnsForTimestampExpr();
         auto required_begin = required_columns_after_streaming_window.begin();
         auto required_end = required_columns_after_streaming_window.end();
-        for (const auto & name : timestamp_expr_columns)
+        for (const auto & name : timestamp_func_desc->input_columns)
             if (std::find(required_begin, required_end, name) == required_end)
                 output_header.erase(name);
 
         /// Add transformed timestamp column required by downstream pipe
-        auto timestamp_col = distributed->getTimestampExpr()->getSampleBlock().getByPosition(0);
+        auto timestamp_col = timestamp_func_desc->expr->getSampleBlock().getByPosition(0);
         assert(!output_header.findByName(timestamp_col.name));
         timestamp_col.column = timestamp_col.type->createColumnConstWithDefaultValue(0);
         output_header.insert(timestamp_col);
 
         query_plan.addStep(
             std::make_unique<TimestampTransformStep>(
-                query_plan.getCurrentDataStream(), output_header, distributed->getTimestampExpr(), timestamp_expr_columns));
+                query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc)));
     }
 
     if (query_info.syntax_analyzer_result->streaming)

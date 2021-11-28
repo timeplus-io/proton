@@ -45,11 +45,17 @@ public:
 
     Names getAdditionalRequiredColumns() const;
 
-    const Names & getRequiredColumnsForStreamingFunction() const { return streaming_func_desc->input_columns; }
+    Names getRequiredColumnsForStreamingFunction() const { return streaming_func_desc->input_columns; }
     StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
 
-    const Names & getRequiredColumnsForTimestampExpr() const { return timestamp_expr_required_columns; }
-    ExpressionActionsPtr getTimestampExpr() const { return timestamp_expr; }
+    Names getRequiredColumnsForTimestampExpr() const
+    {
+        if (timestamp_func_desc)
+            return timestamp_func_desc->input_columns;
+        return {};
+    }
+    StreamingFunctionDescriptionPtr getTimestampFunctionDescription() const { return timestamp_func_desc; }
+
     const StoragePtr & getInnerStorage() const { return storage; }
 
 private:
@@ -59,14 +65,11 @@ private:
         StorageMetadataPtr underlying_storage_metadata_snapshot_,
         ContextPtr context_,
         StreamingFunctionDescriptionPtr streaming_func_desc_,
-        ExpressionActionsPtr timestamp_expr_,
-        const Names & timestamp_expr_required_columns_
-    );
+        StreamingFunctionDescriptionPtr timestamp_func_desc_);
 
     StorageMetadataPtr underlying_storage_metadata_snapshot;
     StreamingFunctionDescriptionPtr streaming_func_desc;
-    ExpressionActionsPtr timestamp_expr;
-    Names timestamp_expr_required_columns;
+    StreamingFunctionDescriptionPtr timestamp_func_desc;
     StoragePtr storage;
 
     Poco::Logger * log;

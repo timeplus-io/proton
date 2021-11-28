@@ -19,14 +19,12 @@ StreamingDistributedMergeTree::StreamingDistributedMergeTree(
     StorageMetadataPtr underlying_storage_metadata_snapshot_,
     ContextPtr context_,
     StreamingFunctionDescriptionPtr streaming_func_desc_,
-    ExpressionActionsPtr timestamp_expr_,
-    const Names & timestamp_expr_required_columns_)
+    StreamingFunctionDescriptionPtr timestamp_func_desc_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
     , underlying_storage_metadata_snapshot(underlying_storage_metadata_snapshot_)
     , streaming_func_desc(std::move(streaming_func_desc_))
-    , timestamp_expr(std::move(timestamp_expr_))
-    , timestamp_expr_required_columns(timestamp_expr_required_columns_)
+    , timestamp_func_desc(std::move(timestamp_func_desc_))
     , storage(DatabaseCatalog::instance().getTable(id_, context_))
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
@@ -96,7 +94,11 @@ void StreamingDistributedMergeTree::read(
 
 Names StreamingDistributedMergeTree::getAdditionalRequiredColumns() const
 {
-    Names required(timestamp_expr_required_columns);
+    Names required;
+
+    if (timestamp_func_desc)
+        for (const auto & name : timestamp_func_desc->input_columns)
+            required.push_back(name);
 
     for (const auto & name : streaming_func_desc->input_columns)
         if (name != STREAMING_TIMESTAMP_ALIAS)
@@ -105,4 +107,5 @@ Names StreamingDistributedMergeTree::getAdditionalRequiredColumns() const
 
     return required;
 }
+
 }

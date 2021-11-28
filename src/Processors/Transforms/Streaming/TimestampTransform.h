@@ -5,6 +5,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Processors/ISimpleTransform.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/StreamingFunctionDescription.h>
 
 namespace DB
 {
@@ -18,7 +19,7 @@ class TimestampTransform final : public ISimpleTransform
 {
 public:
     TimestampTransform(
-        const Block & input_header, const Block & output_header, ExpressionActionsPtr timestamp_expr_, const Names & input_columns_);
+        const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_);
 
     ~TimestampTransform() override = default;
 
@@ -29,11 +30,21 @@ public:
 private:
     /// Calculate the positions of columns required by timestamp expr
     void calculateColumns(const Block & input_header, const Block & output_header, const Names & input_columns_);
+    void handleProcessingTimeFunc();
     void transformTimestamp(Chunk & chunk);
+    void assignProcTimestamp(Chunk & chunk);
 
 private:
     ContextPtr context;
-    ExpressionActionsPtr timestamp_expr;
+
+    StreamingFunctionDescriptionPtr timestamp_func_desc;
+
+    /// process time streaming processing
+    bool proc_time = false;
+    bool is_datetime64 = false;
+    String timezone;
+    /// For datetime64
+    UInt32 scale = 0;
 
     size_t timestamp_col_pos = 0;
     DataTypePtr timestamp_col_data_type;

@@ -25,18 +25,16 @@ namespace DB
 TimestampTransformStep::TimestampTransformStep(
     const DataStream & input_stream_,
     Block output_header,
-    ExpressionActionsPtr timestamp_expr_,
-    const Names & input_columns_)
+    StreamingFunctionDescriptionPtr  timestamp_func_desc_)
     : ITransformingStep(input_stream_, std::move(output_header), getTraits())
-    , timestamp_expr(std::move(timestamp_expr_))
-    , input_columns(input_columns_)
+    , timestamp_func_desc(std::move(timestamp_func_desc_))
 {
 }
 
 void TimestampTransformStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<TimestampTransform>(header, getOutputStream().header, timestamp_expr, input_columns);
+        return std::make_shared<TimestampTransform>(header, getOutputStream().header, timestamp_func_desc);
     });
 }
 }

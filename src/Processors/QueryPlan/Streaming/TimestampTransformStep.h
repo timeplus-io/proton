@@ -13,8 +13,7 @@ public:
     TimestampTransformStep(
         const DataStream & input_stream_,
         Block output_header,
-        ExpressionActionsPtr timestamp_expr_,
-        const Names & input_columns_);
+        StreamingFunctionDescriptionPtr timestamp_func_desc_);
 
     ~TimestampTransformStep() override = default;
 
@@ -23,7 +22,6 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    ExpressionActionsPtr timestamp_expr;
-    Names input_columns;
+    StreamingFunctionDescriptionPtr timestamp_func_desc;
 };
 }

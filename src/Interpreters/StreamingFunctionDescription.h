@@ -18,6 +18,7 @@ struct StreamingFunctionDescription
         , expr(std::move(expr_))
         , input_columns(std::move(input_columns_))
     {
+        assert(func_ast);
     }
 
     ASTPtr func_ast;
