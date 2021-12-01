@@ -5,6 +5,8 @@
 #include <Common/hex.h>
 #include <base/logger_useful.h>
 
+#include <cstring>
+
 namespace DB
 {
 namespace ErrorCodes

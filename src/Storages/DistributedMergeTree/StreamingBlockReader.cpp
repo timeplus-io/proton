@@ -13,16 +13,22 @@ namespace ErrorCodes
 }
 
 StreamingBlockReader::StreamingBlockReader(
-    const StorageID & storage_id, ContextPtr context_, Int32 shard_, const DWAL::KafkaWALSimpleConsumerPtr & consumer_, Poco::Logger * log_)
+    const StorageID & storage_id, ContextPtr context_, Int32 shard_, Int64 offset, const DWAL::KafkaWALSimpleConsumerPtr & consumer_, Poco::Logger * log_)
     : context(context_)
     , consumer(consumer_)
     , consume_ctx(DWAL::escapeDWALName(storage_id.getDatabaseName(), storage_id.getTableName()), shard_, Int64{-1} /* latest */)
     , log(log_)
 {
-    consume_ctx.auto_offset_reset = "latest";
+    if (offset == -1)
+        consume_ctx.auto_offset_reset = "latest";
+    else if (offset == -2)
+        consume_ctx.auto_offset_reset = "earliest";
+
+    consume_ctx.offset = offset;
+    consume_ctx.enforce_offset = true;
     consumer->initTopicHandle(consume_ctx);
 
-    LOG_INFO(log, "Start streaming reading from topic={} shard={} ", consume_ctx.topic, shard_);
+    LOG_INFO(log, "Start streaming reading from topic={} shard={} offset={}", consume_ctx.topic, shard_, offset);
 }
 
 StreamingBlockReader::~StreamingBlockReader()

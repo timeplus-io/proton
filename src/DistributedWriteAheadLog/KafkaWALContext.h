@@ -23,6 +23,8 @@ struct KafkaWALContext
     /// - RD_KAFKA_OFFSET_TAIL
     int64_t offset = -1000;
 
+    bool enforce_offset = false;
+
     /// Admin API settings
     int32_t partitions = 1;
     int32_t replication_factor = 1;
@@ -32,6 +34,10 @@ struct KafkaWALContext
 
     /// Enable compression for internal kafka topics and message
     bool client_side_compression = false;
+
+    /// When producing a record to Kafka broker, what kind of timestamp to use
+    /// CreationTime (application assigned) or LogAppendTime (Kafka broker assigned)
+    bool use_append_timestamp = true;
 
     /// Data retention for cleanup_policy `delete`
     int64_t retention_ms = -1;

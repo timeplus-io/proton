@@ -19,6 +19,7 @@ public:
         const Block & header,
         ContextPtr context_,
         Int32 shard_,
+        Int64 offset,
         DWAL::KafkaWALSimpleConsumerPtr consumer_,
         Poco::Logger * log_);
 

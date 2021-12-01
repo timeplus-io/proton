@@ -28,7 +28,7 @@ struct KafkaWALContext;
 /// 3. init topic handle as `consumer->initTopicHandle(ctx)`
 /// 4. consume data by calling `consume` like `consumer->consume(..., ctx)`
 /// 5. commit offset by calling `consumer->commit(..., ctx)`
-/// 6. stop consumeing by calling `consumer->stopConsume(..., ctx)`
+/// 6. stop consuming by calling `consumer->stopConsume(..., ctx)`
 /// 7. dtor `consumer`
 class KafkaWALSimpleConsumer final: private boost::noncopyable
 {

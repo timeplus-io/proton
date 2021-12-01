@@ -8,6 +8,7 @@
 #include <DistributedWriteAheadLog/KafkaWALCommon.h>
 #include <DistributedWriteAheadLog/KafkaWALPool.h>
 #include <Functions/IFunction.h>
+#include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -39,6 +40,7 @@ namespace ErrorCodes
     extern const int UNABLE_TO_SKIP_UNUSED_SHARDS;
     extern const int TOO_MANY_ROWS;
     extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int BAD_ARGUMENTS;
 }
 
 namespace
@@ -332,11 +334,10 @@ void StorageDistributedMergeTree::readStreaming(
 
     auto header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
 
+    auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
+
     for (Int32 i = 0; i < shards; ++i)
-    {
-        pipes.emplace_back(
-            std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, consumer, log));
-    }
+        pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, offsets[i], consumer, log));
 
     LOG_INFO(log, "Starting reading {} streams", pipes.size());
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
@@ -610,7 +611,11 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info) const
 {
-    if (requireDistributedQuery(context_))
+    if (query_info.syntax_analyzer_result->streaming)
+    {
+        return QueryProcessingStage::Enum::FetchColumns;
+    }
+    else if (requireDistributedQuery(context_))
     {
         return getQueryProcessingStageRemote(context_, to_stage, metadata_snapshot, query_info);
     }
@@ -1571,5 +1576,36 @@ void StorageDistributedMergeTree::initWal()
     dwal_append_ctx.request_required_acks = dwal_request_required_acks;
     dwal_append_ctx.request_timeout_ms = dwal_request_timeout_ms;
     dwal->initProducerTopicHandle(dwal_append_ctx);
+}
+
+std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_to) const
+{
+    /// -1 latest, -2 earliest
+    if (seek_to == "latest")
+    {
+        return std::vector<Int64>(shards, -1);
+    }
+    else if (seek_to == "earliest")
+    {
+        return std::vector<Int64>(shards, -2);
+    }
+    else
+    {
+        /// -1h
+        /// ISO8601
+        /// Streaming store broker timestamp in milliseconds
+        DateTime64 res;
+        ReadBufferFromString in(seek_to);
+        try
+        {
+            parseDateTime64BestEffort(res, 3, in, DateLUT::instance(), DateLUT::instance("UTC"));
+        }
+        catch (...)
+        {
+            throw Exception("Invalid seek timestamp, only ISO8601 format is supported. Example: 2020-01-01T01:12:45Z or  2020-01-01T01:12:45.123+08:00", ErrorCodes::BAD_ARGUMENTS);
+        }
+
+        return dwal->offsetsForTimestamps(topic, res, shards);
+    }
 }
 }

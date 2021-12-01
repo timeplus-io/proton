@@ -215,6 +215,7 @@ protected:
 private:
     bool requireDistributedQuery(ContextPtr context_) const;
     void initWal();
+    std::vector<Int64> getOffsets(const String & seek_to) const;
 
 private:
     struct WriteCallbackData

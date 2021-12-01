@@ -145,10 +145,21 @@ inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALCont
 
     if (unlikely(!ctx.topic_consuming_started))
     {
-        /// Always starts from broker stored offset. Since for simple consumer, if we specify a
-        // positive offset manually, it will disable auto-commit.
-        /// We will filter uneeded messages according to ctx.offset in consume function
-        if (rd_kafka_consume_start(ctx.topic_handle.get(), ctx.partition, RD_KAFKA_OFFSET_STORED) == -1)
+        int res = 0;
+        if (ctx.enforce_offset)
+        {
+            /// For streaming processing
+            res = rd_kafka_consume_start(ctx.topic_handle.get(), ctx.partition, ctx.offset);
+        }
+        else
+        {
+            /// Always starts from broker stored offset. Since for simple consumer, if we specify a
+            /// positive offset manually, it will disable auto-commit.
+            /// We will filter unneeded messages according to ctx.offset in consume function
+            res = rd_kafka_consume_start(ctx.topic_handle.get(), ctx.partition, RD_KAFKA_OFFSET_STORED);
+        }
+
+        if (res == -1)
         {
             LOG_ERROR(
                 log,
@@ -206,7 +217,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, c
 
         if (likely(rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR))
         {
-            if (rkmessage->offset < wrapped->ctx.offset)
+            if (unlikely(rkmessage->offset < wrapped->ctx.offset))
             {
                 /// Ignore the message which has lower offset than what clients like to have
                 return;
@@ -332,7 +343,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
             auto rkmessage = rkmessages.get()[idx];
             if (rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR)
             {
-                if (rkmessage->offset < ctx.offset)
+                if (unlikely(rkmessage->offset < ctx.offset))
                 {
                     /// Ignore the message which has lower offset than what clients like to have
                     continue;

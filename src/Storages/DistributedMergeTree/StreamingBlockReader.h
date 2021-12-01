@@ -22,6 +22,7 @@ public:
         const StorageID & storage_id,
         ContextPtr context_,
         Int32 shard_,
+        Int64 offset,
         const DWAL::KafkaWALSimpleConsumerPtr & consumer_,
         Poco::Logger * log_);
 

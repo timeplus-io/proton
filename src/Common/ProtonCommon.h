@@ -8,8 +8,8 @@ namespace DB
 const String STREAMING_WINDOW_START = "window_start";
 const String STREAMING_WINDOW_END = "window_end";
 const std::vector<String> STREAMING_WINDOW_COLUMN_NAMES = {STREAMING_WINDOW_START, STREAMING_WINDOW_END};
-const String STREAMING_WINDOW_FUNC_ALIAS = "____swin";
-const String STREAMING_TIMESTAMP_ALIAS = "____ts";
+const String STREAMING_WINDOW_FUNC_ALIAS = "__tp_swin";
+const String STREAMING_TIMESTAMP_ALIAS = "__tp_ts";
 
 /// Reserved column names / aliases for proton system
 const String RESERVED_EVENT_TIME = "_time";
