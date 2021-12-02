@@ -44,6 +44,10 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
+/// proton: starts.
+#include <Common/ProtonCommon.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -895,7 +899,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     bool has_reserved_time = false;
     if (storage)
     {
-        auto time_col = source_columns.tryGetByName("_time");
+        auto time_col = source_columns.tryGetByName(RESERVED_EVENT_TIME);
         if (time_col && (isDateTime64(time_col->type) || isDateTime(time_col->type)))
             has_reserved_time = true;
     }

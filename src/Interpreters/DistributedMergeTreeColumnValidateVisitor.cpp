@@ -1,6 +1,7 @@
 #include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTFunction.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -34,12 +35,14 @@ void DistributedMergeTreeColumnValidateMatcher::visit(ASTCreateQuery & node, Dis
 
 void DistributedMergeTreeColumnValidateMatcher::visit(ASTColumnDeclaration & column, DistributedMergeTreeColumnValidateMatcher::Data & data)
 {
-    if (!column.name.compare("_time"))
+    if (!column.name.compare(RESERVED_EVENT_TIME))
     {
         auto * func = column.type->as<ASTFunction>();
         if (data.is_distributed_merge_tree && (!func || func->name.compare("DateTime64")))
         {
-            throw Exception("The type of _time column must be DateTime64 in DistributedMergeTree Engine", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                "The type of " + RESERVED_EVENT_TIME + " column must be DateTime64 in DistributedMergeTree Engine",
+                ErrorCodes::ILLEGAL_COLUMN);
         }
         else
         {

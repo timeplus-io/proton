@@ -7,6 +7,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
+#include <Common/ProtonCommon.h>
 
 #include <boost/algorithm/string/join.hpp>
 
@@ -50,12 +51,11 @@ std::map<String, std::map<String, String> > TableRestRouterHandler::update_schem
     }
 };
 
-std::map<String, String> TableRestRouterHandler::granularity_func_mapping = {
-    {"M", "toYYYYMM(`_time`)"},
-    {"D", "toYYYYMMDD(`_time`)"},
-    {"H", "toStartOfHour(`_time`)"},
-    {"m", "toStartOfMinute(`_time`)"}
-};
+std::map<String, String> TableRestRouterHandler::granularity_func_mapping
+    = {{"M", "toYYYYMM(`" + RESERVED_EVENT_TIME + "`)"},
+       {"D", "toYYYYMMDD(`" + RESERVED_EVENT_TIME + "`)"},
+       {"H", "toStartOfHour(`" + RESERVED_EVENT_TIME + "`)"},
+       {"m", "toStartOfMinute(`" + RESERVED_EVENT_TIME + "`)"}};
 
 bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
@@ -316,7 +316,7 @@ String TableRestRouterHandler::getStringValueFrom(const Poco::JSON::Object::Ptr 
 
 String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard) const
 {
-    const auto & time_col = getStringValueFrom(payload, "_time_column", "_time");
+    const auto & time_col = getStringValueFrom(payload, "_tp_event_time", RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
     create_segments.push_back("CREATE TABLE " + database + ".`" + payload->get("name").toString() + "`");
     create_segments.push_back("(");

@@ -5,6 +5,10 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/IStorage.h>
 
+/// proton: starts.
+#include <Common/ProtonCommon.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -113,6 +117,19 @@ static NamesAndTypesList getColumnsFromTableExpression(
     return names_and_type_list;
 }
 
+/// proton: starts.
+static void removeReservedColumns(NamesAndTypesList & columns)
+{
+    for (auto it = columns.begin(); it != columns.end();)
+    {
+        if (std::find(RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), it->name) != RESERVED_COLUMN_NAMES.end())
+            columns.erase(it++);
+        else
+            ++it;
+    }
+}
+/// proton: ends.
+
 TablesWithColumns getDatabaseAndTablesWithColumns(
         const ASTTableExprConstPtrs & table_expressions,
         ContextPtr context,
@@ -132,6 +149,11 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
             *table_expression, context, materialized, aliases, virtuals);
 
         removeDuplicateColumns(names_and_types);
+
+        /// proton: starts.
+        if (!context->getSettingsRef().show_reserved_columns)
+            removeReservedColumns(names_and_types);
+        /// proton: ends.
 
         tables_with_columns.emplace_back(
             DatabaseAndTableWithAlias(*table_expression, current_database), names_and_types);

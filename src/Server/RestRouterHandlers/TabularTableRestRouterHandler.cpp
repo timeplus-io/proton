@@ -2,10 +2,10 @@
 #include "ColumnDefinition.h"
 #include "SchemaValidator.h"
 
+#include <Common/ProtonCommon.h>
 #include <Interpreters/executeQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
-
 #include <boost/algorithm/string/join.hpp>
 
 #include <vector>
@@ -26,7 +26,7 @@ std::map<String, std::map<String, String> > TabularTableRestRouterHandler::creat
     },
     {"optional", {
                     {"shards", "int"},
-                    {"_time_column", "string"},
+                    {"_tp_event_time", "string"},
                     {"replication_factor", "int"},
                     {"order_by_expression", "string"},
                     {"order_by_granularity", "string"},
@@ -106,6 +106,14 @@ bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr &
         {
             return false;
         }
+
+        if (std::find(
+                RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), col.extract<Poco::JSON::Object::Ptr>()->get("name").toString())
+            != RESERVED_COLUMN_NAMES.end())
+        {
+            error_msg = "Column '" + col.extract<Poco::JSON::Object::Ptr>()->get("name").toString() + "' is reserved.";
+            return false;
+        }
     }
 
     return TableRestRouterHandler::validatePost(payload, error_msg);
@@ -131,31 +139,21 @@ String TabularTableRestRouterHandler::getOrderByExpr(
 String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Object::Ptr & payload) const
 {
     const auto & columns = payload->getArray("columns");
-    bool custom_time_column = false;
 
     std::vector<String> columns_definition;
     for (const auto & col : *columns)
     {
         columns_definition.push_back(getCreateColumnDefination(col.extract<Poco::JSON::Object::Ptr>()));
-
-        if (!col.extract<Poco::JSON::Object::Ptr>()->get("name").toString().compare("_time"))
-        {
-            custom_time_column = true;
-        }
     }
 
-    if(custom_time_column && payload->has("_time_column"))
+    if (payload->has("_tp_event_time"))
     {
-        throw Exception("There is a conflict between _time and _time_column, only one of them should be specified", ErrorCodes::BAD_REQUEST_PARAMETER);
+        columns_definition.push_back(
+            "`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT " + payload->get("_tp_event_time").toString());
     }
-
-    if (payload->has("_time_column"))
+    else
     {
-        columns_definition.push_back("`_time` DateTime64(3, UTC) DEFAULT " + payload->get("_time_column").toString());
-    }
-    else if (!custom_time_column)
-    {
-        columns_definition.push_back("`_time` DateTime64(3, UTC) DEFAULT now64(3)");
+        columns_definition.push_back("`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT now64(3)");
     }
 
     return boost::algorithm::join(columns_definition, ",");

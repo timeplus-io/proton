@@ -6,6 +6,7 @@
 #include <Formats/FormatFactory.h>
 #include <Formats/JSONEachRowUtils.h>
 #include <Processors/Formats/Impl/RawStoreInputFormat.h>
+#include <Common/ProtonCommon.h>
 
 #include <Poco/Dynamic/Var.h>
 #include <Poco/JSON/JSON.h>
@@ -79,21 +80,24 @@ RawStoreInputFormat::RawStoreInputFormat(
 
         const std::map<std::string, int> & grp_to_idx = time_extraction_regex->NamedCapturingGroups();
 
-        auto it = grp_to_idx.find("_time");
+        auto it = grp_to_idx.find(RESERVED_EVENT_TIME);
         if (it != grp_to_idx.end())
             time_group_idx = it->second;
         else
             throw Exception(
-                "No '_time' group defined in 'time_extraction_rule': " + time_extraction_rule, ErrorCodes::UNRECOGNIZED_ARGUMENTS);
+                "No '" + RESERVED_EVENT_TIME + "' group defined in 'time_extraction_rule': " + time_extraction_rule,
+                ErrorCodes::UNRECOGNIZED_ARGUMENTS);
     }
     else if (time_extraction_type == "json_path" && time_extraction_rule.empty())
         throw Exception("'time_extraction_rule' is empty", ErrorCodes::UNRECOGNIZED_ARGUMENTS);
 
     prev_positions.resize(num_columns);
     raw_col_idx = columnIndex("_raw", 0);
-    time_col_idx = columnIndex("_time", 0);
+    time_col_idx = columnIndex(RESERVED_EVENT_TIME, 0);
     if (raw_col_idx == UNKNOWN_FIELD || time_col_idx == UNKNOWN_FIELD)
-        throw Exception("It is suitable for RawStoreFormat, either '_raw' or '_time' is missing", ErrorCodes::UNRECOGNIZED_ARGUMENTS);
+        throw Exception(
+            "It is suitable for RawStoreFormat, either '_raw' or '" + RESERVED_EVENT_TIME + "' is missing",
+            ErrorCodes::UNRECOGNIZED_ARGUMENTS);
 }
 
 inline const String & RawStoreInputFormat::columnName(size_t i) const

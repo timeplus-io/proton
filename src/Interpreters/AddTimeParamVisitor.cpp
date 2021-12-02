@@ -12,6 +12,7 @@
 #include <Parsers/IAST.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
+#include <Common/ProtonCommon.h>
 
 
 namespace DB
@@ -36,7 +37,7 @@ bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, ContextPtr & context
 
     auto metadata = table->getInMemoryMetadataPtr();
     const auto & col_desc = metadata->getColumns();
-    return col_desc.has("_time") && col_desc.get("_time").type->getTypeId() == TypeIndex::DateTime64;
+    return col_desc.has(RESERVED_EVENT_TIME) && col_desc.get(RESERVED_EVENT_TIME).type->getTypeId() == TypeIndex::DateTime64;
 }
 
 void AddTimeVisitorMatcher::visitSelectQuery(ASTPtr & ast, ContextPtr & context)
