@@ -316,7 +316,7 @@ String TableRestRouterHandler::getStringValueFrom(const Poco::JSON::Object::Ptr 
 
 String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard) const
 {
-    const auto & time_col = getStringValueFrom(payload, "_tp_event_time", RESERVED_EVENT_TIME);
+    const auto & time_col = getStringValueFrom(payload, RESERVED_EVENT_TIME_API_NAME, RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
     create_segments.push_back("CREATE TABLE " + database + ".`" + payload->get("name").toString() + "`");
     create_segments.push_back("(");

@@ -123,7 +123,7 @@ static void removeReservedColumns(NamesAndTypesList & columns)
     for (auto it = columns.begin(); it != columns.end();)
     {
         if (std::find(RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), it->name) != RESERVED_COLUMN_NAMES.end())
-            columns.erase(it++);
+            it = columns.erase(it);
         else
             ++it;
     }
@@ -151,7 +151,7 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
         removeDuplicateColumns(names_and_types);
 
         /// proton: starts.
-        if (!context->getSettingsRef().show_reserved_columns)
+        if (!context->getSettingsRef().asterisk_include_reserved_columns)
             removeReservedColumns(names_and_types);
         /// proton: ends.
 

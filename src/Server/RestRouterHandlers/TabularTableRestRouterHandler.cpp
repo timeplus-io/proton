@@ -26,7 +26,7 @@ std::map<String, std::map<String, String> > TabularTableRestRouterHandler::creat
     },
     {"optional", {
                     {"shards", "int"},
-                    {"_tp_event_time", "string"},
+                    {RESERVED_EVENT_TIME_API_NAME, "string"},
                     {"replication_factor", "int"},
                     {"order_by_expression", "string"},
                     {"order_by_granularity", "string"},
@@ -102,8 +102,17 @@ bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr &
     Poco::JSON::Array::Ptr columns = payload->getArray("columns");
     for (const auto & col : *columns)
     {
-        if (!validateSchema(column_schema, col.extract<Poco::JSON::Object::Ptr>(), error_msg))
+        const auto col_ptr = col.extract<Poco::JSON::Object::Ptr>();
+        if (!validateSchema(column_schema, col_ptr, error_msg))
         {
+            return false;
+        }
+
+        if (std::find(
+                RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), col_ptr->get("name").toString())
+            != RESERVED_COLUMN_NAMES.end())
+        {
+            error_msg = "Column '" + col_ptr->get("name").toString() + "' is reserved.";
             return false;
         }
 
@@ -146,10 +155,10 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
         columns_definition.push_back(getCreateColumnDefination(col.extract<Poco::JSON::Object::Ptr>()));
     }
 
-    if (payload->has("_tp_event_time"))
+    if (payload->has(RESERVED_EVENT_TIME_API_NAME))
     {
         columns_definition.push_back(
-            "`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT " + payload->get("_tp_event_time").toString());
+            "`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT " + payload->get(RESERVED_EVENT_TIME_API_NAME).toString());
     }
     else
     {

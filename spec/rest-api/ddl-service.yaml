@@ -695,9 +695,9 @@ components:
           type: integer
           default: 1
           description: Number of replicas of per shard.
-        _time_column:
+        event_time_column:
           type: string
-          description: Which column shall be used for internal time partitioning in proton. Default is now() if it is not sepcified.
+          description: Which column shall be used for internal time partitioning in proton. Default is now64(3, 'UTC') if it is not sepcified.
         order_by_expression:
           type: string
           description: The first order by column is specified with order_by_granularity. It will append other expressions if it is specified.

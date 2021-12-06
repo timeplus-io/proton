@@ -559,7 +559,7 @@ class IColumn;
     M(Bool, allow_experimental_nlp_functions, false, "Enable experimental functions for natural language processing.", 0) \
     M(String, insert_deduplication_token, "", "If not empty, used for duplicate detection instead of data digest", 0) \
     /* proton: starts. */ \
-    M(Bool, show_reserved_columns, false, "Show reserved columns on SELECT query.", 0) \
+    M(Bool, asterisk_include_reserved_columns, false, "Show reserved columns on SELECT query.", 0) \
     /* proton: ends. */ \
 
 // End of COMMON_SETTINGS
