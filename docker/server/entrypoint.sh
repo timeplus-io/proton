@@ -176,6 +176,25 @@ if [ -n "$STREAM_STORAGE_BROKERS" ]; then
     fi
 fi
 
+# Produce latency
+if [ -n "$STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS" ]; then
+    # Replace `queue_buffering_max_ms: 50` in config.yaml with customized one
+    sed -i"" "s/queue_buffering_max_ms: 50/queue_buffering_max_ms: $STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup queue_buffering_max_ms for stream storage.'
+        exit 1
+    fi
+fi
+
+if [ -n "$STREAM_STORAGE_FETCH_WAIT_MAX_MS" ]; then
+    # Replace `fetch_wait_max_ms: 500` in config.yaml with customized one
+    sed -i"" "s/fetch_wait_max_ms: 500/fetch_wait_max_ms: $STREAM_STORAGE_FETCH_WAIT_MAX_MS/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup fetch_wait_max_ms for stream storage.'
+        exit 1
+    fi
+fi
+
 # if no args passed to `docker run` or first argument start with `--`, then the user is passing proton-server arguments
 if [[ $# -lt 1 ]] || [[ "$1" == "--"* ]]; then
     # Watchdog is launched by default, but does not send SIGINT to the main process,

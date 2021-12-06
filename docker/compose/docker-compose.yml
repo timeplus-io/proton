@@ -17,6 +17,8 @@ services:
     # to discover stream store
     environment:
       - STREAM_STORAGE_BROKERS=stream-store:9092
+      - STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS=50 # Control producer latency
+      - STREAM_STORAGE_FETCH_WAIT_MAX_MS=500 # Control consumer latency
     command: >
       /bin/bash -c "sleep 2; /entrypoint.sh"
     depends_on:

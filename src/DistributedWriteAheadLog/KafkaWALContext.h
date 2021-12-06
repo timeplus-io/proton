@@ -9,8 +9,8 @@ struct rd_kafka_topic_s;
 
 namespace DWAL
 {
-/// KafkaWALContext is not thread safe, so each produce/consume thread
-/// shall maintain its own context instance
+/// KafkaWALContext is per designed per topic and is not thread safe, so each produce/consume thread
+/// shall maintain its own context instance.
 struct KafkaWALContext
 {
     std::string topic;

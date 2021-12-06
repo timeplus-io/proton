@@ -764,6 +764,7 @@ KafkaWALClusterPtr KafkaWAL::cluster(const KafkaWALContext & ctx) const
     return result;
 }
 
+/// https://cwiki.apache.org/confluence/display/KAFKA/KIP-33+-+Add+a+time+based+log+index
 std::vector<int64_t> KafkaWAL::offsetsForTimestamps(const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms) const
 {
     using RdKafkaTopicPartitionListPtr = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;

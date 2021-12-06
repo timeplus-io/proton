@@ -15,7 +15,7 @@ namespace DWAL
 /// KafkaWALConsumerMultiplexer has a dedicated thread consuming a list of topic partitions
 /// in a dedicated consumer group by using high level KafkaWALConsumer. It then routes
 /// the records to different targets by calling the corresponding callbacks.
-/// It is multithread safe.
+/// It is multi-thread safe.
 /// KafkaWALConsumerMultiplexer is usually pooled and long lasting as the whole program
 class KafkaWALConsumerMultiplexer final : private boost::noncopyable
 {
@@ -63,14 +63,14 @@ public:
     /// Register a callback for a partition of a topic at specific offset.
     /// Once registered, the callback will be invoked asynchronously in a background thread when there
     /// is new data available, so make sure the callback handles thread safety correctly.
-    /// Please note if this function is called against same topic but with different partitions serveral
+    /// Please note if this function is called against same topic but with different partitions several
     /// times, the late call will override the `callback `/ `data` of previous call.
     /// The returned Result contains a weak_ptr of CallbackContext which is used to check
     /// if the registered `callback` will be used any longer. The caller usually can do
     /// the following steps to make sure a graceful shutdown:
     /// 1. Caller calls addSubscription. If success, keep the weak_ptr around
     /// 2. During shutdown, caller calls removeSubscription. The CallbackContextPtr is
-    /// removed from the internal data structure of mulitplexer and its reference count
+    /// removed from the internal data structure of multiplexer and its reference count
     /// will be decremented by 1. In normal case, the reference count will drop to 0 and the
     /// CallbackContext get dtored in removeSubscription. However there is another case
     /// in which the CallbackContextPtr is copied out of the internal data structure
@@ -78,10 +78,10 @@ public:
     /// holding the internal lock, which is designed in this way on purpose to avoid
     /// arbitrary long time lock over a callback). In the late case, multiplexer is still
     /// referencing the callback / data, so it is probably not safe for the caller to
-    /// dtor itself, the callback and the data. When the callback is finished in multipexer
+    /// dtor itself, the callback and the data. When the callback is finished in multiplexer
     /// the reference count to the CallbackContext will further get decremented and will drop
     /// to zero. So caller needs poll the weak_ptr to make sure nobody
-    /// (in this case the multipler) is referencing the `callback`, and then do a shutdown and
+    /// (in this case the multiplexer) is referencing the `callback`, and then do a shutdown and
     /// dtor.
     /// Essentially the lifetimes of `callback and data` parameters are maintained
     /// by the caller but referenced by multiplexer (in a different background thread);
@@ -101,7 +101,7 @@ private:
     void backgroundPoll();
     void handleResult(ConsumeResult result) const;
 
-    /// `flush` calls callbacks perioridically with empty records
+    /// `flush` calls callbacks periodically with empty records
     /// callbacks can use this as a signal to flush outstanding offset
     /// to checkpoint
     void flush() const;

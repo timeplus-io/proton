@@ -1041,19 +1041,21 @@ cluster_settings:
         replication_factor: 1
         data_retention: 24
 
-    # Node idenity shall be unique in proton cluster
+    # Node identity shall be unique in proton cluster
     # When leave it empty, the system will the nodes FQDN and tcp port to
     # generate one
     node_identity: localhost:8123
 
     # Roles that the current node has
-    # For now, only a single node can have
-    # placement, ddl and task role
+    # Every node must have catalog role.
+    # For now, only a single node can have placement, ddl and task role and these 3 roles
+    # shall coexist on the same node
     node_roles:
-        role: placement
-        role: catalog
-        role: ddl
-        role: task
+        role:
+            - placement
+            - catalog
+            - ddl
+            - task
 
     schedule_intervals:
         node_metrics: 5000
