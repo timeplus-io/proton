@@ -502,6 +502,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             else
                 query_end = end;
 
+            /// proton: starts
+            if (context->getIngestTime() <= 0)
+                context->setIngestTime(UTCMilliseconds::now());
+            /// proton: ends
+
             insert_query->tail = istr;
         }
         else
@@ -747,7 +752,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 /// proton: starts
 >>>>>>> more cleanup (#4)
                 /// Setup poll ID for ingestion status querying
-                if (context->getIngestMode() == "async" || context->getIngestMode().empty())
+                if (context->getIngestMode() == IngestMode::ASYNC || context->getIngestMode() == IngestMode::None)
                 {
                     context->getQueryContext()->setupQueryStatusPollId();
                 }

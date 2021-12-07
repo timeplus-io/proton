@@ -6,14 +6,55 @@
 namespace DB
 {
 
+struct ChunkContext
+{
+    static constexpr UInt64 WATERMARK_FLAG = 0x1;
+    static constexpr UInt64 INGEST_TIME_FLAG = 0x2;
+
+    /// A pair of Int64, flags represent what they mean
+    Int64 ts_1 = 0;
+    Int64 ts_2 = 0;
+    UInt64 flags = 0;
+
+    ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
+    ALWAYS_INLINE void setWatermark(Int64 watermark, Int64 watermark_lower_bound)
+    {
+        if (watermark != 0)
+        {
+            flags |= WATERMARK_FLAG;
+            ts_1 = watermark;
+            ts_2 = watermark_lower_bound;
+        }
+    }
+
+    ALWAYS_INLINE void getWatermark(Int64 & watermark, Int64 & watermark_lower_bound) const
+    {
+        assert(hasWatermark());
+
+        watermark = ts_1;
+        watermark_lower_bound = ts_2;
+    }
+
+    ALWAYS_INLINE bool hasIngestTime() const { return flags & INGEST_TIME_FLAG; }
+    ALWAYS_INLINE void setIngestTime(Int64 ingest_time)
+    {
+        if (ingest_time > 0)
+        {
+            flags |= INGEST_TIME_FLAG;
+            ts_1 = ingest_time;
+        }
+    }
+
+    ALWAYS_INLINE Int64 getIngestTime() const { assert(hasIngestTime()); return ts_1; }
+};
+
 class ChunkInfo
 {
 public:
     virtual ~ChunkInfo() = default;
     ChunkInfo() = default;
 
-    Int64 watermark = 0;
-    Int64 watermark_lower_bound = 0;
+    ChunkContext ctx;
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;

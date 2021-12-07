@@ -102,7 +102,7 @@ void ISimpleTransform::work()
     /// the output.header is empty. So we need explicitly check watermark chunk info here to propagate empty chunk
     /// with watermark
     const auto & chunk_info = output_data.chunk.getChunkInfo();
-    if (!skip_empty_chunks || output_data.chunk || (chunk_info && chunk_info->watermark != 0))
+    if (!skip_empty_chunks || output_data.chunk || (chunk_info && chunk_info->ctx.hasWatermark()))
         has_output = true;
     /// proton: ends
 

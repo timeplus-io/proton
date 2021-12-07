@@ -27,6 +27,8 @@
 #include <Storages/StorageMergeTree.h>
 #include <base/logger_useful.h>
 #include <Common/randomSeed.h>
+#include <Common/ProtonCommon.h>
+#include <Common/timeScale.h>
 
 
 namespace DB
@@ -272,6 +274,10 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
         sharding_key_expr = buildShardingKeyExpression(sharding_key_, getContext(), metadata_.getColumns().getAllPhysical(), false);
         sharding_key_is_deterministic = isExpressionActionsDeterministics(sharding_key_expr);
         sharding_key_column_name = sharding_key_->getColumnName();
+
+        if (auto shard_func = sharding_key_->as<ASTFunction>())
+            if (shard_func->name == "rand" || shard_func->name == "RAND")
+                rand_sharding_key = true;
     }
 }
 
@@ -1193,6 +1199,11 @@ void StorageDistributedMergeTree::doCommit(
                 merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
 
                 merge_tree_sink->onStart();
+
+                /// Reset index time here
+                auto * index_time_col = const_cast<ColumnWithTypeAndName *>(moved_block.findByName(RESERVED_INDEX_TIME));
+                index_time_col->column = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
+
                 merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                 break;
             }
@@ -1554,7 +1565,7 @@ void StorageDistributedMergeTree::initWal()
 
     shard = ssettings->shard.value;
 
-    default_ingest_mode = ssettings->distributed_ingest_mode.value;
+    default_ingest_mode = toIngestMode(ssettings->distributed_ingest_mode.value);
 
     dwal = DWAL::KafkaWALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
 

@@ -78,8 +78,7 @@ Chunk MergingAggregatedTransform::generate()
     info->is_overflows = block.info.is_overflows;
 
     /// proton: starts
-    info->watermark = block.info.watermark;
-    info->watermark_lower_bound = block.info.watermark_lower_bound;
+    info->ctx.setWatermark(block.info.watermark, block.info.watermark_lower_bound);
     /// proton: ends
 
     UInt64 num_rows = block.rows();

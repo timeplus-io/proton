@@ -169,7 +169,7 @@ void FilterTransform::transform(Chunk & chunk)
     {
         /// If watermark is not empty, still keep the column header in chunk to avoid emptiness
         auto chunk_info = chunk.getChunkInfo();
-        if (chunk_info && chunk_info->watermark != 0)
+        if (chunk_info && chunk_info->ctx.hasWatermark())
             chunk.setColumns(output.getHeader().getColumns(), 0);
 
         /// SimpleTransform will skip it.

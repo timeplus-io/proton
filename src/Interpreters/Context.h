@@ -27,6 +27,10 @@
 #include <optional>
 #include <exception>
 
+/// proton: starts
+#include <Storages/DistributedMergeTree/IngestMode.h>
+/// proton: ends
+
 
 namespace Poco::Net { class IPAddress; }
 namespace zkutil { class ZooKeeper; }
@@ -238,8 +242,9 @@ private:
     String channel_id;
     String query_status_poll_id;
     String idempotent_key;
-    String ingest_mode;
     String config_path;
+    IngestMode ingest_mode = IngestMode::None;
+    Int64 ingest_time = 0;
     bool distributed_ddl_operation = false;
     /// proton: ends
 
@@ -564,7 +569,8 @@ public:
     String getChannel() const { return channel_id; }
     String getConfigPath() const { return config_path; }
     const String & getIdempotentKey() const { return idempotent_key; }
-    const String & getIngestMode() const { return ingest_mode; }
+    IngestMode getIngestMode() const { return ingest_mode; }
+    Int64 getIngestTime() const { return ingest_time; }
     /// If proton is a distributed deployment
     bool isDistributedEnv() const;
     bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
@@ -579,11 +585,13 @@ public:
     /// exists because it should be set before databases loading.
     void setCurrentDatabaseNameInGlobalContext(const String & name);
     void setCurrentQueryId(const String & query_id);
+
     /// proton: starts
     void setupNodeIdentity();
     void setupQueryStatusPollId();
     void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
-    void setIngestMode(const String & ingest_mode_) { ingest_mode = ingest_mode_; }
+    void setIngestMode(IngestMode ingest_mode_) { ingest_mode = ingest_mode_; }
+    void setIngestTime(Int64 ingest_time_) { ingest_time = ingest_time_; }
     void setConfigPath(const String & config_path_) { config_path = config_path_; }
     /// Kinda hacky
     void setDistributedDDLOperation(bool distributed) { distributed_ddl_operation = distributed; }

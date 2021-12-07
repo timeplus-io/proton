@@ -274,11 +274,12 @@ private:
     Int32 shards;
     String topic;
     ExpressionActionsPtr sharding_key_expr;
+    bool rand_sharding_key = false;
 
     /// Current shard. DWAL partition and table shard is 1:1 mapped
     Int32 shard = -1;
 
-    String default_ingest_mode;
+    IngestMode default_ingest_mode;
 
     /// For sharding
     bool sharding_key_is_deterministic = false;

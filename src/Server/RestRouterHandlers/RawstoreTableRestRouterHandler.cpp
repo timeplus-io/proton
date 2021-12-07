@@ -85,8 +85,8 @@ String RawstoreTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Ob
 {
     std::vector<String> columns_definition;
     columns_definition.push_back("`_raw` String");
-    columns_definition.push_back("`_time` DateTime64(3) DEFAULT now64(3) CODEC (DoubleDelta, LZ4)");
-    columns_definition.push_back("`_index_time` DateTime64(3) DEFAULT now64(3) CODEC (DoubleDelta, LZ4)");
+    columns_definition.push_back("`_time` DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)");
+    columns_definition.push_back("`_index_time` DateTime64(3, 'UTC') DEFAULT 0 CODEC (DoubleDelta, LZ4)");
     columns_definition.push_back("`sourcetype` LowCardinality(String)");
     columns_definition.push_back("`source` String");
     columns_definition.push_back("`host` String");

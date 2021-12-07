@@ -171,7 +171,7 @@ void KafkaWALPool::init(const std::string & key)
             else if (type == "Int32")
             {
                 auto i = config.getInt(k);
-                if (i <= 0)
+                if (i < 0)
                 {
                     throw DB::Exception("Invalid setting " + std::get<0>(t), DB::ErrorCodes::BAD_ARGUMENTS);
                 }

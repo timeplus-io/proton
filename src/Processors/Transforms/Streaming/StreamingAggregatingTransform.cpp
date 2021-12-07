@@ -644,7 +644,7 @@ void StreamingAggregatingTransform::initGenerate()
 bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 {
     const auto & chunk_info = chunk.getChunkInfo();
-    if (chunk_info && chunk_info->watermark != 0)
+    if (chunk_info && chunk_info->ctx.hasWatermark() != 0)
     {
         return true;
     }
@@ -656,8 +656,7 @@ bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 /// Only for streaming aggregation case
 void StreamingAggregatingTransform::finalize(const ChunkInfo & chunk_info)
 {
-    watermark_bound.watermark = chunk_info.watermark;
-    watermark_bound.watermark_lower_bound = chunk_info.watermark_lower_bound;
+    chunk_info.ctx.getWatermark(watermark_bound.watermark, watermark_bound.watermark_lower_bound);
 
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {

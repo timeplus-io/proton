@@ -9,17 +9,19 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int TIMEOUT_EXCEEDED;
-    extern const int OK;
     extern const int UNSUPPORTED_PARAMETER;
+    extern const int OK;
 }
 
 DistributedMergeTreeSink::DistributedMergeTreeSink(
     StorageDistributedMergeTree & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
-    : SinkToStorage(metadata_snapshot_->getSampleBlock()), storage(storage_), metadata_snapshot(metadata_snapshot_), query_context(query_context_)
+    : SinkToStorage(metadata_snapshot_->getSampleBlock())
+    , storage(storage_)
+    , metadata_snapshot(metadata_snapshot_)
+    , query_context(query_context_)
 {
 }
 
@@ -60,13 +62,8 @@ BlocksWithShard DistributedMergeTreeSink::shardBlock(const Block & block) const
     size_t shard = 0;
     if (storage.shards > 1)
     {
-        if (storage.sharding_key_expr)
+        if (storage.sharding_key_expr && !storage.rand_sharding_key)
         {
-            /// FIXME, if sharding key is `rand`, then we don't need shard block
-            /// since we can randomly pick one shard to ingest this block. This is
-            /// especially true when there are N shards and the block has only M rows
-            /// where N > M in which case each shard will be assigned at most 1 row
-            /// which is not good.
             return doShardBlock(block);
         }
         else
@@ -79,17 +76,16 @@ BlocksWithShard DistributedMergeTreeSink::shardBlock(const Block & block) const
     return {BlockWithShard{Block(block), shard}};
 }
 
-inline String DistributedMergeTreeSink::getIngestMode() const
+inline IngestMode DistributedMergeTreeSink::getIngestMode() const
 {
     auto ingest_mode = query_context->getIngestMode();
-
-    if (!ingest_mode.empty())
+    if (ingest_mode != IngestMode::None && ingest_mode != IngestMode::INVALID)
         return ingest_mode;
 
-    if (!storage.default_ingest_mode.empty())
+    if (storage.default_ingest_mode != IngestMode::None && ingest_mode != IngestMode::INVALID)
         return storage.default_ingest_mode;
 
-    return "async";
+    return IngestMode::ASYNC;
 }
 
 void DistributedMergeTreeSink::consume(Chunk chunk)
@@ -110,76 +106,91 @@ void DistributedMergeTreeSink::consume(Chunk chunk)
 
     /// 2) Commit each sharded block to corresponding Kafka partition
     /// we failed the whole insert whenever single block failed
+    const auto & idem_key = query_context->getIdempotentKey();
+    const auto ingest_time = query_context->getIngestTime();
     for (auto & current_block : blocks)
     {
         DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(current_block.block)};
         record.partition_key = current_block.shard;
-        if (!query_context->getIdempotentKey().empty())
-        {
-            record.setIdempotentKey(query_context->getIdempotentKey());
-        }
+        if (!idem_key.empty())
+            record.setIdempotentKey(idem_key);
 
-        if (ingest_mode == "async")
+        if (ingest_time > 0)
+            record.setIngestTime(ingest_time);
+
+        switch (ingest_mode)
         {
-            LOG_TRACE(storage.log,
+            case IngestMode::ASYNC:
+            {
+                LOG_TRACE(
+                    storage.log,
                     "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
-                    outstanding, record.block.rows(), current_block.shard, query_context->getQueryStatusPollId());
-            auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
-            auto ret = storage.dwal->append(
-                record,
-                &StorageDistributedMergeTree::writeCallback,
-                callback_data.get(),
-                storage.dwal_append_ctx);
-            if (ret == ErrorCodes::OK)
-            {
-                /// The writeCallback takes over the ownership of callback data
-                callback_data.release();
+                    outstanding,
+                    record.block.rows(),
+                    current_block.shard,
+                    query_context->getQueryStatusPollId());
+                auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
+                auto ret = storage.dwal->append(
+                    record, &StorageDistributedMergeTree::writeCallback, callback_data.get(), storage.dwal_append_ctx);
+                if (ret == ErrorCodes::OK)
+                {
+                    /// The writeCallback takes over the ownership of callback data
+                    callback_data.release();
+                }
+                else
+                {
+                    throw Exception("Failed to insert data async", ret);
+                }
+                break;
             }
-            else
+            case IngestMode::SYNC:
             {
-                throw Exception("Failed to insert data async", ret);
-            }
-        }
-        else if (ingest_mode == "sync")
-        {
-            LOG_TRACE(storage.log,
+                LOG_TRACE(
+                    storage.log,
                     "[sync] write a block={} rows={} shard={} committed={} ...",
-                    outstanding, record.block.rows(), current_block.shard, committed);
-            auto ret = storage.dwal->append(record, &DistributedMergeTreeSink::writeCallback, this, storage.dwal_append_ctx);
-            if (ret != 0)
-            {
-                throw Exception("Failed to insert data sync", ret);
+                    outstanding,
+                    record.block.rows(),
+                    current_block.shard,
+                    committed);
+                auto ret = storage.dwal->append(record, &DistributedMergeTreeSink::writeCallback, this, storage.dwal_append_ctx);
+                if (ret != 0)
+                {
+                    throw Exception("Failed to insert data sync", ret);
+                }
+                break;
             }
-        }
-        else if (ingest_mode == "fire_and_forget")
-        {
-            LOG_TRACE(storage.log,
+            case IngestMode::FIRE_AND_FORGET:
+            {
+                LOG_TRACE(
+                    storage.log,
                     "[fire_and_forget] write a block={} rows={} shard={} ...",
-                    outstanding, record.block.rows(), current_block.shard);
-            auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
-            if (ret != 0)
-            {
-                throw Exception("Failed to insert data fire_and_forget", ret);
+                    outstanding,
+                    record.block.rows(),
+                    current_block.shard);
+                auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
+                if (ret != 0)
+                {
+                    throw Exception("Failed to insert data fire_and_forget", ret);
+                }
+                break;
             }
-        }
-        else if (ingest_mode == "ordered")
-        {
-            /// ordered
-            LOG_TRACE(storage.log,
-                    "[ordered] write a block={} rows={} shard={} ...",
-                    outstanding, record.block.rows(), current_block.shard);
-            auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
-            if (ret.err != ErrorCodes::OK)
+            case IngestMode::ORDERED:
             {
-                throw Exception("Failed to insert data ordered", ret.err);
+                LOG_TRACE(
+                    storage.log, "[ordered] write a block={} rows={} shard={} ...", outstanding, record.block.rows(), current_block.shard);
+                auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
+                if (ret.err != ErrorCodes::OK)
+                {
+                    throw Exception("Failed to insert data ordered", ret.err);
+                }
+                LOG_TRACE(
+                    storage.log, "[ordered] write a block={} rows={} shard={} done", outstanding, record.block.rows(), current_block.shard);
+                break;
             }
-            LOG_TRACE(storage.log,
-                    "[ordered] write a block={} rows={} shard={} done",
-                    outstanding, record.block.rows(), current_block.shard);
-        }
-        else
-        {
-            throw Exception("Failed to insert data, non-support ingest mode: " + ingest_mode, ErrorCodes::UNSUPPORTED_PARAMETER);
+            case IngestMode::None:
+                /// FALLTHROUGH
+            case IngestMode::INVALID:
+                throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
         }
         outstanding += 1;
     }
@@ -206,7 +217,7 @@ void DistributedMergeTreeSink::onFinish()
     /// We need wait for all outstanding ingesting block committed
     /// before dtor itself. Otherwise the if the registered callback is invoked
     /// after dtor, crash will happen
-    if (query_context->getIngestMode() != "sync")
+    if (query_context->getIngestMode() != IngestMode::SYNC)
     {
         return;
     }

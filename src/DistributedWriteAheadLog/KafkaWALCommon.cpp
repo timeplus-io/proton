@@ -188,6 +188,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
 
     record->sn = msg->offset;
     record->partition_key = msg->partition;
+    record->block.info.enqueue_time = rd_kafka_message_timestamp(msg, nullptr);
 
     if (copy_topic)
     {
@@ -207,7 +208,11 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
 
             if (rd_kafka_header_get_all(hdrs, i, &name, &value, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
             {
-                record->headers.emplace(name, std::string{static_cast<const char *>(value), size});
+                std::string v{static_cast<const char *>(value), size};
+                if (v == Record::INGEST_TIME_KEY)
+                    record->block.info.ingest_time = std::stoll(v);
+                else
+                    record->headers.emplace(name, std::move(v));
             }
         }
     }

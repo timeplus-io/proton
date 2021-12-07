@@ -157,13 +157,16 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
 
     if (payload->has(RESERVED_EVENT_TIME_API_NAME))
     {
+        /// FIXME: validate the result type of RESERVED_EVENT_TIME_API_NAME expression
         columns_definition.push_back(
             "`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT " + payload->get(RESERVED_EVENT_TIME_API_NAME).toString());
     }
     else
     {
-        columns_definition.push_back("`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT now64(3)");
+        columns_definition.push_back("`" + RESERVED_EVENT_TIME + "` DateTime64(3, UTC) DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)");
     }
+    /// RESERVED_INDEX_TIME will need recalculate when the block gets indexed to historical store
+    columns_definition.push_back("`" + RESERVED_INDEX_TIME + "` DateTime64(3, UTC) DEFAULT 0 CODEC (DoubleDelta, LZ4)");
 
     return boost::algorithm::join(columns_definition, ",");
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "IngestMode.h"
+
 #include <Processors/Sinks/SinkToStorage.h>
 #include <DistributedWriteAheadLog/Results.h>
 #include <Storages/StorageInMemoryMetadata.h>
@@ -35,7 +37,7 @@ public:
 private:
     BlocksWithShard shardBlock(const Block & block) const;
     BlocksWithShard doShardBlock(const Block & block) const;
-    String getIngestMode() const;
+    IngestMode getIngestMode() const;
 
 private:
     void writeCallback(const DWAL::AppendResult & result);

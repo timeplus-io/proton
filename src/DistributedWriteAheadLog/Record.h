@@ -16,7 +16,11 @@ using RecordSN = int64_t;
 
 struct Record
 {
-    inline const static std::string IDEMPOTENT_KEY = "_idem";
+    /// We like to make the keys as short as possible
+    /// since they are bound to each batch
+    inline const static std::string IDEMPOTENT_KEY = "_id";
+    inline const static std::string INGEST_TIME_KEY = "_it";
+
     constexpr static uint8_t VERSION = 1;
 
     /// Fields on the wire
@@ -36,9 +40,11 @@ struct Record
 
     bool empty() const { return block.rows() == 0; }
 
-    bool hasIdempotentKey() const { return headers.contains(IDEMPOTENT_KEY) && !headers.at(IDEMPOTENT_KEY).empty(); }
+    bool hasIdempotentKey() const { return headers.contains(IDEMPOTENT_KEY); }
     std::string & idempotentKey() { return headers.at(IDEMPOTENT_KEY); }
     void setIdempotentKey(const std::string & key) { headers[IDEMPOTENT_KEY] = key; }
+
+    void setIngestTime(int64_t ingest_time) { headers[INGEST_TIME_KEY] = std::to_string(ingest_time); }
 
     static uint8_t ALWAYS_INLINE version(uint64_t flags) { return flags & 0x1F; }
 

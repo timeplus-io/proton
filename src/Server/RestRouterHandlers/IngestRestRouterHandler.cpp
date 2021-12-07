@@ -26,16 +26,20 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     if (hasQueryParameter("mode"))
     {
         const auto & mode = getQueryParameter("mode");
-        if (mode.empty()
-            || mode == "async"
-            || mode == "sync"
-            || mode == "fire_and_forget"
-            || mode == "ordered")
-            /// only support ingest mode as above.
-            query_context->setIngestMode(mode);
+        auto ingest_mode = toIngestMode(mode);
+        if (ingest_mode != IngestMode::INVALID)
+            query_context->setIngestMode(ingest_mode);
         else
             return {jsonErrorResponse("No support ingest mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
+
+    if (hasQueryParameter("ingest_time"))
+    {
+        auto ingest_time = std::stoll(getQueryParameter("ingest_time"));
+        query_context->setIngestTime(ingest_time);
+    }
+    else
+        query_context->setIngestTime(UTCMilliseconds::now());
 
     query_context->setSetting("output_format_parallel_formatting", false);
     query_context->setSetting("date_time_input_format", String{"best_effort"});

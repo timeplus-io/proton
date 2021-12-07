@@ -31,8 +31,7 @@ void WatermarkTransform::transform(Chunk & chunk)
             chunk.setChunkInfo(std::make_shared<ChunkInfo>());
             chunk_info = chunk.getChunkInfo();
         }
-        const_cast<ChunkInfo *>(chunk_info.get())->watermark = block.info.watermark;
-        const_cast<ChunkInfo *>(chunk_info.get())->watermark_lower_bound = block.info.watermark_lower_bound;
+        const_cast<ChunkInfo *>(chunk_info.get())->ctx.setWatermark(block.info.watermark, block.info.watermark_lower_bound);
     }
 }
 
