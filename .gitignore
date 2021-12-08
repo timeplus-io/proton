@@ -154,3 +154,5 @@ website/package-lock.json
 /programs/server/metadata
 /programs/server/store
 
+/src/meta/
+/src/meta1/

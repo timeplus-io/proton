@@ -379,30 +379,39 @@ public:
         return res;
     }
 
+    /// Return {removed, last_removed_watermark, remaining_size}
     template <typename MappedDestroyFunc>
-    std::pair<size_t, size_t> removeBucketsBeforeButKeep(UInt64 watermark, size_t num_bucket_to_keep, MappedDestroyFunc && mapped_destroy)
+    std::tuple<size_t, size_t, size_t> removeBucketsBeforeButKeep(UInt64 watermark, size_t num_bucket_to_keep, MappedDestroyFunc && mapped_destroy)
     {
-        if (num_bucket_to_keep >= impls.size())
-            return {0, impls.size()};
+        auto total = impls.size();
+        if (num_bucket_to_keep >= total)
+            return {0, 0, total};
 
+        /// Calculate number of outstanding windows
+        size_t outstanding = 0;
+        for (auto it = impls.rbegin(), it_end = impls.rend(); it != it_end; ++it)
+            if (it->first > watermark)
+                ++outstanding;
+
+        if (total - outstanding <= num_bucket_to_keep)
+            return {0, 0, total};
+
+        UInt64 last_removed_watermark = 0;
         size_t removed = 0;
-        for (auto it = impls.begin(), it_end = impls.end(); it != it_end;)
+        for (auto it = impls.begin(); removed < total - outstanding - num_bucket_to_keep;)
         {
-            if (it->first <= watermark)
-            {
-                it->second.forEachMapped(mapped_destroy);
-                it->second.clearAndShrink();
-                it = impls.erase(it);
-                ++removed;
+            assert (it->first <= watermark);
 
-                if (impls.size() == num_bucket_to_keep)
-                    break;
-            }
-            else
-                break;
+            it->second.forEachMapped(mapped_destroy);
+            it->second.clearAndShrink();
+
+            last_removed_watermark = it->first;
+            ++removed;
+
+            it = impls.erase(it);
         }
 
-        return {removed, impls.size()};
+        return {removed, last_removed_watermark, total - removed};
     }
 
     std::vector<size_t> bucketsBefore(UInt64 watermark)

@@ -2993,10 +2993,10 @@ void StreamingAggregator::setupAggregatesPoolTimestamps(UInt64 num_rows, const C
     result.aggregates_pool->setCurrentTimestamps(window_lower_bound, window_upper_bound);
 }
 
-std::pair<size_t, size_t> StreamingAggregator::removeBucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
+void StreamingAggregator::removeBucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
 {
     if (watermark <= 0)
-        return {0, 0};
+        return;
 
     auto destroy = [&](AggregateDataPtr & data)
     {
@@ -3012,12 +3012,15 @@ std::pair<size_t, size_t> StreamingAggregator::removeBucketsBefore(StreamingAggr
     if (params.group_by == Params::GroupBy::WINDOW_START)
         watermark = watermark_lower_bound;
 
-    std::pair<Int64, Int64> res;
+    size_t removed = 0;
+    UInt64 last_removed_watermark = 0;
+    size_t remaining = 0;
 
     switch (result.type)
     {
 #define M(NAME, IS_TWO_LEVEL) \
-            case StreamingAggregatedDataVariants::Type::NAME: res = result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
+            case StreamingAggregatedDataVariants::Type::NAME: \
+                std::tie(removed, last_removed_watermark, remaining) = result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
         APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
 #undef M
 
@@ -3027,18 +3030,18 @@ std::pair<size_t, size_t> StreamingAggregator::removeBucketsBefore(StreamingAggr
 
     Arena::Stats stats;
 
-    if (res.first)
-        stats = result.aggregates_pool->free(watermark);
+    if (removed)
+        stats = result.aggregates_pool->free(last_removed_watermark);
 
     LOG_INFO(
         log,
         "Removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}. "
         "Arena: arena_chunks={}, arena_size={}, chunks_removed={}, bytes_removed={}. chunks_reused={}, bytes_reused={}, head_chunk_size={}, "
         "free_list_hits={}, free_list_missed={}",
-        res.first,
-        watermark,
+        removed,
+        last_removed_watermark,
         params.streaming_window_count,
-        res.second,
+        remaining,
         stats.chunks,
         stats.bytes,
         stats.chunks_removed,
@@ -3048,8 +3051,6 @@ std::pair<size_t, size_t> StreamingAggregator::removeBucketsBefore(StreamingAggr
         stats.head_chunk_size,
         stats.free_list_hits,
         stats.free_list_misses);
-
-    return res;
 }
 
 std::vector<size_t> StreamingAggregator::bucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
