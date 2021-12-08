@@ -23,11 +23,9 @@ StreamingBlockReader::StreamingBlockReader(
         consume_ctx.auto_offset_reset = "latest";
     else if (offset == -2)
         consume_ctx.auto_offset_reset = "earliest";
-    else
-    {
-        consume_ctx.offset = offset;
-        consume_ctx.enforce_offset = true;
-    }
+
+    consume_ctx.offset = offset;
+    consume_ctx.enforce_offset = true;
     consumer->initTopicHandle(consume_ctx);
 
     LOG_INFO(log, "Start streaming reading from topic={} shard={} offset={}", consume_ctx.topic, shard_, offset);
