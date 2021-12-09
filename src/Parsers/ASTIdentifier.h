@@ -80,6 +80,11 @@ public:
 
     UUID uuid = UUIDHelpers::Nil;  // FIXME(ilezhankin): make private
 
+    /// proton: starts
+    bool streaming = true;
+    void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+    /// proton: ends
+
     StorageID getTableId() const;
     String getDatabaseName() const;
 

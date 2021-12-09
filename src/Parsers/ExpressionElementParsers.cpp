@@ -749,6 +749,28 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (parsed_special_function.has_value())
         return parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos);
 
+    /// proton: starts. HACKY for hist(...)
+    if (getIdentifierName(identifier) == "hist")
+    {
+        /// Parse hist(a.b) function parameter `a.b` as table identifier
+        if (!ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true)
+            .parse(pos, node, expected))
+            throw Exception("Invalid or missing table identifier for hist() function", ErrorCodes::SYNTAX_ERROR);
+
+        if (pos->type != TokenType::ClosingRoundBracket)
+            throw Exception("hist() function only accept 1 table parameter", ErrorCodes::SYNTAX_ERROR);
+
+        ++pos;
+
+        auto * table_id = node->as<ASTTableIdentifier>();
+        if (!table_id)
+            throw Exception("Invalid table identifier for hist() function", ErrorCodes::SYNTAX_ERROR);
+
+        table_id->streaming = false;
+        return true;
+    }
+    /// proton: ends
+
     auto pos_after_bracket = pos;
     auto old_expected = expected;
 

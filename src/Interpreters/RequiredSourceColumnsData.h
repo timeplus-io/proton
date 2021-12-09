@@ -32,7 +32,7 @@ struct RequiredSourceColumnsData
     /// proton: starts
     RequiredSourceColumnsData(bool has_reserved_time_ = false) : has_reserved_time(has_reserved_time_) { }
 
-    bool streaming = false;
+    bool streaming = true;
     bool has_reserved_time;
     /// proton: ends
 

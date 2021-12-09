@@ -8,10 +8,6 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
-/// proton: starts
-#include <Parsers/ASTEmitQuery.h>
-/// proton: ends
-
 namespace DB
 {
 
@@ -107,12 +103,6 @@ void RequiredSourceColumnsMatcher::visit(const ASTPtr & ast, Data & data)
     }
 
     /// other
-    /// proton: starts
-    if (auto * t = ast->as<ASTEmitQuery>())
-    {
-        visit(*t, ast, data);
-    }
-    /// proton: ends;
 
     if (auto * t = ast->as<ASTArrayJoin>())
     {
@@ -193,18 +183,13 @@ void RequiredSourceColumnsMatcher::visit(const ASTTablesInSelectQueryElement & n
 }
 
 /// ASTIdentifiers here are tables. Do not visit them as generic ones.
-void RequiredSourceColumnsMatcher::visit(const ASTTableExpression &, const ASTPtr &, Data &)
+void RequiredSourceColumnsMatcher::visit(const ASTTableExpression & node, const ASTPtr &, Data & data)
 {
-
+    if (node.database_and_table_name)
+        if (!node.database_and_table_name->as<ASTTableIdentifier>()->streaming)
+            /// FIXME, per table ?
+            data.streaming = false;
 }
-
-/// proton: starts
-void RequiredSourceColumnsMatcher::visit(const ASTEmitQuery & node, const ASTPtr &, Data & data)
-{
-    if (node.streaming)
-        data.streaming = true;
-}
-/// proton: ends
 
 void RequiredSourceColumnsMatcher::visit(const ASTArrayJoin & node, const ASTPtr &, Data & data)
 {

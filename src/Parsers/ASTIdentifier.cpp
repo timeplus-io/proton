@@ -189,6 +189,19 @@ ASTPtr ASTTableIdentifier::clone() const
     return ret;
 }
 
+/// proton: starts
+void ASTTableIdentifier::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+{
+    if (!streaming)
+        settings.ostr << "hist(";
+
+    ASTIdentifier::formatImplWithoutAlias(settings, state, frame);
+
+    if (!streaming)
+        settings.ostr << ")";
+}
+/// proton: ends
+
 StorageID ASTTableIdentifier::getTableId() const
 {
     if (name_parts.size() == 2) return {name_parts[0], name_parts[1], uuid};

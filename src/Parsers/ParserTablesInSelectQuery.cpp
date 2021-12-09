@@ -5,6 +5,10 @@
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 
+/// proton: starts
+#include <Parsers/ASTFunction.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -12,6 +16,25 @@ namespace ErrorCodes
 {
     extern const int SYNTAX_ERROR;
 }
+
+/// proton: starts. HACKY...
+namespace
+{
+    void handleHistTable(const std::shared_ptr<ASTTableExpression> & ast)
+    {
+        if (!ast->table_function)
+            return;
+
+        if (ast->table_function->as<ASTFunction>())
+            return;
+
+        /// hist(table) is parsed as a function, but it is actually a tagged table identifier
+        /// We don't use a hist() table function since this hacky solution seems more efficient.
+        /// Revisit this if necessary
+        ast->database_and_table_name = std::move(ast->table_function);
+    }
+}
+/// proton: ends
 
 bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -23,6 +46,8 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), false)
                 .parse(pos, res->database_and_table_name, expected))
         return false;
+
+    handleHistTable(res);
     /// proton: ends
 
     /// FINAL

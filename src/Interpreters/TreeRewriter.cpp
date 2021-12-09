@@ -909,8 +909,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     RequiredSourceColumnsVisitor(columns_context).visit(query);
 
     /// proton: starts
-    if (storage)
-        streaming = columns_context.streaming;
+    streaming = columns_context.streaming;
     /// proton: ends
 
     NameSet source_column_names;

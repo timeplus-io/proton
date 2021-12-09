@@ -25,10 +25,8 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTEmitQuery::Mode mode = ASTEmitQuery::NONE;
     bool streaming = false;
 
-    if (!ParserKeyword("STREAM").ignore(pos, expected))
-        return false;
-
-    streaming = true;
+    if (ParserKeyword("STREAM").ignore(pos, expected))
+        streaming = true;
 
     ParserIntervalOperatorExpression interval_p;
 
