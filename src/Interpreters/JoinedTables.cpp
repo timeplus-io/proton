@@ -68,6 +68,11 @@ void replaceJoinedTable(const ASTSelectQuery & select_query)
         const auto & table_id = table_expr.database_and_table_name->as<ASTTableIdentifier &>();
         String table_name = table_id.name();
         String table_short_name = table_id.shortName();
+
+        /// proton: starts
+        auto streaming = table_id.streaming;
+        /// proton: ends
+
         // FIXME: since the expression "a as b" exposes both "a" and "b" names, which is not equivalent to "(select * from a) as b",
         //        we can't replace aliased tables.
         // FIXME: long table names include database name, which we can't save within alias.
@@ -89,7 +94,11 @@ void replaceJoinedTable(const ASTSelectQuery & select_query)
 
             auto tables_elem = addASTChildren<ASTTablesInSelectQueryElement>(*new_select->tables());
             auto sub_table_expr = addASTChildrenTo<ASTTableExpression>(*tables_elem, tables_elem->table_expression);
-            addASTChildrenTo<ASTTableIdentifier>(*sub_table_expr, sub_table_expr->database_and_table_name, table_name);
+
+            /// proton: starts. Propagate `streaming` tag
+            auto new_table_id = addASTChildrenTo<ASTTableIdentifier>(*sub_table_expr, sub_table_expr->database_and_table_name, table_name);
+            new_table_id->as<ASTTableIdentifier>()->streaming = streaming;
+            /// proton: ends
         }
     }
 }
