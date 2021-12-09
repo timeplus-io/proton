@@ -29,9 +29,9 @@ private:
 
     virtual Int64 getProgressingInterval() const { return window_interval; }
 
-    std::pair<Int64, Int64> initFirstWindow(Block & block) const;
-    std::pair<Int64, Int64> initFirstWindowWithAutoScale(Block & block) const;
-    std::pair<Int64, Int64> doInitFirstWindow(Block & block) const;
+    std::pair<Int64, Int64> initFirstWindow(Block & block, bool delay = false) const;
+    std::pair<Int64, Int64> initFirstWindowWithAutoScale(Block & block, bool delay = false) const;
+    std::pair<Int64, Int64> doInitFirstWindow(Block & block, bool delay = false) const;
 
     std::pair<Int64, Int64> getWindow(Int64 time_sec) const;
 
