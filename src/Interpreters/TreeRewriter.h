@@ -53,7 +53,7 @@ struct TreeRewriterResult
     NameToNameMap array_join_alias_to_name;
 
     /// proton: starts
-    bool streaming = false;
+    bool streaming = true;
     /// proton: ends
 
     /// The backward mapping for array_join_alias_to_name.

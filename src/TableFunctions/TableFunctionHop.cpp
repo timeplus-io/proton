@@ -48,7 +48,7 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
         throw Exception(help_message, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
     /// First argument is expected to be table
-    storage_id = resolveStorageID(args[0], context);
+    storage_id= resolveStorageID(args[0], context);
 
     /// The rest of the arguments are streaming window arguments
     /// Change the name to call the internal streaming window functions

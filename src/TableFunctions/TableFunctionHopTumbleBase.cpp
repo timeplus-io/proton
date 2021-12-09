@@ -70,21 +70,32 @@ namespace ErrorCodes
 
 StorageID TableFunctionHopTumbleBase::resolveStorageID(const ASTPtr & arg, ContextPtr context)
 {
-    String table;
-    if (!tryGetIdentifierNameInto(arg, table))
+    StorageID storage_id = StorageID::createEmpty();
+
+    if (auto * table_id = arg->as<ASTTableIdentifier>())
+    {
+        /// tumble(hist(table), ...)
+        storage_id = table_id->getTableId();
+    }
+    else if (String table; tryGetIdentifierNameInto(arg, table))
+    {
+        ParserCompoundIdentifier table_name_p(true);
+
+        Tokens tokens(table.data(), table.data() + table.size(), context->getSettingsRef().max_query_size);
+        IParser::Pos pos(tokens, context->getSettingsRef().max_parser_depth);
+        Expected expected;
+
+        ASTPtr table_ast;
+        if (!table_name_p.parse(pos, table_ast, expected))
+            throw Exception("First argument is an invalid table name", ErrorCodes::BAD_ARGUMENTS);
+
+        storage_id = table_ast->as<ASTTableIdentifier>()->getTableId();
+    }
+    else
+    {
         throw Exception("First argument must be table name", ErrorCodes::BAD_ARGUMENTS);
+    }
 
-    ParserCompoundIdentifier table_name_p(true);
-
-    Tokens tokens(table.data(), table.data() + table.size(), context->getSettingsRef().max_query_size);
-    IParser::Pos pos(tokens, context->getSettingsRef().max_parser_depth);
-    Expected expected;
-
-    ASTPtr table_ast;
-    if (!table_name_p.parse(pos, table_ast, expected))
-        throw Exception("First argument is an invalid table name", ErrorCodes::BAD_ARGUMENTS);
-
-    auto storage_id = table_ast->as<ASTTableIdentifier>()->getTableId();
     if (storage_id.database_name.empty())
         storage_id.database_name = context->getCurrentDatabase();
 

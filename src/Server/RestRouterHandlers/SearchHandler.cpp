@@ -80,6 +80,8 @@ String SearchHandler::getQuery(const Poco::JSON::Object::Ptr & payload) const
         query_context->setSetting("asterisk_include_materialized_columns", true);
         query_context->setSetting("asterisk_include_alias_columns", true);
     }
+    else if (mode == "hist")
+        query_context->setSetting("query_mode", mode);
 
     const auto & start_time = payload->has("start_time") ? payload->get("start_time").toString() : "";
     if (!start_time.empty())
@@ -114,9 +116,9 @@ bool SearchHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String
     if (payload->has("mode"))
     {
         const auto & mode = payload->getValue<String>("mode");
-        if (mode != "standard" && mode != "verbose")
+        if (mode != "standard" && mode != "verbose" && mode != "hist")
         {
-            error_msg = fmt::format("Invalid 'mode': {}, only support 'standard', 'verbose'", mode);
+            error_msg = fmt::format("Invalid 'mode': {}, only support 'standard', 'verbose', 'hist'", mode);
             return false;
         }
     }

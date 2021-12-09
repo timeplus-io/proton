@@ -910,6 +910,10 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     /// proton: starts
     streaming = columns_context.streaming;
+    /// force hist mode
+    if (context->getSettingsRef().query_mode.value == "hist")
+        streaming = false;
+
     /// proton: ends
 
     NameSet source_column_names;

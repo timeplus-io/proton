@@ -514,8 +514,7 @@ void RestHTTPRequestHandler::trySendExceptionToClient(
         }
         else
         {
-            assert(false);
-            __builtin_unreachable();
+            LOG_ERROR(log, "Failed to send response: " + s, exception_code);
         }
     }
     catch (...)
