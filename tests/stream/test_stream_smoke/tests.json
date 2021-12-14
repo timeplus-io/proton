@@ -1,12 +1,42 @@
 {
     "commments":
         "Tests covering the steam query smoke cases.",
+    "test_config": {
+        "table_schema": {
+            "name": "test",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "String"
+                },
+                {
+                    "name": "location",
+                    "type": "String"
+                },
+                {
+                    "name": "value",
+                    "type": "Float32"
+                },
+                {
+                    "name": "json",
+                    "type": "String"
+        
+                },
+                {
+                    "name": "timestamp",
+                    "type": "Datetime64(3)",
+                    "default": "now64(3)"
+                }
+            ]
+        }
+    },
+    "setup": {},
     "tests": [
         {
             "name": "stream tumble window max(value) aggregate group by id",
             "description": "tumble window aggregate by max and group by id",
             "pre_statements": [
-                {"client":"python", "query_type": "stream", "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}],
+                {"client":"python", "query_type": "stream", "query_end_timer": 5, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}],
             "inputs": [[
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
@@ -153,7 +183,7 @@
                 ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:07"]]
                 ],
             "expected_results": [
-                [[]]
+                []
             ]                
         },
         {

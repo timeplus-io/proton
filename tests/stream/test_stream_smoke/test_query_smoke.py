@@ -25,13 +25,15 @@ def test_set(request):
 
 def test_run(test_set, caplog):
     expected_results = test_set.get("expected_results")
+    print(f"\n test run: expected_results: {expected_results}")
     statements_results = test_set.get("statements_results")
-
+    print(f"test run: statemetns_results: {statements_results}")
     for i in range(len(expected_results)):  # for each query_results
         expected_result = expected_results[i]
-        print(f"test run: expected_result in expected_results: {expected_result}")
+        # print(f"test run: expected_result in expected_results: {expected_result}")
         query_results_dict = statements_results[i]
         query_result = query_results_dict.get("query_result")
+        # print(f"test run: query_result in statements_results: {query_result}")
         query_result_column_types = query_results_dict.get("query_result_column_types")
         assert type(expected_result) == type(
             query_result
@@ -44,6 +46,66 @@ def test_run(test_set, caplog):
             else:
                 assert expected_result == query_result
         else:
+            print(
+                f"test_run: for i in range(len(expected_results)): expected_result: {expected_result}"
+            )
+            if len(expected_result) == 0:
+                assert len(query_result) == 0
+
+            else:
+                assert len(expected_result) == len(query_result)
+
+                expected_result_check_arry = []
+                for i in range(len(expected_result)):
+                    expected_result_check_arry.append(0)
+                row_step = 0
+                for expected_result_row in expected_result:
+                    for query_result_row in query_result:
+                        expected_result_row_field_check_arry = []
+                        for i in range(
+                            len(query_result_column_types) - 1
+                        ):  # query_result_column_types has a timestamp filed added by query_execute, so need to minus 1
+                            expected_result_row_field_check_arry.append(0)
+                        print(f"query_result_column_types: {query_result_column_types}")
+                        print(
+                            f"expected_result_row_field_check_array: {expected_result_row_field_check_arry}"
+                        )
+                        expected_result_row_check = 1
+                        for i in range(
+                            len(expected_result_row)
+                        ):  # for each filed of each row of each query_results
+                            # print("test_run: column_type:", query_result_column_types[i][1])
+                            expected_result_field = expected_result_row[i]
+                            query_result_field = query_result_row[i]
+                            if "Float" in query_result_column_types[i][1]:
+                                if math.isclose(
+                                    float(expected_result_field),
+                                    float(query_result_field),
+                                    rel_tol=1e-2,
+                                ):
+                                    expected_result_row_field_check_arry[i] = 1
+                            elif "Int" in query_result_column_types[i][1]:
+                                if int(expected_result_field) == int(
+                                    query_result_field
+                                ):
+                                    expected_result_row_field_check_arry[i] = 1
+                            else:
+                                if expected_result_field == query_result_field:
+                                    expected_result_row_field_check_arry[i] = 1
+                        print(
+                            f"query_result_row: {query_result_row}, expected_result_row_field_check_array:{expected_result_row_field_check_arry}"
+                        )
+                        for i in range(len(expected_result_row_field_check_arry)):
+                            expected_result_row_check = (
+                                expected_result_row_check
+                                * expected_result_row_field_check_arry[i]
+                            )
+                        if expected_result_row_check == 1:
+                            expected_result_check_arry[row_step] = 1
+                    assert expected_result_check_arry[row_step] == 1
+                    row_step += 1
+
+            """
             for i in range(len(expected_result)):  # for each row of each query_results
                 expected_result_row = expected_result[i]
                 # print(f"i in expected_result = {i}, expected_result_row={expected_result_row}")
@@ -68,3 +130,4 @@ def test_run(test_set, caplog):
                         assert int(expected_result_field) == int(query_result_field)
                     else:
                         assert expected_result_field == query_result_field
+            """

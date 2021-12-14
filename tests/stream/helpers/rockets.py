@@ -38,13 +38,11 @@
 # }
 # import global_settigns
 
-import os, sys, json
+import os, sys, json, getopt
 import logging, logging.config
 import time
 import datetime
-import re
 import random
-from pytest_cases.fixture_parametrize_plus import parametrize
 import requests
 
 # from dataclasses import dataclass
@@ -60,14 +58,56 @@ cur_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(cur_path)
 
 
-def rockets_context(config_file, tests_file):
-    with open(config_file) as f:
-        config = json.load(f)
+def rockets_env_var_get():
+    proton_server = os.environ.get("PROTON_HOST")
+    proton_server_native_port = os.environ.get("PROTON_NATIVE_PORT")
+    proton_rest_port = os.environ.get("PROTON_REST_PORT")
+    proton_rest_params = os.environ.get("PROTON_REST_PARAMS")
+    proton_rest_table_ddl_path = os.environ.get("PROTON_REST_TABLE_PATH")
+    proton_rest_ingest_path = os.environ.get("PROTON_REST_INGEST_PATH")
+    proton_rest_query_path = os.environ.get("PROTON_REST_QUERY_PATH")
+
+    if (
+        proton_server != None
+        and proton_server_native_port != None
+        and proton_rest_port != None
+        and proton_rest_params != None
+        and proton_rest_table_ddl_path != None
+        and proton_rest_ingest_path != None
+        and proton_rest_query_path != None
+    ):
+
+        config = {
+            "rest_setting": {
+                "table_ddl_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_table_ddl_path}",
+                "ingest_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_ingest_path}",
+                "query_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_query_path}",
+                "prarams": proton_rest_params,
+            },
+            "roton_server": proton_server,
+            "proton_server_native_port": proton_server_native_port,
+        }
+        return config
+    else:
+        return None
+
+
+def rockets_context(config_file=None, tests_file=None):
+    config = rockets_env_var_get()
+    if config == None:
+        with open(config_file) as f:
+            config = json.load(f)
+        logging.debug(f"rockets_context: config reading from config files: {config}")
+
+    if config == None:
+        raise Exception("No config env vars nor config file")
+    # proton_server = config.get("proton_server")
+    # proton_server_native_port = config.get("proton_server_native_port")
+
     with open(tests_file) as f:
-        test_suit = json.load(f)
-    proton_server = config.get("proton_server")
-    proton_server_native_port = config.get("proton_server_native_port")
-    tests = test_suit.get("tests")
+        test_suite = json.load(f)
+
+    # tests = test_suite.get("tests")
     (
         query_exe_parent_conn,
         query_exe_child_conn,
@@ -80,7 +120,7 @@ def rockets_context(config_file, tests_file):
     )  # Create query_exe_client process
     rockets_context = {
         "config": config,
-        "tests": tests,
+        "test_suite": test_suite,
         "query_exe_client": query_exe_client,
         "query_exe_parent_conn": query_exe_parent_conn,
         "query_exe_child_conn": query_exe_child_conn,
@@ -497,12 +537,14 @@ def rockets_run(test_context):
     rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
-    table_schema = config.get("table_schema")
     q_exec_client = test_context.get("query_exe_client")
     query_conn = test_context.get("query_exe_parent_conn")
     q_exec_client_conn = test_context.get("query_exe_child_conn")
     q_exec_client.start()
-    tests = test_context.get("tests")
+    test_suite = test_context.get("test_suite")
+    tests = test_suite.get("tests")
+    test_suite_config = test_suite.get("test_config")
+    table_schema = test_suite_config.get("table_schema")
     test_id_run = 0
     test_sets = []
     env_setup(rest_setting, table_schema)
@@ -610,9 +652,27 @@ def rockets_run(test_context):
 
 
 if __name__ == "__main__":
-    cul_run_path = os.getcwd()
-    cul_run_path_parent = os.path.dirname(cul_run_path)
-    logging_config_file = f"{cul_run_path_parent}/helpers/logging.conf"
+    cur_run_path = os.getcwd()
+    cur_run_path_parent = os.path.dirname(cur_run_path)
+    cur_file_path = os.path.dirname(os.path.abspath(__file__))
+    cur_file_path_parent = os.path.dirname(cur_file_path)
+    test_suite_path = None
+    """
+    logging_config_file = f"{cur_run_path_parent}/helpers/logging.conf"
+    if os.path.exists(logging_config_file):
+        logging.basicConfig(
+            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
+        )  # todo: add log stuff
+        logging.config.fileConfig(logging_config_file)  # need logging.conf
+        logger = logging.getLogger("rockets")
+    else:
+        print("no logging.conf exists under ../helper, no logging.")
+
+    logging.info("rockets_main starts......")
+    """
+
+    # logging_config_file = f"{cul_run_path_parent}/helpers/logging.conf"
+    logging_config_file = f"{cur_file_path}/logging.conf"
     if os.path.exists(logging_config_file):
         logging.basicConfig(
             format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
@@ -624,15 +684,32 @@ if __name__ == "__main__":
 
     logging.info("rockets_main starts......")
 
+    argv = sys.argv[1:]  # get -d to specify the test_sutie path
+    try:
+        opts, args = getopt.getopt(argv, "d:")
+    except:
+        print("Error")
+
+    for opt, arg in opts:
+        if opt in ["-d"]:
+            test_suite_path = arg
+    if test_suite_path == None:
+        print("No test suite directory specificed by -d, exit.")
+        sys.exit(0)
+    # config_file = f"{cul_run_path}/configs/config.json"
+    config_file = f"{test_suite_path}/configs/config.json"
+    tests_file = f"{test_suite_path}/tests.json"
+
+    """
     config_file = f"{cul_run_path}/configs/config.json"
     tests_file = f"{cul_run_path}/tests.json"
     logging.debug(f"config_file path: {config_file}")
     logging.debug(f"tests_fiel path: {tests_file}")
-
-    if os.path.exists(config_file) and os.path.exists(tests_file):
+    """
+    if os.path.exists(tests_file):
         rockets_context = rockets_context(
             config_file, tests_file
-        )  # need to have config.json and test.json when run rockets.py as a test debug tooling.
+        )  # need to have config env vars/config.json and test.json when run rockets.py as a test debug tooling.
         test_sets = rockets_run(rockets_context)
         # output the test_sets one by one
         logging.info("main: ouput test_sets......")
@@ -640,6 +717,4 @@ if __name__ == "__main__":
             test_set_json = json.dumps(test_set)
             logging.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
     else:
-        print(
-            "No config.json exists under ../helper or no tests.json exists under current folder."
-        )
+        print("No tests.json exists under test suite folder.")
