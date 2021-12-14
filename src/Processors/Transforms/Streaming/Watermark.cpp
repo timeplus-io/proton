@@ -22,111 +22,43 @@ namespace ErrorCodes
 
 namespace
 {
-    IntervalKind mapIntervalKind(const String & func_name)
-    {
-        if (func_name == "toIntervalSecond")
-            return IntervalKind::Second;
-        else if (func_name == "toIntervalMinute")
-            return IntervalKind::Minute;
-        else if (func_name == "toIntervalHour")
-            return IntervalKind::Hour;
-        else if (func_name == "toIntervalDay")
-            return IntervalKind::Day;
-        else if (func_name == "toIntervalWeek")
-            return IntervalKind::Week;
-        else if (func_name == "toIntervalMonth")
-            return IntervalKind::Month;
-        else if (func_name == "toIntervalQuarter")
-            return IntervalKind::Quarter;
-        else if (func_name == "toIntervalYear")
-            return IntervalKind::Year;
-
-        throw Exception("Invalid interval function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    }
-
-    WatermarkSettings::EmitMode mapMode(ASTEmitQuery::Mode mode)
-    {
-        switch (mode)
-        {
-            case ASTEmitQuery::Mode::NONE:
-                return WatermarkSettings::EmitMode::NONE;
-            case ASTEmitQuery::Mode::TAIL:
-                return WatermarkSettings::EmitMode::TAIL;
-            case ASTEmitQuery::Mode::PERIODIC:
-                return WatermarkSettings::EmitMode::PERIODIC;
-            case ASTEmitQuery::Mode::DELAY:
-                return WatermarkSettings::EmitMode::DELAY;
-            case ASTEmitQuery::Mode::WATERMARK:
-                return WatermarkSettings::EmitMode::WATERMARK;
-            case ASTEmitQuery::Mode::WATERMARK_WITH_DELAY:
-                return WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY;
-        }
-    }
-}
-
-void extractInterval(ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind)
+void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
 {
-    assert(ast);
-
-    kind = mapIntervalKind(ast->name);
-    const auto * val = ast->children.front()->children.front()->as<ASTLiteral>();
-    if (!val)
-        throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-    if (val->value.getType() == Field::Types::UInt64)
+    if (!emit_query)
     {
-        interval = val->value.safeGet<UInt64>();
+        return;
     }
-    else if (val->value.getType() == Field::Types::String)
+
+    auto emit = emit_query->as<ASTEmitQuery>();
+    assert(emit);
+
+    watermark_settings.streaming = emit->streaming;
+
+    if (emit->periodic_interval)
     {
-        interval = std::stoi(val->value.safeGet<String>());
+        if (emit->after_watermark || emit->delay_interval)
+            throw Exception("Streaming doesn't support having both any watermark and periodic emit policy", ErrorCodes::SYNTAX_ERROR);
+
+        extractInterval(
+            emit->periodic_interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
+
+        watermark_settings.mode = WatermarkSettings::EmitMode::PERIODIC;
+    }
+    else if (emit->delay_interval)
+    {
+        extractInterval(
+            emit->delay_interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
+
+        watermark_settings.mode
+            = emit->after_watermark ? WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY : WatermarkSettings::EmitMode::DELAY;
+    }
+    else if (emit->after_watermark)
+    {
+        watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
     }
     else
-        throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        watermark_settings.mode = WatermarkSettings::EmitMode::NONE;
 }
-
-ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone)
-{
-    switch (kind)
-    {
-#define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        return AddTime<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
-    }
-        CASE_WINDOW_KIND(Second)
-        CASE_WINDOW_KIND(Minute)
-        CASE_WINDOW_KIND(Hour)
-        CASE_WINDOW_KIND(Day)
-        CASE_WINDOW_KIND(Week)
-        CASE_WINDOW_KIND(Month)
-        CASE_WINDOW_KIND(Quarter)
-        CASE_WINDOW_KIND(Year)
-#undef CASE_WINDOW_KIND
-    }
-    __builtin_unreachable();
-}
-
-namespace
-{
-    void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
-    {
-        if (!emit_query)
-        {
-            return;
-        }
-
-        auto emit = emit_query->as<ASTEmitQuery>();
-        assert(emit);
-
-        watermark_settings.streaming = emit->streaming;
-        watermark_settings.mode = mapMode(emit->mode);
-
-        if (emit->interval)
-        {
-            extractInterval(
-                emit->interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
-        }
-    }
 }
 
 WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc)

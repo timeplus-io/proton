@@ -7,19 +7,15 @@ namespace DB
 struct ASTEmitQuery : public IAST
 {
 public:
-    enum Mode
-    {
-        NONE,
-        TAIL,
-        PERIODIC,
-        DELAY,
-        WATERMARK,
-        WATERMARK_WITH_DELAY,
-    };
-
     bool streaming = false;
-    Mode mode = NONE;
-    ASTPtr interval;
+    /// [AFTER WATERMARK]
+    bool after_watermark = false;
+    /// [PERIODIC INTERVAL 1 SECOND]
+    ASTPtr periodic_interval;
+    /// [DELAY INTERVAL 1 SECOND]
+    ASTPtr delay_interval;
+    /// [LAST <last-x>]
+    ASTPtr last_interval;
 
     String getID(char) const override { return "Emit"; }
 

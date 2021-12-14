@@ -3,6 +3,13 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
+/// proton: starts.
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSubquery.h>
+#include <Parsers/ASTFunction.h>
+/// proton: ends.
+
 namespace DB
 {
 

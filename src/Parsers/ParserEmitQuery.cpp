@@ -6,13 +6,24 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int SYNTAX_ERROR;
+}
+
 bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     /// EMIT [STREAM]
-    /// EMIT [STREAM] PERIODIC INTERVAL '3' SECONDS
-    /// EMIT [STREAM] AFTER DELAY INTERVAL '3' SECONDS
-    /// EMIT [STREAM] AFTER WATERMARK
-    /// EMIT [STREAM] AFTER WATERMARK AND DELAY INTERVAL '3' SECONDS
+    ///         - [PERIODIC INTERVAL '3' SECONDS]
+    ///         - [AFTER WATERMARK]
+    ///         - [DELAY INTERVAL '3' SECONDS]
+    ///         - [LAST <last-x>]
+    /// For each sub-option can be combined with 'AND', we shall select a matching mod based on the combination of parsed content finally.
+    /// For example:
+    /// 1) EMIT STREAM PERIODIC INTERVAL '3' SECONDS AND AFTER WATERMARK
+    /// 2) EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL '3' SECONDS
+    /// 3) EMIT STREAM AFTER WATERMARK AND LAST <last-x>
+    /// ...
     if (!parse_only_internals)
     {
         ParserKeyword s_emit("EMIT");
@@ -20,57 +31,64 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
     }
 
-    /// FIXME AND order
-    ASTPtr interval;
-    ASTEmitQuery::Mode mode = ASTEmitQuery::NONE;
     bool streaming = false;
-
     if (ParserKeyword("STREAM").ignore(pos, expected))
         streaming = true;
 
+    bool after_watermark = false;
+    ASTPtr periodic_interval;
+    ASTPtr delay_interval;
+    ASTPtr last_interval;
+
     ParserIntervalOperatorExpression interval_p;
-
-    if (ParserKeyword("PERIODIC").ignore(pos, expected))
+    ParserIntervalAliasExpression interval_alias_p;
+    do
     {
-        if (!interval_p.parse(pos, interval, expected))
-            return false;
-
-        mode = ASTEmitQuery::Mode::PERIODIC;
-    }
-    else if (ParserKeyword("AFTER").ignore(pos, expected))
-    {
-        if (ParserKeyword("DELAY").ignore(pos, expected))
+        if (ParserKeyword("PERIODIC").ignore(pos, expected))
         {
-            if (!interval_p.parse(pos, interval, expected))
+            /// [PERIODIC INTERVAL '3' SECONDS]
+            if (periodic_interval)
+                throw Exception("Can not use repeat 'PERIODIC' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+
+            if (!interval_p.parse(pos, periodic_interval, expected))
                 return false;
-
-            mode = ASTEmitQuery::Mode::DELAY;
         }
-        else if (ParserKeyword("WATERMARK").ignore(pos, expected))
+        else if (ParserKeyword("AFTER WATERMARK").ignore(pos, expected))
         {
-            if (ParserKeyword("AND").ignore(pos, expected))
-            {
-                if (ParserKeyword("DELAY").ignore(pos, expected))
-                {
-                    if (!interval_p.parse(pos, interval, expected))
-                        return false;
+            /// [AFTER WATERMARK]
+            if (after_watermark)
+                throw Exception("Can not use repeat 'AFTER WATERMARK' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
 
-                    mode = ASTEmitQuery::Mode::WATERMARK_WITH_DELAY;
-                }
-                else
-                    return false;
-            }
-            else
-                mode = ASTEmitQuery::Mode::WATERMARK;
+            after_watermark = true;
         }
-        else
-            return false;
+        else if (ParserKeyword("DELAY").ignore(pos, expected))
+        {
+            /// [DELAY INTERVAL '3' SECONDS]
+            if (delay_interval)
+                throw Exception("Can not use repeat 'DELAY' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+
+            if (!interval_p.parse(pos, delay_interval, expected))
+                return false;
+        }
+        else if (ParserKeyword("LAST").ignore(pos, expected))
+        {
+            if (last_interval)
+                throw Exception("Can not use repeat 'LAST' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+
+            /// [LAST <last-x>]
+            if (!interval_alias_p.parse(pos, last_interval, expected))
+                return false;
+        }
     }
+    while (ParserKeyword("AND").ignore(pos, expected));
 
     auto query = std::make_shared<ASTEmitQuery>();
     query->streaming = streaming;
-    query->mode = mode;
-    query->interval = interval;
+    query->after_watermark = after_watermark;
+    query->periodic_interval = periodic_interval;
+    query->delay_interval = delay_interval;
+    query->last_interval = last_interval;
+
     node = query;
 
     return true;

@@ -5,6 +5,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/IntervalKind.h>
+#include <Common/ProtonUtil.h>
 
 class DateLUTImpl;
 
@@ -101,9 +102,6 @@ protected:
     UInt64 last_logged_late_events = 0;
     Int64 last_logged_late_events_ts = 0;
 };
-
-void extractInterval(ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
-Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
 
 using WatermarkPtr = std::shared_ptr<Watermark>;
 }

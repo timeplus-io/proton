@@ -560,6 +560,7 @@ class IColumn;
     M(String, insert_deduplication_token, "", "If not empty, used for duplicate detection instead of data digest", 0) \
     /* proton: starts. */ \
     M(Bool, asterisk_include_reserved_columns, false, "Show reserved columns on SELECT query.", 0) \
+    M(UInt64, max_keep_windows, 100, "Maximum number of streaming windows.", 0) \
     /* proton: ends. */ \
 
 // End of COMMON_SETTINGS

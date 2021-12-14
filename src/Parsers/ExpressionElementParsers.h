@@ -467,6 +467,23 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
+<<<<<<< HEAD
 ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast);
 
+=======
+/// proton: starts.
+struct IntervalKind;
+/// Optional conversion to interval alias. Example:
+/// 1) "xs" parsed as "toIntervalSecond(x)"
+/// 2) "ym" parsed as "toIntervalMinute(y)"
+/// 3) "zh" parsed as "toIntervalHour(z)"
+/// now kind supports: 's','m','h'
+class ParserIntervalAliasExpression : public IParserBase
+{
+protected:
+    const char * getName() const  override { return "interval alias expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+};
+/// proton: ends.
+>>>>>>> feature last-x streaming processing (#128)
 }

@@ -23,29 +23,19 @@ namespace ErrorCodes
 
 TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionHopTumbleBase(name_)
 {
-    help_message = fmt::format(
-        "Table function '{}' requires from 3 to 5 parameters: "
-        "<name of the table>, [timestamp column], <hop interval size>, <hop window size>, [time zone]",
-        name);
 }
 
 void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
     if (func_ast->children.size() != 1)
-        throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(HOP_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     auto streaming_func_ast = func_ast->clone();
     auto * node = streaming_func_ast->as<ASTFunction>();
     assert(node);
 
     /// hop(table, [timestamp_column], hop_interval, hop_win_interval, [timezone])
-    ASTs & args = node->arguments->children;
-
-    if (args.size() < 3)
-        throw Exception(help_message, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
-
-    if (args.size() > 5)
-        throw Exception(help_message, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+    auto args = checkAndExtractHopArguments(node);
 
     /// First argument is expected to be table
     storage_id= resolveStorageID(args[0], context);
@@ -61,28 +51,10 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
 
     ASTPtr timestamp_expr_ast;
 
-    if (args.size() == 2)
+    //// [timestamp_column_expr]
+    /// The following logic is adding system default time column to hop function if user doesn't specify one
+    if (args[0])
     {
-        /// Assume the first / second arguments are interval, insert `_time`
-        args.insert(args.begin(), std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
-    }
-    else if (args.size() == 3)
-    {
-        if (args[2]->as<ASTLiteral>())
-        {
-            /// the last argument is a literal, assume it is a timezone string
-            args.insert(args.begin(), std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
-        }
-        else if (auto func_node = args[0]->as<ASTFunction>(); func_node)
-        {
-            /// time column is a transformed one, for example, hop(table, toDateTime32(t), INTERVAL 5 SECOND, ...)
-            func_node->alias = STREAMING_TIMESTAMP_ALIAS;
-            timestamp_expr_ast = args[0];
-        }
-    }
-    else
-    {
-        assert(args.size() == 4);
         if (auto func_node = args[0]->as<ASTFunction>(); func_node)
         {
             /// time column is a transformed one, for example, hop(table, toDateTime32(t), INTERVAL 5 SECOND, ...)
@@ -90,6 +62,15 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
             timestamp_expr_ast = args[0];
         }
     }
+    else
+        args[0] = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+
+    //// [timezone]
+    /// Prune the empty timezone if user doesn't specify one
+    if (!args.back())
+        args.pop_back();
+
+    node->arguments->children.swap(args);
 
     /// Calculate column description
     init(context, std::move(streaming_func_ast), "__HOP(", std::move(timestamp_expr_ast));

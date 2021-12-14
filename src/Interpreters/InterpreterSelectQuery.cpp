@@ -3,6 +3,7 @@
 
 /// proton: starts
 #include <Interpreters/StreamingAggregator.h>
+#include <Interpreters/StreamingEmitInterpreter.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
@@ -331,6 +332,20 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     {
         UnnestSubqueryVisitorData data;
         UnnestSubqueryVisitor(data).visit(query_ptr);
+    }
+    /// proton: ends.
+
+    /// proton: starts. Try to process the streaming query extension grammar.
+    /// we need to process before table storage generation (maybe has table function)
+    if (getSelectQuery().emit())
+    {
+        StreamingEmitInterpreter::handleRules(
+                    /* streaming query */ query_ptr,
+                    /* rules */ StreamingEmitInterpreter::LastXRule(settings, log));
+
+        /// After handling, update setting for context.
+        if (getSelectQuery().settings())
+            InterpreterSetQuery(getSelectQuery().settings(), context).executeForCurrentContext();
     }
     /// proton: ends.
 
