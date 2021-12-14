@@ -1,0 +1,180 @@
+{
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "tests": [
+        {
+            "name": "stream tumble window max(value) aggregate group by id",
+            "description": "tumble window aggregate by max and group by id",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}],
+            "inputs": [[
+                    ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
+                ],
+                
+                    [["dev6", "ca", 66, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:04"]]
+                ,
+                    [["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:10"]]
+            ],
+            "expected_results": [
+                    [["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev6", "66.0", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]]]                
+        },
+        {
+            "name": "stream query expected exception: not under aggregate and not in group",
+            "description": "expected exception",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by window_start, window_end emit stream"}
+            ],
+            "expected_results": ["error_code:215"]                
+        },
+        {
+            "name": "stream query expected exception: global stream query w/ PERIODIC INTERVAL but no window aggreagation",
+            "description": "expected exception",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"SELECT * FROM test WHERE value >25 EMIT STREAM PERIODIC INTERVAL 2 SECOND"}
+            ],
+            "expected_results": ["error_code:62"]                
+        },
+        {
+            "name": "stream query expected exception: stream query group by w/ both window_start and window_end lacked",
+            "description": "expected exception",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select id, max(value) from tumble(test, timestamp, interval 5 second) group by id emit stream after watermark"}
+            ],
+            "expected_results": ["error_code:2002"]                
+        },
+        {
+            "name": "stream tumble window with designated timestamp w/ out of order timestamp within window.",
+            "description": "stream tumble window with designated 5 sec timestamp.",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by window_start, window_end emit stream"}],
+            "inputs": [[
+                    ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:14"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:13"]
+                ],
+                
+                    [["dev6", "ca", 66, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:12"]]
+                ,
+                    [["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:15"]]
+            ],
+            "expected_results": [
+                [["66", "2020-02-02 20:00:10", "2020-02-02 20:00:15"]]
+            ]                
+        },
+        {
+            "name": "stream tumble window w/ 1st batch inputs data cross multiple windows - #104",
+            "description": "stream tumble window query and send 3 inptus in the first batch, the window_start of the next window should be based on the minimal timestamp of the first batch",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select window_start, window_end, max(timestamp), min(timestamp) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}],
+            "inputs": [[
+                    ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:20"],
+                    ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:23"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:27"]
+                ]
+            ],
+            "expected_results": [
+                [
+                    ["2020-02-02 20:00:18", "2020-02-02 20:00:21", "2020-02-02 20:00:20", "2020-02-02 20:00:20"],
+                    ["2020-02-02 20:00:21", "2020-02-02 20:00:24", "2020-02-02 20:00:23", "2020-02-02 20:00:23"]
+                ]
+            ]                
+        },
+        
+        {
+            "name": "stream query w/ inputs with timestamp early than latest timestamp in stream table",
+            "description": "stream query aggregate by max is created and then ingest data w/ timestamp early than latest timestamp in stream table, projection based on the inputs should be emitted. ",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}],
+            "inputs": [[
+                    ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
+                ],
+                
+                    [["dev6", "ca", 66, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:04"]]
+                ,
+                    [["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:05"]],
+                    [["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:30"]]
+            ],
+            "expected_results": [
+                    [["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev6", "66.0", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev8", "67", "2020-02-02 20:00:05", "2020-02-02 20:00:10"]]]                
+        },
+        
+        {
+            "name": "stream tumble late events drop w/ window delay interval  - #107",
+            "description": "an example positive test that uses insert into w/o column",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 2 second"}],
+            "inputs": [
+                    [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:30"]],
+                    [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:31"]],
+                    [["dev2", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:32"]],
+                    [["dev2", "ca", 59.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:50"]],
+                    [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:34"]],
+                    [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:37"]],
+                    [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:45"]]
+            ],
+            "expected_results": [
+                [["2020-02-02 20:00:30", "2020-02-02 20:00:35", 3]]
+            ]                
+        },
+        {
+            "name": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
+            "description": "an example positive test that uses insert into w/o column",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}],
+            "inputs": [
+                    [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:50"]],
+                    [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:51"]],
+                    [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:55"]],
+                    [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:57"]]
+                ],
+            "expected_results": [
+                [["2020-02-02 20:00:48", "2020-02-02 20:00:51", 1],
+                ["2020-02-02 20:00:51", "2020-02-02 20:00:54", 1],
+                ["2020-02-02 20:00:54", "2020-02-02 20:00:57", 1]]
+            ]                
+        },
+        {
+            "name": "stream query tumble window w/delay: no aggregation to be emit before delay gate ",
+            "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}],
+            "inputs": [
+                [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]],
+                [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:07"]]
+                ],
+            "expected_results": [
+                [[]]
+            ]                
+        },
+        {
+            "name": "stream query tumble window w/delay: no aggregation to be emit when delay gate",
+            "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}],
+            "inputs": [
+                [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]],
+                [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]
+                ],
+            "expected_results": [
+                [["2020-02-02 20:01:00", "2020-02-02 20:01:05", 4]]
+            ]                
+        }
+
+    ]
+}
+
+
