@@ -1,7 +1,6 @@
 #include "ProtonUtil.h"
 
 #include <Functions/FunctionsStreamingWindow.h>
-#include <Parsers/ASTEmitQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>

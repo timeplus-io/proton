@@ -535,8 +535,8 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                     WriteBufferFromFile out(logger_file);
                     out << "<clickhouse>\n"
                     "    <logger>\n"
-                    "        <log>" << (log_path / "clickhouse-server.log").string() << "</log>\n"
-                    "        <errorlog>" << (log_path / "clickhouse-server.err.log").string() << "</errorlog>\n"
+                    "        <log>" << (log_path / "proton-server.log").string() << "</log>\n"
+                    "        <errorlog>" << (log_path / "proton-server.err.log").string() << "</errorlog>\n"
                     "    </logger>\n"
                     "</clickhouse>\n";
                     out.sync();
