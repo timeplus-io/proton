@@ -691,6 +691,10 @@ components:
           type: integer
           default: 1
           description: Number of shards of the table.
+        shard_by_expression:
+          type: string
+          default: rand()
+          description: Expression of sharding key for distributing data to different shard. For example, sipHash64(timestamp).
         replication_factor:
           type: integer
           default: 1
