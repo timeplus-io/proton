@@ -130,6 +130,10 @@ void MySQLHandler::run()
             session->sessionContext()->setDefaultFormat("MySQLWire");
             if (!handshake_response.database.empty())
                 session->sessionContext()->setCurrentDatabase(handshake_response.database);
+
+            /// proton: starts. Enforce `hist` connection
+            session->sessionContext()->setSetting("query_mode", String("hist"));
+            /// proton: ends
         }
         catch (const Exception & exc)
         {

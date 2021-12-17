@@ -96,6 +96,11 @@ users:
     system:
         password: ''
 
+    pgadmin:
+        password: 'pgadmin'
+        networks:
+            ip: '::/0'
+
 # Quotas.
 quotas:
     # Name of quota.

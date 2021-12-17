@@ -134,12 +134,21 @@ bool PostgreSQLHandler::startup()
     const auto & user_name = start_up_msg->user;
     authentication_manager.authenticate(user_name, *session, *message_transport, socket().peerAddress());
 
+    /// proton: starts. Check query mode: options=-c query_mode=hist
+    String query_mode = "hist";
+    auto it = start_up_msg->parameters.find("options");
+    if (it != start_up_msg->parameters.end())
+        if (it->second.find("query_mode=streaming") != String::npos)
+            query_mode = "streaming";
+
     try
     {
         session->makeSessionContext();
         session->sessionContext()->setDefaultFormat("PostgreSQLWire");
         if (!start_up_msg->database.empty())
             session->sessionContext()->setCurrentDatabase(start_up_msg->database);
+
+        session->sessionContext()->setSetting("query_mode", query_mode);
     }
     catch (const Exception & exc)
     {
@@ -149,6 +158,7 @@ bool PostgreSQLHandler::startup()
             true);
         throw;
     }
+    /// proton: ends
 
     sendParameterStatusData(*start_up_msg);
 
