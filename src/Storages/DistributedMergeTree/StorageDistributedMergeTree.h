@@ -9,7 +9,7 @@
 
 #include <DistributedWriteAheadLog/KafkaWAL.h>
 #include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
-#include <Interpreters/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>

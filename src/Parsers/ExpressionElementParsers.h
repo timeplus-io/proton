@@ -467,10 +467,8 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
-<<<<<<< HEAD
 ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast);
 
-=======
 /// proton: starts.
 struct IntervalKind;
 /// Optional conversion to interval alias. Example:
@@ -485,5 +483,4 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 /// proton: ends.
->>>>>>> feature last-x streaming processing (#128)
 }

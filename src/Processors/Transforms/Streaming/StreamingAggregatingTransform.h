@@ -2,7 +2,7 @@
 
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
-#include <Interpreters/StreamingAggregator.h>
+#include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Processors/IAccumulatingTransform.h>
 #include <Common/Stopwatch.h>
 

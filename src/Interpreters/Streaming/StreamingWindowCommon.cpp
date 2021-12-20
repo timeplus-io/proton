@@ -1,4 +1,4 @@
-#include "ProtonUtil.h"
+#include "StreamingWindowCommon.h"
 
 #include <Functions/FunctionsStreamingWindow.h>
 #include <Parsers/ASTFunction.h>

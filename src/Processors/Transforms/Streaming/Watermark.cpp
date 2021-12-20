@@ -2,11 +2,11 @@
 
 #include <Core/Block.h>
 #include <Functions/FunctionsStreamingWindow.h>
-#include <Interpreters/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
-#include <Parsers/ASTEmitQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Storages/SelectQueryInfo.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>

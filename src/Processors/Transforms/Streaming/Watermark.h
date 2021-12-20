@@ -1,11 +1,11 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Interpreters/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/IntervalKind.h>
-#include <Common/ProtonUtil.h>
 
 class DateLUTImpl;
 

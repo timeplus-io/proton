@@ -1,11 +1,12 @@
-#include <Parsers/ParserEmitQuery.h>
-#include <Parsers/ASTEmitQuery.h>
+#include "ParserEmitQuery.h"
+#include "ASTEmitQuery.h"
+#include "ParserIntervalAliasExpression.h"
+
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int SYNTAX_ERROR;
@@ -79,8 +80,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!interval_alias_p.parse(pos, last_interval, expected))
                 return false;
         }
-    }
-    while (ParserKeyword("AND").ignore(pos, expected));
+    } while (ParserKeyword("AND").ignore(pos, expected));
 
     auto query = std::make_shared<ASTEmitQuery>();
     query->streaming = streaming;

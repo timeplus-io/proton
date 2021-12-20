@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Aggregator.h"
+#include "Interpreters/Aggregator.h"
 
 #include <mutex>
 #include <memory>
@@ -37,7 +37,7 @@
 #include <Columns/ColumnLowCardinality.h>
 
 /// proton: starts
-#include <Interpreters/StreamingAggregator.h>
+#include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/StreamingTwoLevelHashMap.h>
 

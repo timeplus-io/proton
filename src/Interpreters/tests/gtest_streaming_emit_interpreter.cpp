@@ -1,6 +1,6 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Interpreters/InDepthNodeVisitor.h>
-#include <Interpreters/StreamingEmitInterpreter.h>
+#include <Interpreters/Streaming/StreamingEmitInterpreter.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>

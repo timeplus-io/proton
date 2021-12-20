@@ -2,14 +2,14 @@
 #include <DataTypes/DataTypeInterval.h>
 
 /// proton: starts
-#include <Interpreters/StreamingAggregator.h>
-#include <Interpreters/StreamingEmitInterpreter.h>
+#include <Interpreters/Streaming/StreamingAggregator.h>
+#include <Interpreters/Streaming/StreamingEmitInterpreter.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
-#include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 

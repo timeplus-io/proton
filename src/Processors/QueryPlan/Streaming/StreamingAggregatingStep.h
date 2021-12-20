@@ -1,7 +1,7 @@
 #pragma once
 
+#include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
-#include <Interpreters/StreamingAggregator.h>
 
 namespace DB
 {

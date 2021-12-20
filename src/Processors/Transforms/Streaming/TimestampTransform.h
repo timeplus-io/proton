@@ -2,10 +2,10 @@
 
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/ISimpleTransform.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/StreamingFunctionDescription.h>
 
 namespace DB
 {

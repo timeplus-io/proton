@@ -11,7 +11,7 @@
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
 /// proton: starts
-#include <Parsers/ParserEmitQuery.h>
+#include <Parsers/Streaming/ParserEmitQuery.h>
 /// proton: ends
 
 namespace DB

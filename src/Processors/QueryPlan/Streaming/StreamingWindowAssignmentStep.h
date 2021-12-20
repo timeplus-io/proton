@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 

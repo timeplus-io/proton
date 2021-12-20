@@ -2,8 +2,8 @@
 
 #include <Interpreters/GetAggregatesVisitor.h>
 #include <Interpreters/InterpreterSetQuery.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Interpreters/getTableExpressions.h>
-#include <Parsers/ASTEmitQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -11,11 +11,11 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Parsers/formatAST.h>
 #include <base/logger_useful.h>
 #include <Common/IntervalKind.h>
 #include <Common/ProtonCommon.h>
-#include <Common/ProtonUtil.h>
 
 namespace DB
 {

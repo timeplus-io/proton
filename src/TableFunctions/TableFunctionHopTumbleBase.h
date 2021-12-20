@@ -2,10 +2,10 @@
 
 #include "ITableFunction.h"
 
-#include <Common/ProtonUtil.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 namespace DB

@@ -1,6 +1,6 @@
-#include <Parsers/ASTEmitQuery.h>
-#include <Common/SipHash.h>
 #include <IO/Operators.h>
+#include <Parsers/Streaming/ASTEmitQuery.h>
+#include <Common/SipHash.h>
 
 namespace DB
 {
