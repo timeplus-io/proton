@@ -8,8 +8,8 @@
 #include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
-#include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -542,7 +542,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (storage)
         {
             /// proton: starts
-            if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
+            if (auto * distributed = storage->as<ProxyDistributedMergeTree>())
             {
                 /// We save the required columns to project (after streaming window)
                 required_columns_after_streaming_window = required_columns;
@@ -1973,9 +1973,12 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             if (query_analyzer->hasAggregation())
                 interpreter_subquery->ignoreWithTotals();
         }
-
         interpreter_subquery->buildQueryPlan(query_plan);
         query_plan.addInterpreterContext(context);
+
+        if (!storage && isStreaming())
+            /// Global aggregation over subquery case
+            buildStreamingProcessingQueryPlan(query_plan);
     }
     else if (storage)
     {
@@ -2090,10 +2093,10 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_plan.addStep(std::move(adding_limits_and_quota));
 
         /// proton: starts. Streaming Window
-        if (auto * streaming_distributed = storage->as<StreamingDistributedMergeTree>())
+        if (auto * streaming_distributed = storage->as<ProxyDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan, streaming_distributed);
         else if (auto * distributed = storage->as<StorageDistributedMergeTree>())
-            buildStreamingProcessingQueryPlan(query_plan, distributed);
+            buildStreamingProcessingQueryPlan(query_plan);
         /// proton: ends
     }
     else
@@ -2131,7 +2134,7 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
 void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final, InputOrderInfoPtr group_by_info)
 {
     /// proton: starts
-    if (query_info.syntax_analyzer_result->streaming)
+    if (isStreaming())
     {
         executeStreamingAggregation(query_plan, expression, overflow_row, final);
         return;
@@ -2693,7 +2696,7 @@ void InterpreterSelectQuery::initSettings()
 /// proton: starts
 void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final)
 {
-    assert(query_info.syntax_analyzer_result->streaming);
+    assert(isStreaming());
 
     auto expression_before_aggregation = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), expression);
     expression_before_aggregation->setStepDescription("Before GROUP BY");
@@ -2753,7 +2756,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
         {},
-        query_info.syntax_analyzer_result->streaming, /// FIXME, more robust streaming checking
+        isStreaming(),
         settings.keep_windows,
         streaming_group_by);
 
@@ -2775,9 +2778,20 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
     query_plan.addStep(std::move(aggregating_step));
 }
 
-void InterpreterSelectQuery::checkForStreamingQuery() const
+bool InterpreterSelectQuery::isStreaming() const
 {
     if (query_info.syntax_analyzer_result->streaming)
+        return query_info.syntax_analyzer_result->streaming;
+
+    if (interpreter_subquery)
+        return interpreter_subquery->isStreaming();
+    else
+        return false;
+}
+
+void InterpreterSelectQuery::checkForStreamingQuery() const
+{
+    if (isStreaming())
     {
         if (analysis_result.has_order_by)
             throw Exception("Streaming query doesn't support ORDER BY", ErrorCodes::NOT_IMPLEMENTED);
@@ -2788,28 +2802,30 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
     if (storage)
     {
-        if (auto * distributed = storage->as<StreamingDistributedMergeTree>())
+        if (auto * distributed = storage->as<ProxyDistributedMergeTree>())
         {
-            bool has_win_col = false;
-            for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
+            if (distributed->hasStreamingFunc())
             {
-                if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
+                bool has_win_col = false;
+                for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
                 {
-                    has_win_col = true;
-                    break;
+                    if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
+                    {
+                        has_win_col = true;
+                        break;
+                    }
                 }
+
+                if (!has_win_col)
+                    throw Exception(
+                        "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
+                        ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
             }
-
-            if (!has_win_col)
-                throw Exception(
-                    "Neither window_start nor window_end is referenced in the query, but streaming window function is used",
-                    ErrorCodes::WINDOW_COLUMN_NOT_REFERENCED);
-
         }
     }
 }
 
-void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyDistributedMergeTree * distributed) const
 {
     auto timestamp_func_desc = distributed->getTimestampFunctionDescription();
     if (timestamp_func_desc)
@@ -2833,19 +2849,32 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
                 query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc)));
     }
 
-    if (query_info.syntax_analyzer_result->streaming)
-        query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, distributed->getStreamingFunctionDescription(), log));
+    auto stream_func_desc = distributed->getStreamingFunctionDescription();
 
-    auto output_header = metadata_snapshot->getSampleBlockForColumns(
-                             required_columns_after_streaming_window, distributed->getInnerStorage()->getVirtuals(), distributed->getInnerStorage()->getStorageID());
-    query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
-        query_plan.getCurrentDataStream(), std::move(output_header), distributed->getStreamingFunctionDescription()));
+    if (isStreaming())
+        query_plan.addStep(std::make_unique<WatermarkStep>(
+            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, log));
+
+    if (stream_func_desc)
+    {
+        Block output_header;
+        if (!distributed->getInnerStorage())
+            output_header = metadata_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
+        else
+            /// Built from subquery
+            output_header = metadata_snapshot->getSampleBlockForColumns(
+                required_columns_after_streaming_window,
+                distributed->getInnerStorage()->getVirtuals(),
+                distributed->getInnerStorage()->getStorageID());
+
+        query_plan.addStep(
+            std::make_unique<StreamingWindowAssignmentStep>(query_plan.getCurrentDataStream(), std::move(output_header), stream_func_desc));
+    }
 }
 
-void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StorageDistributedMergeTree *) const
+void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
 {
-    if (query_info.syntax_analyzer_result->streaming)
+    if (isStreaming())
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, nullptr, log));
 }

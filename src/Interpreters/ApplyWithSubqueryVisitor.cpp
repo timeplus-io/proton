@@ -105,6 +105,38 @@ void ApplyWithSubqueryVisitor::visit(ASTFunction & func, const Data & data)
             }
         }
     }
+
+    /// proton: starts. replace table identifier with subquery defined by WITH for tumble and hop
+    /// function. For example,
+    /// "WITH transformed AS (...)
+    /// SELECT ...
+    /// FROM
+    ///    tumble(transformed, ...)
+    /// GROUP BY ..."
+    /// it will find 'transformed' argument in tumble function and replace with the subquery
+    /// defined by WITH and set its cte_name to 'transformed'
+    if (func.name == "hop" || func.name == "tumble")
+    {
+        auto & ast = func.arguments->children.at(0);
+        if (const auto * identifier = ast->as<ASTIdentifier>())
+        {
+            if (identifier->isShort())
+            {
+                /// Clang-tidy is wrong on this line, because `func.arguments->children.at(1)` gets replaced before last use of `name`.
+                auto name = identifier->shortName(); // NOLINT
+                auto subquery_it = data.subqueries.find(name);
+                if (subquery_it != data.subqueries.end())
+                {
+                    auto old_alias = func.arguments->children[0]->tryGetAlias();
+                    func.arguments->children[0] = subquery_it->second->clone();
+                    func.arguments->children[0]->as<ASTSubquery &>().cte_name = name;
+                    if (!old_alias.empty())
+                        func.arguments->children[0]->setAlias(old_alias);
+                }
+            }
+        }
+    }
+    /// proton: ends
 }
 
 }

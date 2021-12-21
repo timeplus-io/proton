@@ -32,6 +32,7 @@ public:
 
     /// proton: starts
     bool hasAggregation() const override;
+    bool isStreaming() const override;
     /// proton: ends
 
 private:

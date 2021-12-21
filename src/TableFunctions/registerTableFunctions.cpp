@@ -53,6 +53,7 @@ void registerTableFunctions()
     /// proton: starts
     registerTableFunctionHop(factory);
     registerTableFunctionTumble(factory);
+    registerTableFunctionHist(factory);
     /// proton: ends
 }
 

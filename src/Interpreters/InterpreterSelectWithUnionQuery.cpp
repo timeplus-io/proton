@@ -261,6 +261,16 @@ bool InterpreterSelectWithUnionQuery::hasAggregation() const
     }
     return false;
 }
+
+bool InterpreterSelectWithUnionQuery::isStreaming() const
+{
+    for (auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->isStreaming())
+            return true;
+    }
+    return false;
+}
 /// proton: ends
 
 void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)

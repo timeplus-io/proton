@@ -183,24 +183,8 @@ void RequiredSourceColumnsMatcher::visit(const ASTTablesInSelectQueryElement & n
 }
 
 /// ASTIdentifiers here are tables. Do not visit them as generic ones.
-void RequiredSourceColumnsMatcher::visit(const ASTTableExpression & node, const ASTPtr &, Data & data)
+void RequiredSourceColumnsMatcher::visit(const ASTTableExpression & /*node*/, const ASTPtr &, Data & /*data*/)
 {
-    /// proton: starts
-    if (node.database_and_table_name)
-    {
-        if (!node.database_and_table_name->as<ASTTableIdentifier>()->streaming)
-            /// FIXME, per table ?
-            data.streaming = false;
-    }
-    else if (node.table_function)
-    {
-        auto * func_node = node.table_function->as<ASTFunction>();
-        if (func_node->arguments && func_node->arguments->children.size() >= 2)
-            /// tumble/hop(hist(table), ...)
-            if (auto * table = func_node->arguments->children[0]->as<ASTTableIdentifier>())
-                data.streaming = table->streaming;
-    }
-    /// proton: ends
 }
 
 void RequiredSourceColumnsMatcher::visit(const ASTArrayJoin & node, const ASTPtr &, Data & data)

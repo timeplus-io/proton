@@ -41,10 +41,11 @@
 
 #include <IO/WriteHelpers.h>
 #include <Storages/IStorage.h>
-
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
+#include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
+#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends.
 
@@ -908,14 +909,6 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     RequiredSourceColumnsVisitor::Data columns_context{has_reserved_time};
     RequiredSourceColumnsVisitor(columns_context).visit(query);
 
-    /// proton: starts
-    streaming = columns_context.streaming;
-    /// force hist mode
-    if (context->getSettingsRef().query_mode.value == "hist")
-        streaming = false;
-
-    /// proton: ends
-
     NameSet source_column_names;
     for (const auto & column : source_columns)
         source_column_names.insert(column.name);
@@ -1130,6 +1123,27 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     {
         source_column_names.insert(column.name);
     }
+
+    /// proton: starts
+    /// As required_source_columns are collected from storage, if it is not empty, then we can simple determine the query type (stream or
+    /// not) by storage's type. Only one exception is that the storage is nullptr. In this case, the storage must be a subquery, only
+    /// the calling interpreter knows whether or not it is a streaming query. therefore InterpreterSelectQuery::isStreaming() is more accurate.
+    streaming = false;
+    if (storage && !required_source_columns.empty())
+    {
+        if (const auto * stream = storage->as<ProxyDistributedMergeTree>())
+        {
+            if (stream->isStreaming())
+                streaming = true;
+        }
+        else if (const auto * distributed = storage->as<StorageDistributedMergeTree>())
+            streaming = true;
+    }
+
+    /// force hist mode
+    if (context->getSettingsRef().query_mode.value == "hist")
+        streaming = false;
+    /// proton: ends
 }
 
 NameSet TreeRewriterResult::getArrayJoinSourceNameSet() const

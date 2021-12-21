@@ -1,17 +1,18 @@
-#include "TableFunctionHopTumbleBase.h"
+#include "TableFunctionProxyBase.h"
 
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSubquery.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <Storages/DistributedMergeTree/StreamingDistributedMergeTree.h>
-#include <Storages/IStorage.h>
+#include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -68,14 +69,25 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
-StorageID TableFunctionHopTumbleBase::resolveStorageID(const ASTPtr & arg, ContextPtr context)
+StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr context)
 {
-    StorageID storage_id = StorageID::createEmpty();
-
-    if (auto * table_id = arg->as<ASTTableIdentifier>())
+    if (auto * sub = arg->as<ASTSubquery>())
     {
-        /// tumble(hist(table), ...)
-        storage_id = table_id->getTableId();
+        subquery = sub->clone();
+        storage_id = StorageID::createEmpty();
+        /// TODO: Whether the temporary table should be create in temporary database?
+        storage_id.database_name = context->getCurrentDatabase();
+        storage_id.table_name = sub->cte_name;
+        return storage_id;
+    }
+    else if (auto * table_func = arg->as<ASTFunction>())
+    {
+        /// tumble(hist(devices), ...)
+        auto query_context = context->getQueryContext();
+        const auto & function_storage = query_context->executeTableFunction(arg);
+        if (auto * streaming_storage = function_storage->as<ProxyDistributedMergeTree>())
+            streaming = streaming_storage->isStreaming();
+        return function_storage->getStorageID();
     }
     else if (String table; tryGetIdentifierNameInto(arg, table))
     {
@@ -103,32 +115,49 @@ StorageID TableFunctionHopTumbleBase::resolveStorageID(const ASTPtr & arg, Conte
     return DatabaseCatalog::instance().getTable(storage_id, context)->getStorageID();
 }
 
-TableFunctionHopTumbleBase::TableFunctionHopTumbleBase(const String & name_) : name(name_)
+TableFunctionProxyBase::TableFunctionProxyBase(const String & name_) : name(name_)
 {
 }
 
-StoragePtr TableFunctionHopTumbleBase::executeImpl(
+StoragePtr TableFunctionProxyBase::executeImpl(
     const ASTPtr & /* func_ast */, ContextPtr context, const String & /* table_name */, ColumnsDescription /* cached_columns_ = {} */) const
 {
-    return StreamingDistributedMergeTree::create(
-        storage_id, columns, underlying_storage_metadata_snapshot, context, streaming_func_desc, timestamp_func_desc);
+    return ProxyDistributedMergeTree::create(
+        storage_id, columns, underlying_storage_metadata_snapshot, context, streaming_func_desc, timestamp_func_desc, subquery, streaming);
 }
 
-void TableFunctionHopTumbleBase::init(
+void TableFunctionProxyBase::init(
     ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast)
 {
-    auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    if (storage->getName() != "DistributedMergeTree")
-        throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
+    StoragePtr storage;
 
-    underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
-    columns = underlying_storage_metadata_snapshot->getColumns();
+    if (subquery)
+    {
+        SelectQueryOptions options;
+        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context, options.subquery());
+        if (interpreter_subquery)
+        {
+            auto source_header = interpreter_subquery->getSampleBlock();
+            columns = ColumnsDescription(source_header.getNamesAndTypesList());
+
+            /// determine whether it is a streaming query
+            streaming = interpreter_subquery->isStreaming();
+        }
+    }
+    else
+    {
+        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        if (storage->getName() != "DistributedMergeTree")
+            throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
+        underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
+        columns = underlying_storage_metadata_snapshot->getColumns();
+    }
 
     /// We will first need analyze time column expression since the streaming window function depends on the result of time column expr
     if (timestamp_expr_ast)
     {
-        auto syntax_analyzer_result
-            = TreeRewriter(context).analyze(timestamp_expr_ast, columns.getAll(), storage, underlying_storage_metadata_snapshot);
+        auto syntax_analyzer_result = TreeRewriter(context).analyze(
+            timestamp_expr_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_metadata_snapshot : nullptr);
         timestamp_func_desc = createStreamingFunctionDescription(timestamp_expr_ast, std::move(syntax_analyzer_result), context, "");
 
         /// Check the resulting type. It shall be a datetime / datetime64.
@@ -158,9 +187,9 @@ void TableFunctionHopTumbleBase::init(
     handleResultType(result_type_and_name);
 }
 
-void TableFunctionHopTumbleBase::handleResultType(const ColumnWithTypeAndName & type_and_name)
+void TableFunctionProxyBase::handleResultType(const ColumnWithTypeAndName & type_and_name)
 {
-    auto tuple_result_type = checkAndGetDataType<DataTypeTuple>(type_and_name.type.get());
+    const auto * tuple_result_type = checkAndGetDataType<DataTypeTuple>(type_and_name.type.get());
     assert(tuple_result_type);
     assert(tuple_result_type->getElements().size() == 2);
 
@@ -174,7 +203,7 @@ void TableFunctionHopTumbleBase::handleResultType(const ColumnWithTypeAndName & 
     columns.add(wend);
 }
 
-ColumnsDescription TableFunctionHopTumbleBase::getActualTableStructure(ContextPtr /* context */) const
+ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /* context */) const
 {
     return columns;
 }

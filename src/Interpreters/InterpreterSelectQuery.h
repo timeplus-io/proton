@@ -31,7 +31,7 @@ struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 
 /// proton: starts
-class StreamingDistributedMergeTree;
+class ProxyDistributedMergeTree;
 class StorageDistributedMergeTree;
 /// proton: ends
 
@@ -103,6 +103,7 @@ public:
 
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
+    bool isStreaming() const override;
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
@@ -162,8 +163,8 @@ private:
     /// proton: starts
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
-    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StreamingDistributedMergeTree * distributed) const;
-    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, StorageDistributedMergeTree * distributed) const;
+    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyDistributedMergeTree * distributed) const;
+    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     /// proton: ends
 
     enum class Modificator

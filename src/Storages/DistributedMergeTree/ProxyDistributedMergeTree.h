@@ -12,12 +12,12 @@ struct StorageID;
 
 /// StreamingDistributedMergeTree is pure in-memory representation
 /// when a stream query is executed. It is for read-query only
-class StreamingDistributedMergeTree final : public shared_ptr_helper<StreamingDistributedMergeTree>, public IStorage, WithContext
+class ProxyDistributedMergeTree final : public shared_ptr_helper<ProxyDistributedMergeTree>, public IStorage, WithContext
 {
-    friend struct shared_ptr_helper<StreamingDistributedMergeTree>;
+    friend struct shared_ptr_helper<ProxyDistributedMergeTree>;
 
 public:
-    ~StreamingDistributedMergeTree() override = default;
+    ~ProxyDistributedMergeTree() override = default;
 
     String getName() const override { return "StreamingDistributedMergeTree"; }
 
@@ -58,19 +58,30 @@ public:
 
     const StoragePtr & getInnerStorage() const { return storage; }
 
+    /// Whether it reads data from streaming store or historical store
+    bool isStreaming() const { return streaming; }
+
+    /// Whether is has streaming func, i.e. tumble(...) or hop(...)
+    bool hasStreamingFunc() const { return streaming_func_desc != nullptr; }
+
 private:
-    StreamingDistributedMergeTree(
+    ProxyDistributedMergeTree(
         const StorageID & id_,
         const ColumnsDescription & columns_,
         StorageMetadataPtr underlying_storage_metadata_snapshot_,
         ContextPtr context_,
         StreamingFunctionDescriptionPtr streaming_func_desc_,
-        StreamingFunctionDescriptionPtr timestamp_func_desc_);
+        StreamingFunctionDescriptionPtr timestamp_func_desc_,
+        ASTPtr subquery_ = nullptr,
+        bool streaming_ = false);
 
     StorageMetadataPtr underlying_storage_metadata_snapshot;
     StreamingFunctionDescriptionPtr streaming_func_desc;
     StreamingFunctionDescriptionPtr timestamp_func_desc;
     StoragePtr storage;
+    ASTPtr subquery;
+
+    bool streaming = false;
 
     Poco::Logger * log;
 };

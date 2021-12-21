@@ -19,7 +19,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
-TableFunctionTumble::TableFunctionTumble(const String & name_) : TableFunctionHopTumbleBase(name_)
+TableFunctionTumble::TableFunctionTumble(const String & name_) : TableFunctionProxyBase(name_)
 {
 }
 

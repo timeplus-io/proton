@@ -1,7 +1,8 @@
-#include "StreamingDistributedMergeTree.h"
+#include "ProxyDistributedMergeTree.h"
 #include "StorageDistributedMergeTree.h"
 
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
@@ -13,38 +14,49 @@
 
 namespace DB
 {
-StreamingDistributedMergeTree::StreamingDistributedMergeTree(
+ProxyDistributedMergeTree::ProxyDistributedMergeTree(
     const StorageID & id_,
     const ColumnsDescription & columns_,
     StorageMetadataPtr underlying_storage_metadata_snapshot_,
     ContextPtr context_,
     StreamingFunctionDescriptionPtr streaming_func_desc_,
-    StreamingFunctionDescriptionPtr timestamp_func_desc_)
+    StreamingFunctionDescriptionPtr timestamp_func_desc_,
+    ASTPtr subquery_,
+    bool streaming_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
     , underlying_storage_metadata_snapshot(underlying_storage_metadata_snapshot_)
     , streaming_func_desc(std::move(streaming_func_desc_))
     , timestamp_func_desc(std::move(timestamp_func_desc_))
-    , storage(DatabaseCatalog::instance().getTable(id_, context_))
+    , subquery(subquery_)
+    , streaming(streaming_)
     , log(&Poco::Logger::get(id_.getNameForLogs()))
 {
-    assert(streaming_func_desc);
+    if (streaming)
+        assert(streaming_func_desc);
+
+    if (!subquery)
+        storage =  DatabaseCatalog::instance().getTable(id_, context_);
 
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
 }
 
-QueryProcessingStage::Enum StreamingDistributedMergeTree::getQueryProcessingStage(
+QueryProcessingStage::Enum ProxyDistributedMergeTree::getQueryProcessingStage(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info) const
 {
-    return storage->getQueryProcessingStage(context_, to_stage, metadata_snapshot, query_info);
+    if (storage)
+        return storage->getQueryProcessingStage(context_, to_stage, metadata_snapshot, query_info);
+    else
+        /// When it is created by subquery not a table
+        return QueryProcessingStage::FetchColumns;
 }
 
-Pipe StreamingDistributedMergeTree::read(
+Pipe ProxyDistributedMergeTree::read(
     const Names & column_names,
     const StorageMetadataPtr & /* metadata_snapshot */,
     SelectQueryInfo & query_info,
@@ -58,7 +70,7 @@ Pipe StreamingDistributedMergeTree::read(
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
 }
 
-void StreamingDistributedMergeTree::read(
+void ProxyDistributedMergeTree::read(
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageMetadataPtr & /* metadata_snapshot */,
@@ -79,20 +91,47 @@ void StreamingDistributedMergeTree::read(
         updated_column_names.push_back(column_name);
     }
 
-    auto distributed = storage->as<StorageDistributedMergeTree>();
+    /// If this storage is built from subquery
+    if (!storage && subquery)
+    {
+        /// TODO: should we use a copy of context, instead of that from initial query?
+        SelectQueryOptions options;
+        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
+            subquery->children[0], context_, options.subquery().noModify(), updated_column_names);
+        if (interpreter_subquery)
+        {
+            interpreter_subquery->ignoreWithTotals();
+            interpreter_subquery->buildQueryPlan(query_plan);
+            //            query_plan.addInterpreterContext(context);
+        }
+        return;
+    }
+
+    auto *distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
-    distributed->read(
-        query_plan,
-        updated_column_names,
-        underlying_storage_metadata_snapshot,
-        query_info,
-        context_,
-        processed_stage,
-        max_block_size,
-        num_streams);
+
+    if (streaming)
+        distributed->readStreaming(
+            query_plan,
+            query_info,
+            updated_column_names,
+            underlying_storage_metadata_snapshot,
+            context_,
+            max_block_size,
+            num_streams);
+    else
+        distributed->readHistory(
+            query_plan,
+            updated_column_names,
+            underlying_storage_metadata_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            num_streams);
 }
 
-Names StreamingDistributedMergeTree::getAdditionalRequiredColumns() const
+Names ProxyDistributedMergeTree::getAdditionalRequiredColumns() const
 {
     Names required;
 
@@ -100,10 +139,11 @@ Names StreamingDistributedMergeTree::getAdditionalRequiredColumns() const
         for (const auto & name : timestamp_func_desc->input_columns)
             required.push_back(name);
 
-    for (const auto & name : streaming_func_desc->input_columns)
-        if (name != STREAMING_TIMESTAMP_ALIAS)
-            /// We remove the internal dependent ____ts column
-            required.push_back(name);
+    if(streaming_func_desc)
+        for (const auto & name : streaming_func_desc->input_columns)
+            if (name != STREAMING_TIMESTAMP_ALIAS)
+                /// We remove the internal dependent ____ts column
+                required.push_back(name);
 
     return required;
 }

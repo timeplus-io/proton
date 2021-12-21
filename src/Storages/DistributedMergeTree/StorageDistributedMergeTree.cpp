@@ -362,10 +362,22 @@ void StorageDistributedMergeTree::read(
 {
     /// Non streaming window function: tail or global streaming aggr
     if (query_info.syntax_analyzer_result->streaming)
-    {
         readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams);
-    }
-    else if (requireDistributedQuery(context_))
+    else
+        readHistory(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+}
+
+void StorageDistributedMergeTree::readHistory(
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context_,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    unsigned num_streams)
+{
+    if (requireDistributedQuery(context_))
     {
         /// This is a distributed query
         readRemote(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage);

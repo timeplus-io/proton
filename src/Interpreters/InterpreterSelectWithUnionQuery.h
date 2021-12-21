@@ -39,6 +39,7 @@ public:
 
     /// proton: starts
     bool hasAggregation() const override;
+    bool isStreaming() const override;
     /// proton: ends
 
     virtual void ignoreWithTotals() override;

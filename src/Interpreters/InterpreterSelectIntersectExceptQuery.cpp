@@ -157,6 +157,16 @@ bool InterpreterSelectIntersectExceptQuery::hasAggregation() const
     }
     return false;
 }
+
+bool InterpreterSelectIntersectExceptQuery::isStreaming() const
+{
+    for (auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->isStreaming())
+            return true;
+    }
+    return false;
+}
 /// proton: ends
 
 }
