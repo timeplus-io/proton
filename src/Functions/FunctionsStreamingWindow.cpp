@@ -18,7 +18,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int BAD_ARGUMENTS;
 }
 
 namespace
@@ -27,24 +27,13 @@ namespace
     using ColumnDateTime32 = ColumnVector<UInt32>;
     using ColumnDate = ColumnVector<UInt16>;
 
-    std::tuple<IntervalKind::Kind, Int64>
-    dispatchForIntervalColumns(const ColumnWithTypeAndName & interval_column, const String & function_name)
+    std::tuple<IntervalKind::Kind, Int64> intervalKindAndUnits(const ColumnWithTypeAndName & interval_column)
     {
         const auto * interval_type = checkAndGetDataType<DataTypeInterval>(interval_column.type.get());
-        if (!interval_type)
-            throw Exception(
-                "Illegal column " + interval_column.name + " of argument of function " + function_name, ErrorCodes::ILLEGAL_COLUMN);
+        assert(interval_type);
         const auto * interval_column_const_int64 = checkAndGetColumnConst<ColumnInt64>(interval_column.column.get());
-        if (!interval_column_const_int64)
-            throw Exception(
-                "Illegal column " + interval_column.name + " of argument of function " + function_name, ErrorCodes::ILLEGAL_COLUMN);
-        Int64 num_units = interval_column_const_int64->getValue<Int64>();
-        if (num_units <= 0)
-            throw Exception(
-                "Value for column " + interval_column.name + " of function " + function_name + " must be positive",
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        return {interval_type->getKind(), num_units};
+        assert(interval_column_const_int64);
+        return {interval_type->getKind(), interval_column_const_int64->getValue<Int64>()};
     }
 
     ColumnPtr executeWindowBoundTumble(const ColumnPtr & column, int index, const String & function_name)
@@ -109,7 +98,7 @@ namespace
     }
 
     void checkIntervalArgument(
-        const ColumnWithTypeAndName & argument, const String & function_name, IntervalKind & interval_kind, bool & result_type_is_date)
+        const ColumnWithTypeAndName & argument, const String & function_name, IntervalKind & interval_kind, Int64 & interval, bool & result_type_is_date)
     {
         const auto * interval_type = checkAndGetDataType<DataTypeInterval>(argument.type.get());
         if (!interval_type)
@@ -117,6 +106,18 @@ namespace
                 "Illegal type " + argument.type->getName() + " of argument of function " + function_name
                     + ". Should be an interval of time",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        const auto * interval_column_const_int64 = checkAndGetColumnConst<ColumnInt64>(argument.column.get());
+        if (!interval_column_const_int64)
+            throw Exception(
+                "Illegal column " + argument.name + " of argument of function " + function_name, ErrorCodes::ILLEGAL_COLUMN);
+
+        interval = interval_column_const_int64->getValue<Int64>();
+        if (interval <= 0)
+            throw Exception(
+                "Value for column " + argument.name + " of function " + function_name + " must be positive",
+                ErrorCodes::BAD_ARGUMENTS);
+
         interval_kind = interval_type->getKind();
         result_type_is_date = (interval_kind == IntervalKind::Year) || (interval_kind == IntervalKind::Quarter)
             || (interval_kind == IntervalKind::Month) || (interval_kind == IntervalKind::Week);
@@ -125,7 +126,8 @@ namespace
     void checkIntervalArgument(const ColumnWithTypeAndName & argument, const String & function_name, bool & result_type_is_date)
     {
         IntervalKind interval_kind;
-        checkIntervalArgument(argument, function_name, interval_kind, result_type_is_date);
+        Int64 interval;
+        checkIntervalArgument(argument, function_name, interval_kind, interval, result_type_is_date);
     }
 
     void checkTimeZoneArgument(const ColumnWithTypeAndName & argument, const String & function_name)
@@ -204,11 +206,11 @@ struct WindowImpl<TUMBLE>
         const auto & from_datatype = *time_column.type.get();
         if (isDateTime64(from_datatype))
         {
-            return dispatchForColumnsDateTime64(arguments, function_name);
+            return dispatchForColumnsDateTime64(arguments);
         }
         else if (isDateTime(from_datatype))
         {
-            return dispatchForColumnsDateTime32(arguments, function_name);
+            return dispatchForColumnsDateTime32(arguments);
         }
         else
         {
@@ -218,14 +220,14 @@ struct WindowImpl<TUMBLE>
         }
     }
 
-    static ColumnPtr dispatchForColumnsDateTime64(const ColumnsWithTypeAndName & arguments, const String & function_name)
+    static ColumnPtr dispatchForColumnsDateTime64(const ColumnsWithTypeAndName & arguments)
     {
         const auto & time_column = arguments[0];
         const auto & interval_column = arguments[1];
         const auto * time_column_vec = checkAndGetColumn<ColumnDateTime64>(time_column.column.get());
         const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
 
-        auto interval = dispatchForIntervalColumns(interval_column, function_name);
+        auto interval = intervalKindAndUnits(interval_column);
 
         switch (std::get<0>(interval))
         {
@@ -302,14 +304,14 @@ struct WindowImpl<TUMBLE>
         return ColumnTuple::create(std::move(result));
     }
 
-    static ColumnPtr dispatchForColumnsDateTime32(const ColumnsWithTypeAndName & arguments, const String & function_name)
+    static ColumnPtr dispatchForColumnsDateTime32(const ColumnsWithTypeAndName & arguments)
     {
         const auto & time_column = arguments[0];
         const auto & interval_column = arguments[1];
         const auto * time_column_vec = checkAndGetColumn<ColumnDateTime32>(time_column.column.get());
         const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
 
-        auto interval = dispatchForIntervalColumns(interval_column, function_name);
+        auto interval = intervalKindAndUnits(interval_column);
 
         switch (std::get<0>(interval))
         {
@@ -427,21 +429,23 @@ struct WindowImpl<HOP>
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
-        bool result_type_is_date;
-        IntervalKind interval_kind_1;
-        IntervalKind interval_kind_2;
+        bool result_type_is_date = true;
+        IntervalKind slide_kind;
+        IntervalKind window_kind;
+        Int64 slide_size = 0;
+        Int64 window_size = 0;
 
         if (arguments.size() == 3)
         {
             checkFirstArgument(arguments[0], function_name);
-            checkIntervalArgument(arguments[1], function_name, interval_kind_1, result_type_is_date);
-            checkIntervalArgument(arguments[2], function_name, interval_kind_2, result_type_is_date);
+            checkIntervalArgument(arguments[1], function_name, slide_kind, slide_size, result_type_is_date);
+            checkIntervalArgument(arguments[2], function_name, window_kind, window_size, result_type_is_date);
         }
         else if (arguments.size() == 4)
         {
             checkFirstArgument(arguments[0], function_name);
-            checkIntervalArgument(arguments[1], function_name, interval_kind_1, result_type_is_date);
-            checkIntervalArgument(arguments[2], function_name, interval_kind_2, result_type_is_date);
+            checkIntervalArgument(arguments[1], function_name, slide_kind, slide_size, result_type_is_date);
+            checkIntervalArgument(arguments[2], function_name, window_kind, window_size, result_type_is_date);
             checkTimeZoneArgument(arguments[3], function_name);
         }
         else
@@ -452,9 +456,13 @@ struct WindowImpl<HOP>
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
 
-        if (interval_kind_1 != interval_kind_2)
+        if (slide_kind != window_kind)
             throw Exception(
                 "Illegal type of window and hop column of function " + function_name + ", must be same", ErrorCodes::ILLEGAL_COLUMN);
+
+        if (slide_size > window_size)
+            throw Exception(
+                "Slide size shall be less than or equal to window size in hop function", ErrorCodes::BAD_ARGUMENTS);
 
         size_t time_zone_arg_num_check = arguments.size() == 4 ? 3 : 0;
         DataTypePtr data_type = std::make_shared<DataTypeArray>(getReturnDataType(result_type_is_date, arguments, time_zone_arg_num_check));
@@ -468,11 +476,11 @@ struct WindowImpl<HOP>
         auto time_col_type = WhichDataType(from_datatype);
         if (time_col_type.isDateTime64())
         {
-            return dispatchForColumnsDateTime64(arguments, function_name);
+            return dispatchForColumnsDateTime64(arguments);
         }
         else if (time_col_type.isDateTime())
         {
-            return dispatchForColumnsDateTime32(arguments, function_name);
+            return dispatchForColumnsDateTime32(arguments);
         }
         else
         {
@@ -482,7 +490,7 @@ struct WindowImpl<HOP>
         }
     }
 
-    static ColumnPtr dispatchForColumnsDateTime64(const ColumnsWithTypeAndName & arguments, const String & function_name)
+    static ColumnPtr dispatchForColumnsDateTime64(const ColumnsWithTypeAndName & arguments)
     {
         const auto & time_column = arguments[0];
         const auto & hop_interval_column = arguments[1];
@@ -490,13 +498,8 @@ struct WindowImpl<HOP>
         const auto * time_column_vec = checkAndGetColumn<ColumnDateTime64>(time_column.column.get());
         const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
 
-        auto hop_interval = dispatchForIntervalColumns(hop_interval_column, function_name);
-        auto window_interval = dispatchForIntervalColumns(window_interval_column, function_name);
-
-        if (std::get<1>(hop_interval) > std::get<1>(window_interval))
-            throw Exception(
-                "Value for hop interval of function " + function_name + " must not larger than window interval",
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        auto hop_interval = intervalKindAndUnits(hop_interval_column);
+        auto window_interval = intervalKindAndUnits(window_interval_column);
 
         switch (std::get<0>(window_interval))
         {
@@ -651,7 +654,7 @@ struct WindowImpl<HOP>
         return ColumnTuple::create(std::move(result));
     }
 
-    static ColumnPtr dispatchForColumnsDateTime32(const ColumnsWithTypeAndName & arguments, const String & function_name)
+    static ColumnPtr dispatchForColumnsDateTime32(const ColumnsWithTypeAndName & arguments)
     {
         const auto & time_column = arguments[0];
         const auto & hop_interval_column = arguments[1];
@@ -659,12 +662,8 @@ struct WindowImpl<HOP>
         const auto * time_column_vec = checkAndGetColumn<ColumnUInt32>(time_column.column.get());
         const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 3, 0);
 
-        auto hop_interval = dispatchForIntervalColumns(hop_interval_column, function_name);
-        auto window_interval = dispatchForIntervalColumns(window_interval_column, function_name);
-        if (std::get<1>(hop_interval) > std::get<1>(window_interval))
-            throw Exception(
-                "Value for hop interval of function " + function_name + " must not larger than window interval",
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        auto hop_interval = intervalKindAndUnits(hop_interval_column);
+        auto window_interval = intervalKindAndUnits(window_interval_column);
 
         switch (std::get<0>(window_interval))
         {

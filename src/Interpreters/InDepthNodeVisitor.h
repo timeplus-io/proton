@@ -33,9 +33,11 @@ public:
         {
             Matcher::visit(ast, data);
         }
-        catch (Exception & e)
+        /// proton: starts, disable ast formatting as it exposes internal AST rewrite
+        catch (Exception &)
         {
-            e.addMessage("While processing {}", ast->formatForErrorMessage());
+            /// e.addMessage("While processing {}", ast->formatForErrorMessage());
+            /// proton: ends
             throw;
         }
 
