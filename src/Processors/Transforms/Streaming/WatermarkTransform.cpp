@@ -41,10 +41,16 @@ void WatermarkTransform::initWatermark(
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
     if (watermark_settings.func_name == "__TUMBLE")
     {
+        if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
+            throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::SYNTAX_ERROR);
+
         watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), log);
     }
     else if (watermark_settings.func_name == "__HOP")
     {
+        if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
+            throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::SYNTAX_ERROR);
+
         watermark = std::make_shared<HopWatermark>(std::move(watermark_settings), log);
     }
     else
