@@ -296,6 +296,9 @@ void initDistributedMetadataServices(DB::ContextMutablePtr & global_context)
 
 /// DDL service depends on REST server
 /// so it will need initialize after REST server
+/// There is still a race condition: when http/tcp services are inited, but DDLService init is not done yet
+/// and at this very time, a table creation request sneaks in which will try to append the request to DDL WAL
+/// but the wal is not init yet. We will check the nullness of DWAL in DDLService::append
 void initDistributedMetadataServicesPost(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);

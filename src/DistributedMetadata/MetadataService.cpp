@@ -310,7 +310,8 @@ void MetadataService::startup()
             }
             catch (Exception e)
             {
-                LOG_INFO(log, e.message());
+                LOG_ERROR(log, e.message());
+                throw;
             }
 
             /// Consumer settings
