@@ -553,6 +553,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                     if (std::find(required_columns.begin(), required_columns.end(), name) == required_columns.end())
                         required_columns.push_back(name);
             }
+
+            if (last_tail && last_interval_seconds > 0 && isStreaming())
+                if (std::find(required_columns.begin(), required_columns.end(), RESERVED_EVENT_TIME) == required_columns.end())
+                    required_columns.push_back(RESERVED_EVENT_TIME);
             /// proton: ends
 
             /// Fix source_header for filter actions.
@@ -2700,6 +2704,9 @@ void InterpreterSelectQuery::initSettings()
 /// proton: starts
 void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan)
 {
+    if (!isStreaming())
+        return;
+
     auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_seconds, RESERVED_EVENT_TIME);
 
     proc_filter_step->setStepDescription("ProcessTimeFilter");

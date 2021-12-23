@@ -209,7 +209,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
             if (rd_kafka_header_get_all(hdrs, i, &name, &value, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
             {
                 std::string v{static_cast<const char *>(value), size};
-                if (v == Record::INGEST_TIME_KEY)
+                if (name == Record::INGEST_TIME_KEY)
                     record->block.info.ingest_time = std::stoll(v);
                 else
                     record->headers.emplace(name, std::move(v));

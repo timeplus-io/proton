@@ -43,6 +43,8 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    NamesAndTypesList getVirtuals() const override;
+
     Names getAdditionalRequiredColumns() const;
 
     Names getRequiredColumnsForStreamingFunction() const { return streaming_func_desc->input_columns; }

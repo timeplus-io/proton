@@ -36,6 +36,11 @@ private:
     ContextPtr context;
     Names column_names;
 
+    std::vector<std::pair<Int32, std::function<Int64(const BlockInfo &)>>> virtual_time_columns_calc;
+
+    /// These virtual columns have the same Int64 type
+    DataTypePtr virtual_col_type;
+
     Chunk header_chunk;
 
     Int32 shard;

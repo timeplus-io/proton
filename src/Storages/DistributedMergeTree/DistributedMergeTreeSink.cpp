@@ -107,7 +107,7 @@ void DistributedMergeTreeSink::consume(Chunk chunk)
     /// 2) Commit each sharded block to corresponding Kafka partition
     /// we failed the whole insert whenever single block failed
     const auto & idem_key = query_context->getIdempotentKey();
-    const auto ingest_time = query_context->getIngestTime();
+    auto ingest_time = query_context->getIngestTime();
     for (auto & current_block : blocks)
     {
         DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(current_block.block)};

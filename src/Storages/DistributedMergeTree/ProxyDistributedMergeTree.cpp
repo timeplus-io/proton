@@ -1,8 +1,8 @@
 #include "ProxyDistributedMergeTree.h"
 #include "StorageDistributedMergeTree.h"
 
-#include <Interpreters/TreeRewriter.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
@@ -37,7 +37,7 @@ ProxyDistributedMergeTree::ProxyDistributedMergeTree(
         assert(streaming_func_desc);
 
     if (!subquery)
-        storage =  DatabaseCatalog::instance().getTable(id_, context_);
+        storage = DatabaseCatalog::instance().getTable(id_, context_);
 
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -109,27 +109,22 @@ void ProxyDistributedMergeTree::read(
     }
 
     if (auto * view = storage->as<StorageView>())
-        return view->read(query_plan,
-                          updated_column_names,
-                          underlying_storage_metadata_snapshot,
-                          query_info,
-                          context_,
-                          processed_stage,
-                          max_block_size,
-                          num_streams);
+        return view->read(
+            query_plan,
+            updated_column_names,
+            underlying_storage_metadata_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            num_streams);
 
-    auto *distributed = storage->as<StorageDistributedMergeTree>();
+    auto * distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
 
     if (streaming)
         distributed->readStreaming(
-            query_plan,
-            query_info,
-            updated_column_names,
-            underlying_storage_metadata_snapshot,
-            context_,
-            max_block_size,
-            num_streams);
+            query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_, max_block_size, num_streams);
     else
         distributed->readHistory(
             query_plan,
@@ -142,6 +137,18 @@ void ProxyDistributedMergeTree::read(
             num_streams);
 }
 
+NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
+{
+    auto * distributed = storage->as<StorageDistributedMergeTree>();
+    if (!distributed)
+        return {};
+
+    if (streaming)
+        return distributed->getVirtuals();
+
+    return distributed->getVirtualsHistory();
+}
+
 Names ProxyDistributedMergeTree::getAdditionalRequiredColumns() const
 {
     Names required;
@@ -150,7 +157,7 @@ Names ProxyDistributedMergeTree::getAdditionalRequiredColumns() const
         for (const auto & name : timestamp_func_desc->input_columns)
             required.push_back(name);
 
-    if(streaming_func_desc)
+    if (streaming_func_desc)
         for (const auto & name : streaming_func_desc->input_columns)
             if (name != STREAMING_TIMESTAMP_ALIAS)
                 /// We remove the internal dependent ____ts column

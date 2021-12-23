@@ -3,6 +3,7 @@
 #include "StreamingBlockReader.h"
 
 #include <base/ClockUtils.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -27,6 +28,27 @@ StreamingStoreSource::StreamingStoreSource(
     iter = result_chunks.begin();
 
     last_flush_ms = MonotonicMilliseconds::now();
+
+    for (Int32 pos = 0, size = column_names.size(); pos < size; ++pos)
+    {
+        if (column_names[pos] == RESERVED_APPEND_TIME)
+            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.append_time; });
+        else if (column_names[pos] == RESERVED_INGEST_TIME)
+            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.ingest_time; });
+        else if (column_names[pos] == RESERVED_PROCESS_TIME)
+            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo &) { return UTCMilliseconds::now(); });
+    }
+
+    std::sort(virtual_time_columns_calc.begin(), virtual_time_columns_calc.end(), [](const auto & lhs, const auto & rhs) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        return lhs.first < rhs.first;
+    });
+
+    /// Remove the streaming virtual columns since we will handle it here specially
+    for (auto item = virtual_time_columns_calc.rbegin(); item != virtual_time_columns_calc.rend(); ++item)
+        column_names.erase(column_names.begin() + item->first);
+
+    if (!virtual_time_columns_calc.empty())
+        virtual_col_type = header.getByPosition(virtual_time_columns_calc[0].first).type;
 }
 
 Chunk StreamingStoreSource::generate()
@@ -82,21 +104,34 @@ void StreamingStoreSource::readAndProcess()
 
     for (auto & record : records)
     {
-       Block block;
-       /// Only select required columns.
-       /// FIXME, move the columns filtered logic to deserialization ?
+        Columns columns;
+        columns.reserve(header_chunk.getNumColumns());
+        Block & block = record->block;
+        auto rows = block.rows();
 
-       for (const auto & name : column_names)
-           block.insert(std::move(record->block.getByName(name)));
+        /// Only select required columns.
+        /// FIXME, move the columns filtered logic to deserialization ?
 
-       result_chunks.emplace_back(block.getColumns(), block.rows());
-       if (block.info.append_time > 0)
-       {
-           auto chunk_info = std::make_shared<ChunkInfo>();
-           chunk_info->ctx.setAppendTime(block.info.append_time);
-           result_chunks.back().setChunkInfo(std::move(chunk_info));
-       }
+        for (const auto & name : column_names)
+            columns.push_back(std::move(block.getByName(name).column));
 
+        for (const auto & item : virtual_time_columns_calc)
+        {
+            auto ts = item.second(block.info);
+            auto time_column = virtual_col_type->createColumnConst(rows, ts);
+            if (static_cast<Int32>(columns.size()) > item.first)
+                columns.insert(columns.begin() + item.first, time_column);
+            else
+                columns.push_back(time_column);
+        }
+
+        result_chunks.emplace_back(columns, rows);
+        if (likely(record->block.info.append_time > 0))
+        {
+            auto chunk_info = std::make_shared<ChunkInfo>();
+            chunk_info->ctx.setAppendTime(record->block.info.append_time);
+            result_chunks.back().setChunkInfo(std::move(chunk_info));
+        }
     }
     iter = result_chunks.begin();
 }
