@@ -67,7 +67,9 @@ namespace
     }
 }
 
-StreamingEmitInterpreter::LastXRule::LastXRule(const Settings & settings_, Poco::Logger * log_) : settings(settings_), log(log_)
+StreamingEmitInterpreter::LastXRule::LastXRule(
+    const Settings & settings_, Int64 & last_interval_seconds_, bool & tail_, Poco::Logger * log_)
+    : settings(settings_), last_interval_seconds(last_interval_seconds_), tail(tail_), log(log_)
 {
 }
 
@@ -89,14 +91,14 @@ void StreamingEmitInterpreter::LastXRule::operator()(ASTPtr & query_)
     if (!last_interval)
         return;
 
+    /// The order of window aggr / global aggr / tail matters
     if (handleWindowAggr(*select_query))
         return;
 
     if (handleGlobalAggr(*select_query))
         return;
 
-    /// TAIL MODE no support LAST-X
-    throw Exception("Streaming tail mode not support 'LAST-X' rule", ErrorCodes::SYNTAX_ERROR);
+    handleTail(*select_query);
 }
 
 bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query)
@@ -129,8 +131,7 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
     else
         return false;
 
-    /// last interval seconds
-    Int64 last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
+    last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
 
     /// calculate settings keep_windows = ceil(last_interval / window_interval)
     UInt64 keep_windows = (std::abs(last_interval_seconds) + std::abs(window_interval_seconds) - 1) / std::abs(window_interval_seconds);
@@ -181,7 +182,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
 
     ASTPtr periodic_interval;
     IntervalKind periodic_interval_kind = IntervalKind::Second;
-    Int64 last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
+    last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
     if (new_emit_query->periodic_interval)
     {
         /// check periodic_interval is appropriate value by settings.max_keep_windows
@@ -252,4 +253,33 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     return true;
 }
 
+void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query)
+{
+    assert(last_interval);
+    assert(emit_query);
+
+    tail = true;
+    ASTPtr new_emit = emit_query->clone();
+    auto new_emit_query = new_emit->as<ASTEmitQuery>();
+    assert(new_emit_query);
+    new_emit_query->last_interval.reset();
+
+    last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
+
+    const auto & old_settings = select_query.settings();
+    ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
+    auto & ast_set = new_settings->as<ASTSetQuery &>();
+    ast_set.is_standalone = false;
+    if (ast_set.changes.tryGet("seek_to"))
+        throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
+
+    /// Seek to -3600s for example
+    ast_set.changes.emplace_back("seek_to", "-" + std::to_string(last_interval_seconds) + "s");
+
+    select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
+    select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
+
+    if (log)
+        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query));
+}
 }

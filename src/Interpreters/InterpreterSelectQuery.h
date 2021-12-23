@@ -161,6 +161,7 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
+    void executeLastXTail(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyDistributedMergeTree * distributed) const;
@@ -203,6 +204,8 @@ private:
     /// proton: starts
     /// A copy of required_columns before adding the additional ones for streaming processing
     Names required_columns_after_streaming_window;
+    bool last_tail = false;
+    Int64 last_interval_seconds = 0;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

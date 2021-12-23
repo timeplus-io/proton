@@ -4,6 +4,7 @@
 /// proton: starts
 #include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Interpreters/Streaming/StreamingEmitInterpreter.h>
+#include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
@@ -341,7 +342,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     {
         StreamingEmitInterpreter::handleRules(
                     /* streaming query */ query_ptr,
-                    /* rules */ StreamingEmitInterpreter::LastXRule(settings, log));
+                    /* rules */ StreamingEmitInterpreter::LastXRule(settings, last_interval_seconds, last_tail, log));
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
@@ -1248,6 +1249,9 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
 
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
+
+            if (last_tail && last_interval_seconds)
+                executeLastXTail(query_plan);
 
             if (expressions.need_aggregate)
             {
@@ -2694,6 +2698,14 @@ void InterpreterSelectQuery::initSettings()
 }
 
 /// proton: starts
+void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan)
+{
+    auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_seconds, RESERVED_EVENT_TIME);
+
+    proc_filter_step->setStepDescription("ProcessTimeFilter");
+    query_plan.addStep(std::move(proc_filter_step));
+}
+
 void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final)
 {
     assert(isStreaming());

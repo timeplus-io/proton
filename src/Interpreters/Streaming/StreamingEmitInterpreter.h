@@ -36,24 +36,34 @@ public:
     /// but provides simpler user experiences.
     class LastXRule final
     {
-    private:
-        const Settings & settings;
-        Poco::Logger * log;
-        ASTPtr query;
-        ASTPtr emit_query;
-        ASTPtr last_interval;
-
     public:
-        LastXRule(const Settings & settings_, Poco::Logger * log_ = nullptr);
+        LastXRule(const Settings & settings_, Int64 & last_interval_seconds_, bool & tail_, Poco::Logger * log_ = nullptr);
         void operator()(ASTPtr & query);
+
+        bool isTail() const { return tail; }
+        Int64 lastIntervalSeconds() const { return last_interval_seconds; }
 
     private:
         /// Last X streaming processing for window(Tumble/Hop...)
         /// we shall convert last_interval to settings "keep_windows = `ceil(last_interval / window_interval)`" for AST
         bool handleWindowAggr(ASTSelectQuery & query);
-        /// Last X streaming processing for gloabl aggregation
-        /// we shall convert gloabl aggreation to hop table window for AST
+
+        /// Last X streaming processing for global aggregation
+        /// we shall convert global aggregation to hop table window for AST
         bool handleGlobalAggr(ASTSelectQuery & query);
+
+        /// Last X streaming tail
+        void handleTail(ASTSelectQuery & query);
+
+    private:
+        const Settings & settings;
+        Int64 & last_interval_seconds;
+        bool & tail;
+        Poco::Logger * log;
+
+        ASTPtr query;
+        ASTPtr emit_query;
+        ASTPtr last_interval;
     };
 };
 }

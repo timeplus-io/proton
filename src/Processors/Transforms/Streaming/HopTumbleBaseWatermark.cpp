@@ -20,15 +20,16 @@ namespace
     using ColumnDateTime32 = ColumnVector<UInt32>;
 
     template <typename TargetColumnType>
-    void doProcessBlock(
+    ALWAYS_INLINE void doProcessBlock(
         Block & block, const ColumnWithTypeAndName & time_col, Int64 last_project_watermark_ts, Int64 & max_event_ts, UInt64 & late_events)
     {
         /// FIXME, use simple FilterTransform to do this ?
         const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
-        IColumn::Filter filt(time_vec.size(), 1);
+        auto rows = time_vec.size();
+        IColumn::Filter filt(rows, 1);
 
         UInt64 late_events_in_block = 0;
-        for (size_t i = 0; i < time_vec.size(); ++i)
+        for (size_t i = 0; i < rows; ++i)
         {
             if (time_vec[i] > max_event_ts)
                 max_event_ts = time_vec[i];
@@ -44,7 +45,7 @@ namespace
             late_events += late_events_in_block;
             for (auto & col_with_name_type : block)
             {
-                col_with_name_type.column = col_with_name_type.column->filter(filt, time_vec.size() - late_events_in_block);
+                col_with_name_type.column = col_with_name_type.column->filter(filt, rows - late_events_in_block);
             }
         }
     }
@@ -236,8 +237,8 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::processWatermarkWithDelayAndWithAutoS
         if (unlikely(last_projected_watermark_ts == 0))
         {
             auto watermark_ts_lower_bound = addTimeWithAutoScale(watermark_ts, window_interval_kind, -1 * interval);
-            watermark_ts_bias
-                = addTimeWithAutoScale(watermark_ts_lower_bound, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
+            watermark_ts_bias = addTimeWithAutoScale(
+                watermark_ts_lower_bound, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval);
             if (max_event_ts >= watermark_ts_bias)
             {
                 block.info.watermark = watermark_ts_lower_bound;
@@ -278,8 +279,8 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & b
         if (unlikely(last_projected_watermark_ts == 0))
         {
             auto watermark_ts_lower_bound = addTime(watermark_ts, window_interval_kind, -1 * interval, *timezone);
-            watermark_ts_bias
-                = addTime(watermark_ts_lower_bound, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
+            watermark_ts_bias = addTime(
+                watermark_ts_lower_bound, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, *timezone);
             if (max_event_ts >= watermark_ts_bias)
             {
                 block.info.watermark = watermark_ts_lower_bound;
@@ -305,8 +306,10 @@ void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
         if (scale != 0)
         {
             auto now = UTCMilliseconds::now();
-            if (scale > 3) now *= multiplier;
-            else if (scale < 3) now /= multiplier;
+            if (scale > 3)
+                now *= multiplier;
+            else if (scale < 3)
+                now /= multiplier;
 
             if (now >= watermark_ts)
             {
