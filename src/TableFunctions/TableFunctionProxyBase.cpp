@@ -61,7 +61,7 @@ namespace
 
         /// Parse the argument names
         return std::make_shared<StreamingFunctionDescription>(
-            ast, Names{}, DataTypes{}, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns());
+            ast, Names{}, DataTypes{}, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns(), true);
     }
 }
 

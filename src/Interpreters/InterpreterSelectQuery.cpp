@@ -2827,9 +2827,11 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyDistributedMergeTree * distributed) const
 {
+    bool proc_time = false;
     auto timestamp_func_desc = distributed->getTimestampFunctionDescription();
     if (timestamp_func_desc)
     {
+        proc_time = timestamp_func_desc->is_now_func;
         auto output_header = query_plan.getCurrentDataStream().header;
         /// Drop timestamp expr required columns if they are not required by downstream pipe
         auto required_begin = required_columns_after_streaming_window.begin();
@@ -2844,16 +2846,19 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
         timestamp_col.column = timestamp_col.type->createColumnConstWithDefaultValue(0);
         output_header.insert(timestamp_col);
 
+        const auto & seek_to = context->getSettingsRef().seek_to.value;
+        bool backfill = !seek_to.empty() && seek_to != "latest" && seek_to != "earliest";
+
         query_plan.addStep(
             std::make_unique<TimestampTransformStep>(
-                query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc)));
+                query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc), backfill));
     }
 
     auto stream_func_desc = distributed->getStreamingFunctionDescription();
 
     if (isStreaming())
         query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, log));
+            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, proc_time, log));
 
     if (stream_func_desc)
     {
@@ -2876,7 +2881,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
 {
     if (isStreaming())
         query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, nullptr, log));
+            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
 }
 /// proton: ends
 }

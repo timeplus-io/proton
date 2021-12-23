@@ -15,6 +15,7 @@ public:
         ASTPtr query_,
         TreeRewriterResultPtr syntax_analyzer_result_,
         StreamingFunctionDescriptionPtr desc_,
+        bool proc_time,
         Poco::Logger * log);
 
     ~WatermarkStep() override = default;
@@ -26,6 +27,7 @@ private:
     ASTPtr query;
     TreeRewriterResultPtr syntax_analyzer_result;
     StreamingFunctionDescriptionPtr desc;
+    bool proc_time;
     String partition_key;
     Poco::Logger * log;
 };

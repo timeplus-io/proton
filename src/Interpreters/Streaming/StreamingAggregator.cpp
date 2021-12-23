@@ -3009,6 +3009,9 @@ void StreamingAggregator::removeBucketsBefore(StreamingAggregatedDataVariants & 
         data = nullptr;
     };
 
+    auto interval = watermark - watermark_lower_bound;
+    assert(interval > 0);
+
     if (params.group_by == Params::GroupBy::WINDOW_START)
         watermark = watermark_lower_bound;
 
@@ -3020,7 +3023,7 @@ void StreamingAggregator::removeBucketsBefore(StreamingAggregatedDataVariants & 
     {
 #define M(NAME, IS_TWO_LEVEL) \
             case StreamingAggregatedDataVariants::Type::NAME: \
-                std::tie(removed, last_removed_watermark, remaining) = result.NAME->data.removeBucketsBeforeButKeep(watermark, params.streaming_window_count, destroy); break;
+                std::tie(removed, last_removed_watermark, remaining) = result.NAME->data.removeBucketsBeforeButKeep(watermark, interval, params.streaming_window_count, destroy); break;
         APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
 #undef M
 

@@ -28,6 +28,7 @@
 #include <base/logger_useful.h>
 #include <Common/randomSeed.h>
 #include <Common/ProtonCommon.h>
+#include <Common/parseIntStrict.h>
 #include <Common/timeScale.h>
 
 
@@ -338,14 +339,20 @@ void StorageDistributedMergeTree::readStreaming(
 
     auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
 
-    auto header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+    /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
+    /// We will need add one
+    Block header;
+    if (!column_names.empty())
+        header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+    else
+        header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
 
     auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
 
     for (Int32 i = 0; i < shards; ++i)
         pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, offsets[i], consumer, log));
 
-    LOG_INFO(log, "Starting reading {} streams", pipes.size());
+    LOG_INFO(log, "Starting reading {} streams by seeking to {}", pipes.size(), context_->getSettingsRef().seek_to.value);
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
 }
@@ -1617,18 +1624,56 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
         /// -1h
         /// ISO8601
         /// Streaming store broker timestamp in milliseconds
-        DateTime64 res;
-        ReadBufferFromString in(seek_to);
-        try
+        if (seek_to.empty())
         {
-            parseDateTime64BestEffort(res, 3, in, DateLUT::instance(), DateLUT::instance("UTC"));
-        }
-        catch (...)
-        {
-            throw Exception("Invalid seek timestamp, only ISO8601 format is supported. Example: 2020-01-01T01:12:45Z or  2020-01-01T01:12:45.123+08:00", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Empty seek_to", ErrorCodes::BAD_ARGUMENTS);
         }
 
-        return dwal->offsetsForTimestamps(topic, res, shards);
+        Int64 multiplier = 0;
+        switch (seek_to.back())
+        {
+            case 's':
+                multiplier = 1000;
+                break;
+            case 'm':
+                multiplier = 60 * 1000;
+                break;
+            case 'h':
+                multiplier = 60 * 60 * 1000;
+                break;
+            case 'd':
+                multiplier = 24 * 60 * 60 * 1000;
+                break;
+        }
+
+        Int64 utc_ms = 0;
+        if (multiplier > 0)
+        {
+            auto relative_time = parseIntStrict<Int32>(seek_to, 0, seek_to.size() - 1);
+            if (relative_time > 0)
+            {
+                throw Exception("Relative seek time shall be negative", ErrorCodes::BAD_ARGUMENTS);
+            }
+
+            utc_ms = UTCMilliseconds::now() + relative_time * multiplier;
+        }
+        else
+        {
+            DateTime64 res;
+            ReadBufferFromString in(seek_to);
+            try
+            {
+                parseDateTime64BestEffort(res, 3, in, DateLUT::instance(), DateLUT::instance("UTC"));
+            }
+            catch (...)
+            {
+                throw Exception("Invalid seek timestamp, ISO8601 format or relative time are supported. Example: 2020-01-01T01:12:45Z or 2020-01-01T01:12:45.123+08:00 or -10s or -6m or -2h or -1d",  ErrorCodes::BAD_ARGUMENTS);
+            }
+
+            utc_ms = res;
+        }
+
+        return dwal->offsetsForTimestamps(topic, utc_ms, shards);
     }
 }
 }

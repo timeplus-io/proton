@@ -9,11 +9,12 @@ WatermarkTransform::WatermarkTransform(
     ASTPtr query,
     TreeRewriterResultPtr syntax_analyzer_result,
     StreamingFunctionDescriptionPtr desc,
+    bool proc_time,
     const Block & header,
     Poco::Logger * log)
     : ISimpleTransform(header, header, false)
 {
-    initWatermark(query, syntax_analyzer_result, desc, log);
+    initWatermark(query, syntax_analyzer_result, desc, proc_time, log);
     assert(watermark);
     watermark->preProcess();
 }
@@ -36,7 +37,7 @@ void WatermarkTransform::transform(Chunk & chunk)
 }
 
 void WatermarkTransform::initWatermark(
-    ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc, Poco::Logger * log)
+    ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
 {
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
     if (watermark_settings.func_name == "__TUMBLE")
@@ -44,18 +45,18 @@ void WatermarkTransform::initWatermark(
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::SYNTAX_ERROR);
 
-        watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), log);
+        watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), proc_time, log);
     }
     else if (watermark_settings.func_name == "__HOP")
     {
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::SYNTAX_ERROR);
 
-        watermark = std::make_shared<HopWatermark>(std::move(watermark_settings), log);
+        watermark = std::make_shared<HopWatermark>(std::move(watermark_settings), proc_time, log);
     }
     else
     {
-        watermark = std::make_shared<Watermark>(std::move(watermark_settings), log);
+        watermark = std::make_shared<Watermark>(std::move(watermark_settings), proc_time, log);
     }
 }
 }

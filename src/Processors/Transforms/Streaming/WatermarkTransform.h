@@ -20,6 +20,7 @@ public:
         ASTPtr query,
         TreeRewriterResultPtr syntax_analyzer_result,
         StreamingFunctionDescriptionPtr desc,
+        bool proc_time,
         const Block & header,
         Poco::Logger * log);
 
@@ -35,6 +36,7 @@ private:
         ASTPtr query,
         TreeRewriterResultPtr syntax_analyzer_result,
         StreamingFunctionDescriptionPtr desc,
+        bool proc_time,
         Poco::Logger * log);
 
     WatermarkPtr watermark;

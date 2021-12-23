@@ -7,12 +7,11 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
-#include <Parsers/formatAST.h>
+#include <Parsers/queryToString.h>
 #include <base/logger_useful.h>
 #include <Common/IntervalKind.h>
 #include <Common/ProtonCommon.h>
@@ -144,17 +143,26 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
 
     const auto & old_settings = select_query.settings();
     ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
-    if (new_settings->as<ASTSetQuery &>().changes.tryGet("keep_windows"))
-        throw Exception("The last conflicts with the existing settings 'keep_windows'", ErrorCodes::SYNTAX_ERROR);
+    auto & ast_set = new_settings->as<ASTSetQuery &>();
 
-    new_settings->as<ASTSetQuery &>().is_standalone = false;
-    new_settings->as<ASTSetQuery &>().changes.emplace_back("keep_windows", keep_windows);
+    if (ast_set.changes.tryGet("keep_windows"))
+        throw Exception("The `emit last` policy conflicts with the existing 'keep_windows' setting", ErrorCodes::SYNTAX_ERROR);
+
+    ast_set.is_standalone = false;
+    ast_set.changes.emplace_back("keep_windows", keep_windows);
+
+    if (ast_set.changes.tryGet("seek_to"))
+        throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
+
+    /// Seek to -3600s for example
+    ast_set.changes.emplace_back("seek_to", "-" + std::to_string(last_interval_seconds) + "s");
 
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
-        LOG_INFO(log, "(LastXForWindow) processed query: {}", serializeAST(*query));
+        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query));
+
     return true;
 }
 
@@ -227,8 +235,20 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     select_query.setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(new_groupby));
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
 
+    const auto & old_settings = select_query.settings();
+    ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
+    auto & ast_set = new_settings->as<ASTSetQuery &>();
+    ast_set.is_standalone = false;
+    if (ast_set.changes.tryGet("seek_to"))
+        throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
+
+    /// Seek to -3600s for example
+    ast_set.changes.emplace_back("seek_to", "-" + std::to_string(last_interval_seconds) + "s");
+    select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
+
     if (log)
-        LOG_INFO(log, "(LastXForGlobal) processed query: {}", serializeAST(*query));
+        LOG_INFO(log, "(LastXForGlobal) processed query: {}", queryToString(query));
+
     return true;
 }
 

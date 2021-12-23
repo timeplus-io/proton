@@ -188,7 +188,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
 
     record->sn = msg->offset;
     record->partition_key = msg->partition;
-    record->block.info.enqueue_time = rd_kafka_message_timestamp(msg, nullptr);
+    record->block.info.append_time = rd_kafka_message_timestamp(msg, nullptr);
 
     if (copy_topic)
     {

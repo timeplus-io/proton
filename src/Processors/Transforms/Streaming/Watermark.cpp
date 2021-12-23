@@ -136,8 +136,8 @@ void Watermark::process(Block & block)
         doProcess(block);
 
     /// If after filtering, block is empty, we handle idleness
-    //    if (!block.rows())
-    //        handleIdleness(block);
+    if (!block.rows())
+        handleIdleness(block);
 }
 
 void Watermark::assignWatermark(Block & block)
@@ -187,25 +187,10 @@ void Watermark::handleIdleness(Block & block)
         case WatermarkSettings::EmitMode::TAIL:
             assert(0);
             break;
-        case WatermarkSettings::EmitMode::PERIODIC: {
-            auto now = UTCSeconds::now();
-            auto next_watermark_ts = addTime(
-                watermark_ts, watermark_settings.emit_query_interval_kind, watermark_settings.emit_query_interval, DateLUT::instance());
-
-            if (now >= next_watermark_ts)
-            {
-                block.info.watermark = addTime(
-                    last_projected_watermark_ts,
-                    watermark_settings.emit_query_interval_kind,
-                    watermark_settings.emit_query_interval,
-                    DateLUT::instance());
-
-                block.info.watermark_lower_bound = last_projected_watermark_ts;
-                last_projected_watermark_ts = block.info.watermark;
-                watermark_ts = now;
-            }
+        case WatermarkSettings::EmitMode::PERIODIC:
+            /// periodic only applies to global aggr which shall have no idleness
+            assert(0);
             break;
-        }
         case WatermarkSettings::EmitMode::DELAY: {
             throw Exception("DELAY emit doesn't implement yet", ErrorCodes::NOT_IMPLEMENTED);
         }

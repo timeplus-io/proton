@@ -47,7 +47,7 @@ struct BlockInfo
     /// watermark_start is `watermark - window_size`
     Int64 watermark_lower_bound = 0;
     /// Milliseconds since UTC
-    Int64 enqueue_time = 0;
+    Int64 append_time = 0;
     /// Milliseconds since UTC
     Int64 ingest_time = 0;
     /// proton: ends

@@ -9,7 +9,7 @@ namespace DB
 struct ChunkContext
 {
     static constexpr UInt64 WATERMARK_FLAG = 0x1;
-    static constexpr UInt64 INGEST_TIME_FLAG = 0x2;
+    static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
 
     /// A pair of Int64, flags represent what they mean
     Int64 ts_1 = 0;
@@ -35,17 +35,17 @@ struct ChunkContext
         watermark_lower_bound = ts_2;
     }
 
-    ALWAYS_INLINE bool hasIngestTime() const { return flags & INGEST_TIME_FLAG; }
-    ALWAYS_INLINE void setIngestTime(Int64 ingest_time)
+    ALWAYS_INLINE bool hasAppendTime() const { return flags & APPEND_TIME_FLAG; }
+    ALWAYS_INLINE void setAppendTime(Int64 append_time)
     {
-        if (ingest_time > 0)
+        if (append_time > 0)
         {
-            flags |= INGEST_TIME_FLAG;
-            ts_1 = ingest_time;
+            flags |= APPEND_TIME_FLAG;
+            ts_1 = append_time;
         }
     }
 
-    ALWAYS_INLINE Int64 getIngestTime() const { assert(hasIngestTime()); return ts_1; }
+    ALWAYS_INLINE Int64 getAppendTime() const { assert(hasAppendTime()); return ts_1; }
 };
 
 class ChunkInfo

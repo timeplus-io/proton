@@ -64,8 +64,8 @@ namespace
     }
 }
 
-HopTumbleBaseWatermark::HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, Poco::Logger * log_)
-    : Watermark(std::move(watermark_settings_), log_)
+HopTumbleBaseWatermark::HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_)
+    : Watermark(std::move(watermark_settings_), proc_time_, log_)
 {
     if (watermark_settings.mode == WatermarkSettings::EmitMode::NONE)
         watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
@@ -84,6 +84,8 @@ void HopTumbleBaseWatermark::init(Int64 & interval)
     {
         scale = checkAndGetDataType<DataTypeDateTime64>(desc.argument_types[0].get())->getScale();
     }
+
+    multiplier = intExp10(std::abs(scale - 3));
 
     auto * func_ast = desc.func_ast->as<ASTFunction>();
     extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), interval, window_interval_kind);
@@ -297,27 +299,31 @@ ALWAYS_INLINE void HopTumbleBaseWatermark::doProcessWatermarkWithDelay(Block & b
 
 void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
 {
-    /// FIXME, this is not a complete implementation
-    if (likely(watermark_ts != 0))
+    if (proc_time && watermark_ts > 0)
     {
         auto interval = getProgressingInterval();
-        auto next_watermark_ts = addTime(last_event_seen_ts, window_interval_kind, interval, DateLUT::instance());
-
-        if (UTCSeconds::now() > next_watermark_ts)
+        if (scale != 0)
         {
-            block.info.watermark = watermark_ts;
-            last_projected_watermark_ts = watermark_ts;
+            auto now = UTCMilliseconds::now();
+            if (scale > 3) now *= multiplier;
+            else if (scale < 3) now /= multiplier;
 
-            last_event_seen_ts = next_watermark_ts;
-
-            /// Force watermark progressing
-            if (scale != 0)
+            if (now >= watermark_ts)
             {
+                block.info.watermark = watermark_ts;
+                last_projected_watermark_ts = watermark_ts;
+
                 block.info.watermark_lower_bound = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
                 watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
             }
-            else
+        }
+        else
+        {
+            if (UTCSeconds::now() >= watermark_ts)
             {
+                block.info.watermark = watermark_ts;
+                last_projected_watermark_ts = watermark_ts;
+
                 block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
                 watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
             }

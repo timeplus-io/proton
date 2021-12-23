@@ -6,13 +6,17 @@
 #include <Parsers/ASTLiteral.h>
 #include <Common/ProtonCommon.h>
 #include <Common/timeScale.h>
+#include <Common/intExp.h>
+
+#include <cmath>
 
 namespace DB
 {
 TimestampTransform::TimestampTransform(
-    const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_)
+    const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
     : ISimpleTransform(input_header, output_header, false)
     , timestamp_func_desc(std::move(timestamp_func_desc_))
+    , backfill(backfill_)
     , chunk_header(output_header.getColumns(), 0)
 {
     assert(timestamp_func_desc);
@@ -75,12 +79,56 @@ void TimestampTransform::assignProcTimestamp(Chunk & chunk)
 {
     auto num_rows = chunk.getNumRows();
     ColumnPtr column;
-    if (is_datetime64)
-        /// Call now64(scale, timezone)
-        column = timestamp_col_data_type->createColumnConst(num_rows, nowSubsecond(scale));
-    else
-        /// Call now(timezone)
-        column = timestamp_col_data_type->createColumnConst(num_rows, static_cast<UInt64>(time(nullptr)));
+
+    if (unlikely(proc_time && backfill))
+    {
+        /// When we are backfilling, we use log append time as proc time until we catch up to the latest stream
+        /// We assume the timestamp is in sync between streaming store server and proton server
+        const auto & chunk_info = chunk.getChunkInfo();
+        if (chunk_info && chunk_info->ctx.hasAppendTime())
+        {
+            auto append_time = chunk_info->ctx.getAppendTime();
+            auto delta = UTCMilliseconds::now() - append_time;
+            // Heuristic
+            if (delta < 1000)
+            {
+                /// Disable backfill since we caught up. Fall through to assign real proc time
+                backfill = false;
+            }
+            else
+            {
+                /// Use append time as proc time. append time is milliseconds
+                Int64 seconds = append_time / 1000;
+                Int64 fractional = append_time % 1000;
+                if (scale > 3)
+                    fractional *= multiplier;
+                else if (scale < 3)
+                    fractional /= multiplier;
+
+                if (is_datetime64)
+                {
+                    DecimalUtils::DecimalComponents<DateTime64> components{seconds, fractional};
+                    column = timestamp_col_data_type->createColumnConst(
+                        num_rows, DecimalField(DecimalUtils::decimalFromComponents<DateTime64>(components, scale), scale));
+                }
+                else
+                    column = timestamp_col_data_type->createColumnConst(num_rows, static_cast<UInt64>(seconds));
+            }
+        }
+        else
+            /// if no append time, disable backfill mode immediately
+            backfill = false;
+    }
+
+    if (likely(!column))
+    {
+        if (is_datetime64)
+            /// Call now64(scale, timezone)
+            column = timestamp_col_data_type->createColumnConst(num_rows, nowSubsecond(scale));
+        else
+            /// Call now(timezone)
+            column = timestamp_col_data_type->createColumnConst(num_rows, static_cast<UInt64>(time(nullptr)));
+    }
 
     auto time_column = column->convertToFullColumnIfConst();
 
@@ -211,6 +259,8 @@ void TimestampTransform::handleProcessingTimeFunc()
             }
         }
     }
+
+    multiplier = intExp10(std::abs(scale - 3));
 
     proc_time = true;
 }

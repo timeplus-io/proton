@@ -19,7 +19,7 @@ class TimestampTransform final : public ISimpleTransform
 {
 public:
     TimestampTransform(
-        const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_);
+        const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
 
     ~TimestampTransform() override = default;
 
@@ -40,13 +40,15 @@ private:
     StreamingFunctionDescriptionPtr timestamp_func_desc;
 
     /// process time streaming processing
+    bool backfill = false;
     bool proc_time = false;
     bool is_datetime64 = false;
     String timezone;
     /// For datetime64
-    UInt32 scale = 0;
+    Int32 scale = 0;
+    Int64 multiplier = 1;
 
-    size_t timestamp_col_pos = 0;
+    size_t timestamp_col_pos = 1;
     DataTypePtr timestamp_col_data_type;
     Chunk chunk_header;
 

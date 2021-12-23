@@ -7,7 +7,7 @@ namespace DB
 class HopWatermark final : public HopTumbleBaseWatermark
 {
 public:
-    HopWatermark(WatermarkSettings && watermark_settings_, Poco::Logger * log_);
+    HopWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_);
     ~HopWatermark() override = default;
 
 private:

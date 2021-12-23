@@ -13,7 +13,8 @@ public:
     TimestampTransformStep(
         const DataStream & input_stream_,
         Block output_header,
-        StreamingFunctionDescriptionPtr timestamp_func_desc_);
+        StreamingFunctionDescriptionPtr timestamp_func_desc_,
+        bool backfill_);
 
     ~TimestampTransformStep() override = default;
 
@@ -23,5 +24,6 @@ public:
 
 private:
     StreamingFunctionDescriptionPtr timestamp_func_desc;
+    bool backfill;
 };
 }

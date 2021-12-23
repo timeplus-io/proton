@@ -56,8 +56,8 @@ private:
 class Watermark
 {
 public:
-    Watermark(WatermarkSettings && watermark_settings_, Poco::Logger * log_)
-        : watermark_settings(std::move(watermark_settings_)), log(log_)
+    Watermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_)
+        : watermark_settings(std::move(watermark_settings_)), proc_time(proc_time_), log(log_)
     {
     }
     virtual ~Watermark() { }
@@ -84,6 +84,8 @@ private:
 
 protected:
     WatermarkSettings watermark_settings;
+
+    bool proc_time = false;
 
     Poco::Logger * log;
 

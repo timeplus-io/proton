@@ -90,6 +90,13 @@ void StreamingStoreSource::readAndProcess()
            block.insert(std::move(record->block.getByName(name)));
 
        result_chunks.emplace_back(block.getColumns(), block.rows());
+       if (block.info.append_time > 0)
+       {
+           auto chunk_info = std::make_shared<ChunkInfo>();
+           chunk_info->ctx.setAppendTime(block.info.append_time);
+           result_chunks.back().setChunkInfo(std::move(chunk_info));
+       }
+
     }
     iter = result_chunks.begin();
 }
