@@ -13,6 +13,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
+#include <Storages/StorageView.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -126,8 +127,7 @@ StoragePtr TableFunctionProxyBase::executeImpl(
         storage_id, columns, underlying_storage_metadata_snapshot, context, streaming_func_desc, timestamp_func_desc, subquery, streaming);
 }
 
-void TableFunctionProxyBase::init(
-    ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast)
+void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast)
 {
     StoragePtr storage;
 
@@ -147,10 +147,28 @@ void TableFunctionProxyBase::init(
     else
     {
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        if (storage->getName() != "DistributedMergeTree")
-            throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
-        underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
-        columns = underlying_storage_metadata_snapshot->getColumns();
+        if (auto * view = storage->as<StorageView>())
+        {
+            underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
+            auto select = underlying_storage_metadata_snapshot->getSelectQuery().inner_query;
+            SelectQueryOptions options;
+            auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, options);
+            if (interpreter_subquery)
+            {
+                auto source_header = interpreter_subquery->getSampleBlock();
+                columns = ColumnsDescription(source_header.getNamesAndTypesList());
+
+                /// determine whether it is a streaming query
+                streaming = interpreter_subquery->isStreaming();
+            }
+        }
+        else
+        {
+            if (storage->getName() != "DistributedMergeTree")
+                throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
+            underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
+            columns = underlying_storage_metadata_snapshot->getColumns();
+        }
     }
 
     /// We will first need analyze time column expression since the streaming window function depends on the result of time column expr

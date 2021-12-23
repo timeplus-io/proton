@@ -40,12 +40,6 @@ namespace
             return {};
     }
 
-    ALWAYS_INLINE bool isTableAST(const ASTPtr ast)
-    {
-        String table_name;
-        return tryGetIdentifierNameInto(ast, table_name);
-    }
-
     ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
     {
         /// Assume it is a time or time_expr, we will check it later again
@@ -96,9 +90,6 @@ ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
 
     do
     {
-        /// First argument is expected to be table name
-        if (!isTableAST(args[0]))
-            break; /// throw error
         table = args[0];
 
         if (args.size() == 2)
@@ -171,9 +162,6 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
 
     do
     {
-        /// First argument is expected to be table name
-        if (!isTableAST(args[0]))
-            break; /// throw error
         table = args[0];
 
         if (args.size() == 3)

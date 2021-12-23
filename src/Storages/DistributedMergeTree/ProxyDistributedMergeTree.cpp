@@ -8,6 +8,7 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/StorageView.h>
 #include <Common/ProtonCommon.h>
 
 #include <base/logger_useful.h>
@@ -106,6 +107,16 @@ void ProxyDistributedMergeTree::read(
         }
         return;
     }
+
+    if (auto * view = storage->as<StorageView>())
+        return view->read(query_plan,
+                          updated_column_names,
+                          underlying_storage_metadata_snapshot,
+                          query_info,
+                          context_,
+                          processed_stage,
+                          max_block_size,
+                          num_streams);
 
     auto *distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
