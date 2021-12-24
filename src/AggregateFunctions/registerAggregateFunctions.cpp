@@ -75,6 +75,10 @@ void registerAggregateFunctionCombinatorMap(AggregateFunctionCombinatorFactory &
 
 void registerWindowFunctions(AggregateFunctionFactory & factory);
 
+/// proton: starts.
+void registerAggregateFunctionMinMaxK(AggregateFunctionFactory &);
+/// proton: ends.
+
 void registerAggregateFunctions()
 {
     {
@@ -132,6 +136,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionSparkbar(factory);
 
         registerWindowFunctions(factory);
+
+        /// proton: starts.
+        registerAggregateFunctionMinMaxK(factory);
+        /// proton: ends.
     }
 
     {
