@@ -572,7 +572,14 @@ void ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions, Aggr
 
         AggregateFunctionProperties properties;
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters, "", getContext()) : Array();
-        aggregate.function = AggregateFunctionFactory::instance().get(node->name, types, aggregate.parameters, properties);
+
+        /// proton: starts.
+        /// We shall replace '<aggr>Distinct' to '<aggr>DistinctStreaming' in streaming query.
+        if (syntax->streaming && endsWith(Poco::toLower(node->name), "distinct"))
+            aggregate.function = AggregateFunctionFactory::instance().get(node->name + "Streaming", types, aggregate.parameters, properties);
+        else
+            aggregate.function = AggregateFunctionFactory::instance().get(node->name, types, aggregate.parameters, properties);
+        /// proton: ends.
 
         descriptions.push_back(aggregate);
     }

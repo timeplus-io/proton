@@ -151,7 +151,7 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
 template <typename Data>
 class AggregateFunctionDistinct : public IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct<Data>>
 {
-private:
+protected:
     static constexpr auto prefix_size = sizeof(Data);
     AggregateFunctionPtr nested_func;
     size_t arguments_num;

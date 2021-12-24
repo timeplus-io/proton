@@ -77,6 +77,7 @@ void registerWindowFunctions(AggregateFunctionFactory & factory);
 
 /// proton: starts.
 void registerAggregateFunctionMinMaxK(AggregateFunctionFactory &);
+void registerAggregateFunctionCombinatorDistinctStreaming(AggregateFunctionCombinatorFactory &);
 /// proton: ends.
 
 void registerAggregateFunctions()
@@ -156,6 +157,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionCombinatorResample(factory);
         registerAggregateFunctionCombinatorDistinct(factory);
         registerAggregateFunctionCombinatorMap(factory);
+    
+        /// proton: starts.
+        registerAggregateFunctionCombinatorDistinctStreaming(factory);
+        /// proton: ends.
     }
 }
 
