@@ -38,6 +38,9 @@
 
 #include <Interpreters/StorageID.h>
 
+/// proton: starts.
+#include <Parsers/Streaming/ParserIntervalAliasExpression.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -804,8 +807,32 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserExpressionList contents(false, is_table_function);
 
     const char * contents_begin = pos->begin;
-    if (!contents.parse(pos, expr_list_args, expected))
-        return false;
+
+    /// proton: starts.
+    /// The tumble/hop function arguments support interval alias expression
+    bool allow_interval_alias = is_table_function;
+    if (allow_interval_alias)
+    {
+        auto func_name = getIdentifierName(identifier);
+        allow_interval_alias = func_name == "tumble" || func_name == "hop";
+    }
+
+    if (allow_interval_alias)
+    {
+        ParserList interval_alias_content{
+            std::make_unique<ParserIntervalAliasExpression>(std::make_unique<ParserExpressionWithOptionalAlias>(false, is_table_function)),
+            std::make_unique<ParserToken>(TokenType::Comma)};
+
+        if (!interval_alias_content.parse(pos, expr_list_args, expected))
+            return false;
+    }
+    else
+    {
+        if (!contents.parse(pos, expr_list_args, expected))
+            return false;
+    }
+    /// proton: ends.
+
     const char * contents_end = pos->begin;
 
     if (pos->type != TokenType::ClosingRoundBracket)

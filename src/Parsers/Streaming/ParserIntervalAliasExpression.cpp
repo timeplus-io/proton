@@ -14,29 +14,53 @@ bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected
     if (!pos.isValid())
         return false;
 
-    /// Case: 1s
+    Pos pos_begin = pos;
+
+    //// Case: +1s -1s 1s
+    /// Parse + -
+    bool negative = false;
+    if (pos->type == TokenType::Minus)
+    {
+        ++pos;
+        negative = true;
+    }
+    else if (pos->type == TokenType::Plus)  /// Leading plus is simply ignored.
+        ++pos;
+
     /// Parse number
     Int64 x = 0;
     ReadBufferFromMemory in(pos->begin, pos->size());
     if (!tryReadIntText(x, in) || in.count() == pos->size())
-        return false;
+        return elem_parser ? elem_parser->parse(pos = pos_begin, node, expected) : false;
 
     /// Parse interval kind
     IntervalKind interval_kind;
     {
-        Tokens kind_token(pos->begin + in.count(), pos->begin + pos->size());
-        Pos kind_pos(kind_token, 0);
-        if (ParserKeyword("S").ignore(kind_pos, expected))
+        /// pos->begin = "10s"
+        /// pos->size() = 3(token size)
+        /// in.count() = 2(number size)
+        String kind_str(pos->begin + in.count(), pos->size() - in.count());
+        if ("s" == kind_str)
             interval_kind = IntervalKind::Second;
-        else if (ParserKeyword("M").ignore(kind_pos, expected))
+        else if ("m" == kind_str)
             interval_kind = IntervalKind::Minute;
-        else if (ParserKeyword("H").ignore(kind_pos, expected))
+        else if ("h" == kind_str)
             interval_kind = IntervalKind::Hour;
+        else if ("d" == kind_str)
+            interval_kind = IntervalKind::Day;
+        else if ("w" == kind_str)
+            interval_kind = IntervalKind::Week;
+        else if ("M" == kind_str)
+            interval_kind = IntervalKind::Month;
+        else if ("q" == kind_str)
+            interval_kind = IntervalKind::Quarter;
+        else if ("y" == kind_str)
+            interval_kind = IntervalKind::Year;
         else
-            return false;
+            return elem_parser ? elem_parser->parse(pos = pos_begin, node, expected) : false;
     }
 
-    auto expr = x < 0 ? std::make_shared<ASTLiteral>(Int64(x)) : std::make_shared<ASTLiteral>(UInt64(x));
+    auto expr = negative ? std::make_shared<ASTLiteral>(Int64(-x)) : std::make_shared<ASTLiteral>(UInt64(x));
     expr->begin = pos;
     expr->end = ++pos;
 

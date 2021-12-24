@@ -4,15 +4,32 @@
 
 namespace DB
 {
-/// Optional conversion to interval alias. Example:
-/// 1) "xs" parsed as "toIntervalSecond(x)"
-/// 2) "ym" parsed as "toIntervalMinute(y)"
-/// 3) "zh" parsed as "toIntervalHour(z)"
-/// now kind supports: 's','m','h'
+/// Optional conversion to interval alias. Support formats:
+/// <nt>
+///     <n> is a signed integer value like 1 +1 -1
+///     <t> is a simple unit of time like s(seconds) or h(hours)
+/// Example:
+/// 1) "1s" parsed as "toIntervalSecond(1)"
+///
+/// The unit of time supports [Case Sensitive]:
+/// 'seconds' - 's'
+/// 'minutes' - 'm'
+/// 'hours' - 'h'
+/// 'days' - 'd'
+/// 'weeks' - 'w'
+/// 'months' - 'M'
+/// 'quarter' - 'q'
+/// 'year' - 'y' 
 class ParserIntervalAliasExpression : public IParserBase
 {
+public:
+    explicit ParserIntervalAliasExpression(ParserPtr && elem_parser_ = {}) : elem_parser(std::move(elem_parser_)) { }
+
+private:
+    ParserPtr elem_parser;
+
 protected:
-    const char * getName() const  override { return "interval alias expression"; }
+    const char * getName() const override { return "interval alias expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 }

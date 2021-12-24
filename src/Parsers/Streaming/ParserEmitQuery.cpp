@@ -41,8 +41,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr delay_interval;
     ASTPtr last_interval;
 
-    ParserIntervalOperatorExpression interval_p;
-    ParserIntervalAliasExpression interval_alias_p;
+    ParserIntervalAliasExpression interval_alias_p(std::make_unique<ParserIntervalOperatorExpression>());
     do
     {
         if (ParserKeyword("PERIODIC").ignore(pos, expected))
@@ -51,7 +50,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (periodic_interval)
                 throw Exception("Can not use repeat 'PERIODIC' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
 
-            if (!interval_p.parse(pos, periodic_interval, expected))
+            if (!interval_alias_p.parse(pos, periodic_interval, expected))
                 return false;
         }
         else if (ParserKeyword("AFTER WATERMARK").ignore(pos, expected))
@@ -68,15 +67,15 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (delay_interval)
                 throw Exception("Can not use repeat 'DELAY' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
 
-            if (!interval_p.parse(pos, delay_interval, expected))
+            if (!interval_alias_p.parse(pos, delay_interval, expected))
                 return false;
         }
         else if (ParserKeyword("LAST").ignore(pos, expected))
         {
+            /// [LAST <last-x>]
             if (last_interval)
                 throw Exception("Can not use repeat 'LAST' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
 
-            /// [LAST <last-x>]
             if (!interval_alias_p.parse(pos, last_interval, expected))
                 return false;
         }
