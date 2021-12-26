@@ -1,0 +1,31 @@
+name: ProtonStreamCheck
+
+on: push
+
+jobs:
+  CheckLabels:
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-102-setup-ci-pipeline
+    with:
+      submodules: 'false'
+      command: |
+        cd $GITHUB_WORKSPACE/tests/stream
+        env
+        apt-get update
+        env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
+          shellcheck \
+          libxml2-utils \
+          git \
+          python3-pip \
+          pylint \
+          yamllint
+        pip3 install -r helpers/requirements.txt
+        python3 ci_runner.py
+      ec2-instance-type: c4.2xlarge
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

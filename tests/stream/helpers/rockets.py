@@ -38,16 +38,12 @@
 # }
 # import global_settigns
 
-import os, sys, json, getopt
+import os, sys, json, getopt, subprocess
 import logging, logging.config
 import time
 import datetime
 import random
 import requests
-
-# from dataclasses import dataclass
-
-
 import multiprocessing as mp
 from clickhouse_driver import Client
 from clickhouse_driver import errors
@@ -66,6 +62,8 @@ def rockets_env_var_get():
     proton_rest_table_ddl_path = os.environ.get("PROTON_REST_TABLE_PATH")
     proton_rest_ingest_path = os.environ.get("PROTON_REST_INGEST_PATH")
     proton_rest_query_path = os.environ.get("PROTON_REST_QUERY_PATH")
+    proton_rest_health_path = os.environ.get("PROTON_REST_HEALTH_PATH")
+    proton_rest_info_path = os.environ.get("PROTON_REST_INFO_PATH")
 
     if (
         proton_server != None
@@ -75,6 +73,8 @@ def rockets_env_var_get():
         and proton_rest_table_ddl_path != None
         and proton_rest_ingest_path != None
         and proton_rest_query_path != None
+        and proton_rest_health_path != None
+        and proton_rest_info_path != None
     ):
 
         config = {
@@ -82,6 +82,8 @@ def rockets_env_var_get():
                 "table_ddl_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_table_ddl_path}",
                 "ingest_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_ingest_path}",
                 "query_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_query_path}",
+                "health_check_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_health_path}",
+                "info_url": f"http://{proton_server}:{proton_rest_port}{proton_rest_info_path}",
                 "prarams": proton_rest_params,
             },
             "roton_server": proton_server,
@@ -92,7 +94,7 @@ def rockets_env_var_get():
         return None
 
 
-def rockets_context(config_file=None, tests_file=None):
+def rockets_context(config_file=None, tests_file=None, docker_compose_file=None):
     config = rockets_env_var_get()
     if config == None:
         with open(config_file) as f:
@@ -118,10 +120,12 @@ def rockets_context(config_file=None, tests_file=None):
     query_exe_client = mp.Process(
         target=query_execute, args=(config, query_exe_child_conn)
     )  # Create query_exe_client process
+
     rockets_context = {
         "config": config,
         "test_suite": test_suite,
         "query_exe_client": query_exe_client,
+        "docker_compose_file": docker_compose_file,
         "query_exe_parent_conn": query_exe_parent_conn,
         "query_exe_child_conn": query_exe_child_conn,
     }
@@ -146,7 +150,7 @@ def kill_query(
     query_conn,
     statements_results,
     query_end_timer_start,
-    query_end_timer,
+    query_end_timer=0,
 ):
     # currently only stream query kill logic is done, query_2_kill is the query_id, get the id and kill the query and recv the stream query results from query_execute
     # pay attention: the stream query must be created by the query_execute and a child_conn.send(query_results) must be done by query_execute, watch the pipe conn pairs.
@@ -477,7 +481,11 @@ def input_batch_rest(input_url, input_batch, table_schema):
 
 
 def input_walk_through_rest(
-    rest_setting, inputs, table_schema, wait_before_inputs=0.5, sleep_after_inputs=1
+    rest_setting,
+    inputs,
+    table_schema,
+    wait_before_inputs=1,
+    sleep_after_inputs=1.5,  # stable set wait_before_inputs=1, sleep_after_inputs=1.5
 ):
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
@@ -492,12 +500,7 @@ def input_walk_through_rest(
     return inputs_record
 
 
-def env_setup(rest_setting, table_schema):
-    # check the test env, if table w/ table_name is found, drop it
-    # create table w/ table_name and table_schema to get the  table for query verification ready
-    table_ddl_url = rest_setting.get("table_ddl_url")
-    params = rest_setting.get("params")
-    table_name = table_schema.get("name")
+def drop_table_if_exist_rest(table_ddl_url, table_name):
     res = requests.get(table_ddl_url)
     if res.status_code == 200:
         res_json = res.json()
@@ -511,28 +514,129 @@ def env_setup(rest_setting, table_schema):
                             f"table drop rest access failed, status code={res.status_code}"
                         )
                     else:
+                        time.sleep(1)  # sleep to wait the table drop completed.
                         logging.info(
                             "env_setup: table {} is dropped".format(table_name)
                         )
         else:
-            logging.info(f"table: {table_name} does not exit")
+            logging.info(f"env_setup: table {table_name} does not exit")
     else:
         raise Exception(f"table list rest acces failed, status code={res.status_code}")
-    time.sleep(1)  # sleep to wait the table drop completed.
+
+
+def table_exist(table_ddl_url, table_name):
+    res = requests.get(table_ddl_url)
+    logging.debug(f"table_exist: res.status_code = {res.status_code}")
+    if res.status_code == 200:
+        res_json = res.json()
+        table_list = res_json.get("data")
+        if len(table_list) > 0:
+            for element in table_list:
+                element_name = element.get("name")
+                # logging.debug(f"table_exist: element_name = {element_name}, table_name = {table_name}")
+                if element_name == table_name:
+                    logging.debug(f"table_exist: table {table_name} exists.")
+                    return True
+            return False
+        else:
+            logging.debug("table_exist: False")
+            return False
+
+
+def create_table_rest(table_ddl_url, table_schema):
+    # logging.debug(f"create_table_rest: table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
+    table_name = table_schema.get("name")
     res = requests.post(
         table_ddl_url, data=json.dumps(table_schema)
     )  # create the table w/ table schema
-    if res.status_code != 200:
+    if res.status_code == 200:
+        logging.debug(f"table {table_name} create_rest is called successfully.")
+    else:
         raise Exception(
             f"table create rest access failed, status code={res.status_code}"
         )
-    time.sleep(1)
+    # show tables and check if table_name creates
+
+    create_table_time_out = 5  # set how many times wait and list table to check if table creation completed.
+    while create_table_time_out > 0:
+        if table_exist(table_ddl_url, table_name):
+            print(f"table {table_name} is created sussufully.")
+            break
+        else:
+            time.sleep(2)
+            # res = requests.post(table_ddl_url, data=json.dumps(table_schema)) #currently the health check rest is not accurate, retry here and remove later
+        create_table_time_out -= 1
+    # time.sleep(1) # wait the table creation completed
+
+
+def compose_up(compose_file_path):
+    print(f"compose_up: compose_file_path = {compose_file_path}")
+    try:
+        cmd = f"docker-compose -f {compose_file_path} up -d"
+        logging.debug(f"compose_up: cmd = {cmd}")
+        res = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT)
+        return True
+    except (subprocess.CalledProcessError) as Error:
+        return False
+
+
+def env_health_check(health_check_url):
+    try:
+        logging.debug(f"env_health_check: health_check_url = {health_check_url}")
+        res = requests.get(health_check_url)
+        if res.status_code == 200:
+            return True
+        else:
+            return False
+    except (BaseException):
+        return False
+
+
+def env_setup(rest_setting, test_suite_config, env_compose_file, proton_ci_mode):
+    ci_mode = proton_ci_mode
+    logging.info(f"env_setup: ci_mode = {ci_mode}")
+    logging.debug(f"env_setup: rest_setting = {rest_setting}")
+    health_url = rest_setting.get("health_check_url")
+    logging.debug(f"env_setup: health_url = {health_url}")
+    if ci_mode == "local":
+        env_docker_compose_res = True
+        logging.info(f"Bypass docker compose up.")
+    else:
+        env_docker_compose_res = compose_up(env_compose_file)
+        logging.info(f"docker compose up...")
+    logging.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
+    env_health_check_res = env_health_check(health_url)
+    logging.info(f"env_setup: env_health_check_res: {env_health_check_res}")
+    if env_docker_compose_res:
+        retry = 5
+        while env_health_check_res == False and retry > 0:
+            time.sleep(2)
+            env_health_check_res = env_health_check(health_url)
+            logging.debug(f"env_setup: retry = {retry}")
+            retry -= 1
+
+        if env_health_check_res == False:
+            raise Exception("Env health check failure.")
+    else:
+        raise Exception("Env docker compose up failure.")
+    if ci_mode == "github":
+        time.sleep(
+            5
+        )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
+    table_schema = test_suite_config.get("table_schema")
+    table_ddl_url = rest_setting.get("table_ddl_url")
+    params = rest_setting.get("params")
+    table_name = table_schema.get("name")
+    if table_name != None:
+        drop_table_if_exist_rest(table_ddl_url, table_name)
+    create_table_rest(table_ddl_url, table_schema)
     return
 
 
 # @pytest.fixture(scope="module")
 def rockets_run(test_context):
     logging.info("rockets_run starts......")
+    docker_compose_file = test_context.get("docker_compose_file")
     config = test_context.get("config")
     rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
@@ -542,36 +646,64 @@ def rockets_run(test_context):
     q_exec_client_conn = test_context.get("query_exe_child_conn")
     q_exec_client.start()
     test_suite = test_context.get("test_suite")
-    tests = test_suite.get("tests")
-    test_suite_config = test_suite.get("test_config")
+    test_suite_config = test_suite.get("test_suite_config")
     table_schema = test_suite_config.get("table_schema")
+    tests = test_suite.get("tests")
+    tests_2_run = test_suite_config.get("tests_2_run")
+    test_run_list = []
+    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    logging.info(f"rockets_run: proton_ci_mode = {proton_ci_mode}")
+
+    if tests_2_run == None:  # if tests_2_run is not set, run all tests.
+        test_run_list = tests
+    else:  # if tests_2_run is set in test_suite_config, run the id list.
+        logging.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
+        ids_2_run = tests_2_run.get("ids_2_run")
+        if len(ids_2_run) != 0:
+            if ids_2_run[0] == "all":
+                test_run_list = tests
+            else:
+                # tests = []
+                for test in tests:
+                    if test.get("id") in ids_2_run:
+                        test_run_list.append(test)
+                # logging.debug(f"rockets_run: {len(test_run_list)} tests: {test_run_list} to be run based on tests_2_run: {tests_2_run} configured")
+        else:
+            print("rockets_run: test_suite_config is misconfigured. ")
+            return []
+        logging.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
+
+    env_setup(rest_setting, test_suite_config, docker_compose_file, proton_ci_mode)
+    logging.info("rockets_run env_etup done")
+    # logging.info(f"test_run_list = {test_run_list}")
+
     test_id_run = 0
     test_sets = []
-    env_setup(rest_setting, table_schema)
-    logging.info("rockets_run env_etup done")
-
     try:
         client = Client(host=proton_server, port=proton_server_native_port)
-        while test_id_run < len(tests):
+        while test_id_run < len(test_run_list):
             query_2_kill = ""
             query_end_timer_start = None
             query_end_timer = 0
             statements_results = []
             inputs_record = []
             # read pre_statements, send to q_exe_client, and get result, put into test results[]
-            pre_statements = tests[test_id_run].get("pre_statements")
-            test_name = tests[test_id_run].get("name")
-            inputs = tests[test_id_run].get("inputs")
-            post_statements = tests[test_id_run].get("post_statements")
-            expected_results = tests[test_id_run].get("expected_results")
+            test_id = test_run_list[test_id_run].get("id")
+            pre_statements = test_run_list[test_id_run].get("pre_statements")
+            test_name = test_run_list[test_id_run].get("name")
+            inputs = test_run_list[test_id_run].get("inputs")
+            post_statements = test_run_list[test_id_run].get("post_statements")
+            expected_results = test_run_list[test_id_run].get("expected_results")
 
             if pre_statements:
-                logging.info(f"rockets_run: {test_id_run} pre_statement start")
+                logging.info(
+                    f"rockets_run: {test_id_run}, test_id = {test_id} pre_statement start"
+                )
                 query_walk_through_res = query_walk_through(
                     client, pre_statements, query_conn
                 )  # pre_statements walk through
                 logging.info(
-                    f"rockets_run: {test_id_run} pre_statements query_walk_through_res = {query_walk_through_res}"
+                    f"rockets_run: {test_id_run}, test_id = {test_id} pre_statements query_walk_through_res = {query_walk_through_res}"
                 )
                 (
                     statement_result_from_query_execute,
@@ -584,21 +716,27 @@ def rockets_run(test_context):
                     for element in statement_result_from_query_execute:
                         statements_results.append(element)
                 # query_2_kill = query_walk_through_res[1]
-                logging.info(f"rockets_run: {test_id_run} pre_statement done")
+                logging.info(
+                    f"rockets_run: {test_id_run}, test_id = {test_id} pre_statement done"
+                )
             if inputs:
-                logging.info(f"rockets_run: {test_id_run} input_walk_through start")
+                logging.info(
+                    f"rockets_run: {test_id_run}, test_id = {test_id} input_walk_through start"
+                )
                 # time.sleep(0.5) # sleep 0.5 sec to ensure the
                 # input_walk_through(client, inputs, table_schema) #inputs walk through via python client
                 inputs_record = input_walk_through_rest(
                     rest_setting, inputs, table_schema
                 )  # inputs walk through rest_client
                 # input_walk_through_res = input_walk_through(client, inputs, table_schema, query_2_kill, query_conn) #inputs walk through
-                logging.info(f"rockets_run: {test_id_run} input_walk_through done")
+                logging.info(
+                    f"rockets_run: {test_id_run}, test_id = {test_id} input_walk_through done"
+                )
                 # time.sleep(0.5) #wait for the data inputs done.
 
             if query_2_kill:
                 logging.info(
-                    f"rockets_run: {test_id_run} kill_query after pre_statement start."
+                    f"rockets_run: {test_id_run}, test_id = {test_id} kill_query after pre_statement start."
                 )
                 kill_query(
                     client,
@@ -610,7 +748,7 @@ def rockets_run(test_context):
                 )
                 query_2_kill = ""
                 logging.info(
-                    f"rockets_run: {test_id_run} kill_query after pre_statement done."
+                    f"rockets_run: {test_id_run}, test_id = {test_id} kill_query after pre_statement done."
                 )
             if post_statements:
                 input_walk_through_rest(
@@ -622,7 +760,9 @@ def rockets_run(test_context):
                         statements_results.append(element)
 
                 query_2_kill = query_walk_through_res[1]
-                logging.info(f"rockets_run: {test_id_run} post_statement done.")
+                logging.info(
+                    f"rockets_run: {test_id_run}, test_id = {test_id} post_statement done."
+                )
             if query_2_kill:
                 kill_query(client, query_2_kill, query_conn, statements_results)
                 query_2_kill = ""
@@ -630,6 +770,7 @@ def rockets_run(test_context):
             test_sets.append(
                 {
                     "test_id_run": test_id_run,
+                    "test_id": test_id,
                     "test_name": test_name,
                     "inputs_record": inputs_record,
                     "expected_results": expected_results,
@@ -652,26 +793,11 @@ def rockets_run(test_context):
 
 
 if __name__ == "__main__":
-    cur_run_path = os.getcwd()
-    cur_run_path_parent = os.path.dirname(cur_run_path)
+    # cur_run_path = os.getcwd()
+    # cur_run_path_parent = os.path.dirname(cur_run_path)
     cur_file_path = os.path.dirname(os.path.abspath(__file__))
     cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
-    """
-    logging_config_file = f"{cur_run_path_parent}/helpers/logging.conf"
-    if os.path.exists(logging_config_file):
-        logging.basicConfig(
-            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
-        )  # todo: add log stuff
-        logging.config.fileConfig(logging_config_file)  # need logging.conf
-        logger = logging.getLogger("rockets")
-    else:
-        print("no logging.conf exists under ../helper, no logging.")
-
-    logging.info("rockets_main starts......")
-    """
-
-    # logging_config_file = f"{cul_run_path_parent}/helpers/logging.conf"
     logging_config_file = f"{cur_file_path}/logging.conf"
     if os.path.exists(logging_config_file):
         logging.basicConfig(
@@ -689,6 +815,7 @@ if __name__ == "__main__":
         opts, args = getopt.getopt(argv, "d:")
     except:
         print("Error")
+        sys.exit(2)
 
     for opt, arg in opts:
         if opt in ["-d"]:
@@ -699,16 +826,11 @@ if __name__ == "__main__":
     # config_file = f"{cul_run_path}/configs/config.json"
     config_file = f"{test_suite_path}/configs/config.json"
     tests_file = f"{test_suite_path}/tests.json"
+    docker_compose_file = f"{test_suite_path}/configs/docker-compose.yaml"
 
-    """
-    config_file = f"{cul_run_path}/configs/config.json"
-    tests_file = f"{cul_run_path}/tests.json"
-    logging.debug(f"config_file path: {config_file}")
-    logging.debug(f"tests_fiel path: {tests_file}")
-    """
     if os.path.exists(tests_file):
         rockets_context = rockets_context(
-            config_file, tests_file
+            config_file, tests_file, docker_compose_file
         )  # need to have config env vars/config.json and test.json when run rockets.py as a test debug tooling.
         test_sets = rockets_run(rockets_context)
         # output the test_sets one by one
@@ -718,3 +840,4 @@ if __name__ == "__main__":
             logging.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
     else:
         print("No tests.json exists under test suite folder.")
+

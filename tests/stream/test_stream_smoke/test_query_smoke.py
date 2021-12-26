@@ -5,15 +5,20 @@ import math
 
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import helpers.rockets
+from helpers import rockets
+
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+config_file_path = f"{cur_dir}/configs/config.json"
+tests_file_path = f"{cur_dir}/tests.json"
+docker_compose_file_path = f"{cur_dir}/configs/docker-compose.yaml"
 
 
 def pytest_generate_tests(metafunc):
     if "test_set" in metafunc.fixturenames:
-        rockets_context = helpers.rockets.rockets_context(
-            "./configs/config.json", "./tests.json"
+        rockets_context = rockets.rockets_context(
+            config_file_path, tests_file_path, docker_compose_file_path
         )
-        test_sets = helpers.rockets.rockets_run(rockets_context)
+        test_sets = rockets.rockets_run(rockets_context)
         test_ids = [test["test_name"] for test in test_sets]
         metafunc.parametrize("test_set", test_sets, ids=test_ids, indirect=True)
 
@@ -23,7 +28,7 @@ def test_set(request):
     return request.param
 
 
-def test_run(test_set, caplog):
+def query_result_check(test_set, order_check=False):
     expected_results = test_set.get("expected_results")
     print(f"\n test run: expected_results: {expected_results}")
     statements_results = test_set.get("statements_results")
@@ -54,23 +59,64 @@ def test_run(test_set, caplog):
 
             else:
                 assert len(expected_result) == len(query_result)
+                if (
+                    order_check == False
+                ):  # when the order_check ==False, only check if the expected_reslt matches a query result but the sequence of the query result is not checked.
+                    expected_result_check_arry = []
+                    for i in range(len(expected_result)):
+                        expected_result_check_arry.append(0)
+                    row_step = 0
+                    for expected_result_row in expected_result:
+                        for query_result_row in query_result:
+                            expected_result_row_field_check_arry = []
+                            for i in range(
+                                len(query_result_column_types) - 1
+                            ):  # query_result_column_types has a timestamp filed added by query_execute, so need to minus 1
+                                expected_result_row_field_check_arry.append(0)
 
-                expected_result_check_arry = []
-                for i in range(len(expected_result)):
-                    expected_result_check_arry.append(0)
-                row_step = 0
-                for expected_result_row in expected_result:
-                    for query_result_row in query_result:
-                        expected_result_row_field_check_arry = []
-                        for i in range(
-                            len(query_result_column_types) - 1
-                        ):  # query_result_column_types has a timestamp filed added by query_execute, so need to minus 1
-                            expected_result_row_field_check_arry.append(0)
-                        print(f"query_result_column_types: {query_result_column_types}")
-                        print(
-                            f"expected_result_row_field_check_array: {expected_result_row_field_check_arry}"
-                        )
-                        expected_result_row_check = 1
+                            expected_result_row_check = 1
+                            for i in range(
+                                len(expected_result_row)
+                            ):  # for each filed of each row of each query_results
+                                # print("test_run: column_type:", query_result_column_types[i][1])
+                                expected_result_field = expected_result_row[i]
+                                query_result_field = query_result_row[i]
+                                if "Float" in query_result_column_types[i][1]:
+                                    if math.isclose(
+                                        float(expected_result_field),
+                                        float(query_result_field),
+                                        rel_tol=1e-2,
+                                    ):
+                                        expected_result_row_field_check_arry[i] = 1
+                                elif "Int" in query_result_column_types[i][1]:
+                                    if int(expected_result_field) == int(
+                                        query_result_field
+                                    ):
+                                        expected_result_row_field_check_arry[i] = 1
+                                else:
+                                    if expected_result_field == query_result_field:
+                                        expected_result_row_field_check_arry[i] = 1
+
+                            for i in range(len(expected_result_row_field_check_arry)):
+                                expected_result_row_check = (
+                                    expected_result_row_check
+                                    * expected_result_row_field_check_arry[i]
+                                )
+                            if expected_result_row_check == 1:
+                                expected_result_check_arry[row_step] = 1
+                        assert expected_result_check_arry[row_step] == 1
+                        row_step += 1
+                else:  # if order_check == True, assert the query result in the exact sequence of the expected result
+                    for i in range(
+                        len(expected_result)
+                    ):  # for each row of each query_results
+                        expected_result_row = expected_result[i]
+                        # print(f"i in expected_result = {i}, expected_result_row={expected_result_row}")
+                        query_result_row = query_result[i]
+                        # print(f"i in expected_result = {i}, query_result_row={query_result_row}")
+                        assert (
+                            len(expected_result_row) == len(query_result_row) - 1
+                        )  # the timestamp field in query_result_row is artifically added and need to be excluded in the length
                         for i in range(
                             len(expected_result_row)
                         ):  # for each filed of each row of each query_results
@@ -78,56 +124,18 @@ def test_run(test_set, caplog):
                             expected_result_field = expected_result_row[i]
                             query_result_field = query_result_row[i]
                             if "Float" in query_result_column_types[i][1]:
-                                if math.isclose(
+                                assert math.isclose(
                                     float(expected_result_field),
                                     float(query_result_field),
                                     rel_tol=1e-2,
-                                ):
-                                    expected_result_row_field_check_arry[i] = 1
+                                )
                             elif "Int" in query_result_column_types[i][1]:
-                                if int(expected_result_field) == int(
+                                assert int(expected_result_field) == int(
                                     query_result_field
-                                ):
-                                    expected_result_row_field_check_arry[i] = 1
+                                )
                             else:
-                                if expected_result_field == query_result_field:
-                                    expected_result_row_field_check_arry[i] = 1
-                        print(
-                            f"query_result_row: {query_result_row}, expected_result_row_field_check_array:{expected_result_row_field_check_arry}"
-                        )
-                        for i in range(len(expected_result_row_field_check_arry)):
-                            expected_result_row_check = (
-                                expected_result_row_check
-                                * expected_result_row_field_check_arry[i]
-                            )
-                        if expected_result_row_check == 1:
-                            expected_result_check_arry[row_step] = 1
-                    assert expected_result_check_arry[row_step] == 1
-                    row_step += 1
+                                assert expected_result_field == query_result_field
 
-            """
-            for i in range(len(expected_result)):  # for each row of each query_results
-                expected_result_row = expected_result[i]
-                # print(f"i in expected_result = {i}, expected_result_row={expected_result_row}")
-                query_result_row = query_result[i]
-                # print(f"i in expected_result = {i}, query_result_row={query_result_row}")
-                assert (
-                    len(expected_result_row) == len(query_result_row) - 1
-                )  # the timestamp field in query_result_row is artifically added and need to be excluded in the length
-                for i in range(
-                    len(expected_result_row)
-                ):  # for each filed of each row of each query_results
-                    # print("test_run: column_type:", query_result_column_types[i][1])
-                    expected_result_field = expected_result_row[i]
-                    query_result_field = query_result_row[i]
-                    if "Float" in query_result_column_types[i][1]:
-                        assert math.isclose(
-                            float(expected_result_field),
-                            float(query_result_field),
-                            rel_tol=1e-2,
-                        )
-                    elif "Int" in query_result_column_types[i][1]:
-                        assert int(expected_result_field) == int(query_result_field)
-                    else:
-                        assert expected_result_field == query_result_field
-            """
+
+def test_run(test_set, caplog):
+    query_result_check(test_set)

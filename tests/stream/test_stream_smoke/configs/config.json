@@ -3,8 +3,12 @@
         "table_ddl_url": "http://localhost:8123/proton/v1/ddl/tables",
         "ingest_url": "http://localhost:8123/proton/v1/ingest/tables",
         "query_url": "http://localhost:8123/proton/v1/search",
+        "health_check_url": "http://localhost:8123/proton/ping",
+        "info_url": "http://localhost:8123/proton/info",
         "params": {
-            "headers": {"Content-Type": "application/json"}
+            "headers": {
+                "Content-Type": "application/json"
+            }
         }
     },
     "proton_server": "localhost",
@@ -27,7 +31,6 @@
             {
                 "name": "json",
                 "type": "String"
-    
             },
             {
                 "name": "timestamp",
@@ -36,6 +39,4 @@
             }
         ]
     }
-
-    
 }

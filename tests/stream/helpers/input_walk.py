@@ -16,13 +16,13 @@ from clickhouse_driver import errors
 from requests.api import request
 
 
-def input_walk(test_id_run):
+def input_walk(test_id_run, config_file, tests_file):
     input_results = []
-    with open("./config.json") as f:
+    with open(config_file) as f:
         config = json.load(f)
     #    proton_server = config.get('proton_server')
     #    proton_server_native_port = config.get('proton_server_native_port')
-    with open("./tests.json") as f:
+    with open(tests_file) as f:
         test_suit = json.load(f)
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
@@ -76,15 +76,19 @@ def input_walk(test_id_run):
 
 
 if __name__ == "__main__":
+    test_suite_path = None
     test_id_run = None
     argv = sys.argv[1:]
     try:
         opts, args = getopt.getopt(argv, "i:")
+        for opt, arg in opts:
+            if opt in ["-i"]:
+                test_id_run = int(arg)
     except:
         print("Error")
 
-    for opt, arg in opts:
-        if opt in ["-i"]:
-            test_id_run = int(arg)
-    # test_id_run = 1
-    input_walk(test_id_run)
+    test_suite_path = "."
+    config_file = f"{test_suite_path}/configs/config.json"
+    tests_file = f"{test_suite_path}/tests.json"
+
+    input_walk(test_id_run, config_file, tests_file)

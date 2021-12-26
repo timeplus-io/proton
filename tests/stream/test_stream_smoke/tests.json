@@ -1,7 +1,7 @@
 {
     "commments":
         "Tests covering the steam query smoke cases.",
-    "test_config": {
+    "test_suite_config": {
         "table_schema": {
             "name": "test",
             "columns": [
@@ -27,14 +27,16 @@
                     "type": "Datetime64(3)",
                     "default": "now64(3)"
                 }
-            ]
-        }
+            ]},
+        "tests_2_run": {"ids_2_run": [0,1,2,3,4,5,6,7,8,9,10,11,12,13], "tags_run":[]} 
     },
     "setup": {},
     "tests": [
         {
-            "name": "stream tumble window max(value) aggregate group by id",
-            "description": "tumble window aggregate by max and group by id",
+            "id": 0,
+            "tags": ["tumble window"],
+            "name": "stream tumble window max(value) aggregate group by id, window_start, window_end",
+            "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "pre_statements": [
                 {"client":"python", "query_type": "stream", "query_end_timer": 5, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}],
             "inputs": [[
@@ -52,6 +54,8 @@
                     ["dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"]]]                
         },
         {
+            "id": 1,
+            "tags": ["sytax exception"],
             "name": "stream query expected exception: not under aggregate and not in group",
             "description": "expected exception",
             "pre_statements": [
@@ -60,6 +64,8 @@
             "expected_results": ["error_code:215"]                
         },
         {
+            "id": 2,
+            "tags": ["sytax exception"],
             "name": "stream query expected exception: global stream query w/ PERIODIC INTERVAL but no window aggreagation",
             "description": "expected exception",
             "pre_statements": [
@@ -68,6 +74,8 @@
             "expected_results": ["error_code:62"]                
         },
         {
+            "id": 3,
+            "tags": ["sytax exception"],
             "name": "stream query expected exception: stream query group by w/ both window_start and window_end lacked",
             "description": "expected exception",
             "pre_statements": [
@@ -76,6 +84,8 @@
             "expected_results": ["error_code:2002"]                
         },
         {
+            "id": 4,
+            "tags": ["tumble window"],
             "name": "stream tumble window with designated timestamp w/ out of order timestamp within window.",
             "description": "stream tumble window with designated 5 sec timestamp.",
             "pre_statements": [
@@ -94,6 +104,8 @@
             ]                
         },
         {
+            "id": 5,
+            "tags": ["tumble window"],
             "name": "stream tumble window w/ 1st batch inputs data cross multiple windows - #104",
             "description": "stream tumble window query and send 3 inptus in the first batch, the window_start of the next window should be based on the minimal timestamp of the first batch",
             "pre_statements": [
@@ -113,6 +125,8 @@
         },
         
         {
+            "id": 6,
+            "tags": ["tumble window"],
             "name": "stream query w/ inputs with timestamp early than latest timestamp in stream table",
             "description": "stream query aggregate by max is created and then ingest data w/ timestamp early than latest timestamp in stream table, projection based on the inputs should be emitted. ",
             "pre_statements": [
@@ -135,6 +149,8 @@
         },
         
         {
+            "id": 7,
+            "tags": ["tumble window", "delay"],
             "name": "stream tumble late events drop w/ window delay interval  - #107",
             "description": "an example positive test that uses insert into w/o column",
             "pre_statements": [
@@ -153,8 +169,10 @@
             ]                
         },
         {
+            "id": 8,
+            "tags": ["tumble window"],
             "name": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
-            "description": "an example positive test that uses insert into w/o column",
+            "description": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
             "pre_statements": [
                 {"client":"python", "query_type": "stream", "query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}],
             "inputs": [
@@ -170,7 +188,9 @@
             ]                
         },
         {
-            "name": "stream query tumble window w/delay: no aggregation to be emit before delay gate ",
+            "id": 9,
+            "tags": ["tumble window", "delay"],
+            "name": "stream query tumble window w/delay: no aggregation to be emit before delay gate",
             "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
             "pre_statements": [
                 {"client":"python", "query_type": "stream", "query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}],
@@ -187,6 +207,8 @@
             ]                
         },
         {
+            "id": 10,
+            "tags": ["tumble window", "delay"],
             "name": "stream query tumble window w/delay: no aggregation to be emit when delay gate",
             "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
             "pre_statements": [
@@ -202,6 +224,116 @@
             "expected_results": [
                 [["2020-02-02 20:01:00", "2020-02-02 20:01:05", 4]]
             ]                
+        },
+        {
+            "id": 11,
+            "tags": ["hopping window"],
+            "name": "stream hopping window max(value) aggregate group by id, window_start, window_end",
+            "description": "tumble window aggregate by max and group by id, window_start, window_end",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream"}],
+            "inputs": [[
+                    ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
+                ],
+                
+                    [["dev6", "ca", 66, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:04"],
+                    ["dev6", "ca", 69, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:05"]]
+                ,
+                    [["dev8", "ca", 68, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:08"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:10"]
+                ]
+            ],
+            "expected_results": [
+                    [["dev1", "57.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                    ["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev6", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["dev6", "69", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                    ["dev2", "58.3", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]]]                
+        },
+        {
+            "id": 12,
+            "tags": ["hopping window", "delay"],
+            "name": "stream hopping window count(*) w/delay",
+            "description": "tumble window aggregate by max and group by id, window_start, window_end",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query":"select location, count(*), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark and delay interval 2 second"}],
+            "inputs": [
+                [["dev1", "ca", 51, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
+                ["dev1", "ca", 99, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:02"],
+                ["dev1", "ca", 87, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:01"],
+                ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]],
+                [["dev2", "ca", 33, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:07"]],
+                [["dev2", "ca", 46, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:06"]],
+                [["dev2", "ca", 98, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:05"]],
+                [["dev2", "ca", 101, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:08"]],
+                [["dev2", "ca", 101, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:07"]],
+                [["dev2", "ca", 56, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:10"]],
+                [["dev1", "ca", 22, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:11"],
+                ["dev1", "ca", 51, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:14"],
+                ["dev2", "ca", 62, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:11"],
+                ["dev2", "ca", 47, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:15"]]
+            ],
+            "expected_results": [
+                    [["ca", "2", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                    ["ca", "4", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                    ["ca", "5", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                    ["ca", "5", "2020-02-02 20:00:06", "2020-02-02 20:00:11"]]]                
+        },
+        {
+            "id": 13,
+            "tags": ["global aggregation"],
+            "name": "global aggregation by max and group by id w/by default periodic",
+            "description": "global aggregation by max and group by id, execute query, end query after 5 second",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value) from test group by id"}],
+            "inputs": [
+                [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]],
+                [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]],
+                [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]],
+                [["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]
+            ],
+            "expected_results": [
+                    [["dev2", "80"],
+                    ["dev8", "77"],
+                    ["dev1", "66"],
+                    ["dev3", "66"]]]                
+        },
+        {
+            "id": 98,
+            "tags": ["system"],
+            "name": "todo: global aggregation by max and group by id w/by default periodic",
+            "description": "global aggregation by max and group by id, execute query, end query after 10 second",
+            "pre_statements": [
+                {"client":"python", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value) from test group by id"}],
+            "inputs": [
+                [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]],
+                [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]],
+                [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]],
+                [["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]
+            ],
+            "expected_results": [
+                    [["dev2", "80"],
+                    ["dev8", "77"],
+                    ["dev1", "66"],
+                    ["dev3", "66"]]]                
         }
 
     ]
