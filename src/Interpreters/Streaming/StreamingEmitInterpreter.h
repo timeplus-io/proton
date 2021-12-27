@@ -65,5 +65,8 @@ public:
         ASTPtr emit_query;
         ASTPtr last_interval;
     };
+
+    /// To check emit ast
+    static void checkEmitAST(ASTPtr & query);
 };
 }

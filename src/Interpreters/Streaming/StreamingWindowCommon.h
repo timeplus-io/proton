@@ -25,7 +25,7 @@ bool isTableFunctionHop(const ASTFunction * ast);
 ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast);
 ASTs checkAndExtractHopArguments(const ASTFunction * func_ast);
 
-
+void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval");
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind & kind);
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);

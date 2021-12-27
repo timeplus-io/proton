@@ -215,6 +215,11 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
     throw Exception(HOP_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
 }
 
+void checkIntervalAST(const ASTPtr & ast, const String & msg)
+{
+    if (!isIntervalAST(ast))
+        throw Exception(msg, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+}
 
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind)
 {

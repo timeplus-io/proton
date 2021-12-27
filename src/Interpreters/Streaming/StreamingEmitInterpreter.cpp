@@ -171,8 +171,17 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
 {
     assert(emit_query);
     assert(last_interval);
+
+    /// FIXME: If the global aggr has several hist tables, could foreach all tables to convert ?
+    /// Example:
+    ///     table1, table2                  -> hop(table1, ...), hop(table2, ...)
+    ///     subquery1, subquery2            -> hop(subquery1, ...), hop(subquery2, ...)
+    ///     hist(table1), hist(table2)      -> hop(hist(table1), ...), hop(hist(table2), ...)
+    if (getTableExpressions(select_query).size() > 1)
+        Exception("No support serveral tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
+
     auto table_expression = getTableExpression(select_query, 0);
-    if (!hasAggregates(query, select_query) || !table_expression || !table_expression->database_and_table_name)
+    if (!hasAggregates(query, select_query) || !table_expression)
         return false;
 
     ASTPtr new_emit = emit_query->clone();
@@ -211,11 +220,22 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     auto [conv_interval, conv_interval_kind] = secondsToInterval(last_interval_seconds, periodic_interval_kind);
     last_interval = makeASTInterval(conv_interval, conv_interval_kind);
 
-    /// Create a table function: hop(table, now(), periodic_interval, last_time_interval)
+    ASTPtr table;
+    if (table_expression->database_and_table_name)
+        table = std::make_shared<ASTIdentifier>(table_expression->database_and_table_name->as<ASTTableIdentifier &>().name());
+    else if (table_expression->table_function)
+        table = table_expression->table_function;
+    else if (table_expression->subquery)
+        table = table_expression->subquery;
+    else
+        throw Exception("The table is empty", ErrorCodes::SYNTAX_ERROR);
+
+    /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
+    /// The table_expression can be table, hist(table) and subquery.
     auto table_expr = std::make_shared<ASTTableExpression>();
     table_expr->table_function = makeASTFunction(
         "hop",
-        std::make_shared<ASTIdentifier>(table_expression->database_and_table_name->as<ASTTableIdentifier &>().name()),
+        table,
         makeASTFunction("now"),
         periodic_interval,
         last_interval);
@@ -282,4 +302,28 @@ void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_que
     if (log)
         LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query));
 }
+
+void StreamingEmitInterpreter::checkEmitAST(ASTPtr & query)
+{
+    auto select_query = query->as<ASTSelectQuery>();
+    if (!select_query)
+        return;
+
+    auto emit_query = select_query->emit();
+    if (!emit_query)
+        return;
+
+    auto emit = emit_query->as<ASTEmitQuery>();
+    assert(emit);
+
+    if (emit->periodic_interval)
+        checkIntervalAST(emit->periodic_interval, "Invalid EMIT PERIODIC interval");
+
+    if (emit->delay_interval)
+        checkIntervalAST(emit->delay_interval, "Invalid EMIT DELAY interval");
+
+    if (emit->last_interval)
+        checkIntervalAST(emit->last_interval, "Invalid EMIT LAST interval");
+}
+
 }

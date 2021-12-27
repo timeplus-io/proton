@@ -342,7 +342,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     {
         StreamingEmitInterpreter::handleRules(
                     /* streaming query */ query_ptr,
-                    /* rules */ StreamingEmitInterpreter::LastXRule(settings, last_interval_seconds, last_tail, log));
+                    /* rules */ StreamingEmitInterpreter::checkEmitAST,
+                                StreamingEmitInterpreter::LastXRule(settings, last_interval_seconds, last_tail, log));
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
