@@ -653,6 +653,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
+    /// proton: starts.
+    query_plan.setStreaming(isStreaming());
+    /// proton: ends.
+
     executeImpl(query_plan, std::move(input_pipe));
 
     /// We must guarantee that result structure is the same as in getSampleBlock()

@@ -65,6 +65,11 @@ public:
         const QueryPlanOptimizationSettings & optimization_settings,
         const BuildQueryPipelineSettings & build_pipeline_settings);
 
+    /// proton: starts.
+    void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }
+    bool isStreaming() const { return is_streaming; }
+    /// proton: ends.
+
     struct ExplainPlanOptions
     {
         /// Add output header to step.
@@ -107,6 +112,10 @@ public:
 private:
     Nodes nodes;
     Node * root = nullptr;
+
+    /// proton: starts.
+    bool is_streaming = false;
+    /// proton: ends.
 
     void checkInitialized() const;
     void checkNotCompleted() const;

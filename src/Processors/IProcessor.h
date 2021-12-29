@@ -299,6 +299,14 @@ public:
     IQueryPlanStep * getQueryPlanStep() const { return query_plan_step; }
     size_t getQueryPlanStepGroup() const { return query_plan_step_group; }
 
+    /// proton: starts.
+    void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }
+    bool isStreaming() const { return is_streaming; }
+
+protected:
+    bool is_streaming = false;
+    /// proton: ends.
+
 protected:
     virtual void onCancel() {}
 

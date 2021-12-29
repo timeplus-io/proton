@@ -160,6 +160,10 @@ public:
     static Pipe getPipe(QueryPipelineBuilder pipeline) { return std::move(pipeline.pipe); }
     static QueryPipeline getPipeline(QueryPipelineBuilder builder);
 
+    /// proton: starts.
+    static void setStreaming(QueryPipelineBuilder & builder, bool is_streaming);
+    /// proton: ends.
+
 private:
 
     Pipe pipe;

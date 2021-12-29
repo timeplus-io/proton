@@ -569,6 +569,14 @@ void QueryPipelineBuilder::setCollectedProcessors(Processors * processors)
     pipe.collected_processors = processors;
 }
 
+/// proton: starts.
+void QueryPipelineBuilder::setStreaming(QueryPipelineBuilder & builder, bool is_streaming)
+{
+    for (const auto & processor : builder.pipe.processors)
+        processor->setStreaming(is_streaming);
+}
+/// proton: ends.
+
 
 QueryPipelineProcessorsCollector::QueryPipelineProcessorsCollector(QueryPipelineBuilder & pipeline_, IQueryPlanStep * step_)
     : pipeline(pipeline_), step(step_)

@@ -183,6 +183,10 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     last_pipeline->setProgressCallback(build_pipeline_settings.progress_callback);
     last_pipeline->setProcessListElement(build_pipeline_settings.process_list_element);
 
+    /// proton: starts.
+    QueryPipelineBuilder::setStreaming(*last_pipeline, is_streaming);
+    /// proton: ends.
+
     return last_pipeline;
 }
 

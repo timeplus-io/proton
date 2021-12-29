@@ -69,12 +69,15 @@ FilterTransform::FilterTransform(
 
 IProcessor::Status FilterTransform::prepare()
 {
-    if (!on_totals
+    /// proton: starts. In streaming mode, we avoid doing this shortcut optimization 
+    /// because streaming mode is expected to be running forever even there is no final results projected.
+    if (!is_streaming && !on_totals
         && (constant_filter_description.always_false
             /// Optimization for `WHERE column in (empty set)`.
             /// The result will not change after set was created, so we can skip this check.
             /// It is implemented in prepare() stop pipeline before reading from input port.
             || (!are_prepared_sets_initialized && expression->checkColumnIsAlwaysFalse(filter_column_name))))
+    /// proton: ends.
     {
         input.close();
         output.finish();
