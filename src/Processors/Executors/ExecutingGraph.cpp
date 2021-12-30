@@ -2,6 +2,11 @@
 #include <stack>
 #include <Common/Stopwatch.h>
 
+/// proton: starts.
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Array.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -362,5 +367,46 @@ void ExecutingGraph::cancel()
     for (auto & processor : processors)
         processor->cancel();
 }
+
+/// proton: starts.
+String ExecutingGraph::getStats() const
+{
+    Poco::JSON::Object status;
+    Poco::JSON::Array node_list;
+    Poco::JSON::Array edges;
+
+    for (auto & node : nodes)
+    {
+        Poco::JSON::Object n;
+
+        n.set("name", node->processor->getName());
+        n.set("id", node->processors_id);
+        n.set("status", IProcessor::statusToName(node->last_processor_status));
+
+        for (auto eg = node->direct_edges.begin(); eg != node->direct_edges.end(); ++eg)
+        {
+            Poco::JSON::Object edge;
+            edge.set("from", node->processors_id);
+            edge.set("to", eg->to);
+            edges.add(edge);
+        }
+
+        Poco::JSON::Object metrices;
+        auto metric = node->processor->getMetrics();
+
+        metrices.set("processing_time_ns", metric.processing_time_ns);
+        metrices.set("processed_bytes", metric.processed_bytes);
+
+        n.set("metric", metrices);
+        node_list.add(n);
+    }
+    status.set("nodes", node_list);
+    status.set("edges", edges);
+
+    std::ostringstream oss; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    status.stringify(oss);
+    return oss.str();
+}
+/// proton: ends.
 
 }

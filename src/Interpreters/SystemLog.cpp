@@ -31,6 +31,10 @@
 #include <base/logger_useful.h>
 #include <base/scope_guard.h>
 
+///proton: starts
+#include <Interpreters/PipelineMetricLog.h>
+///proton: ends
+
 
 namespace DB
 {
@@ -46,6 +50,10 @@ namespace
 
 constexpr size_t DEFAULT_SYSTEM_LOG_FLUSH_INTERVAL_MILLISECONDS = 7500;
 constexpr size_t DEFAULT_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS = 1000;
+/// proton: starts.
+constexpr size_t DEFAULT_PIPELINE_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS = 5000;
+/// proton: ends.
+
 
 /// Creates a system log with MergeTree engine using parameters from config
 template <typename TSystemLog>
@@ -151,6 +159,9 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     opentelemetry_span_log = createSystemLog<OpenTelemetrySpanLog>(
         global_context, "system", "opentelemetry_span_log", config,
         "opentelemetry_span_log");
+    /// proton: starts
+    pipeline_metric_log = createSystemLog<PipelineMetricLog>(global_context, "system", "pipeline_metric_log", config, "pipeline_metric_log");
+    /// proton: ends
     query_views_log = createSystemLog<QueryViewsLog>(global_context, "system", "query_views_log", config, "query_views_log");
     zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log");
     session_log = createSystemLog<SessionLog>(global_context, "system", "session_log", config, "session_log");
@@ -173,6 +184,10 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(asynchronous_metric_log.get());
     if (opentelemetry_span_log)
         logs.emplace_back(opentelemetry_span_log.get());
+    /// proton: starts
+    if (pipeline_metric_log)
+        logs.emplace_back(pipeline_metric_log.get());
+    /// proton: ends
     if (query_views_log)
         logs.emplace_back(query_views_log.get());
     if (zookeeper_log)
@@ -198,6 +213,15 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
                                                                 DEFAULT_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
         metric_log->startCollectMetric(collect_interval_milliseconds);
     }
+
+    /// proton: starts.
+    if (pipeline_metric_log)
+    {
+        size_t collect_interval_milliseconds = config.getUInt64("pipeline_metric_log.collect_interval_milliseconds",
+                                                                DEFAULT_PIPELINE_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
+        pipeline_metric_log->startCollectMetric(collect_interval_milliseconds);
+    }
+    /// proton: ends.
 
     if (crash_log)
     {

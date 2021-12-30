@@ -259,6 +259,10 @@ namespace
             str.append(str.empty() ? "" : ", ").append("cancelled");
         if (result.has_exception())
             str.append(str.empty() ? "" : ", ").append("exception");
+        /// proton: starts.
+        if (result.query_id().empty())
+            str.append(str.empty() ? "" : ", ").append("query_id");
+        /// proton: ends.
         return str;
     }
 
@@ -606,6 +610,13 @@ namespace
         void sendResult();
         void throwIfFailedToSendResult();
         void sendException(const Exception & exception);
+
+        /// proton: starts.
+        void addQueryIdToResult()
+        {
+            result.set_query_id(query_context->getCurrentQueryId());
+        }
+        /// proton: ends.
 
         const CallType call_type;
         std::unique_ptr<BaseResponder> responder;
@@ -1197,6 +1208,9 @@ namespace
                     addProgressToResult();
                     after_send_progress.restart();
                 }
+                /// proton: starts.
+                addQueryIdToResult();
+                /// proton: ends.
 
                 addLogsToResult();
 
@@ -1222,6 +1236,11 @@ namespace
             {
                 throwIfFailedToSendResult();
                 addProgressToResult();
+
+                /// proton: starts.
+                addQueryIdToResult();
+                /// proton: ends.
+
                 addLogsToResult();
 
                 if (has_output() || result.has_progress() || result.logs_size())
@@ -1244,6 +1263,11 @@ namespace
         io.onFinish();
         addProgressToResult();
         query_scope->logPeakMemoryUsage();
+
+        /// proton: starts.
+        addQueryIdToResult();
+        /// proton: ends.
+
         addLogsToResult();
         releaseQueryIDAndSessionID();
         sendResult();

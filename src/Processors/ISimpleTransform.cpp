@@ -1,5 +1,8 @@
 #include <Processors/ISimpleTransform.h>
 
+/// proton: starts
+#include <base/ClockUtils.h>
+/// proton: ends
 
 namespace DB
 {
@@ -84,9 +87,16 @@ void ISimpleTransform::work()
         return;
     }
 
+    /// proton: starts.
+    auto start_ns = MonotonicNanoseconds::now();
+    metrics.processed_bytes += input_data.chunk.bytes();
+    /// proton: ends.
     try
     {
         transform(input_data.chunk, output_data.chunk);
+        /// proton: starts.
+        metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+        /// proton: ends.
     }
     catch (DB::Exception &)
     {

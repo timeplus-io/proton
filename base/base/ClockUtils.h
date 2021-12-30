@@ -14,6 +14,11 @@ public:
     {
         return std::chrono::duration_cast<TimeScale>(Clock::now().time_since_epoch()).count();
     }
+
+    static inline Int64 count(std::chrono::time_point<Clock> timepoint)
+    {
+        return std::chrono::duration_cast<TimeScale>(timepoint.time_since_epoch()).count();
+    }
 };
 
 template<typename TimeScale>

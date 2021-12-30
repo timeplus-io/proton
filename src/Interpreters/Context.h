@@ -126,6 +126,7 @@ class IInputFormat;
 
 /// proton: starts.
 class MetaStoreDispatcher;
+class PipelineMetricLog;
 /// proton: ends.
 
 class IOutputFormat;
@@ -858,6 +859,11 @@ public:
     std::shared_ptr<TextLog> getTextLog() const;
     std::shared_ptr<MetricLog> getMetricLog() const;
     std::shared_ptr<AsynchronousMetricLog> getAsynchronousMetricLog() const;
+
+    /// proton: starts.
+    std::shared_ptr<PipelineMetricLog> getPipelineMetricLog() const;
+    /// proton: ends.
+    
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
     std::shared_ptr<SessionLog> getSessionLog() const;

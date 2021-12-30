@@ -164,6 +164,9 @@ public:
             return;
         }
 
+        /// proton: starts.
+        Int64 start_ns = MonotonicNanoseconds::now();
+        /// proton: ends.
         if (data->at(0)->isTwoLevel())
         {
             /// In two-level case will only create sources.
@@ -174,6 +177,9 @@ public:
         {
             mergeSingleLevel();
         }
+        /// proton: starts.
+        metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+        /// proton: ends.
     }
 
     Processors expandPipeline() override
@@ -487,6 +493,11 @@ IProcessor::Status StreamingAggregatingTransform::prepare()
 
 void StreamingAggregatingTransform::work()
 {
+    /// proton: starts.
+    Int64 start_ns = MonotonicNanoseconds::now();
+    metrics.processed_bytes += current_chunk.bytes();
+    /// proton: ends.
+
     if (is_consume_finished)
         initGenerate();
     else
@@ -494,6 +505,10 @@ void StreamingAggregatingTransform::work()
         consume(std::move(current_chunk));
         read_current_chunk = false;
     }
+
+    /// proton: starts.
+    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends.
 }
 
 Processors StreamingAggregatingTransform::expandPipeline()

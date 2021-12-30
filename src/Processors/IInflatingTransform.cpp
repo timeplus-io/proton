@@ -1,5 +1,9 @@
 #include <Processors/IInflatingTransform.h>
 
+/// proton: starts.
+#include <base/ClockUtils.h>
+/// proton: ends.
+
 namespace DB
 {
 namespace ErrorCodes
@@ -64,6 +68,10 @@ IInflatingTransform::Status IInflatingTransform::prepare()
 
 void IInflatingTransform::work()
 {
+    /// proton: starts.
+    auto start_ns = MonotonicNanoseconds::now();
+    /// proton: ends.
+
     if (can_generate)
     {
         if (generated)
@@ -80,10 +88,17 @@ void IInflatingTransform::work()
             throw Exception("IInflatingTransform cannot consume chunk because it wasn't read",
                     ErrorCodes::LOGICAL_ERROR);
 
+        /// proton: starts.
+        metrics.processed_bytes += current_chunk.bytes();
+        /// proton: ends.
+
         consume(std::move(current_chunk));
         has_input = false;
         can_generate = canGenerate();
     }
+    /// proton: starts.
+    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends.
 }
 
 }

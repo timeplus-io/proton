@@ -187,6 +187,9 @@ message Result {
 
    // Set by the ClickHouse server if executing was cancelled by the `cancel` field in QueryInfo.
    bool cancelled = 8;
+   /// proton: starts.
+   string query_id = 9;
+   /// proton: ends.
 }
 
 service ClickHouse {

@@ -1,0 +1,77 @@
+openapi: 3.0.0
+servers:
+  - url: 'http://{host}:{port}/proton/v1'
+info:
+  title: proton query pipeline metric API
+  version: '1.0'
+  description: REST API for query pipeline metric
+paths:
+  /pipeline_metrics:
+    post:
+      summary: Get metric of query pipeline
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              properties:
+                query_id:
+                  type: string
+                  required: true
+                  minLength: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/pipelineMetricResp'
+        '404':
+          description: Query Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: error code
+                  error_msg:
+                    type: string
+                    description: readable error message
+                  request_id:
+                    type: string
+                    description: ''
+                required:
+                  - code
+                  - error_msg
+                  - request_id
+
+components:
+  schemas:
+    pipelineMetricResp:
+      type: object
+      properties:
+        edges:
+          type: array
+          items:
+            type: object
+            properties:
+              from: number
+              to: number
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              id: number
+              name: string
+              status:
+                type: string
+                description: Status of processor. Value of this field is in [NeedData, PortFull, Finished, Ready, Async, ExpandPipeline].
+              metric:
+                type: object
+                properties:
+                  processing_time_ns: number
+                  processed_bytes: number

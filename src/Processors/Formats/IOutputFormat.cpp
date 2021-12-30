@@ -1,6 +1,10 @@
 #include <Processors/Formats/IOutputFormat.h>
 #include <IO/WriteBuffer.h>
 
+/// proton: starts.
+#include <base/ClockUtils.h>
+/// proton: ends.
+
 
 namespace DB
 {
@@ -77,9 +81,16 @@ void IOutputFormat::work()
         return;
     }
 
+    /// proton: starts.
+    auto start_ns = MonotonicNanoseconds::now();
+    /// proton: ends.
+
     switch (current_block_kind)
     {
         case Main:
+            /// proton: starts.
+            metrics.processed_bytes += current_chunk.bytes();
+            /// proton: ends.
             result_rows += current_chunk.getNumRows();
             result_bytes += current_chunk.allocatedBytes();
             consume(std::move(current_chunk));
@@ -102,6 +113,10 @@ void IOutputFormat::work()
         flush();
 
     has_input = false;
+
+    /// proton: starts.
+    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends.
 }
 
 void IOutputFormat::flush()

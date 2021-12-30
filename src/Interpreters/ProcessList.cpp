@@ -16,6 +16,10 @@
 #include <base/logger_useful.h>
 #include <chrono>
 
+namespace CurrentMetrics
+{
+    extern const Metric Query;
+}
 
 namespace DB
 {
@@ -368,6 +372,19 @@ bool QueryStatus::checkTimeLimitSoft()
     return limits.checkTimeLimit(watch, OverflowMode::BREAK);
 }
 
+/// proton: starts.
+String QueryStatus::getPipelineMetric() const
+{
+    std::unique_lock lock(executors_mutex, std::try_to_lock);
+    if (!lock.owns_lock())
+        return "";
+
+    if (!executors.empty())
+        return executors[0]->getStats();
+
+    return "";
+}
+/// proton: ends.
 
 void QueryStatus::setUserProcessList(ProcessListForUser * user_process_list_)
 {
@@ -457,6 +474,11 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
         res.current_database = getContext()->getCurrentDatabase();
     }
 
+    /// proton: starts.
+    if (getContext()->getPipelineMetricLog())
+        res.pipeline_metrics = getPipelineMetric();
+    /// proton: ends.
+
     return res;
 }
 
@@ -535,4 +557,13 @@ ProcessList::QueryAmount ProcessList::getQueryKindAmount(const IAST::QueryKind &
     return found->second;
 }
 
+/// proton: starts.
+String ProcessList::getPipelineMetric(const String & current_query_id, const String & current_user)
+{
+    auto process = tryGetProcessListElement(current_query_id, current_user);
+    if (process)
+        return process->getPipelineMetric();
+    return "";
+}
+/// proton: ends.
 }

@@ -3,6 +3,10 @@
 #include <memory>
 #include <Processors/Port.h>
 
+/// proton: starts.
+#include <Common/ProfileEvents.h>
+#include <map>
+/// proton: ends.
 
 class EventCounter;
 
@@ -20,6 +24,14 @@ class IQueryPlanStep;
 class IProcessor;
 using ProcessorPtr = std::shared_ptr<IProcessor>;
 using Processors = std::vector<ProcessorPtr>;
+
+/// proton: starts.
+struct ProcessorMetrics
+{
+    int64_t processing_time_ns = 0;
+    uint64_t processed_bytes = 0;
+};
+/// proton: ends.
 
 /** Processor is an element (low level building block) of a query execution pipeline.
   * It has zero or more input ports and zero or more output ports.
@@ -303,12 +315,18 @@ public:
     void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }
     bool isStreaming() const { return is_streaming; }
 
+    ProcessorMetrics getMetrics() const { return metrics; }
+
 protected:
     bool is_streaming = false;
     /// proton: ends.
 
 protected:
     virtual void onCancel() {}
+
+    /// proton: starts.
+    ProcessorMetrics metrics;
+    /// proton: ends.
 
 private:
     std::atomic<bool> is_cancelled{false};

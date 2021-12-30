@@ -15,6 +15,7 @@
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
+#include "PipelineMetricHandler.h"
 
 #include <re2/re2.h>
 #include <Common/escapeForFileName.h>
@@ -61,6 +62,13 @@ public:
             "POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::SearchHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
+            "/proton/v1/pipeline_metrics",
+            "POST",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<DB::PipelineMetricHandler>(query_context);
             });
 
         factory.registerRouterHandler(

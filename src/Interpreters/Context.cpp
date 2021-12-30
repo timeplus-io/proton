@@ -2425,6 +2425,17 @@ std::shared_ptr<AsynchronousMetricLog> Context::getAsynchronousMetricLog() const
     return shared->system_logs->asynchronous_metric_log;
 }
 
+/// proton: starts.
+std::shared_ptr<PipelineMetricLog> Context::getPipelineMetricLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->pipeline_metric_log;
+}
+/// proton: ends.
 
 std::shared_ptr<OpenTelemetrySpanLog> Context::getOpenTelemetrySpanLog() const
 {

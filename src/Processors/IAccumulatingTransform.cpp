@@ -1,6 +1,10 @@
 #include <Processors/IAccumulatingTransform.h>
 #include <iostream>
 
+/// proton: starts.
+#include <base/ClockUtils.h>
+/// proton: ends.
+
 namespace DB
 {
 namespace ErrorCodes
@@ -92,8 +96,16 @@ IAccumulatingTransform::Status IAccumulatingTransform::prepare()
 
 void IAccumulatingTransform::work()
 {
+    /// proton: starts.
+    auto start_ns = MonotonicNanoseconds::now();
+    /// proton: ends.
+
     if (!finished_input)
     {
+        /// proton: starts.
+        metrics.processed_bytes += current_input_chunk.bytes();
+        /// proton: ends.
+
         consume(std::move(current_input_chunk));
         has_input = false;
     }
@@ -103,6 +115,10 @@ void IAccumulatingTransform::work()
         if (!current_output_chunk)
             finished_generate = true;
     }
+
+    /// proton: starts.
+    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends.
 }
 
 void IAccumulatingTransform::setReadyChunk(Chunk chunk)

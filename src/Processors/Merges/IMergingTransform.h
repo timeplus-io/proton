@@ -4,6 +4,10 @@
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
 
+/// proton: starts.
+#include <base/ClockUtils.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -92,6 +96,9 @@ public:
 
     void work() override
     {
+        /// proton: starts.
+        auto start_ns = MonotonicNanoseconds::now();
+        /// proton: ends.
         filterChunks();
 
         if (!state.init_chunks.empty())
@@ -101,6 +108,11 @@ public:
         {
             // std::cerr << "Consume chunk with " << state.input_chunk.getNumRows()
             //           << " for input " << state.next_input_to_read << std::endl;
+
+            /// proton: starts.
+            metrics.processed_bytes += state.input_chunk.chunk.bytes();
+            /// proton: ends.
+
             algorithm.consume(state.input_chunk, state.next_input_to_read);
             state.has_input = false;
         }
@@ -125,6 +137,10 @@ public:
             // std::cerr << "Finished" << std::endl;
             state.is_finished = true;
         }
+
+        /// proton: starts.
+        metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+        /// proton: ends.
     }
 
 protected:

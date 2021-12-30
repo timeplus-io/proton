@@ -15,6 +15,11 @@
     #include <Common/Stopwatch.h>
 #endif
 
+/// proton: starts.
+#include <Interpreters/PipelineMetricLog.h>
+/// proton: ends.
+
+
 namespace DB
 {
 
@@ -157,6 +162,32 @@ void PipelineExecutor::finalizeExecution()
 
     if (cancelled)
         return;
+
+    /// proton: starts.
+    if (process_list_element)
+    {
+        auto context_ptr = process_list_element->getContext();
+        auto pipeline_metric_log = context_ptr->getPipelineMetricLog();
+
+        if (pipeline_metric_log)
+        {
+            auto info = process_list_element->getInfo();
+
+            PipelineMetricLogElement pipeline_metric_log_elem;
+            auto finish_time = std::chrono::system_clock::now();
+
+            pipeline_metric_log_elem.event_time = std::chrono::system_clock::to_time_t(finish_time);
+            pipeline_metric_log_elem.event_time_microseconds = UTCMicroseconds::count(finish_time);
+            pipeline_metric_log_elem.milliseconds = UTCMilliseconds::count(finish_time) - UTCSeconds::count(finish_time) * 1000;
+
+            pipeline_metric_log_elem.query_id = info.client_info.current_query_id;
+            pipeline_metric_log_elem.query = info.query;
+            pipeline_metric_log_elem.pipeline_metric = info.pipeline_metrics;
+
+            pipeline_metric_log->add(pipeline_metric_log_elem);
+        }
+    }
+    /// proton: ends.
 
     bool all_processors_finished = true;
     for (auto & node : graph->nodes)
@@ -362,4 +393,10 @@ String PipelineExecutor::dumpPipeline() const
     return out.str();
 }
 
+/// proton: starts.
+String PipelineExecutor::getStats() const
+{
+    return graph->getStats();
+}
+/// proton: ends.
 }

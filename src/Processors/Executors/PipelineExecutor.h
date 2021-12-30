@@ -48,6 +48,10 @@ public:
     /// Same as checkTimeLimit but it never throws. It returns false on cancellation or time limit reached
     [[nodiscard]] bool checkTimeLimitSoft();
 
+    /// proton: starts.
+    String getStats() const;
+    /// proton: ends.
+
 private:
     ExecutingGraphPtr graph;
 

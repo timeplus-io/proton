@@ -44,6 +44,10 @@ class QueryViewsLog;
 class ZooKeeperLog;
 class SessionLog;
 
+/// proton: starts
+class PipelineMetricLog;
+/// proton: ends
+
 /// System logs should be destroyed in destructor of the last Context and before tables,
 ///  because SystemLog destruction makes insert query while flushing data into underlying tables
 struct SystemLogs
@@ -64,6 +68,11 @@ struct SystemLogs
     std::shared_ptr<AsynchronousMetricLog> asynchronous_metric_log;
     /// OpenTelemetry trace spans.
     std::shared_ptr<OpenTelemetrySpanLog> opentelemetry_span_log;
+    
+    /// proton: starts
+    std::shared_ptr<PipelineMetricLog> pipeline_metric_log;   /// Used to log processor metrics used in query pipeline.
+    /// proton: ends
+    
     /// Used to log queries of materialized and live views
     std::shared_ptr<QueryViewsLog> query_views_log;
     /// Used to log all actions of ZooKeeper client
@@ -74,9 +83,10 @@ struct SystemLogs
     std::vector<ISystemLog *> logs;
 };
 
-
+/// proton: starts
 template <typename LogElement>
-class SystemLog : public SystemLogBase<LogElement>, private boost::noncopyable, WithContext
+class SystemLog : public SystemLogBase<LogElement>, private boost::noncopyable, protected WithContext
+/// proton: ends
 {
 public:
     using Self = SystemLog;

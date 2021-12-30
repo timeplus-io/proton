@@ -137,6 +137,10 @@ public:
 
     void cancel();
 
+    /// proton: start.
+    String getStats() const;
+    /// proton: ends.
+
 private:
     /// Add single edge to edges list. Check processor is known.
     Edge & addEdge(Edges & edges, Edge edge, const IProcessor * from, const IProcessor * to);

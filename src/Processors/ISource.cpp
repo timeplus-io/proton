@@ -1,5 +1,9 @@
 #include <Processors/ISource.h>
 
+/// proton: starts
+#include <base/ClockUtils.h>
+#include <Common/ProfileEvents.h>
+/// proton: ends
 
 namespace DB
 {
@@ -50,8 +54,15 @@ void ISource::work()
 {
     try
     {
+        /// proton: starts.
+        auto start_ns = MonotonicNanoseconds::now();
+        /// proton: ends.
         if (auto chunk = tryGenerate())
         {
+            /// proton: starts.
+            metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+            metrics.processed_bytes += chunk->bytes();
+            /// proton: ends.
             current_chunk.chunk = std::move(*chunk);
             if (current_chunk.chunk)
                 has_input = true;

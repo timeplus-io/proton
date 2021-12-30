@@ -1,5 +1,9 @@
 #include <Processors/ISink.h>
 
+/// proton: starts.
+#include <base/ClockUtils.h>
+/// proton: ends.
+
 
 namespace DB
 {
@@ -43,8 +47,17 @@ void ISink::work()
     }
     else if (has_input)
     {
+        /// proton: starts.
+        auto start_ns = MonotonicNanoseconds::now();
+        metrics.processed_bytes += current_chunk.bytes();
+        /// proton: ends.
+
         has_input = false;
         consume(std::move(current_chunk));
+
+        /// proton: starts.
+        metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+        /// proton: ends.
     }
     else if (!was_on_finish_called)
     {

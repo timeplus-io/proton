@@ -66,6 +66,9 @@ struct QueryStatusInfo
     std::shared_ptr<ProfileEvents::Counters::Snapshot> profile_counters;
     std::shared_ptr<Settings> query_settings;
     std::string current_database;
+    /// proton: starts.
+    String pipeline_metrics;
+    /// proton: ends.
 };
 
 /// Query and information about its execution.
@@ -168,6 +171,11 @@ public:
 
         return !is_killed.load(std::memory_order_relaxed);
     }
+
+
+    /// proton: starts.
+    String getPipelineMetric() const;
+    /// proton: ends.
 
     QueryStatusInfo getInfo(bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false) const;
 
@@ -326,6 +334,10 @@ public:
 
     /// Get current state of process list per user.
     UserInfo getUserInfo(bool get_profile_events = false) const;
+
+    /// proton: starts.
+    String getPipelineMetric(const String & current_query_id, const String & current_user);
+    /// proton: ends.
 
     void setMaxSize(size_t max_size_)
     {
