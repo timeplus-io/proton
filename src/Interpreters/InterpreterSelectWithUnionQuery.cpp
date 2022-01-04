@@ -254,7 +254,7 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
 /// proton: starts
 bool InterpreterSelectWithUnionQuery::hasAggregation() const
 {
-    for (auto & interpreter : nested_interpreters)
+    for (const auto & interpreter : nested_interpreters)
     {
         if (interpreter->hasAggregation())
             return true;
@@ -264,9 +264,29 @@ bool InterpreterSelectWithUnionQuery::hasAggregation() const
 
 bool InterpreterSelectWithUnionQuery::isStreaming() const
 {
-    for (auto & interpreter : nested_interpreters)
+    for (const auto & interpreter : nested_interpreters)
     {
         if (interpreter->isStreaming())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectWithUnionQuery::hasGlobalAggregation() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasGlobalAggregation())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectWithUnionQuery::hasStreamingFunc() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasStreamingFunc())
             return true;
     }
     return false;

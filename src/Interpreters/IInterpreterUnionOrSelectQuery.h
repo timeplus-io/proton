@@ -41,6 +41,8 @@ public:
     /// proton: starts
     virtual bool hasAggregation() const = 0;
     virtual bool isStreaming() const = 0;
+    virtual bool hasGlobalAggregation() const = 0;
+    virtual bool hasStreamingFunc() const = 0;
     /// proton: ends
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override;

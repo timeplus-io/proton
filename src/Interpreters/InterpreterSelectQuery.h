@@ -104,6 +104,8 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
+    bool hasStreamingFunc() const override;
+    bool hasGlobalAggregation() const override;
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
@@ -164,6 +166,8 @@ private:
     void executeLastXTail(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
+    bool shouldApplyWatermark() const;
+    bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyDistributedMergeTree * distributed) const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     /// proton: ends

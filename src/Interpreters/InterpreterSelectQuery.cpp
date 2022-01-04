@@ -2780,7 +2780,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
         {},
-        isStreaming(),
+        shouldKeepState(),
         settings.keep_windows,
         streaming_group_by);
 
@@ -2813,6 +2813,82 @@ bool InterpreterSelectQuery::isStreaming() const
         return false;
 }
 
+bool InterpreterSelectQuery::hasStreamingFunc() const
+{
+    if (!isStreaming())
+        return false;
+
+    if (storage)
+    {
+        if (auto * proxy = storage->as<ProxyDistributedMergeTree>())
+        {
+            if (proxy->hasStreamingFunc())
+                return true;
+        }
+    }
+
+    return false;
+}
+
+bool InterpreterSelectQuery::hasGlobalAggregation() const
+{
+    return isStreaming() && hasAggregation() && !hasStreamingFunc();
+}
+
+bool InterpreterSelectQuery::shouldApplyWatermark() const
+{
+    if (!isStreaming())
+        return false;
+
+    if (hasStreamingFunc())
+        return true;
+
+    if (hasGlobalAggregation())
+    {
+        /// CTE subquery
+        if (storage)
+        {
+            if (auto * proxy = storage->as<ProxyDistributedMergeTree>())
+            {
+                if (proxy->hasGlobalAggregation())
+                    return false;
+            }
+        }
+
+        /// nested global aggregation
+        return !(interpreter_subquery && interpreter_subquery->hasGlobalAggregation());
+    }
+
+    return false;
+}
+
+bool InterpreterSelectQuery::shouldKeepState() const
+{
+    if (!isStreaming())
+        return false;
+
+    if (hasStreamingFunc())
+        return true;
+
+    if (hasGlobalAggregation())
+    {
+        if (interpreter_subquery && interpreter_subquery->hasGlobalAggregation())
+            return false;
+
+        /// subquery
+        if (storage)
+        {
+            if (auto * proxy = storage->as<ProxyDistributedMergeTree>())
+                if (proxy->hasGlobalAggregation())
+                    return false;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 void InterpreterSelectQuery::checkForStreamingQuery() const
 {
     if (isStreaming())
@@ -2822,6 +2898,15 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
         if (analysis_result.hasLimitBy())
             throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
+
+        /// Does not allow window func over a global aggregation
+        if (hasStreamingFunc())
+        {
+            /// nested query
+            if (auto * proxy = storage->as<ProxyDistributedMergeTree>())
+                if (proxy->hasGlobalAggregation())
+                    throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
+        }
     }
 
     if (storage)
@@ -2873,14 +2958,13 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
         const auto & seek_to = context->getSettingsRef().seek_to.value;
         bool backfill = !seek_to.empty() && seek_to != "latest" && seek_to != "earliest";
 
-        query_plan.addStep(
-            std::make_unique<TimestampTransformStep>(
-                query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc), backfill));
+        query_plan.addStep(std::make_unique<TimestampTransformStep>(
+            query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc), backfill));
     }
 
     auto stream_func_desc = distributed->getStreamingFunctionDescription();
 
-    if (isStreaming())
+    if (shouldApplyWatermark())
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, proc_time, log));
 
@@ -2903,7 +2987,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
 
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
 {
-    if (isStreaming())
+    if (shouldApplyWatermark())
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
 }

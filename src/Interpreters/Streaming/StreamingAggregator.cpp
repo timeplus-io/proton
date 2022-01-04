@@ -431,13 +431,10 @@ StreamingAggregatedDataVariants::Type StreamingAggregator::chooseAggregationMeth
     }
 
     /// proton: starts
-    if (params.streaming)
-    {
-        auto method_type = chooseAggregationMethodStreaming(
-            types_removed_nullable, has_nullable_key, has_low_cardinality, num_fixed_contiguous_keys, keys_bytes);
-        if (method_type != StreamingAggregatedDataVariants::Type::EMPTY)
-            return method_type;
-    }
+    auto method_type = chooseAggregationMethodStreaming(
+        types_removed_nullable, has_nullable_key, has_low_cardinality, num_fixed_contiguous_keys, keys_bytes);
+    if (method_type != StreamingAggregatedDataVariants::Type::EMPTY)
+        return method_type;
     /// proton: ends
 
     if (has_nullable_key)
@@ -1385,10 +1382,8 @@ void StreamingAggregator::convertToBlockImpl(
     }
     /// In order to release memory early.
     /// proton: starts. For streaming aggr, we hold on to the states
-//    if (!params.streaming)
-//    {
-//        data.clearAndShrink();
-//    }
+    if (!params.keep_state)
+        data.clearAndShrink();
     /// proton: ends
 }
 
@@ -1438,7 +1433,7 @@ inline void StreamingAggregator::insertAggregatesIntoColumns(
 
     /// proton: starts
     /// For streaming aggregation, we hold up to the states
-    if (params.streaming)
+    if (params.keep_state)
     {
         if (exception)
             std::rethrow_exception(exception);
@@ -1504,7 +1499,7 @@ void NO_INLINE StreamingAggregator::convertToBlockImplFinal(
         /// proton: starts. Here we push the `mapped` to `places`, for streaming
         /// case, we don't want aggregate function to destroy the places
         /// FIXME, State aggregation
-        if (!params.streaming)
+        if (!params.keep_state)
             mapped = nullptr;
         /// proton: ends
     });
@@ -1584,7 +1579,7 @@ void NO_INLINE StreamingAggregator::convertToBlockImplFinal(
             /// 2. For `-State` aggregations, since the ownership of the places are transferred to the result column, aggregator / data
             ///    don't need maintain them anymore after insert.
             bool is_state = aggregate_functions[destroy_index]->isState();
-            bool destroy_place_after_insert = !is_state && !params.streaming;
+            bool destroy_place_after_insert = !is_state && !params.keep_state;
             /// proton: ends
 
             aggregate_functions[destroy_index]->insertResultIntoBatch(places.size(), places.data(), offset, *final_aggregate_column, arena, destroy_place_after_insert);
@@ -1646,7 +1641,7 @@ void NO_INLINE StreamingAggregator::convertToBlockImplNotFinal(
             aggregate_columns[i]->push_back(mapped + offsets_of_aggregate_states[i]);
 
         /// proton: starts. For streaming aggr, we hold on to the states
-        if (!params.streaming)
+        if (!params.keep_state)
         {
             mapped = nullptr;
         }
@@ -1686,7 +1681,7 @@ Block StreamingAggregator::prepareBlockAndFill(
             ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
 
             /// proton: starts
-            column_aggregate_func.setStreaming(params.streaming);
+            column_aggregate_func.setStreaming(params.keep_state);
             /// proton: ends
 
             for (auto & pool : data_variants.aggregates_pools)
@@ -1739,6 +1734,13 @@ Block StreamingAggregator::prepareBlockAndFill(
     for (size_t i = 0; i < columns; ++i)
         if (isColumnConst(*res.getByPosition(i).column))
             res.getByPosition(i).column = res.getByPosition(i).column->cut(0, rows);
+
+    /// proton: starts
+    if (!params.keep_state)
+    {
+        data_variants.init(method_chosen);
+    }
+    /// proton: ends
 
     return res;
 }
@@ -1806,7 +1808,7 @@ Block StreamingAggregator::prepareBlockAndFillWithoutKey(StreamingAggregatedData
                     aggregate_columns[i]->push_back(data + offsets_of_aggregate_states[i]);
 
                 /// proton: starts
-                if (!params.streaming)
+                if (!params.keep_state)
                 {
                     data = nullptr;
                 }
@@ -1830,7 +1832,7 @@ Block StreamingAggregator::prepareBlockAndFillWithoutKey(StreamingAggregatedData
         block.info.is_overflows = true;
 
     /// proton: starts
-    if (final && !params.streaming)
+    if (final && !params.keep_state)
         destroyWithoutKey(data_variants);
     /// proton: ends
 
@@ -1987,7 +1989,7 @@ BlocksList StreamingAggregator::convertToBlocks(StreamingAggregatedDataVariants 
     }
 
     /// proton: starts
-    if (!final && !params.streaming)
+    if (!final && !params.keep_state)
     {
         /// data_variants will not destroy the states of aggregate functions in the destructor.
         /// Now ColumnAggregateFunction owns the states.
@@ -2092,11 +2094,11 @@ void NO_INLINE StreamingAggregator::mergeDataImpl(
                 for (size_t i = 0; i < params.aggregates_size; ++i)
                     aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
 
-//                for (size_t i = 0; i < params.aggregates_size; ++i)
-//                    /// proton: starts
-//                    if (!params.streaming)
-//                        aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
-//                    /// proton: ends
+                for (size_t i = 0; i < params.aggregates_size; ++i)
+                    /// proton: starts
+                    if (!params.keep_state)
+                        aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                    /// proton: ends
             }
         }
         else
@@ -2105,14 +2107,14 @@ void NO_INLINE StreamingAggregator::mergeDataImpl(
         }
 
         /// proton: starts
-        if (!params.streaming)
+        if (!params.keep_state)
             src = nullptr;
         /// proton: ends
     });
 
     /// proton: starts
-//    if (!params.streaming)
-//        table_src.clearAndShrink();
+    if (!params.keep_state)
+        table_src.clearAndShrink();
     /// proton: ends
 }
 
@@ -2777,7 +2779,7 @@ Block StreamingAggregator::mergeBlocks(BlocksList & blocks, bool final)
         block = prepareBlockAndFillSingleLevel(result, final);
     /// NOTE: two-level data is not possible here - chooseAggregationMethod chooses only among single-level methods.
 
-    if (!final && !params.streaming)
+    if (!final && !params.keep_state)
     {
         /// Pass ownership of aggregate function states from result to ColumnAggregateFunction objects in the resulting block.
         result.aggregator = nullptr;

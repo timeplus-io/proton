@@ -96,14 +96,15 @@ public:
 private:
     void consume(Chunk chunk);
     bool needsFinalization(const Chunk & chunk) const;
-    void finalize(const ChunkInfo & chunk_info);
-    void doFinalize(const WatermarkBound & chunk_info);
-    void initialize(ManyStreamingAggregatedDataVariantsPtr & data);
-    void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data);
-    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data);
-    void mergeTwoLevelStreamingWindow(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark);
+    void finalize(ChunkInfoPtr chunk_info);
+    void doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
+    void initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
+    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    void mergeTwoLevelStreamingWindow(
+        ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
     void removeBuckets();
-    void setCurrentChunk(Chunk chunk);
+    void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
     IProcessor::Status preparePushToOutput();
 
 private:

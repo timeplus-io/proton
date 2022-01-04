@@ -621,7 +621,7 @@ public:
         bool compile_aggregate_expressions;
         size_t min_count_to_compile_aggregate_expression;
         /// proton: starts
-        bool streaming = false;
+        bool keep_state = true;
         /// How many streaming windows to keep from recycling
         size_t streaming_window_count = 0;
 
@@ -648,7 +648,7 @@ public:
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
             const Block & intermediate_header_ = {},
-            bool streaming_ = false,
+            bool keep_state_ = true,
             size_t streaming_window_count_ = 0,
             GroupBy streaming_group_by_ = GroupBy::OTHER)
         : src_header(src_header_),
@@ -662,7 +662,7 @@ public:
             min_free_disk_space(min_free_disk_space_),
             compile_aggregate_expressions(compile_aggregate_expressions_),
             min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
-            streaming(streaming_),
+            keep_state(keep_state_),
             streaming_window_count(streaming_window_count_),
             group_by(streaming_group_by_)
         {

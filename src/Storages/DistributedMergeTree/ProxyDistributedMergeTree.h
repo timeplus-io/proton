@@ -63,8 +63,11 @@ public:
     /// Whether it reads data from streaming store or historical store
     bool isStreaming() const { return streaming; }
 
-    /// Whether is has streaming func, i.e. tumble(...) or hop(...)
+    /// Whether has streaming func itself, i.e. tumble(...) or hop(...)
     bool hasStreamingFunc() const { return streaming_func_desc != nullptr; }
+
+    /// Whether has GlobalAggregation in subquery
+    bool hasGlobalAggregation() const { return has_global_aggr; }
 
 private:
     ProxyDistributedMergeTree(
@@ -82,6 +85,7 @@ private:
     StreamingFunctionDescriptionPtr timestamp_func_desc;
     StoragePtr storage;
     ASTPtr subquery;
+    bool has_global_aggr = false;
 
     bool streaming = false;
 

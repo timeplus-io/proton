@@ -95,7 +95,10 @@ public:
     using SharedDataPtr = std::shared_ptr<SharedData>;
 
     StreamingConvertingAggregatedToChunksSource(
-        StreamingAggregatingTransformParamsPtr params_, ManyStreamingAggregatedDataVariantsPtr data_, SharedDataPtr shared_data_, Arena * arena_)
+        StreamingAggregatingTransformParamsPtr params_,
+        ManyStreamingAggregatedDataVariantsPtr data_,
+        SharedDataPtr shared_data_,
+        Arena * arena_)
         : ISource(params_->getHeader())
         , params(std::move(params_))
         , data(std::move(data_))
@@ -549,7 +552,7 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
 
     if (needsFinalization(chunk))
     {
-        finalize(*chunk.getChunkInfo());
+        finalize(chunk.getChunkInfo());
     }
 }
 
@@ -599,7 +602,7 @@ void StreamingAggregatingTransform::initGenerate()
     /// All aggregation streams are done
     /// Disable streaming mode to release all in-memory states since
     /// we are finalizing the aggregation result
-    params->aggregator.params.streaming = false;
+    params->aggregator.params.keep_state = false;
 
     if (!params->aggregator.hasTemporaryFiles())
     {
@@ -669,9 +672,9 @@ bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
 /// Only for streaming aggregation case
-void StreamingAggregatingTransform::finalize(const ChunkInfo & chunk_info)
+void StreamingAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
 {
-    chunk_info.ctx.getWatermark(watermark_bound.watermark, watermark_bound.watermark_lower_bound);
+    chunk_info->ctx.getWatermark(watermark_bound.watermark, watermark_bound.watermark_lower_bound);
 
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
@@ -698,13 +701,15 @@ void StreamingAggregatingTransform::finalize(const ChunkInfo & chunk_info)
             LOG_INFO(
                 log,
                 "StreamingAggregated. Found watermark skew. min_watermark={}, max_watermark={}",
-                min_watermark.watermark, min_watermark.watermark);
+                min_watermark.watermark,
+                min_watermark.watermark);
 
         auto start = MonotonicMilliseconds::now();
-        doFinalize(min_watermark);
+        doFinalize(min_watermark, chunk_info);
         auto end = MonotonicMilliseconds::now();
 
-        LOG_INFO(log, "StreamingAggregated. Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
+        LOG_INFO(
+            log, "StreamingAggregated. Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
 
         // Clear the finalization count
         many_data->finalizations.store(0);
@@ -727,13 +732,17 @@ void StreamingAggregatingTransform::finalize(const ChunkInfo & chunk_info)
         many_data->finalized.wait(lk);
 
         auto end = MonotonicMilliseconds::now();
-        LOG_INFO(log, "StreamingAggregated. Took {} milliseconds to wait for finalizing {} shard aggregation", end - start, many_data->variants.size());
+        LOG_INFO(
+            log,
+            "StreamingAggregated. Took {} milliseconds to wait for finalizing {} shard aggregation",
+            end - start,
+            many_data->variants.size());
 
         removeBuckets();
     }
 }
 
-void StreamingAggregatingTransform::doFinalize(const WatermarkBound & watermark)
+void StreamingAggregatingTransform::doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
 {
     /// FIXME spill to disk, overflow_row etc cases
     auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
@@ -742,28 +751,26 @@ void StreamingAggregatingTransform::doFinalize(const WatermarkBound & watermark)
     if (prepared_data_ptr->empty())
         return;
 
-    initialize(prepared_data_ptr);
+    initialize(prepared_data_ptr, chunk_info);
 
     if (prepared_data_ptr->at(0)->isTwoLevel())
     {
         if (params->params.group_by != StreamingAggregator::Params::GroupBy::OTHER)
-            mergeTwoLevelStreamingWindow(prepared_data_ptr, watermark);
+            mergeTwoLevelStreamingWindow(prepared_data_ptr, watermark, chunk_info);
         else
-            mergeTwoLevel(prepared_data_ptr);
+            mergeTwoLevel(prepared_data_ptr, chunk_info);
     }
     else
     {
-        mergeSingleLevel(prepared_data_ptr);
+        mergeSingleLevel(prepared_data_ptr, watermark, chunk_info);
     }
 
     rows_since_last_finalization = 0;
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::initialize
-void StreamingAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data)
+void StreamingAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
 {
-    assert(params->params.streaming);
-
     StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
     /// At least we need one arena in first data item per thread
@@ -780,12 +787,13 @@ void StreamingAggregatingTransform::initialize(ManyStreamingAggregatedDataVarian
         auto block = params->aggregator.prepareBlockAndFillWithoutKey(
             *first, params->final, first->type != StreamingAggregatedDataVariants::Type::without_key);
 
-        setCurrentChunk(convertToChunk(block));
+        setCurrentChunk(convertToChunk(block), chunk_info);
     }
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
-void StreamingAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data)
+void StreamingAggregatingTransform::mergeSingleLevel(
+    ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
 {
     StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
@@ -805,16 +813,20 @@ void StreamingAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedData
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
     auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
+    /// Tell other variants to clean up memory arena
+    many_data->arena_watermark = watermark;
 
-    setCurrentChunk(convertToChunk(block));
+    setCurrentChunk(convertToChunk(block), chunk_info);
 }
 
-void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data)
+void StreamingAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
 {
     (void)data;
+    (void)chunk_info;
 }
 
-void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark)
+void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(
+    ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -831,8 +843,8 @@ void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(ManyStreamingAg
 
         /// Figure out which buckets need get merged
         auto & data_variant = data->at(index);
-        std::vector<size_t> buckets = data_variant->aggregator->bucketsBefore(
-            *data_variant, watermark.watermark_lower_bound, watermark.watermark);
+        std::vector<size_t> buckets
+            = data_variant->aggregator->bucketsBefore(*data_variant, watermark.watermark_lower_bound, watermark.watermark);
 
         for (auto bucket : buckets)
         {
@@ -857,7 +869,7 @@ void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(ManyStreamingAg
     }
 
     if (merged_block)
-        setCurrentChunk(convertToChunk(merged_block));
+        setCurrentChunk(convertToChunk(merged_block), chunk_info);
 
     /// Tell other variants to clean up memory arena
     many_data->arena_watermark = watermark;
@@ -867,16 +879,20 @@ void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(ManyStreamingAg
 void StreamingAggregatingTransform::removeBuckets()
 {
     if (params->params.group_by != StreamingAggregator::Params::GroupBy::OTHER)
-        variants.aggregator->removeBucketsBefore(variants, many_data->arena_watermark.watermark_lower_bound, many_data->arena_watermark.watermark);
+        variants.aggregator->removeBucketsBefore(
+            variants, many_data->arena_watermark.watermark_lower_bound, many_data->arena_watermark.watermark);
 }
 
-void StreamingAggregatingTransform::setCurrentChunk(Chunk chunk)
+void StreamingAggregatingTransform::setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_Info)
 {
     if (has_input)
         throw Exception("Current chunk was already set in StreamingAggregatingTransform.", ErrorCodes::LOGICAL_ERROR);
 
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
+
+    if (params->params.group_by == StreamingAggregator::Params::GroupBy::OTHER)
+        current_chunk_aggregated.setChunkInfo(std::move(chunk_Info));
 }
 
 IProcessor::Status StreamingAggregatingTransform::preparePushToOutput()

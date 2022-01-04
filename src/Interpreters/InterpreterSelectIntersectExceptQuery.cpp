@@ -150,7 +150,7 @@ void InterpreterSelectIntersectExceptQuery::ignoreWithTotals()
 /// proton: starts
 bool InterpreterSelectIntersectExceptQuery::hasAggregation() const
 {
-    for (auto & interpreter : nested_interpreters)
+    for (const auto & interpreter : nested_interpreters)
     {
         if (interpreter->hasAggregation())
             return true;
@@ -160,9 +160,29 @@ bool InterpreterSelectIntersectExceptQuery::hasAggregation() const
 
 bool InterpreterSelectIntersectExceptQuery::isStreaming() const
 {
-    for (auto & interpreter : nested_interpreters)
+    for (const auto & interpreter : nested_interpreters)
     {
         if (interpreter->isStreaming())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectIntersectExceptQuery::hasGlobalAggregation() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasGlobalAggregation())
+            return true;
+    }
+    return false;
+}
+
+bool InterpreterSelectIntersectExceptQuery::hasStreamingFunc() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->hasStreamingFunc())
             return true;
     }
     return false;

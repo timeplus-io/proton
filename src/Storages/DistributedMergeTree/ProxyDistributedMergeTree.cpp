@@ -37,7 +37,18 @@ ProxyDistributedMergeTree::ProxyDistributedMergeTree(
         assert(streaming_func_desc);
 
     if (!subquery)
+    {
         storage = DatabaseCatalog::instance().getTable(id_, context_);
+    }
+    else
+    {
+        /// Whether has GlobalAggregation in subquery
+        SelectQueryOptions options;
+        auto interpreter_subquery
+            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], getContext(), options.subquery());
+        if (interpreter_subquery)
+            has_global_aggr = interpreter_subquery->hasGlobalAggregation();
+    }
 
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
