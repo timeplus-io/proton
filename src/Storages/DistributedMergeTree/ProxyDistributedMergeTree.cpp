@@ -133,7 +133,7 @@ void ProxyDistributedMergeTree::read(
     auto * distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
 
-    if (streaming)
+    if (streaming && context_->getSettingsRef().query_mode.value != "hist")
         distributed->readStreaming(
             query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_, max_block_size, num_streams);
     else
