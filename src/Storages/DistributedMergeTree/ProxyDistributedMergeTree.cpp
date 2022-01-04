@@ -150,6 +150,9 @@ void ProxyDistributedMergeTree::read(
 
 NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
 {
+    if (!storage)
+        return {};
+
     auto * distributed = storage->as<StorageDistributedMergeTree>();
     if (!distributed)
         return {};
