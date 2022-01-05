@@ -24,6 +24,7 @@ struct AggregateFunctionMinMaxKData
     Container values;
     SpaceSavingArena<T> arena;
     Compare compare;
+    bool is_sorted = false;
 
     AggregateFunctionMinMaxKData()
     {
@@ -39,6 +40,12 @@ struct AggregateFunctionMinMaxKData
 
     void add(const T & val, UInt64 k)
     {
+        if (is_sorted)
+        {
+            std::make_heap(values.begin(), values.end(), compare);
+            is_sorted = false;
+        }
+
         if (values.size() < k)
         {
             values.push_back(arena.emplace(val));
@@ -72,6 +79,8 @@ struct AggregateFunctionMinMaxKData
 
         for (const auto & value : values)
             writeBinary(value, wb);
+
+        writeBoolText(is_sorted, wb);
     }
 
     void read(ReadBuffer & rb)
@@ -88,6 +97,17 @@ struct AggregateFunctionMinMaxKData
         values.resize(size);
         for (size_t i = 0; i < size; ++i)
             readBinary(values[i], rb);
+
+        readBoolText(is_sorted, rb);
+    }
+
+    void sort()
+    {
+        if (!is_sorted)
+        {
+            std::sort_heap(values.begin(), values.end(), compare);
+            is_sorted = true;
+        }
     }
 };
 
@@ -146,7 +166,7 @@ public:
         ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
 
-        const auto & top_k = this->data(place);
+        auto & top_k = this->data(place);
         size_t size = top_k.size();
 
         offsets_to.push_back(offsets_to.back() + size);
@@ -154,6 +174,8 @@ public:
         typename ColumnVector<T>::Container & data_to = assert_cast<ColumnVector<T> &>(arr_to.getData()).getData();
         size_t old_size = data_to.size();
         data_to.resize(old_size + size);
+
+        top_k.sort();
 
         size_t i = 0;
         for (auto it = top_k.begin(); it != top_k.end(); ++it, ++i)
@@ -211,6 +233,8 @@ public:
             top_k.add(ref, k);
             arena->rollback(ref.size);
         }
+
+        readBoolText(top_k.is_sorted, buf);
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
@@ -246,8 +270,10 @@ public:
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
         IColumn & data_to = arr_to.getData();
 
-        const auto & top_k = this->data(place);
+        auto & top_k = this->data(place);
         offsets_to.push_back(offsets_to.back() + top_k.size());
+
+        top_k.sort();
 
         for (auto & elem : top_k)
         {
