@@ -45,7 +45,7 @@ ProxyDistributedMergeTree::ProxyDistributedMergeTree(
         /// Whether has GlobalAggregation in subquery
         SelectQueryOptions options;
         auto interpreter_subquery
-            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], getContext(), options.subquery());
+            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context_, options.subquery());
         if (interpreter_subquery)
             has_global_aggr = interpreter_subquery->hasGlobalAggregation();
     }
