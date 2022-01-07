@@ -1,3 +1,5 @@
+import logging, logging.config
+
 import pytest
 from pytest_cases import parametrize_with_cases
 
@@ -16,6 +18,80 @@ from clickhouse_driver import errors
 from requests.api import request
 
 
+def input_batch_rest(input_url, input_batch, table_schema):
+    # todo: complete the input by rest
+    logging.debug(f"input_batch_rest: input_batch = {input_batch}")
+    input_batch_record = {}
+    table_name = table_schema.get("name")
+    input_rest_columns = []
+    input_rest_body_data = []
+    input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
+    for element in table_schema.get("columns"):
+        input_rest_columns.append(element.get("name"))
+    logging.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
+    input_batch_data = input_batch.get("data")
+    for row in input_batch_data:
+        logging.debug(f"input_batch_rest: row_data = {row}")
+        input_rest_body_data.append(
+            row
+        )  # get data from inputs batch dict as rest ingest body.
+    input_rest_body = json.dumps(input_rest_body)
+    input_url = f"{input_url}/{table_name}"
+    res = requests.post(input_url, data=input_rest_body)
+
+    assert res.status_code == 200
+    input_batch_record["input_batch"] = input_rest_body_data
+    input_batch_record["timestamp"] = str(datetime.datetime.now())
+
+    """
+    if res.status_code != 200:
+        logging.debug(f"table input rest access failed, status code={res.status_code}") 
+        raise Exception(f"table input rest access failed, status code={res.status_code}")
+    else:
+        input_batch_record["input_batch"] =input_rest_body_data
+        input_batch_record["timestamp"] = str(datetime.datetime.now())
+        #logging.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
+    """
+    return input_batch_record
+
+
+def find_schema(table_name, table_schemas):
+    for table_schema in table_schemas:
+        if table_name == table_schema.get("name"):
+            return table_schema
+    return None
+
+
+def input_walk_through_rest(
+    rest_setting,
+    inputs,
+    table_schemas,
+    wait_before_inputs=1,
+    sleep_after_inputs=1.5,  # stable set wait_before_inputs=1, sleep_after_inputs=1.5
+):
+    wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
+    sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
+    time.sleep(wait_before_inputs)
+    input_url = rest_setting.get("ingest_url")
+    inputs_record = []
+
+    for batch in inputs:
+        table_name = batch.get("table_name")
+        table_schema = find_schema(table_name, table_schemas)
+        if table_schema != None:
+            # table_schema.pop("type")
+            logging.debug(f"input_walk_through_rest: table_schema = {table_schema}")
+            input_batch_record = input_batch_rest(input_url, batch, table_schema)
+            inputs_record.append(input_batch_record)
+        else:
+            logging.debug(
+                f"input_walk_through_rest: table_schema of table name {table_schema} not founded in table schemas {table_schemas}"
+            )
+        # time.sleep(0.5)
+    time.sleep(sleep_after_inputs)
+    return inputs_record
+
+
 def input_walk(test_id_run, config_file, tests_file):
     input_results = []
     with open(config_file) as f:
@@ -23,61 +99,48 @@ def input_walk(test_id_run, config_file, tests_file):
     #    proton_server = config.get('proton_server')
     #    proton_server_native_port = config.get('proton_server_native_port')
     with open(tests_file) as f:
-        test_suit = json.load(f)
+        test_suite = json.load(f)
+
+    rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
-    tests = test_suit.get("tests")
-    rest_setting = config.get("rest_setting")
-    table_schema = config.get("table_schema")
+    test_suite_config = test_suite.get("test_suite_config")
+    table_schemas = test_suite_config.get("table_schemas")
+    tests = test_suite.get("tests")
+    tests_2_run = test_suite_config.get("tests_2_run")
+    test_run_list = []
+    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    logging.info(f"rockets_run: proton_ci_mode = {proton_ci_mode}")
     client = Client(host=proton_server, port=proton_server_native_port)
-    inputs = tests[test_id_run].get("inputs")
-    columns = table_schema.get("columns")
-    table_name = table_schema.get("name")
-    table_columns = ""
-    for element in columns:
-        table_columns = table_columns + element.get("name") + ","
-    table_columns_str = "(" + table_columns[: len(table_columns) - 1] + ")"
-    # print("input_walk_through: table_columns_str = ", table_columns_str)
 
-    if inputs:
-        # print("input_walk_through: inputs:", inputs)
-        for batch in inputs:
-            # print("input_walk_through: batch:", batch)
-            batch_str = " "
-            for row in batch:
-                # print("input_walk_through: row:", row)
-                row_str = " "
-                for field in row:
-                    # print("input_walk_through: field:", field)
-                    if isinstance(field, str):
-                        field.replace('"', '//"')  # proton does
-                    row_str = (
-                        row_str + "'" + str(field) + "'" + ","
-                    )  # python client does not support "", so put ' here
-                row_str = "(" + row_str[: len(row_str) - 1] + ")"
-                # print("row_str:", row_str)
-                batch_str = batch_str + row_str + ","
-                # print("batch_str:", batch_str)
-            batch_str = batch_str[: len(batch_str) - 1]
-            # print("batch_str", batch_str)
-            # insert_sql = "insert into {} {} values {}".format(table_name, table_columns_str, batch_str[:len(batch_str)-1])
-            input_sql = (
-                f"insert into {table_name} {table_columns_str} values {batch_str}"
-            )
-            # print("input_walk_through: input_sql= ", input_sql)
-            input_result = client.execute(input_sql)
-            print("input_walk: input_sql= {}, done.".format(input_sql))
-            print("--------------------------------------------------")
-            # print("input_walk_through: input_result= ", input_result)
-            input_results.append(input_result)
-        else:
-            print("no inputs in this test_id_run")
-    return input_results
+    for test in tests:
+        test_id = test.get("id")
+        if test_id == test_id_run:
+            inputs = test.get("inputs")
+
+    inputs_record = input_walk_through_rest(rest_setting, inputs, table_schemas)
+
+    return inputs_record
 
 
 if __name__ == "__main__":
+    # cur_run_path = os.getcwd()
+    # cur_run_path_parent = os.path.dirname(cur_run_path)
+    cur_file_path = os.path.dirname(os.path.abspath(__file__))
+    cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
-    test_id_run = None
+    logging_config_file = f"{cur_file_path}/logging.conf"
+    if os.path.exists(logging_config_file):
+        logging.basicConfig(
+            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
+        )  # todo: add log stuff
+        logging.config.fileConfig(logging_config_file)  # need logging.conf
+        logger = logging.getLogger("rockets")
+    else:
+        print("no logging.conf exists under ../helper, no logging.")
+
+    logging.info("rockets_main starts......")
+
     argv = sys.argv[1:]
     try:
         opts, args = getopt.getopt(argv, "i:")
@@ -87,6 +150,7 @@ if __name__ == "__main__":
     except:
         print("Error")
 
+    # config_file = f"{cul_run_path}/configs/config.json"
     test_suite_path = "."
     config_file = f"{test_suite_path}/configs/config.json"
     tests_file = f"{test_suite_path}/tests.json"

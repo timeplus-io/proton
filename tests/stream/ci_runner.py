@@ -63,7 +63,7 @@ def upload_results(
     return report_url
 
 
-def ci_runner(local_all_results_folder_path, pr_number="0", commit_sha="0"):
+def ci_runner(local_all_results_folder_path, local_mode, pr_number="0", commit_sha="0"):
 
     timestamp = str(datetime.datetime.now())
     report_file_name = f"report_{timestamp}.html"
@@ -85,26 +85,29 @@ def ci_runner(local_all_results_folder_path, pr_number="0", commit_sha="0"):
         f"ci_runner: downloaded_log_files_paths = {downloaded_log_files_paths}"
     )
 
-    pr_number = os.getenv("GITHUB_REF_NAME", pr_number)
-    commit_sha = os.getenv("GITHUB_SHA", commit_sha)
+    if local_mode == False:
+        pr_number = os.getenv("GITHUB_REF_NAME", pr_number)
+        commit_sha = os.getenv("GITHUB_SHA", commit_sha)
 
-    s3_helper = S3Helper("https://s3.amazonaws.com")
+        s3_helper = S3Helper("https://s3.amazonaws.com")
 
-    report_url = upload_results(
-        s3_helper,
-        report_file_path,
-        report_file_name,
-        pr_number,
-        commit_sha,
-        *downloaded_log_files_paths,
-    )
-    print(f"::notice ::Report url: {report_url}")
+        report_url = upload_results(
+            s3_helper,
+            report_file_path,
+            report_file_name,
+            pr_number,
+            commit_sha,
+            *downloaded_log_files_paths,
+        )
+        print(f"::notice ::Report url: {report_url}")
+    else:
+        print("ci_runner: local mode, no report uploaded.")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     cur_dir = cur_dir = os.path.dirname(os.path.abspath(__file__))
-    parser = argparse.ArgumentParser(description="Run CI in debug and normal mode")
+    parser = argparse.ArgumentParser(description="Run CI in local mode")
     parser.add_argument(
         "-l",
         "--local",
@@ -118,7 +121,7 @@ if __name__ == "__main__":
     else:
         os.environ["PROTON_CI_MODE"] = "github"
 
-    ci_runner(cur_dir)
+    ci_runner(cur_dir, args.local)
 
     #
     # compress logs.

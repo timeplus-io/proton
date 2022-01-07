@@ -19,7 +19,9 @@ def pytest_generate_tests(metafunc):
             config_file_path, tests_file_path, docker_compose_file_path
         )
         test_sets = rockets.rockets_run(rockets_context)
-        test_ids = [test["test_name"] for test in test_sets]
+        test_ids = [
+            str(test["test_id"]) + "-" + test["test_name"] for test in test_sets
+        ]
         metafunc.parametrize("test_set", test_sets, ids=test_ids, indirect=True)
 
 
@@ -37,6 +39,7 @@ def query_result_check(test_set, order_check=False):
         expected_result = expected_results[i]
         # print(f"test run: expected_result in expected_results: {expected_result}")
         query_results_dict = statements_results[i]
+        # print(f"test_run: query_result_dict = {query_results_dict}")
         query_result = query_results_dict.get("query_result")
         # print(f"test run: query_result in statements_results: {query_result}")
         query_result_column_types = query_results_dict.get("query_result_column_types")
@@ -51,9 +54,9 @@ def query_result_check(test_set, order_check=False):
             else:
                 assert expected_result == query_result
         else:
-            print(
-                f"test_run: for i in range(len(expected_results)): expected_result: {expected_result}"
-            )
+            # print(
+            #    f"test_run: for i in range(len(expected_results)): expected_result: {expected_result}"
+            # )
             if len(expected_result) == 0:
                 assert len(query_result) == 0
 
@@ -81,7 +84,10 @@ def query_result_check(test_set, order_check=False):
                                 # print("test_run: column_type:", query_result_column_types[i][1])
                                 expected_result_field = expected_result_row[i]
                                 query_result_field = query_result_row[i]
-                                if "Float" in query_result_column_types[i][1]:
+                                if "Array" in query_result_column_types[i][1]:
+                                    if expected_result_field == query_result_field:
+                                        expected_result_row_field_check_arry[i] = 1
+                                elif "Float" in query_result_column_types[i][1]:
                                     if math.isclose(
                                         float(expected_result_field),
                                         float(query_result_field),
@@ -123,7 +129,9 @@ def query_result_check(test_set, order_check=False):
                             # print("test_run: column_type:", query_result_column_types[i][1])
                             expected_result_field = expected_result_row[i]
                             query_result_field = query_result_row[i]
-                            if "Float" in query_result_column_types[i][1]:
+                            if "Array" in query_result_column_types[i][1]:
+                                assert expected_result_field == query_result_field
+                            elif "Float" in query_result_column_types[i][1]:
                                 assert math.isclose(
                                     float(expected_result_field),
                                     float(query_result_field),
