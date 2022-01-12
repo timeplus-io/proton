@@ -8,7 +8,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   Build:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-102-setup-ci-pipeline
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.12xlarge
       ec2-image-id: ami-045a86d6d301ab637
@@ -17,9 +17,9 @@ jobs:
         cd $GITHUB_WORKSPACE
 
         # prepare build cache
-        aws s3 cp s3://tp-internal/proton/cache.tar .
+        aws s3 cp --no-progress s3://tp-internal/proton/cache.tar .
         mkdir $GITHUB_WORKSPACE/ccache
-        tar -xvf ./cache.tar -C $GITHUB_WORKSPACE/ccache
+        tar -xf ./cache.tar -C $GITHUB_WORKSPACE/ccache
         rm cache.tar
 
         # compiling
@@ -38,8 +38,8 @@ jobs:
         docker push timeplus/proton:latest
 
         # upload build cache
-        tar -cvf ./cache.tar $GITHUB_WORKSPACE/ccache/*
-        aws s3 cp ./cache.tar s3://tp-internal/proton/
+        tar -cf ./cache.tar $GITHUB_WORKSPACE/ccache/*
+        aws s3 cp --no-progress ./cache.tar s3://tp-internal/proton/
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
