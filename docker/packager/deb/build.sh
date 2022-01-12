@@ -22,7 +22,9 @@ if [ -n "$BINARY_OUTPUT" ] && { [ "$BINARY_OUTPUT" = "programs" ] || [ "$BINARY_
 then
   echo "Place $BINARY_OUTPUT to output"
   mkdir /output/binary ||: # if exists
-  mv /build/obj-*/programs/clickhouse* /output/binary
+  # proton: starts.
+  mv /build/obj-*/programs/proton* /output/binary
+  # proton: ends.
 
   if [ "$BINARY_OUTPUT" = "tests" ]
   then

@@ -1,0 +1,7 @@
+usr/bin/proton-client
+usr/bin/proton-local
+usr/bin/proton-compressor
+usr/bin/proton-benchmark
+usr/bin/proton-format
+usr/bin/proton-obfuscator
+etc/clickhouse-client/config.xml

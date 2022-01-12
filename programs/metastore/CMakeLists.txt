@@ -20,11 +20,11 @@ set (CLICKHOUSE_METASTORE_LINK
 
 clickhouse_program_add(metastore)
 
-install (FILES metastore_config.xml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-metastore" COMPONENT proton-metastore)
+install (FILES metastore_config.yaml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-metastore" COMPONENT proton-metastore)
 
 clickhouse_embed_binaries(
     TARGET clickhouse_metastore_configs
     RESOURCES metastore_config.yaml metastore_embedded.yaml
 )
 
-add_dependencies(clickhouse-metastore-lib clickhouse_server_configs)
+add_dependencies(clickhouse-metastore-lib clickhouse_metastore_configs)

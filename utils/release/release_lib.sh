@@ -221,25 +221,35 @@ function make_rpm {
         rpm_pack
     }
 
-    PACKAGE=clickhouse-server
+    # proton: starts.
+    PACKAGE=proton-server
+    # proton: ends.
     ARCH=all
     TARGET=noarch
     deb_unpack
     mv ${PACKAGE}-$VERSION_FULL-2.spec ${PACKAGE}-$VERSION_FULL-2.spec_tmp
-    echo "Requires: clickhouse-common-static = $VERSION_FULL-2" >> ${PACKAGE}-$VERSION_FULL-2.spec
+    # proton: starts.
+    echo "Requires: proton-common-static = $VERSION_FULL-2" >> ${PACKAGE}-$VERSION_FULL-2.spec
+    # proton: ends.
     echo "Requires: tzdata" >> ${PACKAGE}-$VERSION_FULL-2.spec
     echo "Requires: initscripts" >> ${PACKAGE}-$VERSION_FULL-2.spec
-    echo "Obsoletes: clickhouse-server-common < $VERSION_FULL" >> ${PACKAGE}-$VERSION_FULL-2.spec
+    # proton: starts.
+    echo "Obsoletes: proton-server-common < $VERSION_FULL" >> ${PACKAGE}-$VERSION_FULL-2.spec
+    # proton: ends.
 
     cat ${PACKAGE}-$VERSION_FULL-2.spec_tmp >> ${PACKAGE}-$VERSION_FULL-2.spec
     rpm_pack
 
-    PACKAGE=clickhouse-client
+    # proton: starts.
+    PACKAGE=proton-client
+    # proton: ends.
     ARCH=all
     TARGET=noarch
     deb_unpack
     mv ${PACKAGE}-$VERSION_FULL-2.spec ${PACKAGE}-$VERSION_FULL-2.spec_tmp
-    echo "Requires: clickhouse-common-static = $VERSION_FULL-2" >> ${PACKAGE}-$VERSION_FULL-2.spec
+    # proton: starts.
+    echo "Requires: proton-common-static = $VERSION_FULL-2" >> ${PACKAGE}-$VERSION_FULL-2.spec
+    # proton: ends.
     cat ${PACKAGE}-$VERSION_FULL-2.spec_tmp >> ${PACKAGE}-$VERSION_FULL-2.spec
     rpm_pack
 
@@ -253,17 +263,23 @@ function make_rpm {
     cat ${PACKAGE}-$VERSION_FULL-2.spec_tmp >> ${PACKAGE}-$VERSION_FULL-2.spec
     rpm_pack
 
-    PACKAGE=clickhouse-common-static
+    # proton: starts.
+    PACKAGE=proton-common-static
+    # proton: ends.
     ARCH=amd64
     TARGET=x86_64
     unpack_pack
 
-    PACKAGE=clickhouse-common-static-dbg
+    # proton: starts.
+    PACKAGE=proton-common-static-dbg
+    # proton: ends.
     ARCH=amd64
     TARGET=x86_64
     unpack_pack
 
-    mv clickhouse-*-${VERSION_FULL}-2.*.rpm ${PACKAGE_DIR}
+    # proton: starts.
+    mv proton-*-${VERSION_FULL}-2.*.rpm ${PACKAGE_DIR}
+    # proton: ends.
 }
 
 function make_tgz {
@@ -271,7 +287,9 @@ function make_tgz {
     VERSION_FULL="${VERSION_STRING}"
     PACKAGE_DIR=${PACKAGE_DIR=../}
 
-    for PACKAGE in clickhouse-server clickhouse-client clickhouse-test clickhouse-common-static clickhouse-common-static-dbg; do
+    # proton: starts.
+    for PACKAGE in proton-server proton-client clickhouse-test proton-common-static proton-common-static-dbg; do
+    # proton: ends.
         alien --verbose --scripts --generate --to-tgz ${PACKAGE_DIR}${PACKAGE}_${VERSION_FULL}_*.deb
         PKGDIR="./${PACKAGE}-${VERSION_FULL}"
         if [ ! -d "$PKGDIR/install" ]; then
@@ -306,5 +324,7 @@ done
     done
 
 
-    mv clickhouse-*-${VERSION_FULL}.tgz ${PACKAGE_DIR}
+    # proton: starts.
+    mv proton-*-${VERSION_FULL}.tgz ${PACKAGE_DIR}
+    # proton: ends.
 }

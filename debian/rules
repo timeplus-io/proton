@@ -31,7 +31,9 @@ else
 endif
 
 ifndef MAKE_TARGET
-    MAKE_TARGET = clickhouse-bundle
+# proton: starts.
+    MAKE_TARGET = proton-bundle
+# proton: ends.
 endif
 
 CMAKE_FLAGS += -DENABLE_UTILS=0
@@ -100,25 +102,25 @@ endif
 override_dh_update_autotools_config:
 
 override_dh_clean:
-	rm -rf debian/copyright debian/clickhouse-client.docs debian/clickhouse-common-static.docs
+	rm -rf debian/copyright debian/proton-client.docs debian/proton-common-static.docs
 	dh_clean # -X contrib
 
 override_dh_strip:
 	#https://www.debian.org/doc/debian-policy/ch-source.html#debian-rules-and-deb-build-options
 ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
-	dh_strip -pclickhouse-common-static --dbg-package=clickhouse-common-static-dbg
+	dh_strip -pproton-common-static --dbg-package=proton-common-static-dbg
 endif
 
 override_dh_install:
 	# Making docs
 	cp LICENSE debian/copyright
 
-	ln -sf clickhouse-server.docs debian/clickhouse-client.docs
-	ln -sf clickhouse-server.docs debian/clickhouse-common-static.docs
+	ln -sf proton-server.docs debian/proton-client.docs
+	ln -sf proton-server.docs debian/proton-common-static.docs
 
 	# systemd compatibility
 	mkdir -p $(DESTDIR)/etc/systemd/system/
-	cp debian/clickhouse-server.service $(DESTDIR)/etc/systemd/system/
+	cp debian/proton-server.service $(DESTDIR)/etc/systemd/system/
 	cp -r spec/ $(DESTDIR)/etc/proton-spec
 
 	dh_install --list-missing --sourcedir=$(DESTDIR)

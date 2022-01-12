@@ -1,0 +1,47 @@
+#!/bin/sh
+set -e
+# set -x
+
+PROGRAM=proton-server
+PROTON_USER=${PROTON_USER:=proton}
+PROTON_GROUP=${PROTON_GROUP:=${PROTON_USER}}
+# Please note that we don't support paths with whitespaces. This is rather ignorant.
+PROTON_CONFDIR=${PROTON_CONFDIR:=/etc/proton-server}
+PROTON_DATADIR=${PROTON_DATADIR:=/var/lib/proton}
+PROTON_LOGDIR=${PROTON_LOGDIR:=/var/log/proton-server}
+PROTON_BINDIR=${PROTON_BINDIR:=/usr/bin}
+PROTON_GENERIC_PROGRAM=${PROTON_GENERIC_PROGRAM:=proton}
+EXTRACT_FROM_CONFIG=${PROTON_GENERIC_PROGRAM}-extract-from-config
+PROTON_CONFIG=$PROTON_CONFDIR/config.xml
+PROTON_PIDDIR=/var/run/$PROGRAM
+
+[ -f /usr/share/debconf/confmodule ] && . /usr/share/debconf/confmodule
+[ -f /etc/default/proton ] && . /etc/default/proton
+
+if [ ! -f "/etc/debian_version" ]; then
+    not_deb_os=1
+fi
+
+if [ "$1" = configure ] || [ -n "$not_deb_os" ]; then
+
+    ${PROTON_GENERIC_PROGRAM} install --user "${PROTON_USER}" --group "${PROTON_GROUP}" --pid-path "${PROTON_PIDDIR}" --config-path "${PROTON_CONFDIR}" --binary-path "${PROTON_BINDIR}" --log-path "${PROTON_LOGDIR}" --data-path "${PROTON_DATADIR}"
+
+    if [ -x "/bin/systemctl" ] && [ -f /etc/systemd/system/proton-server.service ] && [ -d /run/systemd/system ]; then
+        # if old rc.d service present - remove it
+        if [ -x "/etc/init.d/proton-server" ] && [ -x "/usr/sbin/update-rc.d" ]; then
+            /usr/sbin/update-rc.d proton-server remove
+        fi
+
+        /bin/systemctl daemon-reload
+        /bin/systemctl enable proton-server
+    else
+        # If you downgrading to version older than 1.1.54336 run: systemctl disable proton-server
+        if [ -x "/etc/init.d/proton-server" ]; then
+            if [ -x "/usr/sbin/update-rc.d" ]; then
+                /usr/sbin/update-rc.d proton-server defaults 19 19 >/dev/null || exit $?
+            else
+                echo # Other OS
+            fi
+        fi
+    fi
+fi

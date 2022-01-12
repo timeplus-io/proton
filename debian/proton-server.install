@@ -1,7 +1,7 @@
 usr/bin/proton-server
 usr/bin/proton-copier
-usr/bin/proton-report
-etc/proton-server/config.yaml
-etc/proton-server/users.yaml
+usr/bin/clickhouse-report
+etc/clickhouse-server/config.yaml
+etc/clickhouse-server/users.yaml
 etc/proton-spec/
 etc/systemd/system/proton-server.service

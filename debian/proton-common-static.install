@@ -1,0 +1,5 @@
+usr/bin/proton
+usr/bin/proton-odbc-bridge
+usr/bin/proton-library-bridge
+usr/bin/proton-extract-from-config
+usr/share/bash-completion/completions

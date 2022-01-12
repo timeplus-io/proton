@@ -8,10 +8,13 @@ import sys
 
 SCRIPT_PATH = os.path.realpath(__file__)
 
+# proton: starts.
 IMAGE_MAP = {
-    "deb": "clickhouse/deb-builder",
-    "binary": "clickhouse/binary-builder",
+    "deb": "timeplus/proton-deb-builder",
+    "binary": "timeplus/proton-binary-builder",
+    "unbundled": "timeplus/unbundled-builder"
 }
+# proton: ends.
 
 def check_image_exists_locally(image_name):
     try:
@@ -37,9 +40,7 @@ def build_image(image_name, filepath):
         shell=True,
     )
 
-# proton: starts. Add sccache directory.
-def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache_dir, sccache_dir, docker_image_version):
-# proton: ends.
+def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache_dir, docker_image_version):
     env_part = " -e ".join(env_variables)
     if env_part:
         env_part = " -e " + env_part
@@ -49,17 +50,14 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
     else:
         interactive = ""
 
-    # proton: starts. Mount sccache directory.
-    cmd = "docker run --network=host --rm --volume={output_path}:/output --volume={ch_root}:/build --volume={ccache_dir}:/ccache --volume={sccache_dir}:/root/.config/sccache {env} {interactive} {img_name}".format(
+    cmd = "docker run --network=host --rm --volume={output_path}:/output --volume={ch_root}:/build --volume={ccache_dir}:/ccache {env} {interactive} {img_name}".format(
         output_path=output,
         ch_root=ch_root,
         ccache_dir=ccache_dir,
-        sccache_dir=sccache_dir,
         env=env_part,
         img_name=image_name + ":" + docker_image_version,
         interactive=interactive
     )
-    # proton: ends.
 
     logging.info("Will build ClickHouse pkg with cmd: '{}'".format(cmd))
 
@@ -75,10 +73,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     result = []
     cmake_flags = ['$CMAKE_FLAGS']
 
-    # proton: starts. Add ninja_flags.
-    ninja_flags = []
-    # proton: ends.
-
     is_clang = compiler.startswith(CLANG_PREFIX)
     is_cross_darwin = compiler.endswith(DARWIN_SUFFIX)
     is_cross_darwin_arm = compiler.endswith(DARWIN_ARM_SUFFIX)
@@ -89,11 +83,8 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
 
     # Explicitly use LLD with Clang by default.
     # Don't force linker for cross-compilation.
-
-    # proton: starts. Don't force linker for sccache.
-    if is_clang and not is_cross_compile and not cache == 'sccache':
-        cmake_flags.append("-DLINKER_NAME=lld")
-    # proton: ends.
+    if is_clang and not is_cross_compile:
+        cmake_flags.append("-DLINKER_NAME=ld.lld")
 
     if is_cross_darwin:
         cc = compiler[:-len(DARWIN_SUFFIX)]
@@ -152,12 +143,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     if cache == 'distcc':
         result.append("CCACHE_PREFIX={}".format(cache))
 
-    # proton: starts. Add cmake & ninja flags for sccahe.
-    if cache == 'sccache':
-        cmake_flags.append('-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWERROR=OFF')
-        ninja_flags.append('-j400')
-    # proton: ends.
-
     if cache:
         result.append("CCACHE_DIR=/ccache")
         result.append("CCACHE_BASEDIR=/build")
@@ -195,9 +180,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_TESTS=1')
         cmake_flags.append('-DENABLE_EXAMPLES=1')
         # Don't stop on first error to find more clang-tidy errors in one run.
-        # proton: starts. Generate ninja flags later.
-        ninja_flags.append('-k0')
-        # proton: ends.
+        result.append('NINJA_FLAGS=-k0')
 
     if with_coverage:
         cmake_flags.append('-DWITH_COVERAGE=1')
@@ -211,11 +194,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     if official:
         cmake_flags.append('-DYANDEX_OFFICIAL_BUILD=1')
 
-    # proton: starts. Generate ninja flags.
-    if len(ninja_flags) > 0:
-        result.append("NINJA_FLAGS='{flags}'".format(flags=' '.join(ninja_flags)))
-    # proton: ends.
-
     result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')
 
     return result
@@ -227,7 +205,7 @@ if __name__ == "__main__":
     parser.add_argument("--package-type", choices=['deb', 'binary', 'performance'], required=True)
     parser.add_argument("--clickhouse-repo-path", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--build-type", choices=("debug", "RelWithDebInfo", ""), default="")
+    parser.add_argument("--build-type", choices=("debug", ""), default="")
     parser.add_argument("--compiler", choices=("clang-11", "clang-11-darwin", "clang-11-darwin-aarch64", "clang-11-aarch64",
                                                "clang-12", "clang-12-darwin", "clang-12-darwin-aarch64", "clang-12-aarch64",
                                                "clang-13", "clang-13-darwin", "clang-13-darwin-aarch64", "clang-13-aarch64", "clang-13-ppc64le",
@@ -235,25 +213,19 @@ if __name__ == "__main__":
     parser.add_argument("--sanitizer", choices=("address", "thread", "memory", "undefined", ""), default="")
     parser.add_argument("--split-binary", action="store_true")
     parser.add_argument("--clang-tidy", action="store_true")
-    # proton: starts. Add sccache into choices.
-    parser.add_argument("--cache", choices=("", "ccache", "distcc", "sccache"), default="")
-    # proton: ends.
+    parser.add_argument("--cache", choices=("", "ccache", "distcc"), default="")
     parser.add_argument("--ccache_dir", default= os.getenv("HOME", "") + '/.ccache')
-    # proton: starts. Add --sccache_dir parameter.
-    parser.add_argument("--sccache_dir", default= os.getenv("HOME", "") + '/.config/sccache')
-    # proton: ends.
     parser.add_argument("--distcc-hosts", nargs="+")
     parser.add_argument("--force-build-image", action="store_true")
     parser.add_argument("--version")
-    parser.add_argument("--author", default="clickhouse")
+    # proton: starts.
+    parser.add_argument("--author", default="timeplus")
+    # proton: ends.
     parser.add_argument("--official", action="store_true")
     parser.add_argument("--alien-pkgs", nargs='+', default=[])
     parser.add_argument("--with-coverage", action="store_true")
     parser.add_argument("--with-binaries", choices=("programs", "tests", ""), default="")
     parser.add_argument("--docker-image-version", default="latest")
-    # proton: starts. Add docker-image-repo parameter.
-    parser.add_argument("--docker-image-repo", default="")
-    # proton: ends.
 
     args = parser.parse_args()
     if not os.path.isabs(args.output_dir):
@@ -277,11 +249,6 @@ if __name__ == "__main__":
         logging.info("Should place {} to output".format(args.with_binaries))
 
     dockerfile = os.path.join(ch_root, "docker/packager", image_type, "Dockerfile")
-
-    # proton: starts. Get the final image name.
-    image_name = args.docker_image_repo + "/" + image_name if args.docker_image_repo else image_name
-    # proton: ends.
-
     image_with_version = image_name + ":" + args.docker_image_version
     if image_type != "freebsd" and not check_image_exists_locally(image_name) or args.force_build_image:
         if not pull_image(image_with_version) or args.force_build_image:
@@ -291,7 +258,5 @@ if __name__ == "__main__":
         args.cache, args.distcc_hosts, args.split_binary, args.clang_tidy,
         args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries)
 
-    # proton: starts. Add sccache directory.
-    run_docker_image_with_env(image_name, args.output_dir, env_prepared, ch_root, args.ccache_dir, args.sccache_dir, args.docker_image_version)
-    # proton: ends.
+    run_docker_image_with_env(image_name, args.output_dir, env_prepared, ch_root, args.ccache_dir, args.docker_image_version)
     logging.info("Output placed into {}".format(args.output_dir))
