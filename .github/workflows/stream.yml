@@ -15,10 +15,10 @@ jobs:
       submodules: 'true'
       command: |
         cd $GITHUB_WORKSPACE
-        aws s3 cp s3://tp-internal/proton/cache.tar .
+        aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
-        tar -xvf ./cache.tar -C $GITHUB_WORKSPACE/ccache
-        rm cache.tar
+        tar -zxf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache
+        rm cache.tar.gz
         ./docker/packager/packager --package-type binary --sanitizer address --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
@@ -32,8 +32,8 @@ jobs:
         python3 ci_runner.py
 
         docker push timeplus/proton:$GITHUB_SHA
-        tar -cvf ./cache.tar $GITHUB_WORKSPACE/ccache/*
-        aws s3 cp ./cache.tar s3://tp-internal/proton/
+        tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal/proton/
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

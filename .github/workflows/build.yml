@@ -17,10 +17,10 @@ jobs:
         cd $GITHUB_WORKSPACE
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal/proton/cache.tar .
+        aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
-        tar -xf ./cache.tar -C $GITHUB_WORKSPACE/ccache
-        rm cache.tar
+        tar -zxf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache
+        rm cache.tar.gz
 
         # compiling
         ./docker/packager/packager --package-type binary --sanitizer address --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
@@ -38,8 +38,8 @@ jobs:
         docker push timeplus/proton:latest
 
         # upload build cache
-        tar -cf ./cache.tar $GITHUB_WORKSPACE/ccache/*
-        aws s3 cp --no-progress ./cache.tar s3://tp-internal/proton/
+        tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal/proton/
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
