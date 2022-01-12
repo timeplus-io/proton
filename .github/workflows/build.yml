@@ -1,0 +1,50 @@
+name: WeelklyBuild
+
+on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  schedule:
+    # build at 00:30(UTC) on every Monday
+    - cron:  '30 0 * * MON'
+
+jobs:
+  Build:
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-102-setup-ci-pipeline
+    with:
+      ec2-instance-type: c5.12xlarge
+      ec2-image-id: ami-045a86d6d301ab637
+      submodules: 'true'
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # prepare build cache
+        aws s3 cp s3://tp-internal/proton/cache.tar .
+        mkdir $GITHUB_WORKSPACE/ccache
+        tar -xvf ./cache.tar -C $GITHUB_WORKSPACE/ccache
+        rm cache.tar
+
+        # compiling
+        ./docker/packager/packager --package-type binary --sanitizer address --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
+        cd $GITHUB_WORKSPACE/docker/server
+
+        # build docker image
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:develop
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:latest
+
+        # push docker image
+        docker push timeplus/proton:$GITHUB_SHA
+        docker push timeplus/proton:develop
+        docker push timeplus/proton:latest
+
+        # upload build cache
+        tar -cvf ./cache.tar $GITHUB_WORKSPACE/ccache/*
+        aws s3 cp ./cache.tar s3://tp-internal/proton/
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
