@@ -3,9 +3,11 @@
 
 #include <Common/Exception.h>
 #include <Common/hex.h>
+#include <base/ClockUtils.h>
 #include <base/logger_useful.h>
 
 #include <cstring>
+
 
 namespace DB
 {
@@ -179,7 +181,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
 RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
 {
     assert(msg != nullptr);
-
+    auto consume_time = DB::UTCMilliseconds::now();
     auto record = Record::read(static_cast<const char *>(msg->payload), msg->len);
     if (unlikely(!record))
     {
@@ -189,7 +191,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
     record->sn = msg->offset;
     record->partition_key = msg->partition;
     record->block.info.append_time = rd_kafka_message_timestamp(msg, nullptr);
-
+    record->block.info.consume_time = consume_time;
     if (copy_topic)
     {
         record->topic = rd_kafka_topic_name(msg->rkt);

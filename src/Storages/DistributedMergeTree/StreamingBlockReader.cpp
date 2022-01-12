@@ -38,9 +38,9 @@ StreamingBlockReader::~StreamingBlockReader()
     consumer->stopConsume(consume_ctx);
 }
 
-DWAL::RecordPtrs StreamingBlockReader::read(Int32 timeout_ms)
+DWAL::RecordPtrs StreamingBlockReader::read(UInt32 count, Int32 timeout_ms)
 {
-    auto result{consumer->consume(10000, timeout_ms, consume_ctx)};
+    auto result{consumer->consume(count, timeout_ms, consume_ctx)};
     if (result.err != ErrorCodes::OK)
     {
         LOG_ERROR(log, "Failed to consume streaming, topic={} shard={} err={}", consume_ctx.topic, consume_ctx.partition, result.err);

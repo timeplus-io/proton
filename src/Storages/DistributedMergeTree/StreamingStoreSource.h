@@ -56,5 +56,8 @@ private:
     // FIXME, late event etc, every second
     Int64 flush_interval_ms = 1000;
     Int64 last_flush_ms = 0;
+
+    UInt64 record_consume_batch_count = 1000;
+    Int64 record_consume_timeout = 100;
 };
 }

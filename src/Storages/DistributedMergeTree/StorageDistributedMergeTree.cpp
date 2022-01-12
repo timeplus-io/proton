@@ -287,6 +287,7 @@ NamesAndTypesList StorageDistributedMergeTree::getVirtuals() const
     auto names_and_types = MergeTreeData::getVirtuals();
     names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
     names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
+    names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
     names_and_types.push_back(NameAndTypePair(RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
     return names_and_types;
 }

@@ -35,6 +35,8 @@ StreamingStoreSource::StreamingStoreSource(
             virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.append_time; });
         else if (column_names[pos] == RESERVED_INGEST_TIME)
             virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.ingest_time; });
+        else if (column_names[pos] == RESERVED_CONSUME_TIME)
+            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.consume_time; });
         else if (column_names[pos] == RESERVED_PROCESS_TIME)
             virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo &) { return UTCMilliseconds::now(); });
     }
@@ -49,6 +51,11 @@ StreamingStoreSource::StreamingStoreSource(
 
     if (!virtual_time_columns_calc.empty())
         virtual_col_type = header.getByPosition(virtual_time_columns_calc[0].first).type;
+
+    if (context->getSettingsRef().record_consume_batch_count != 0)
+        record_consume_batch_count = context->getSettingsRef().record_consume_batch_count;
+    if (context->getSettingsRef().record_consume_timeout != 0)
+        record_consume_timeout = context->getSettingsRef().record_consume_timeout;
 }
 
 Chunk StreamingStoreSource::generate()
@@ -92,7 +99,7 @@ Chunk StreamingStoreSource::generate()
 
 void StreamingStoreSource::readAndProcess()
 {
-    auto records = reader->read(flush_interval_ms);
+    auto records = reader->read(record_consume_batch_count, record_consume_timeout);
     if (records.empty())
         return;
 

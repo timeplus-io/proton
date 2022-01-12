@@ -18,6 +18,7 @@ const String RESERVED_EVENT_TIME = "_tp_time";
 const String RESERVED_PROCESS_TIME = "_tp_process_time";
 const String RESERVED_APPEND_TIME = "_tp_append_time";
 const String RESERVED_INGEST_TIME = "_tp_ingest_time";
+const String RESERVED_CONSUME_TIME = "_tp_consume_time";
 const String RESERVED_EMIT_TIME = "_tp_emit_time";
 const String RESERVED_INDEX_TIME = "_tp_index_time";
 const String RESERVED_EVENT_TIME_API_NAME = "event_time_column";

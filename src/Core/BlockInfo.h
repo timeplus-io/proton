@@ -50,6 +50,8 @@ struct BlockInfo
     Int64 append_time = 0;
     /// Milliseconds since UTC
     Int64 ingest_time = 0;
+    /// Milliseconds since UTC
+    Int64 consume_time = 0;
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.

@@ -561,6 +561,8 @@ class IColumn;
     /* proton: starts. */ \
     M(Bool, asterisk_include_reserved_columns, true, "Show reserved columns on SELECT query.", 0) \
     M(UInt64, max_keep_windows, 100, "Maximum number of streaming windows.", 0) \
+    M(UInt64, record_consume_batch_count, 1000, "Maximum number for consuming records at once", 0) \
+    M(Int64, record_consume_timeout, 100, "Timeout of consuming record", 0) \
     /* proton: ends. */ \
 
 // End of COMMON_SETTINGS

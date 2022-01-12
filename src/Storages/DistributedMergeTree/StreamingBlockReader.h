@@ -28,7 +28,7 @@ public:
 
     ~StreamingBlockReader();
 
-    DWAL::RecordPtrs read(Int32 timeout_ms);
+    DWAL::RecordPtrs read(UInt32 count, Int32 timeout_ms);
 
 private:
     ContextPtr context;

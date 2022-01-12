@@ -13,6 +13,9 @@ profiles:
         # first_or_random - if first replica one has higher number of errors, pick a random one from replicas with minimum number of errors.
         load_balancing: random
 
+        record_consume_batch_count: 1000
+        record_consume_timeout: 100
+
         # Profile that allows only read queries.
     readonly:
         readonly: 1
