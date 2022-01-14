@@ -173,11 +173,13 @@ int mainEntryClickHouseServer(int argc, char ** argv)
 
     if (jemallocOptionEnabled("opt.background_thread"))
     {
+        /// proton: starts.
         LOG_ERROR(&app.logger(),
             "jemalloc.background_thread was requested, "
-            "however ClickHouse uses percpu_arena and background_thread most likely will not give any benefits, "
-            "and also background_thread is not compatible with ClickHouse watchdog "
-            "(that can be disabled with CLICKHOUSE_WATCHDOG_ENABLE=0)");
+            "however Proton uses percpu_arena and background_thread most likely will not give any benefits, "
+            "and also background_thread is not compatible with Proton watchdog "
+            "(that can be disabled with PROTON_WATCHDOG_ENABLE=0)");
+        /// proton: ends.
     }
 
     /// Do not fork separate process from watchdog if we attached to terminal.
@@ -185,7 +187,9 @@ int mainEntryClickHouseServer(int argc, char ** argv)
     /// Can be overridden by environment variable (cannot use server config at this moment).
     if (argc > 0)
     {
-        const char * env_watchdog = getenv("CLICKHOUSE_WATCHDOG_ENABLE");
+        /// proton: starts.
+        const char * env_watchdog = getenv("PROTON_WATCHDOG_ENABLE");
+        /// proton: ends.
         if (env_watchdog)
         {
             if (0 == strcmp(env_watchdog, "1"))
