@@ -575,6 +575,7 @@ public:
     /// If proton is a distributed deployment
     bool isDistributedEnv() const;
     bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
+    bool isLocalQueryFromTCP() const { return !isDistributedDDLOperation() && !getQueryParameters().contains("_payload"); }
     ThreadPool & getPartCommitPool() const;
     /// proton: ends
 

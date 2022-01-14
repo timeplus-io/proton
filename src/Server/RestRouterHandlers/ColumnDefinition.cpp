@@ -64,13 +64,19 @@ String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const 
     std::vector<String> update_segments;
     if (payload->has("name"))
     {
-        update_segments.push_back(" RENAME COLUMN `" + column + "` TO `" + payload->get("name").toString() + "`");
-        column = payload->get("name").toString();
+        auto new_name = payload->get("name").toString();
+        if (column != new_name)
+        {
+            update_segments.push_back("RENAME COLUMN `" + column + "` " + "TO `" + new_name + "`");
+            /// Ignore other changes as rename can only be execute alone
+            return boost::algorithm::join(update_segments, " ");
+        }
     }
+    update_segments.push_back("MODIFY COLUMN `" + column + "`");
 
     if (payload->has("type"))
     {
-        update_segments.push_back(" MODIFY COLUMN `" + column + "` " + payload->get("type").toString());
+        update_segments.push_back(" " + payload->get("type").toString());
     }
 
     if (payload->has("default"))
@@ -85,29 +91,29 @@ String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const 
             default_str = "'" + default_str + "'";
         }
 
-        update_segments.push_back(" MODIFY COLUMN `" + column + "` DEFAULT " + default_str);
+        update_segments.push_back("DEFAULT " + default_str);
     }
     else if (payload->has("alias"))
     {
-        update_segments.push_back(" MODIFY COLUMN `" + column + "` ALIAS `" + payload->get("alias").toString() + "`");
+        update_segments.push_back("ALIAS `" + payload->get("alias").toString() + "`");
     }
 
     if (payload->has("comment"))
     {
-        update_segments.push_back(" COMMENT COLUMN `" + column + "` '" + payload->get("comment").toString() + "'");
+        update_segments.push_back("COMMENT '" + payload->get("comment").toString() + "'");
     }
 
     if (payload->has("ttl_expression"))
     {
-        update_segments.push_back(" MODIFY COLUMN `" + column + "` TTL " + payload->get("ttl_expression").toString());
+        update_segments.push_back("`TTL " + payload->get("ttl_expression").toString());
     }
 
     if (payload->has("compression_codec"))
     {
-        update_segments.push_back(" MODIFY COLUMN `" + column + "` CODEC(" + payload->get("compression_codec").toString() + ")");
+        update_segments.push_back("`CODEC(" + payload->get("compression_codec").toString() + ")");
     }
 
-    return boost::algorithm::join(update_segments, ",");
+    return boost::algorithm::join(update_segments, " ");
 }
 
 }

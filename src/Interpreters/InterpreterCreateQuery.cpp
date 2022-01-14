@@ -81,7 +81,11 @@
 #include <base/ClockUtils.h>
 
 /// proton: starts.
+#include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
+#include <Interpreters/Streaming/DDLHelper.h>
+
+//#include <Poco/JSON/Parser.h>
 /// proton: ends.
 
 
@@ -893,11 +897,38 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     auto * log = &Poco::Logger::get("InterpreterCreateQuery");
 
+    String payload;
+    if (ctx->isLocalQueryFromTCP())
+    {
+        /// it comes from TCPHandler, therefore update column definitions if required
+        prepareCreateQueryForDistributedMergeTree(create);
+
+        /// Build json payload here from SQL statement
+        payload = getJSONFromCreateQuery(create);
+        ctx->setDistributedDDLOperation(true);
+    }
+    else
+    {
+        payload = ctx->getQueryParameters().at("_payload");
+    }
+
+    if (payload.empty() || !ctx->isDistributedDDLOperation())
+    {
+        return false;
+    }
+
     TableProperties properties = getTablePropertiesAndNormalizeCreateQuery(create);
 
     if (create.database.empty())
     {
         create.database = current_database;
+    }
+
+    const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
+    auto tables = catalog_service.findTableByName(create.database, create.table);
+    if (!tables.empty())
+    {
+        throw Exception(fmt::format("Table {}.{} does not exist.", create.database, create.table), ErrorCodes::TABLE_ALREADY_EXISTS);
     }
 
     /// More verification happened in storage engine creation
@@ -906,7 +937,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     auto res = StorageFactory::instance().get(
         create, "" /* virtual */, ctx, ctx->getGlobalContext(), properties.columns, properties.constraints, false);
 
-    auto storage = static_cast<StorageDistributedMergeTree *>(res.get());
+    auto *storage = static_cast<StorageDistributedMergeTree *>(res.get());
     if (storage->currentShard() >= 0)
     {
         LOG_INFO(log, "Local DistributedMergeTree table creation with shard assigned");
@@ -917,22 +948,8 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     auto query = queryToString(create);
     LOG_INFO(log, "Creating DistributedMergeTree query={} query_id={}", query, ctx->getCurrentQueryId());
 
-
-    if (!ctx->getQueryParameters().contains("_payload"))
-    {
-        /// FIXME:
-        /// Build json payload here from SQL statement
-        /// context.setDistributedDDLOperation(true);
-        return false;
-    }
-
-    if (!ctx->isDistributedDDLOperation())
-    {
-        return false;
-    }
-
     std::vector<std::pair<String, String>> string_cols
-        = {{"payload", ctx->getQueryParameters().at("_payload")},
+        = {{"payload", payload},
            {"database", current_database},
            {"table", create.table},
            {"query_id", ctx->getCurrentQueryId()},

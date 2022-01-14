@@ -93,18 +93,21 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         return false;
     }
 
-    if (!ctx->getQueryParameters().contains("_payload"))
+    String payload = "{}";
+    if (ctx->isLocalQueryFromTCP())
     {
-        /// FIXME:
-        /// Build json payload here from SQL statement
-        /// context.setDistributedDDLOperation(true);
-        return false;
+        ctx->setDistributedDDLOperation(true);
+    }
+    else
+    {
+        payload = ctx->getQueryParameters().at("_payload");
     }
 
     if (ctx->isDistributedDDLOperation())
     {
         const auto & catalog_service = CatalogService::instance(ctx);
-        auto tables = catalog_service.findTableByName(query.database, query.table);
+        const String & database = query.database.empty() ? ctx->getCurrentDatabase() : query.database;
+        auto tables = catalog_service.findTableByName(database, query.table);
         if (tables.empty())
         {
             throw Exception(fmt::format("Table {}.{} does not exist.", query.database, query.table), ErrorCodes::UNKNOWN_TABLE);
@@ -121,8 +124,8 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         LOG_INFO(log, "Drop DistributedMergeTree query={} query_id={}", query_str, ctx->getCurrentQueryId());
 
         std::vector<std::pair<String, String>> string_cols
-            = {{"payload", ctx->getQueryParameters().at("_payload")},
-               {"database", query.database},
+            = {{"payload", payload},
+               {"database", database},
                {"table", query.table},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};

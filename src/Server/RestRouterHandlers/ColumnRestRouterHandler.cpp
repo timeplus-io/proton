@@ -74,9 +74,8 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePost(const Poco::JSON::
         {
             return {message, HTTPResponse::HTTP_CONFLICT};
         }
-
-        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_POST}, {"column", column}}, payload);
     }
+    setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_POST}}, payload);
 
     std::vector<String> create_segments;
     create_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
@@ -99,9 +98,8 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePatch(const Poco::JSON:
         {
             return {message, HTTPResponse::HTTP_NOT_FOUND};
         }
-
-        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_PATCH}, {"column", column}}, payload);
     }
+    setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_PATCH}, {"column", column}}, payload);
 
     std::vector<String> update_segments;
     update_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
@@ -123,9 +121,8 @@ std::pair<String, Int32> ColumnRestRouterHandler::executeDelete(const Poco::JSON
         {
             return {message, HTTPResponse::HTTP_NOT_FOUND};
         }
-
-        setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_DELETE}, {"column", column}});
     }
+    setupDistributedQueryParameters({{"query_method", HTTPRequest::HTTP_DELETE}, {"column", column}});
 
     std::vector<String> delete_segments;
     delete_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");

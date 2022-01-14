@@ -75,11 +75,6 @@ void RestRouterHandler::execute(HTTPServerRequest & request, HTTPServerResponse 
 void RestRouterHandler::setupDistributedQueryParameters(
     const std::map<String, String> & parameters, const Poco::JSON::Object::Ptr & payload) const
 {
-    if (!isDistributedDDL())
-    {
-        return;
-    }
-
     if (payload)
     {
         std::stringstream payload_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
@@ -90,6 +85,12 @@ void RestRouterHandler::setupDistributedQueryParameters(
     {
         /// keep payload consistent with the schema in interper interpreters
         query_context->setQueryParameter("_payload", "{}");
+    }
+
+    if (!isDistributedDDL())
+    {
+        query_context->setDistributedDDLOperation(false);
+        return;
     }
 
     for (const auto & kv : parameters)

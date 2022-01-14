@@ -23,9 +23,11 @@
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
 #include <Common/typeid_cast.h>
-#include <Poco/Net/HTTPRequest.h>
 
+/// proton: starts
 #include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/Streaming/DDLHelper.h>
+/// proton: ends
 
 #include <boost/range/algorithm_ext/push_back.hpp>
 
@@ -46,42 +48,39 @@ namespace ErrorCodes
     /// proton: end
 }
 
-
-/// proton: start
 namespace
 {
-DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
-{
-    if (queryParams.contains("column"))
+    void setupColumnIfNotSet(ContextMutablePtr ctx, const ASTAlterQuery & alter)
     {
-        auto iter = queryParams.find("query_method");
+        if (alter.command_list->children.empty() || ctx->getQueryParameters().contains("column"))
+            return;
 
-        if (iter->second == Poco::Net::HTTPRequest::HTTP_POST)
+        for (const auto & child : alter.command_list->children)
         {
-            return DWAL::OpCode::CREATE_COLUMN;
-        }
-        else if (iter->second == Poco::Net::HTTPRequest::HTTP_PATCH)
-        {
-            return DWAL::OpCode::ALTER_COLUMN;
-        }
-        else if (iter->second == Poco::Net::HTTPRequest::HTTP_DELETE)
-        {
-            return DWAL::OpCode::DELETE_COLUMN;
-        }
-        else
-        {
-            assert(false);
-            return DWAL::OpCode::UNKNOWN;
+            if (auto * cmd = child->as<ASTAlterCommand>())
+            {
+                if (cmd->type == ASTAlterCommand::Type::ADD_COLUMN || cmd->type == ASTAlterCommand::Type::MODIFY_COLUMN)
+                {
+                    const auto & column = cmd->col_decl->as<ASTColumnDeclaration &>();
+                    if (!column.name.starts_with("_tp_"))
+                    {
+                        return ctx->setQueryParameter("column", column.name);
+                    }
+                }
+                else if (cmd->type == ASTAlterCommand::Type::DROP_COLUMN || cmd->type == ASTAlterCommand::Type::RENAME_COLUMN)
+                {
+                    String col = queryToString(cmd->column);
+                    if (!col.starts_with("_tp_"))
+                    {
+                        return ctx->setQueryParameter("column", col);
+                    }
+                }
+            }
         }
     }
-
-    return DWAL::OpCode::ALTER_TABLE;
 }
-}
-/// proton: end
 
-
-InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextPtr context_) : WithContext(context_), query_ptr(query_ptr_)
+InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) : WithMutableContext(context_), query_ptr(query_ptr_)
 {
 }
 
@@ -238,12 +237,16 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         return false;
     }
 
-    if (!ctx->getQueryParameters().contains("_payload"))
+    String payload;
+    if (ctx->isLocalQueryFromTCP())
     {
-        /// FIXME:
         /// Build json payload here from SQL statement
-        /// context.setDistributedDDLOperation(true);
-        return false;
+        payload = getJSONFromAlterQuery(query);
+        ctx->setDistributedDDLOperation(true);
+    }
+    else
+    {
+        payload = ctx->getQueryParameters().at("_payload");
     }
 
     if (ctx->isDistributedDDLOperation())
@@ -269,7 +272,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         LOG_INFO(log, "Altering DistributedMergeTree query={} query_id={}", query_str, ctx->getCurrentQueryId());
 
         std::vector<std::pair<String, String>> string_cols
-            = {{"payload", ctx->getQueryParameters().at("_payload")},
+            = {{"payload", payload},
                {"database", query.database},
                {"table", query.table},
                {"query_id", ctx->getCurrentQueryId()},
@@ -285,9 +288,12 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
 
         /// Schema: (payload, database, table, timestamp, query_id, user)
         Block block = buildBlock(string_cols, int32_cols, uint64_cols);
-
+        setupColumnIfNotSet(ctx, query);
+        DWAL::OpCode op_code;
+        op_code = ctx->getQueryParameters().contains("_payload") ? getAlterTableParamOpCode(ctx->getQueryParameters())
+                                                                : getOpCodeFromQuery(query);
         appendDDLBlock(
-            std::move(block), ctx, {"table_type", "column", "query_method"}, getAlterTableParamOpCode(ctx->getQueryParameters()), log);
+            std::move(block), ctx, {"table_type", "column", "query_method"}, op_code, log);
 
         LOG_INFO(
             log, "Request of altering DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
