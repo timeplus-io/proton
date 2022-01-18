@@ -1,4 +1,5 @@
 import os, sys
+import logging
 from logging import fatal
 import pytest
 import math
@@ -30,18 +31,26 @@ def test_set(request):
     return request.param
 
 
+
+
 def query_result_check(test_set, order_check=False):
     expected_results = test_set.get("expected_results")
-    print(f"\n test run: expected_results: {expected_results}")
+    logging.info(f"\n test run: expected_results: {expected_results}")
     statements_results = test_set.get("statements_results")
-    print(f"test run: statemetns_results: {statements_results}")
+    logging.info(f"test run: statemetns_results: {statements_results}")
     for i in range(len(expected_results)):  # for each query_results
-        expected_result = expected_results[i]
-        # print(f"test run: expected_result in expected_results: {expected_result}")
-        query_results_dict = statements_results[i]
-        # print(f"test_run: query_result_dict = {query_results_dict}")
+        expected_result = expected_results[i].get("expected_results")
+        expected_result_query_id = expected_results[i].get("query_id")
+        query_results_dict = None
+        for statement_results in statements_results:
+
+            statement_results_query_id = statement_results.get("query_id")
+            if statement_results_query_id == str(expected_result_query_id):
+                query_results_dict = statement_results
+        assert (
+            query_results_dict != None
+        )  # if no statement_results_query_id matches expected_result_query_id, case failed
         query_result = query_results_dict.get("query_result")
-        # print(f"test run: query_result in statements_results: {query_result}")
         query_result_column_types = query_results_dict.get("query_result_column_types")
         assert type(expected_result) == type(
             query_result
@@ -54,9 +63,6 @@ def query_result_check(test_set, order_check=False):
             else:
                 assert expected_result == query_result
         else:
-            # print(
-            #    f"test_run: for i in range(len(expected_results)): expected_result: {expected_result}"
-            # )
             if len(expected_result) == 0:
                 assert len(query_result) == 0
 
@@ -81,9 +87,10 @@ def query_result_check(test_set, order_check=False):
                             for i in range(
                                 len(expected_result_row)
                             ):  # for each filed of each row of each query_results
-                                # print("test_run: column_type:", query_result_column_types[i][1])
+                                logging.debug("test_run: column_type:", query_result_column_types[i][1])
                                 expected_result_field = expected_result_row[i]
                                 query_result_field = query_result_row[i]
+                                logging.debug(f"test_run: query_result_column_types[i] = {query_result_column_types[i]}")
                                 if "Array" in query_result_column_types[i][1]:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1
@@ -117,16 +124,13 @@ def query_result_check(test_set, order_check=False):
                         len(expected_result)
                     ):  # for each row of each query_results
                         expected_result_row = expected_result[i]
-                        # print(f"i in expected_result = {i}, expected_result_row={expected_result_row}")
                         query_result_row = query_result[i]
-                        # print(f"i in expected_result = {i}, query_result_row={query_result_row}")
                         assert (
                             len(expected_result_row) == len(query_result_row) - 1
                         )  # the timestamp field in query_result_row is artifically added and need to be excluded in the length
                         for i in range(
                             len(expected_result_row)
                         ):  # for each filed of each row of each query_results
-                            # print("test_run: column_type:", query_result_column_types[i][1])
                             expected_result_field = expected_result_row[i]
                             query_result_field = query_result_row[i]
                             if "Array" in query_result_column_types[i][1]:

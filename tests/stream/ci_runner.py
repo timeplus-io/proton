@@ -56,9 +56,7 @@ def upload_results(
             s3_client.upload_test_report_to_s3(
                 additional_file_path, s3_path_prefix + file_name
             )
-    # html_report = create_test_html_report(check_name, test_results, raw_log_url, task_url, branch_url, branch_name, commit_url, additional_urls, False)
-    # with open('report.html', 'w', encoding='utf-8') as f:
-    #    f.write(html_report)
+
     logging.info("Search result in url %s", report_url)
     return report_url
 
@@ -69,7 +67,7 @@ def ci_runner(local_all_results_folder_path, local_mode, pr_number="0", commit_s
     report_file_name = f"report_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
     retcode = pytest.main(
-        ["-s", "-v", f"--html={report_file_path}", "--self-contained-html"]
+        ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
     )
 
     with open(".status", "w") as status_result:
@@ -105,7 +103,7 @@ def ci_runner(local_all_results_folder_path, local_mode, pr_number="0", commit_s
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    #logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     cur_dir = cur_dir = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description="Run CI in local mode")
     parser.add_argument(
@@ -115,16 +113,9 @@ if __name__ == "__main__":
         help="run CI in default 'github' mode or 'local' mdoe",
     )
     args = parser.parse_args()
-    print(f"args.local = {args.local}")
     if args.local:
         os.environ["PROTON_CI_MODE"] = "local"
     else:
         os.environ["PROTON_CI_MODE"] = "github"
 
     ci_runner(cur_dir, args.local)
-
-    #
-    # compress logs.
-    # compressed_log =
-    # test_results = []
-    # additional_logs = []

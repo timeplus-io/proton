@@ -11,11 +11,13 @@ import random
 from pytest_cases.fixture_parametrize_plus import parametrize
 import requests
 
-# from dataclasses import dataclass
 import multiprocessing as mp
 from clickhouse_driver import Client
 from clickhouse_driver import errors
 from requests.api import request
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from helpers import rockets
 
 
 def input_batch_rest(input_url, input_batch, table_schema):
@@ -43,15 +45,6 @@ def input_batch_rest(input_url, input_batch, table_schema):
     input_batch_record["input_batch"] = input_rest_body_data
     input_batch_record["timestamp"] = str(datetime.datetime.now())
 
-    """
-    if res.status_code != 200:
-        logging.debug(f"table input rest access failed, status code={res.status_code}") 
-        raise Exception(f"table input rest access failed, status code={res.status_code}")
-    else:
-        input_batch_record["input_batch"] =input_rest_body_data
-        input_batch_record["timestamp"] = str(datetime.datetime.now())
-        #logging.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
-    """
     return input_batch_record
 
 
@@ -74,12 +67,15 @@ def input_walk_through_rest(
     time.sleep(wait_before_inputs)
     input_url = rest_setting.get("ingest_url")
     inputs_record = []
+    print(f"input_walk_through_rest: inputs = {inputs}")
 
     for batch in inputs:
         table_name = batch.get("table_name")
         table_schema = find_schema(table_name, table_schemas)
         if table_schema != None:
-            # table_schema.pop("type")
+            batch_sleep_before_input = batch.get("sleep")
+            if batch_sleep_before_input != None:
+                time.sleep(int(batch_sleep_before_input))
             logging.debug(f"input_walk_through_rest: table_schema = {table_schema}")
             input_batch_record = input_batch_rest(input_url, batch, table_schema)
             inputs_record.append(input_batch_record)
@@ -96,8 +92,7 @@ def input_walk(test_id_run, config_file, tests_file):
     input_results = []
     with open(config_file) as f:
         config = json.load(f)
-    #    proton_server = config.get('proton_server')
-    #    proton_server_native_port = config.get('proton_server_native_port')
+
     with open(tests_file) as f:
         test_suite = json.load(f)
 
@@ -114,18 +109,25 @@ def input_walk(test_id_run, config_file, tests_file):
     client = Client(host=proton_server, port=proton_server_native_port)
 
     for test in tests:
-        test_id = test.get("id")
-        if test_id == test_id_run:
-            inputs = test.get("inputs")
+        test_id = str(test.get("id"))
+        if test_id == str(test_id_run):
+            logging.debug(f"input_walk: test_id = {test_id} ...... test = {test}...... test_id_run = {test_id_run}")
+            steps = test.get("steps")
+            logging.debug(f"input_walk: steps = {steps}")
+            for step in steps:
+                print(f"input_walk: step = {step}")
+                if "inputs" in step:
+                    inputs = step.get("inputs")
+                    print(f"input_walk: test_id = {test_id} inputs = {inputs}")
+                    inputs_record = input_walk_through_rest(
+                        rest_setting, inputs, table_schemas
+                    )
+                    input_results.append(inputs_record)
 
-    inputs_record = input_walk_through_rest(rest_setting, inputs, table_schemas)
-
-    return inputs_record
+    return input_results
 
 
 if __name__ == "__main__":
-    # cur_run_path = os.getcwd()
-    # cur_run_path_parent = os.path.dirname(cur_run_path)
     cur_file_path = os.path.dirname(os.path.abspath(__file__))
     cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
@@ -150,7 +152,6 @@ if __name__ == "__main__":
     except:
         print("Error")
 
-    # config_file = f"{cul_run_path}/configs/config.json"
     test_suite_path = "."
     config_file = f"{test_suite_path}/configs/config.json"
     tests_file = f"{test_suite_path}/tests.json"
