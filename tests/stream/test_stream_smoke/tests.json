@@ -487,7 +487,7 @@
             "description": "global aggregation by max and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":0, "query":"select id, max(value) from test group by id"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, max(value) from test group by id emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -518,7 +518,7 @@
             "description": "global aggregation sum distinct and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":0, "query":"select id, sum(distinct value) from test group by id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, sum(distinct value) from test group by id emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -715,7 +715,7 @@
 
         {
             "id": 22,
-            "tags": ["join", "bug"],
+            "tags": ["join"],
             "name": "stream tail join hist",
             "description": "stream tail join hist",
             "steps":[
@@ -752,7 +752,7 @@
         },
         {
             "id": 23,
-            "tags": ["join", "bug"],
+            "tags": ["join"],
             "name": "stream hist join hist w/o aggregation",
             "description": "stream hist join hist w/o aggregation",
             "steps":[
@@ -839,7 +839,7 @@
             "description": "global stream aggregation join hist",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query":"select a.id, b.type, max(value) from test as a join hist(test_d) as b on a.id = b.id group by a.id, b.type"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join hist(test_d) as b on a.id = b.id group by a.id, b.type emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -872,7 +872,7 @@
             "description": "global stream aggregation join hist w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query":"select a.id, b.type, max(value) from test as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -1033,13 +1033,15 @@
 
         {
             "id": 32,
-            "tags": ["subquery", "bug"],
+            "tags": ["subquery"],
             "name": "global aggregation based on vanilla subquery extracts timestamp from json",
             "description": "tranform function in subquery to extract timestamp from a json and run global aggregation on the subquery",
-            "steps":[
-                {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":0, "query":"with transformed as (select id, value, toDateTime(JSONExtractString(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id"}]},
-                {            "inputs": [
+            "steps":[             
+                
+                {               
+                "statements": [
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, toDateTime(JSONExtractString(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id emit periodic 5s"}]},
+                {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
@@ -1105,7 +1107,7 @@
             "id": 34,
             "tags": ["subquery"],
             "name": "tumble based on tumble subquery",
-            "description": "tranform function in subquery to extract timestamp from a json and run global aggregation on the subquery",
+            "description": "tranform function in subquery to extract timestamp from a json and run tumble aggregation on the subquery",
             "steps":[
                 {"statements": [
                     {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, max(value_avg), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
@@ -1460,7 +1462,7 @@
 
         {
             "id": 45,
-            "tags": ["subquery", "bug"],
+            "tags": ["subquery"],
             "name": "tumble count based on tail join hist subquery",
             "description": "tumble count based on tail join hist subquery",
             "steps":[
@@ -1490,7 +1492,7 @@
 
         {
             "id": 46,
-            "tags": ["subquery", "bug"],
+            "tags": ["subquery"],
             "name": "hop count based on tail join hist subquery",
             "description": "hop count based on tail join hist subquery",
             "steps":[
@@ -1522,7 +1524,7 @@
 
         {
             "id": 47,
-            "tags": ["view", "bug"],
+            "tags": ["view"],
             "name": "tumble sum based on tail join hist view",
             "description": "tumble sum based on tail join hist view",
             "steps":[
