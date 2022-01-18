@@ -36,7 +36,7 @@ namespace
 
     const String DDL_TABLE_POST_API_PATH_FMT = "/proton/v1/ddl/{}";
     const String DDL_TABLE_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/{}";
-    const String DDL_TABLE_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/{}";
+    const String DDL_TABLE_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/{}?mode={}";
     const String DDL_COLUMN_POST_API_PATH_FMT = "/proton/v1/ddl/{}/columns";
     const String DDL_COLUMN_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
     const String DDL_COLUMN_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
@@ -91,6 +91,13 @@ namespace
         return "tables";
     }
 
+    String getDeleteMode(const std::unordered_map<String, String> & headers)
+    {
+        if (headers.contains("mode"))
+            return headers.at("mode");
+        return "drop";
+    }
+
     String getTableApiPath(const std::unordered_map<String, String> & headers, const String & table, const String & method)
     {
         if (method == Poco::Net::HTTPRequest::HTTP_POST)
@@ -103,7 +110,8 @@ namespace
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return fmt::format(DDL_TABLE_DELETE_API_PATH_FMT, getTableCategory(headers), escapeForFileName(table));
+            auto mode = getDeleteMode(headers);
+            return fmt::format(DDL_TABLE_DELETE_API_PATH_FMT, getTableCategory(headers), escapeForFileName(table), mode);
         }
         else
         {
@@ -573,6 +581,11 @@ void DDLService::processRecords(const DWAL::RecordPtrs & records)
                 doDeleteDWal(ctx);
                 break;
             }
+            case DWAL::OpCode::TRUNCATE_TABLE:
+            {
+                mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE);
+                break;
+            }
             case DWAL::OpCode::CREATE_COLUMN:
             {
                 mutateTable(record, Poco::Net::HTTPRequest::HTTP_POST);
@@ -623,6 +636,8 @@ DDLService::getTargetURIs(DWAL::RecordPtr record, const String & database, const
     else
     {
         /// Table DDL request
+        if (record->op_code == DWAL::OpCode::TRUNCATE_TABLE)
+            record->headers["mode"] = "truncate";
         return toURIs(placement.placed(database, table), getTableApiPath(record->headers, table, method));
     }
 }

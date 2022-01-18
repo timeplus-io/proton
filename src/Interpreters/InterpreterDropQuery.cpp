@@ -137,8 +137,8 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
 
         Block block = buildBlock(string_cols, int32_cols, uint64_cols);
         /// Schema: (payload, database, table, timestamp, query_id, user)
-
-        appendDDLBlock(std::move(block), ctx, {"table_type"}, DWAL::OpCode::DELETE_TABLE, log);
+        DWAL::OpCode op_code = query.kind == ASTDropQuery::Kind::Truncate ? DWAL::OpCode::TRUNCATE_TABLE : DWAL::OpCode::DELETE_TABLE;
+        appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
 
         LOG_INFO(
             log, "Request of dropping DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());

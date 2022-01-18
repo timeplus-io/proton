@@ -40,6 +40,23 @@ namespace
         "distributed_flush_threshold_count",
         "distributed_flush_threshold_bytes",
     };
+
+    enum class DeleteMode
+    {
+        TRUNCATE,
+        DROP,
+        INVALID,
+    };
+
+    inline DeleteMode toDeleteMode(const std::string & mode)
+    {
+        if (mode == "truncate")
+            return DeleteMode::TRUNCATE;
+        else if (mode == "drop")
+            return DeleteMode::DROP;
+        else
+            return DeleteMode::INVALID;
+    }
 }
 
 std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema
@@ -168,6 +185,18 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
 {
     const String & table = getPathParameter("table");
 
+    String query = "DROP TABLE " + database + ".`" + table + "`";
+    if (hasQueryParameter("mode"))
+    {
+        const auto & mode = getQueryParameter("mode");
+        auto delete_mode = toDeleteMode(mode);
+        if (delete_mode == DeleteMode::INVALID)
+            return {
+                jsonErrorResponse("No support delete mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+        else if (delete_mode == DeleteMode::TRUNCATE)
+            query = "TRUNCATE TABLE " + database + ".`" + table + "`";
+    }
+
     if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
@@ -177,7 +206,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
 
     setupDistributedQueryParameters({});
 
-    return {processQuery("DROP TABLE " + database + ".`" + table + "`"), HTTPResponse::HTTP_OK};
+    return {processQuery(query), HTTPResponse::HTTP_OK};
 }
 
 void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const

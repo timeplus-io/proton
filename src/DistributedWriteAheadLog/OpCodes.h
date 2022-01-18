@@ -12,6 +12,7 @@ enum class OpCode : uint8_t
     /// Table Metadata
     CREATE_TABLE,
     DELETE_TABLE,
+    TRUNCATE_TABLE,
     ALTER_TABLE,
 
     /// Column Metadata
