@@ -6,6 +6,7 @@
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 
 #include <Poco/JSON/Parser.h>
@@ -20,10 +21,48 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
 }
 
+ASTPtr functionToAST(const String & query)
+{
+    const char * start = query.data();
+    const char * end = start + query.size();
+    ParserFunction parser;
+    return parseQuery(parser, start, end, "", 0, 0);
+}
+
+void prepareEngine(ASTCreateQuery & create)
+{
+    Field shards = DEFAULT_SHARDS;
+    Field replicas = DEFAULT_REPLICAS;
+    Field sharding_expr_field = DEFAULT_SHARDING_EXPR;
+    String expr;
+
+    if (create.storage->settings && !create.storage->settings->changes.empty())
+    {
+        create.storage->settings->changes.tryGet("shards", shards);
+        create.storage->settings->changes.tryGet("replicas", replicas);
+        create.storage->settings->changes.tryGet("sharding_expr", sharding_expr_field);
+    }
+    sharding_expr_field.tryGet<String>(expr);
+    ASTPtr sharding_expr = functionToAST(expr);
+
+    auto engine = makeASTFunction(
+        "DistributedMergeTree", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
+    create.storage->set(create.storage->engine, engine);
+}
+
 void prepareColumns(ASTCreateQuery & create)
 {
     const ASTs & column_asts = create.columns_list->columns->children;
     auto new_columns = std::make_shared<ASTExpressionList>();
+
+    Field event_time_default = DEFAULT_EVENT_TIME;
+
+    if (create.storage->settings && !create.storage->settings->changes.empty())
+    {
+        create.storage->settings->changes.tryGet("event_time_column", event_time_default);
+    }
+    String expr;
+    event_time_default.tryGet<String>(expr);
 
     for (const ASTPtr & column_ast : column_asts)
     {
@@ -38,23 +77,27 @@ void prepareColumns(ASTCreateQuery & create)
 
     auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
     col_tp_time->name = RESERVED_EVENT_TIME;
-    col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))));
+    col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
     col_tp_time->default_specifier = "DEFAULT";
-    col_tp_time->default_expression
-        = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
-    //        col_tp_time->codec = makeASTFunction("CODEC", makeASTFunction("DoubleDelta"), makeASTFunction("LZ4"));
-    new_columns->children.emplace_back(col_tp_time);
-
-    col_tp_time = std::make_shared<ASTColumnDeclaration>();
-    col_tp_time->name = RESERVED_INDEX_TIME;
-    col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))));
-    col_tp_time->default_specifier = "DEFAULT";
-    col_tp_time->default_expression
-        = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+    col_tp_time->default_expression = functionToAST(expr);
     /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
     auto func_double_delta = std::make_shared<ASTFunction>();
     func_double_delta->name = "DoubleDelta";
     auto func_lz4 = std::make_shared<ASTFunction>();
+    func_lz4->name = "LZ4";
+    col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
+    new_columns->children.emplace_back(col_tp_time);
+
+    col_tp_time = std::make_shared<ASTColumnDeclaration>();
+    col_tp_time->name = RESERVED_INDEX_TIME;
+    col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+    col_tp_time->default_specifier = "DEFAULT";
+    col_tp_time->default_expression
+        = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+    /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
+    func_double_delta = std::make_shared<ASTFunction>();
+    func_double_delta->name = "DoubleDelta";
+    func_lz4 = std::make_shared<ASTFunction>();
     func_lz4->name = "LZ4";
     col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
     new_columns->children.emplace_back(col_tp_time);
@@ -68,10 +111,10 @@ void prepareColumns(ASTCreateQuery & create)
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
 {
     /// FIXME: raw table might have different order by and partition by
-    auto new_order_by = makeASTFunction("toStartOfHour", std::make_shared<ASTIdentifier>("_tp_time"));
+    auto new_order_by = makeASTFunction("toStartOfHour", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
     create.storage->set(create.storage->order_by, new_order_by);
 
-    auto new_partition_by = makeASTFunction("toYYYYMMDD", std::make_shared<ASTIdentifier>("_tp_time"));
+    auto new_partition_by = makeASTFunction("toYYYYMMDD", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
     create.storage->set(create.storage->partition_by, new_partition_by);
 }
 
@@ -90,9 +133,6 @@ void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * column
     for (auto & ast_it : columns_ast->children)
     {
         const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
-        if (col_decl.name.starts_with("_tp_"))
-            continue;
-
         Poco::JSON::Object column_mapping_json;
         ColumnDeclarationToJSON(column_mapping_json, col_decl);
         columns_mapping_json.add(column_mapping_json);

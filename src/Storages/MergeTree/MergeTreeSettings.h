@@ -149,7 +149,11 @@ struct Settings;
     M(UInt64, replicated_max_parallel_fetches, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, replicated_max_parallel_fetches_for_table, 0, "Obsolete setting, does nothing.", 0) \
     M(Bool, write_final_mark, true, "Obsolete setting, does nothing.", 0) \
-    /** Settings for DistributedMergeTree */ \
+    /** Settings for DistributedMergeTree */                                                                                                                                                                                                                         \
+    M(UInt64, shards, 1, "Shards number for DistributedMergeTree table", 0)                                                                                                                                                           \
+    M(UInt64, replicas, 1, "Replicas number for DistributedMergeTree table", 0) \
+    M(String, sharding_expr, "rand()", "Sharding method of DistributedMergeTree table. Default is 'rand()'.", 0)                                                                                               \
+    M(String, event_time_column, "now64(3, UTC)", "Event time expression of DistributedMergeTree table. Default is '_tp_time'.", 0)                                     \
     M(Int64, shard, -1, "Current shard number", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
     M(String, streaming_storage, "kafka", "Backend streaming storage for write ahead log implementation", 0) \

@@ -353,13 +353,13 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr ttl_table;
     ASTPtr settings;
 
-    if (!s_engine.ignore(pos, expected))
-        return false;
+    if (s_engine.ignore(pos, expected))
+    {
+        s_eq.ignore(pos, expected);
 
-    s_eq.ignore(pos, expected);
-
-    if (!ident_with_optional_params_p.parse(pos, engine, expected))
-        return false;
+        if (!ident_with_optional_params_p.parse(pos, engine, expected))
+            return false;
+    }
 
     while (true)
     {

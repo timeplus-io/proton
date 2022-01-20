@@ -5,6 +5,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 
 #include <gtest/gtest.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -229,7 +230,7 @@ CREATE TABLE default.tests
     `ttl`            DateTime DEFAULT now()
 ) ENGINE = DistributedMergeTree(1, 1, rand())
 )###");
-    auto *create = ast->as<ASTCreateQuery>();
+    auto * create = ast->as<ASTCreateQuery>();
     prepareCreateQueryForDistributedMergeTree(*create);
     EXPECT_EQ(create->columns_list->columns->children.size(), 7);
 
@@ -268,4 +269,50 @@ TTL ttl + toIntervalDay(1)
 
     partition_by = create->storage->partition_by->as<ASTFunction>();
     EXPECT_EQ(partition_by->name, "toYYYYMMDD");
+
+    /// add event_time_column
+    ast = queryToAST(R"###(
+CREATE TABLE default.tests
+(
+    `timestamp`      DateTime64(3) DEFAULT now64(3),
+    `ttl`            DateTime DEFAULT now()
+) ENGINE = DistributedMergeTree(1, 1, rand())
+SETTINGS event_time_column = 'toStartOfHour(timestamp)'
+)###");
+    create = ast->as<ASTCreateQuery>();
+
+    prepareCreateQueryForDistributedMergeTree(*create);
+    EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
+CREATE TABLE default.tests (
+  `timestamp` DateTime64(3) DEFAULT now64(3),
+  `ttl` DateTimeDEFAULTnow(),
+  `_tp_time` DateTime64(3) DEFAULT toStartOfHour(timestamp) CODEC(DoubleDelta(), LZ4()),
+  `_tp_index_time` DateTime64(3) DEFAULT now64(3, 'UTC') CODEC(DoubleDelta(), LZ4())
+) ENGINE = DistributedMergeTree(1, 1, rand())
+PARTITION BY toYYYYMMDD(_tp_time)
+ORDER BY toStartOfHour(_tp_time))###"));
+}
+
+TEST(DDLHelper, prepareEngine)
+{
+    ASTPtr ast = queryToAST(R"###(
+CREATE TABLE default.tests
+(
+    `ttl`            DateTime DEFAULT now()
+))###");
+    auto * create = ast->as<ASTCreateQuery>();
+
+    prepareEngine(*create);
+    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = DistributedMergeTree(1, 1, rand()))###"));
+
+    queryToAST(R"###(
+CREATE TABLE default.tests
+(
+    `ttl`            DateTime DEFAULT now()
+)
+SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
+)###");
+    create = ast->as<ASTCreateQuery>();
+    prepareEngine(*create);
+    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE=DistributedMergeTree(2,1,hash(ttl)))###"));
 }

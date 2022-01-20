@@ -877,7 +877,12 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 bool InterpreterCreateQuery::createTableDistributed(const String & current_database, ASTCreateQuery & create)
 {
     auto ctx = getContext();
-    if (!create.storage || !create.storage->engine || create.storage->engine->name != "DistributedMergeTree")
+    if (!create.storage || !create.storage->engine)
+    {
+        prepareEngine(create);
+    }
+
+    if (create.storage->engine->name != "DistributedMergeTree")
     {
         /// We only support `DistributedMergeTree` table engine for now
         return false;
@@ -909,7 +914,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     }
     else
     {
-        payload = ctx->getQueryParameters().at("_payload");
+        payload = getJSONFromCreateQuery(create);
     }
 
     if (payload.empty() || !ctx->isDistributedDDLOperation())

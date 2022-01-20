@@ -2,7 +2,6 @@
 
 #include <DistributedMetadata/CatalogService.h>
 
-//#include <DataTypes/DataTypeFactory.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -12,6 +11,7 @@
 
 namespace DB
 {
+void prepareEngine(ASTCreateQuery & create);
 void prepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
 void prepareCreateQueryForDistributedMergeTree(ASTCreateQuery & create);
