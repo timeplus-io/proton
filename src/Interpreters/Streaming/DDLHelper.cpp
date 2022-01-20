@@ -106,6 +106,8 @@ void prepareColumns(ASTCreateQuery & create)
     new_columns_list->set(new_columns_list->columns, new_columns);
 
     create.replace(create.columns_list, new_columns_list);
+    /// as columns_list has been replaced, the existing pointer create.storage->primary_key becomes invalid, therefore set it to nullptr
+    create.storage->primary_key = nullptr;
 }
 
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
