@@ -340,6 +340,21 @@ protected:
   */
 class ParserStorage : public IParserBase
 {
+/// proton: starts. Database engine parse flow shares this parser.
+/// If we know it is database parse context, ignore PARTITION BY, ORDER BY etc
+/// parsing. But most importantly, if ENGINE doesn't exist, return false instead
+/// of setting up a `storage` AST node but with nullptr engine name
+/// which causes crash during system boots.
+/// With hiding ENGINE feature implemented for table, ENGINE is optional now,
+/// so for table storage parsing, if ENGINE doesn't exist, we still need
+/// continue the parsing.
+public:
+    explicit ParserStorage(bool parse_database_engine_ = false) : parse_database_engine(parse_database_engine_) { }
+
+private:
+    bool parse_database_engine;
+/// proton: ends
+
 protected:
     const char * getName() const override { return "storage definition"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;

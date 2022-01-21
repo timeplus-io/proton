@@ -353,6 +353,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr ttl_table;
     ASTPtr settings;
 
+    /// proton: starts
     if (s_engine.ignore(pos, expected))
     {
         s_eq.ignore(pos, expected);
@@ -360,6 +361,19 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!ident_with_optional_params_p.parse(pos, engine, expected))
             return false;
     }
+
+    if (parse_database_engine)
+    {
+        if (engine)
+        {
+            auto storage = std::make_shared<ASTStorage>();
+            storage->set(storage->engine, engine);
+            node = storage;
+            return true;
+        }
+        return false;
+    }
+    /// proton: ends
 
     while (true)
     {
@@ -1090,7 +1104,9 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_attach("ATTACH");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserStorage storage_p;
+    /// proton: starts
+    ParserStorage storage_p{true};
+    /// proton: ends
     ParserIdentifier name_p(true);
     ParserTableOverridesDeclarationList table_overrides_p;
 
