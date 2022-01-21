@@ -93,7 +93,7 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
     else if (String table; tryGetIdentifierNameInto(arg, table))
     {
         ParserCompoundIdentifier table_name_p(true);
-
+        table = "`" + table + "`";   /// add back quoted
         Tokens tokens(table.data(), table.data() + table.size(), context->getSettingsRef().max_query_size);
         IParser::Pos pos(tokens, context->getSettingsRef().max_parser_depth);
         Expected expected;
