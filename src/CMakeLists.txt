@@ -247,6 +247,7 @@ add_object_library(clickhouse_processors_transforms Processors/Transforms)
 # proton: starts
 add_object_library(clickhouse_interpreters_streaming Interpreters/Streaming)
 add_object_library(clickhouse_processors_transforms_streaming Processors/Transforms/Streaming)
+add_object_library(clickhouse_storages_streamingview Storages/StreamingView)
 # proton: ends
 
 add_object_library(clickhouse_processors_sources Processors/Sources)

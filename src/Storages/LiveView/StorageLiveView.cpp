@@ -46,6 +46,9 @@ limitations under the License. */
 #include <Access/Common/AccessFlags.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 
+/// proton: starts.
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
+/// proton: ends.
 
 namespace DB
 {

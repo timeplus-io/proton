@@ -105,6 +105,10 @@ StoragePtr StorageFactory::get(
         {
             name = "WindowView";
         }
+        else if (query.is_streaming_view)
+        {
+            name = "StreamingView";
+        }
         else
         {
             if (!storage_def)

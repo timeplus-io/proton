@@ -86,7 +86,7 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/tables/(?P<table>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+            "/proton/v1/ddl/tables/(?P<table>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
             "PATCH/DELETE",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);

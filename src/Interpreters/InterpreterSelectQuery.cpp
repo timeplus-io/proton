@@ -11,6 +11,7 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/StreamingView/StorageStreamingView.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 

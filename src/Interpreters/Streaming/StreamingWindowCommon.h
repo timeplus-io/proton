@@ -16,6 +16,7 @@ const String HOP_HELP_MESSAGE = "Table function 'hop' requires from 3 to 5 param
 
 bool isTableFunctionTumble(const ASTFunction * ast);
 bool isTableFunctionHop(const ASTFunction * ast);
+bool isTableFunctionHist(const ASTFunction * ast);
 
 /// Note: the extracted arguments is whole (include omitted parameters represented by an empty ASTPtr)
 /// for example:

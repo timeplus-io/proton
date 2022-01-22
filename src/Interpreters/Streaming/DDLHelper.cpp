@@ -213,6 +213,9 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
     payload.set("order_by_granularity", "H");
     payload.set("partition_by_granularity", "D");
 
+    if (create.uuid != UUIDHelpers::Nil)
+        payload.set("uuid", toString(create.uuid));
+
     if (create.storage && create.storage->ttl_table)
     {
         payload.set("ttl", queryToString(*create.storage->ttl_table));

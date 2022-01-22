@@ -67,6 +67,12 @@ ALWAYS_INLINE bool isTableFunctionHop(const ASTFunction * ast)
     return !strcasecmp("HOP", ast->name.c_str());
 }
 
+ALWAYS_INLINE bool isTableFunctionHist(const ASTFunction * ast)
+{
+    assert(ast);
+    return !strcasecmp("HIST", ast->name.c_str());
+}
+
 ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionTumble(func_ast));

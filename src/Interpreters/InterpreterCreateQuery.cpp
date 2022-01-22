@@ -82,6 +82,7 @@
 
 /// proton: starts.
 #include <DistributedMetadata/CatalogService.h>
+#include <DistributedMetadata/TaskStatusService.h>
 #include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 
@@ -113,6 +114,7 @@ namespace ErrorCodes
     /// proton: starts
     extern const int UNKNOWN_TABLE;
     extern const int CONFIG_ERROR;
+    extern const int UNKNOWN_EXCEPTION;
     /// proton: ends
 }
 
@@ -717,7 +719,7 @@ void InterpreterCreateQuery::validateTableStructure(const ASTCreateQuery & creat
     const auto & settings = getContext()->getSettingsRef();
 
     /// Check low cardinality types in creating table if it was not allowed in setting
-    if (!create.attach && !settings.allow_suspicious_low_cardinality_types && !create.is_materialized_view)
+    if (!create.attach && !settings.allow_suspicious_low_cardinality_types && !create.is_materialized_view && !create.is_streaming_view)
     {
         for (const auto & name_and_type_pair : properties.columns.getAllPhysical())
         {
@@ -820,7 +822,9 @@ static void generateUUIDForTable(ASTCreateQuery & create)
     /// If destination table (to_table_id) is not specified for materialized view,
     /// then MV will create inner table. We should generate UUID of inner table here,
     /// so it will be the same on all hosts if query in ON CLUSTER or database engine is Replicated.
-    bool need_uuid_for_inner_table = !create.attach && create.is_materialized_view && !create.to_table_id;
+    /// proton: starts.
+    bool need_uuid_for_inner_table = !create.attach && ((create.is_materialized_view && !create.to_table_id) || (create.is_streaming_view));
+    /// proton: ends.
     if (need_uuid_for_inner_table && create.to_inner_uuid == UUIDHelpers::Nil)
         create.to_inner_uuid = UUIDHelpers::generateV4();
 }
@@ -933,7 +937,10 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     auto tables = catalog_service.findTableByName(create.database, create.table);
     if (!tables.empty())
     {
-        throw Exception(fmt::format("Table {}.{} does not exist.", create.database, create.table), ErrorCodes::TABLE_ALREADY_EXISTS);
+        if (create.if_not_exists)
+            return true;
+        else
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists", create.database, create.table);
     }
 
     /// More verification happened in storage engine creation
@@ -974,6 +981,28 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     LOG_INFO(log, "Request of creating DistributedMergeTree query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
+    /// If is a internal create query, sync create task status
+    if (internal)
+    {
+        auto & task_service = TaskStatusService::instance(ctx);
+        while (true)
+        {
+            /// Loop wait to finish, sleep interval too large?
+            /// Actually, the create delay is about '1s'
+            LOG_INFO(log, "Wait for creating DistributedMergeTree to complete, query={} query_id={} ...", query, ctx->getCurrentQueryId());
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            auto task_status = task_service.findById(ctx->getCurrentQueryId());
+            if (task_status)
+            {
+                if (task_status->status == TaskStatusService::TaskStatus::SUCCEEDED)
+                    break;
+                else if (task_status->status == TaskStatusService::TaskStatus::FAILED)
+                    throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Fail to create table {}.{}: {}", create.database, create.table, task_status->reason);
+            }
+        }
+    }
+
     /// FIXME, project tasks status
     return true;
 }
@@ -999,7 +1028,10 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
         const auto & database = DatabaseCatalog::instance().tryGetDatabase(create.database);
         if (database)
         {
-            throw Exception(fmt::format("Database {} already exists.", create.database), ErrorCodes::DATABASE_ALREADY_EXISTS);
+            if (create.if_not_exists)
+                return true;
+            else
+                throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Database {} already exists.", create.database);
         }
 
         auto * log = &Poco::Logger::get("InterpreterCreateQuery");
@@ -1448,9 +1480,11 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
 {
     /// If the query is a CREATE SELECT, insert the data into the table.
+    /// proton: starts. Add `!create.is_streaming_view`
     if (create.select && !create.attach
-        && !create.is_ordinary_view && !create.is_live_view && !create.is_window_view
+        && !create.is_ordinary_view && !create.is_live_view && !create.is_window_view && !create.is_streaming_view
         && (!create.is_materialized_view || create.is_populate))
+    /// proton: ends.
     {
         auto insert = std::make_shared<ASTInsertQuery>();
         insert->table_id = {create.getDatabase(), create.getTable(), create.uuid};

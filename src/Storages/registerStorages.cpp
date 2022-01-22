@@ -23,6 +23,9 @@ void registerStorageSet(StorageFactory & factory);
 void registerStorageJoin(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
+/// proton: starts.
+void registerStorageStreamingView(StorageFactory & factory);
+/// proton: ends.
 void registerStorageLiveView(StorageFactory & factory);
 void registerStorageGenerateRandom(StorageFactory & factory);
 void registerStorageExecutable(StorageFactory & factory);
@@ -100,6 +103,9 @@ void registerStorages()
     registerStorageJoin(factory);
     registerStorageView(factory);
     registerStorageMaterializedView(factory);
+    /// proton: starts.
+    registerStorageStreamingView(factory);
+    /// proton: ends.
     registerStorageLiveView(factory);
     registerStorageGenerateRandom(factory);
     registerStorageExecutable(factory);

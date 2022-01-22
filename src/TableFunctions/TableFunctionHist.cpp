@@ -47,7 +47,7 @@ void TableFunctionHist::init(
 {
     streaming = false;
     auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    if (storage->getName() != "DistributedMergeTree")
+    if (storage->getName() != "DistributedMergeTree" && storage->getName() != "StreamingView")
         throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
 
     underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();

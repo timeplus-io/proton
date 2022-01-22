@@ -93,10 +93,20 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         return false;
     }
 
+    const String & database = query.database.empty() ? ctx->getCurrentDatabase() : query.database;
     String payload = "{}";
     if (ctx->isLocalQueryFromTCP())
     {
-        ctx->setDistributedDDLOperation(true);
+        /// We assume it is a `DistributedMergeTree`, so either `on local` or `not exists but is virtual`，
+        /// and try do distributed ddl operation.
+        /// NOTE: we can not check it from `CatalogService`, there are some reasons:
+        /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
+        /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
+        auto table = DatabaseCatalog::instance().tryGetTable({database, query.table}, ctx);
+        if (!table || table->getName() == "DistributedMergeTree")
+            ctx->setDistributedDDLOperation(true);
+        else
+            return false;
     }
     else
     {
@@ -106,7 +116,6 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
     if (ctx->isDistributedDDLOperation())
     {
         const auto & catalog_service = CatalogService::instance(ctx);
-        const String & database = query.database.empty() ? ctx->getCurrentDatabase() : query.database;
         auto tables = catalog_service.findTableByName(database, query.table);
         if (tables.empty())
         {

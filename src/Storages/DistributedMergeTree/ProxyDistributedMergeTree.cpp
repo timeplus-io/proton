@@ -9,6 +9,7 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageView.h>
+#include <Storages/StreamingView/StorageStreamingView.h>
 #include <Common/ProtonCommon.h>
 
 #include <base/logger_useful.h>
@@ -130,6 +131,17 @@ void ProxyDistributedMergeTree::read(
             max_block_size,
             num_streams);
 
+    if (auto * streaming_view = storage->as<StorageStreamingView>())
+        return streaming_view->read(
+            query_plan,
+            updated_column_names,
+            underlying_storage_metadata_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            num_streams);
+
     auto * distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
 
@@ -152,6 +164,10 @@ NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
 {
     if (!storage)
         return {};
+
+    auto * streaming_view = storage->as<StorageStreamingView>();
+    if (streaming_view)
+        return streaming_view->getVirtuals();
 
     auto * distributed = storage->as<StorageDistributedMergeTree>();
     if (!distributed)

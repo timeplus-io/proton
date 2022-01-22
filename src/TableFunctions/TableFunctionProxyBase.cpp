@@ -164,8 +164,8 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         }
         else
         {
-            if (storage->getName() != "DistributedMergeTree")
-                throw Exception("Storage engine is not DistributedMergeTree", ErrorCodes::BAD_ARGUMENTS);
+            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "StreamingView")
+                throw Exception("Storage engine is not DistributedMergeTree or StreamingView", ErrorCodes::BAD_ARGUMENTS);
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
             columns = underlying_storage_metadata_snapshot->getColumns();
         }
@@ -193,7 +193,8 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         columns.add(time_column_desc);
     }
 
-    auto func_syntax_analyzer_result = TreeRewriter(context).analyze(streaming_func_ast, columns.getAll(), nullptr, nullptr);
+    auto func_syntax_analyzer_result = TreeRewriter(context).analyze(
+        streaming_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_metadata_snapshot : nullptr);
     streaming_func_desc
         = createStreamingFunctionDescription(streaming_func_ast, std::move(func_syntax_analyzer_result), context, func_name_prefix);
 

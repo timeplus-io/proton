@@ -19,6 +19,9 @@
 #include <Parsers/ParserSetQuery.h>
 #include <Common/typeid_cast.h>
 
+/// proton: starts
+#include <Parsers/Streaming/ParserCreateStreamingViewQuery.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -1446,12 +1449,17 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateLiveViewQuery live_view_p;
     ParserCreateWindowViewQuery window_view_p;
 
+    /// proton: starts. Add to parse StreamingViewQuery
+    ParserCreateStreamingViewQuery streaming_view_p;
+
     return table_p.parse(pos, node, expected)
         || database_p.parse(pos, node, expected)
         || view_p.parse(pos, node, expected)
         || dictionary_p.parse(pos, node, expected)
         || live_view_p.parse(pos, node, expected)
-        || window_view_p.parse(pos, node, expected);
+        || window_view_p.parse(pos, node, expected)
+        || streaming_view_p.parse(pos, node, expected);
+    /// proton: ends.
 }
 
 }

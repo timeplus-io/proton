@@ -22,6 +22,10 @@
 #include <base/scope_guard.h>
 #include <base/logger_useful.h>
 
+/// proton: starts.
+#include <Storages/StreamingView/StorageStreamingView.h>
+/// proton: ends.
+
 #include <atomic>
 #include <chrono>
 
@@ -396,6 +400,12 @@ Chain buildPushingToViewsChain(
         sink->setRuntimeData(thread_status, elapsed_counter_ms);
         result_chain.addSource(std::move(sink));
     }
+    /// proton: starts.
+    else if (auto * streaming_view = dynamic_cast<StorageStreamingView *>(storage.get()))
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No support insert into StreamingView");
+    }
+    /// proton: ends.
     /// Do not push to destination table if the flag is set
     else if (!no_destination)
     {

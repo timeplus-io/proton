@@ -7,6 +7,10 @@
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
 
+/// proton: starts.
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -56,9 +60,33 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
     {
         return StorageID(db_and_table->database, db_and_table->table/*, db_and_table->uuid*/);
     }
-    else if (auto subquery = extractTableExpression(query, 0))
+    /// proton: starts.
+    else if (auto table_expression = extractTableExpression(query, 0))
     {
-        auto * ast_select = subquery->as<ASTSelectWithUnionQuery>();
+        /// table_functoin
+        auto * ast_func = table_expression->as<ASTFunction>();
+        if (ast_func && (isTableFunctionTumble(ast_func) || isTableFunctionHop(ast_func) || isTableFunctionHist(ast_func)))
+        {
+            assert(ast_func->arguments);
+            table_expression = ast_func->arguments->children.at(0);
+
+            /// table name
+            if (auto identifier = table_expression->as<ASTIdentifier>())
+            {
+                auto table = identifier->createTable();
+                if (!table)
+                    return StorageID::createEmpty();
+
+                auto storage_id = table->getTableId();
+                if (storage_id.database_name.empty())
+                    storage_id.database_name = context->getCurrentDatabase();
+
+                return storage_id;
+            }
+        }
+
+        /// subquery
+        auto * ast_select = table_expression->as<ASTSelectWithUnionQuery>();
         if (!ast_select)
             throw Exception(ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW,
                             "StorageMaterializedView cannot be created from table functions ({})",
@@ -71,6 +99,7 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
 
         return extractDependentTableFromSelectQuery(inner_query->as<ASTSelectQuery &>(), context, false);
     }
+    /// proton: ends.
     else
         return StorageID::createEmpty();
 }

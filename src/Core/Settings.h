@@ -563,6 +563,8 @@ class IColumn;
     M(UInt64, max_keep_windows, 100, "Maximum number of streaming windows.", 0) \
     M(UInt64, record_consume_batch_count, 1000, "Maximum number for consuming records at once", 0) \
     M(Int64, record_consume_timeout, 100, "Timeout of consuming record", 0) \
+    M(UInt64, max_steraming_view_cached_block_count, 100, "Maximum count of block cached in steraming view", 0) \
+    M(UInt64, max_steraming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in steraming view", 0) \
     /* proton: ends. */ \
 
 // End of COMMON_SETTINGS

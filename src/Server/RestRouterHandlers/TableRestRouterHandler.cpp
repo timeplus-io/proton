@@ -285,7 +285,8 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
 {
     const auto & time_col = getStringValueFrom(payload, RESERVED_EVENT_TIME_API_NAME, RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
-    create_segments.push_back("CREATE TABLE " + database + ".`" + payload->get("name").toString() + "`");
+    String uuid = payload->has("uuid") ? " UUID '" + payload->get("uuid").toString() + "'" : "";
+    create_segments.push_back("CREATE TABLE " + database + ".`" + payload->get("name").toString() + "`" + uuid);
     create_segments.push_back("(");
     create_segments.push_back(getColumnsDefinition(payload));
     create_segments.push_back(")");

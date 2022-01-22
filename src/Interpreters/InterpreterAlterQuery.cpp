@@ -237,12 +237,24 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         return false;
     }
 
+    const String & database = query.database.empty() ? ctx->getCurrentDatabase() : query.database;
     String payload;
     if (ctx->isLocalQueryFromTCP())
     {
-        /// Build json payload here from SQL statement
-        payload = getJSONFromAlterQuery(query);
-        ctx->setDistributedDDLOperation(true);
+        /// We assume it is a `DistributedMergeTree`, so either `on local` or `not exists but is virtual`，
+        /// and try do distributed ddl operation.
+        /// NOTE: we can not check it from `CatalogService`, there are some reasons:
+        /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
+        /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
+        auto table = DatabaseCatalog::instance().tryGetTable({database, query.table}, ctx);
+        if (!table || table->getName() == "DistributedMergeTree")
+        {
+            /// Build json payload here from SQL statement
+            payload = getJSONFromAlterQuery(query);
+            ctx->setDistributedDDLOperation(true);
+        }
+        else
+            return false;
     }
     else
     {
@@ -252,7 +264,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
     if (ctx->isDistributedDDLOperation())
     {
         const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
-        auto tables = catalog_service.findTableByName(query.database, query.table);
+        auto tables = catalog_service.findTableByName(database, query.table);
         if (tables.empty())
         {
             throw Exception(fmt::format("Table {}.{} does not exist.", query.database, query.table), ErrorCodes::UNKNOWN_TABLE);
