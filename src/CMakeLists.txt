@@ -248,6 +248,8 @@ add_object_library(clickhouse_processors_transforms Processors/Transforms)
 add_object_library(clickhouse_interpreters_streaming Interpreters/Streaming)
 add_object_library(clickhouse_processors_transforms_streaming Processors/Transforms/Streaming)
 add_object_library(clickhouse_storages_streamingview Storages/StreamingView)
+add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
+add_object_library(clickhouse_functions_streaming Functions/Streaming)
 # proton: ends
 
 add_object_library(clickhouse_processors_sources Processors/Sources)
@@ -261,7 +263,6 @@ add_object_library(clickhouse_processors_queryplan_optimizations Processors/Quer
 if (TARGET ch_contrib::nuraft)
     add_object_library(clickhouse_coordination Coordination)
 endif()
-
 
 # proton: starts
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)

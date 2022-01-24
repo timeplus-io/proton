@@ -206,6 +206,9 @@ public:
 void registerFunctionNeighbor(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionNeighbor>();
+    /// proton: starts.
+    factory.registerAlias("neighborInBlock", FunctionNeighbor::name);
+    /// proton: ends.
 }
 
 }

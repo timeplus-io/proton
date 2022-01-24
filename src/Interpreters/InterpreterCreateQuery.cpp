@@ -881,6 +881,10 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 bool InterpreterCreateQuery::createTableDistributed(const String & current_database, ASTCreateQuery & create)
 {
     auto ctx = getContext();
+
+    if (create.isView() || create.is_dictionary)
+        return false;
+
     if (!create.storage || !create.storage->engine)
     {
         prepareEngine(create);

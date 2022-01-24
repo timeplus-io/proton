@@ -36,7 +36,11 @@ void prepareEngine(ASTCreateQuery & create)
     Field sharding_expr_field = DEFAULT_SHARDING_EXPR;
     String expr;
 
-    if (create.storage->settings && !create.storage->settings->changes.empty())
+    if (!create.storage)
+    {
+        create.set(create.storage, std::make_shared<ASTStorage>());
+    }
+    else if (create.storage->settings && !create.storage->settings->changes.empty())
     {
         create.storage->settings->changes.tryGet("shards", shards);
         create.storage->settings->changes.tryGet("replicas", replicas);

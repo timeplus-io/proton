@@ -81,6 +81,10 @@ void registerFunctionServerUUID(FunctionFactory &);
 void registerFunctionZooKeeperSessionUptime(FunctionFactory &);
 void registerFunctionGetOSKernelVersion(FunctionFactory &);
 
+/// proton: starts.
+void registerFunctionStreamingNeighbor(FunctionFactory &);
+/// proton: ends.
+
 #if USE_ICU
 void registerFunctionConvertCharset(FunctionFactory &);
 #endif
@@ -166,6 +170,10 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionServerUUID(factory);
     registerFunctionZooKeeperSessionUptime(factory);
     registerFunctionGetOSKernelVersion(factory);
+
+    /// proton: starts.
+    registerFunctionStreamingNeighbor(factory);
+    /// proton: ends.
 
 #if USE_ICU
     registerFunctionConvertCharset(factory);

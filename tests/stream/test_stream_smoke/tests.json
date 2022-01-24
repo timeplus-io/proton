@@ -1640,7 +1640,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select id, count(*), window_start, window_end from tumble(test_seek, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest'"}]}
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select id, count(*), window_start, window_end from tumble(test_seek, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1760,8 +1760,47 @@
                     ["dev5", "roof", 66],
                     ["dev2", "field", 76]
                     ]}]                
-        }
+        },
 
+        {
+            "id": 81,
+            "tags": ["functions"],
+            "name": "neighbor",
+            "description": "function neighbor for streaming",
+            "steps":[
+                {"statements": [
+                    {"client":"python","query_id":"101", "query_type": "stream", "query":"select value, neighbor(value, -1) as prev_1, streamingNeighbor(value, -1) as s_prev_1 from test"},
+                    {"client":"python","query_id":"102", "query_type": "stream", "query":"select value, neighbor(value, -3, -1) as prev_3, streamingNeighbor(value, -3, -1) as s_prev_3 from test"}]},
+                {"inputs": [
+                    {"table_name":"test", "data": [
+                        ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev2", "ca", 2, "2021-11-02 20:00:10", "2020-02-02 20:01:02"],
+                        ["dev2", "ca", 3, "2021-11-02 20:00:10", "2020-02-02 20:00:02"],
+                        ["dev2", "ca", 4, "2021-11-02 20:00:10", "2020-02-02 20:01:02"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev3", "ca", 5, "2021-11-02 20:00:10", "2020-02-02 20:01:03"]
+                        ]}
+                ]}
+            ],
+            "expected_results": [
+                {"query_id":"101", "expected_results": [
+                    [1, 0, 0],
+                    [2, 0, 1],
+                    [3, 2, 2],
+                    [4, 3, 3],
+                    [5, 0, 4]
+                ]},
+                {"query_id":"102", "expected_results": [
+                    [1, -1, -1],
+                    [2, -1, -1],
+                    [3, -1, -1],
+                    [4, -1, 1],
+                    [5, -1, 2]
+                ]}]                
+        }
     ]
 }
 
