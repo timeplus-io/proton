@@ -36,6 +36,6 @@ TEST(DistributedMergeTreeColumnValidateVisitor, invalidCreate)
 {
     EXPECT_THROW(
         validateCreate(
-            "CREATE TABLE example_table(d DateTime64(3), _time String DEFAULT d) ENGINE = DistributedMergeTree PARTITION BY toYYYYMM(d) ORDER BY d"),
+            "CREATE TABLE example_table(d DateTime64(3), _tp_time String DEFAULT d) ENGINE = DistributedMergeTree PARTITION BY toYYYYMM(d) ORDER BY d"),
         DB::Exception);
 }

@@ -146,7 +146,7 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterCommand_MODIFY_COMMENT, ParserTest,
 
 INSTANTIATE_TEST_SUITE_P(ParserCreateQuery_DICTIONARY_WITH_COMMENT, ParserTest,
     ::testing::Combine(
-        ::testing::Values(std::make_shared<ParserCreateQuery>()),
+        ::testing::Values(std::make_shared<ParserCreateDictionaryQuery>()),
         ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
         {
             R"sql(CREATE DICTIONARY 2024_dictionary_with_comment

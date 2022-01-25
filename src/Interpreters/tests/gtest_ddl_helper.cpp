@@ -101,6 +101,20 @@ CREATE TABLE default.tests
         ignoreEmptyChars(R"###(
 {
 	"columns": [{
+		"default": "now(UTC)",
+		"name": "_tp_time",
+		"nullable": false,
+		"type": "DateTime64(3)"
+	}, {
+		"default": "now(UTC)",
+		"name": "_tp_index_time",
+		"nullable": false,
+		"type": "DateTime64(3)"
+	}, {
+		"name": "_tp_xxxx",
+		"nullable": false,
+		"type": "UInt64"
+	}, {
 		"default": "now()",
 		"name": "ttl",
 		"nullable": false,
@@ -286,11 +300,11 @@ SETTINGS event_time_column = 'toStartOfHour(timestamp)'
 CREATE TABLE default.tests (
   `timestamp` DateTime64(3) DEFAULT now64(3),
   `ttl` DateTimeDEFAULTnow(),
-  `_tp_time` DateTime64(3) DEFAULT toStartOfHour(timestamp) CODEC(DoubleDelta(), LZ4()),
-  `_tp_index_time` DateTime64(3) DEFAULT now64(3, 'UTC') CODEC(DoubleDelta(), LZ4())
+  `_tp_time` DateTime64(3,'UTC') DEFAULT toStartOfHour(timestamp) CODEC(DoubleDelta(), LZ4()),
+  `_tp_index_time` DateTime64(3,'UTC') DEFAULT now64(3, 'UTC') CODEC(DoubleDelta(), LZ4())
 ) ENGINE = DistributedMergeTree(1, 1, rand())
 PARTITION BY toYYYYMMDD(_tp_time)
-ORDER BY toStartOfHour(_tp_time))###"));
+ORDER BY toStartOfHour(_tp_time)SETTINGSevent_time_column='toStartOfHour(timestamp)')###"));
 }
 
 TEST(DDLHelper, prepareEngine)
@@ -305,7 +319,7 @@ CREATE TABLE default.tests
     prepareEngine(*create);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = DistributedMergeTree(1, 1, rand()))###"));
 
-    queryToAST(R"###(
+    ast = queryToAST(R"###(
 CREATE TABLE default.tests
 (
     `ttl`            DateTime DEFAULT now()
@@ -314,5 +328,5 @@ SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
 )###");
     create = ast->as<ASTCreateQuery>();
     prepareEngine(*create);
-    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE=DistributedMergeTree(2,1,hash(ttl)))###"));
+    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE=DistributedMergeTree(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));
 }
