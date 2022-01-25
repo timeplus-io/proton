@@ -21,6 +21,8 @@ public:
     void startup();
     void shutdown();
 
+    bool ready() const { return started.test(); }
+
     const String & nodeRoles() const { return node_roles; }
     std::vector<DWAL::KafkaWALClusterPtr> clusters();
 
@@ -29,7 +31,7 @@ private:
     void tailingRecords();
     void doTailingRecords();
 
-    virtual void postStartup() {}
+    virtual void postStartup() { started.test_and_set(); }
     virtual void preShutdown() {}
 
     virtual void processRecords(const DWAL::RecordPtrs & records) = 0;
@@ -75,6 +77,7 @@ protected:
     DWAL::KafkaWALPtr dwal;
 
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag started = ATOMIC_FLAG_INIT;
     std::optional<ThreadPool> pool;
 
     String node_roles;

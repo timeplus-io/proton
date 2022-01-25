@@ -172,7 +172,7 @@ DDLService::DDLService(const ContextMutablePtr & global_context_)
 
 Int32 DDLService::append(const DWAL::Record & ddl_record) const
 {
-    if (dwal)
+    if (ready())
         return dwal->append(ddl_record, dwal_append_ctx).err;
     else
         throw Exception("System is still initiating", ErrorCodes::RESOURCE_NOT_INITED);
