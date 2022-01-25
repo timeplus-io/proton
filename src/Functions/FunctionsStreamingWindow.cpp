@@ -98,7 +98,11 @@ namespace
     }
 
     void checkIntervalArgument(
-        const ColumnWithTypeAndName & argument, const String & function_name, IntervalKind & interval_kind, Int64 & interval, bool & result_type_is_date)
+        const ColumnWithTypeAndName & argument,
+        const String & function_name,
+        IntervalKind & interval_kind,
+        Int64 & interval,
+        bool & result_type_is_date)
     {
         const auto * interval_type = checkAndGetDataType<DataTypeInterval>(argument.type.get());
         if (!interval_type)
@@ -109,14 +113,12 @@ namespace
 
         const auto * interval_column_const_int64 = checkAndGetColumnConst<ColumnInt64>(argument.column.get());
         if (!interval_column_const_int64)
-            throw Exception(
-                "Illegal column " + argument.name + " of argument of function " + function_name, ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception("Illegal column " + argument.name + " of argument of function " + function_name, ErrorCodes::ILLEGAL_COLUMN);
 
         interval = interval_column_const_int64->getValue<Int64>();
         if (interval <= 0)
             throw Exception(
-                "Value for column " + argument.name + " of function " + function_name + " must be positive",
-                ErrorCodes::BAD_ARGUMENTS);
+                "Value for column " + argument.name + " of function " + function_name + " must be positive", ErrorCodes::BAD_ARGUMENTS);
 
         interval_kind = interval_type->getKind();
         result_type_is_date = (interval_kind == IntervalKind::Year) || (interval_kind == IntervalKind::Quarter)
@@ -461,8 +463,7 @@ struct WindowImpl<HOP>
                 "Illegal type of window and hop column of function " + function_name + ", must be same", ErrorCodes::ILLEGAL_COLUMN);
 
         if (slide_size > window_size)
-            throw Exception(
-                "Slide size shall be less than or equal to window size in hop function", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Slide size shall be less than or equal to window size in hop function", ErrorCodes::BAD_ARGUMENTS);
 
         size_t time_zone_arg_num_check = arguments.size() == 4 ? 3 : 0;
         DataTypePtr data_type = std::make_shared<DataTypeArray>(getReturnDataType(result_type_is_date, arguments, time_zone_arg_num_check));
@@ -598,10 +599,13 @@ struct WindowImpl<HOP>
 
         auto scale = time_column.getScale();
 
-        /// FIXME, size to avoid reallocation as much as possible
+        auto final_size = size * (window_num_units / hop_num_units);
         auto start = ColumnArray::create(ColumnDate::create(0));
+        start->reserve(final_size);
         auto end = ColumnArray::create(ColumnDate::create(0));
+        end->reserve(final_size);
 
+        /// In order to avoid memory copy, we manipulate array and offsets by ourselves
         auto & start_data = start->getData();
         auto & start_offsets = start->getOffsets();
 
@@ -614,36 +618,19 @@ struct WindowImpl<HOP>
         {
             UInt32 whole = DecimalUtils::getWholePart(time_data[i], scale);
             UInt16 event_ts = ToStartOfTransform<unit>::execute(whole, 1, time_zone);
-            UInt16 wstart = ToStartOfTransform<unit>::execute(whole, window_num_units, time_zone);
+            UInt16 wstart = ToStartOfTransform<unit>::execute(event_ts, hop_num_units, time_zone);
             UInt16 wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
-
-            UInt16 wstart_l = wstart;
-            UInt16 wend_l = wend;
 
             do
             {
-                start_data.insert(Field(wstart_l));
-                end_data.insert(Field(wend_l));
+                start_data.insert(Field(wstart));
+                end_data.insert(Field(wend));
                 ++offset;
 
                 /// Slide to left until the right of the window passes (<) `component.whole`
-                wstart_l = AddTime<unit>::execute(wstart_l, -1 * hop_num_units, time_zone);
-                wend_l = AddTime<unit>::execute(wend_l, -1 * hop_num_units, time_zone);
-            } while (wend_l > event_ts);
-
-            UInt16 wstart_r = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
-            UInt16 wend_r = AddTime<unit>::execute(wend, hop_num_units, time_zone);
-
-            while (wstart_r <= event_ts)
-            {
-                start_data.insert(Field(wstart_r));
-                end_data.insert(Field(wend_r));
-                ++offset;
-
-                /// Slide to right until the left of the window passes (>) `component.whole`
-                wstart_r = AddTime<unit>::execute(wstart_r, hop_num_units, time_zone);
-                wend_r = AddTime<unit>::execute(wend_r, hop_num_units, time_zone);
-            }
+                wstart = AddTime<unit>::execute(wstart, -1 * hop_num_units, time_zone);
+                wend = AddTime<unit>::execute(wend, -1 * hop_num_units, time_zone);
+            } while (wend > event_ts);
 
             start_offsets.push_back(offset);
             end_offsets.push_back(offset);
@@ -702,10 +689,13 @@ struct WindowImpl<HOP>
         const auto & time_data = time_column.getData();
         size_t size = time_column.size();
 
-        /// FIXME, size
+        auto final_size = size * (window_num_units / hop_num_units);
         auto start = ColumnArray::create(ColumnVector<ToType>::create(0));
+        start->reserve(final_size);
         auto end = ColumnArray::create(ColumnVector<ToType>::create(0));
+        end->reserve(final_size);
 
+        /// In order to avoid memory copy, we manipulate array and offsets by ourselves
         auto & start_data = start->getData();
         auto & start_offsets = start->getOffsets();
 
@@ -718,37 +708,20 @@ struct WindowImpl<HOP>
         {
             /// event_ts is a round down to the latest unit which will be its
             /// current second, minute, hour, day, week, month, quarter, year etc
-            ToType event_ts = ToStartOfTransform<unit>::execute(time_data[i], 1, time_zone);
-            ToType wstart = ToStartOfTransform<unit>::execute(time_data[i], window_num_units, time_zone);
+            ToType event_ts = time_data[i];
+            ToType wstart = ToStartOfTransform<unit>::execute(event_ts, hop_num_units, time_zone);
             ToType wend = AddTime<unit>::execute(wstart, window_num_units, time_zone);
-
-            ToType wstart_l = wstart;
-            ToType wend_l = wend;
 
             do
             {
-                start_data.insert(Field(wstart_l));
-                end_data.insert(Field(wend_l));
+                start_data.insert(Field(wstart));
+                end_data.insert(Field(wend));
                 ++offset;
 
-                /// Slide to left until the right of the window passes (<) `component.whole`
-                wstart_l = AddTime<unit>::execute(wstart_l, -1 * hop_num_units, time_zone);
-                wend_l = AddTime<unit>::execute(wend_l, -1 * hop_num_units, time_zone);
-            } while (wend_l > event_ts);
-
-            ToType wstart_r = AddTime<unit>::execute(wstart, hop_num_units, time_zone);
-            ToType wend_r = AddTime<unit>::execute(wend, hop_num_units, time_zone);
-
-            while (wstart_r <= event_ts)
-            {
-                start_data.insert(Field(wstart_r));
-                end_data.insert(Field(wend_r));
-                ++offset;
-
-                /// Slide to right until the left of the window passes (>) `component.whole`
-                wstart_r = AddTime<unit>::execute(wstart_r, hop_num_units, time_zone);
-                wend_r = AddTime<unit>::execute(wend_r, hop_num_units, time_zone);
-            }
+                /// Slide to left until the right of the window passes (<) `event_ts`
+                wstart = AddTime<unit>::execute(wstart, -1 * hop_num_units, time_zone);
+                wend = AddTime<unit>::execute(wend, -1 * hop_num_units, time_zone);
+            } while (wend > event_ts);
 
             start_offsets.push_back(offset);
             end_offsets.push_back(offset);
