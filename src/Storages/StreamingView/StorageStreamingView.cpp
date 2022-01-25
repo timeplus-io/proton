@@ -450,8 +450,8 @@ void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_sn
     const auto & settings = local_context->getSettingsRef();
     memory_table.reset(new InMemoryTable(
         is_global_aggr_query ? 1 /* only cache current block result */
-                            : settings.max_steraming_view_cached_block_count,
-        settings.max_steraming_view_cached_block_bytes));
+                            : settings.max_streaming_view_cached_block_count,
+        settings.max_streaming_view_cached_block_bytes));
 
     /// If there is a Create request, then we need create the target inner table.
     assert(target_table_id);
