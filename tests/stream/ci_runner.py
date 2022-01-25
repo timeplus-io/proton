@@ -69,7 +69,6 @@ def ci_runner(local_all_results_folder_path, local_mode, pr_number="0", commit_s
     retcode = pytest.main(
         ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
     )
-
     with open(".status", "w") as status_result:
         status_result.write(str(retcode))
 

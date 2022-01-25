@@ -20,6 +20,7 @@ def pytest_generate_tests(metafunc):
             config_file_path, tests_file_path, docker_compose_file_path
         )
         test_sets = rockets.rockets_run(rockets_context)
+        assert len(test_sets) != 0
         test_ids = [
             str(test["test_id"]) + "-" + test["test_name"] for test in test_sets
         ]
