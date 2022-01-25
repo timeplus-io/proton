@@ -1146,6 +1146,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     /// force hist mode
     if (context->getSettingsRef().query_mode.value == "hist")
         streaming = false;
+
     /// proton: ends
 }
 
@@ -1249,6 +1250,10 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
     result.window_function_asts = getWindowFunctions(query, *select_query);
     result.collectUsedColumns(query, true, getContext());
     result.required_source_columns_before_expanding_alias_columns = result.required_source_columns.getNames();
+
+    /// proton: starts
+    result.has_group_by = select_query->groupBy() != nullptr;
+    /// proton: ends
 
     /// rewrite filters for select query, must go after getArrayJoinedColumns
     bool is_initiator = getContext()->getClientInfo().distributed_depth == 0;

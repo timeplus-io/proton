@@ -70,7 +70,7 @@ WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_
 
     mergeEmitQuerySettings(select_query->emit(), *this);
 
-    if (syntax_analyzer_result->aggregates.empty())
+    if (syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
     {
         /// if there is no aggregation, we don't need project watermark
         if (mode != EmitMode::TAIL && mode != EmitMode::NONE)
