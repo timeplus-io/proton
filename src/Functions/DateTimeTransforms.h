@@ -225,8 +225,8 @@ struct ToStartOfYearImpl
 
 struct ToTimeImpl
 {
-    /// When transforming to time, the date will be equated to 1970-01-02.
-    static constexpr auto name = "toTime";
+    /// When transforming to time, the date will be equated to 1970-01-01.
+    static constexpr auto name = "__toTime";
 
     static UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {

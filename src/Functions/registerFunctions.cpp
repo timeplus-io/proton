@@ -56,6 +56,8 @@ void registerFunctionsSnowflake(FunctionFactory & factory);
 /// proton: starts
 void registerFunctionsStreamingWindow(FunctionFactory &);
 void registerJSONFunctionAlias(FunctionFactory &);
+void registerFunctionsDateTimeAlias(FunctionFactory &);
+void registerFunctionsRegexAlias(FunctionFactory &);
 /// proton: ends
 
 #if !defined(ARCADIA_BUILD)
@@ -132,6 +134,8 @@ void registerFunctions()
     /// proton: starts
     registerFunctionsStreamingWindow(factory);
     registerJSONFunctionAlias(factory);
+    registerFunctionsDateTimeAlias(factory);
+    registerFunctionsRegexAlias(factory);
     /// proton: ends
 
 #if USE_SSL
