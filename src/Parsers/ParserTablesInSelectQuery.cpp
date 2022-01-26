@@ -5,10 +5,6 @@
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 
-/// proton: starts
-#include <Parsers/ASTFunction.h>
-/// proton: ends
-
 namespace DB
 {
 
@@ -21,13 +17,11 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 {
     auto res = std::make_shared<ASTTableExpression>();
 
-    /// proton: starts. We don't support alias without `AS` anymore
-    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), false).parse(pos, res->subquery, expected)
+    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), true).parse(pos, res->subquery, expected)
         && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(true, true), false).parse(pos, res->table_function, expected)
-        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), false)
+        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true)
                 .parse(pos, res->database_and_table_name, expected))
         return false;
-    /// proton: ends
 
     /// FINAL
     if (ParserKeyword("FINAL").ignore(pos, expected))
