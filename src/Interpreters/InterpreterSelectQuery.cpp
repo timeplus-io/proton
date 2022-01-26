@@ -2139,9 +2139,12 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_plan.addStep(std::move(adding_limits_and_quota));
 
         /// proton: starts. Streaming Window
+        /// Supports: TableFunction, DistributedMergeTree, StreamingView
         if (auto * streaming_distributed = storage->as<ProxyDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan, streaming_distributed);
         else if (auto * distributed = storage->as<StorageDistributedMergeTree>())
+            buildStreamingProcessingQueryPlan(query_plan);
+        else if (auto * streaming_view = storage->as<StorageStreamingView>())
             buildStreamingProcessingQueryPlan(query_plan);
         /// proton: ends
     }
