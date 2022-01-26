@@ -19,6 +19,7 @@ void KVResponse::write(WriteBuffer & out)
     writeIntBinary<uint32_t>(static_cast<int32_t>(getOpNum()), out);
     writeIntBinary<int32_t>(code, out);
     writeStringBinary(msg, out);
+    writeBinary(column_family, out);
     writeImpl(out);
     out.next();
 }
@@ -28,13 +29,16 @@ std::shared_ptr<KVResponse> KVResponse::read(ReadBuffer & in)
     KVOpNum op_num;
     int32_t code;
     String msg;
+    KVString column_family;
     readIntBinary<uint32_t>(reinterpret_cast<uint32_t &>(op_num), in);
     readIntBinary<int32_t>(code, in);
     readStringBinary(msg, in);
+    readBinary(column_family, in);
 
     auto response = KVResponseFactory::instance().get(op_num);
     response->code = code;
     response->msg = msg;
+    response->column_family = column_family;
     response->readImpl(in);
     return response;
 }
@@ -47,11 +51,9 @@ void registerKVResponse(KVResponseFactory & factory)
 
 KVResponseFactory::KVResponseFactory()
 {
-    registerKVResponse<KVOpNum::GET, KVGetResponse>(*this);
     registerKVResponse<KVOpNum::MULTIGET, KVMultiGetResponse>(*this);
-    registerKVResponse<KVOpNum::PUT, KVPutResponse>(*this);
     registerKVResponse<KVOpNum::MULTIPUT, KVMultiPutResponse>(*this);
-    registerKVResponse<KVOpNum::DELETE, KVDeleteResponse>(*this);
     registerKVResponse<KVOpNum::MULTIDELETE, KVMultiDeleteResponse>(*this);
+    registerKVResponse<KVOpNum::LIST, KVListResponse>(*this);
 }
 }

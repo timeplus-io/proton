@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Common/TypePromotion.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Common/TypePromotion.h>
 
 namespace DB::ErrorCodes
 {
@@ -13,15 +13,18 @@ namespace Coordination
 {
 using namespace DB;
 
+using KVString = String;
+using KVStrings = std::vector<KVString>;
+using KVStringPair = std::pair<KVString, KVString>;
+using KVStringPairs = std::vector<KVStringPair>;
+
 enum class KVOpNum : uint32_t
 {
     UNKNOWN = 0,
-    PUT = 1,
-    MULTIPUT = 2,
-    GET = 3,
-    MULTIGET = 4,
-    DELETE = 5,
-    MULTIDELETE = 6
+    MULTIPUT,
+    MULTIGET,
+    MULTIDELETE,
+    LIST
 };
 namespace
 {
@@ -31,26 +34,24 @@ namespace
         {
             case KVOpNum::UNKNOWN:
                 return "Unknown";
-            case KVOpNum::PUT:
-                return "Put";
             case KVOpNum::MULTIPUT:
                 return "MultiPut";
-            case KVOpNum::GET:
-                return "Get";
             case KVOpNum::MULTIGET:
                 return "MultiGet";
-            case KVOpNum::DELETE:
-                return "Delete";
             case KVOpNum::MULTIDELETE:
                 return "MultiDelete";
+            case KVOpNum::LIST:
+                return "List";
         }
         int32_t raw_op = static_cast<int32_t>(op_num);
         throw DB::Exception("Operation " + std::to_string(raw_op) + " is unknown", DB::ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-struct KVRequest: public TypePromotion<KVRequest>
+struct KVRequest : public TypePromotion<KVRequest>
 {
+    KVString column_family;
+
     KVRequest() = default;
     KVRequest(const KVRequest &) = default;
     virtual ~KVRequest() = default;
@@ -70,92 +71,28 @@ struct KVRequest: public TypePromotion<KVRequest>
 
 using KVRequestPtr = std::shared_ptr<KVRequest>;
 
-struct KVGetRequest final : public KVRequest
-{
-    String key;
-
-    KVOpNum getOpNum() const override { return KVOpNum::GET; }
-    inline void writeImpl(WriteBuffer & out) const override { writeStringBinary(key, out); }
-
-    inline void readImpl(ReadBuffer & in) override { readStringBinary(key, in); }
-
-    bool isReadRequest() const override { return true; }
-};
-
 struct KVMultiGetRequest final : public KVRequest
 {
-    std::vector<String> keys;
+    KVStrings keys;
 
     KVOpNum getOpNum() const override { return KVOpNum::MULTIGET; }
-    inline void writeImpl(WriteBuffer & out) const override { writeVectorBinary<String>(keys, out); }
+    inline void writeImpl(WriteBuffer & out) const override { writeBinary(keys, out); }
 
-    inline void readImpl(ReadBuffer & in) override { readVectorBinary<String>(keys, in); }
+    inline void readImpl(ReadBuffer & in) override { readBinary(keys, in); }
 
     bool isReadRequest() const override { return true; }
-};
-
-struct KVPutRequest final : public KVRequest
-{
-    // TODO: use Slice in future to avoid memory copy
-    String key;
-    String value;
-
-    KVOpNum getOpNum() const override { return KVOpNum::PUT; }
-
-    inline void writeImpl(WriteBuffer & out) const override
-    {
-        writeStringBinary(key, out);
-        writeStringBinary(value, out);
-    }
-
-    inline void readImpl(ReadBuffer & in) override
-    {
-        readStringBinary(key, in);
-        readStringBinary(value, in);
-    }
-
-    bool isReadRequest() const override { return false; }
 };
 
 struct KVMultiPutRequest final : public KVRequest
 {
     // TODO: use Slice in future to avoid memory copy
-    std::vector<String> keys;
-    std::vector<String> values;
+    KVStringPairs kv_pairs;
 
     KVOpNum getOpNum() const override { return KVOpNum::MULTIPUT; }
 
-    inline void writeImpl(WriteBuffer & out) const override
-    {
-        writeVectorBinary<String>(keys, out);
-        writeVectorBinary<String>(values, out);
-    }
+    inline void writeImpl(WriteBuffer & out) const override { writeBinary(kv_pairs, out); }
 
-    inline void readImpl(ReadBuffer & in) override
-    {
-        readVectorBinary<String>(keys, in);
-        readVectorBinary<String>(values, in);
-    }
-
-    bool isReadRequest() const override { return false; }
-};
-
-struct KVDeleteRequest final : public KVRequest
-{
-    // TODO: use Slice in future to avoid memory copy
-    String key;
-
-    KVOpNum getOpNum() const override { return KVOpNum::DELETE; }
-
-    inline void writeImpl(WriteBuffer & out) const override
-    {
-        writeStringBinary(key, out);
-    }
-
-    inline void readImpl(ReadBuffer & in) override
-    {
-        readStringBinary(key, in);
-    }
+    inline void readImpl(ReadBuffer & in) override { readBinary(kv_pairs, in); }
 
     bool isReadRequest() const override { return false; }
 };
@@ -163,21 +100,29 @@ struct KVDeleteRequest final : public KVRequest
 struct KVMultiDeleteRequest final : public KVRequest
 {
     // TODO: use Slice in future to avoid memory copy
-    std::vector<String> keys;
+    KVStrings keys;
 
     KVOpNum getOpNum() const override { return KVOpNum::MULTIDELETE; }
 
-    inline void writeImpl(WriteBuffer & out) const override
-    {
-        writeVectorBinary<String>(keys, out);
-    }
+    inline void writeImpl(WriteBuffer & out) const override { writeBinary(keys, out); }
 
-    inline void readImpl(ReadBuffer & in) override
-    {
-        readVectorBinary<String>(keys, in);
-    }
+    inline void readImpl(ReadBuffer & in) override { readBinary(keys, in); }
 
     bool isReadRequest() const override { return false; }
+};
+
+struct KVListRequest final : public KVRequest
+{
+    // TODO: use Slice in future to avoid memory copy
+    KVString key_prefix;
+
+    KVOpNum getOpNum() const override { return KVOpNum::LIST; }
+
+    inline void writeImpl(WriteBuffer & out) const override { writeBinary(key_prefix, out); }
+
+    inline void readImpl(ReadBuffer & in) override { readBinary(key_prefix, in); }
+
+    bool isReadRequest() const override { return true; }
 };
 
 class KVRequestFactory final : private boost::noncopyable

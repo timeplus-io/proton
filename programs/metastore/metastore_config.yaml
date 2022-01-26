@@ -44,7 +44,7 @@ metastore_server:
             id: 1
             # Internal port and hostname
             hostname: localhost
-            port: 44444
+            port: 94444
         # Add more servers here
 
 # Sources to read users, roles, access rights, profiles of settings, quotas.

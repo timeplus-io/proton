@@ -56,14 +56,17 @@ public:
         nuraft::ptr<nuraft::buffer> & data_out,
         bool & is_last_obj) override;
 
-    void getByKey(const std::string & key, std::string * value) const;
+    void getByKey(const std::string & key, std::string * value, const std::string & column_family = {}) const;
 
-    void multiGetByKeys(const std::vector<std::string> & keys, std::vector<std::string> * values) const;
+    void multiGetByKeys(const std::vector<std::string> & keys, std::vector<std::string> * values, const std::string & column_family = {}) const;
+
+    void rangeGetByPrefix(const std::string & prefix, std::vector<std::pair<std::string, std::string>> * kv_pairs, const std::string & column_family = {}) const;
+
+    rocksdb::ColumnFamilyHandle * tryGetColumnFamilyHandler(const std::string & column_family) const;
+    rocksdb::ColumnFamilyHandle * getColumnFamilyHandler(const std::string & column_family) const;
+    rocksdb::ColumnFamilyHandle * getOrCreateColumnFamilyHandler(const std::string & column_family);
 
     void shutdownStorage();
-
-    int64_t getValue() const { return 100; }
-
 
 private:
     // RocksDB related variables
@@ -71,6 +74,11 @@ private:
     using RocksDBPtr = std::unique_ptr<rocksdb::DB>;
     RocksDBPtr rocksdb_ptr;
     String rocksdb_dir;
+
+    /// Ref the system column family handler to avoid frequent find from column_families
+    rocksdb::ColumnFamilyHandle * system_cf_handler;
+    std::unordered_map<std::string, rocksdb::ColumnFamilyHandle *> column_families;
+    mutable std::shared_mutex cf_mutex;
 
     MetaSnapshotPtr latest_snapshot_meta = nullptr;
     nuraft::ptr<nuraft::buffer> latest_snapshot_buf = nullptr;
@@ -95,6 +103,7 @@ private:
     Poco::Logger * log;
 
     void initDB();
+    rocksdb::Status writeLogIndex(uint64_t log_idx);
 };
 
 }

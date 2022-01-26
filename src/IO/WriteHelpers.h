@@ -883,6 +883,15 @@ inline void writeBinary(const LocalDate & x, WriteBuffer & buf) { writePODBinary
 inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const UUID & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 
+/// proton: starts
+template <typename T1, typename T2>
+inline void writeBinary(const std::pair<T1, T2> & x, WriteBuffer & buf)
+{
+    writeBinary(x.first, buf);
+    writeBinary(x.second, buf);
+}
+/// proton: ends
+
 /// Methods for outputting the value in text form for a tab-separated format.
 
 inline void writeText(is_integer auto x, WriteBuffer & buf)

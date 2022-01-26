@@ -1,5 +1,6 @@
 #include <Coordination/MetaStateMachine.h>
 
+#include <Coordination/KVNamespaceAndPrefixHelper.h>
 #include <Coordination/KVRequest.h>
 #include <Coordination/KVResponse.h>
 #include <Coordination/MetaSnapshotManager.h>
@@ -8,15 +9,18 @@
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Common/SipHash.h>
 
 #include <rocksdb/db.h>
 #include <rocksdb/table.h>
+#include <rocksdb/filter_policy.h>
 
 #include <future>
 
+#define _TP_SYSTEM_COLUMN_FAMILY_NAME (rocksdb::kDefaultColumnFamilyName)
 namespace DB
 {
-[[maybe_unused]] std::string META_LOG_INDEX_KEY = "metastore_log_index";
+[[maybe_unused]] const std::string META_LOG_INDEX_KEY = "_metastore_log_index";
 
 namespace ErrorCodes
 {
@@ -77,12 +81,12 @@ void MetaStateMachine::init()
     LOG_DEBUG(log, "Totally have {} snapshots", snapshot_manager.totalSnapshots());
 
     //    bool has_snapshots = snapshot_manager.totalSnapshots() != 0;
-    std::string result;
-    rocksdb::Status status = rocksdb_ptr->Get(rocksdb::ReadOptions(), META_LOG_INDEX_KEY, &result);
+    std::string idx_value;
+    rocksdb::Status status = rocksdb_ptr->Get(rocksdb::ReadOptions(), system_cf_handler, META_LOG_INDEX_KEY, &idx_value);
     if (status.ok())
     {
-        //        throw Exception("RocksDB load error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
-        last_committed_idx = std::stoi(result);
+        assert(idx_value.size() == sizeof(uint64_t));
+        last_committed_idx = *reinterpret_cast<uint64_t*>(idx_value.data());
     }
     LOG_DEBUG(log, "last committed log index {}", last_committed_idx);
     while (snapshot_manager.totalSnapshots() != 0)
@@ -118,105 +122,103 @@ nuraft::ptr<nuraft::buffer> MetaStateMachine::commit(const uint64_t log_idx, nur
 
     auto request = parseKVRequest(data);
     const auto & op = request->getOpNum();
-    auto response = Coordination::KVResponseFactory::instance().get(op);
+    auto response = Coordination::KVResponseFactory::instance().get(request);
 
-    if (op == Coordination::KVOpNum::MULTIPUT || op == Coordination::KVOpNum::PUT)
+    switch (op)
     {
-        auto write_batch = [this](uint64_t idx, const std::vector<std::string> & keys, const std::vector<std::string> & values) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-            rocksdb::Status status;
-            rocksdb::WriteBatch batch;
-            auto count = std::min(keys.size(), values.size());
-            for (size_t i = 0; i < count; ++i)
-            {
-                status = batch.Put(keys[i], values[i]);
-                if (!status.ok())
-                    return status;
-            }
-
-            status = batch.Put(META_LOG_INDEX_KEY, std::to_string(idx));
-            if (!status.ok())
-                return status;
-
-            status = rocksdb_ptr->Write(rocksdb::WriteOptions(), &batch);
-            return status;
-        };
-
-        rocksdb::Status status;
-        if (op == Coordination::KVOpNum::MULTIPUT)
+        case Coordination::KVOpNum::MULTIPUT:
         {
+            auto write_batch = [this](const auto & kv_pairs, const auto & cf) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                rocksdb::Status status;
+                rocksdb::WriteBatch batch;
+
+                auto cf_handler = getOrCreateColumnFamilyHandler(cf);
+                for (const auto & [key, value] : kv_pairs)
+                {
+                    status = batch.Put(cf_handler, key, value);
+                    if (!status.ok())
+                        return status;
+                }
+                return rocksdb_ptr->Write(rocksdb::WriteOptions(), &batch);
+            };
+
             auto req = request->as<const Coordination::KVMultiPutRequest>();
-            status = write_batch(log_idx, req->keys, req->values);
-        }
-        else
-        {
-            auto req = request->as<const Coordination::KVPutRequest>();
-            status = write_batch(log_idx, {req->key}, {req->value});
-        }
-        if (!status.ok())
-        {
-            /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
-            throw Exception("RocksDB write error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
-        }
-    }
-    else if (op == Coordination::KVOpNum::MULTIGET)
-    {
-        auto req = request->as<const Coordination::KVMultiGetRequest>();
-        auto resp = response->as<Coordination::KVMultiGetResponse>();
-        const auto & slices_keys = convertStringsToSlices(req->keys);
-        auto statuses = rocksdb_ptr->MultiGet(rocksdb::ReadOptions(), slices_keys, &(resp->values));
-        for (auto status : statuses)
+            auto status = write_batch(req->kv_pairs, req->column_family);
             if (!status.ok())
             {
                 /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
-                // throw Exception("RocksDB read error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+                throw Exception("RocksDB write error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+            }
+            break;
+        }
+        case Coordination::KVOpNum::MULTIGET:
+        {
+            auto req = request->as<const Coordination::KVMultiGetRequest>();
+            auto resp = response->as<Coordination::KVMultiGetResponse>();
+            const auto & slices_keys = convertStringsToSlices(req->keys);
+            std::vector<String> values;
 
-                /// To avoid to exit for exception, even if the read failed, we also consider this commit successful,
-                /// and return error status.
+            /// Return error if not column family
+            auto cf_handler = tryGetColumnFamilyHandler(req->column_family);
+            if (!cf_handler)
+            {
                 resp->code = ErrorCodes::ROCKSDB_ERROR;
-                resp->msg = "RocksDB read error: " + status.ToString();
+                resp->msg = "RocksDB read error: NotFound: column family '" + req->column_family + "' doesn't exists.";
                 break;
             }
-    }
-    else if (op == Coordination::KVOpNum::GET)
-    {
-        auto req = request->as<const Coordination::KVGetRequest>();
-        auto resp = response->as<Coordination::KVGetResponse>();
-        auto status = rocksdb_ptr->Get(rocksdb::ReadOptions(), req->key, &(resp->value));
-        if (!status.ok())
-        {
-            /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
-            // throw Exception("RocksDB read error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
 
-            /// To avoid to exit for exception, even if the read failed, we also consider this commit successful,
-            /// and return error status.
-            resp->code = ErrorCodes::ROCKSDB_ERROR;
-            resp->msg = "RocksDB read error: " + status.ToString();
-        }
-    }
-    else if (op == Coordination::KVOpNum::MULTIDELETE)
-    {
-        auto req = request->as<const Coordination::KVMultiDeleteRequest>();
-        for (const auto & key : req->keys)
-        {
-            auto status = rocksdb_ptr->Delete(rocksdb::WriteOptions(), key);
-            if (!status.ok())
+            auto statuses = rocksdb_ptr->MultiGet(rocksdb::ReadOptions(), {slices_keys.size(), cf_handler}, slices_keys, &values);
+            for (size_t i = 0; i < statuses.size(); ++i)
             {
-                /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
-                throw Exception("RocksDB delete error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
-            }
+                resp->kv_pairs.emplace_back(req->keys[i], values[i]);
+                if (!statuses[i].ok())
+                {
+                    /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
+                    // throw Exception("RocksDB read error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
 
+                    /// To avoid to exit for exception, even if the read failed, we also consider this commit successful,
+                    /// and return error status.
+                    resp->code = ErrorCodes::ROCKSDB_ERROR;
+                    resp->msg = fmt::format("RocksDB get '{}' error: {}", req->keys[i], statuses[i].ToString());
+                    break;
+                }
+            }
+            break;
         }
-    }
-    else if (op == Coordination::KVOpNum::DELETE)
-    {
-        auto req = request->as<const Coordination::KVDeleteRequest>();
-        auto status = rocksdb_ptr->Delete(rocksdb::WriteOptions(), req->key);
-        if (!status.ok())
+        case Coordination::KVOpNum::MULTIDELETE:
         {
-            /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
-            throw Exception("RocksDB delete error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+            auto req = request->as<const Coordination::KVMultiDeleteRequest>();
+
+            /// Do nothing if not column family
+            auto cf_handler = tryGetColumnFamilyHandler(req->column_family);
+            if (!cf_handler)
+                break;
+
+            for (const auto & key : req->keys)
+            {
+                auto status = rocksdb_ptr->Delete(rocksdb::WriteOptions(), cf_handler, key);
+                if (!status.ok())
+                {
+                    /// NOTICE: There is incomplete rollback operation in nuraft, so it will cause the system to exit.
+                    throw Exception(ErrorCodes::ROCKSDB_ERROR, "RocksDB delete '{}' error: {}", key, status.ToString());
+                }
+            }
+            break;
         }
+        case Coordination::KVOpNum::LIST:
+        {
+            auto req = request->as<const Coordination::KVListRequest>();
+            auto resp = response->as<Coordination::KVListResponse>();
+            rangeGetByPrefix(req->key_prefix, &(resp->kv_pairs), req->column_family);
+            break;
+        }
+        default:
+            break;
     }
+
+    auto status = writeLogIndex(log_idx);
+    if (!status.ok())
+        throw Exception(ErrorCodes::ROCKSDB_ERROR, "RocksDB write log index error: {}", status.ToString());
 
     last_committed_idx = log_idx;
     return getBufferFromKVResponse(response);
@@ -358,38 +360,196 @@ int MetaStateMachine::read_logical_snp_obj(
     return 1;
 }
 
-void MetaStateMachine::getByKey(const std::string & key, std::string * value) const
+void MetaStateMachine::getByKey(const std::string & key, std::string * value, const std::string & column_family) const
 {
-    auto status = rocksdb_ptr->Get(rocksdb::ReadOptions(), key, value);
+    auto status = rocksdb_ptr->Get(rocksdb::ReadOptions(), getColumnFamilyHandler(column_family), key, value);
     if (!status.ok())
-        throw Exception("RocksDB read error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+        throw Exception(ErrorCodes::ROCKSDB_ERROR, "RocksDB get '{}' error: {}", key, status.ToString());
 }
 
-void MetaStateMachine::multiGetByKeys(const std::vector<std::string> & keys, std::vector<std::string> * values) const
+void MetaStateMachine::multiGetByKeys(
+    const std::vector<std::string> & keys, std::vector<std::string> * values, const std::string & column_family) const
 {
-    auto statuses = rocksdb_ptr->MultiGet(rocksdb::ReadOptions(), convertStringsToSlices(keys), values);
-    for (auto status : statuses)
-        if (!status.ok())
-            throw Exception("RocksDB read error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+    auto cf = getColumnFamilyHandler(column_family);
+    auto statuses = rocksdb_ptr->MultiGet(rocksdb::ReadOptions(), {keys.size(), cf}, convertStringsToSlices(keys), values);
+    for (size_t i = 0; i < statuses.size(); ++i)
+        if (!statuses[i].ok())
+            throw Exception(ErrorCodes::ROCKSDB_ERROR, "RocksDB get '{}' error: {}", keys[i], statuses[i].ToString());
+}
+
+void MetaStateMachine::rangeGetByPrefix(
+    const std::string & prefix, Coordination::KVStringPairs * kv_pairs, const std::string & column_family) const
+{
+    /// Return empty if columns familiy not exists.
+    auto cf = tryGetColumnFamilyHandler(column_family);
+    if (!cf)
+        return;
+
+    rocksdb::ReadOptions read_options{};
+    read_options.auto_prefix_mode = true;
+
+    std::unique_ptr<rocksdb::Iterator> iter;
+    if (prefix.empty())
+    {
+        iter.reset(rocksdb_ptr->NewIterator(read_options, cf));
+        iter->SeekToFirst();
+    }
+    else
+    {
+        read_options.prefix_same_as_start = true;
+        iter.reset(rocksdb_ptr->NewIterator(read_options, cf));
+        iter->Seek(prefix);
+    }
+
+    for (; iter->Valid(); iter->Next())
+        kv_pairs->emplace_back(iter->key().ToString(), iter->value().ToString());
 }
 
 void MetaStateMachine::shutdownStorage()
 {
-    //    std::lock_guard lock(storage_lock);
-    //    storage->finalize();
+    for (auto iter = column_families.begin(); iter != column_families.end(); ++iter)
+    {
+        if (iter->second != nullptr)
+        {
+            auto status = rocksdb_ptr->DestroyColumnFamilyHandle(iter->second);
+            if (!status.ok())
+                LOG_ERROR(log, "Failed to destroy column family handle");
+        }
+    }
+    system_cf_handler = nullptr;
+    column_families.clear();
+
+    auto status = rocksdb_ptr->Close();
+    if (!status.ok())
+        LOG_ERROR(log, "Failed to close rocksdb");
+}
+
+rocksdb::ColumnFamilyHandle * MetaStateMachine::tryGetColumnFamilyHandler(const std::string & column_family) const
+{
+    std::shared_lock lock(cf_mutex);
+    auto iter = column_families.find(column_family);
+    if (iter == column_families.end())
+        return nullptr;
+
+    return iter->second;
+}
+
+rocksdb::ColumnFamilyHandle * MetaStateMachine::getColumnFamilyHandler(const std::string & column_family) const
+{
+    auto handle = tryGetColumnFamilyHandler(column_family);
+    if (!handle)
+        throw Exception("Fail to get column families '" + column_family + "'", ErrorCodes::STD_EXCEPTION);
+
+    return handle;
+}
+
+rocksdb::ColumnFamilyHandle * MetaStateMachine::getOrCreateColumnFamilyHandler(const std::string & column_family)
+{
+    if (auto * handle = tryGetColumnFamilyHandler(column_family))
+        return handle;
+
+    std::lock_guard lock(cf_mutex);
+
+    /// Double check again
+    auto iter = column_families.find(column_family);
+    if (iter != column_families.end())
+        return iter->second;
+
+    /// Create new column family
+    assert(column_families.size() > 0);
+    rocksdb::ColumnFamilyDescriptor cf_descriptor;
+    rocksdb::ColumnFamilyHandle * handle;
+
+    auto status = column_families.begin()->second->GetDescriptor(&cf_descriptor);
+    if (status != rocksdb::Status::OK())
+        throw Exception(
+            "Fail to get rocksdb column families descriptor at " + column_families.begin()->second->GetName() + ": "
+                + status.ToString(),
+            ErrorCodes::ROCKSDB_ERROR);
+
+    status = rocksdb_ptr->CreateColumnFamily(cf_descriptor.options, column_family, &handle);
+    if (status != rocksdb::Status::OK())
+        throw Exception("Fail to create rocksdb column families '" + column_family + "' : " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+
+    column_families[column_family] = handle;
+    return handle;
 }
 
 void MetaStateMachine::initDB()
 {
+    //// FIXME: Option Configurable
     rocksdb::Options options;
     rocksdb::DB * db;
     options.create_if_missing = true;
+    options.create_missing_column_families = true;
     options.compression = rocksdb::CompressionType::kZSTD;
-    rocksdb::Status status = rocksdb::DB::Open(options, rocksdb_dir, &db);
 
+    /// Enable prefix seek
+    options.prefix_extractor.reset(new Coordination::NamespacePrefixTransform());
+
+    /// Enable prefix bloom for mem tables, size: `write_buffer_size(default: 64MB) * memtable_prefix_bloom_size_ratio`
+    options.memtable_whole_key_filtering = true;
+    options.memtable_prefix_bloom_size_ratio = 0.1;
+
+    /// Enable prefix bloom for SST file
+    rocksdb::BlockBasedTableOptions table_options;
+    table_options.whole_key_filtering = true;
+    table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10 /* bits_per_key */, true));
+    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
+
+    /// Init column families
+    rocksdb::DBOptions db_options(options);
+    rocksdb::ColumnFamilyOptions cf_options(options);
+    std::vector<std::string> cf_names;
+    auto status = rocksdb::DB::ListColumnFamilies(db_options, rocksdb_dir, &cf_names);
     if (status != rocksdb::Status::OK())
-        throw Exception("Fail to open rocksdb path at: " + rocksdb_dir + ": " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+    {
+        LOG_WARNING(log, "Fail to get rocksdb column families list at: {} : {} ", rocksdb_dir, status.ToString());
+        cf_names.clear();
+    }
+
+    std::vector<rocksdb::ColumnFamilyDescriptor> cf_descriptors;
+    cf_descriptors.emplace_back(_TP_SYSTEM_COLUMN_FAMILY_NAME, cf_options);  /// set default system column family
+    for (auto & name : cf_names)
+    {
+        if (name == _TP_SYSTEM_COLUMN_FAMILY_NAME)
+            continue;
+
+        cf_descriptors.emplace_back(name, cf_options);
+    }
+
+    std::vector<rocksdb::ColumnFamilyHandle *> cf_handlers;
+
+    /// Open Rocksdb with column families
+    status = rocksdb::DB::Open(options, rocksdb_dir, cf_descriptors, &cf_handlers, &db);
+    if (status != rocksdb::Status::OK())
+        throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to open rocksdb path at: {}: {}", rocksdb_dir, status.ToString());
+
     rocksdb_ptr = std::unique_ptr<rocksdb::DB>(db);
+
+    assert(cf_descriptors.size() == cf_handlers.size());
+
+    std::lock_guard lock(cf_mutex);
+    for (size_t i = 0; i < cf_descriptors.size(); ++i)
+    {
+        column_families.emplace(cf_descriptors[i].name, cf_handlers[i]);
+
+        if (cf_descriptors[i].name == _TP_SYSTEM_COLUMN_FAMILY_NAME)
+            system_cf_handler = cf_handlers[i];  // cache system cf reference
+    }
+
+    assert(system_cf_handler);
+}
+
+rocksdb::Status MetaStateMachine::writeLogIndex(uint64_t log_idx)
+{
+    rocksdb::WriteBatch batch;
+    rocksdb::Slice idx_value{reinterpret_cast<char*>(&log_idx), sizeof(log_idx)};
+    auto status = batch.Put(system_cf_handler, META_LOG_INDEX_KEY, idx_value);
+    if (!status.ok())
+        return status;
+
+    return rocksdb_ptr->Write(rocksdb::WriteOptions(), &batch);
 }
 
 }

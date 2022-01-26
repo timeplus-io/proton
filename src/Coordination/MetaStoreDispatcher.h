@@ -50,19 +50,24 @@ public:
 
     ~MetaStoreDispatcher();
 
-    String localGetByKey(const String & key) const
+    String localGetByKey(const String & key, const String & namespace_) const
     {
-        return server->localGetByKey(key);
+        return server->localGetByKey(key, namespace_);
     }
 
-    std::vector<String> localMultiGetByKeys(const std::vector<String> & keys) const
+    std::vector<String> localMultiGetByKeys(const std::vector<String> & keys, const String & namespace_) const
     {
-        return server->localMultiGetByKeys(keys);
+        return server->localMultiGetByKeys(keys, namespace_);
     }
 
-    Coordination::KVResponsePtr putRequest(const Coordination::KVRequestPtr & request)
+    std::vector<std::pair<String, String> > localRangeGetByNamespace(const String & prefix_, const String & namespace_) const
     {
-        return server->putRequest(request);
+        return server->localRangeGetByNamespace(prefix_, namespace_);
+    }
+
+    Coordination::KVResponsePtr putRequest(const Coordination::KVRequestPtr & request, const String & namespace_)
+    {
+        return server->putRequest(request, namespace_);
     }
 
     bool isLeader() const

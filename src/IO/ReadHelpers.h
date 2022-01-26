@@ -966,6 +966,14 @@ inline void readBinary(Decimal128 & x, ReadBuffer & buf) { readPODBinary(x, buf)
 inline void readBinary(Decimal256 & x, ReadBuffer & buf) { readPODBinary(x.value, buf); }
 inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 
+/// proton: starts
+template <typename T1, typename T2>
+inline void readBinary(std::pair<T1, T2> & x, ReadBuffer & buf)
+{
+    readBinary(x.first, buf);
+    readBinary(x.second, buf);
+}
+/// proton: ends
 
 template <typename T>
 inline std::enable_if_t<is_arithmetic_v<T> && (sizeof(T) <= 8), void>

@@ -1,11 +1,13 @@
 #pragma once
 
-#include <Coordination/InMemoryLogStore.h>
-#include <Coordination/KVRequest.h>
-#include <Coordination/KVResponse.h>
-#include <Coordination/MetaStateManager.h>
-#include <Coordination/MetaStateMachine.h>
-#include <Coordination/CoordinationSettings.h>
+#include "CoordinationSettings.h"
+#include "InMemoryLogStore.h"
+#include "KVNamespaceAndPrefixHelper.h"
+#include "KVRequest.h"
+#include "KVResponse.h"
+#include "MetaStateMachine.h"
+#include "MetaStateManager.h"
+
 #include <base/logger_useful.h>
 
 #include <libnuraft/nuraft.hxx>
@@ -40,13 +42,13 @@ private:
 
     Poco::Logger * log;
 
+    std::unordered_set<std::string> namespace_whitelist;
+
     nuraft::cb_func::ReturnCode callbackFunc(nuraft::cb_func::Type type, nuraft::cb_func::Param * param);
 
     /// Almost copy-paste from nuraft::launcher, but with separated server init and start
     /// Allows to avoid race conditions.
-    void launchRaftServer(
-        const nuraft::raft_params & params,
-        const nuraft::asio_service::options & asio_opts);
+    void launchRaftServer(const nuraft::raft_params & params, const nuraft::asio_service::options & asio_opts);
 
     void shutdownRaftServer();
 
@@ -61,11 +63,13 @@ public:
 
     void startup();
 
-    String localGetByKey(const String & key) const;
+    String localGetByKey(const String & key, const String & namespace_) const;
 
-    std::vector<String> localMultiGetByKeys(const std::vector<String> & keys) const;
+    std::vector<String> localMultiGetByKeys(const std::vector<String> & keys, const String & namespace_) const;
 
-    Coordination::KVResponsePtr putRequest(const Coordination::KVRequestPtr & request);
+    std::vector<std::pair<String, String>> localRangeGetByNamespace(const String & prefix_, const String & namespace_) const;
+
+    Coordination::KVResponsePtr putRequest(Coordination::KVRequestPtr request, const String & namespace_);
 
     bool isLeader() const;
 
@@ -82,6 +86,8 @@ public:
     int getLeaderID() const;
 
     MetaClusterConfig getClusterConfig() const;
+
+    const String & checkNamespace(const String & namespace_) const;
 };
 
 }

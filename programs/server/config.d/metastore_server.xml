@@ -60,7 +60,7 @@
             <server>
                 <id>1</id>
                 <hostname>localhost</hostname>
-                <port>44444</port>
+                <port>94444</port>
             </server>
         </raft_configuration>
     </metastore_server>

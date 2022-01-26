@@ -47,9 +47,8 @@ struct ChangelogDirTest
 
 TEST(CoordinationTest1, BufferSerde)
 {
-    Coordination::KVRequestPtr request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::PUT);
-    dynamic_cast<Coordination::KVPutRequest &>(*request).key = "/path/value";
-    dynamic_cast<Coordination::KVPutRequest &>(*request).value = "1.0";
+    Coordination::KVRequestPtr request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::MULTIPUT);
+    dynamic_cast<Coordination::KVMultiPutRequest &>(*request).kv_pairs = {{"/path/value", "1.0"}};
 
     DB::WriteBufferFromNuraftBuffer wbuf;
     request->write(wbuf);
@@ -58,9 +57,9 @@ TEST(CoordinationTest1, BufferSerde)
     DB::ReadBufferFromNuraftBuffer rbuf(nuraft_buffer);
     Coordination::KVRequestPtr request_read = Coordination::KVRequest::read(rbuf);
 
-    EXPECT_EQ(request_read->getOpNum(), Coordination::KVOpNum::PUT);
-    EXPECT_EQ(dynamic_cast<Coordination::KVPutRequest &>(*request_read).key, "/path/value");
-    EXPECT_EQ(dynamic_cast<Coordination::KVPutRequest &>(*request_read).value, "1.0");
+    EXPECT_EQ(request_read->getOpNum(), Coordination::KVOpNum::MULTIPUT);
+    EXPECT_EQ(dynamic_cast<Coordination::KVMultiPutRequest &>(*request_read).kv_pairs.front().first, "/path/value");
+    EXPECT_EQ(dynamic_cast<Coordination::KVMultiPutRequest &>(*request_read).kv_pairs.front().second, "1.0");
 }
 
 struct MetaRaftServer
@@ -166,9 +165,8 @@ TEST(CoordinationTest1, TestMetaRaft1)
     /// Single node is leader
     EXPECT_EQ(s1.raft_instance->get_leader(), 1);
 
-    std::shared_ptr<KVPutRequest> request = std::make_shared<KVPutRequest>();
-    request->key = "version";
-    request->value = "1.0.0";
+    std::shared_ptr<KVMultiPutRequest> request = std::make_shared<KVMultiPutRequest>();
+    request->kv_pairs = {{"version", "1.0.0"}};
     auto entry = getBufferFromKVRequest(request);
     auto ret = s1.raft_instance->append_entries({entry});
     EXPECT_TRUE(ret->get_accepted()) << "failed to replicate: entry 1" << ret->get_result_code();
@@ -211,9 +209,8 @@ void testCreateRestoreSnapshot(Coordination::CoordinationSettingsPtr settings, u
     changelog.init(state_machine->last_commit_index() + 1, settings->reserved_log_items);
     for (size_t i = 1; i < total_logs + 1; ++i)
     {
-        std::shared_ptr<KVPutRequest> request = std::make_shared<KVPutRequest>();
-        request->key = "version";
-        request->value = std::to_string(i);
+        std::shared_ptr<KVMultiPutRequest> request = std::make_shared<KVMultiPutRequest>();
+        request->kv_pairs = {{"version", std::to_string(i)}};
         auto entry = getLogEntryFromKVRequest(0, request);
         uint64_t idx = changelog.append(entry);
         changelog.end_of_append_batch(0, 0);
@@ -317,9 +314,8 @@ void testLogAndStateMachine1(Coordination::CoordinationSettingsPtr settings, uin
     changelog.init(state_machine->last_commit_index() + 1, settings->reserved_log_items);
     for (size_t i = 1; i < total_logs + 1; ++i)
     {
-        std::shared_ptr<KVPutRequest> request = std::make_shared<KVPutRequest>();
-        request->key = "version";
-        request->value = std::to_string(i);
+        std::shared_ptr<KVMultiPutRequest> request = std::make_shared<KVMultiPutRequest>();
+        request->kv_pairs = {{"version", std::to_string(i)}};
         auto entry = getLogEntryFromKVRequest(0, request);
         uint64_t idx = changelog.append(entry);
         changelog.end_of_append_batch(0, 0);

@@ -15,10 +15,11 @@ namespace Coordination
 {
 using namespace DB;
 
-struct KVResponse: public TypePromotion<KVResponse>
+struct KVResponse : public TypePromotion<KVResponse>
 {
     int32_t code = ErrorCodes::OK;
     String msg;
+    KVString column_family;
 
     KVResponse() = default;
     KVResponse(const KVResponse &) = default;
@@ -47,33 +48,13 @@ struct KVEmptyResponse final : public KVResponse
     inline void readImpl(ReadBuffer & /*in*/) override { }
 };
 
-struct KVGetResponse final : public KVResponse
-{
-    String value;
-
-    KVOpNum getOpNum() const override { return KVOpNum::GET; }
-    inline void writeImpl(WriteBuffer & out) const override { writeStringBinary(value, out); }
-
-    inline void readImpl(ReadBuffer & in) override { readStringBinary(value, in); }
-};
-
 struct KVMultiGetResponse final : public KVResponse
 {
-    std::vector<String> values;
+    KVStringPairs kv_pairs;
 
     KVOpNum getOpNum() const override { return KVOpNum::MULTIGET; }
-    inline void writeImpl(WriteBuffer & out) const override { writeVectorBinary<String>(values, out); }
-
-    inline void readImpl(ReadBuffer & in) override { readVectorBinary<String>(values, in); }
-};
-
-struct KVPutResponse final : public KVResponse
-{
-    KVOpNum getOpNum() const override { return KVOpNum::PUT; }
-
-    inline void writeImpl(WriteBuffer & /*out*/) const override { }
-
-    inline void readImpl(ReadBuffer & /*in*/) override { }
+    inline void writeImpl(WriteBuffer & out) const override { writeBinary(kv_pairs, out); }
+    inline void readImpl(ReadBuffer & in) override { readBinary(kv_pairs, in); }
 };
 
 struct KVMultiPutResponse final : public KVResponse
@@ -81,16 +62,6 @@ struct KVMultiPutResponse final : public KVResponse
     KVOpNum getOpNum() const override { return KVOpNum::MULTIPUT; }
 
     inline void writeImpl(WriteBuffer & /*out*/) const override { }
-
-    inline void readImpl(ReadBuffer & /*in*/) override { }
-};
-
-struct KVDeleteResponse final : public KVResponse
-{
-    KVOpNum getOpNum() const override { return KVOpNum::DELETE; }
-
-    inline void writeImpl(WriteBuffer & /*out*/) const override { }
-
     inline void readImpl(ReadBuffer & /*in*/) override { }
 };
 
@@ -99,8 +70,16 @@ struct KVMultiDeleteResponse final : public KVResponse
     KVOpNum getOpNum() const override { return KVOpNum::MULTIDELETE; }
 
     inline void writeImpl(WriteBuffer & /*out*/) const override { }
-
     inline void readImpl(ReadBuffer & /*in*/) override { }
+};
+
+struct KVListResponse final : public KVResponse
+{
+    KVStringPairs kv_pairs;
+
+    KVOpNum getOpNum() const override { return KVOpNum::LIST; }
+    inline void writeImpl(WriteBuffer & out) const override { writeBinary(kv_pairs, out); }
+    inline void readImpl(ReadBuffer & in) override { readBinary(kv_pairs, in); }
 };
 
 class KVResponseFactory final : private boost::noncopyable
@@ -121,6 +100,16 @@ public:
         if (it == op_num_to_response.end())
             throw DB::Exception("Unknown operation type " + toString(op_num), ErrorCodes::LOGICAL_ERROR);
 
+        return it->second();
+    }
+
+    KVResponsePtr get(KVRequestPtr request)
+    {
+        auto it = op_num_to_response.find(request->getOpNum());
+        if (it == op_num_to_response.end())
+            throw DB::Exception("Unknown operation type " + toString(request->getOpNum()), ErrorCodes::LOGICAL_ERROR);
+
+        it->second()->column_family = request->column_family;
         return it->second();
     }
 

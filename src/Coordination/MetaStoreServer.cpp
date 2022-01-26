@@ -1,27 +1,29 @@
-#include <Coordination/MetaStoreServer.h>
+#include "MetaStoreServer.h"
+#include "LoggerWrapper.h"
+#include "MetaStateMachine.h"
+#include "MetaStateManager.h"
+#include "ReadBufferFromNuraftBuffer.h"
+#include "WriteBufferFromNuraftBuffer.h"
 
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
 #endif
-
-#include <Coordination/LoggerWrapper.h>
-#include <Coordination/MetaStateMachine.h>
-#include <Coordination/MetaStateManager.h>
-#include <Coordination/WriteBufferFromNuraftBuffer.h>
-#include <Coordination/ReadBufferFromNuraftBuffer.h>
+#include <Common/ZooKeeper/ZooKeeperIO.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <chrono>
-#include <Common/ZooKeeper/ZooKeeperIO.h>
-#include <string>
-#include <filesystem>
+
 #include <Poco/Util/Application.h>
+
+#include <chrono>
+#include <filesystem>
+#include <string>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
+    extern const int ACCESS_DENIED;
     extern const int RAFT_ERROR;
     extern const int NO_ELEMENTS_IN_CONFIG;
     extern const int SUPPORT_IS_DISABLED;
@@ -87,6 +89,18 @@ std::string getStoragePathFromConfig(const Poco::Util::AbstractConfiguration & c
         return std::filesystem::path{config.getString("path", DBMS_DEFAULT_PATH)} / "coordination";
 }
 
+std::unordered_set<std::string> getNamespaceWhitelistFromConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    Poco::Util::AbstractConfiguration::Keys namespace_keys;
+    config.keys("metastore_server.namespace_whitelist", namespace_keys);
+
+    std::unordered_set<std::string> sets;
+    for (const auto & key : namespace_keys)
+        sets.insert(config.getString("metastore_server.namespace_whitelist." + key));
+
+    return sets;
+}
+
 nuraft::ptr<nuraft::buffer> getBufferFromKVRequest(const Coordination::KVRequestPtr & request)
 {
     DB::WriteBufferFromNuraftBuffer buf;
@@ -121,6 +135,7 @@ MetaStoreServer::MetaStoreServer(
                         coordination_settings))
     , state_manager(nuraft::cs_new<MetaStateManager>(server_id, "metastore_server", config, coordination_settings, standalone_metastore))
     , log(&Poco::Logger::get("MetaStoreServer"))
+    , namespace_whitelist(getNamespaceWhitelistFromConfig(config))
 {
     if (coordination_settings->quorum_reads)
         LOG_WARNING(log, "Quorum reads enabled, MetaStoreServer will work slower.");
@@ -256,28 +271,40 @@ void MetaStoreServer::shutdown()
     shutdownRaftServer();
 }
 
-String MetaStoreServer::localGetByKey(const String & key) const
+String MetaStoreServer::localGetByKey(const String & key, const String & namespace_) const
 {
     String value;
-    state_machine->getByKey(key, &value);
+    Coordination::KVNamespaceAndPrefixHelper helper(checkNamespace(namespace_));
+    state_machine->getByKey(key, &value, helper.getColumnFamily());
     return value;
 }
 
-std::vector<String> MetaStoreServer::localMultiGetByKeys(const std::vector<String> & keys) const
+std::vector<String> MetaStoreServer::localMultiGetByKeys(const std::vector<String> & keys, const String & namespace_) const
 {
     std::vector<String> values;
-    state_machine->multiGetByKeys(keys, &values);
+    Coordination::KVNamespaceAndPrefixHelper helper(checkNamespace(namespace_));
+    state_machine->multiGetByKeys(keys, &values, helper.getColumnFamily());
     return values;
 }
 
-Coordination::KVResponsePtr MetaStoreServer::putRequest(const Coordination::KVRequestPtr & request)
+std::vector<std::pair<String, String> > MetaStoreServer::localRangeGetByNamespace(const String & prefix_, const String & namespace_) const
 {
-    const auto & entry = getBufferFromKVRequest(request);
+    Coordination::KVListResponse resp;
+    Coordination::KVNamespaceAndPrefixHelper helper(checkNamespace(namespace_), prefix_);
+    state_machine->rangeGetByPrefix(helper.getPrefix(), &resp.kv_pairs, helper.getColumnFamily());
+    helper.handle(resp);
+    return resp.kv_pairs;
+}
+
+Coordination::KVResponsePtr MetaStoreServer::putRequest(Coordination::KVRequestPtr request, const String & namespace_)
+{
+    Coordination::KVNamespaceAndPrefixHelper helper(checkNamespace(namespace_));
+    const auto & entry = getBufferFromKVRequest(helper.handle(request));
     auto ret = raft_instance->append_entries({entry});
     if (ret->get_accepted() &&
         ret->get_result_code() == nuraft::cmd_result_code::OK &&
         ret->get())
-        return parseKVResponse(ret->get());
+        return helper.handle(parseKVResponse(ret->get()));
 
     /// error response
     auto response = std::make_shared<Coordination::KVEmptyResponse>();
@@ -376,6 +403,14 @@ void MetaStoreServer::waitInit()
     int64_t timeout = coordination_settings->startup_timeout.totalMilliseconds();
     if (!initialized_cv.wait_for(lock, std::chrono::milliseconds(timeout), [&] { return initialized_flag.load(); }))
         throw Exception(ErrorCodes::RAFT_ERROR, "Failed to wait RAFT initialization");
+}
+
+const String & MetaStoreServer::checkNamespace(const String & namespace_) const
+{
+    if (!namespace_whitelist.contains(namespace_))
+        throw DB::Exception(ErrorCodes::ACCESS_DENIED, "Unknown namespace '{}'", namespace_);
+
+    return namespace_;
 }
 
 }

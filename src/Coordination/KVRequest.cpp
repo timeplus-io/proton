@@ -17,6 +17,7 @@ using namespace DB;
 void KVRequest::write(WriteBuffer & out)
 {
     writeIntBinary<uint32_t>(static_cast<int32_t>(getOpNum()), out);
+    writeBinary(column_family, out);
     writeImpl(out);
     out.next();
 }
@@ -24,9 +25,12 @@ void KVRequest::write(WriteBuffer & out)
 std::shared_ptr<KVRequest> KVRequest::read(ReadBuffer & in)
 {
     KVOpNum op_num;
+    KVString column_family;
     readIntBinary<uint32_t>(reinterpret_cast<uint32_t &>(op_num), in);
+    readBinary(column_family, in);
 
     auto request = KVRequestFactory::instance().get(op_num);
+    request->column_family = column_family;
     request->readImpl(in);
     return request;
 }
@@ -39,11 +43,9 @@ void registerKVRequest(KVRequestFactory & factory)
 
 KVRequestFactory::KVRequestFactory()
 {
-    registerKVRequest<KVOpNum::GET, KVGetRequest>(*this);
     registerKVRequest<KVOpNum::MULTIGET, KVMultiGetRequest>(*this);
-    registerKVRequest<KVOpNum::PUT, KVPutRequest>(*this);
     registerKVRequest<KVOpNum::MULTIPUT, KVMultiPutRequest>(*this);
-    registerKVRequest<KVOpNum::DELETE, KVDeleteRequest>(*this);
     registerKVRequest<KVOpNum::MULTIDELETE, KVMultiDeleteRequest>(*this);
+    registerKVRequest<KVOpNum::LIST, KVListRequest>(*this);
 }
 }
