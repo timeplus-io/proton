@@ -28,20 +28,95 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast);
 
 void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval");
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
-void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind & kind);
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
 
 Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
 
-/// [seconds -> auto]
-/// example: secondsToInterval(3600)  - convert 3600s to 1h
-std::pair<Int64, IntervalKind> secondsToInterval(Int64 time_sec);
-/// [seconds -> to_kind]
-/// example: secondsToInterval(3600, Minute)  - convert 3600s to 60m
-std::pair<Int64, IntervalKind> secondsToInterval(Int64 time_sec, IntervalKind::Kind to_kind);
-/// [kind -> seconds]
-/// example: intervalToSeconds(60, Minute)  - convert 60m to 3600s
-Int64 intervalToSeconds(Int64 num_units, IntervalKind::Kind kind);
+/// BaseScaleInterval util class converts interval in different scale to a common base scale.
+/// BaseScale-1: Second    Range: Second, Minute, Hour, Day, Week
+/// BaseScale-2: Month     Range: Month, Quarter, Year
+/// example: '1h' -> '3600s'   '1y' -> '12M'
+class BaseScaleInterval
+{
+public:
+    static constexpr IntervalKind::Kind SCALE_SECOND = IntervalKind::Second;
+    static constexpr IntervalKind::Kind SCALE_MONTH = IntervalKind::Month;
+
+    Int64 num_units = 0;
+    IntervalKind::Kind scale = SCALE_SECOND;
+    IntervalKind::Kind src_kind = SCALE_SECOND;
+
+    BaseScaleInterval() = default;
+
+    static constexpr BaseScaleInterval toBaseScale(Int64 num_units, IntervalKind::Kind kind)
+    {
+        switch (kind)
+        {
+            /// Based on SCALE_SECOND
+            case IntervalKind::Second:
+                return BaseScaleInterval{num_units, SCALE_SECOND, kind};
+            case IntervalKind::Minute:
+                return BaseScaleInterval{num_units * 60, SCALE_SECOND, kind};
+            case IntervalKind::Hour:
+                return BaseScaleInterval{num_units * 3600, SCALE_SECOND, kind};
+            case IntervalKind::Day:
+                return BaseScaleInterval{num_units * 86400, SCALE_SECOND, kind};
+            case IntervalKind::Week:
+                return BaseScaleInterval{num_units * 604800, SCALE_SECOND, kind};
+            /// Based on SCALE_MONTH
+            case IntervalKind::Month:
+                return BaseScaleInterval{num_units, SCALE_MONTH, kind};
+            case IntervalKind::Quarter:
+                return BaseScaleInterval{num_units * 3, SCALE_MONTH, kind};
+            case IntervalKind::Year:
+                return BaseScaleInterval{num_units * 12, SCALE_MONTH, kind};
+        }
+        __builtin_unreachable();
+    }
+
+    static BaseScaleInterval toBaseScale(const std::pair<Int64, IntervalKind> & interval)
+    {
+        return toBaseScale(interval.first, interval.second);
+    }
+
+    std::pair<Int64, IntervalKind> toIntervalKind(IntervalKind::Kind to_kind) const;
+
+    BaseScaleInterval & operator+(const BaseScaleInterval & bs)
+    {
+        assert(scale == bs.scale);
+        num_units += bs.num_units;
+        return *this;
+    }
+
+    BaseScaleInterval & operator-(const BaseScaleInterval & bs)
+    {
+        assert(scale == bs.scale);
+        num_units -= bs.num_units;
+        return *this;
+    }
+
+    Int64 operator/(const BaseScaleInterval & bs) const
+    {
+        assert(scale == bs.scale);
+        assert(bs.num_units != 0);
+        return num_units / bs.num_units;
+    }
+
+    BaseScaleInterval operator/(Int64 num) const
+    {
+        assert(num != 0);
+        return {num_units / num, scale, src_kind};
+    }
+
+    String toString() const;
+
+protected:
+    constexpr BaseScaleInterval(Int64 num_units_, IntervalKind::Kind scale_, IntervalKind::Kind src_kind_) : num_units(num_units_), scale(scale_), src_kind(src_kind_) { }
+};
+using BasedScaleIntervalPtr = std::shared_ptr<BaseScaleInterval>;
 
 ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind);
+ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval);
+
+void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2);
 }

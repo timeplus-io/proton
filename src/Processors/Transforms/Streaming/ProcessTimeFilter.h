@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Processors/ISimpleTransform.h>
 
 namespace DB
@@ -11,7 +12,7 @@ class ProcessTimeFilter  : public ISimpleTransform
 public:
     ProcessTimeFilter(
         const String & column_name_,
-        Int64 interval_seconds_,
+        BaseScaleInterval interval_bs_,
         const Block & header);
 
     ~ProcessTimeFilter() override = default;
@@ -23,7 +24,7 @@ private:
 
 private:
     String column_name;
-    Int64 interval_seconds;
+    BaseScaleInterval interval_bs;
 
     DataTypePtr timestamp_col_data_type;
     UInt32 timestamp_col_pos = 0;

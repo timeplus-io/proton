@@ -64,6 +64,13 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     else
         args[0] = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
 
+    /// Try do the same scale conversion of hop_interval and win_interval
+    convertToSameKindIntervalAST(
+        BaseScaleInterval::toBaseScale(extractInterval(args[1]->as<ASTFunction>())),
+        BaseScaleInterval::toBaseScale(extractInterval(args[2]->as<ASTFunction>())),
+        args[1],
+        args[2]);
+
     //// [timezone]
     /// Prune the empty timezone if user doesn't specify one
     if (!args.back())

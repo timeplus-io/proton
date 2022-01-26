@@ -1,6 +1,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/Streaming/StreamingEmitInterpreter.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
@@ -33,12 +34,12 @@ static bool checkLastXRule(const String & last_x_query, const String & check_que
     settings.set("max_keep_windows", max_keep_windows);
 
     bool tail = false;
-    Int64 last_interval_seconds = 0;
+    BaseScaleInterval last_interval_bs{};
 
     ParserQuery last_x_parser(last_x_query.end().base());
     ASTPtr last_x_ast = parseQuery(last_x_parser, last_x_query.begin().base(), last_x_query.end().base(), "", 0, 0);
     StreamingEmitInterpreter::handleRules(
-        last_x_ast->as<ASTSelectWithUnionQuery &>().list_of_selects->children.at(0), StreamingEmitInterpreter::LastXRule(settings, last_interval_seconds, tail));
+        last_x_ast->as<ASTSelectWithUnionQuery &>().list_of_selects->children.at(0), StreamingEmitInterpreter::LastXRule(settings, last_interval_bs, tail));
 
     ParserQuery check_parser(check_query.end().base());
     ASTPtr check_ast = parseQuery(check_parser, check_query.begin().base(), check_query.end().base(), "", 0, 0);
@@ -138,19 +139,6 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleHopWindow)
 
 TEST_F(StreamingEmitInterpreterTest, LastXRuleWindowError1)
 {
-    /// [Error] slide and hop interval scale is inconsistent
-    EXPECT_THROW(
-        checkLastXRule(
-            /* lastX query */
-            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 10 second, interval 1 minute) "
-            "group by device, window_end emit stream LAST 1m",
-            /* check query */
-            ""),
-        DB::Exception);
-}
-
-TEST_F(StreamingEmitInterpreterTest, LastXRuleWindowError2)
-{
     /// [Error] conflicts settings keep_windows
     EXPECT_THROW(
         checkLastXRule(
@@ -223,6 +211,30 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr)
             "window_end emit stream settings seek_to='-60s'"),
         true)
         << "Last-X Global Aggregation for subquery";
+}
+
+TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr2)
+{
+    /// Different interval scale
+    EXPECT_EQ(
+        checkLastXRule(
+            /* lastX query */
+            "SELECT device, avg(temperature) FROM default.devices group by device emit stream LAST 2m",
+            /* check query */
+            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 1 second, interval 120 second) group by device, "
+            "window_end emit stream settings seek_to='-120s'",
+            /* max_keep_windows */
+            120),
+        true);
+
+    ASSERT_EQ(
+        checkLastXRule(
+            /* lastX query */
+            "SELECT device, avg(temperature) FROM default.devices group by device emit stream LAST 1y and periodic 1q",
+            /* check query */
+            "SELECT device, avg(temperature) FROM hop(default.devices, now(), interval 1 quarter, interval 4 quarter) group by device, "
+            "window_end emit stream settings seek_to='-12M'"),
+        true);
 }
 
 TEST_F(StreamingEmitInterpreterTest, LastXRuleTailMode)

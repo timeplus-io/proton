@@ -58,18 +58,11 @@ namespace
         auto aggregates = getAggregates(query, select_query);
         return (!aggregates.empty());
     }
-
-    Int64 extractIntervalSeconds(const ASTFunction * func)
-    {
-        assert(func);
-        auto [interval, interval_kind] = extractInterval(func);
-        return intervalToSeconds(interval, interval_kind);
-    }
 }
 
 StreamingEmitInterpreter::LastXRule::LastXRule(
-    const Settings & settings_, Int64 & last_interval_seconds_, bool & tail_, Poco::Logger * log_)
-    : settings(settings_), last_interval_seconds(last_interval_seconds_), tail(tail_), log(log_)
+    const Settings & settings_, BaseScaleInterval & last_interval_bs_, bool & tail_, Poco::Logger * log_)
+    : settings(settings_), last_interval_bs(last_interval_bs_), tail(tail_), log(log_)
 {
 }
 
@@ -114,27 +107,32 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
     new_emit_query->last_interval.reset();
 
     auto table_func = table_expression->table_function->as<ASTFunction>();
-    /// window interval seconds
-    Int64 window_interval_seconds = 0;
+    ASTPtr interval_ast;
     if (isTableFunctionTumble(table_func))
     {
         /// tumble(table, [time_expr], win_interval, [timezone])
-        auto win_interval = checkAndExtractTumbleArguments(table_func)[2];
-        window_interval_seconds = extractIntervalSeconds(win_interval->as<ASTFunction>());
+        interval_ast = checkAndExtractTumbleArguments(table_func)[2];
     }
     else if (isTableFunctionHop(table_func))
     {
         /// hop(table, [timestamp_column], hop_interval, hop_win_interval, [timezone])
-        auto hop_interval = checkAndExtractHopArguments(table_func)[2];
-        window_interval_seconds = extractIntervalSeconds(hop_interval->as<ASTFunction>());
+        interval_ast = checkAndExtractHopArguments(table_func)[2];
     }
     else
         return false;
 
-    last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
+    auto window_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(interval_ast->as<ASTFunction>()));
+    last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
+    if (window_interval_bs.scale != last_interval_bs.scale)
+        throw Exception(
+            ErrorCodes::SYNTAX_ERROR,
+            "Cannot convert between win interval '{}' and last interval '{}'",
+            IntervalKind(window_interval_bs.src_kind).toString(),
+            IntervalKind(last_interval_bs.src_kind).toString());
 
     /// calculate settings keep_windows = ceil(last_interval / window_interval)
-    UInt64 keep_windows = (std::abs(last_interval_seconds) + std::abs(window_interval_seconds) - 1) / std::abs(window_interval_seconds);
+    UInt64 keep_windows
+        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
     if (keep_windows == 0 || keep_windows > settings.max_keep_windows)
         throw Exception(
             "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
@@ -156,7 +154,7 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
         throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
 
     /// Seek to -3600s for example
-    ast_set.changes.emplace_back("seek_to", "-" + std::to_string(last_interval_seconds) + "s");
+    ast_set.changes.emplace_back("seek_to", "-" + last_interval_bs.toString());
 
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
@@ -190,35 +188,40 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     new_emit_query->last_interval.reset();
 
     ASTPtr periodic_interval;
-    IntervalKind periodic_interval_kind = IntervalKind::Second;
-    last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
+    last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
     if (new_emit_query->periodic_interval)
     {
         /// check periodic_interval is appropriate value by settings.max_keep_windows
         periodic_interval = std::move(new_emit_query->periodic_interval);
-        auto [slide_interval, slide_interval_kind] = extractInterval(periodic_interval->as<ASTFunction>());
-        Int64 slide_interval_seconds = intervalToSeconds(slide_interval, slide_interval_kind);
-        periodic_interval_kind = slide_interval_kind;
+        auto periodic_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(periodic_interval->as<ASTFunction>()));
+        if (periodic_interval_bs.scale != last_interval_bs.scale)
+            throw Exception(
+                ErrorCodes::SYNTAX_ERROR,
+                "Cannot convert between periodic interval '{}' and last interval '{}'",
+                IntervalKind(periodic_interval_bs.src_kind).toString(),
+                IntervalKind(last_interval_bs.src_kind).toString());
 
-        UInt64 keep_windows = (std::abs(last_interval_seconds) + std::abs(slide_interval_seconds) - 1) / std::abs(slide_interval_seconds);
+        UInt64 keep_windows
+            = (std::abs(last_interval_bs.num_units) + std::abs(periodic_interval_bs.num_units) - 1) / std::abs(periodic_interval_bs.num_units);
         if (keep_windows == 0 || keep_windows > settings.max_keep_windows)
             throw Exception(
                 "Too big range or too small emit interval. Make sure 'range / emit_interval' is less or equal to "
                     + std::to_string(settings.max_keep_windows),
                 ErrorCodes::SYNTAX_ERROR);
+
+        /// To keep same scale between last interval and periodic interval.
+        convertToSameKindIntervalAST(periodic_interval_bs, last_interval_bs, periodic_interval, last_interval);
     }
     else
     {
         /// if periodic_interval is omitted, we calculate a appropriate value by settings.max_keep_windows.
-        Int64 slide_interval_seconds = last_interval_seconds / settings.max_keep_windows;
-        auto [slide_interval, slide_interval_kind] = secondsToInterval(slide_interval_seconds == 0 ? 1 : slide_interval_seconds);
-        periodic_interval = makeASTInterval(slide_interval, slide_interval_kind);
-        periodic_interval_kind = slide_interval_kind;
-    }
+        auto periodic_interval_bs = last_interval_bs / settings.max_keep_windows;
+        periodic_interval = makeASTInterval(periodic_interval_bs.num_units == 0 ? 1 : periodic_interval_bs.num_units, periodic_interval_bs.scale);
 
-    /// To keep same scale, we convert last interval to periodic interval kind.
-    auto [conv_interval, conv_interval_kind] = secondsToInterval(last_interval_seconds, periodic_interval_kind);
-    last_interval = makeASTInterval(conv_interval, conv_interval_kind);
+        /// To keep same scale between last interval and periodic interval.
+        if (last_interval_bs.scale != last_interval_bs.src_kind)
+            last_interval = makeASTInterval(last_interval_bs.num_units, last_interval_bs.scale);
+    }
 
     ASTPtr table;
     if (table_expression->database_and_table_name)
@@ -233,12 +236,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
     /// The table_expression can be table, hist(table) and subquery.
     auto table_expr = std::make_shared<ASTTableExpression>();
-    table_expr->table_function = makeASTFunction(
-        "hop",
-        table,
-        makeASTFunction("now"),
-        periodic_interval,
-        last_interval);
+    table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
     table_expr->children.emplace_back(table_expr->table_function);
     auto element = std::make_shared<ASTTablesInSelectQueryElement>();
     element->table_expression = table_expr;
@@ -264,7 +262,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
         throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
 
     /// Seek to -3600s for example
-    ast_set.changes.emplace_back("seek_to", "-" + std::to_string(last_interval_seconds) + "s");
+    ast_set.changes.emplace_back("seek_to", "-" + last_interval_bs.toString());
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
@@ -284,7 +282,7 @@ void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_que
     assert(new_emit_query);
     new_emit_query->last_interval.reset();
 
-    last_interval_seconds = extractIntervalSeconds(last_interval->as<ASTFunction>());
+    last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
 
     const auto & old_settings = select_query.settings();
     ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
@@ -294,7 +292,7 @@ void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_que
         throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
 
     /// Seek to -3600s for example
-    ast_set.changes.emplace_back("seek_to", "-" + std::to_string(last_interval_seconds) + "s");
+    ast_set.changes.emplace_back("seek_to", "-" + last_interval_bs.toString());
 
     select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(new_emit));
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));

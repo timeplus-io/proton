@@ -48,8 +48,8 @@ namespace ErrorCodes
     extern const int TYPE_MISMATCH;
 }
 
-ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, Int64 interval_seconds_, const Block & header)
-    : ISimpleTransform(header, header, false), column_name(column_name_), interval_seconds(interval_seconds_)
+ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInterval interval_bs_, const Block & header)
+    : ISimpleTransform(header, header, false), column_name(column_name_), interval_bs(interval_bs_)
 {
     const auto * column_with_type = header.findByName(column_name);
     if (!column_with_type)
@@ -89,13 +89,16 @@ void ProcessTimeFilter::transform(Chunk & chunk)
     {
         /// Call now64(scale, timezone)
         auto now_column = timestamp_col_data_type->createColumnConst(1, nowSubsecond(scale));
-        filtered_rows = filter<ColumnDateTime64>(source_columns, source_column, now_column->get64(0) - interval_seconds * multiplier);
+        auto time = now_column->get64(0);
+        Int64 interval_ago = addTime(time / multiplier, interval_bs.scale, -interval_bs.num_units, DateLUT::instance()) * multiplier + time % multiplier;
+        filtered_rows = filter<ColumnDateTime64>(source_columns, source_column, interval_ago);
     }
     else
     {
         /// Call now(timezone)
         auto now_column = timestamp_col_data_type->createColumnConst(1, static_cast<UInt64>(time(nullptr)));
-        filtered_rows = filter<ColumnDateTime32>(source_columns, source_column, now_column->get64(0) - interval_seconds);
+        Int64 interval_ago = addTime(now_column->get64(0), interval_bs.scale, -interval_bs.num_units, DateLUT::instance());
+        filtered_rows = filter<ColumnDateTime64>(source_columns, source_column, interval_ago);
     }
 
     chunk.setColumns(std::move(source_columns), rows - filtered_rows);

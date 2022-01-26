@@ -15,6 +15,10 @@
 
 #include <Columns/FilterDescription.h>
 
+/// proton: starts.
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
+/// proton: ends.
+
 namespace Poco
 {
 class Logger;
@@ -33,6 +37,7 @@ using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 /// proton: starts
 class ProxyDistributedMergeTree;
 class StorageDistributedMergeTree;
+class BaseScaleInterval;
 /// proton: ends
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
@@ -163,7 +168,7 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
-    void executeLastXTail(QueryPlan & query_plan);
+    void executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;
@@ -209,7 +214,7 @@ private:
     /// A copy of required_columns before adding the additional ones for streaming processing
     Names required_columns_after_streaming_window;
     bool last_tail = false;
-    Int64 last_interval_seconds = 0;
+    BaseScaleInterval last_interval_bs;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

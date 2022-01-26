@@ -368,7 +368,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         StreamingEmitInterpreter::handleRules(
                     /* streaming query */ query_ptr,
                     /* rules */ StreamingEmitInterpreter::checkEmitAST,
-                                StreamingEmitInterpreter::LastXRule(settings, last_interval_seconds, last_tail, log));
+                                StreamingEmitInterpreter::LastXRule(settings, last_interval_bs, last_tail, log));
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
@@ -588,7 +588,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
                         required_columns.push_back(name);
             }
 
-            if (last_tail && last_interval_seconds > 0 && isStreaming())
+            if (last_tail && last_interval_bs.num_units > 0 && isStreaming())
                 if (std::find(required_columns.begin(), required_columns.end(), RESERVED_EVENT_TIME) == required_columns.end())
                     required_columns.push_back(RESERVED_EVENT_TIME);
             /// proton: ends
@@ -1292,8 +1292,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
             if (!query_info.projection && expressions.hasWhere())
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
 
-            if (last_tail && last_interval_seconds)
-                executeLastXTail(query_plan);
+            if (last_tail && last_interval_bs.num_units > 0)
+                executeLastXTail(query_plan, last_interval_bs);
 
             if (expressions.need_aggregate)
             {
@@ -2743,12 +2743,12 @@ void InterpreterSelectQuery::initSettings()
 }
 
 /// proton: starts
-void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan)
+void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_)
 {
     if (!isStreaming())
         return;
 
-    auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_seconds, RESERVED_EVENT_TIME);
+    auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_bs_, RESERVED_EVENT_TIME);
 
     proc_filter_step->setStepDescription("ProcessTimeFilter");
     query_plan.addStep(std::move(proc_filter_step));

@@ -1645,6 +1645,7 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
         }
 
         Int64 multiplier = 0;
+        bool is_month = false, is_quarter = false, is_year = false;
         switch (seek_to.back())
         {
             case 's':
@@ -1659,6 +1660,18 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
             case 'd':
                 multiplier = 24 * 60 * 60 * 1000;
                 break;
+            case 'M':
+                multiplier = 1000;
+                is_month = true;
+                break;
+            case 'q':
+                multiplier = 1000;
+                is_quarter = true;
+                break;
+            case 'y':
+                multiplier = 1000;
+                is_year = true;
+                break;
         }
 
         Int64 utc_ms = 0;
@@ -1670,7 +1683,23 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
                 throw Exception("Relative seek time shall be negative", ErrorCodes::BAD_ARGUMENTS);
             }
 
-            utc_ms = UTCMilliseconds::now() + relative_time * multiplier;
+            if (is_month)
+            {
+                utc_ms = UTCMilliseconds::now();
+                utc_ms = DateLUT::instance("UTC").addMonths(utc_ms / multiplier, relative_time) * multiplier + (utc_ms % multiplier);
+            }
+            else if (is_quarter)
+            {
+                utc_ms = UTCMilliseconds::now();
+                utc_ms = DateLUT::instance("UTC").addQuarters(utc_ms / multiplier, relative_time) * multiplier + (utc_ms % multiplier);
+            }
+            else if (is_year)
+            {
+                utc_ms = UTCMilliseconds::now();
+                utc_ms = DateLUT::instance("UTC").addYears(utc_ms / multiplier, relative_time) * multiplier + (utc_ms % multiplier);
+            }
+            else
+                utc_ms = UTCMilliseconds::now() + relative_time * multiplier;
         }
         else
         {

@@ -16,6 +16,7 @@
 namespace DB
 {
 class ASTSelectQuery;
+class BaseScaleInterval;
 
 class StreamingEmitInterpreter final
 {
@@ -37,11 +38,11 @@ public:
     class LastXRule final
     {
     public:
-        LastXRule(const Settings & settings_, Int64 & last_interval_seconds_, bool & tail_, Poco::Logger * log_ = nullptr);
+        LastXRule(const Settings & settings_, BaseScaleInterval & last_interval_bs_, bool & tail_, Poco::Logger * log_ = nullptr);
         void operator()(ASTPtr & query);
 
         bool isTail() const { return tail; }
-        Int64 lastIntervalSeconds() const { return last_interval_seconds; }
+        const BaseScaleInterval & lastInterval() const { return last_interval_bs; }
 
     private:
         /// Last X streaming processing for window(Tumble/Hop...)
@@ -57,7 +58,7 @@ public:
 
     private:
         const Settings & settings;
-        Int64 & last_interval_seconds;
+        BaseScaleInterval & last_interval_bs;
         bool & tail;
         Poco::Logger * log;
 

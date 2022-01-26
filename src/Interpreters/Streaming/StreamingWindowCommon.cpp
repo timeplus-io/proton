@@ -9,6 +9,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+    extern const int CANNOT_CONVERT_TYPE;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
@@ -256,11 +257,6 @@ void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Ki
         throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
-void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind & kind)
-{
-    extractInterval(ast, interval, kind.kind);
-}
-
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast)
 {
     Int64 interval;
@@ -290,31 +286,43 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
     __builtin_unreachable();
 }
 
-std::pair<Int64, IntervalKind> secondsToInterval(Int64 time_sec, IntervalKind::Kind to_kind)
-{
-    Int64 num_units = time_sec / IntervalKind(to_kind).toAvgSeconds();
-    if (num_units == 0)
-        throw Exception("Failed to convert seconds to interval kind", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-    return {num_units, to_kind};
-}
-
-std::pair<Int64, IntervalKind> secondsToInterval(Int64 time_sec)
-{
-    /// auto detect to_kind
-    const auto & to_kind = IntervalKind::fromAvgSeconds(time_sec);
-    Int64 num_units = time_sec / to_kind.toAvgSeconds();
-    return {num_units, to_kind};
-}
-
-Int64 intervalToSeconds(Int64 num_units, IntervalKind::Kind kind)
-{
-    return num_units * IntervalKind(kind).toAvgSeconds();
-}
-
 ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind)
 {
     return makeASTFunction(
         kind.toNameOfFunctionToIntervalDataType(), std::make_shared<ASTLiteral>(num_units < 0 ? Int64(num_units) : UInt64(num_units)));
+}
+
+ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval)
+{
+    return makeASTInterval(interval.first, interval.second);
+}
+
+void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2)
+{
+    if (bs1.src_kind < bs2.src_kind)
+        ast2 = makeASTInterval(bs2.toIntervalKind(bs1.src_kind));
+    else if (bs1.src_kind > bs2.src_kind)
+        ast1 = makeASTInterval(bs1.toIntervalKind(bs2.src_kind));
+}
+
+std::pair<Int64, IntervalKind> BaseScaleInterval::toIntervalKind(IntervalKind::Kind to_kind) const
+{
+    if (scale == to_kind)
+        return {num_units, to_kind};
+
+    const auto & bs = toBaseScale(1, to_kind);
+    if (scale != bs.scale)
+        throw Exception(
+            ErrorCodes::CANNOT_CONVERT_TYPE,
+            "Scale conversion is not possible between '{}' and '{}'",
+            IntervalKind(src_kind).toString(),
+            IntervalKind(to_kind).toString());
+
+    return {num_units / bs.num_units, to_kind};
+}
+
+String BaseScaleInterval::toString() const
+{
+    return fmt::format("{}{}", num_units, (scale == SCALE_SECOND ? "s" : "M"));
 }
 }

@@ -24,10 +24,10 @@ namespace DB
 {
 ProcessTimeFilterStep::ProcessTimeFilterStep(
     const DataStream & input_stream_,
-    Int64 interval_seconds_,
+    BaseScaleInterval interval_bs_,
     const String & column_name_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
-    , interval_seconds(interval_seconds_)
+    , interval_bs(interval_bs_)
     , column_name(column_name_)
 {
 }
@@ -35,7 +35,7 @@ ProcessTimeFilterStep::ProcessTimeFilterStep(
 void ProcessTimeFilterStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<ProcessTimeFilter>(column_name, interval_seconds, header);
+        return std::make_shared<ProcessTimeFilter>(column_name, interval_bs, header);
     });
 }
 }

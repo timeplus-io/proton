@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
@@ -11,7 +12,7 @@ class ProcessTimeFilterStep final : public ITransformingStep
 {
 public:
     ProcessTimeFilterStep(
-        const DataStream & input_stream_, Int64 interval_seconds_, const String & column_name_);
+        const DataStream & input_stream_, BaseScaleInterval interval_bs_, const String & column_name_);
 
     ~ProcessTimeFilterStep() override = default;
 
@@ -19,7 +20,7 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    Int64 interval_seconds;
+    BaseScaleInterval interval_bs;
     String column_name;
 };
 }
