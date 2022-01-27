@@ -68,43 +68,68 @@ void prepareColumns(ASTCreateQuery & create)
     String expr;
     event_time_default.tryGet<String>(expr);
 
+    bool has_event_time = false;
+    bool has_index_time = false;
     for (const ASTPtr & column_ast : column_asts)
     {
         const auto & column = column_ast->as<ASTColumnDeclaration &>();
 
         /// Skip reserved internal columns
         if (column.name.starts_with("_tp_"))
-            throw Exception("Column " + column.name + " is reserved, should not used in create query.", ErrorCodes::ILLEGAL_COLUMN);
+        {
+            if (RESERVED_EVENT_TIME == column.name)
+            {
+                has_event_time = true;
+                auto type_name = tryGetFunctionName(column.type);
+                if (!type_name || *type_name != "DateTime64")
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.", RESERVED_EVENT_TIME, column.type->getID());
+            }
+            else if (RESERVED_INDEX_TIME == column.name)
+            {
+                has_index_time = true;
+                auto type_name = tryGetFunctionName(column.type);
+                if (!type_name || *type_name != "DateTime64")
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.", RESERVED_INDEX_TIME, column.type->getID());
+            }
+            else
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, should not used in create query.", column.name);
+        }
 
         new_columns->children.emplace_back(column_ast);
     }
 
-    auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
-    col_tp_time->name = RESERVED_EVENT_TIME;
-    col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
-    col_tp_time->default_specifier = "DEFAULT";
-    col_tp_time->default_expression = functionToAST(expr);
-    /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
-    auto func_double_delta = std::make_shared<ASTFunction>();
-    func_double_delta->name = "DoubleDelta";
-    auto func_lz4 = std::make_shared<ASTFunction>();
-    func_lz4->name = "LZ4";
-    col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
-    new_columns->children.emplace_back(col_tp_time);
+    if (!has_event_time)
+    {
+        auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
+        col_tp_time->name = RESERVED_EVENT_TIME;
+        col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+        col_tp_time->default_specifier = "DEFAULT";
+        col_tp_time->default_expression = functionToAST(expr);
+        /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
+        auto func_double_delta = std::make_shared<ASTFunction>();
+        func_double_delta->name = "DoubleDelta";
+        auto func_lz4 = std::make_shared<ASTFunction>();
+        func_lz4->name = "LZ4";
+        col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
+        new_columns->children.emplace_back(col_tp_time);
+    }
 
-    col_tp_time = std::make_shared<ASTColumnDeclaration>();
-    col_tp_time->name = RESERVED_INDEX_TIME;
-    col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
-    col_tp_time->default_specifier = "DEFAULT";
-    col_tp_time->default_expression
-        = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
-    /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
-    func_double_delta = std::make_shared<ASTFunction>();
-    func_double_delta->name = "DoubleDelta";
-    func_lz4 = std::make_shared<ASTFunction>();
-    func_lz4->name = "LZ4";
-    col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
-    new_columns->children.emplace_back(col_tp_time);
+    if (!has_index_time)
+    {
+        auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
+        col_tp_time->name = RESERVED_INDEX_TIME;
+        col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+        col_tp_time->default_specifier = "DEFAULT";
+        col_tp_time->default_expression
+            = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+        /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
+        auto func_double_delta = std::make_shared<ASTFunction>();
+        func_double_delta->name = "DoubleDelta";
+        auto func_lz4 = std::make_shared<ASTFunction>();
+        func_lz4->name = "LZ4";
+        col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
+        new_columns->children.emplace_back(col_tp_time);
+    }
 
     auto new_columns_list = std::make_shared<ASTColumns>();
     new_columns_list->set(new_columns_list->columns, new_columns);
