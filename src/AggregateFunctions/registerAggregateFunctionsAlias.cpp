@@ -6,7 +6,7 @@ void registerAggregateFunctionsAlias(AggregateFunctionFactory & factory)
 {
     /// rename JSON processing related functions
     /// 'uniqXXXX' functions
-    factory.registerAlias("unique", "uniq");
-    factory.registerAlias("uniqueExact", "uniqExact");
+    factory.registerAlias("uniq", "unique");
+    factory.registerAlias("uniqExact", "uniqueExact");
 }
 }

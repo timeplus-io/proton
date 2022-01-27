@@ -6,6 +6,6 @@ void registerFunctionsDateTimeAlias(FunctionFactory & factory)
 {
     /// rename JSON processing related functions
     /// 'parseDateTimeBestEffortXXXX' functions
-    factory.registerAlias("toTime", "parseDateTimeBestEffortUS");
+    factory.registerAlias("parseDateTimeBestEffortUS", "toTime");
 }
 }

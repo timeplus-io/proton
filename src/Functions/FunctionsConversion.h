@@ -2384,7 +2384,9 @@ using FunctionToUUIDOrNull = FunctionConvertFromString<DataTypeUUID, NameToUUIDO
 struct NameParseDateTimeBestEffort { static constexpr auto name = "parseDateTimeBestEffort"; };
 struct NameParseDateTimeBestEffortOrZero { static constexpr auto name = "parseDateTimeBestEffortOrZero"; };
 struct NameParseDateTimeBestEffortOrNull { static constexpr auto name = "parseDateTimeBestEffortOrNull"; };
-struct NameParseDateTimeBestEffortUS { static constexpr auto name = "parseDateTimeBestEffortUS"; };
+/// proton: starts
+struct NameParseDateTimeBestEffortUS { static constexpr auto name = "toTime"; };
+/// proton: ends
 struct NameParseDateTimeBestEffortUSOrZero { static constexpr auto name = "parseDateTimeBestEffortUSOrZero"; };
 struct NameParseDateTimeBestEffortUSOrNull { static constexpr auto name = "parseDateTimeBestEffortUSOrNull"; };
 struct NameParseDateTime32BestEffort { static constexpr auto name = "parseDateTime32BestEffort"; };
