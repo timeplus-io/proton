@@ -24,6 +24,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// 1) EMIT STREAM PERIODIC INTERVAL '3' SECONDS AND AFTER WATERMARK
     /// 2) EMIT STREAM AFTER WATERMARK AND DELAY INTERVAL '3' SECONDS
     /// 3) EMIT STREAM AFTER WATERMARK AND LAST <last-x>
+    /// 4) EMIT STREAM LAST 1h ON PROCTIME
     /// ...
     if (!parse_only_internals)
     {
@@ -37,6 +38,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         streaming = true;
 
     bool after_watermark = false;
+    bool proctime = false;
     ASTPtr periodic_interval;
     ASTPtr delay_interval;
     ASTPtr last_interval;
@@ -48,16 +50,19 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             /// [PERIODIC INTERVAL '3' SECONDS]
             if (periodic_interval)
-                throw Exception("Can not use repeat 'PERIODIC' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+                throw Exception("Can not use repeat 'PERIODIC' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
 
             if (!interval_alias_p.parse(pos, periodic_interval, expected))
                 return false;
         }
-        else if (ParserKeyword("AFTER WATERMARK").ignore(pos, expected))
+        else if (ParserKeyword("AFTER").ignore(pos, expected))
         {
+            if (!ParserKeyword("WATERMARK").ignore(pos, expected))
+                throw Exception("Expect 'WATERMARK' after 'AFTER' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
+
             /// [AFTER WATERMARK]
             if (after_watermark)
-                throw Exception("Can not use repeat 'AFTER WATERMARK' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+                throw Exception("Can not use repeat 'AFTER WATERMARK' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
 
             after_watermark = true;
         }
@@ -65,7 +70,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             /// [DELAY INTERVAL '3' SECONDS]
             if (delay_interval)
-                throw Exception("Can not use repeat 'DELAY' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+                throw Exception("Can not use repeat 'DELAY' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
 
             if (!interval_alias_p.parse(pos, delay_interval, expected))
                 return false;
@@ -74,16 +79,25 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             /// [LAST <last-x>]
             if (last_interval)
-                throw Exception("Can not use repeat 'LAST' in EMIT caluse", ErrorCodes::SYNTAX_ERROR);
+                throw Exception("Can not use repeat 'LAST' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
 
             if (!interval_alias_p.parse(pos, last_interval, expected))
                 return false;
+
+            if (ParserKeyword("ON").ignore(pos, expected))
+            {
+                if (ParserKeyword("PROCTIME").ignore(pos, expected))
+                    proctime = true;
+                else
+                    throw Exception("Expect 'PROCTIME' after 'ON' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
+            }
         }
     } while (ParserKeyword("AND").ignore(pos, expected));
 
     auto query = std::make_shared<ASTEmitQuery>();
     query->streaming = streaming;
     query->after_watermark = after_watermark;
+    query->proc_time = proctime;
     query->periodic_interval = periodic_interval;
     query->delay_interval = delay_interval;
     query->last_interval = last_interval;

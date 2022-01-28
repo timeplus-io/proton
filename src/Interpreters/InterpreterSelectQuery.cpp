@@ -127,19 +127,22 @@ namespace
     struct RenameFunctionForStreamingData
     {
         using TypeToVisit = ASTFunction;
-        const String src_name;
-        const String to_name;
 
-        [[maybe_unused]] RenameFunctionForStreamingData(const String src_name_, const String to_name_)
-            : src_name(std::move(src_name_)), to_name(std::move(to_name_)) {}
-
-        [[maybe_unused]] void visit(ASTFunction & func, ASTPtr)
+        void visit(ASTFunction & func, ASTPtr)
         {
-            if (func.name != src_name)
-                return;
-
-            func.name = to_name;
+            auto iter = func_map.find(func.name);
+            if (iter != func_map.end())
+                func.name = iter->second;
         }
+
+    private:
+        static std::unordered_map<String, String> func_map;
+    };
+
+    std::unordered_map<String, String> RenameFunctionForStreamingData::func_map =  {
+        {"neighbor", "__streaming_neighbor"},
+        {"now64", "__streaming_now64"},
+        {"now", "__streaming_now"},
     };
     using RenameFunctionForStreamingVisitor = InDepthNodeVisitor<OneTypeMatcher<RenameFunctionForStreamingData>, false>;
 }
@@ -469,13 +472,13 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         query_info.syntax_analyzer_result = syntax_analyzer_result;
         context->setDistributed(syntax_analyzer_result->is_remote_storage);
 
-        // /// proton: starts. Some normal (non-aggration) function specialization for streaming
-        // if (isStreaming())
-        // {
-        //     RenameFunctionForStreamingVisitor::Data func_neighbor("neighbor", "streamingNeighbor");
-        //     RenameFunctionForStreamingVisitor(func_neighbor).visit(query_ptr);
-        // }
-        // /// proton: ends.
+        /// proton: starts. Use streaming version of the functions
+        if (isStreaming())
+        {
+            RenameFunctionForStreamingVisitor::Data func_data;
+            RenameFunctionForStreamingVisitor(func_data).visit(query_ptr);
+        }
+        /// proton: ends.
 
         if (storage && !query.final() && storage->needRewriteQueryWithFinal(syntax_analyzer_result->requiredSourceColumns()))
             query.setFinal();

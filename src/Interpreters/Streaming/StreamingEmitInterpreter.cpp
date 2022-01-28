@@ -7,6 +7,7 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -25,38 +26,15 @@ namespace ErrorCodes
 
 namespace
 {
-    std::vector<const ASTFunction *> getAggregates(ASTPtr & query, const ASTSelectQuery & select_query)
+    /// Check if we have GROUP BY and / or aggregates function
+    /// We allow aggregate without group by like `SELECT count() FROM device_utils`
+    /// We also allow GROUP BY without aggregate like `SELECT device FROM device_utils GROUP BY device`
+    bool hasAggregates(const ASTPtr & query, const ASTSelectQuery & select_query)
     {
-        /// There can not be aggregate functions inside the WHERE and PREWHERE.
-        if (select_query.where())
-            assertNoAggregates(select_query.where(), "in WHERE");
-        if (select_query.prewhere())
-            assertNoAggregates(select_query.prewhere(), "in PREWHERE");
-
         GetAggregatesVisitor::Data data;
         GetAggregatesVisitor(data).visit(query);
 
-        /// There can not be other aggregate functions within the aggregate functions.
-        for (const ASTFunction * node : data.aggregates)
-        {
-            if (node->arguments)
-            {
-                for (auto & arg : node->arguments->children)
-                {
-                    assertNoAggregates(arg, "inside another aggregate function");
-                    // We also can't have window functions inside aggregate functions,
-                    // because the window functions are calculated later.
-                    assertNoWindows(arg, "inside an aggregate function");
-                }
-            }
-        }
-        return data.aggregates;
-    }
-
-    bool hasAggregates(ASTPtr & query, const ASTSelectQuery & select_query)
-    {
-        auto aggregates = getAggregates(query, select_query);
-        return (!aggregates.empty());
+        return !data.aggregates.empty() || select_query.groupBy() != nullptr;
     }
 }
 
@@ -84,6 +62,8 @@ void StreamingEmitInterpreter::LastXRule::operator()(ASTPtr & query_)
     if (!last_interval)
         return;
 
+    proc_time = emit->proc_time;
+
     /// The order of window aggr / global aggr / tail matters
     if (handleWindowAggr(*select_query))
         return;
@@ -94,7 +74,7 @@ void StreamingEmitInterpreter::LastXRule::operator()(ASTPtr & query_)
     handleTail(*select_query);
 }
 
-bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query)
+bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query) const
 {
     assert(last_interval);
     auto table_expression = getTableExpression(select_query, 0);
@@ -120,6 +100,9 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
     }
     else
         return false;
+
+    if (!proc_time)
+        addEventTimePredicate(select_query);
 
     auto window_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(interval_ast->as<ASTFunction>()));
     last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
@@ -175,10 +158,11 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     ///     table1, table2                  -> hop(table1, ...), hop(table2, ...)
     ///     subquery1, subquery2            -> hop(subquery1, ...), hop(subquery2, ...)
     ///     hist(table1), hist(table2)      -> hop(hist(table1), ...), hop(hist(table2), ...)
-    if (getTableExpressions(select_query).size() > 1)
-        Exception("No support serveral tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
+    auto table_expressions{getTableExpressions(select_query)};
+    if (table_expressions.size() > 1)
+        Exception("No support several tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
 
-    auto table_expression = getTableExpression(select_query, 0);
+    auto table_expression = table_expressions[ 0];
     if (!hasAggregates(query, select_query) || !table_expression)
         return false;
 
@@ -236,13 +220,21 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
     /// The table_expression can be table, hist(table) and subquery.
     auto table_expr = std::make_shared<ASTTableExpression>();
-    table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
+    if (proc_time)
+        table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
+    else
+        table_expr->table_function = makeASTFunction("hop", table, periodic_interval, last_interval);
+
     table_expr->children.emplace_back(table_expr->table_function);
     auto element = std::make_shared<ASTTablesInSelectQueryElement>();
     element->table_expression = table_expr;
     element->children.emplace_back(element->table_expression);
     auto new_table = std::make_shared<ASTTablesInSelectQuery>();
     new_table->children.emplace_back(element);
+
+    if (!proc_time)
+        /// We will need add `_tp_time > now64(3,'UTC') - last_interval` to WHERE
+        addEventTimePredicate(select_query);
 
     /// we add 'window_end' into groupby.
     ASTPtr new_groupby = select_query.groupBy() ? select_query.groupBy()->clone() : std::make_shared<ASTExpressionList>();
@@ -271,10 +263,14 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     return true;
 }
 
-void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query)
+void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query) const
 {
     assert(last_interval);
     assert(emit_query);
+
+    if (!proc_time)
+        /// We will need add `_tp_time > now64(3,'UTC') - last_interval` to WHERE
+        addEventTimePredicate(select_query);
 
     tail = true;
     ASTPtr new_emit = emit_query->clone();
@@ -299,6 +295,22 @@ void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_que
 
     if (log)
         LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query));
+}
+
+/// Add `_tp_time >= now64(3, 'UTC') to WHERE clause
+void StreamingEmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery & select_query) const
+{
+    auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(3), std::make_shared<ASTLiteral>("UTC"));
+    auto minus = makeASTFunction("minus", now, last_interval);
+    auto greater = makeASTFunction("greaterOrEquals", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME), minus);
+
+    auto where = select_query.where();
+    if (!where)
+        /// 1. If where clause is empty, then add `WHERE _tp_time >= now64(3, 'UTC') - 'INTERVAL 1 HOUR'
+        select_query.setExpression(ASTSelectQuery::Expression::WHERE, greater);
+    else
+        /// 2. If where clause is already there , then add `WHERE (existing predicates) AND (_tp_time >= now64(3, 'UTC'))
+        select_query.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", where, greater));
 }
 
 void StreamingEmitInterpreter::checkEmitAST(ASTPtr & query)

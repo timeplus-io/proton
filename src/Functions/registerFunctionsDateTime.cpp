@@ -73,6 +73,11 @@ void registerFunctionDateTrunc(FunctionFactory &);
 
 void registerFunctiontimezoneOffset(FunctionFactory &);
 
+/// proton: starts
+void registerFunctionStreamingNow64(FunctionFactory &);
+void registerFunctionStreamingNow(FunctionFactory &);
+/// proton: ends
+
 void registerFunctionsDateTime(FunctionFactory & factory)
 {
     registerFunctionToYear(factory);
@@ -143,6 +148,11 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionFromModifiedJulianDay(factory);
     registerFunctionDateTrunc(factory);
     registerFunctiontimezoneOffset(factory);
+
+    /// proton: starts
+    registerFunctionStreamingNow64(factory);
+    registerFunctionStreamingNow(factory);
+    /// proton: ends
 }
 
 }

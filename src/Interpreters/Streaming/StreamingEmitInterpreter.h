@@ -47,14 +47,16 @@ public:
     private:
         /// Last X streaming processing for window(Tumble/Hop...)
         /// we shall convert last_interval to settings "keep_windows = `ceil(last_interval / window_interval)`" for AST
-        bool handleWindowAggr(ASTSelectQuery & query);
+        bool handleWindowAggr(ASTSelectQuery & query) const;
 
         /// Last X streaming processing for global aggregation
         /// we shall convert global aggregation to hop table window for AST
         bool handleGlobalAggr(ASTSelectQuery & query);
 
         /// Last X streaming tail
-        void handleTail(ASTSelectQuery & query);
+        void handleTail(ASTSelectQuery & query) const;
+
+        void addEventTimePredicate(ASTSelectQuery & query) const;
 
     private:
         const Settings & settings;
@@ -65,6 +67,7 @@ public:
         ASTPtr query;
         ASTPtr emit_query;
         ASTPtr last_interval;
+        bool proc_time = false;
     };
 
     /// To check emit ast

@@ -17,6 +17,16 @@
 
 using namespace std::literals;
 
+/// proton: starts
+namespace
+{
+static const std::unordered_map<std::string, std::string> streaming_func_map = {
+    {"__streaming_neighbor", "neighbor"},
+    {"__streaming_now64", "now64"},
+    {"__streaming_now", "now"},
+};
+}
+/// proton: ends
 
 namespace DB
 {
@@ -42,6 +52,15 @@ void ASTFunction::appendColumnNameImpl(WriteBuffer & ostr) const
     }
 
     writeString(name, ostr);
+
+    /// proton: starts. rename back
+    const std::string * show_name = &name;
+    auto iter = streaming_func_map.find(name);
+    if (iter != streaming_func_map.end())
+        show_name = &iter->second;
+
+    writeString(*show_name, ostr);
+    /// proton: ends
 
     if (parameters)
     {

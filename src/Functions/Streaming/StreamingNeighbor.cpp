@@ -21,7 +21,7 @@ namespace ErrorCodes
 
 namespace
 {
-    static const auto * STREAMING_NEIGHBOR = "streamingNeighbor";
+    static constexpr auto * STREAMING_NEIGHBOR = "neighbor";
 
     /// Cache prev-columns + current-column
     class ColumnsCache final
@@ -236,17 +236,19 @@ namespace
         }
     };
 
-    class StreamingNeighborOverloadResolver : public IFunctionOverloadResolver
+    class NeighborOverloadResolver : public IFunctionOverloadResolver
     {
     public:
+        static constexpr auto * name = "__streaming_neighbor";
+
         static FunctionOverloadResolverPtr create(ContextPtr context)
         {
-            return std::make_unique<StreamingNeighborOverloadResolver>(context);
+            return std::make_unique<NeighborOverloadResolver>(context);
         }
 
-        explicit StreamingNeighborOverloadResolver(ContextPtr context_) : context(context_) { }
+        explicit NeighborOverloadResolver(ContextPtr context_) : context(context_) { }
 
-        String getName() const override { return STREAMING_NEIGHBOR; }
+        String getName() const override { return name; }
         size_t getNumberOfArguments() const override { return 0; }
         bool isVariadic() const override { return true; }
 
@@ -275,7 +277,7 @@ namespace
 
 void registerFunctionStreamingNeighbor(FunctionFactory & factory)
 {
-    factory.registerFunction<StreamingNeighborOverloadResolver>(STREAMING_NEIGHBOR);
+    factory.registerFunction<NeighborOverloadResolver>(FunctionFactory::CaseSensitive);
 }
 
 }
