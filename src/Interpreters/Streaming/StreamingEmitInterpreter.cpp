@@ -114,14 +114,14 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
             IntervalKind(last_interval_bs.src_kind).toString());
 
     /// calculate settings keep_windows = ceil(last_interval / window_interval)
-    UInt64 keep_windows
-        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
-    if (keep_windows == 0 || keep_windows > settings.max_keep_windows)
-        throw Exception(
-            "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
-            "than or equal to "
-                + std::to_string(settings.max_keep_windows),
-            ErrorCodes::SYNTAX_ERROR);
+//    UInt64 keep_windows
+//        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
+//    if (keep_windows == 0 || keep_windows > settings.max_keep_windows)
+//        throw Exception(
+//            "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
+//            "than or equal to "
+//                + std::to_string(settings.max_keep_windows),
+//            ErrorCodes::SYNTAX_ERROR);
 
     const auto & old_settings = select_query.settings();
     ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
@@ -131,7 +131,7 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
         throw Exception("The `emit last` policy conflicts with the existing 'keep_windows' setting", ErrorCodes::SYNTAX_ERROR);
 
     ast_set.is_standalone = false;
-    ast_set.changes.emplace_back("keep_windows", keep_windows);
+//    ast_set.changes.emplace_back("keep_windows", keep_windows);
 
     if (ast_set.changes.tryGet("seek_to"))
         throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
