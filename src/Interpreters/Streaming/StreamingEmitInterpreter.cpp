@@ -220,10 +220,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
     /// The table_expression can be table, hist(table) and subquery.
     auto table_expr = std::make_shared<ASTTableExpression>();
-    if (proc_time)
-        table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
-    else
-        table_expr->table_function = makeASTFunction("hop", table, periodic_interval, last_interval);
+    table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
 
     table_expr->children.emplace_back(table_expr->table_function);
     auto element = std::make_shared<ASTTablesInSelectQueryElement>();
@@ -232,9 +229,9 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     auto new_table = std::make_shared<ASTTablesInSelectQuery>();
     new_table->children.emplace_back(element);
 
-    if (!proc_time)
-        /// We will need add `_tp_time > now64(3,'UTC') - last_interval` to WHERE
-        addEventTimePredicate(select_query);
+    /// We will need add `_tp_time > now64(3,'UTC') - last_interval` to WHERE
+    /// Global window is always translated to hop proctime processing with event time filtering
+    addEventTimePredicate(select_query);
 
     /// we add 'window_end' into groupby.
     ASTPtr new_groupby = select_query.groupBy() ? select_query.groupBy()->clone() : std::make_shared<ASTExpressionList>();
