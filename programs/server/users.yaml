@@ -104,6 +104,11 @@ users:
         networks:
             ip: '::/0'
 
+    neutron:
+        password: 'neutron@t+'
+        networks:
+            ip: '::/0'
+
 # Quotas.
 quotas:
     # Name of quota.

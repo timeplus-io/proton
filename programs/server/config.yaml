@@ -459,6 +459,9 @@ default_profile: default
 # Default database.
 default_database: default
 
+# Neutron database
+neutron_database: neutron
+
 # Server time zone could be set here.
 
 # Time zone is used when converting between String and DateTime types,

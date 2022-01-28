@@ -801,6 +801,10 @@ if (ThreadFuzzer::instance().isEffective())
     std::string path_str = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
     fs::path path = path_str;
     std::string default_database = config().getString("default_database", "default");
+    /// proton: starts
+    std::string neutron_database = config().getString("neutron_database", "neutron");
+    std::vector<std::string> builtin_databases{default_database, neutron_database};
+    /// proton: ends
 
     /// Check that the process user id matches the owner of the data.
     const auto effective_user_id = geteuid();
@@ -1339,7 +1343,7 @@ if (ThreadFuzzer::instance().isEffective())
         /// and so loadMarkedAsDroppedTables() will find it and try to add, and UUID will overlap.
         database_catalog.loadMarkedAsDroppedTables();
         /// Then, load remaining databases
-        loadMetadata(global_context, default_database);
+        loadMetadata(global_context, builtin_databases);
         startupSystemTables();
         database_catalog.loadDatabases();
         /// After loading validate that default database exists

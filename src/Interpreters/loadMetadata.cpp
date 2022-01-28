@@ -96,7 +96,7 @@ static void loadDatabase(
 }
 
 
-void loadMetadata(ContextMutablePtr context, const String & default_database_name)
+void loadMetadata(ContextMutablePtr context, const std::vector<String> & builtin_databases)
 {
     Poco::Logger * log = &Poco::Logger::get("loadMetadata");
 
@@ -159,10 +159,15 @@ void loadMetadata(ContextMutablePtr context, const String & default_database_nam
 
     /// clickhouse-local creates DatabaseMemory as default database by itself
     /// For clickhouse-server we need create default database
-    bool create_default_db_if_not_exists = !default_database_name.empty();
-    bool metadata_dir_for_default_db_already_exists = databases.count(default_database_name);
-    if (create_default_db_if_not_exists && !metadata_dir_for_default_db_already_exists)
-        databases.emplace(default_database_name, std::filesystem::path(path) / escapeForFileName(default_database_name));
+    /// proton: starts
+    for (const auto & builtin_db : builtin_databases)
+    {
+        bool create_default_db_if_not_exists = !builtin_db.empty();
+        bool metadata_dir_for_default_db_already_exists = databases.count(builtin_db);
+        if (create_default_db_if_not_exists && !metadata_dir_for_default_db_already_exists)
+            databases.emplace(builtin_db, std::filesystem::path(path) / escapeForFileName(builtin_db));
+    }
+    /// proton: ends
 
     TablesLoader::Databases loaded_databases;
     for (const auto & [name, db_path] : databases)
