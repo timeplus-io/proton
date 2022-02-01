@@ -1,7 +1,7 @@
 #include "DistributedMergeTreeSink.h"
 #include "StorageDistributedMergeTree.h"
 
-#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWALClient/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <base/ClockUtils.h>

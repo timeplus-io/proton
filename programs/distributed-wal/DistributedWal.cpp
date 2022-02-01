@@ -6,11 +6,11 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/KafkaWALConsumer.h>
-#include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
-#include <DistributedWriteAheadLog/KafkaWALContext.h>
-#include <DistributedWriteAheadLog/KafkaWALSettings.h>
+#include <DistributedWALClient/KafkaWAL.h>
+#include <DistributedWALClient/KafkaWALConsumer.h>
+#include <DistributedWALClient/KafkaWALConsumerMultiplexer.h>
+#include <DistributedWALClient/KafkaWALContext.h>
+#include <DistributedWALClient/KafkaWALSettings.h>
 #include <Common/ProtonCommon.h>
 #include <Common/TerminalSize.h>
 #include <Common/ThreadPool.h>

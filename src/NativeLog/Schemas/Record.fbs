@@ -1,0 +1,46 @@
+namespace nlog;
+
+table RecordHeader {
+    key: string;
+    value: [byte];
+}
+
+table Record {
+    /// event timestamp
+    timestamp: int64;
+    /// base_offset + offset_delta is the real offset of this record
+    offset_delta: uint16;
+    key: [byte];
+    value: [byte];
+    headers: [RecordHeader];
+}
+
+/// NativeLog clients always ingest data in RecordBatch and prefixed with a 64bit integer
+/// called RecordBatchPrefix which contains some special flags and the length of the RecordBatch
+/// NativeLog server validates the prefix and also read the payload according to the length
+/// [64bits-prefix][RecordBatch]
+table RecordBatch {
+    /// When server receives a RecordBatch, it first needs validate the CRC
+    /// and then setup timestamps etc fields, and re-calculates the CRC before persisting
+    /// it to storage
+    crc: uint32;
+    /// 64bit flags has the following layout
+    /// [0-3bits][4-54bits][55-62bits][63bit    ]
+    ///    |         |          |         |
+    /// [version][reserved][magic=159][tombstone]
+    /// The magic number is high 8 bits which is a sum of letter `t` (0x74) + letter `+` (0x2B)
+    flags: uint64;
+    base_offset: int64;
+    shard_leader_epoch: int32;
+    /// Also serves as LastSequenceDelta
+    last_offset_delta: int32;
+    append_timestamp: int64;
+    first_timestamp: int64;
+    max_timestamp: int64;
+    producer_id: int64;
+    producer_epoch: int16;
+    base_sequence: int32;
+    records: [Record];
+}
+
+root_type RecordBatch;

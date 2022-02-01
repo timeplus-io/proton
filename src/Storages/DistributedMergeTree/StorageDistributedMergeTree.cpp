@@ -5,8 +5,8 @@
 #include "StreamingStoreSource.h"
 
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedWriteAheadLog/KafkaWALCommon.h>
-#include <DistributedWriteAheadLog/KafkaWALPool.h>
+#include <DistributedWALClient/KafkaWALCommon.h>
+#include <DistributedWALClient/KafkaWALPool.h>
 #include <Functions/IFunction.h>
 #include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>

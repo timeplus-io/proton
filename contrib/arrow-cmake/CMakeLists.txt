@@ -379,7 +379,7 @@ target_include_directories(_arrow SYSTEM PRIVATE ${ORC_SOURCE_WRAP_DIR})
 target_include_directories(_arrow SYSTEM PRIVATE ${ORC_BUILD_SRC_DIR})
 target_include_directories(_arrow SYSTEM PRIVATE ${ORC_ADDITION_SOURCE_DIR})
 target_include_directories(_arrow SYSTEM PRIVATE ${ARROW_SRC_DIR})
-target_include_directories(_arrow SYSTEM PRIVATE ${FLATBUFFERS_INCLUDE_DIR})
+target_include_directories(_arrow SYSTEM PUBLIC ${FLATBUFFERS_INCLUDE_DIR}) # proton: starts/ends, expose flatbuffers include as system public
 target_include_directories(_arrow SYSTEM PRIVATE ${HDFS_INCLUDE_DIR})
 
 # === parquet

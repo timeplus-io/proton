@@ -7,8 +7,8 @@
 #include <base/shared_ptr_helper.h>
 #include <base/ClockUtils.h>
 
-#include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/KafkaWALConsumerMultiplexer.h>
+#include <DistributedWALClient/KafkaWAL.h>
+#include <DistributedWALClient/KafkaWALConsumerMultiplexer.h>
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>

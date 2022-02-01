@@ -72,7 +72,6 @@ add_subdirectory (Compression)
 add_subdirectory (Server)
 add_subdirectory (Coordination)
 
-
 set(dbms_headers)
 set(dbms_sources)
 
@@ -89,7 +88,7 @@ endif()
 
 if (TARGET ch_contrib::rdkafka)
     add_headers_and_sources(dbms Storages/Kafka)
-    add_headers_and_sources(dbms DistributedWriteAheadLog)
+    add_headers_and_sources(dbms DistributedWALClient)
 endif()
 
 if (TARGET ch_contrib::amqp_cpp)
@@ -192,6 +191,10 @@ add_subdirectory(Access/Common)
 add_subdirectory(Common/ZooKeeper)
 add_subdirectory(Common/Config)
 
+# proton: starts
+add_subdirectory (NativeLog)
+# proton: ends
+
 set (all_modules)
 macro(add_object_library name common_path)
     if (USE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
@@ -207,6 +210,7 @@ macro(add_object_library name common_path)
         endif()
     endif ()
 endmacro()
+
 
 add_object_library(clickhouse_access Access)
 add_object_library(clickhouse_backups Backups)
@@ -270,8 +274,9 @@ add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPla
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
 
 if(USE_RDKAFKA)
-    add_object_library(clickhouse_distributed_write_ahead_log DistributedWriteAheadLog)
+    add_object_library(clickhouse_distributed_write_ahead_log DistributedWALClient)
 endif ()
+
 # proton: end
 
 set (DBMS_COMMON_LIBRARIES)
@@ -386,6 +391,16 @@ if (TARGET ch_contrib::nuraft)
     dbms_target_link_libraries(PUBLIC ch_contrib::nuraft)
 endif()
 
+# proton: starts
+if (USE_LIBURING)
+    dbms_target_link_libraries(PRIVATE ${LIBURING_LIBRARY})
+endif()
+# proton: ends
+
+if(RE2_INCLUDE_DIR)
+    target_include_directories(clickhouse_common_io SYSTEM BEFORE PUBLIC ${RE2_INCLUDE_DIR})
+endif()
+
 dbms_target_link_libraries (
     PRIVATE
         boost::filesystem
@@ -402,6 +417,7 @@ dbms_target_link_libraries (
     PUBLIC
         boost::system
         clickhouse_common_io
+        nlog
 )
 
 if (TARGET ch::mysqlxx)

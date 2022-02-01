@@ -3,7 +3,7 @@
 #include "IngestMode.h"
 
 #include <Processors/Sinks/SinkToStorage.h>
-#include <DistributedWriteAheadLog/Results.h>
+#include <DistributedWALClient/Results.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 

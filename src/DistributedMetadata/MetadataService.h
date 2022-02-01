@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DistributedWriteAheadLog/KafkaWAL.h>
+#include <DistributedWALClient/KafkaWAL.h>
 #include <Common/ThreadPool.h>
 
 #include <boost/noncopyable.hpp>

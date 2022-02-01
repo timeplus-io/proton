@@ -1,7 +1,7 @@
 #include "StreamingBlockReader.h"
 
-#include <DistributedWriteAheadLog/KafkaWALCommon.h>
-#include <DistributedWriteAheadLog/KafkaWALSimpleConsumer.h>
+#include <DistributedWALClient/KafkaWALCommon.h>
+#include <DistributedWALClient/KafkaWALSimpleConsumer.h>
 #include <Interpreters/StorageID.h>
 #include <base/logger_useful.h>
 

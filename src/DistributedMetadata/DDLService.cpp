@@ -6,8 +6,8 @@
 #include "sendRequest.h"
 
 #include <Core/Block.h>
-#include <DistributedWriteAheadLog/KafkaWAL.h>
-#include <DistributedWriteAheadLog/KafkaWALCommon.h>
+#include <DistributedWALClient/KafkaWAL.h>
+#include <DistributedWALClient/KafkaWALCommon.h>
 #include <Interpreters/Context.h>
 #include <Common/escapeForFileName.h>
 

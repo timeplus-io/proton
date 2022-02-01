@@ -14,28 +14,36 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INVALID_SETTING_VALUE;
+    extern const int INVALID_INTEGER_STRING;
+}
+
+template <typename Str, typename Integer>
+Integer parseIntStrict(const Str & s, String::size_type lpos, String::size_type rpos)
+{
+    if (rpos <= lpos || rpos > s.size())
+        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_INTEGER_STRING);
+
+    Integer n = 0;
+    /// Note for string_view, indexing beyond the very end throws exception
+    auto [p, ec] = std::from_chars(&s[lpos], &s[rpos], n);
+    if (ec != std::errc())
+        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_INTEGER_STRING);
+    else if (p != &s[rpos])
+        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_INTEGER_STRING);
+
+    return n;
 }
 
 template <typename Integer>
-Integer parseIntStrict(const String & s, String::size_type lpos, String::size_type rpos)
+Integer parseIntStrict(const std::string & s, String::size_type lpos, String::size_type rpos)
 {
-    if (rpos <= lpos || rpos > s.size())
-    {
-        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_SETTING_VALUE);
-    }
+    return parseIntStrict<std::string, Integer>(s, lpos, rpos);
+}
 
-    Integer n = 0;
-    auto [p, ec] = std::from_chars(&s[lpos], &s[rpos], n);
-    if (ec != std::errc())
-    {
-        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_SETTING_VALUE);
-    }
-    else if (p != &s[rpos])
-    {
-        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_SETTING_VALUE);
-    }
-    return n;
+template <typename Integer>
+Integer parseIntStrict(const std::string_view & s, String::size_type lpos, String::size_type rpos)
+{
+    return parseIntStrict<std::string_view, Integer>(s, lpos, rpos);
 }
 }
 

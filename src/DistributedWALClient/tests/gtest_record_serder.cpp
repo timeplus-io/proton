@@ -4,9 +4,9 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DistributedWriteAheadLog/ByteVector.h>
-#include <DistributedWriteAheadLog/OpCodes.h>
-#include <DistributedWriteAheadLog/Record.h>
+#include <DistributedWALClient/ByteVector.h>
+#include <DistributedWALClient/OpCodes.h>
+#include <DistributedWALClient/Record.h>
 
 #include <gtest/gtest.h>
 

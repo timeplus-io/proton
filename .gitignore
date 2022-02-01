@@ -156,4 +156,7 @@ website/package-lock.json
 
 /src/meta/
 /src/meta1/
-tests/stream/.status
+/src/snapshots/
+/src/snapshots1/
+/tests/stream/.status
+.gdb_history

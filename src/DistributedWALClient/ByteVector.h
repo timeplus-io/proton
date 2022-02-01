@@ -9,6 +9,9 @@
 
 namespace DWAL
 {
+/// A simple byte vector implementation by using `malloc` instead of `new` since we like it
+/// to inter-operate across C/C++
+/// FIXME: make the allocator customizable
 class ByteVector final : public boost::noncopyable
 {
 public:
@@ -50,7 +53,8 @@ public:
 
     size_t size() const { return siz; }
 
-    /// release the ownership of the underlying memory
+    /// Release the ownership of the underlying memory
+    /// Caller is responsible to deallocate the released memory after this call
     uint8_t * release()
     {
         siz = 0;

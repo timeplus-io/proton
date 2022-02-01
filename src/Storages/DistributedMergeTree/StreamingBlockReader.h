@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DistributedWriteAheadLog/KafkaWALContext.h>
-#include <DistributedWriteAheadLog/KafkaWALSimpleConsumer.h>
+#include <DistributedWALClient/KafkaWALContext.h>
+#include <DistributedWALClient/KafkaWALSimpleConsumer.h>
 #include <Interpreters/Context_fwd.h>
 
 namespace Poco

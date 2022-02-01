@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include <DistributedWriteAheadLog/KafkaWALSimpleConsumer.h>
+#include <DistributedWALClient/KafkaWALSimpleConsumer.h>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Storages/StorageInMemoryMetadata.h>

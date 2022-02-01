@@ -94,7 +94,7 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
-#include <DistributedWriteAheadLog/KafkaWALPool.h>
+#include <DistributedWALClient/KafkaWALPool.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
 /// proton: ends
 

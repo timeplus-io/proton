@@ -1,6 +1,6 @@
 #include "MetadataService.h"
 
-#include <DistributedWriteAheadLog/KafkaWALPool.h>
+#include <DistributedWALClient/KafkaWALPool.h>
 #include <Interpreters/Context.h>
 #include <Common/setThreadName.h>
 #include <base/getFQDNOrHostName.h>

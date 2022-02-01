@@ -3,7 +3,7 @@
 #include "Context_fwd.h"
 
 #include <Core/Block.h>
-#include <DistributedWriteAheadLog/OpCodes.h>
+#include <DistributedWALClient/OpCodes.h>
 
 namespace DB
 {

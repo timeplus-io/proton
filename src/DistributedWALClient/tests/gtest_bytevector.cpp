@@ -1,4 +1,4 @@
-#include <DistributedWriteAheadLog/ByteVector.h>
+#include <DistributedWALClient/ByteVector.h>
 
 #include <gtest/gtest.h>
 
