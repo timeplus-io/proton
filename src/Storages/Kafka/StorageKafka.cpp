@@ -39,6 +39,15 @@
 #include <base/getFQDNOrHostName.h>
 #include <base/logger_useful.h>
 
+/// proton: starts.
+#include <Storages/DistributedMergeTree/StreamingKafkaSource.h>
+#include <Storages/SelectQueryInfo.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+/// proton: ends.
+
 
 namespace DB
 {
@@ -263,7 +272,9 @@ String StorageKafka::getDefaultClientId(const StorageID & table_id_)
 Pipe StorageKafka::read(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
-    SelectQueryInfo & /* query_info */,
+    /// proton: starts.
+    SelectQueryInfo & query_info,
+    /// proton: ends.
     ContextPtr local_context,
     QueryProcessingStage::Enum /* processed_stage */,
     size_t /* max_block_size */,
@@ -290,13 +301,42 @@ Pipe StorageKafka::read(
         /// Use block size of 1, otherwise LIMIT won't work properly as it will buffer excess messages in the last block
         /// TODO: probably that leads to awful performance.
         /// FIXME: seems that doesn't help with extra reading and committing unprocessed messages.
-        pipes.emplace_back(std::make_shared<KafkaSource>(*this, metadata_snapshot, modified_context, column_names, log, 1, kafka_settings->kafka_commit_on_select));
+        pipes.emplace_back(std::make_shared<KafkaSource>(*this, metadata_snapshot, modified_context, column_names, log, 1, ));
+
+        /// proton: starts.
+        if (query_info.syntax_analyzer_result->streaming)
+            pipes.emplace_back(std::make_shared<StreamingKafkaSource>(*this, metadata_snapshot, modified_context, column_names, log, 1));
+        else
+            pipes.emplace_back(std::make_shared<KafkaSource>(*this, metadata_snapshot, modified_context, column_names, log, 1, kafka_settings->kafka_commit_on_select));
+        /// proton: ends.
     }
 
     LOG_DEBUG(log, "Starting reading {} streams", pipes.size());
     return Pipe::unitePipes(std::move(pipes));
 }
 
+/// proton: starts.
+void StorageKafka:: read(
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr local_context,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    unsigned num_streams)
+{
+    Pipe pipe = read(column_names,
+                    metadata_snapshot,
+                    query_info,
+                    local_context,
+                    processed_stage,
+                    max_block_size,
+                    num_streams);
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
+    query_plan.addStep(std::move(read_step));
+}
+/// proton: ends.
 
 SinkToStoragePtr StorageKafka::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
@@ -447,6 +487,39 @@ ConsumerBufferPtr StorageKafka::createReadBuffer(const size_t consumer_number)
     }
     return std::make_shared<ReadBufferFromKafkaConsumer>(consumer, log, getPollMaxBatchSize(), getPollTimeoutMillisecond(), intermediate_commit, tasks.back()->stream_cancelled, topics);
 }
+
+/// proton: starts.
+ConsumerBufferPtr StorageKafka::createStreamingReadBuffer(const String & group_id)
+{
+    cppkafka::Configuration conf;
+
+    conf.set("metadata.broker.list", brokers);
+    conf.set("group.id", group_id);
+    conf.set("client.id", client_id);
+    conf.set("client.software.name", VERSION_NAME);
+    conf.set("client.software.version", VERSION_DESCRIBE);
+    conf.set("auto.offset.reset", "latest");     // If no offset stored for this group, read all messages from the start
+
+    // that allows to prevent fast draining of the librdkafka queue
+    // during building of single insert block. Improves performance
+    // significantly, but may lead to bigger memory consumption.
+    size_t default_queued_min_messages = 100000; // we don't want to decrease the default
+    conf.set("queued.min.messages", std::max(getMaxBlockSize(),default_queued_min_messages));
+
+    updateConfiguration(conf);
+
+    // those settings should not be changed by users.
+    conf.set("enable.auto.commit", "false");       // We manually commit offsets after a stream successfully finished
+    conf.set("enable.auto.offset.store", "false"); // Update offset automatically - to commit them all at once.
+    conf.set("enable.partition.eof", "false");     // Ignore EOF messages
+
+    // Create a consumer and subscribe to topics
+    auto consumer = std::make_shared<cppkafka::Consumer>(conf);
+    consumer->set_destroy_flags(RD_KAFKA_DESTROY_F_NO_CONSUMER_CLOSE);
+
+    return std::make_shared<ReadBufferFromKafkaConsumer>(consumer, log, getPollMaxBatchSize(), getPollTimeoutMillisecond(), intermediate_commit, tasks.back()->stream_cancelled, topics);
+}
+/// proton: ends.
 
 size_t StorageKafka::getMaxBlockSize() const
 {

@@ -213,6 +213,10 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDomainSimpleAggregateFunction(*this);
     registerDataTypeDomainGeo(*this);
     registerDataTypeMap(*this);
+
+    /// proton: starts.
+    registerDataTypeJson(*this);
+    /// proton: ends.
 }
 
 DataTypeFactory & DataTypeFactory::instance()

@@ -50,6 +50,10 @@
 #include <Common/ProtonCommon.h>
 /// proton: ends.
 
+/// proton: remove
+#include <Storages/Kafka/StorageKafka.h>
+/// proton: remove
+
 namespace DB
 {
 
@@ -1140,6 +1144,8 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         else if (const auto * distributed = storage->as<StorageDistributedMergeTree>())
             streaming = true;
         else if (const auto * streaming_view = storage->as<StorageStreamingView>())
+            streaming = true;
+        else if (const auto * streaming_kafka = storage->as<StorageKafka>())
             streaming = true;
     }
 

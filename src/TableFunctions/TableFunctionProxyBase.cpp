@@ -164,8 +164,8 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         }
         else
         {
-            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "StreamingView")
-                throw Exception("Storage engine is not DistributedMergeTree or StreamingView", ErrorCodes::BAD_ARGUMENTS);
+            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "StreamingView" && storage->getName() != "Kafka")
+                throw Exception("Storage engine is not DistributedMergeTree or StreamingView or Kafka", ErrorCodes::BAD_ARGUMENTS);
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
             columns = underlying_storage_metadata_snapshot->getColumns();
         }

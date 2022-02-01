@@ -69,6 +69,8 @@ public:
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }
 
+    bool supportsSubcolumns() const override { return storage && storage->supportsSubcolumns(); }
+
 private:
     ProxyDistributedMergeTree(
         const StorageID & id_,

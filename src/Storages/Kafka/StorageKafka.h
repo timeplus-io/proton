@@ -50,6 +50,18 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    /// proton: starts.
+    void read(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & /*metadata_snapshot*/,
+        SelectQueryInfo & query_info,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams) override;
+    /// proton: ends.
+
     SinkToStoragePtr write(
         const ASTPtr & query,
         const StorageMetadataPtr & /*metadata_snapshot*/,
@@ -58,6 +70,11 @@ public:
     void pushReadBuffer(ConsumerBufferPtr buf);
     ConsumerBufferPtr popReadBuffer();
     ConsumerBufferPtr popReadBuffer(std::chrono::milliseconds timeout);
+
+    /// proton: starts.
+    ConsumerBufferPtr createStreamingReadBuffer(const String & group_id);
+    bool supportsSubcolumns() const override { return true; }
+    /// proton: ends.
 
     ProducerBufferPtr createWriteBuffer(const Block & header);
 

@@ -8,6 +8,7 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages//Kafka/StorageKafka.h>
 #include <Storages/StorageView.h>
 #include <Storages/StreamingView/StorageStreamingView.h>
 #include <Common/ProtonCommon.h>
@@ -86,7 +87,7 @@ Pipe ProxyDistributedMergeTree::read(
 void ProxyDistributedMergeTree::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & /* metadata_snapshot */,
+    const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -130,12 +131,21 @@ void ProxyDistributedMergeTree::read(
             processed_stage,
             max_block_size,
             num_streams);
-
-    if (auto * streaming_view = storage->as<StorageStreamingView>())
+    else if (auto * streaming_view = storage->as<StorageStreamingView>())
         return streaming_view->read(
             query_plan,
             updated_column_names,
             underlying_storage_metadata_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            num_streams);
+    else if (auto * kafka = storage->as<StorageKafka>())
+        return kafka->read(
+            query_plan,
+            column_names,
+            metadata_snapshot,
             query_info,
             context_,
             processed_stage,

@@ -10,7 +10,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@feature/issue-102-setup-ci-pipeline
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: c5.12xlarge
+      ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-045a86d6d301ab637
       submodules: 'true'
       command: |

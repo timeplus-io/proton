@@ -45,11 +45,20 @@ JSONEachRowRowInputFormat::JSONEachRowRowInputFormat(
         name_map[column_name] = i;        /// NOTE You could place names more cache-locally.
         if (format_settings_.import_nested_json)
         {
-            const auto split = Nested::splitName(column_name);
-            if (!split.second.empty())
+            /// proton: starts.
+            auto split = Nested::splitName(column_name);
+            size_t table_name_size = 0;
+            while (!split.second.empty())
             {
-                const StringRef table_name(column_name.data(), split.first.size());
+                if (table_name_size != 0)
+                {
+                    table_name_size++;
+                }
+                table_name_size += split.first.size();
+                StringRef table_name(column_name.data(), table_name_size);
                 name_map[table_name] = NESTED_FIELD;
+                split = Nested::splitName(split.second);
+            /// proton: ends.
             }
         }
     }

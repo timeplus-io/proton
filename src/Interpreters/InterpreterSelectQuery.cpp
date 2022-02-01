@@ -98,6 +98,9 @@
 #include <base/scope_guard_safe.h>
 #include <memory>
 
+/// proton: remove
+#include <Storages/Kafka/StorageKafka.h>
+/// proton: remove
 
 namespace DB
 {
@@ -2148,6 +2151,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         else if (auto * distributed = storage->as<StorageDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan);
         else if (auto * streaming_view = storage->as<StorageStreamingView>())
+            buildStreamingProcessingQueryPlan(query_plan);
+        else if (auto * streaming_kafka = storage->as<StorageKafka>())
             buildStreamingProcessingQueryPlan(query_plan);
         /// proton: ends
     }

@@ -89,4 +89,8 @@ void registerDataTypeDomainBool(DataTypeFactory & factory);
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory);
 void registerDataTypeDomainGeo(DataTypeFactory & factory);
 
+/// proton: starts.
+void registerDataTypeJson(DataTypeFactory & factory);
+/// proton: ends.
+
 }
