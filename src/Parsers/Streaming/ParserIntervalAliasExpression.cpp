@@ -61,7 +61,7 @@ bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected
     }
 
     auto expr = negative ? std::make_shared<ASTLiteral>(Int64(-x)) : std::make_shared<ASTLiteral>(UInt64(x));
-    expr->begin = pos;
+    expr->begin = pos_begin;
     expr->end = ++pos;
 
     /// The function corresponding to the operator
