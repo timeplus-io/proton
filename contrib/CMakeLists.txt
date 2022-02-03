@@ -147,9 +147,9 @@ endif()
 add_contrib (sqlite-cmake sqlite-amalgamation)
 add_contrib (s2geometry-cmake s2geometry)
 
-if (USE_LIBURING)
-    add_subdirectory(liburing-cmake)
-endif()
+# proton: starts
+add_contrib (liburing-cmake liburing)
+# proton: ends
 
 # Put all targets defined here and in subdirectories under "contrib/<immediate-subdir>" folders in GUI-based IDEs.
 # Some of third-party projects may override CMAKE_FOLDER or FOLDER property of their targets, so they would not appear

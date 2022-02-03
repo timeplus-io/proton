@@ -1,3 +1,10 @@
+option (ENABLE_URING "Enable uring" ${ENABLE_LIBRARIES})
+
+if (NOT ENABLE_URING)
+    message(STATUS "Not using liburing")
+    return()
+endif()
+
 SET(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/liburing")
 INCLUDE_DIRECTORIES(BEFORE ${LIBRARY_DIR} "${LIBRARY_DIR}/src/include")
 
@@ -19,8 +26,9 @@ set (SRCS
     "${LIBRARY_DIR}/src/setup.c"
     "${LIBRARY_DIR}/src/lib.h")
 
-add_library(${LIBURING_LIBRARY} ${SRCS})
+add_library(_uring ${SRCS})
+add_library(ch_contrib::uring ALIAS _uring)
 
-target_include_directories(${LIBURING_LIBRARY}
+target_include_directories(_uring
     PUBLIC
         "${LIBRARY_DIR}/src/include")

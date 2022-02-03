@@ -193,7 +193,10 @@ add_subdirectory(Common/ZooKeeper)
 add_subdirectory(Common/Config)
 
 # proton: starts
-add_subdirectory (NativeLog)
+option(ENABLE_NATIVE_LOG "Enable NativeLog" ON)
+if (ENABLE_NATIVE_LOG)
+    add_subdirectory (NativeLog)
+endif()
 # proton: ends
 
 set (all_modules)
@@ -272,7 +275,7 @@ endif()
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
 
-if(USE_RDKAFKA)
+if (TARGET ch_contrib::rdkafka)
     add_object_library(clickhouse_distributed_write_ahead_log DistributedWALClient)
 endif ()
 
@@ -391,7 +394,7 @@ if (TARGET ch_contrib::nuraft)
 endif()
 
 # proton: starts
-if (USE_LIBURING)
+if (TARGET ch_contrib::liburing)
     dbms_target_link_libraries(PRIVATE ${LIBURING_LIBRARY})
 endif()
 # proton: ends
@@ -411,8 +414,14 @@ dbms_target_link_libraries (
     PUBLIC
         boost::system
         clickhouse_common_io
-        nlog
 )
+
+if (ENABLE_NATIVE_LOG)
+    dbms_target_link_libraries (
+       PUBLIC
+            nlog
+    )
+endif()
 
 if (TARGET ch::mysqlxx)
     dbms_target_link_libraries (PUBLIC ch::mysqlxx)
@@ -506,11 +515,6 @@ endif()
 
 if (TARGET ch_contrib::sqlite)
     dbms_target_link_libraries(PUBLIC ch_contrib::sqlite)
-endif()
-
-if (USE_CASSANDRA)
-    dbms_target_link_libraries(PUBLIC ${CASSANDRA_LIBRARY})
-    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${CASS_INCLUDE_DIR})
 endif()
 
 if (TARGET ch_contrib::msgpack)
