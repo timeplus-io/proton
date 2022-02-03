@@ -1,6 +1,6 @@
 #include "StreamingWindowCommon.h"
 
-#include <Functions/FunctionsStreamingWindow.h>
+#include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>

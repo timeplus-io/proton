@@ -295,8 +295,8 @@ void MetadataService::startup()
     {
         /// Node only with corresponding service role has corresponding data consuming capability
         auto node_role = config.getString(SYSTEM_ROLES_KEY + "." + key, "");
-        boost::trim(node_role);
-        boost::to_lower(node_role);
+        /// boost::trim(node_role);
+        /// boost::to_lower(node_role);
         node_roles += node_role + ",";
 
         if (node_role == this_role && !pool)
@@ -310,7 +310,7 @@ void MetadataService::startup()
             }
             catch (Exception e)
             {
-                LOG_ERROR(log, e.message());
+                LOG_ERROR(log, "{}", e.message());
                 throw;
             }
 

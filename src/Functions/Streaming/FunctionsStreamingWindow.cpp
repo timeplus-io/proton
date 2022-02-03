@@ -1,4 +1,4 @@
-#include <numeric>
+#include "FunctionsStreamingWindow.h"
 
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
@@ -8,8 +8,9 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsStreamingWindow.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
+
+#include <numeric>
 
 namespace DB
 {
@@ -34,59 +35,6 @@ namespace
         const auto * interval_column_const_int64 = checkAndGetColumnConst<ColumnInt64>(interval_column.column.get());
         assert(interval_column_const_int64);
         return {interval_type->getKind(), interval_column_const_int64->getValue<Int64>()};
-    }
-
-    ColumnPtr executeWindowBoundTumble(const ColumnPtr & column, int index, const String & function_name)
-    {
-        if (const ColumnTuple * col_tuple = checkAndGetColumn<ColumnTuple>(column.get()))
-        {
-            auto nested = col_tuple->getColumnPtr(index);
-            if (!checkColumn<ColumnDate>(*nested) && !checkColumn<ColumnDateTime32>(*nested) && !checkColumn<ColumnDateTime64>(*nested))
-                throw Exception(
-                    "Illegal column for first argument of function " + function_name
-                        + ". Must be a Tuple(DataTime64, DataTime64) or a Tuple(DataTime32, DataTime32) "
-                        + "or a Tuple(ColumnVectorUInt16, ColumnVectorUInt16)",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            return col_tuple->getColumnPtr(index);
-        }
-        else
-        {
-            throw Exception(
-                "Illegal column for first argument of function " + function_name + ". Must be Tuple(DateTime, DateTime)",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
-    }
-
-    ColumnPtr executeWindowBoundHop(const ColumnPtr & column, int index, const String & function_name)
-    {
-        if (const ColumnTuple * col_tuple = checkAndGetColumn<ColumnTuple>(column.get()))
-        {
-            const auto * col_array = checkAndGetColumn<ColumnArray>(*col_tuple->getColumnPtr(index));
-            if (!col_array)
-            {
-                throw Exception(
-                    "Illegal column for first argument of function " + function_name
-                        + ". Must be an Array(DataTime64, DataTime64) or an Array(DataTime32, DataTime32) "
-                        + "or an Array(ColumnVectorUInt16, ColumnVectorUInt16)",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            }
-
-            const auto & nested = col_array->getData();
-
-            if (!checkColumn<ColumnDate>(nested) && !checkColumn<ColumnDateTime32>(nested) && !checkColumn<ColumnDateTime64>(nested))
-                throw Exception(
-                    "Illegal column for first argument of function " + function_name
-                        + ". Must be an Array(DataTime64, DataTime64) or an Array(DataTime32, DataTime32) "
-                        + "or an Array(ColumnVectorUInt16, ColumnVectorUInt16)",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            return col_tuple->getColumnPtr(index);
-        }
-        else
-        {
-            throw Exception(
-                "Illegal column for first argument of function " + function_name + ". Must be Tuple(Array, Array)",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
     }
 
     void checkFirstArgument(const ColumnWithTypeAndName & argument, const String & function_name)
@@ -356,70 +304,6 @@ struct WindowImpl<TUMBLE>
         result.emplace_back(std::move(start));
         result.emplace_back(std::move(end));
         return ColumnTuple::create(std::move(result));
-    }
-};
-
-template <>
-struct WindowImpl<TUMBLE_START>
-{
-    static constexpr auto name = "__TUMBLE_START";
-    static constexpr auto external_name = "TUMBLE_START";
-
-    static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        /// FIXME: window ID
-        if (arguments.size() == 1)
-        {
-            /// Referencing a window ID which points a tuple
-            if (isTuple(arguments[0].type))
-            {
-                auto tuple_type = checkAndGetDataType<DataTypeTuple>(arguments[0].type.get());
-                if (tuple_type)
-                    return tuple_type->getElements()[0];
-            }
-            throw Exception(
-                "Illegal type of first argument of function " + function_name + " should be a window ID", ErrorCodes::ILLEGAL_COLUMN);
-        }
-        else
-        {
-            auto return_type = WindowImpl<TUMBLE>::getReturnType(arguments, function_name);
-            auto tuple_type = checkAndGetDataType<DataTypeTuple>(return_type.get());
-            return tuple_type->getElements()[0];
-        }
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto first_arg_type = WhichDataType(arguments[0].type);
-        ColumnPtr result_column_;
-        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
-            result_column_ = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
-        else
-            result_column_ = arguments[0].column;
-        return executeWindowBoundTumble(result_column_, 0, function_name);
-    }
-};
-
-template <>
-struct WindowImpl<TUMBLE_END>
-{
-    static constexpr auto name = "__TUMBLE_END";
-    static constexpr auto external_name = "TUMBLE_END";
-
-    [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        return WindowImpl<TUMBLE_START>::getReturnType(arguments, function_name);
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto first_arg_type = WhichDataType(arguments[0].type);
-        ColumnPtr result_column_;
-        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
-            result_column_ = WindowImpl<TUMBLE>::dispatchForColumns(arguments, function_name);
-        else
-            result_column_ = arguments[0].column;
-        return executeWindowBoundTumble(result_column_, 1, function_name);
     }
 };
 
@@ -733,70 +617,6 @@ struct WindowImpl<HOP>
     }
 };
 
-template <>
-struct WindowImpl<HOP_START>
-{
-    static constexpr auto name = "__HOP_START";
-    static constexpr auto external_name = "HOP_START";
-
-    static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        if (arguments.size() == 1)
-        {
-            if (isTuple(arguments[0].type))
-            {
-                auto tuple_type = checkAndGetDataType<DataTypeTuple>(arguments[0].type.get());
-                return tuple_type->getElements()[0];
-            }
-            else
-            {
-                throw Exception(
-                    "Illegal type of first argument of function " + function_name + " should be a window ID", ErrorCodes::ILLEGAL_COLUMN);
-            }
-        }
-        else
-        {
-            auto return_type = WindowImpl<HOP>::getReturnType(arguments, function_name);
-            auto tuple_type = checkAndGetDataType<DataTypeTuple>(return_type.get());
-            return tuple_type->getElements()[0];
-        }
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto first_arg_type = WhichDataType(arguments[0].type);
-        ColumnPtr result_column_;
-        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
-            result_column_ = WindowImpl<HOP>::dispatchForColumns(arguments, function_name);
-        else
-            result_column_ = arguments[0].column;
-        return executeWindowBoundHop(result_column_, 0, function_name);
-    }
-};
-
-template <>
-struct WindowImpl<HOP_END>
-{
-    static constexpr auto name = "__HOP_END";
-    static constexpr auto external_name = "HOP_END";
-
-    [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        return WindowImpl<HOP_START>::getReturnType(arguments, function_name);
-    }
-
-    [[maybe_unused]] static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & arguments, const String & function_name)
-    {
-        const auto first_arg_type = WhichDataType(arguments[0].type);
-        ColumnPtr result_column_;
-        if (first_arg_type.isDateTime64() || first_arg_type.isDateTime())
-            result_column_ = WindowImpl<HOP>::dispatchForColumns(arguments, function_name);
-        else
-            result_column_ = arguments[0].column;
-        return executeWindowBoundHop(result_column_, 1, function_name);
-    }
-};
-
 template <WindowFunctionName type>
 DataTypePtr FunctionWindow<type>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
@@ -813,10 +633,6 @@ ColumnPtr FunctionWindow<type>::executeImpl(
 void registerFunctionsStreamingWindow(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTumble>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionTumbleStart>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionTumbleEnd>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionHop>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionHopStart>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionHopEnd>(FunctionFactory::CaseInsensitive);
 }
 }

@@ -1,7 +1,7 @@
 #include "Watermark.h"
 
 #include <Core/Block.h>
-#include <Functions/FunctionsStreamingWindow.h>
+#include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTLiteral.h>
@@ -22,43 +22,47 @@ namespace ErrorCodes
 
 namespace
 {
-void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
-{
-    if (!emit_query)
+    void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
     {
-        return;
+        if (!emit_query)
+        {
+            return;
+        }
+
+        auto emit = emit_query->as<ASTEmitQuery>();
+        assert(emit);
+
+        watermark_settings.streaming = emit->streaming;
+
+        if (emit->periodic_interval)
+        {
+            if (emit->after_watermark || emit->delay_interval)
+                throw Exception("Streaming doesn't support having both any watermark and periodic emit policy", ErrorCodes::SYNTAX_ERROR);
+
+            extractInterval(
+                emit->periodic_interval->as<ASTFunction>(),
+                watermark_settings.emit_query_interval,
+                watermark_settings.emit_query_interval_kind);
+
+            watermark_settings.mode = WatermarkSettings::EmitMode::PERIODIC;
+        }
+        else if (emit->delay_interval)
+        {
+            extractInterval(
+                emit->delay_interval->as<ASTFunction>(),
+                watermark_settings.emit_query_interval,
+                watermark_settings.emit_query_interval_kind);
+
+            watermark_settings.mode
+                = emit->after_watermark ? WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY : WatermarkSettings::EmitMode::DELAY;
+        }
+        else if (emit->after_watermark)
+        {
+            watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
+        }
+        else
+            watermark_settings.mode = WatermarkSettings::EmitMode::NONE;
     }
-
-    auto emit = emit_query->as<ASTEmitQuery>();
-    assert(emit);
-
-    watermark_settings.streaming = emit->streaming;
-
-    if (emit->periodic_interval)
-    {
-        if (emit->after_watermark || emit->delay_interval)
-            throw Exception("Streaming doesn't support having both any watermark and periodic emit policy", ErrorCodes::SYNTAX_ERROR);
-
-        extractInterval(
-            emit->periodic_interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
-
-        watermark_settings.mode = WatermarkSettings::EmitMode::PERIODIC;
-    }
-    else if (emit->delay_interval)
-    {
-        extractInterval(
-            emit->delay_interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
-
-        watermark_settings.mode
-            = emit->after_watermark ? WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY : WatermarkSettings::EmitMode::DELAY;
-    }
-    else if (emit->after_watermark)
-    {
-        watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
-    }
-    else
-        watermark_settings.mode = WatermarkSettings::EmitMode::NONE;
-}
 }
 
 WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc)

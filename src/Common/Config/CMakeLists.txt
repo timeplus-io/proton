@@ -28,6 +28,6 @@ target_link_libraries(clickhouse_common_config_no_zookeeper_log
 )
 
 if (TARGET ch_contrib::yaml_cpp)
-    target_link_libraries(clickhouse_common_config PRIVATE ch_contrib::yaml_cpp)
-    target_link_libraries(clickhouse_common_config_no_zookeeper_log PRIVATE ch_contrib::yaml_cpp)
+    target_link_libraries(clickhouse_common_config PUBLIC ch_contrib::yaml_cpp)
+    target_link_libraries(clickhouse_common_config_no_zookeeper_log PUBLIC ch_contrib::yaml_cpp)
 endif()

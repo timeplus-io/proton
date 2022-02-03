@@ -4,12 +4,12 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsStreamingWindow.h>
+#include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <base/ClockUtils.h>
-#include <base/DateLUT.h>
 #include <base/logger_useful.h>
+#include <Common/DateLUT.h>
 #include <Common/StringUtils/StringUtils.h>
 
 namespace DB

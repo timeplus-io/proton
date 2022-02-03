@@ -3,7 +3,7 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/TaskStatusService.h>
 #include <DistributedMetadata/sendRequest.h>
-#include <base/DateLUT.h>
+#include <Common/DateLUT.h>
 
 
 namespace DB
@@ -16,7 +16,7 @@ namespace ErrorCodes
 
 namespace
 {
-    const String TASK_URL = "http://{}:{}/proton/v1/tasks/{}";
+    constexpr auto * TASK_URL = "http://{}:{}/proton/v1/tasks/{}";
 
     Poco::JSON::Array buildTaskResponse(const std::vector<DB::TaskStatusService::TaskStatusPtr> & tasks)
     {

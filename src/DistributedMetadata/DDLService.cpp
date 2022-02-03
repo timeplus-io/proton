@@ -34,14 +34,14 @@ namespace
     const String DDL_KEY_PREFIX = "cluster_settings.system_ddls.";
     const String DDL_DEFAULT_TOPIC = "__system_ddls";
 
-    const String DDL_TABLE_POST_API_PATH_FMT = "/proton/v1/ddl/{}";
-    const String DDL_TABLE_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/{}";
-    const String DDL_TABLE_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/{}?mode={}";
-    const String DDL_COLUMN_POST_API_PATH_FMT = "/proton/v1/ddl/{}/columns";
-    const String DDL_COLUMN_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
-    const String DDL_COLUMN_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
-    const String DDL_DATABSE_POST_API_PATH_FMT = "/proton/v1/ddl/databases";
-    const String DDL_DATABSE_DELETE_API_PATH_FMT = "/proton/v1/ddl/databases/{}";
+    constexpr auto * DDL_TABLE_POST_API_PATH_FMT = "/proton/v1/ddl/{}";
+    constexpr auto * DDL_TABLE_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/{}";
+    constexpr auto * DDL_TABLE_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/{}?mode={}";
+    constexpr auto * DDL_COLUMN_POST_API_PATH_FMT = "/proton/v1/ddl/{}/columns";
+    constexpr auto * DDL_COLUMN_PATCH_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
+    constexpr auto * DDL_COLUMN_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
+    constexpr auto * DDL_DATABSE_POST_API_PATH_FMT = "/proton/v1/ddl/databases";
+    constexpr auto * DDL_DATABSE_DELETE_API_PATH_FMT = "/proton/v1/ddl/databases/{}";
 
     constexpr Int32 MAX_RETRIES = 3;
 
@@ -348,7 +348,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
 
         const String & hosts_val = record->headers.at("hosts");
         std::vector<String> hosts;
-        boost::algorithm::split(hosts, hosts_val, boost::is_any_of(","));
+        boost::algorithm::split(hosts, hosts_val, [](auto ch) { return ch == ','; });
         assert(!hosts.empty());
 
         std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST))};
@@ -498,14 +498,14 @@ void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) c
         hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
     }
 
-    const String * api_path_fmt = nullptr;
+    std::vector<Poco::URI> target_hosts;
     if (method == Poco::Net::HTTPRequest::HTTP_POST)
     {
-        api_path_fmt = &DDL_DATABSE_POST_API_PATH_FMT;
+        target_hosts = toURIs(hosts, fmt::format(DDL_DATABSE_POST_API_PATH_FMT, database));
     }
     else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
     {
-        api_path_fmt = &DDL_DATABSE_DELETE_API_PATH_FMT;
+        target_hosts = toURIs(hosts, fmt::format(DDL_DATABSE_DELETE_API_PATH_FMT, database));
     }
     else
     {
@@ -514,8 +514,6 @@ void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) c
         failDDL(query_id, user, payload, "Unsupported method " + method);
         return;
     }
-
-    std::vector<Poco::URI> target_hosts{toURIs(hosts, fmt::format(*api_path_fmt, database))};
 
     doDDLOnHosts(target_hosts, payload, method, query_id, user);
 }

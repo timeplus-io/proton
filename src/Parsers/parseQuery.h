@@ -2,6 +2,10 @@
 
 #include <Parsers/IAST_fwd.h>
 
+/// proton: starts
+#include <Parsers/IParser.h>
+/// proton: ends
+
 namespace DB
 {
 

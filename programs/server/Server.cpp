@@ -125,17 +125,6 @@
 #    include <jemalloc/jemalloc.h>
 #endif
 
-/// Daisy : starts
-#include <DistributedMetadata/TaskStatusService.h>
-#include <DistributedMetadata/CatalogService.h>
-#include <DistributedMetadata/DDLService.h>
-#include <DistributedMetadata/PlacementService.h>
-#include <DistributedWriteAheadLog/DistributedWriteAheadLogPool.h>
-#include <DistributedWriteAheadLog/WALPool.h>
-#include <DistributedWriteAheadLog/KafkaWALPool.h>
-#include <Server/RestRouterHandlers/RestRouterFactory.h>
-/// Daisy : ends
-
 namespace CurrentMetrics
 {
     extern const Metric Revision;

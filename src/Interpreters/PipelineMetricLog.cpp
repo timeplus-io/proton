@@ -7,8 +7,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/PipelineMetricLog.h>
-#include <Common/ProtonCommon.h>
-
 
 namespace DB
 {
@@ -44,7 +42,7 @@ void PipelineMetricLogElement::appendToBlock(MutableColumns & columns) const
 void PipelineMetricLog::startCollectMetric(size_t collect_interval_milliseconds_)
 {
     collect_interval_milliseconds = collect_interval_milliseconds_;
-    is_shutdown = false;
+    stopped = false;
     metric_flush_thread = ThreadFromGlobalPool([this] { metricThreadFunction(); });
 }
 
@@ -52,7 +50,7 @@ void PipelineMetricLog::startCollectMetric(size_t collect_interval_milliseconds_
 void PipelineMetricLog::stopCollectMetric()
 {
     bool old_val = false;
-    if (!is_shutdown.compare_exchange_strong(old_val, true))
+    if (!stopped.compare_exchange_strong(old_val, true))
         return;
     metric_flush_thread.join();
 }
@@ -69,7 +67,7 @@ void PipelineMetricLog::metricThreadFunction()
 {
     auto next_collect_time = std::chrono::system_clock::now();
 
-    while (!is_shutdown)
+    while (!stopped)
     {
         try
         {
@@ -89,9 +87,8 @@ void PipelineMetricLog::metricThreadFunction()
                 elem.query_id = process.client_info.current_query_id;
                 elem.query = process.query;
                 if (process.pipeline_metrics.empty())
-                {
                     continue;
-                }
+
                 elem.pipeline_metric = process.pipeline_metrics;
                 this->add(elem);
             }

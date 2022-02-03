@@ -51,8 +51,6 @@ void ASTFunction::appendColumnNameImpl(WriteBuffer & ostr) const
         return;
     }
 
-    writeString(name, ostr);
-
     /// proton: starts. rename back
     const std::string * show_name = &name;
     auto iter = streaming_func_map.find(name);

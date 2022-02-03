@@ -241,7 +241,7 @@ LogManager::TwoLevelUnorderedMap<std::string, TopicShard, int64_t> LogManager::r
     else
         LOG_WARNING(
             logger,
-            "Didn't find log root_dir {} occurred while reading recovery-point-offsets for directory {}, resetting the recovery offset to "
+            "Didn't find log root_dir occurred while reading recovery-point-offsets for directory {}, resetting the recovery offset to "
             "0",
             root_dir.c_str());
 
@@ -268,7 +268,7 @@ LogManager::TwoLevelUnorderedMap<std::string, TopicShard, int64_t> LogManager::r
     else
         LOG_WARNING(
             logger,
-            "Didn't find log root_dir {} occurred while reading log-start-offsets for directory {}, resetting the log start offset to 0",
+            "Didn't find log root_dir occurred while reading log-start-offsets for directory {}, resetting the log start offset to 0",
             root_dir.c_str());
 
     return {};

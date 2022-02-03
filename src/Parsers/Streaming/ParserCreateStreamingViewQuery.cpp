@@ -1,17 +1,17 @@
 #include "ParserCreateStreamingViewQuery.h"
 
-#include <Parsers/ASTIdentifier.h>
+#include <IO/ReadHelpers.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
-#include <IO/ReadHelpers.h>
 
 namespace DB
 {
-
 bool ParserCreateStreamingViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_create("CREATE");
@@ -99,8 +99,8 @@ bool ParserCreateStreamingViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expecte
     query->is_streaming_view = true;
 
     auto table_id = table->as<ASTTableIdentifier>()->getTableId();
-    query->database = table_id.database_name;
-    query->table = table_id.table_name;
+    query->setDatabase(table_id.getDatabaseName());
+    query->setTable(table_id.getTableName());
     query->uuid = table_id.uuid;
     query->cluster = cluster_str;
 
@@ -120,4 +120,3 @@ bool ParserCreateStreamingViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expecte
 }
 
 }
-

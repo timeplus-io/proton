@@ -2109,10 +2109,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         query_info.settings_limit_offset_done = options.settings_limit_offset_done;
 
-        /// proton: starts
-        query_info.streaming_win_func = std::move(query_analyzer->streaming_win_func);
-        /// proton: ends
-
         storage->read(query_plan, required_columns, metadata_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
 
         if (context->hasQueryContext() && !options.is_internal)

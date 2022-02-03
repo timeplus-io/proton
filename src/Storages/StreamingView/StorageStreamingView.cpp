@@ -3,13 +3,14 @@
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
 
-#include <Common/ProtonCommon.h>
+#include <IO/WriteBufferFromString.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
-#include <IO/WriteBufferFromString.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Processors/Executors/PipelineExecutor.h>
@@ -26,6 +27,7 @@
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <Processors/Transforms/buildPushingToViewsChain.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -93,9 +95,7 @@ private:
 class StreamingViewMemorySource : public SourceWithProgress
 {
 public:
-    StreamingViewMemorySource(
-        const StorageStreamingView & view_,
-        const Block & header)
+    StreamingViewMemorySource(const StorageStreamingView & view_, const Block & header)
         : SourceWithProgress(header)
         , column_names_and_types(header.getNamesAndTypesList())
         , data(view_.memory_table ? view_.memory_table->get() : StorageStreamingView::Data())
@@ -139,11 +139,15 @@ private:
     size_t expected_virtual_num = 0;
 
 public:
-    PushingToStreamingViewMemorySink(const Block & in_header, const Block & out_header, StorageStreamingView & view_, const StorageStreamingView::VirtualColumns & to_calc_virtual_columns_)
-        : ExceptionKeepingTransform(in_header, out_header),
-          view(view_),
-          to_calc_virtual_columns(to_calc_virtual_columns_),
-          expected_virtual_num(out_header.columns() - in_header.columns())
+    PushingToStreamingViewMemorySink(
+        const Block & in_header,
+        const Block & out_header,
+        StorageStreamingView & view_,
+        const StorageStreamingView::VirtualColumns & to_calc_virtual_columns_)
+        : ExceptionKeepingTransform(in_header, out_header)
+        , view(view_)
+        , to_calc_virtual_columns(to_calc_virtual_columns_)
+        , expected_virtual_num(out_header.columns() - in_header.columns())
     {
         assert(expected_virtual_num <= to_calc_virtual_columns.size());
     }
@@ -151,7 +155,7 @@ public:
     String getName() const override { return "PushingToStreamingViewMemory"; }
 
 protected:
-    void transform(Chunk & chunk) override
+    void onConsume(Chunk chunk) override
     {
         if (!chunk.hasColumns())
             return;
@@ -173,15 +177,27 @@ protected:
         /// There may be some empty block(heart block) from tail mode, ignore it.
         if (rows > 0 && view.memory_table)
             view.memory_table->write(std::move(newest_block));
+
+        cur_chunk = std::move(chunk);
     }
+
+    GenerateResult onGenerate() override
+    {
+        GenerateResult res;
+        res.chunk = std::move(cur_chunk);
+        return res;
+    }
+
+    Chunk cur_chunk;
 };
 
 StorageStreamingView::StorageStreamingView(
     const StorageID & table_id_, ContextPtr local_context, const ASTCreateQuery & query, const ColumnsDescription & columns_, bool attach_)
-    : IStorage(table_id_), WithMutableContext(local_context->getGlobalContext()),
-      log(&Poco::Logger::get("StorageStreamingView (" + table_id_.database_name + "." + table_id_.table_name + ")")),
-      is_attach(attach_),
-      virtual_columns({{RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
+    : IStorage(table_id_)
+    , WithMutableContext(local_context->getGlobalContext())
+    , log(&Poco::Logger::get("StorageStreamingView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
+    , is_attach(attach_)
+    , virtual_columns({{RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -203,7 +219,7 @@ StorageStreamingView::StorageStreamingView(
     if (point_to_itself_by_uuid)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Streaming View {} cannot point to itself", table_id_.getFullTableName());
 
-    
+
     target_table_id = StorageID(getStorageID().database_name, generateInnerTableName(getStorageID()), query.to_inner_uuid);
 }
 
@@ -259,7 +275,7 @@ void StorageStreamingView::startup()
         background_status.exception = std::current_exception();
         background_status.has_exception = true;
 
-        LOG_ERROR(log, getExceptionMessage(background_status.exception, false));
+        LOG_ERROR(log, "{}", getExceptionMessage(background_status.exception, false));
 
         /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
         /// And it should be able to safely destroy table after exception in "startup" method.
@@ -304,8 +320,7 @@ Pipe StorageStreamingView::read(
     QueryPlan plan;
     read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(local_context),
-        BuildQueryPipelineSettings::fromContext(local_context));
+        QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
 
 void StorageStreamingView::read(
@@ -342,7 +357,8 @@ void StorageStreamingView::read(
         if (query_info.order_optimizer)
             query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
 
-        auto pipe = storage->read(column_names, target_metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+        auto pipe = storage->read(
+            column_names, target_metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
         /// Add valid check of the view
         /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.
@@ -356,13 +372,7 @@ void StorageStreamingView::read(
 
         /// Add table lock for destination table.
         auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
-                query_plan.getCurrentDataStream(),
-                storage,
-                std::move(lock),
-                limits,
-                leaf_limits,
-                nullptr,
-                nullptr);
+            query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
 
         adding_limits_and_quota->setStepDescription("Lock destination table for StreamingView");
         query_plan.addStep(std::move(adding_limits_and_quota));
@@ -450,7 +460,7 @@ void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_sn
     const auto & settings = local_context->getSettingsRef();
     memory_table.reset(new InMemoryTable(
         is_global_aggr_query ? 1 /* only cache current block result */
-                            : settings.max_streaming_view_cached_block_count,
+                             : settings.max_streaming_view_cached_block_count,
         settings.max_streaming_view_cached_block_bytes));
 
     /// If there is a Create request, then we need create the target inner table.
@@ -461,8 +471,8 @@ void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_sn
         ///   create table <inner_target_table_id> (view_properties[, RESERVED_VIEW_VERSION]) engine = DistributedMergeTree(1, 1, rand());
         /// FIXME: In future, add order clause or remove engine ?
         auto manual_create_query = std::make_shared<ASTCreateQuery>();
-        manual_create_query->database = target_table_id.database_name;
-        manual_create_query->table = target_table_id.table_name;
+        manual_create_query->setDatabase(target_table_id.getDatabaseName());
+        manual_create_query->setTable(target_table_id.getTableName());
         manual_create_query->uuid = target_table_id.uuid;
 
         auto names_and_types = metadata_snapshot->getColumns().getAll();
@@ -473,7 +483,11 @@ void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_sn
         new_columns_list->set(new_columns_list->columns, columns_ast);
 
         auto new_storage = std::make_shared<ASTStorage>();
-        auto engine = makeASTFunction("DistributedMergeTree", std::make_shared<ASTLiteral>(UInt64(1)), std::make_shared<ASTLiteral>(UInt64(1)), makeASTFunction("rand"));
+        auto engine = makeASTFunction(
+            "DistributedMergeTree",
+            std::make_shared<ASTLiteral>(UInt64(1)),
+            std::make_shared<ASTLiteral>(UInt64(1)),
+            makeASTFunction("rand"));
         engine->no_empty_args = true;
         new_storage->set(new_storage->engine, engine);
 
@@ -484,13 +498,15 @@ void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_sn
         create_interpreter.setInternal(true);
         create_interpreter.execute();
 
-        target_table_storage = DatabaseCatalog::instance().getTable({manual_create_query->database, manual_create_query->table}, local_context);
+        target_table_storage
+            = DatabaseCatalog::instance().getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, local_context);
     }
     else
         getTargetTable();
 }
 
-void StorageStreamingView::buildBackgroundPipeline(InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+void StorageStreamingView::buildBackgroundPipeline(
+    InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
     /// [Pipeline]: `Source` -> `Converting` -> `PushingToStreamingViewMemorySink` -> `Materializing const` -> `target_table`
     background_pipeline = inner_interpreter.buildQueryPipeline();
@@ -499,8 +515,11 @@ void StorageStreamingView::buildBackgroundPipeline(InterpreterSelectQuery & inne
 
     /// Converting since the view properties allows to explicitly specify
     auto inner_converting_view_dag = ActionsDAG::makeConvertingActions(
-        current_header.getColumnsWithTypeAndName(), metadata_snapshot->getSampleBlock().getColumnsWithTypeAndName(), ActionsDAG::MatchColumnsMode::Position);
-    auto inner_converting_view_actions = std::make_shared<ExpressionActions>(inner_converting_view_dag, ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes));
+        current_header.getColumnsWithTypeAndName(),
+        metadata_snapshot->getSampleBlock().getColumnsWithTypeAndName(),
+        ActionsDAG::MatchColumnsMode::Position);
+    auto inner_converting_view_actions = std::make_shared<ExpressionActions>(
+        inner_converting_view_dag, ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes));
     background_pipeline.addSimpleTransform([&](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
         return std::make_shared<ExpressionTransform>(cur_header, inner_converting_view_actions);
     });
@@ -536,8 +555,7 @@ void StorageStreamingView::buildBackgroundPipeline(InterpreterSelectQuery & inne
 
     background_pipeline.addChain(std::move(out_chain));
 
-    background_pipeline.setSinks([&](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr
-    {
+    background_pipeline.setSinks([&](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
         return std::make_shared<EmptySink>(cur_header);
     });
 

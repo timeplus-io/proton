@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/SystemLog.h>
+#include <Core/NamesAndAliases.h>
 
 #include <atomic>
 #include <ctime>
@@ -47,7 +48,7 @@ private:
 
     ThreadFromGlobalPool metric_flush_thread;
     size_t collect_interval_milliseconds;
-    std::atomic<bool> is_shutdown = { false };
+    std::atomic<bool> stopped = false;
 };
 
 }

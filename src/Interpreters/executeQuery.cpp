@@ -107,9 +107,9 @@ void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
         return;
     }
 
-    if (auto create = ast->as<ASTCreateQuery>())
+    if (auto * create = ast->as<ASTCreateQuery>())
     {
-        if (!create->database.empty() || !create->table.empty())
+        if (!create->getDatabase().empty() || !create->getTable().empty())
         {
             CatalogService::instance(context->getGlobalContext()).broadcast();
         }
@@ -727,13 +727,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (!table_id.empty())
                 {
                     context->setInsertionTable(std::move(table_id));
-                    /// Daisy : starts
+                    /// proton: starts
                     /// Setup poll ID for ingestion status querying
-                    if (context->getIngestMode() == "async")
+                    if (context->getIngestMode() == IngestMode::ASYNC)
                     {
                         context->getQueryContext()->setupQueryStatusPollId();
                     }
-                    /// Daisy : ends
+                    /// proton: ends
                 }
             }
         }
@@ -745,12 +745,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             if (!table_id.empty())
             {
                 context->setInsertionTable(std::move(table_id));
-<<<<<<< HEAD
 
-                /// Daisy : starts
-=======
                 /// proton: starts
->>>>>>> more cleanup (#4)
                 /// Setup poll ID for ingestion status querying
                 if (context->getIngestMode() == IngestMode::ASYNC || context->getIngestMode() == IngestMode::None)
                 {

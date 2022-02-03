@@ -66,7 +66,6 @@ void registerFunctionBayesAB(FunctionFactory &);
 
 void registerFunctionTid(FunctionFactory & factory);
 void registerFunctionLogTrace(FunctionFactory & factory);
-void registerFunctionsTimeWindow(FunctionFactory &);
 void registerFunctionToBool(FunctionFactory &);
 
 #if USE_SSL
@@ -128,7 +127,6 @@ void registerFunctions()
     registerFunctionsStringHash(factory);
     registerFunctionValidateNestedArraySizes(factory);
     registerFunctionsSnowflake(factory);
-    registerFunctionsTimeWindow(factory);
     registerFunctionToBool(factory);
 
     /// proton: starts

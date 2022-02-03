@@ -197,7 +197,7 @@ void Log::validateRecord(const Record & record, size_t index, bool compact, LogA
     {
         append_info.record_errors.emplace_back(
             index,
-            fmt::format("Record offset {} in record batch is not assigned correctly. Expected {}, got {}", index, record.offset_delta()));
+            fmt::format("Record offset {0} in record batch is not assigned correctly. Expected {0}, got {1}", index, record.offset_delta()));
         return;
     }
 

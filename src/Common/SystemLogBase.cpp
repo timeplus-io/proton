@@ -11,6 +11,11 @@
 #include <Interpreters/TraceLog.h>
 #include <Interpreters/ZooKeeperLog.h>
 
+/// proton: starts
+#include <Interpreters/PipelineMetricLog.h>
+/// proton: ends
+
+
 #include <Common/MemoryTrackerBlockerInThread.h>
 #include <Common/SystemLogBase.h>
 

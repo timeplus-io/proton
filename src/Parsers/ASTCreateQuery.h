@@ -120,11 +120,7 @@ public:
         return removeOnCluster<ASTCreateQuery>(clone(), new_database);
     }
 
-<<<<<<< HEAD
-    bool isView() const { return is_ordinary_view || is_materialized_view || is_live_view || is_window_view; }
-=======
-    bool isView() const { return is_ordinary_view || is_materialized_view || is_live_view || is_streaming_view; }
->>>>>>> support streaming view (#263)
+    bool isView() const { return is_ordinary_view || is_materialized_view || is_live_view || is_window_view || is_streaming_view; }
 
     virtual QueryKind getQueryKind() const override { return QueryKind::Create; }
 

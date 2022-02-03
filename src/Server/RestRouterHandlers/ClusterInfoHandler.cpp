@@ -13,7 +13,7 @@ namespace ErrorCodes
 
 namespace
 {
-    const String CLUSTER_INFO_URL = "http://{}:{}/proton/v1/clusterinfo";
+    constexpr auto * CLUSTER_INFO_URL = "http://{}:{}/proton/v1/clusterinfo";
 
     Poco::JSON::Array streamingClusters(ContextMutablePtr query_context)
     {

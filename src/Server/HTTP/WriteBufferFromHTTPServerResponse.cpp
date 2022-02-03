@@ -29,7 +29,7 @@ void WriteBufferFromHTTPServerResponse::startSendHeaders()
     }
 }
 
-void WriteBufferFromHTTPServerResponse::writeSummary()
+void WriteBufferFromHTTPServerResponse::writeHeaderSummary()
 {
     if (headers_finished_sending)
         return;
@@ -37,65 +37,33 @@ void WriteBufferFromHTTPServerResponse::writeSummary()
     WriteBufferFromOwnString progress_string_writer;
     accumulated_progress.writeJSON(progress_string_writer);
 
-    /// proton: starts
-    if (send_progress_mode < SendProgressMode::progress_via_body)
-    {
-        /// Sent summary via header
-        if (response_header_ostr)
-            *response_header_ostr << "x-proton-summary: " << progress_string_writer.str() << "\r\n" << std::flush;
-    }
-    else
-    {
-        /// Sent summary via body
-        if (response_body_ostr)
-            *response_body_ostr << "x-proton-summary: " << progress_string_writer.str() << "\n" << std::flush;
-    }
-    /// proton: ends
+    if (response_header_ostr)
+        *response_header_ostr << "X-ClickHouse-Summary: " << progress_string_writer.str() << "\r\n" << std::flush;
 }
 
-void WriteBufferFromHTTPServerResponse::writeProgress()
+void WriteBufferFromHTTPServerResponse::writeHeaderProgress()
 {
-    /// Send all common headers before our special progress headers.
-    startSendHeaders();
-
     if (headers_finished_sending)
         return;
 
     WriteBufferFromOwnString progress_string_writer;
     accumulated_progress.writeJSON(progress_string_writer);
 
-    /// proton: starts
-    if (send_progress_mode == SendProgressMode::progress_via_header)
-    {
-        if (response_header_ostr)
-            *response_header_ostr << "x-proton-progress: " << progress_string_writer.str() << "\r\n" << std::flush;
-    }
-    else if (send_progress_mode == SendProgressMode::progress_via_body)
-    {
-        if (!headers_finish_delimiter && response_header_ostr)
-        {
-            /// Send end of headers delimiter
-            *response_header_ostr << "\r\n" << std::flush;
-            headers_finish_delimiter = true;
-        }
-
-        if (response_body_ostr)
-            *response_body_ostr << "x-proton-progress: " << progress_string_writer.str() << "\n" << std::flush;
-    }
-    /// proton: ends
+    if (response_header_ostr)
+        *response_header_ostr << "X-ClickHouse-Progress: " << progress_string_writer.str() << "\r\n" << std::flush;
 }
 
 void WriteBufferFromHTTPServerResponse::finishSendHeaders()
 {
     if (!headers_finished_sending)
     {
-        writeSummary();
+        writeHeaderSummary();
         headers_finished_sending = true;
 
         if (!is_http_method_head)
         {
             /// Send end of headers delimiter.
-            if (response_header_ostr && !headers_finish_delimiter)
+            if (response_header_ostr)
                 *response_header_ostr << "\r\n" << std::flush;
         }
         else
@@ -186,7 +154,9 @@ void WriteBufferFromHTTPServerResponse::onProgress(const Progress & progress)
     {
         progress_watch.restart();
 
-        writeProgress();
+        /// Send all common headers before our special progress headers.
+        startSendHeaders();
+        writeHeaderProgress();
     }
 }
 

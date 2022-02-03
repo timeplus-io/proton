@@ -24,7 +24,7 @@ namespace ErrorCodes
 
 namespace
 {
-const String BATCH_URL = "http://{}:{}/proton/v1/ingest/statuses";
+constexpr auto * BATCH_URL = "http://{}:{}/proton/v1/ingest/statuses";
 
 const std::map<String, std::map<String, String>> POLL_SCHEMA = {{"required", {{"channel", "string"}, {"poll_ids", "array"}}}};
 

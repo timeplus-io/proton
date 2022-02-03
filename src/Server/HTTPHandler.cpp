@@ -759,23 +759,8 @@ void HTTPHandler::processQuery(
         });
     };
 
-    /// These 2 progress mode options are mutually exclusive, and
-    /// send_progress_in_http_body overrides send_progress_in_http_headers
-    SendProgressMode send_progress_mode = SendProgressMode::progress_none;
+    /// While still no data has been sent, we will report about query execution progress by sending HTTP headers.
     if (settings.send_progress_in_http_headers)
-    {
-        send_progress_mode = SendProgressMode::progress_via_header;
-    }
-
-    if (settings.send_progress_in_http_body)
-    {
-        send_progress_mode = SendProgressMode::progress_via_body;
-    }
-    used_output.out->setSendProgressMode(send_progress_mode);
-
-    /// While still no data has been sent, we will report about query execution progress
-    /// by sending HTTP body or headers.
-    if (send_progress_mode != SendProgressMode::progress_none)
         append_callback([&used_output] (const Progress & progress) { used_output.out->onProgress(progress); });
 
     if (settings.readonly > 0 && settings.cancel_http_readonly_queries_on_client_close)

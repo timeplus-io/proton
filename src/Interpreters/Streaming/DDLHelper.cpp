@@ -6,6 +6,8 @@
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 
@@ -82,14 +84,22 @@ void prepareColumns(ASTCreateQuery & create)
                 has_event_time = true;
                 auto type_name = tryGetFunctionName(column.type);
                 if (!type_name || *type_name != "DateTime64")
-                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.", RESERVED_EVENT_TIME, column.type->getID());
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_COLUMN,
+                        "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
+                        RESERVED_EVENT_TIME,
+                        column.type->getID());
             }
             else if (RESERVED_INDEX_TIME == column.name)
             {
                 has_index_time = true;
                 auto type_name = tryGetFunctionName(column.type);
                 if (!type_name || *type_name != "DateTime64")
-                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.", RESERVED_INDEX_TIME, column.type->getID());
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_COLUMN,
+                        "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
+                        RESERVED_INDEX_TIME,
+                        column.type->getID());
             }
             else
                 throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, should not used in create query.", column.name);
@@ -102,7 +112,8 @@ void prepareColumns(ASTCreateQuery & create)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
         col_tp_time->name = RESERVED_EVENT_TIME;
-        col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+        col_tp_time->type
+            = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         col_tp_time->default_specifier = "DEFAULT";
         col_tp_time->default_expression = functionToAST(expr);
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
@@ -118,7 +129,8 @@ void prepareColumns(ASTCreateQuery & create)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
         col_tp_time->name = RESERVED_INDEX_TIME;
-        col_tp_time->type = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+        col_tp_time->type
+            = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         col_tp_time->default_specifier = "DEFAULT";
         col_tp_time->default_expression
             = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
@@ -234,7 +246,7 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
     String shard_by_expression = queryToString(create.storage->engine->arguments->children[2]);
 
     Poco::JSON::Object table_mapping_json;
-    payload.set("name", create.table);
+    payload.set("name", create.getTable());
     payload.set("shards", shards);
     payload.set("replication_factor", replicas);
     payload.set("shard_by_expression", shard_by_expression);

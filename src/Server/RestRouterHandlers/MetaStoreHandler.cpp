@@ -24,7 +24,7 @@ namespace ErrorCodes
 
 namespace
 {
-    const String METASTORE_URL = "http://{}:{}/proton/metastore{}";
+    constexpr auto * METASTORE_URL = "http://{}:{}/proton/metastore{}";
 
     String buildResponse(const String & query_id)
     {

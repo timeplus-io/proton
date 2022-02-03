@@ -105,7 +105,7 @@ String SearchHandler::getQuery(const Poco::JSON::Object::Ptr & payload) const
         if (page_size > 0 && offset >= 0)
             query_parts.push_back(fmt::format("LIMIT {}, {}", offset, page_size));
     }
-    return boost::algorithm::join(query_parts, " ");
+    return fmt::format("{}", fmt::join(query_parts, " "));
 }
 
 bool SearchHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
@@ -170,7 +170,6 @@ std::shared_ptr<WriteBufferFromHTTPServerResponse> SearchHandler::getOutputBuffe
 
     auto out = std::make_shared<WriteBufferFromHTTPServerResponse>(
         response, false, keep_alive_timeout, client_supports_http_compression, http_response_compression_method);
-    out->setSendProgressMode(SendProgressMode::progress_none);
 
     if (client_supports_http_compression)
         out->setCompressionLevel(settings.http_zlib_compression_level);

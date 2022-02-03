@@ -932,19 +932,19 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     TableProperties properties = getTablePropertiesAndNormalizeCreateQuery(create);
 
-    if (create.database.empty())
+    if (create.getDatabase().empty())
     {
-        create.database = current_database;
+        create.setDatabase(current_database);
     }
 
     const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
-    auto tables = catalog_service.findTableByName(create.database, create.table);
+    auto tables = catalog_service.findTableByName(create.getDatabase(), create.getTable());
     if (!tables.empty())
     {
         if (create.if_not_exists)
             return true;
         else
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists", create.database, create.table);
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists", create.getDatabase(), create.getTable());
     }
 
     /// More verification happened in storage engine creation
@@ -967,7 +967,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     std::vector<std::pair<String, String>> string_cols
         = {{"payload", payload},
            {"database", current_database},
-           {"table", create.table},
+           {"table", create.getTable()},
            {"query_id", ctx->getCurrentQueryId()},
            {"user", ctx->getUserName()}};
 
@@ -1029,13 +1029,13 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
 
     if (ctx->isDistributedDDLOperation())
     {
-        const auto & database = DatabaseCatalog::instance().tryGetDatabase(create.database);
+        const auto & database = DatabaseCatalog::instance().tryGetDatabase(create.getDatabase());
         if (database)
         {
             if (create.if_not_exists)
                 return true;
             else
-                throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Database {} already exists.", create.database);
+                throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Database {} already exists.", create.getDatabase());
         }
 
         auto * log = &Poco::Logger::get("InterpreterCreateQuery");
@@ -1045,7 +1045,7 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", ctx->getQueryParameters().at("_payload")},
-               {"database", create.database},
+               {"database", create.getDatabase()},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};
 

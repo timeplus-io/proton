@@ -237,7 +237,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         return false;
     }
 
-    const String & database = query.database.empty() ? ctx->getCurrentDatabase() : query.database;
+    const String & database = query.getDatabase().empty() ? ctx->getCurrentDatabase() : query.getDatabase();
     String payload;
     if (ctx->isLocalQueryFromTCP())
     {
@@ -246,7 +246,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         /// NOTE: we can not check it from `CatalogService`, there are some reasons:
         /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
         /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
-        auto table = DatabaseCatalog::instance().tryGetTable({database, query.table}, ctx);
+        auto table = DatabaseCatalog::instance().tryGetTable({database, query.getTable()}, ctx);
         if (!table || table->getName() == "DistributedMergeTree")
         {
             /// Build json payload here from SQL statement
@@ -264,11 +264,9 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
     if (ctx->isDistributedDDLOperation())
     {
         const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
-        auto tables = catalog_service.findTableByName(database, query.table);
+        auto tables = catalog_service.findTableByName(database, query.getTable());
         if (tables.empty())
-        {
-            throw Exception(fmt::format("Table {}.{} does not exist.", query.database, query.table), ErrorCodes::UNKNOWN_TABLE);
-        }
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} does not exist.", query.getDatabase(), query.getTable());
 
         if (tables[0]->engine != "DistributedMergeTree")
         {
@@ -285,8 +283,8 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
-               {"database", query.database},
-               {"table", query.table},
+               {"database", query.getDatabase()},
+               {"table", query.getTable()},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};
 

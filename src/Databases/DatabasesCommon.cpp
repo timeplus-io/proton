@@ -324,8 +324,8 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
     }
 
     create->attach = false;
-    create->database = database_;
-    create->table = table_;
+    create->setDatabase(database_);
+    create->setTable(table_);
 
     /// We remove everything that is not needed for ATTACH from the query.
     assert(!create->temporary);

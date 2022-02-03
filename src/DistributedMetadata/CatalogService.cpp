@@ -9,8 +9,8 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
-#include <Common/Exception.h>
 #include <base/logger_useful.h>
+#include <Common/Exception.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 
@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 /// From DatabaseOnDisk.h
 std::pair<String, StoragePtr> createTableFromAST(
     ASTCreateQuery ast_create_query,
@@ -36,24 +35,24 @@ namespace ErrorCodes
 
 namespace
 {
-/// Globals
-const String CATALOG_KEY_PREFIX = "cluster_settings.system_catalogs.";
-const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
+    /// Globals
+    const String CATALOG_KEY_PREFIX = "cluster_settings.system_catalogs.";
+    const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 
-std::regex PARSE_SHARD_REGEX{"shard\\s*=\\s*(\\d+)"};
-std::regex PARSE_SHARDS_REGEX{"DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
-std::regex PARSE_REPLICATION_REGEX{"DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+\\s*,"};
+    std::regex PARSE_SHARD_REGEX{"shard\\s*=\\s*(\\d+)"};
+    std::regex PARSE_SHARDS_REGEX{"DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
+    std::regex PARSE_REPLICATION_REGEX{"DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+\\s*,"};
 
-Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
-{
-    std::smatch pattern_match;
+    Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
+    {
+        std::smatch pattern_match;
 
-    auto m = std::regex_search(str, pattern_match, pattern);
-    assert(m);
-    (void)m;
+        auto m = std::regex_search(str, pattern_match, pattern);
+        assert(m);
+        (void)m;
 
-    return std::stoi(pattern_match.str(1));
-}
+        return std::stoi(pattern_match.str(1));
+    }
 }
 
 CatalogService & CatalogService::instance(const ContextMutablePtr & context)
@@ -106,9 +105,12 @@ void CatalogService::doBroadcast()
     /// We include "system.tables" and / or "system.tasks" tables in the resulting block on purpose .
     /// It is to avoid an empty block if there are no production tables in the system, which will cause
     /// consistency problem in CatalogService (like the last deleted table does not get deleted from CatalogService)
-    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, primary_key, sampling_key, storage_policy";
+    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
+                  "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
-        "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system') OR (database = 'system' AND (name = 'tables' OR name = 'tasks')))", cols);
+        "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system') OR (database = 'system' AND (name = 'tables' OR "
+        "name = 'tasks')))",
+        cols);
 
     /// FIXME, QueryScope
     /// CurrentThread::attachQueryContext(context);
@@ -214,8 +216,16 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
     const char * pos = query.data();
     String error_message;
 
-    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false,
-            "from catalog_service", /* allow_multi_statements = */ false, 0, settings.max_parser_depth);
+    auto ast = tryParseQuery(
+        parser,
+        pos,
+        pos + query.size(),
+        error_message,
+        /* hilite = */ false,
+        "from catalog_service",
+        /* allow_multi_statements = */ false,
+        0,
+        settings.max_parser_depth);
 
     if (!ast)
     {
@@ -288,7 +298,6 @@ std::pair<CatalogService::TablePtr, StoragePtr> CatalogService::findTableStorage
     auto database_table = std::make_pair(database, table);
     TablePtr table_p;
     {
-
         std::shared_lock guard{catalog_rwlock};
         auto iter = indexed_by_name.find(database_table);
         if (iter == indexed_by_name.end() || iter->second.empty())
@@ -528,7 +537,13 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
         if (static_cast<Int32>(shard_replicas.second.size()) != replication_factor)
         {
             LOG_WARNING(
-                log, "Missing replicas, expected={} got={} for database={} table={} shard={}", database, table, shard_replicas.first);
+                log,
+                "Missing replicas, expected={} got={} for database={} table={} shard={}",
+                shard_replicas.second.size(),
+                replication_factor,
+                database,
+                table,
+                shard_replicas.first);
         }
 
         std::shared_lock guard{catalog_rwlock};
@@ -707,7 +722,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
     for (const auto & p : snapshot)
     {
         UUID uuid = UUIDHelpers::Nil;
-        auto node_shard =  std::make_pair(p.second->node_identity, p.second->shard);
+        auto node_shard = std::make_pair(p.second->node_identity, p.second->shard);
 
         DatabaseTable db_table = std::make_pair(p.second->database, p.second->name);
         auto iter_by_name = indexed_by_name.find(db_table);
@@ -795,4 +810,3 @@ std::pair<Int32, Int32> CatalogService::shardAndReplicationFactor(const String &
 }
 
 }
-

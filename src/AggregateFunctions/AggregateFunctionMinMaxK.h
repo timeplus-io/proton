@@ -28,7 +28,7 @@ struct AggregateFunctionMinMaxKData
 
     AggregateFunctionMinMaxKData()
     {
-        /// We ingore the Nan or NULL, so
+        /// We ignore the Nan or NULL, so
         /// if is minK, `nan_direction_hint=1` are considered larger than all numbers
         /// if is maxK, `nan_direction_hint=-1` are considered less than all numbers
         if constexpr (is_min)
@@ -152,9 +152,9 @@ public:
             top_k.add(elem, k);
     }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override { this->data(place).write(buf); }
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /*version*/) const override { this->data(place).write(buf); }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena *) const override
     {
         auto & top_k = this->data(place);
         top_k.reserve(reserved);
@@ -217,9 +217,9 @@ public:
 
     bool allocatesMemoryInArena() const override { return true; }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override { this->data(place).write(buf); }
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t>) const override { this->data(place).write(buf); }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena * arena) const override
     {
         auto & top_k = this->data(place);
         top_k.reserve(reserved);

@@ -1680,9 +1680,10 @@ std::unique_ptr<MergeTreeSettings> StorageMergeTree::getDefaultSettings() const
 /// proton: starts
 void StorageMergeTree::locateSNFile()
 {
-    for (const auto & [path, disk] : getRelativeDataPathsWithDisks())
+    auto disks{getStoragePolicy()->getDisks()};
+    for (auto disk : disks)
     {
-        auto sn_file_path = path + MergeTreeData::COMMITTED_SN_FILE_NAME;
+        auto sn_file_path = relative_data_path + MergeTreeData::COMMITTED_SN_FILE_NAME;
         if (disk->exists(sn_file_path))
         {
             if (!sn_file.first.empty())

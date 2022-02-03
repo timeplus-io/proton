@@ -301,8 +301,6 @@ Pipe StorageKafka::read(
         /// Use block size of 1, otherwise LIMIT won't work properly as it will buffer excess messages in the last block
         /// TODO: probably that leads to awful performance.
         /// FIXME: seems that doesn't help with extra reading and committing unprocessed messages.
-        pipes.emplace_back(std::make_shared<KafkaSource>(*this, metadata_snapshot, modified_context, column_names, log, 1, ));
-
         /// proton: starts.
         if (query_info.syntax_analyzer_result->streaming)
             pipes.emplace_back(std::make_shared<StreamingKafkaSource>(*this, metadata_snapshot, modified_context, column_names, log, 1));

@@ -1,44 +1,23 @@
 #pragma once
 
+#include <Common/DateLUT.h>
 #include <DataTypes/DataTypeInterval.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/Context_fwd.h>
-#include <base/DateLUT.h>
 
 namespace DB
 {
-/** Window functions:
+/** Streaming Window functions:
   *
-  * TUMBLE(time_attr, interval [, alignment, [, timezone]])
+  * __TUMBLE(time_attr, interval [, alignment, [, timezone]])
   *
-  * TUMBLE_START(window_id)
-  *
-  * TUMBLE_START(time_attr, interval [, alignment, [, timezone]])
-  *
-  * TUMBLE_END(window_id)
-  *
-  * TUMBLE_END(time_attr, interval [, alignment, [, timezone]])
-  *
-  * HOP(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
-  *
-  * HOP_START(window_id)
-  *
-  * HOP_START(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
-  *
-  * HOP_END(window_id)
-  *
-  * HOP_END(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
+  * __HOP(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
   *
   */
 enum WindowFunctionName
 {
     TUMBLE,
-    TUMBLE_START,
-    TUMBLE_END,
     HOP,
-    HOP_START,
-    HOP_END,
-    WINDOW_ID
 };
 
 template <IntervalKind::Kind unit>
@@ -48,7 +27,7 @@ struct ToStartOfTransform;
     template <> \
     struct ToStartOfTransform<IntervalKind::INTERVAL_KIND> \
     { \
-        static ExtendedDayNum execute(UInt32 t, UInt64 delta, const DateLUTImpl & time_zone) \
+        static auto execute(UInt32 t, UInt64 delta, const DateLUTImpl & time_zone) \
         { \
             return time_zone.toStartOf##INTERVAL_KIND##Interval(time_zone.toDayNum(t), delta); \
         } \
@@ -89,7 +68,7 @@ struct AddTime;
     template <> \
     struct AddTime<IntervalKind::INTERVAL_KIND> \
     { \
-        static ExtendedDayNum execute(UInt16 d, UInt64 delta, const DateLUTImpl & time_zone) \
+        static inline auto execute(UInt16 d, UInt64 delta, const DateLUTImpl & time_zone) \
         { \
             return time_zone.add##INTERVAL_KIND##s(ExtendedDayNum(d), delta); \
         } \
@@ -102,14 +81,14 @@ ADD_DATE(Month)
 template <>
 struct AddTime<IntervalKind::Week>
 {
-    static ExtendedDayNum execute(UInt16 d, UInt64 delta, const DateLUTImpl &) { return ExtendedDayNum(d + 7 * delta); }
+    static inline NO_SANITIZE_UNDEFINED ExtendedDayNum execute(UInt16 d, UInt64 delta, const DateLUTImpl &) { return ExtendedDayNum(d + 7 * delta); }
 };
 
 #define ADD_TIME(INTERVAL_KIND, INTERVAL) \
     template <> \
     struct AddTime<IntervalKind::INTERVAL_KIND> \
     { \
-        static UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &) { return t + INTERVAL * delta; } \
+        static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &) { return t + INTERVAL * delta; } \
     };
 ADD_TIME(Day, 86400)
 ADD_TIME(Hour, 3600)
@@ -149,9 +128,5 @@ public:
 };
 
 using FunctionTumble = FunctionWindow<TUMBLE>;
-using FunctionTumbleStart = FunctionWindow<TUMBLE_START>;
-using FunctionTumbleEnd = FunctionWindow<TUMBLE_END>;
 using FunctionHop = FunctionWindow<HOP>;
-using FunctionHopStart = FunctionWindow<HOP_START>;
-using FunctionHopEnd = FunctionWindow<HOP_END>;
 }

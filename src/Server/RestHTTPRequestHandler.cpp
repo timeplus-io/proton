@@ -514,7 +514,7 @@ void RestHTTPRequestHandler::trySendExceptionToClient(
         }
         else
         {
-            LOG_ERROR(log, "Failed to send response: " + s, exception_code);
+            LOG_ERROR(log, "Failed to send response: {}, code={}", s, exception_code);
         }
     }
     catch (...)

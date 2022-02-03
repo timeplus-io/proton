@@ -11,8 +11,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <base/ClockUtils.h>
-#include <base/DateLUT.h>
 #include <base/logger_useful.h>
+#include <Common/DateLUT.h>
 
 #include <Poco/Util/Application.h>
 
@@ -26,82 +26,82 @@ namespace ErrorCodes
 
 namespace
 {
-String TASK_KEY_PREFIX = "cluster_settings.system_tasks.";
-String TASK_DEFAULT_TOPIC = "__system_tasks";
+    String TASK_KEY_PREFIX = "cluster_settings.system_tasks.";
+    String TASK_DEFAULT_TOPIC = "__system_tasks";
 
-Block buildBlock(const std::vector<TaskStatusService::TaskStatusPtr> & tasks)
-{
-    std::vector<std::pair<String, std::vector<String>>> string_cols
-        = {{"id", std::vector<String>()},
-            {"status", std::vector<String>()},
-            {"progress", std::vector<String>()},
-            {"reason", std::vector<String>()},
-            {"user", std::vector<String>()},
-            {"context", std::vector<String>()}};
-
-    std::vector<std::pair<String, std::vector<Int64>>> int64_cols
-        = {{"last_modified", std::vector<Int64>()}, {"created", std::vector<Int64>()}};
-
-    for (const auto & task : tasks)
+    Block buildBlock(const std::vector<TaskStatusService::TaskStatusPtr> & tasks)
     {
-        for (auto & col : string_cols)
+        std::vector<std::pair<String, std::vector<String>>> string_cols
+            = {{"id", std::vector<String>()},
+               {"status", std::vector<String>()},
+               {"progress", std::vector<String>()},
+               {"reason", std::vector<String>()},
+               {"user", std::vector<String>()},
+               {"context", std::vector<String>()}};
+
+        std::vector<std::pair<String, std::vector<Int64>>> int64_cols
+            = {{"last_modified", std::vector<Int64>()}, {"created", std::vector<Int64>()}};
+
+        for (const auto & task : tasks)
         {
-            if ("id" == col.first)
+            for (auto & col : string_cols)
             {
-                col.second.push_back(task->id);
+                if ("id" == col.first)
+                {
+                    col.second.push_back(task->id);
+                }
+                else if ("status" == col.first)
+                {
+                    col.second.push_back(task->status);
+                }
+                else if ("progress" == col.first)
+                {
+                    col.second.push_back(task->progress);
+                }
+                else if ("reason" == col.first)
+                {
+                    col.second.push_back(task->reason);
+                }
+                else if ("user" == col.first)
+                {
+                    col.second.push_back(task->user);
+                }
+                else if ("context" == col.first)
+                {
+                    col.second.push_back(task->context);
+                }
+                else
+                {
+                    assert(false);
+                }
             }
-            else if ("status" == col.first)
+
+            for (auto & col : int64_cols)
             {
-                col.second.push_back(task->status);
-            }
-            else if ("progress" == col.first)
-            {
-                col.second.push_back(task->progress);
-            }
-            else if ("reason" == col.first)
-            {
-                col.second.push_back(task->reason);
-            }
-            else if ("user" == col.first)
-            {
-                col.second.push_back(task->user);
-            }
-            else if ("context" == col.first)
-            {
-                col.second.push_back(task->context);
-            }
-            else
-            {
-                assert(false);
+                if ("last_modified" == col.first)
+                {
+                    col.second.push_back(task->last_modified == -1 ? (UTCMilliseconds::now()) : task->last_modified);
+                }
+                else if ("created" == col.first)
+                {
+                    col.second.push_back(task->created == -1 ? (UTCMilliseconds::now()) : task->created);
+                }
+                else
+                {
+                    assert(false);
+                }
             }
         }
 
-        for (auto & col : int64_cols)
-        {
-            if ("last_modified" == col.first)
-            {
-                col.second.push_back(task->last_modified == -1 ? (UTCMilliseconds::now()) : task->last_modified);
-            }
-            else if ("created" == col.first)
-            {
-                col.second.push_back(task->created == -1 ? (UTCMilliseconds::now()) : task->created);
-            }
-            else
-            {
-                assert(false);
-            }
-        }
+        return DB::buildBlock(string_cols, int64_cols);
     }
 
-    return DB::buildBlock(string_cols, int64_cols);
-}
-
-DWAL::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)
-{
-    std::vector<TaskStatusService::TaskStatusPtr> tasks = {task};
-    auto block = buildBlock(tasks);
-    return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block));
-}
+    DWAL::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)
+    {
+        std::vector<TaskStatusService::TaskStatusPtr> tasks = {task};
+        auto block = buildBlock(tasks);
+        return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block));
+    }
 }
 
 const String TaskStatusService::TaskStatus::SUBMITTED = "SUBMITTED";
@@ -325,7 +325,7 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String
 
     CurrentThread::detachQueryIfNotDetached();
     /// FIXME: Remove DISTINCT when we resolve the checkpointing issue
-    auto query_template = "SELECT DISTINCT id, status, progress, "
+    constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                           "reason, user, context, created, last_modified "
                           "FROM system.tasks "
                           "WHERE user <> '' AND id == '{}' "
@@ -387,7 +387,7 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
 
     assert(!user.empty());
     CurrentThread::detachQueryIfNotDetached();
-    auto query_template = "SELECT DISTINCT id, status, progress, "
+    constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                           "reason, user, context, created, last_modified "
                           "FROM system.tasks "
                           "WHERE user == '{}' "
@@ -584,7 +584,8 @@ bool TaskStatusService::createTaskTable()
 
     try
     {
-        executeNonInsertQuery(query, context, [](Block &&) {}, true);
+        executeNonInsertQuery(
+            query, context, [](Block &&) {}, true);
     }
     catch (...)
     {
@@ -607,7 +608,7 @@ bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> 
     context->setCurrentQueryId("");
     CurrentThread::QueryScope query_scope{context};
 
-    const String value_template = "{}('{}', '{}', '{}', '{}', '{}', '{}', {}, {})";
+    constexpr auto * value_template = "{}('{}', '{}', '{}', '{}', '{}', '{}', {}, {})";
     String delimiter = "";
 
     for (const auto & task : tasks)

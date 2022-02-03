@@ -4,6 +4,7 @@
 #include "StreamingBlockReader.h"
 #include "StreamingStoreSource.h"
 
+#include <Columns/ColumnConst.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWALClient/KafkaWALCommon.h>
 #include <DistributedWALClient/KafkaWALPool.h>
@@ -17,6 +18,8 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/createBlockSelector.h>
 #include <Interpreters/evaluateConstantExpression.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
@@ -26,9 +29,10 @@
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <base/logger_useful.h>
-#include <Common/randomSeed.h>
 #include <Common/ProtonCommon.h>
 #include <Common/parseIntStrict.h>
+#include <Common/randomSeed.h>
+#include <Common/setThreadName.h>
 #include <Common/timeScale.h>
 
 
@@ -1236,7 +1240,8 @@ void StorageDistributedMergeTree::doCommit(
 
                 /// Reset index time here
                 auto * index_time_col = const_cast<ColumnWithTypeAndName *>(moved_block.findByName(RESERVED_INDEX_TIME));
-                index_time_col->column = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
+                index_time_col->column
+                    = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
 
                 merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                 break;
@@ -1711,7 +1716,10 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
             }
             catch (...)
             {
-                throw Exception("Invalid seek timestamp, ISO8601 format or relative time are supported. Example: 2020-01-01T01:12:45Z or 2020-01-01T01:12:45.123+08:00 or -10s or -6m or -2h or -1d",  ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "Invalid seek timestamp, ISO8601 format or relative time are supported. Example: 2020-01-01T01:12:45Z or "
+                    "2020-01-01T01:12:45.123+08:00 or -10s or -6m or -2h or -1d",
+                    ErrorCodes::BAD_ARGUMENTS);
             }
 
             utc_ms = res;

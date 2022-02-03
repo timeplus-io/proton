@@ -24,7 +24,8 @@
     M(SessionLogElement) \
     M(TraceLogElement) \
     M(ZooKeeperLogElement) \
-    M(TextLogElement)
+    M(TextLogElement) \
+    M(PipelineMetricLogElement)
 
 namespace Poco
 {
