@@ -5,7 +5,7 @@ if (NOT ENABLE_URING)
     return()
 endif()
 
-SET(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/liburing")
+SET(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/liburing")
 INCLUDE_DIRECTORIES(BEFORE ${LIBRARY_DIR} "${LIBRARY_DIR}/src/include")
 
 configure_file(compat.h "${LIBRARY_DIR}/src/include/liburing")

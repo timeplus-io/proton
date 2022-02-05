@@ -10,7 +10,7 @@ if (NOT ENABLE_NURAFT)
     return()
 endif()
 
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/NuRaft")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/NuRaft")
 
 set(SRCS
     "${LIBRARY_DIR}/src/handle_priority.cxx"
@@ -52,7 +52,7 @@ endif()
 
 target_include_directories (_nuraft SYSTEM PRIVATE "${LIBRARY_DIR}/include/libnuraft")
 # for some reason include "asio.h" directly without "boost/" prefix.
-target_include_directories (_nuraft SYSTEM PRIVATE "${ClickHouse_SOURCE_DIR}/contrib/boost/boost")
+target_include_directories (_nuraft SYSTEM PRIVATE "${proton_SOURCE_DIR}/contrib/boost/boost")
 
 target_link_libraries (_nuraft PRIVATE boost::headers_only boost::coroutine)
 

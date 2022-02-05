@@ -1,4 +1,4 @@
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/croaring")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/croaring")
 
 set(SRCS
     "${LIBRARY_DIR}/src/array_util.c"
@@ -25,7 +25,7 @@ target_include_directories(_roaring PRIVATE "${LIBRARY_DIR}/include/roaring")
 target_include_directories(_roaring SYSTEM BEFORE PUBLIC "${LIBRARY_DIR}/include")
 target_include_directories(_roaring SYSTEM BEFORE PUBLIC "${LIBRARY_DIR}/cpp")
 
-# We redirect malloc/free family of functions to different functions that will track memory in ClickHouse.
+# We redirect malloc/free family of functions to different functions that will track memory in proton.
 # Also note that we exploit implicit function declarations.
 target_compile_definitions(_roaring PRIVATE
     -Dmalloc=clickhouse_malloc

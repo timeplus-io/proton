@@ -1,4 +1,4 @@
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/lemmagen-c")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/lemmagen-c")
 set(LEMMAGEN_INCLUDE_DIR "${LIBRARY_DIR}/include")
 
 set(SRCS

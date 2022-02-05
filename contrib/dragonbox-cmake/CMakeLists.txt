@@ -1,4 +1,4 @@
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/dragonbox")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/dragonbox")
 
 add_library(_dragonbox_to_chars "${LIBRARY_DIR}/source/dragonbox_to_chars.cpp")
 target_include_directories(_dragonbox_to_chars SYSTEM BEFORE PUBLIC "${LIBRARY_DIR}/include/")

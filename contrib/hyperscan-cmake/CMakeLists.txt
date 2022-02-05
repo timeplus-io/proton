@@ -10,7 +10,7 @@ if (NOT ENABLE_HYPERSCAN)
     return()
 endif()
 
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/hyperscan")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/hyperscan")
 
 set (SRCS
     "${LIBRARY_DIR}/src/alloc.c"

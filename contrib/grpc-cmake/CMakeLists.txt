@@ -11,20 +11,20 @@ if(NOT ENABLE_GRPC)
   return()
 endif()
 
-set(_gRPC_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/grpc")
-set(_gRPC_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/grpc")
+set(_gRPC_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/grpc")
+set(_gRPC_BINARY_DIR "${proton_BINARY_DIR}/contrib/grpc")
 
-# Use re2 from ClickHouse contrib, not from gRPC third_party.
+# Use re2 from proton contrib, not from gRPC third_party.
 set(gRPC_RE2_PROVIDER "clickhouse" CACHE STRING "" FORCE)
 set(_gRPC_RE2_INCLUDE_DIR "")
 set(_gRPC_RE2_LIBRARIES ch_contrib::re2)
 
-# Use zlib from ClickHouse contrib, not from gRPC third_party.
+# Use zlib from proton contrib, not from gRPC third_party.
 set(gRPC_ZLIB_PROVIDER "clickhouse" CACHE STRING "" FORCE)
 set(_gRPC_ZLIB_INCLUDE_DIR "")
 set(_gRPC_ZLIB_LIBRARIES ch_contrib::zlib)
 
-# Use protobuf from ClickHouse contrib, not from gRPC third_party.
+# Use protobuf from proton contrib, not from gRPC third_party.
 set(gRPC_PROTOBUF_PROVIDER "clickhouse" CACHE STRING "" FORCE)
 set(_gRPC_PROTOBUF_LIBRARIES ch_contrib::protobuf)
 set(_gRPC_PROTOBUF_PROTOC "protoc")
@@ -37,12 +37,12 @@ else()
   set(gRPC_USE_UNSECURE_LIBRARIES TRUE)
 endif()
 
-# Use OpenSSL from ClickHouse contrib, not from gRPC third_party.
+# Use OpenSSL from proton contrib, not from gRPC third_party.
 set(gRPC_SSL_PROVIDER "clickhouse" CACHE STRING "" FORCE)
 set(_gRPC_SSL_INCLUDE_DIR "")
 set(_gRPC_SSL_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
 
-# Use abseil-cpp from ClickHouse contrib, not from gRPC third_party.
+# Use abseil-cpp from proton contrib, not from gRPC third_party.
 set(gRPC_ABSL_PROVIDER "clickhouse" CACHE STRING "" FORCE)
 
 # Choose to build static or shared library for c-ares.
@@ -81,12 +81,12 @@ add_subdirectory("${_gRPC_SOURCE_DIR}" "${_gRPC_BINARY_DIR}")
 
 # The contrib/grpc/CMakeLists.txt redefined the PROTOBUF_GENERATE_GRPC_CPP() function for its own purposes,
 # so we need to redefine it back.
-include("${ClickHouse_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
+include("${proton_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")
 
 set(gRPC_CPP_PLUGIN $<TARGET_FILE:grpc_cpp_plugin>)
 set(gRPC_PYTHON_PLUGIN $<TARGET_FILE:grpc_python_plugin>)
 
-set(gRPC_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/grpc/include")
+set(gRPC_INCLUDE_DIRS "${proton_SOURCE_DIR}/contrib/grpc/include")
 if(gRPC_USE_UNSECURE_LIBRARIES)
   set(gRPC_LIBRARIES grpc_unsecure grpc++_unsecure)
 else()

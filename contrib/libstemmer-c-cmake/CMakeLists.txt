@@ -1,4 +1,4 @@
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/libstemmer_c")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/libstemmer_c")
 set(STEMMER_INCLUDE_DIR "${LIBRARY_DIR}/include")
 
 FILE ( READ "${LIBRARY_DIR}/mkinc.mak" _CONTENT )

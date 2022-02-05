@@ -6,5 +6,5 @@ if(NOT ENABLE_MSGPACK)
 endif()
 
 add_library(_msgpack INTERFACE)
-target_include_directories(_msgpack SYSTEM BEFORE INTERFACE "${ClickHouse_SOURCE_DIR}/contrib/msgpack-c/include")
+target_include_directories(_msgpack SYSTEM BEFORE INTERFACE "${proton_SOURCE_DIR}/contrib/msgpack-c/include")
 add_library(ch_contrib::msgpack ALIAS _msgpack)

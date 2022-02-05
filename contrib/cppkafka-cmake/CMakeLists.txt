@@ -3,7 +3,7 @@ if (NOT ENABLE_KAFKA)
     return()
 endif()
 
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/cppkafka")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/cppkafka")
 
 set(SRCS
     "${LIBRARY_DIR}/src/buffer.cpp"

@@ -9,7 +9,7 @@ if (NOT ENABLE_BASE64)
     return()
 endif()
 
-SET(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/base64")
+SET(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/base64")
 
 add_library(_base64_scalar OBJECT "${LIBRARY_DIR}/turbob64c.c" "${LIBRARY_DIR}/turbob64d.c")
 add_library(_base64_ssse3 OBJECT "${LIBRARY_DIR}/turbob64sse.c") # This file also contains code for ARM NEON

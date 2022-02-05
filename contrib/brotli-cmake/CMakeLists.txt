@@ -5,8 +5,8 @@ if (NOT ENABLE_BROTLI)
     return()
 endif()
 
-set(BROTLI_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/brotli/c")
-set(BROTLI_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/brotli/c")
+set(BROTLI_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/brotli/c")
+set(BROTLI_BINARY_DIR "${proton_BINARY_DIR}/contrib/brotli/c")
 
 set(SRCS
     "${BROTLI_SOURCE_DIR}/enc/command.c"

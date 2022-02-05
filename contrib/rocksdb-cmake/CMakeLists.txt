@@ -6,7 +6,7 @@ if (NOT ENABLE_ROCKSDB)
 endif()
 
 ## this file is extracted from `contrib/rocksdb/CMakeLists.txt`
-set(ROCKSDB_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/rocksdb")
+set(ROCKSDB_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/rocksdb")
 list(APPEND CMAKE_MODULE_PATH "${ROCKSDB_SOURCE_DIR}/cmake/modules/")
 
 set(PORTABLE ON)
@@ -18,7 +18,7 @@ if (TARGET ch_contrib::snappy)
   set(USE_SNAPPY ON)
 endif()
 option(WITH_SNAPPY "build with SNAPPY" ${USE_SNAPPY})
-## lz4, zlib, zstd is enabled in ClickHouse by default
+## lz4, zlib, zstd is enabled in proton by default
 option(WITH_LZ4 "build with lz4" ON)
 option(WITH_ZLIB "build with zlib" ON)
 option(WITH_ZSTD "build with zstd" ON)

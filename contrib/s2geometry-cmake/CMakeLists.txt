@@ -5,9 +5,9 @@ if (NOT ENABLE_S2_GEOMETRY)
     return()
 endif()
 
-set(S2_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/s2geometry/src")
+set(S2_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/s2geometry/src")
 
-set(ABSL_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/abseil-cpp")
+set(ABSL_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/abseil-cpp")
 if(NOT EXISTS "${ABSL_SOURCE_DIR}/CMakeLists.txt")
     message(FATAL_ERROR " submodule contrib/abseil-cpp is missing. To fix try run: \n git submodule update --init --recursive")
 endif()

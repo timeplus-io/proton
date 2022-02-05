@@ -1,4 +1,4 @@
-include(${ClickHouse_SOURCE_DIR}/cmake/embed_binary.cmake)
+include(${proton_SOURCE_DIR}/cmake/embed_binary.cmake)
 
 set(CLICKHOUSE_METASTORE_SOURCES
     MetaStore.cpp

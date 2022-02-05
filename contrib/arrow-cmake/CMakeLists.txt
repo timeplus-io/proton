@@ -50,7 +50,7 @@ endif()
 
 
 # === orc
-set(ORC_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/orc/c++")
+set(ORC_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/orc/c++")
 set(ORC_INCLUDE_DIR "${ORC_SOURCE_DIR}/include")
 set(ORC_SOURCE_SRC_DIR "${ORC_SOURCE_DIR}/src")
 # set(ORC_SOURCE_WRAP_DIR "${ORC_SOURCE_DIR}/wrap")
@@ -59,7 +59,7 @@ set(ORC_BUILD_SRC_DIR "${CMAKE_CURRENT_BINARY_DIR}/../orc/c++/src")
 set(ORC_BUILD_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../orc/c++/include")
 
 set(ORC_ADDITION_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR})
-set(ARROW_SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/arrow/cpp/src")
+set(ARROW_SRC_DIR "${proton_SOURCE_DIR}/contrib/arrow/cpp/src")
 
 set(PROTOBUF_EXECUTABLE $<TARGET_FILE:protoc>)
 set(PROTO_DIR "${ORC_SOURCE_DIR}/../proto")
@@ -73,8 +73,8 @@ add_custom_command(OUTPUT orc_proto.pb.h orc_proto.pb.cc
 
 
 # === flatbuffers
-set(FLATBUFFERS_SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/flatbuffers")
-set(FLATBUFFERS_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/flatbuffers")
+set(FLATBUFFERS_SRC_DIR "${proton_SOURCE_DIR}/contrib/flatbuffers")
+set(FLATBUFFERS_BINARY_DIR "${proton_BINARY_DIR}/contrib/flatbuffers")
 set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_SRC_DIR}/include")
 
 # set flatbuffers CMake options
@@ -165,7 +165,7 @@ target_include_directories(_orc SYSTEM PRIVATE
 
 # === arrow
 
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/arrow/cpp/src/arrow")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/arrow/cpp/src/arrow")
 
 configure_file("${LIBRARY_DIR}/util/config.h.cmake" "${CMAKE_CURRENT_BINARY_DIR}/cpp/src/arrow/util/config.h")
 
@@ -391,8 +391,8 @@ target_include_directories(_arrow SYSTEM PRIVATE ${HDFS_INCLUDE_DIR})
 
 # === parquet
 
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/arrow/cpp/src/parquet")
-set(GEN_LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/arrow/cpp/src/generated")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/arrow/cpp/src/parquet")
+set(GEN_LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/arrow/cpp/src/generated")
 # arrow/cpp/src/parquet/CMakeLists.txt
 set(PARQUET_SRCS
         "${LIBRARY_DIR}/arrow/path_internal.cc"
@@ -434,7 +434,7 @@ add_library(_parquet ${PARQUET_SRCS})
 add_library(ch_contrib::parquet ALIAS _parquet)
 target_include_directories(_parquet SYSTEM BEFORE
     PUBLIC
-        "${ClickHouse_SOURCE_DIR}/contrib/arrow/cpp/src"
+        "${proton_SOURCE_DIR}/contrib/arrow/cpp/src"
         "${CMAKE_CURRENT_SOURCE_DIR}/cpp/src")
 target_link_libraries(_parquet
     PUBLIC _arrow
@@ -451,7 +451,7 @@ endif ()
 
 # === tools
 
-set(TOOLS_DIR "${ClickHouse_SOURCE_DIR}/contrib/arrow/cpp/tools/parquet")
+set(TOOLS_DIR "${proton_SOURCE_DIR}/contrib/arrow/cpp/tools/parquet")
 set(PARQUET_TOOLS parquet_dump_schema parquet_reader parquet_scan)
 foreach (TOOL ${PARQUET_TOOLS})
     add_executable(${TOOL} "${TOOLS_DIR}/${TOOL}.cc")

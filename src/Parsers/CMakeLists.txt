@@ -1,4 +1,4 @@
-include("${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
+include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 
 add_headers_and_sources(clickhouse_parsers .)
 add_headers_and_sources(clickhouse_parsers ./Access)
@@ -14,7 +14,7 @@ target_link_libraries(clickhouse_parsers PUBLIC clickhouse_common_io clickhouse_
 if (USE_DEBUG_HELPERS)
     # CMake generator expression will do insane quoting when it encounters special character like quotes, spaces, etc.
     # Prefixing "SHELL:" will force it to use the original text.
-    set (INCLUDE_DEBUG_HELPERS "SHELL:-I\"${ClickHouse_SOURCE_DIR}/base\" -include \"${ClickHouse_SOURCE_DIR}/src/Parsers/iostream_debug_helpers.h\"")
+    set (INCLUDE_DEBUG_HELPERS "SHELL:-I\"${proton_SOURCE_DIR}/base\" -include \"${proton_SOURCE_DIR}/src/Parsers/iostream_debug_helpers.h\"")
     # Use generator expression as we don't want to pollute CMAKE_CXX_FLAGS, which will interfere with CMake check system.
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:${INCLUDE_DEBUG_HELPERS}>)
 endif ()

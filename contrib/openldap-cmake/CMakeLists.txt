@@ -27,7 +27,7 @@ if (NOT(
     message (${RECONFIGURE_MESSAGE_LEVEL} "LDAP support using the bundled library is not implemented for ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR} platform.")
 endif ()
 
-set(OPENLDAP_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/openldap")
+set(OPENLDAP_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/openldap")
 
 # How these lists were generated?
 # I compiled the original OpenLDAP with it's original build system and copied the list of source files from build commands.

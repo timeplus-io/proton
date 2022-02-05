@@ -3,7 +3,7 @@ configure_file(config_functions.h.in ${ConfigIncludePath}/config_functions.h)
 
 add_subdirectory(divide)
 
-include("${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
+include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 add_headers_and_sources(clickhouse_functions .)
 
 list(REMOVE_ITEM clickhouse_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp)
@@ -309,13 +309,13 @@ endif()
 #  Provides faster linking and lower binary size.
 #  Tradeoff is the inability to debug some source files with e.g. gdb
 #  (empty stack frames and no local variables)."
-option(STRIP_DEBUG_SYMBOLS_FUNCTIONS "Do not generate debugger info for ClickHouse functions" ${STRIP_DSF_DEFAULT})
+option(STRIP_DEBUG_SYMBOLS_FUNCTIONS "Do not generate debugger info for proton functions" ${STRIP_DSF_DEFAULT})
 
 if (STRIP_DEBUG_SYMBOLS_FUNCTIONS)
-    message(WARNING "Not generating debugger info for ClickHouse functions")
+    message(WARNING "Not generating debugger info for proton functions")
     target_compile_options(clickhouse_functions PRIVATE "-g0")
 else()
-    message(STATUS "Generating debugger info for ClickHouse functions")
+    message(STATUS "Generating debugger info for proton functions")
 endif()
 
 if (TARGET ch_contrib::icu)
@@ -360,7 +360,7 @@ if (TARGET ch_contrib::rapidjson)
     target_link_libraries(clickhouse_functions PRIVATE ch_contrib::rapidjson)
 endif()
 
-# ClickHouse developers may use platform-dependent code under some macro (e.g. `#ifdef ENABLE_MULTITARGET`).
+# proton developers may use platform-dependent code under some macro (e.g. `#ifdef ENABLE_MULTITARGET`).
 # If turned ON, this option defines such macro.
 # See `src/Functions/TargetSpecific.h`
 option(ENABLE_MULTITARGET_CODE "Enable platform-dependent code" ON)

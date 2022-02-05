@@ -4,7 +4,7 @@ target_link_libraries (native_log PRIVATE nlog loggers)
 
 target_include_directories(native_log
         PRIVATE
-        "${ClickHouse_SOURCE_DIR}/src")
+        "${proton_SOURCE_DIR}/src")
 
 # Test range query lower/upper bound seek performance
 add_executable (rocksdb_seek_perf rocksdb_seek_perf.cpp)

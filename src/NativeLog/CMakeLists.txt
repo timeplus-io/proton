@@ -12,7 +12,7 @@ add_subdirectory(Common)
 add_library(nlog ${nlog_headers} ${nlog_sources})
 
 target_include_directories(nlog SYSTEM PUBLIC
-        "${ClickHouse_SOURCE_DIR}/contrib/flatbuffers/include"
+        "${proton_SOURCE_DIR}/contrib/flatbuffers/include"
         "${ROCKSDB_INCLUDE_DIR}")
 
 target_link_libraries(nlog PUBLIC clickhouse_common_io ch_contrib::rocksdb)

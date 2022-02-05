@@ -4,8 +4,8 @@ if (NOT ENABLE_BZIP2)
     return()
 endif()
 
-set(BZIP2_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/bzip2")
-set(BZIP2_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/bzip2")
+set(BZIP2_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/bzip2")
+set(BZIP2_BINARY_DIR "${proton_BINARY_DIR}/contrib/bzip2")
 
 set(SRCS
     "${BZIP2_SOURCE_DIR}/blocksort.c"

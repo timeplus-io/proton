@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(BoringSSL LANGUAGES C CXX)
 
-set(BORINGSSL_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/boringssl")
+set(BORINGSSL_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/boringssl")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CLANG 1)
@@ -679,7 +679,7 @@ if(NOT WIN32 AND NOT ANDROID)
   target_link_libraries(_crypto pthread)
 endif()
 
-# NOTE: that ClickHouse does not support WIN32 anyway.
+# NOTE: that proton does not support WIN32 anyway.
 if(WIN32)
   target_link_libraries(bssl ws2_32)
 endif()

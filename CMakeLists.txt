@@ -26,7 +26,7 @@ foreach(default_policy_var_name
     set(${default_policy_var_name} NEW)
 endforeach()
 
-project(ClickHouse)
+project(proton)
 
 # If turned off: e.g. when ENABLE_FOO is ON, but FOO tool was not found, the CMake will continue.
 option(FAIL_ON_UNSUPPORTED_OPTIONS_COMBINATION
@@ -63,7 +63,7 @@ set(CMAKE_DEBUG_POSTFIX "d" CACHE STRING "Generate debug library name with a pos
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Check that submodules are present only if source was downloaded with git
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git" AND NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/boost/boost")
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git" AND NOT EXISTS "${proton_SOURCE_DIR}/contrib/boost/boost")
     message (FATAL_ERROR "Submodules are not initialized. Run\n\tgit submodule update --init --recursive")
 endif ()
 
@@ -191,7 +191,7 @@ endif ()
 
 # If compiler has support for -Wreserved-identifier. It is difficult to detect by clang version,
 # because there are two different branches of clang: clang and AppleClang.
-# (AppleClang is not supported by ClickHouse, but some developers have misfortune to use it).
+# (AppleClang is not supported by proton, but some developers have misfortune to use it).
 if (HAS_RESERVED_IDENTIFIER)
     add_compile_definitions (HAS_RESERVED_IDENTIFIER)
 endif ()
@@ -439,7 +439,7 @@ if (USE_STATIC_LIBRARIES)
     set (CMAKE_POSITION_INDEPENDENT_CODE OFF)
     if (OS_LINUX AND NOT ARCH_ARM)
         # Slightly more efficient code can be generated
-        # It's disabled for ARM because otherwise ClickHouse cannot run on Android.
+        # It's disabled for ARM because otherwise proton cannot run on Android.
         set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fno-pie")
         set (CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -fno-pie")
         set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie -Wl,-no-pie")

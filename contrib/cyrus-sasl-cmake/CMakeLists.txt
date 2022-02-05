@@ -10,7 +10,7 @@ if (NOT ENABLE_CYRUS_SASL)
     return()
 endif()
 
-set(CYRUS_SASL_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/cyrus-sasl")
+set(CYRUS_SASL_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/cyrus-sasl")
 
 add_library(_sasl2)
 

@@ -1,5 +1,5 @@
-set (CURRENT_DIR_IN_SOURCES "${ClickHouse_SOURCE_DIR}/src/Parsers/fuzzers/codegen_fuzzer")
-set (CURRENT_DIR_IN_BINARY "${ClickHouse_BINARY_DIR}/src/Parsers/fuzzers/codegen_fuzzer")
+set (CURRENT_DIR_IN_SOURCES "${proton_SOURCE_DIR}/src/Parsers/fuzzers/codegen_fuzzer")
+set (CURRENT_DIR_IN_BINARY "${proton_BINARY_DIR}/src/Parsers/fuzzers/codegen_fuzzer")
 
 # Copy scripts and template file to build directory to generate .proto and .cpp file from them
 configure_file(
@@ -20,7 +20,7 @@ configure_file(
 add_custom_command(
     OUTPUT
         "${CURRENT_DIR_IN_BINARY}/clickhouse.g"
-    COMMAND ./update.sh "${ClickHouse_SOURCE_DIR}/tests/fuzz/all.dict"
+    COMMAND ./update.sh "${proton_SOURCE_DIR}/tests/fuzz/all.dict"
 )
 
 add_custom_command(

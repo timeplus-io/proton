@@ -1,4 +1,4 @@
-set (SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest")
+set (SRC_DIR "${proton_SOURCE_DIR}/contrib/googletest/googletest")
 
 add_library(_gtest "${SRC_DIR}/src/gtest-all.cc")
 set_target_properties(_gtest PROPERTIES VERSION "1.0.0")

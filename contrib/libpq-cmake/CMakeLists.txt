@@ -2,7 +2,7 @@ if (NOT ENABLE_LIBPQXX)
     return()
 endif()
 
-set(LIBPQ_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libpq")
+set(LIBPQ_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/libpq")
 
 set(SRCS
         "${LIBPQ_SOURCE_DIR}/fe-auth.c"

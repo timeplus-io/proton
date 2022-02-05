@@ -5,7 +5,7 @@ if(NOT ENABLE_PROTOBUF)
   return()
 endif()
 
-set(Protobuf_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/protobuf/src")
+set(Protobuf_INCLUDE_DIR "${proton_SOURCE_DIR}/contrib/protobuf/src")
 if(OS_FREEBSD AND SANITIZE STREQUAL "address")
   # ../contrib/protobuf/src/google/protobuf/arena_impl.h:45:10: fatal error: 'sanitizer/asan_interface.h' file not found
   # #include <sanitizer/asan_interface.h>
@@ -17,8 +17,8 @@ if(OS_FREEBSD AND SANITIZE STREQUAL "address")
   endif()
 endif()
 
-set(protobuf_source_dir "${ClickHouse_SOURCE_DIR}/contrib/protobuf")
-set(protobuf_binary_dir "${ClickHouse_BINARY_DIR}/contrib/protobuf")
+set(protobuf_source_dir "${proton_SOURCE_DIR}/contrib/protobuf")
+set(protobuf_binary_dir "${proton_BINARY_DIR}/contrib/protobuf")
 
 
 add_definitions(-DGOOGLE_PROTOBUF_CMAKE_BUILD)
@@ -240,7 +240,7 @@ if (CMAKE_HOST_SYSTEM_NAME STREQUAL CMAKE_SYSTEM_NAME
     add_executable(protobuf::protoc ALIAS protoc)
 
     if (ENABLE_FUZZING)
-        # `protoc` will be built with sanitizer and it could fail during ClickHouse build
+        # `protoc` will be built with sanitizer and it could fail during proton build
         # It easily reproduces in oss-fuzz building pipeline
         # To avoid this we can try to build `protoc` without any sanitizer with option `-fno-sanitize=all`, but
         # it this case we will face with linker errors, because libcxx still will be built with sanitizer
@@ -316,7 +316,7 @@ else ()
     add_dependencies(protoc "${PROTOC_BUILD_DIR}/protoc")
 endif ()
 
-include("${ClickHouse_SOURCE_DIR}/contrib/protobuf-cmake/protobuf_generate.cmake")
+include("${proton_SOURCE_DIR}/contrib/protobuf-cmake/protobuf_generate.cmake")
 
 add_library(_protobuf INTERFACE)
 target_link_libraries(_protobuf INTERFACE _libprotobuf)

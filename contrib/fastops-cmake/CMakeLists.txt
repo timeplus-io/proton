@@ -9,7 +9,7 @@ if(NOT ENABLE_FASTOPS)
     return()
 endif()
 
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/fastops")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/fastops")
 
 set(SRCS "")
 

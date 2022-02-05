@@ -5,7 +5,7 @@ if (NOT ENABLE_SQLITE)
     return()
 endif()
 
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/sqlite-amalgamation")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/sqlite-amalgamation")
 
 set(SRCS ${LIBRARY_DIR}/sqlite3.c)
 

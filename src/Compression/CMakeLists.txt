@@ -1,5 +1,5 @@
 if (ENABLE_FUZZING)
-    include("${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
+    include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
     add_headers_and_sources(fuzz_compression .)
 
     # Remove this file, because it has dependencies on DataTypes

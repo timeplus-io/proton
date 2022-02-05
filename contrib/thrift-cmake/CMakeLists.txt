@@ -5,7 +5,7 @@ if (NOT ENABLE_THRIFT)
     return()
 endif()
 
-set(LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/thrift/lib/cpp")
+set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/thrift/lib/cpp")
 set(thriftcpp_SOURCES
         "${LIBRARY_DIR}/src/thrift/TApplicationException.cpp"
         "${LIBRARY_DIR}/src/thrift/TOutput.cpp"
@@ -46,7 +46,7 @@ set(thriftcpp_threads_SOURCES
         "${LIBRARY_DIR}/src/thrift/concurrency/Mutex.cpp"
         )
 
-include("${ClickHouse_SOURCE_DIR}/contrib/thrift/build/cmake/ConfigureChecks.cmake") # makes config.h
+include("${proton_SOURCE_DIR}/contrib/thrift/build/cmake/ConfigureChecks.cmake") # makes config.h
 
 set (HAVE_ARPA_INET_H 1)
 set (HAVE_FCNTL_H 1)
@@ -91,5 +91,5 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 add_library(_thrift ${thriftcpp_SOURCES} ${thriftcpp_threads_SOURCES})
 add_library(ch_contrib::thrift ALIAS _thrift)
-target_include_directories(_thrift SYSTEM PUBLIC "${ClickHouse_SOURCE_DIR}/contrib/thrift/lib/cpp/src" ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(_thrift SYSTEM PUBLIC "${proton_SOURCE_DIR}/contrib/thrift/lib/cpp/src" ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries (_thrift PUBLIC boost::headers_only)

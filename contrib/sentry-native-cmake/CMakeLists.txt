@@ -9,7 +9,7 @@ if (NOT ENABLE_SENTRY)
     return()
 endif()
 
-set (SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/sentry-native")
+set (SRC_DIR "${proton_SOURCE_DIR}/contrib/sentry-native")
 
 set (SRCS
     ${SRC_DIR}/vendor/mpack.c

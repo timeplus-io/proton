@@ -10,7 +10,7 @@ if (NOT ENABLE_CPUID)
     return()
 endif()
 
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/libcpuid")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/libcpuid")
 
 set (SRCS
     "${LIBRARY_DIR}/libcpuid/asm-bits.c"

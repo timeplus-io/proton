@@ -5,8 +5,8 @@ if(NOT ENABLE_H3)
     return()
 endif()
 
-set(H3_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/h3/src/h3lib")
-set(H3_BINARY_DIR "${ClickHouse_BINARY_DIR}/contrib/h3/src/h3lib")
+set(H3_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/h3/src/h3lib")
+set(H3_BINARY_DIR "${proton_BINARY_DIR}/contrib/h3/src/h3lib")
 
 set(SRCS
 "${H3_SOURCE_DIR}/lib/algos.c"

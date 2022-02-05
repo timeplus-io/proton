@@ -4,7 +4,7 @@ if (NOT USE_LIBPROTOBUF_MUTATOR)
     return()
 endif()
 
-set(LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/libprotobuf-mutator)
+set(LIBRARY_DIR ${proton_SOURCE_DIR}/contrib/libprotobuf-mutator)
 
 add_library(_protobuf-mutator
     ${LIBRARY_DIR}/src/libfuzzer/libfuzzer_macro.cc
@@ -15,7 +15,7 @@ add_library(_protobuf-mutator
     ${LIBRARY_DIR}/src/utf8_fix.cc)
 
 target_include_directories(_protobuf-mutator BEFORE INTERFACE "${LIBRARY_DIR}")
-target_include_directories(_protobuf-mutator BEFORE INTERFACE "${ClickHouse_SOURCE_DIR}/contrib/protobuf/src")
+target_include_directories(_protobuf-mutator BEFORE INTERFACE "${proton_SOURCE_DIR}/contrib/protobuf/src")
 
 target_link_libraries(_protobuf-mutator ch_contrib::protobuf)
 

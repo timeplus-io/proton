@@ -5,7 +5,7 @@ if (NOT ENABLE_YAML_CPP)
     return()
 endif()
 
-set (LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/yaml-cpp)
+set (LIBRARY_DIR ${proton_SOURCE_DIR}/contrib/yaml-cpp)
 
 set (SRCS
     ${LIBRARY_DIR}/src/binary.cpp

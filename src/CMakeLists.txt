@@ -32,7 +32,7 @@ if (USE_DEBUG_HELPERS)
     get_target_property(MAGIC_ENUM_INCLUDE_DIR ch_contrib::magic_enum INTERFACE_INCLUDE_DIRECTORIES)
     # CMake generator expression will do insane quoting when it encounters special character like quotes, spaces, etc.
     # Prefixing "SHELL:" will force it to use the original text.
-    set (INCLUDE_DEBUG_HELPERS "SHELL:-I\"${ClickHouse_SOURCE_DIR}/base\" -I\"${MAGIC_ENUM_INCLUDE_DIR}\" -include \"${ClickHouse_SOURCE_DIR}/src/Core/iostream_debug_helpers.h\"")
+    set (INCLUDE_DEBUG_HELPERS "SHELL:-I\"${proton_SOURCE_DIR}/base\" -I\"${MAGIC_ENUM_INCLUDE_DIR}\" -include \"${proton_SOURCE_DIR}/src/Core/iostream_debug_helpers.h\"")
     # Use generator expression as we don't want to pollute CMAKE_CXX_FLAGS, which will interfere with CMake check system.
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:${INCLUDE_DEBUG_HELPERS}>)
 endif ()
@@ -298,8 +298,8 @@ macro (dbms_target_link_libraries)
     endforeach ()
 endmacro ()
 
-dbms_target_include_directories (PUBLIC "${ClickHouse_SOURCE_DIR}/src" "${ClickHouse_BINARY_DIR}/src")
-target_include_directories (clickhouse_common_io PUBLIC "${ClickHouse_SOURCE_DIR}/src" "${ClickHouse_BINARY_DIR}/src")
+dbms_target_include_directories (PUBLIC "${proton_SOURCE_DIR}/src" "${proton_BINARY_DIR}/src")
+target_include_directories (clickhouse_common_io PUBLIC "${proton_SOURCE_DIR}/src" "${proton_BINARY_DIR}/src")
 
 if (TARGET ch_contrib::llvm)
     dbms_target_link_libraries (PUBLIC ch_contrib::llvm)
@@ -518,7 +518,7 @@ endif()
 
 dbms_target_link_libraries(PUBLIC ch_contrib::consistent_hashing)
 
-include ("${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake")
+include ("${proton_SOURCE_DIR}/cmake/add_check.cmake")
 
 if (ENABLE_TESTS)
     macro (grep_gtest_sources BASE_DIR DST_VAR)
@@ -527,7 +527,7 @@ if (ENABLE_TESTS)
     endmacro()
 
     # attach all dbms gtest sources
-    grep_gtest_sources("${ClickHouse_SOURCE_DIR}/src" dbms_gtest_sources)
+    grep_gtest_sources("${proton_SOURCE_DIR}/src" dbms_gtest_sources)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
 
     # gtest framework has substandard code

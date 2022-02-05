@@ -5,8 +5,8 @@ if (NOT ENABLE_SIMDJSON)
     return()
 endif()
 
-set(SIMDJSON_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/simdjson/include")
-set(SIMDJSON_SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/simdjson/src")
+set(SIMDJSON_INCLUDE_DIR "${proton_SOURCE_DIR}/contrib/simdjson/include")
+set(SIMDJSON_SRC_DIR "${proton_SOURCE_DIR}/contrib/simdjson/src")
 set(SIMDJSON_SRC "${SIMDJSON_SRC_DIR}/simdjson.cpp")
 
 add_library(_simdjson ${SIMDJSON_SRC})

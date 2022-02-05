@@ -4,7 +4,7 @@ enable_testing()
 if (TARGET check)
     message (STATUS "Target check already exists")
 else ()
-    include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+    include (${proton_SOURCE_DIR}/cmake/add_check.cmake)
 endif ()
 
 option (ENABLE_CLICKHOUSE_TEST "Install clickhouse-test script and relevant tests scenarios" ON)

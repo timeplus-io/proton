@@ -10,13 +10,13 @@ target_link_libraries(
 target_include_directories(
     graphite-rollup-bench
     SYSTEM PRIVATE
-    ${ClickHouse_SOURCE_DIR}/src ${CMAKE_BINARY_DIR}/src
-    ${ClickHouse_SOURCE_DIR}/base ${ClickHouse_SOURCE_DIR}/base/pcg-random
+    ${proton_SOURCE_DIR}/src ${CMAKE_BINARY_DIR}/src
+    ${proton_SOURCE_DIR}/base ${proton_SOURCE_DIR}/base/pcg-random
     ${CMAKE_BINARY_DIR}/src/Core/include
     ${POCO_INCLUDE_DIR}
-    ${ClickHouse_SOURCE_DIR}/contrib/double-conversion ${ClickHouse_SOURCE_DIR}/contrib/dragonbox/include
-    ${ClickHouse_SOURCE_DIR}/contrib/fmtlib/include
-    ${ClickHouse_SOURCE_DIR}/contrib/cityhash102/include
+    ${proton_SOURCE_DIR}/contrib/double-conversion ${proton_SOURCE_DIR}/contrib/dragonbox/include
+    ${proton_SOURCE_DIR}/contrib/fmtlib/include
+    ${proton_SOURCE_DIR}/contrib/cityhash102/include
     ${RE2_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/contrib/re2_st
 )
 

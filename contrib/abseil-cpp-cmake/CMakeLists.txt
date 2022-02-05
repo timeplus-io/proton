@@ -1,10 +1,10 @@
-set(ABSL_ROOT_DIR "${ClickHouse_SOURCE_DIR}/contrib/abseil-cpp")
+set(ABSL_ROOT_DIR "${proton_SOURCE_DIR}/contrib/abseil-cpp")
 if(NOT EXISTS "${ABSL_ROOT_DIR}/CMakeLists.txt")
   message(FATAL_ERROR " submodule third_party/abseil-cpp is missing. To fix try run: \n git submodule update --init --recursive")
 endif()
 set(BUILD_TESTING OFF)
 set(ABSL_PROPAGATE_CXX_STD ON)
-add_subdirectory("${ABSL_ROOT_DIR}" "${ClickHouse_BINARY_DIR}/contrib/abseil-cpp")
+add_subdirectory("${ABSL_ROOT_DIR}" "${proton_BINARY_DIR}/contrib/abseil-cpp")
 
 add_library(_abseil_swiss_tables INTERFACE)
 

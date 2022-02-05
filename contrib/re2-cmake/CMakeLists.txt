@@ -2,14 +2,14 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-# This file was edited for ClickHouse
+# This file was edited for proton
 
 string(FIND ${CMAKE_CURRENT_BINARY_DIR} " " _have_space)
 if(_have_space GREATER 0)
     message(FATAL_ERROR "Using spaces in build path [${CMAKE_CURRENT_BINARY_DIR}] highly not recommended. Library re2st will be disabled.")
 endif()
 
-set(SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/re2")
+set(SRC_DIR "${proton_SOURCE_DIR}/contrib/re2")
 
 set(RE2_SOURCES
     ${SRC_DIR}/re2/bitstate.cc

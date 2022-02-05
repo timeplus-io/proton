@@ -33,7 +33,7 @@ if (OS_LINUX)
     # muzzy_decay_ms -- use MADV_FREE when available on newer Linuxes, to
     # avoid spurious latencies and additional work associated with
     # MADV_DONTNEED. See
-    # https://github.com/ClickHouse/ClickHouse/issues/11121 for motivation.
+    # https://github.com/proton/proton/issues/11121 for motivation.
     set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
 else()
     set (JEMALLOC_CONFIG_MALLOC_CONF "oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
@@ -46,7 +46,7 @@ if (JEMALLOC_CONFIG_MALLOC_CONF_OVERRIDE)
 endif()
 message (STATUS "jemalloc malloc_conf: ${JEMALLOC_CONFIG_MALLOC_CONF}")
 
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/jemalloc")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/jemalloc")
 
 set (SRCS
     "${LIBRARY_DIR}/src/arena.c"

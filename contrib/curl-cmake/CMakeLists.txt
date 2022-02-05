@@ -5,7 +5,7 @@ if (NOT ENABLE_CURL)
     return()
 endif()
 
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/curl")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/curl")
 
 set (SRCS
     "${LIBRARY_DIR}/lib/file.c"

@@ -5,7 +5,7 @@ if (NOT ENABLE_REPLXX)
     return()
 endif()
 
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/replxx")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/replxx")
 
 set(SRCS
     "${LIBRARY_DIR}/src/conversion.cxx"

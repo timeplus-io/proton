@@ -1,11 +1,11 @@
-set (SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/xz")
+set (SRC_DIR "${proton_SOURCE_DIR}/contrib/xz")
 
 # Author: Lasse Collin
 #
 # This file has been put into the public domain.
 # You can do whatever you want with this file.
 #
-# The file was edited for ClickHouse
+# The file was edited for proton
 
 # Get the package version from version.h into XZ_VERSION variable.
 file(READ ${SRC_DIR}/src/liblzma/api/lzma/version.h XZ_VERSION)

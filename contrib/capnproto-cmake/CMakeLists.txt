@@ -5,7 +5,7 @@ if (NOT ENABLE_CAPNP)
     return()
 endif()
 
-set (CAPNPROTO_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/capnproto/c++/src")
+set (CAPNPROTO_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/capnproto/c++/src")
 
 set (CMAKE_CXX_STANDARD 17)
 

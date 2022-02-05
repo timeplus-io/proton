@@ -1,4 +1,4 @@
-set (LIBRARY_DIR "${ClickHouse_SOURCE_DIR}/contrib/boost")
+set (LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/boost")
 
 # filesystem
 
