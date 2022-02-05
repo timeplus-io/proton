@@ -22,7 +22,6 @@
 #include <Storages/Kafka/WriteBufferToKafkaProducer.h>
 #include <Storages/ExternalDataSourceConfiguration.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/StorageMaterializedView.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -607,11 +606,6 @@ bool StorageKafka::checkDependencies(const StorageID & table_id)
     {
         auto table = DatabaseCatalog::instance().tryGetTable(db_tab, getContext());
         if (!table)
-            return false;
-
-        // If it materialized view, check it's target table
-        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(table.get());
-        if (materialized_view && !materialized_view->tryGetTargetTable())
             return false;
 
         // Check all its dependencies

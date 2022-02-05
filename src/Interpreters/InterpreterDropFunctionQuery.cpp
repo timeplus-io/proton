@@ -6,7 +6,6 @@
 #include <Interpreters/InterpreterDropFunctionQuery.h>
 #include <Interpreters/UserDefinedSQLObjectsLoader.h>
 #include <Interpreters/UserDefinedSQLFunctionFactory.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 
 
 namespace DB
@@ -19,9 +18,6 @@ BlockIO InterpreterDropFunctionQuery::execute()
 
     AccessRightsElements access_rights_elements;
     access_rights_elements.emplace_back(AccessType::DROP_FUNCTION);
-
-    if (!drop_function_query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), access_rights_elements);
 
     auto current_context = getContext();
     current_context->checkAccess(access_rights_elements);

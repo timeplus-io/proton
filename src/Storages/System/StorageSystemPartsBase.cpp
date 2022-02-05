@@ -4,14 +4,10 @@
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeDate.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/StorageMaterializedMySQL.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Access/ContextAccess.h>
 #include <Databases/IDatabase.h>
-#include <Parsers/queryToString.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Interpreters/Context.h>
@@ -123,13 +119,6 @@ StoragesInfoStream::StoragesInfoStream(const SelectQueryInfo & query_info, Conte
 
                     String engine_name = storage->getName();
 
-#if USE_MYSQL
-                    if (auto * proxy = dynamic_cast<StorageMaterializedMySQL *>(storage.get()))
-                    {
-                        auto nested = proxy->getNested();
-                        storage.swap(nested);
-                    }
-#endif
                     if (!dynamic_cast<MergeTreeData *>(storage.get()))
                         continue;
 

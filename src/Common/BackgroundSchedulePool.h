@@ -11,7 +11,6 @@
 #include <map>
 #include <functional>
 #include <boost/noncopyable.hpp>
-#include <Common/ZooKeeper/Types.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
 #include <Common/ThreadPool.h>
@@ -112,9 +111,6 @@ public:
 
     /// Atomically activate task and schedule it for execution.
     bool activateAndSchedule();
-
-    /// get Coordination::WatchCallback needed for notifications from ZooKeeper watches.
-    Coordination::WatchCallback getWatchCallback();
 
 private:
     friend class TaskNotification;

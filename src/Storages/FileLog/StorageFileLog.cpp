@@ -8,16 +8,13 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/FileLog/FileLogSource.h>
-#include <Storages/FileLog/ReadBufferFromFileLog.h>
 #include <Storages/FileLog/StorageFileLog.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/StorageMaterializedView.h>
 #include <base/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/Macros.h>
@@ -549,11 +546,6 @@ bool StorageFileLog::checkDependencies(const StorageID & table_id)
     {
         auto table = DatabaseCatalog::instance().tryGetTable(storage, getContext());
         if (!table)
-            return false;
-
-        // If it materialized view, check it's target table
-        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(table.get());
-        if (materialized_view && !materialized_view->tryGetTargetTable())
             return false;
 
         // Check all its dependencies

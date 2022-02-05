@@ -1,16 +1,11 @@
 #include <map>
-#include <set>
 #include <optional>
 #include <memory>
 #include <Poco/Base64Encoder.h>
 #include <Poco/Base64Decoder.h>
-#include <Poco/Mutex.h>
 #include <Poco/UUID.h>
-#include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
 #include <Common/Macros.h>
-#include <Common/escapeForFileName.h>
-#include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
 #include <Common/Throttler.h>
@@ -18,14 +13,10 @@
 #include <Common/FieldVisitorToString.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Coordination/KeeperDispatcher.h>
-#include <Compression/ICompressionCodec.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Formats/FormatFactory.h>
-#include <Databases/IDatabase.h>
-#include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/MergeList.h>
-#include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/CompressionCodecSelector.h>
@@ -62,20 +53,16 @@
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/SessionLog.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DDLWorker.h>
-#include <Interpreters/DDLTask.h>
 #include <Interpreters/Session.h>
 #include <Interpreters/TraceCollector.h>
-#include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Common/StackTrace.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/DNSResolver.h>
 #include <Common/ShellCommand.h>
 #include <base/logger_useful.h>
 #include <base/EnumReflection.h>
@@ -88,7 +75,6 @@
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Interpreters/SynonymsExtensions.h>
 #include <Interpreters/Lemmatizers.h>
-#include <Interpreters/ClusterDiscovery.h>
 #include <filesystem>
 
 /// proton: starts
@@ -228,7 +214,6 @@ struct ContextSharedPart
     mutable MMappedFileCachePtr mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list;                               /// Executing queries at the moment.
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
-    ReplicatedFetchList replicated_fetch_list;
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
 
@@ -238,11 +223,7 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
-    mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends
-
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
-    std::unique_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
     /// Rules for selecting the compression settings, depending on the size of the part.
     mutable std::unique_ptr<CompressionCodecSelector> compression_codec_selector;
     /// Storage disk chooser for MergeTree engines
@@ -276,7 +257,6 @@ struct ContextSharedPart
     std::shared_ptr<Clusters> clusters;
     ConfigurationPtr clusters_config;                        /// Stores updated configs
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
-    std::unique_ptr<ClusterDiscovery> cluster_discovery;
 
     std::shared_ptr<AsynchronousInsertQueue> async_insert_queue;
     std::map<String, UInt16> server_ports;
@@ -289,9 +269,6 @@ struct ContextSharedPart
     Stopwatch uptime_watch;
 
     Context::ApplicationType application_type = Context::ApplicationType::SERVER;
-
-    /// vector of xdbc-bridge commands, they will be killed when Context will be destroyed
-    std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
 
     Context::ConfigReloadCallback config_reload_callback;
 
@@ -399,7 +376,6 @@ struct ContextSharedPart
             distributed_schedule_pool.reset();
             message_broker_schedule_pool.reset();
             part_commit_pool.reset(); /// proton:
-            ddl_worker.reset();
             access_control.reset();
 
             /// Stop trace collector if any
@@ -498,8 +474,6 @@ ProcessList & Context::getProcessList() { return shared->process_list; }
 const ProcessList & Context::getProcessList() const { return shared->process_list; }
 MergeList & Context::getMergeList() { return shared->merge_list; }
 const MergeList & Context::getMergeList() const { return shared->merge_list; }
-ReplicatedFetchList & Context::getReplicatedFetchList() { return shared->replicated_fetch_list; }
-const ReplicatedFetchList & Context::getReplicatedFetchList() const { return shared->replicated_fetch_list; }
 
 String Context::resolveDatabase(const String & database_name) const
 {
@@ -1794,156 +1768,9 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
     return *shared->message_broker_schedule_pool;
 }
 
-ThrottlerPtr Context::getReplicatedFetchesThrottler() const
-{
-    auto lock = getLock();
-    if (!shared->replicated_fetches_throttler)
-        shared->replicated_fetches_throttler = std::make_shared<Throttler>(
-            settings.max_replicated_fetches_network_bandwidth_for_server);
-
-    return shared->replicated_fetches_throttler;
-}
-
-ThrottlerPtr Context::getReplicatedSendsThrottler() const
-{
-    auto lock = getLock();
-    if (!shared->replicated_sends_throttler)
-        shared->replicated_sends_throttler = std::make_shared<Throttler>(
-            settings.max_replicated_sends_network_bandwidth_for_server);
-
-    return shared->replicated_sends_throttler;
-}
-
 bool Context::hasDistributedDDL() const
 {
     return getConfigRef().has("distributed_ddl");
-}
-
-void Context::setDDLWorker(std::unique_ptr<DDLWorker> ddl_worker)
-{
-    auto lock = getLock();
-    if (shared->ddl_worker)
-        throw Exception("DDL background thread has already been initialized", ErrorCodes::LOGICAL_ERROR);
-    ddl_worker->startup();
-    shared->ddl_worker = std::move(ddl_worker);
-}
-
-DDLWorker & Context::getDDLWorker() const
-{
-    auto lock = getLock();
-    if (!shared->ddl_worker)
-    {
-        if (!hasZooKeeper())
-            throw Exception("There is no Zookeeper configuration in server config", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-        if (!hasDistributedDDL())
-            throw Exception("There is no DistributedDDL configuration in server config", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-
-        throw Exception("DDL background thread is not initialized", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
-    }
-    return *shared->ddl_worker;
-}
-
-zkutil::ZooKeeperPtr Context::getZooKeeper() const
-{
-    std::lock_guard lock(shared->zookeeper_mutex);
-
-    const auto & config = shared->zookeeper_config ? *shared->zookeeper_config : getConfigRef();
-    if (!shared->zookeeper)
-        shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog());
-    else if (shared->zookeeper->expired())
-        shared->zookeeper = shared->zookeeper->startNewSession();
-
-    return shared->zookeeper;
-}
-
-namespace
-{
-
-bool checkZooKeeperConfigIsLocal(const Poco::Util::AbstractConfiguration & config, const std::string & config_name)
-{
-    Poco::Util::AbstractConfiguration::Keys keys;
-    config.keys(config_name, keys);
-
-    for (const auto & key : keys)
-    {
-        if (startsWith(key, "node"))
-        {
-            String host = config.getString(config_name + "." + key + ".host");
-            if (isLocalAddress(DNSResolver::instance().resolveHost(host)))
-                return true;
-        }
-    }
-    return false;
-}
-
-}
-
-
-bool Context::tryCheckClientConnectionToMyKeeperCluster() const
-{
-    try
-    {
-        /// If our server is part of main Keeper cluster
-        if (checkZooKeeperConfigIsLocal(getConfigRef(), "zookeeper"))
-        {
-            LOG_DEBUG(shared->log, "Keeper server is participant of the main zookeeper cluster, will try to connect to it");
-            getZooKeeper();
-            /// Connected, return true
-            return true;
-        }
-        else
-        {
-            Poco::Util::AbstractConfiguration::Keys keys;
-            getConfigRef().keys("auxiliary_zookeepers", keys);
-
-            /// If our server is part of some auxiliary_zookeeper
-            for (const auto & aux_zk_name : keys)
-            {
-                if (checkZooKeeperConfigIsLocal(getConfigRef(), "auxiliary_zookeepers." + aux_zk_name))
-                {
-                    LOG_DEBUG(shared->log, "Our Keeper server is participant of the auxiliary zookeeper cluster ({}), will try to connect to it", aux_zk_name);
-                    getAuxiliaryZooKeeper(aux_zk_name);
-                    /// Connected, return true
-                    return true;
-                }
-            }
-        }
-
-        /// Our server doesn't depend on our Keeper cluster
-        return true;
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
-UInt32 Context::getZooKeeperSessionUptime() const
-{
-    std::lock_guard lock(shared->zookeeper_mutex);
-    if (!shared->zookeeper || shared->zookeeper->expired())
-        return 0;
-    return shared->zookeeper->getSessionUptime();
-}
-
-void Context::setSystemZooKeeperLogAfterInitializationIfNeeded()
-{
-    /// It can be nearly impossible to understand in which order global objects are initialized on server startup.
-    /// If getZooKeeper() is called before initializeSystemLogs(), then zkutil::ZooKeeper gets nullptr
-    /// instead of pointer to system table and it logs nothing.
-    /// This method explicitly sets correct pointer to system log after its initialization.
-    /// TODO get rid of this if possible
-
-    std::lock_guard lock(shared->zookeeper_mutex);
-    if (!shared->system_logs || !shared->system_logs->zookeeper_log)
-        return;
-
-    if (shared->zookeeper)
-        shared->zookeeper->setZooKeeperLog(shared->system_logs->zookeeper_log);
-
-    for (auto & zk : shared->auxiliary_zookeepers)
-        zk.second->setZooKeeperLog(shared->system_logs->zookeeper_log);
 }
 
 void Context::initializeKeeperDispatcher([[maybe_unused]] bool start_async) const
@@ -2052,88 +1879,6 @@ void Context::updateKeeperConfiguration([[maybe_unused]] const Poco::Util::Abstr
 #endif
 }
 
-
-zkutil::ZooKeeperPtr Context::getAuxiliaryZooKeeper(const String & name) const
-{
-    std::lock_guard lock(shared->auxiliary_zookeepers_mutex);
-
-    auto zookeeper = shared->auxiliary_zookeepers.find(name);
-    if (zookeeper == shared->auxiliary_zookeepers.end())
-    {
-        if (name.find(':') != std::string::npos || name.find('/') != std::string::npos)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid auxiliary ZooKeeper name {}: ':' and '/' are not allowed", name);
-
-        const auto & config = shared->auxiliary_zookeepers_config ? *shared->auxiliary_zookeepers_config : getConfigRef();
-        if (!config.has("auxiliary_zookeepers." + name))
-            throw Exception(
-                ErrorCodes::BAD_ARGUMENTS,
-                "Unknown auxiliary ZooKeeper name '{}'. If it's required it can be added to the section <auxiliary_zookeepers> in "
-                "config.xml",
-                name);
-
-        zookeeper = shared->auxiliary_zookeepers.emplace(name,
-                        std::make_shared<zkutil::ZooKeeper>(config, "auxiliary_zookeepers." + name, getZooKeeperLog())).first;
-    }
-    else if (zookeeper->second->expired())
-        zookeeper->second = zookeeper->second->startNewSession();
-
-    return zookeeper->second;
-}
-
-void Context::resetZooKeeper() const
-{
-    std::lock_guard lock(shared->zookeeper_mutex);
-    shared->zookeeper.reset();
-}
-
-static void reloadZooKeeperIfChangedImpl(const ConfigurationPtr & config, const std::string & config_name, zkutil::ZooKeeperPtr & zk,
-                                         std::shared_ptr<ZooKeeperLog> zk_log)
-{
-    if (!zk || zk->configChanged(*config, config_name))
-    {
-        if (zk)
-            zk->finalize("Config changed");
-
-        zk = std::make_shared<zkutil::ZooKeeper>(*config, config_name, std::move(zk_log));
-    }
-}
-
-void Context::reloadZooKeeperIfChanged(const ConfigurationPtr & config) const
-{
-    std::lock_guard lock(shared->zookeeper_mutex);
-    shared->zookeeper_config = config;
-    reloadZooKeeperIfChangedImpl(config, "zookeeper", shared->zookeeper, getZooKeeperLog());
-}
-
-void Context::reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & config)
-{
-    std::lock_guard lock(shared->auxiliary_zookeepers_mutex);
-
-    shared->auxiliary_zookeepers_config = config;
-
-    for (auto it = shared->auxiliary_zookeepers.begin(); it != shared->auxiliary_zookeepers.end();)
-    {
-        if (!config->has("auxiliary_zookeepers." + it->first))
-            it = shared->auxiliary_zookeepers.erase(it);
-        else
-        {
-            reloadZooKeeperIfChangedImpl(config, "auxiliary_zookeepers." + it->first, it->second, getZooKeeperLog());
-            ++it;
-        }
-    }
-}
-
-
-bool Context::hasZooKeeper() const
-{
-    return getConfigRef().has("zookeeper");
-}
-
-bool Context::hasAuxiliaryZooKeeper(const String & name) const
-{
-    return getConfigRef().has("auxiliary_zookeepers." + name);
-}
-
 InterserverCredentialsPtr Context::getInterserverCredentials()
 {
     return shared->interserver_io_credentials.get();
@@ -2222,12 +1967,7 @@ std::shared_ptr<Cluster> Context::getCluster(const std::string & cluster_name) c
 
 std::shared_ptr<Cluster> Context::tryGetCluster(const std::string & cluster_name) const
 {
-    auto res = getClusters()->getCluster(cluster_name);
-    if (res)
-        return res;
-    if (!cluster_name.empty())
-        res = tryGetReplicatedDatabaseCluster(cluster_name);
-    return res;
+    return getClusters()->getCluster(cluster_name);
 }
 
 
@@ -2270,22 +2010,10 @@ std::shared_ptr<Clusters> Context::getClusters() const
     return shared->clusters;
 }
 
-void Context::startClusterDiscovery()
-{
-    if (!shared->cluster_discovery)
-        return;
-    shared->cluster_discovery->start();
-}
-
-
 /// On repeating calls updates existing clusters and adds new clusters, doesn't delete old clusters
-void Context::setClustersConfig(const ConfigurationPtr & config, bool enable_discovery, const String & config_name)
+void Context::setClustersConfig(const ConfigurationPtr & config, bool /*enable_discovery*/, const String & config_name)
 {
     std::lock_guard lock(shared->clusters_mutex);
-    if (config->getBool("allow_experimental_cluster_discovery", false) && enable_discovery && !shared->cluster_discovery)
-    {
-        shared->cluster_discovery = std::make_unique<ClusterDiscovery>(*config, getGlobalContext());
-    }
 
     /// Do not update clusters if this part of config wasn't changed.
     if (shared->clusters && isSameConfiguration(*config, *shared->clusters_config, config_name))
@@ -2839,13 +2567,6 @@ void Context::setQueryParameter(const String & name, const String & value)
 }
 
 
-void Context::addBridgeCommand(std::unique_ptr<ShellCommand> cmd) const
-{
-    auto lock = getLock();
-    shared->bridge_commands.emplace_back(std::move(cmd));
-}
-
-
 IHostContextPtr & Context::getHostContext()
 {
     return host_context;
@@ -3050,26 +2771,6 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     if (exception)
         exception->emplace("Cannot resolve database name for table " + storage_id.getNameForLogs(), ErrorCodes::UNKNOWN_TABLE);
     return StorageID::createEmpty();
-}
-
-void Context::initZooKeeperMetadataTransaction(ZooKeeperMetadataTransactionPtr txn, [[maybe_unused]] bool attach_existing)
-{
-    assert(!metadata_transaction);
-    assert(attach_existing || query_context.lock().get() == this);
-    metadata_transaction = std::move(txn);
-}
-
-ZooKeeperMetadataTransactionPtr Context::getZooKeeperMetadataTransaction() const
-{
-    assert(!metadata_transaction || hasQueryContext());
-    return metadata_transaction;
-}
-
-void Context::resetZooKeeperMetadataTransaction()
-{
-    assert(metadata_transaction);
-    assert(hasQueryContext());
-    metadata_transaction = nullptr;
 }
 
 PartUUIDsPtr Context::getPartUUIDs() const

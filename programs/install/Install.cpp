@@ -358,13 +358,6 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             "proton-server",
             "proton-client",
             "proton-local",
-            "proton-benchmark",
-            "proton-copier",
-            "proton-obfuscator",
-            "proton-git-import",
-            "proton-compressor",
-            "proton-format",
-            "proton-extract-from-config"
         };
 
         for (const auto & tool : tools)

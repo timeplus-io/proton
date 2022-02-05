@@ -1,0 +1,2 @@
+[[ -v $_PROTON_COMPLETION_LOADED ]] || source "$(dirname "${BASH_SOURCE[0]}")/proton-bootstrap"
+_complete_proton_generic proton-client

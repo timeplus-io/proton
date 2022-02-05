@@ -1,7 +1,7 @@
-#include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/Streaming/ParserIntervalAliasExpression.h>
+#include <Parsers/IAST.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/Streaming/ParserIntervalAliasExpression.h>
 #include <Parsers/parseQuery.h>
 #include <gtest/gtest.h>
 

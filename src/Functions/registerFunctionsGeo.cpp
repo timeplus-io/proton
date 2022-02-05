@@ -1,10 +1,12 @@
 #include "config_functions.h"
+#include <config_core.h>
 
 namespace DB
 {
 
 class FunctionFactory;
 
+#if USE_GEO_FUNCS
 void registerFunctionGeoDistance(FunctionFactory & factory);
 void registerFunctionPointInEllipses(FunctionFactory & factory);
 void registerFunctionPointInPolygon(FunctionFactory & factory);
@@ -23,8 +25,10 @@ void registerFunctionGeohashesInBox(FunctionFactory & factory);
 void registerFunctionWkt(FunctionFactory & factory);
 void registerFunctionReadWKT(FunctionFactory & factory);
 void registerFunctionSvg(FunctionFactory & factory);
+#endif
 
 #if USE_H3
+#if USE_H3_GEO_FUNCS
 void registerFunctionGeoToH3(FunctionFactory &);
 void registerFunctionH3ToGeo(FunctionFactory &);
 void registerFunctionH3ToGeoBoundary(FunctionFactory &);
@@ -52,10 +56,11 @@ void registerFunctionH3HexAreaKm2(FunctionFactory &);
 void registerFunctionH3CellAreaM2(FunctionFactory &);
 void registerFunctionH3CellAreaRads2(FunctionFactory &);
 void registerFunctionH3NumHexagons(FunctionFactory &);
-
+#endif
 #endif
 
 #if USE_S2_GEOMETRY
+#if USE_S2_GEO_FUNCS
 void registerFunctionGeoToS2(FunctionFactory &);
 void registerFunctionS2ToGeo(FunctionFactory &);
 void registerFunctionS2GetNeighbors(FunctionFactory &);
@@ -67,10 +72,13 @@ void registerFunctionS2RectContains(FunctionFactory &);
 void registerFunctionS2RectUnion(FunctionFactory &);
 void registerFunctionS2RectIntersection(FunctionFactory &);
 #endif
+#endif
 
 
 void registerFunctionsGeo(FunctionFactory & factory)
 {
+    (void)factory;
+#if USE_GEO_FUNCS
     registerFunctionGeoDistance(factory);
     registerFunctionPointInEllipses(factory);
     registerFunctionPointInPolygon(factory);
@@ -89,8 +97,10 @@ void registerFunctionsGeo(FunctionFactory & factory)
     registerFunctionWkt(factory);
     registerFunctionReadWKT(factory);
     registerFunctionSvg(factory);
+#endif
 
 #if USE_H3
+#if USE_H3_GEO_FUNCS
     registerFunctionGeoToH3(factory);
     registerFunctionH3ToGeo(factory);
     registerFunctionH3ToGeoBoundary(factory);
@@ -119,8 +129,10 @@ void registerFunctionsGeo(FunctionFactory & factory)
     registerFunctionH3CellAreaRads2(factory);
     registerFunctionH3NumHexagons(factory);
 #endif
+#endif
 
 #if USE_S2_GEOMETRY
+#if USE_S2_GEO_FUNCS
     registerFunctionGeoToS2(factory);
     registerFunctionS2ToGeo(factory);
     registerFunctionS2GetNeighbors(factory);
@@ -131,6 +143,7 @@ void registerFunctionsGeo(FunctionFactory & factory)
     registerFunctionS2RectContains(factory);
     registerFunctionS2RectUnion(factory);
     registerFunctionS2RectIntersection(factory);
+#endif
 #endif
 }
 

@@ -7,8 +7,6 @@
 #include <Access/Common/AccessFlags.h>
 #include <Access/RowPolicy.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
-#include <boost/range/algorithm/sort.hpp>
 
 
 namespace DB
@@ -47,12 +45,6 @@ BlockIO InterpreterCreateRowPolicyQuery::execute()
     auto & query = query_ptr->as<ASTCreateRowPolicyQuery &>();
     auto & access_control = getContext()->getAccessControl();
     getContext()->checkAccess(query.alter ? AccessType::ALTER_ROW_POLICY : AccessType::CREATE_ROW_POLICY);
-
-    if (!query.cluster.empty())
-    {
-        query.replaceCurrentUserTag(getContext()->getUserName());
-        return executeDDLQueryOnCluster(query_ptr, getContext());
-    }
 
     assert(query.names->cluster.empty());
     std::optional<RolesOrUsersSet> roles_from_query;

@@ -77,13 +77,6 @@ StoragePtr StorageFactory::get(
 
         name = "View";
     }
-    else if (query.is_live_view)
-    {
-        if (query.storage)
-            throw Exception("Specifying ENGINE is not allowed for a LiveView", ErrorCodes::INCORRECT_QUERY);
-
-        name = "LiveView";
-    }
     else if (query.is_dictionary)
     {
         if (query.storage)
@@ -97,15 +90,7 @@ StoragePtr StorageFactory::get(
         /// Exception: any type is allowed in View, because plain (non-materialized) View does not store anything itself.
         checkAllTypesAreAllowedInTable(columns.getAll());
 
-        if (query.is_materialized_view)
-        {
-            name = "MaterializedView";
-        }
-        else if (query.is_window_view)
-        {
-            name = "WindowView";
-        }
-        else if (query.is_streaming_view)
+        if (query.is_streaming_view)
         {
             name = "StreamingView";
         }
@@ -129,24 +114,6 @@ StoragePtr StorageFactory::get(
             {
                 throw Exception(
                     "Direct creation of tables with ENGINE View is not supported, use CREATE VIEW statement",
-                    ErrorCodes::INCORRECT_QUERY);
-            }
-            else if (name == "MaterializedView")
-            {
-                throw Exception(
-                    "Direct creation of tables with ENGINE MaterializedView is not supported, use CREATE MATERIALIZED VIEW statement",
-                    ErrorCodes::INCORRECT_QUERY);
-            }
-            else if (name == "LiveView")
-            {
-                throw Exception(
-                    "Direct creation of tables with ENGINE LiveView is not supported, use CREATE LIVE VIEW statement",
-                    ErrorCodes::INCORRECT_QUERY);
-            }
-            else if (name == "WindowView")
-            {
-                throw Exception(
-                    "Direct creation of tables with ENGINE WindowView is not supported, use CREATE WINDOW VIEW statement",
                     ErrorCodes::INCORRECT_QUERY);
             }
 

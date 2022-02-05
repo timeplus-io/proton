@@ -2,14 +2,11 @@
 #include <Databases/DatabaseOnDisk.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ReadBufferFromFile.h>
 #include <Parsers/formatAST.h>
 #include <Common/renameat2.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <filesystem>
-#include <Interpreters/DDLTask.h>
 #include <DistributedMetadata/CatalogService.h>
 
 namespace fs = std::filesystem;
@@ -124,9 +121,6 @@ void DatabaseAtomic::dropTable(ContextPtr local_context, const String & table_na
         std::unique_lock lock(mutex);
         table = getTableUnlocked(table_name, lock);
         table_metadata_path_drop = DatabaseCatalog::instance().getPathForDroppedMetadata(table->getStorageID());
-        auto txn = local_context->getZooKeeperMetadataTransaction();
-        if (txn && !local_context->isInternalSubquery())
-            txn->commit();      /// Commit point (a sort of) for Replicated database
 
         /// NOTE: replica will be lost if server crashes before the following rename
         /// We apply changes in ZooKeeper before applying changes in local metadata file
@@ -196,15 +190,6 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
             db.tryCreateSymlink(table_name_, table_data_path_);
     };
 
-    auto assert_can_move_mat_view = [inside_database](const StoragePtr & table_)
-    {
-        if (inside_database)
-            return;
-        if (const auto * mv = dynamic_cast<const StorageMaterializedView *>(table_.get()))
-            if (mv->hasInnerTable())
-                throw Exception("Cannot move MaterializedView with inner table to other database", ErrorCodes::NOT_IMPLEMENTED);
-    };
-
     String table_data_path;
     String other_table_data_path;
 
@@ -235,7 +220,6 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Use RENAME/EXCHANGE TABLE (instead of RENAME/EXCHANGE DICTIONARY) for tables");
 
     table->checkTableCanBeRenamed();
-    assert_can_move_mat_view(table);
     StoragePtr other_table;
     if (exchange)
     {
@@ -243,13 +227,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
         if (dictionary && !other_table->isDictionary())
             throw Exception(ErrorCodes::INCORRECT_QUERY, "Use RENAME/EXCHANGE TABLE (instead of RENAME/EXCHANGE DICTIONARY) for tables");
         other_table->checkTableCanBeRenamed();
-        assert_can_move_mat_view(other_table);
     }
-
-    /// Table renaming actually begins here
-    auto txn = local_context->getZooKeeperMetadataTransaction();
-    if (txn && !local_context->isInternalSubquery())
-        txn->commit();     /// Commit point (a sort of) for Replicated database
 
     /// NOTE: replica will be lost if server crashes before the following rename
     /// TODO better detection and recovery
@@ -296,7 +274,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
 
 void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const StoragePtr & table,
                                        const String & table_metadata_tmp_path, const String & table_metadata_path,
-                                       ContextPtr query_context)
+                                       ContextPtr /*query_context*/)
 {
     DetachedTables not_in_use;
     auto table_data_path = getTableDataPath(query);
@@ -313,10 +291,6 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
         /// We will get en exception if some table with the same UUID exists (even if it's detached table or table from another database)
         DatabaseCatalog::instance().addUUIDMapping(query.uuid);
         locked_uuid = true;
-
-        auto txn = query_context->getZooKeeperMetadataTransaction();
-        if (txn && !query_context->isInternalSubquery())
-            txn->commit();     /// Commit point (a sort of) for Replicated database
 
         /// NOTE: replica will be lost if server crashes before the following renameNoReplace(...)
         /// TODO better detection and recovery
@@ -338,7 +312,7 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
 }
 
 void DatabaseAtomic::commitAlterTable(const StorageID & table_id, const String & table_metadata_tmp_path, const String & table_metadata_path,
-                                      const String & /*statement*/, ContextPtr query_context)
+                                      const String & /*statement*/, ContextPtr /*query_context*/)
 {
     bool check_file_exists = true;
     SCOPE_EXIT({ std::error_code code; if (check_file_exists) std::filesystem::remove(table_metadata_tmp_path, code); });
@@ -348,10 +322,6 @@ void DatabaseAtomic::commitAlterTable(const StorageID & table_id, const String &
 
     if (table_id.uuid != actual_table_id.uuid)
         throw Exception("Cannot alter table because it was renamed", ErrorCodes::CANNOT_ASSIGN_ALTER);
-
-    auto txn = query_context->getZooKeeperMetadataTransaction();
-    if (txn && !query_context->isInternalSubquery())
-        txn->commit();      /// Commit point (a sort of) for Replicated database
 
     /// NOTE: replica will be lost if server crashes before the following rename
     /// TODO better detection and recovery

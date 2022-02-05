@@ -1,6 +1,5 @@
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
@@ -153,60 +152,8 @@ void SelectStreamFactory::createForShard(
             return;
         }
 
-        const auto * replicated_storage = dynamic_cast<const StorageReplicatedMergeTree *>(main_table_storage.get());
-
-        if (!replicated_storage)
-        {
-            /// Table is not replicated, use local server.
-            emplace_local_stream();
-            return;
-        }
-
-        UInt64 max_allowed_delay = settings.max_replica_delay_for_distributed_queries;
-
-        if (!max_allowed_delay)
-        {
-            emplace_local_stream();
-            return;
-        }
-
-        UInt32 local_delay = replicated_storage->getAbsoluteDelay();
-
-        if (local_delay < max_allowed_delay)
-        {
-            emplace_local_stream();
-            return;
-        }
-
-        /// If we reached this point, local replica is stale.
-        ProfileEvents::increment(ProfileEvents::DistributedConnectionStaleReplica);
-        LOG_WARNING(&Poco::Logger::get("ClusterProxy::SelectStreamFactory"), "Local replica of shard {} is stale (delay: {}s.)", shard_info.shard_num, local_delay);
-
-        if (!settings.fallback_to_stale_replicas_for_distributed_queries)
-        {
-            if (shard_info.hasRemoteConnections())
-            {
-                /// If we cannot fallback, then we cannot use local replica. Try our luck with remote replicas.
-                emplace_remote_stream();
-                return;
-            }
-            else
-                throw Exception(
-                    "Local replica of shard " + toString(shard_info.shard_num)
-                    + " is stale (delay: " + toString(local_delay) + "s.), but no other replica configured",
-                    ErrorCodes::ALL_REPLICAS_ARE_STALE);
-        }
-
-        if (!shard_info.hasRemoteConnections())
-        {
-            /// There are no remote replicas but we are allowed to fall back to stale local replica.
-            emplace_local_stream();
-            return;
-        }
-
-        /// Try our luck with remote replicas, but if they are stale too, then fallback to local replica.
-        /// Do it lazily to avoid connecting in the main thread.
-        emplace_remote_stream(true /* lazy */, local_delay);
+        /// Table is not replicated, use local server.
+        emplace_local_stream();
     }
     else
         emplace_remote_stream();

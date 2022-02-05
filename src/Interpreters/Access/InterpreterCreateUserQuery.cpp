@@ -2,14 +2,11 @@
 #include <Parsers/Access/ASTCreateUserQuery.h>
 #include <Parsers/Access/ASTRolesOrUsersSet.h>
 #include <Parsers/Access/ASTUserNameWithHost.h>
-#include <Parsers/ASTDatabaseOrNone.h>
 #include <Access/AccessControl.h>
 #include <Access/ContextAccess.h>
 #include <Access/User.h>
 #include <Interpreters/Access/InterpreterSetRoleQuery.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
-#include <boost/range/algorithm/copy.hpp>
 
 
 namespace DB
@@ -93,9 +90,6 @@ BlockIO InterpreterCreateUserQuery::execute()
                 access->checkAdminOption(role);
         }
     }
-
-    if (!query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext());
 
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)

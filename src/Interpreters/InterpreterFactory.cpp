@@ -80,7 +80,6 @@
 
 #include <Parsers/ASTSystemQuery.h>
 
-#include <Databases/MySQL/MaterializedMySQLSyncThread.h>
 #include <Parsers/ASTExternalDDLQuery.h>
 #include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>

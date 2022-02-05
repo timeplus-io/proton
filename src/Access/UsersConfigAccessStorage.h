@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Access/MemoryAccessStorage.h>
-#include <Common/ZooKeeper/Common.h>
 
 
 namespace Poco::Util
@@ -36,8 +35,7 @@ public:
 
     void load(const String & users_config_path,
               const String & include_from_path = {},
-              const String & preprocessed_dir = {},
-              const zkutil::GetZooKeeper & get_zookeeper_function = {});
+              const String & preprocessed_dir = {});
     void reload();
     void startPeriodicReloading();
     void stopPeriodicReloading();

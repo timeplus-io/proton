@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common/ZooKeeper/IKeeper.h>
 #include <Core/UUID.h>
 #include <set>
 
@@ -10,7 +9,6 @@ namespace DB
 struct PinnedPartUUIDs
 {
     std::set<UUID> part_uuids;
-    Coordination::Stat stat{};
 
     bool contains(const UUID & part_uuid) const
     {

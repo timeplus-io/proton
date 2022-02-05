@@ -1,7 +1,6 @@
 #include <Storages/IStorage.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/InterpreterOptimizeQuery.h>
 #include <Access/Common/AccessRightsElement.h>
 #include <Common/typeid_cast.h>
@@ -23,9 +22,6 @@ namespace ErrorCodes
 BlockIO InterpreterOptimizeQuery::execute()
 {
     const auto & ast = query_ptr->as<ASTOptimizeQuery &>();
-
-    if (!ast.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
 
     getContext()->checkAccess(getRequiredAccess());
 

@@ -39,16 +39,14 @@ if ! $gosu test -f "$PROTON_CONFIG" -a -r "$PROTON_CONFIG"; then
 fi
 
 # get `proton` directories locations
-DATA_DIR="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=path || true)"
-TMP_DIR="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=tmp_path || true)"
-USER_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=user_files_path || true)"
-LOG_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=logger.log || true)"
-LOG_DIR=""
-if [ -n "$LOG_PATH" ]; then LOG_DIR="$(dirname "$LOG_PATH")"; fi
-ERROR_LOG_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=logger.errorlog || true)"
-ERROR_LOG_DIR=""
-if [ -n "$ERROR_LOG_PATH" ]; then ERROR_LOG_DIR="$(dirname "$ERROR_LOG_PATH")"; fi
-FORMAT_SCHEMA_PATH="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=format_schema_path || true)"
+DATA_DIR=/var/lib/proton/
+TMP_DIR=/var/lib/proton/tmp/
+USER_PATH=/var/lib/proton/user_files/
+LOG_PATH=/var/log/proton-server/proton-server.log
+LOG_DIR="$(dirname "$LOG_PATH")"
+ERROR_LOG_PATH=/var/log/proton-server/proton-server.err.log
+ERROR_LOG_DIR="$(dirname "$ERROR_LOG_PATH")"
+FORMAT_SCHEMA_PATH=/var/lib/proton/format_schemas/
 
 PROTON_USER="${PROTON_USER:-default}"
 PROTON_PASSWORD="${PROTON_PASSWORD:-}"
@@ -114,7 +112,7 @@ fi
 
 if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$PROTON_DB" ]; then
     # port is needed to check if proton-server is ready for connections
-    HTTP_PORT="$(proton extract-from-config --config-file "$PROTON_CONFIG" --key=http_port)"
+    HTTP_PORT=8123
 
     # Listen only on localhost until the initialization is done
     $gosu /usr/bin/proton-server --config-file="$PROTON_CONFIG" -- --listen_host=127.0.0.1 &
@@ -125,14 +123,14 @@ if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$PROTON_DB" ]; then
     tries=${PROTON_INIT_TIMEOUT:-12}
     while ! wget --spider -T 1 -q "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null; do
         if [ "$tries" -le "0" ]; then
-            echo >&2 'ClickHouse init process failed.'
+            echo >&2 'Proton init process failed.'
             exit 1
         fi
         tries=$(( tries-1 ))
         sleep 1
     done
 
-    protonclient=( proton-client --multiquery --host "127.0.0.1" -u "$PROTON_USER" --password "$PROTON_PASSWORD" )
+    protonclient=( proton-client --multiquery --host "128.0.0.1" -u "$PROTON_USER" --password "$PROTON_PASSWORD" )
 
     echo
 

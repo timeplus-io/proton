@@ -18,6 +18,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <IO/ConcatReadBuffer.h>
+#include <IO/copyData.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromString.h>
@@ -39,6 +40,7 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/MergeTree/ActiveDataPartSet.h>
 #include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
@@ -49,7 +51,6 @@
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/Increment.h>
 #include <Common/SimpleIncrement.h>
@@ -4863,11 +4864,6 @@ std::optional<ProjectionCandidate> MergeTreeData::getQueryProcessingStageWithAgg
     }
     MergeTreeDataSelectExecutor reader(*this);
     std::shared_ptr<PartitionIdToMaxBlock> max_added_blocks;
-    if (settings.select_sequential_consistency)
-    {
-        if (const StorageReplicatedMergeTree * replicated = dynamic_cast<const StorageReplicatedMergeTree *>(this))
-            max_added_blocks = std::make_shared<PartitionIdToMaxBlock>(replicated->getMaxAddedBlocks());
-    }
     auto parts = getDataPartsVector();
 
     // If minmax_count_projection is a valid candidate, check its completeness.
@@ -5608,41 +5604,8 @@ bool MergeTreeData::moveParts(const CurrentlyMovingPartsTaggerPtr & moving_tagge
 
         try
         {
-            /// If zero-copy replication enabled than replicas shouldn't try to
-            /// move parts to another disk simultaneously. For this purpose we
-            /// use shared lock across replicas. NOTE: it's not 100% reliable,
-            /// because we are not checking lock while finishing part move.
-            /// However it's not dangerous at all, we will just have very rare
-            /// copies of some part.
-            ///
-            /// FIXME: this code is related to Replicated merge tree, and not
-            /// common for ordinary merge tree. So it's a bad design and should
-            /// be fixed.
-            auto disk = moving_part.reserved_space->getDisk();
-            if (supportsReplication() && disk->supportZeroCopyReplication() && settings->allow_remote_fs_zero_copy_replication)
-            {
-                /// If we acuqired lock than let's try to move. After one
-                /// replica will actually move the part from disk to some
-                /// zero-copy storage other replicas will just fetch
-                /// metainformation.
-                if (auto lock = tryCreateZeroCopyExclusiveLock(moving_part.part, disk); lock)
-                {
-                    cloned_part = parts_mover.clonePart(moving_part);
-                    parts_mover.swapClonedPart(cloned_part);
-                }
-                else
-                {
-                    /// Move will be retried but with backoff.
-                    LOG_DEBUG(log, "Move of part {} postponed, because zero copy mode enabled and someone other moving this part right now", moving_part.part->name);
-                    result = false;
-                    continue;
-                }
-            }
-            else /// Ordinary move as it should be
-            {
-                cloned_part = parts_mover.clonePart(moving_part);
-                parts_mover.swapClonedPart(cloned_part);
-            }
+            cloned_part = parts_mover.clonePart(moving_part);
+            parts_mover.swapClonedPart(cloned_part);
             write_part_log({});
         }
         catch (...)

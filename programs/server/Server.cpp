@@ -4,18 +4,15 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <errno.h>
 #include <pwd.h>
 #include <unistd.h>
 #include <Poco/Version.h>
-#include <Poco/DirectoryIterator.h>
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
 #include <base/scope_guard_safe.h>
-#include <base/defines.h>
 #include <base/logger_useful.h>
 #include <base/phdr_cache.h>
 #include <base/ErrorHandlers.h>
@@ -28,8 +25,6 @@
 #include <Common/Macros.h>
 #include <Common/ShellCommand.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <base/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
@@ -41,11 +36,9 @@
 #include <Common/remapExecutable.h>
 #include <Common/TLDListsHolder.h>
 #include <Core/ServerUUID.h>
-#include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/DDLWorker.h>
 #include <Interpreters/DNSCacheUpdater.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
@@ -55,19 +48,19 @@
 #include <Interpreters/UserDefinedSQLObjectsLoader.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Access/AccessControl.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
 #include <Storages/Cache/ExternalDataSourceCache.h>
-#include <Storages/Cache/registerRemoteFileMetadatas.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <Formats/registerFormats.h>
 #include <Storages/registerStorages.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 #include <QueryPipeline/ConnectionCollector.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
+#include <Disks/IVolume.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include "MetricsTransmitter.h"
@@ -78,7 +71,6 @@
 #include <Common/ThreadFuzzer.h>
 #include <Common/getHashOfLoadedBinary.h>
 #include <Common/Elf.h>
-#include <Server/MySQLHandlerFactory.h>
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/HTTP/HTTPServer.h>
@@ -597,7 +589,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerDictionaries();
     registerDisks();
     registerFormats();
-    registerRemoteFileMetadatas();
 
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::getVersionRevision());
     CurrentMetrics::set(CurrentMetrics::VersionInteger, ClickHouseRevision::getVersionInteger());
@@ -669,21 +660,6 @@ if (ThreadFuzzer::instance().isEffective())
     );
 
     ConnectionCollector::init(global_context, config().getUInt("max_threads_for_connection_collector", 10));
-
-    bool has_zookeeper = config().has("zookeeper");
-
-    zkutil::ZooKeeperNodeCache main_config_zk_node_cache([&] { return global_context->getZooKeeper(); });
-    zkutil::EventPtr main_config_zk_changed_event = std::make_shared<Poco::Event>();
-    if (loaded_config.has_zk_includes)
-    {
-        auto old_configuration = loaded_config.configuration;
-        ConfigProcessor config_processor(config_path);
-        loaded_config = config_processor.loadConfigWithZooKeeperIncludes(
-            main_config_zk_node_cache, main_config_zk_changed_event, /* fallback_to_preprocessed = */ true);
-        config_processor.savePreprocessedConfig(loaded_config, config().getString("path", DBMS_DEFAULT_PATH));
-        config().removeConfiguration(old_configuration.get());
-        config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
-    }
 
     Settings::checkNoSettingNamesAtTopLevel(config(), config_path);
 
@@ -957,8 +933,6 @@ if (ThreadFuzzer::instance().isEffective())
         config_path,
         include_from_path,
         config().getString("path", ""),
-        std::move(main_config_zk_node_cache),
-        main_config_zk_changed_event,
         [&](ConfigurationPtr config, bool initial_loading)
         {
             Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
@@ -998,7 +972,7 @@ if (ThreadFuzzer::instance().isEffective())
             // in a lot of places. For now, disable updating log configuration without server restart.
             //setTextLog(global_context->getTextLog());
             updateLevels(*config, logger());
-            global_context->setClustersConfig(config, has_zookeeper);
+            global_context->setClustersConfig(config, false);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
             global_context->setExternalAuthenticatorsConfig(*config);
 
@@ -1027,13 +1001,6 @@ if (ThreadFuzzer::instance().isEffective())
 
             if (!initial_loading)
             {
-                /// We do not load ZooKeeper configuration on the first config loading
-                /// because TestKeeper server is not started yet.
-                if (config->has("zookeeper"))
-                    global_context->reloadZooKeeperIfChanged(config);
-
-                global_context->reloadAuxiliaryZooKeepersConfigIfChanged(config);
-
                 std::lock_guard lock(servers_lock);
                 updateServers(*config, server_pool, async_metrics, servers);
             }
@@ -1057,12 +1024,6 @@ if (ThreadFuzzer::instance().isEffective())
         //// of clickhouse-keeper, so start synchronously.
         bool can_initialize_keeper_async = false;
 
-        if (has_zookeeper) /// We have configured connection to some zookeeper cluster
-        {
-            /// If we cannot connect to some other node from our cluster then we have to wait our Keeper start
-            /// synchronously.
-            can_initialize_keeper_async = global_context->tryCheckClientConnectionToMyKeeperCluster();
-        }
         /// Initialize keeper RAFT.
         global_context->initializeKeeperDispatcher(can_initialize_keeper_async);
         FourLetterCommandFactory::registerCommands(*global_context->getKeeperDispatcher());
@@ -1118,6 +1079,47 @@ if (ThreadFuzzer::instance().isEffective())
 
     }
 
+    /// proton: starts.
+    /// Register REST API handler in advance
+    RestRouterFactory::registerRestRouterHandlers();
+    if (config().has("metastore_server"))
+    {
+#if USE_NURAFT
+        /// Register MetaStore Rest api route handlers
+        RestRouterFactory::registerMetaStoreRestRouterHandlers();
+        const Settings & settings = global_context->getSettingsRef();
+
+        Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
+        Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+        http_params->setTimeout(settings.http_receive_timeout);
+        http_params->setKeepAliveTimeout(keep_alive_timeout);
+
+        /// Initialize test metastore RAFT. Do nothing if no metastore_server in config.
+        global_context->initializeMetaStoreDispatcher();
+        for (const auto & listen_host : listen_hosts)
+        {
+            /// HTTP MetaStoreServer
+            const char * port_name = "metastore_server.http_port";
+            createServer(config(), listen_host, port_name, listen_try, false, servers_to_start_before_tables, [&](UInt16 port) -> ProtocolServerAdapter
+                         {
+                             Poco::Net::ServerSocket socket;
+                             auto address = socketBindListen(socket, listen_host, port);
+                             socket.setReceiveTimeout(settings.http_receive_timeout);
+                             socket.setSendTimeout(settings.http_send_timeout);
+                             return ProtocolServerAdapter(
+                                 listen_host,
+                                 port_name,
+                                 "http://" + address.toString(),
+                                 std::make_unique<HTTPServer>(
+                                     context(), createMetaStoreHandlerFactory(*this, "MetaStoreHTTPHandler-factory"), server_pool, socket, http_params));
+                         });
+        }
+#else
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "proton server built without NuRaft library. Cannot use internal coordination.");
+#endif
+    }
+    /// proton: ends.
+
     for (auto & server : servers_to_start_before_tables)
     {
         server.start();
@@ -1131,7 +1133,7 @@ if (ThreadFuzzer::instance().isEffective())
     /// Initialize access storages.
     try
     {
-        access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
+        access_control.addStoragesFromMainConfig(config(), config_path);
     }
     catch (...)
     {
@@ -1322,9 +1324,8 @@ if (ThreadFuzzer::instance().isEffective())
         loadMetadataSystem(global_context);
         /// After attaching system databases we can initialize system log.
         global_context->initializeSystemLogs();
-        global_context->setSystemZooKeeperLogAfterInitializationIfNeeded();
         /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
-        attachSystemTablesServer(global_context, *database_catalog.getSystemDatabase(), has_zookeeper);
+        attachSystemTablesServer(global_context, *database_catalog.getSystemDatabase());
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA));
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE));
         /// Firstly remove partially dropped databases, to avoid race with MaterializedMySQLSyncThread,
@@ -1515,18 +1516,6 @@ if (ThreadFuzzer::instance().isEffective())
             throw;
         }
 
-        if (has_zookeeper && config().has("distributed_ddl"))
-        {
-            /// DDL worker should be started after all tables were loaded
-            String ddl_zookeeper_path = config().getString("distributed_ddl.path", "/clickhouse/task_queue/ddl/");
-            int pool_size = config().getInt("distributed_ddl.pool_size", 1);
-            if (pool_size < 1)
-                throw Exception("distributed_ddl.pool_size should be greater then 0", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            global_context->setDDLWorker(std::make_unique<DDLWorker>(pool_size, ddl_zookeeper_path, global_context, &config(),
-                                                                     "distributed_ddl", "DDLWorker",
-                                                                     &CurrentMetrics::MaxDDLEntryID, &CurrentMetrics::MaxPushedDDLEntryID));
-        }
-
         {
             std::lock_guard lock(servers_lock);
             for (auto & server : servers)
@@ -1535,15 +1524,6 @@ if (ThreadFuzzer::instance().isEffective())
                 LOG_INFO(log, "Listening for {}", server.getDescription());
             }
             LOG_INFO(log, "Ready for connections.");
-        }
-
-        try
-        {
-            global_context->startClusterDiscovery();
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Caught exception while starting cluster discovery");
         }
 
         /// proton: starts
@@ -1637,41 +1617,6 @@ void Server::createServers(
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
     http_params->setTimeout(settings.http_receive_timeout);
     http_params->setKeepAliveTimeout(keep_alive_timeout);
-
-    /// proton: starts.
-    /// Register REST API handler in advance
-    RestRouterFactory::registerRestRouterHandlers();
-    if (config.has("metastore_server"))
-    {
-#if USE_NURAFT
-        /// Register MetaStore Rest api route handlers
-        RestRouterFactory::registerMetaStoreRestRouterHandlers();
-
-        /// Initialize test metastore RAFT. Do nothing if no metastore_server in config.
-        global_context->initializeMetaStoreDispatcher();
-        for (const auto & listen_host : listen_hosts)
-        {
-            /// HTTP MetaStoreServer
-            const char * port_name = "metastore_server.http_port";
-            createServer(config, listen_host, port_name, listen_try, true, servers, [&](UInt16 port) -> ProtocolServerAdapter
-                         {
-                             Poco::Net::ServerSocket socket;
-                             auto address = socketBindListen(socket, listen_host, port);
-                             socket.setReceiveTimeout(settings.http_receive_timeout);
-                             socket.setSendTimeout(settings.http_send_timeout);
-                             return ProtocolServerAdapter(
-                                 listen_host,
-                                 port_name,
-                                 "http://" + address.toString(),
-                                 std::make_unique<HTTPServer>(
-                                     context(), createMetaStoreHandlerFactory(*this, "MetaStoreHTTPHandler-factory"), server_pool, socket, http_params));
-                         });
-        }
-#else
-        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "proton server built without NuRaft library. Cannot use internal coordination.");
-#endif
-    }
-    /// proton: ends.
 
     for (const auto & listen_host : listen_hosts)
     {
@@ -1820,20 +1765,6 @@ void Server::createServers(
             throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
                             ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
-        });
-
-        port_name = "mysql_port";
-        createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter
-        {
-            Poco::Net::ServerSocket socket;
-            auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-            socket.setReceiveTimeout(Poco::Timespan());
-            socket.setSendTimeout(settings.send_timeout);
-            return ProtocolServerAdapter(
-                listen_host,
-                port_name,
-                "MySQL compatibility protocol: " + address.toString(),
-                std::make_unique<TCPServer>(new MySQLHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
         });
 
         port_name = "postgresql_port";

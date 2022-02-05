@@ -19,14 +19,10 @@ ConfigReloader::ConfigReloader(
         const std::string & path_,
         const std::string & include_from_path_,
         const std::string & preprocessed_dir_,
-        zkutil::ZooKeeperNodeCache && zk_node_cache_,
-        const zkutil::EventPtr & zk_changed_event_,
         Updater && updater_,
         bool already_loaded)
     : path(path_), include_from_path(include_from_path_)
     , preprocessed_dir(preprocessed_dir_)
-    , zk_node_cache(std::move(zk_node_cache_))
-    , zk_changed_event(zk_changed_event_)
     , updater(std::move(updater_))
 {
     if (!already_loaded)
@@ -51,7 +47,6 @@ void ConfigReloader::stop()
     if (!thread.joinable())
         return;
     quit = true;
-    zk_changed_event->set();
     auto temp_thread = std::move(thread);
     lock.unlock();
     temp_thread.join();
@@ -93,12 +88,12 @@ void ConfigReloader::run()
     }
 }
 
-void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool fallback_to_preprocessed, bool initial_loading)
+void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool /*fallback_to_preprocessed*/, bool initial_loading)
 {
     std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
-    if (force || need_reload_from_zk || new_files.isDifferOrNewerThan(files))
+    if (force || new_files.isDifferOrNewerThan(files))
     {
         ConfigProcessor config_processor(path);
         ConfigProcessor::LoadedConfig loaded_config;
@@ -107,21 +102,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool fallbac
 
         try
         {
-            loaded_config = config_processor.loadConfig(/* allow_zk_includes = */ true);
-            if (loaded_config.has_zk_includes)
-                loaded_config = config_processor.loadConfigWithZooKeeperIncludes(
-                    zk_node_cache, zk_changed_event, fallback_to_preprocessed);
-        }
-        catch (const Coordination::Exception & e)
-        {
-            if (Coordination::isHardwareError(e.code))
-                need_reload_from_zk = true;
-
-            if (throw_on_error)
-                throw;
-
-            tryLogCurrentException(log, "ZooKeeper error when loading config from '" + path + "'");
-            return;
+            loaded_config = config_processor.loadConfig();
         }
         catch (...)
         {
@@ -141,7 +122,6 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool fallbac
         if (!loaded_config.loaded_from_preprocessed)
         {
             files = std::move(new_files);
-            need_reload_from_zk = false;
         }
 
         LOG_DEBUG(log, "Loaded config '{}', performing update on configuration", path);

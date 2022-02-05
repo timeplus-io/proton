@@ -60,8 +60,6 @@ public:
     ///    "<foo>contents of the /bar ZooKeeper node</foo>".
     ///    If has_zk_includes is non-NULL and there are such elements, set has_zk_includes to true.
     XMLDocumentPtr processConfig(
-        bool * has_zk_includes = nullptr,
-        zkutil::ZooKeeperNodeCache * zk_node_cache = nullptr,
         const zkutil::EventPtr & zk_changed_event = nullptr);
 
 
@@ -73,23 +71,12 @@ public:
     struct LoadedConfig
     {
         ConfigurationPtr configuration;
-        bool has_zk_includes;
         bool loaded_from_preprocessed;
         XMLDocumentPtr preprocessed_xml;
         std::string config_path;
     };
 
-    /// If allow_zk_includes is true, expect that the configuration XML can contain from_zk nodes.
-    /// If it is the case, set has_zk_includes to true and don't write config-preprocessed.xml,
-    /// expecting that config would be reloaded with zookeeper later.
-    LoadedConfig loadConfig(bool allow_zk_includes = false);
-
-    /// If fallback_to_preprocessed is true, then if KeeperException is thrown during config
-    /// processing, load the configuration from the preprocessed file.
-    LoadedConfig loadConfigWithZooKeeperIncludes(
-        zkutil::ZooKeeperNodeCache & zk_node_cache,
-        const zkutil::EventPtr & zk_changed_event,
-        bool fallback_to_preprocessed = false);
+    LoadedConfig loadConfig();
 
     /// Save preprocessed config to specified directory.
     /// If preprocessed_dir is empty - calculate from loaded_config.path + /preprocessed_configs/
@@ -106,7 +93,7 @@ public:
     /// Is the file named as result of config preprocessing, not as original files.
     static bool isPreprocessedFile(const std::string & config_path);
 
-    static inline const auto SUBSTITUTION_ATTRS = {"incl", "from_zk", "from_env"};
+    static inline const auto SUBSTITUTION_ATTRS = {"incl", "from_env"};
 
 private:
     const std::string path;
@@ -133,9 +120,7 @@ private:
             XMLDocumentPtr config,
             XMLDocumentPtr include_from,
             Poco::XML::Node * node,
-            zkutil::ZooKeeperNodeCache * zk_node_cache,
-            const zkutil::EventPtr & zk_changed_event,
-            std::unordered_set<std::string> & contributing_zk_paths);
+            const zkutil::EventPtr & zk_changed_event);
 };
 
 }

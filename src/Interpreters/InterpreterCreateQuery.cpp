@@ -1,5 +1,4 @@
 #include <memory>
-
 #include <filesystem>
 
 #include <Common/StringUtils/StringUtils.h>
@@ -11,22 +10,15 @@
 #include <Common/hex.h>
 
 #include <Core/Defines.h>
-#include <Core/Settings.h>
-#include <Core/ColumnWithTypeAndName.h>
 
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnVector.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypeString.h>
 
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
 
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -39,10 +31,7 @@
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/executeQuery.h>
-#include <Interpreters/Cluster.h>
-#include <Interpreters/DDLTask.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -60,7 +49,6 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 #include <Databases/DatabaseFactory.h>
-#include <Databases/DatabaseReplicated.h>
 #include <Databases/IDatabase.h>
 #include <Databases/DatabaseOnDisk.h>
 #include <Databases/TablesLoader.h>
@@ -85,8 +73,6 @@
 #include <DistributedMetadata/TaskStatusService.h>
 #include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
-
-//#include <Poco/JSON/Parser.h>
 /// proton: ends.
 
 
@@ -719,7 +705,7 @@ void InterpreterCreateQuery::validateTableStructure(const ASTCreateQuery & creat
     const auto & settings = getContext()->getSettingsRef();
 
     /// Check low cardinality types in creating table if it was not allowed in setting
-    if (!create.attach && !settings.allow_suspicious_low_cardinality_types && !create.is_materialized_view && !create.is_streaming_view)
+    if (!create.attach && !settings.allow_suspicious_low_cardinality_types && !create.is_streaming_view)
     {
         for (const auto & name_and_type_pair : properties.columns.getAllPhysical())
         {
@@ -790,16 +776,6 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                 "Cannot CREATE a table AS " + qualified_name + ", it is a View",
                 ErrorCodes::INCORRECT_QUERY);
 
-        if (as_create.is_live_view)
-            throw Exception(
-                "Cannot CREATE a table AS " + qualified_name + ", it is a Live View",
-                ErrorCodes::INCORRECT_QUERY);
-
-        if (as_create.is_window_view)
-            throw Exception(
-                "Cannot CREATE a table AS " + qualified_name + ", it is a Window View",
-                ErrorCodes::INCORRECT_QUERY);
-
         if (as_create.is_dictionary)
             throw Exception(
                 "Cannot CREATE a table AS " + qualified_name + ", it is a Dictionary",
@@ -823,7 +799,7 @@ static void generateUUIDForTable(ASTCreateQuery & create)
     /// then MV will create inner table. We should generate UUID of inner table here,
     /// so it will be the same on all hosts if query in ON CLUSTER or database engine is Replicated.
     /// proton: starts.
-    bool need_uuid_for_inner_table = !create.attach && ((create.is_materialized_view && !create.to_table_id) || (create.is_streaming_view));
+    bool need_uuid_for_inner_table = !create.attach && create.is_streaming_view;
     /// proton: ends.
     if (need_uuid_for_inner_table && create.to_inner_uuid == UUIDHelpers::Nil)
         create.to_inner_uuid = UUIDHelpers::generateV4();
@@ -1090,19 +1066,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     {
         auto database = DatabaseCatalog::instance().getDatabase(database_name);
 
-        if (database->getEngineName() == "Replicated")
-        {
-            auto guard = DatabaseCatalog::instance().getDDLGuard(database_name, create.getTable());
-
-            if (auto* ptr = typeid_cast<DatabaseReplicated *>(database.get());
-                ptr && !getContext()->getClientInfo().is_replicated_database_internal)
-            {
-                create.setDatabase(database_name);
-                guard->releaseTableLock();
-                return ptr->tryEnqueueReplicatedDDL(query_ptr, getContext());
-            }
-        }
-
         bool if_not_exists = create.if_not_exists;
 
         // Table SQL definition is available even if the table is detached (even permanently)
@@ -1189,19 +1152,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     bool need_add_to_database = !create.temporary;
     if (need_add_to_database)
         database = DatabaseCatalog::instance().getDatabase(database_name);
-
-    if (need_add_to_database && database->getEngineName() == "Replicated")
-    {
-        auto guard = DatabaseCatalog::instance().getDDLGuard(create.getDatabase(), create.getTable());
-
-        if (auto * ptr = typeid_cast<DatabaseReplicated *>(database.get());
-            ptr && !getContext()->getClientInfo().is_replicated_database_internal)
-        {
-            assertOrSetUUID(create, database);
-            guard->releaseTableLock();
-            return ptr->tryEnqueueReplicatedDDL(query_ptr, getContext());
-        }
-    }
 
     if (create.replace_table)
         return doCreateOrReplaceTable(create, properties);
@@ -1377,15 +1327,6 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         if (on_error)
             return drop_context;
 
-        if (auto txn = current_context->getZooKeeperMetadataTransaction())
-        {
-            /// Execute drop as separate query, because [CREATE OR] REPLACE query can be considered as
-            /// successfully executed after RENAME/EXCHANGE query.
-            drop_context->resetZooKeeperMetadataTransaction();
-            auto drop_txn = std::make_shared<ZooKeeperMetadataTransaction>(txn->getZooKeeper(), txn->getDatabaseZooKeeperPath(),
-                                                                           txn->isInitialQuery(), txn->getTaskZooKeeperPath());
-            drop_context->initZooKeeperMetadataTransaction(drop_txn);
-        }
         return drop_context;
     };
 
@@ -1402,11 +1343,6 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 
         UInt64 name_hash = sipHash64(create.getDatabase() + create.getTable());
         UInt16 random_suffix = thread_local_rng();
-        if (auto txn = current_context->getZooKeeperMetadataTransaction())
-        {
-            /// Avoid different table name on database replicas
-            random_suffix = sipHash64(txn->getTaskZooKeeperPath());
-        }
         create.setTable(fmt::format("_tmp_replace_{}_{}",
                             getHexUIntLowercase(name_hash),
                             getHexUIntLowercase(random_suffix)));
@@ -1486,8 +1422,7 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
     /// If the query is a CREATE SELECT, insert the data into the table.
     /// proton: starts. Add `!create.is_streaming_view`
     if (create.select && !create.attach
-        && !create.is_ordinary_view && !create.is_live_view && !create.is_window_view && !create.is_streaming_view
-        && (!create.is_materialized_view || create.is_populate))
+        && !create.is_ordinary_view && !create.is_streaming_view)
     /// proton: ends.
     {
         auto insert = std::make_shared<ASTInsertQuery>();
@@ -1559,11 +1494,6 @@ BlockIO InterpreterCreateQuery::execute()
     /// proton: ends.
 
     auto & create = query_ptr->as<ASTCreateQuery &>();
-    if (!create.cluster.empty())
-    {
-        prepareOnClusterQuery(create, getContext(), create.cluster);
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
-    }
 
     getContext()->checkAccess(getRequiredAccess());
 

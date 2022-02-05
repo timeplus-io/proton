@@ -43,18 +43,6 @@ private:
     StorageID table_id = StorageID::createEmpty();      /// Will be set up if query contains table name
     VolumePtr volume_ptr;
 
-    /// Tries to get a replicated table and restart it
-    /// Returns pointer to a newly created table if the restart was successful
-    StoragePtr tryRestartReplica(const StorageID & replica, ContextMutablePtr context, bool need_ddl_guard = true);
-
-    void restartReplica(const StorageID & replica, ContextMutablePtr system_context);
-    void restartReplicas(ContextMutablePtr system_context);
-    void syncReplica(ASTSystemQuery & query);
-
-    void restoreReplica();
-
-    void dropReplica(ASTSystemQuery & query);
-    bool dropReplicaImpl(ASTSystemQuery & query, const StoragePtr & table);
     void flushDistributed(ASTSystemQuery & query);
     void restartDisk(String & name);
 

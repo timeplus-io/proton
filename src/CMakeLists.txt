@@ -83,23 +83,14 @@ add_headers_and_sources(clickhouse_common_io IO/S3)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 
 add_headers_and_sources(dbms Disks/IO)
-if (TARGET ch_contrib::sqlite)
-    add_headers_and_sources(dbms Databases/SQLite)
-endif()
 
 if (TARGET ch_contrib::rdkafka)
     add_headers_and_sources(dbms Storages/Kafka)
     add_headers_and_sources(dbms DistributedWALClient)
 endif()
 
-if (TARGET ch_contrib::amqp_cpp)
-    add_headers_and_sources(dbms Storages/RabbitMQ)
-endif()
-
 if (USE_LIBPQXX)
     add_headers_and_sources(dbms Core/PostgreSQL)
-    add_headers_and_sources(dbms Databases/PostgreSQL)
-    add_headers_and_sources(dbms Storages/PostgreSQL)
 endif()
 
 if (TARGET ch_contrib::rocksdb)
@@ -115,15 +106,7 @@ if (TARGET ch_contrib::azure_sdk)
     add_headers_and_sources(dbms Disks/AzureBlobStorage)
 endif()
 
-if (TARGET ch_contrib::hdfs)
-    add_headers_and_sources(dbms Storages/HDFS)
-    add_headers_and_sources(dbms Disks/HDFS)
-endif()
-
 add_headers_and_sources(dbms Storages/Cache)
-if (TARGET ch_contrib::hivemetastore)
-    add_headers_and_sources(dbms Storages/Hive)
-endif()
 
 if (OS_LINUX)
     add_headers_and_sources(dbms Storages/FileLog)
@@ -224,16 +207,13 @@ add_object_library(clickhouse_querypipeline QueryPipeline)
 add_object_library(clickhouse_datatypes DataTypes)
 add_object_library(clickhouse_datatypes_serializations DataTypes/Serializations)
 add_object_library(clickhouse_databases Databases)
-add_object_library(clickhouse_databases_mysql Databases/MySQL)
 add_object_library(clickhouse_disks Disks)
 add_object_library(clickhouse_interpreters Interpreters)
 add_object_library(clickhouse_interpreters_access Interpreters/Access)
-add_object_library(clickhouse_interpreters_mysql Interpreters/MySQL)
 add_object_library(clickhouse_interpreters_clusterproxy Interpreters/ClusterProxy)
 add_object_library(clickhouse_interpreters_jit Interpreters/JIT)
 add_object_library(clickhouse_columns Columns)
 add_object_library(clickhouse_storages Storages)
-add_object_library(clickhouse_storages_mysql Storages/MySQL)
 add_object_library(clickhouse_storages_distributed Storages/Distributed)
 add_object_library(clickhouse_storages_mergetree Storages/MergeTree)
 add_object_library(clickhouse_storages_liveview Storages/LiveView)
@@ -409,7 +389,6 @@ dbms_target_link_libraries (
         clickhouse_parsers
         ch_contrib::lz4
         Poco::JSON
-        Poco::MongoDB
         string_utils
     PUBLIC
         boost::system
@@ -421,10 +400,6 @@ if (ENABLE_NATIVE_LOG)
        PUBLIC
             nlog
     )
-endif()
-
-if (TARGET ch::mysqlxx)
-    dbms_target_link_libraries (PUBLIC ch::mysqlxx)
 endif()
 
 dbms_target_link_libraries (
@@ -480,15 +455,6 @@ if (TARGET clickhouse_grpc_protos)
     dbms_target_link_libraries (PUBLIC clickhouse_grpc_protos)
 endif()
 
-if (TARGET ch_contrib::hdfs)
-    dbms_target_link_libraries(PRIVATE ch_contrib::hdfs)
-endif()
-
-if (TARGET ch_contrib::hivemetastore)
-    dbms_target_link_libraries(PRIVATE ch_contrib::hivemetastore)
-endif()
-
-
 if (TARGET ch_contrib::aws_s3)
     target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::aws_s3)
 endif()
@@ -507,14 +473,6 @@ endif()
 
 if (TARGET ch_contrib::snappy)
     target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::snappy)
-endif()
-
-if (TARGET ch_contrib::amqp_cpp)
-    dbms_target_link_libraries(PUBLIC ch_contrib::amqp_cpp)
-endif()
-
-if (TARGET ch_contrib::sqlite)
-    dbms_target_link_libraries(PUBLIC ch_contrib::sqlite)
 endif()
 
 if (TARGET ch_contrib::msgpack)

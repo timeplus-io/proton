@@ -3,11 +3,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Storages/IStorage.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/QueryLog.h>
 #include <Access/Common/AccessRightsElement.h>
 #include <Common/typeid_cast.h>
-#include <Databases/DatabaseReplicated.h>
 
 
 namespace DB
@@ -27,9 +25,6 @@ InterpreterRenameQuery::InterpreterRenameQuery(const ASTPtr & query_ptr_, Contex
 BlockIO InterpreterRenameQuery::execute()
 {
     const auto & rename = query_ptr->as<const ASTRenameQuery &>();
-
-    if (!rename.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
 
     getContext()->checkAccess(getRequiredAccess());
 
@@ -70,7 +65,7 @@ BlockIO InterpreterRenameQuery::execute()
         return executeToTables(rename, descriptions, table_guards);
 }
 
-BlockIO InterpreterRenameQuery::executeToTables(const ASTRenameQuery & rename, const RenameDescriptions & descriptions, TableGuards & ddl_guards)
+BlockIO InterpreterRenameQuery::executeToTables(const ASTRenameQuery & rename, const RenameDescriptions & descriptions, TableGuards & /*ddl_guards*/)
 {
     assert(!rename.rename_if_cannot_exchange || descriptions.size() == 1);
     assert(!(rename.rename_if_cannot_exchange && rename.exchange));
@@ -102,39 +97,21 @@ BlockIO InterpreterRenameQuery::executeToTables(const ASTRenameQuery & rename, c
         }
 
         DatabasePtr database = database_catalog.getDatabase(elem.from_database_name);
-        if (typeid_cast<DatabaseReplicated *>(database.get()) && !getContext()->getClientInfo().is_replicated_database_internal)
-        {
-            if (1 < descriptions.size())
-                throw Exception(
-                    ErrorCodes::NOT_IMPLEMENTED,
-                    "Database {} is Replicated, "
-                    "it does not support renaming of multiple tables in single query.",
-                    elem.from_database_name);
+        TableNamesSet dependencies;
+        if (!exchange_tables)
+            dependencies = database_catalog.tryRemoveLoadingDependencies(StorageID(elem.from_database_name, elem.from_table_name),
+                                                                         getContext()->getSettingsRef().check_table_dependencies);
 
-            UniqueTableName from(elem.from_database_name, elem.from_table_name);
-            UniqueTableName to(elem.to_database_name, elem.to_table_name);
-            ddl_guards[from]->releaseTableLock();
-            ddl_guards[to]->releaseTableLock();
-            return typeid_cast<DatabaseReplicated *>(database.get())->tryEnqueueReplicatedDDL(query_ptr, getContext());
-        }
-        else
-        {
-            TableNamesSet dependencies;
-            if (!exchange_tables)
-                dependencies = database_catalog.tryRemoveLoadingDependencies(StorageID(elem.from_database_name, elem.from_table_name),
-                                                                             getContext()->getSettingsRef().check_table_dependencies);
+        database->renameTable(
+            getContext(),
+            elem.from_table_name,
+            *database_catalog.getDatabase(elem.to_database_name),
+            elem.to_table_name,
+            exchange_tables,
+            rename.dictionary);
 
-            database->renameTable(
-                getContext(),
-                elem.from_table_name,
-                *database_catalog.getDatabase(elem.to_database_name),
-                elem.to_table_name,
-                exchange_tables,
-                rename.dictionary);
-
-            if (!dependencies.empty())
-                DatabaseCatalog::instance().addLoadingDependencies(QualifiedTableName{elem.to_database_name, elem.to_table_name}, std::move(dependencies));
-        }
+        if (!dependencies.empty())
+            DatabaseCatalog::instance().addLoadingDependencies(QualifiedTableName{elem.to_database_name, elem.to_table_name}, std::move(dependencies));
     }
 
     return {};

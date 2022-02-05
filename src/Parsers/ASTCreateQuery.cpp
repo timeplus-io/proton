@@ -272,16 +272,10 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         String what = "TABLE";
         if (is_ordinary_view)
             what = "VIEW";
-        else if (is_materialized_view)
-            what = "MATERIALIZED VIEW";
         /// proton: starts.
         else if (is_streaming_view)
             what = "STREAMING VIEW";
         /// proton: ends.
-        else if (is_live_view)
-            what = "LIVE VIEW";
-        else if (is_window_view)
-            what = "WINDOW VIEW";
 
         settings.ostr
             << (settings.hilite ? hilite_keyword : "")
@@ -300,21 +294,6 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         if (attach_from_path)
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "")
                           << quoteString(*attach_from_path);
-
-        if (live_view_timeout)
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH TIMEOUT " << (settings.hilite ? hilite_none : "")
-                          << *live_view_timeout;
-
-        if (live_view_periodic_refresh)
-        {
-            if (live_view_timeout)
-                settings.ostr << (settings.hilite ? hilite_keyword : "") << " AND" << (settings.hilite ? hilite_none : "");
-            else
-                settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH" << (settings.hilite ? hilite_none : "");
-
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PERIODIC REFRESH " << (settings.hilite ? hilite_none : "")
-                << *live_view_periodic_refresh;
-        }
 
         formatOnCluster(settings);
     }
@@ -340,7 +319,7 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (to_table_id)
     {
-        assert((is_materialized_view || is_window_view || is_streaming_view) && to_inner_uuid == UUIDHelpers::Nil);
+        assert(is_streaming_view && to_inner_uuid == UUIDHelpers::Nil);
         /// proton: starts. Specified streaming view with `INTO`
         settings.ostr
             << (settings.hilite ? hilite_keyword : "") << (is_streaming_view ? " INTO " : " TO ") << (settings.hilite ? hilite_none : "")
@@ -351,7 +330,7 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (to_inner_uuid != UUIDHelpers::Nil)
     {
         /// proton: starts.
-        assert((is_materialized_view || is_streaming_view) && !to_table_id);
+        assert(is_streaming_view && !to_table_id);
         settings.ostr << (settings.hilite ? hilite_keyword : "") << (is_streaming_view ? " INTO INNER UUID " : " TO INNER UUID ") << (settings.hilite ? hilite_none : "")
                       << quoteString(toString(to_inner_uuid));
         /// proton: ends.
@@ -408,29 +387,6 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (dictionary)
         dictionary->formatImpl(settings, state, frame);
-
-    if (is_populate)
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE" << (settings.hilite ? hilite_none : "");
-
-    if (is_watermark_strictly_ascending)
-    {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WATERMARK STRICTLY_ASCENDING" << (settings.hilite ? hilite_none : "");
-    }
-    else if (is_watermark_ascending)
-    {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WATERMARK ASCENDING" << (settings.hilite ? hilite_none : "");
-    }
-    else if (is_watermark_bounded)
-    {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WATERMARK " << (settings.hilite ? hilite_none : "");
-        watermark_function->formatImpl(settings, state, frame);
-    }
-
-    if (allowed_lateness)
-    {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " ALLOWED_LATENESS " << (settings.hilite ? hilite_none : "");
-        lateness_function->formatImpl(settings, state, frame);
-    }
 
     if (select)
     {

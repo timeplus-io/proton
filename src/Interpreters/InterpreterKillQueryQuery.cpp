@@ -2,7 +2,6 @@
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/queryToString.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/CancellationCode.h>
@@ -196,9 +195,6 @@ public:
 BlockIO InterpreterKillQueryQuery::execute()
 {
     const auto & query = query_ptr->as<ASTKillQueryQuery &>();
-
-    if (!query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccessForDDLOnCluster());
 
     BlockIO res_io;
     switch (query.type)

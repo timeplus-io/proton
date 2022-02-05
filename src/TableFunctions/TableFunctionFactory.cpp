@@ -34,6 +34,7 @@ TableFunctionPtr TableFunctionFactory::get(
     ContextPtr context) const
 {
     const auto * table_function = ast_function->as<ASTFunction>();
+    assert(table_function);
     auto res = tryGet(table_function->name, context);
     if (!res)
     {

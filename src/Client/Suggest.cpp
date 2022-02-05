@@ -68,9 +68,7 @@ static String getLoadSuggestionQuery(Int32 suggestion_limit, bool basic_suggesti
         " UNION ALL ";
     if (!basic_suggestion)
     {
-        query << "SELECT cluster FROM system.clusters"
-                 " UNION ALL "
-                 "SELECT macro FROM system.macros"
+        query << "SELECT macro FROM system.macros"
                  " UNION ALL "
                  "SELECT policy_name FROM system.storage_policies"
                  " UNION ALL ";

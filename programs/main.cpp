@@ -36,17 +36,8 @@ int mainEntryClickHouseLocal(int argc, char ** argv);
 #if ENABLE_PROTON_BENCHMARK
 int mainEntryClickHouseBenchmark(int argc, char ** argv);
 #endif
-#if ENABLE_PROTON_EXTRACT_FROM_CONFIG
-int mainEntryClickHouseExtractFromConfig(int argc, char ** argv);
-#endif
-#if ENABLE_PROTON_COMPRESSOR
-int mainEntryClickHouseCompressor(int argc, char ** argv);
-#endif
 #if ENABLE_PROTON_FORMAT
 int mainEntryClickHouseFormat(int argc, char ** argv);
-#endif
-#if ENABLE_PROTON_COPIER
-int mainEntryClickHouseClusterCopier(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_OBFUSCATOR
 int mainEntryClickHouseObfuscator(int argc, char ** argv);
@@ -56,12 +47,6 @@ int mainEntryClickHouseGitImport(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_KEEPER
 int mainEntryClickHouseKeeper(int argc, char ** argv);
-#endif
-#if ENABLE_PROTON_KEEPER
-int mainEntryClickHouseKeeperConverter(int argc, char ** argv);
-#endif
-#if ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
-int mainEntryClickHouseStaticFilesDiskUploader(int argc, char ** argv);
 #endif
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
@@ -111,17 +96,8 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_PROTON_SERVER
     {"server", mainEntryClickHouseServer},
 #endif
-#if ENABLE_PROTON_EXTRACT_FROM_CONFIG
-    {"extract-from-config", mainEntryClickHouseExtractFromConfig},
-#endif
-#if ENABLE_PROTON_COMPRESSOR
-    {"compressor", mainEntryClickHouseCompressor},
-#endif
 #if ENABLE_PROTON_FORMAT
     {"format", mainEntryClickHouseFormat},
-#endif
-#if ENABLE_PROTON_COPIER
-    {"copier", mainEntryClickHouseClusterCopier},
 #endif
 #if ENABLE_PROTON_OBFUSCATOR
     {"obfuscator", mainEntryClickHouseObfuscator},
@@ -131,9 +107,6 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #endif
 #if ENABLE_PROTON_KEEPER
     {"keeper", mainEntryClickHouseKeeper},
-#endif
-#if ENABLE_PROTON_KEEPER_CONVERTER
-    {"keeper-converter", mainEntryClickHouseKeeperConverter},
 #endif
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
@@ -149,9 +122,6 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"stop", mainEntryClickHouseStop},
     {"status", mainEntryClickHouseStatus},
     {"restart", mainEntryClickHouseRestart},
-#endif
-#if ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
-    {"static-files-disk-uploader", mainEntryClickHouseStaticFilesDiskUploader},
 #endif
     {"hash-binary", mainEntryClickHouseHashBinary},
 };

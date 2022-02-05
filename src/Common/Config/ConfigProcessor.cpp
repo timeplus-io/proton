@@ -1,9 +1,6 @@
-#include <Common/config.h>
 #include "ConfigProcessor.h"
 #include "YAMLParser.h"
 
-#include <sys/utsname.h>
-#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
@@ -14,15 +11,13 @@
 #include <Poco/DOM/Attr.h>
 #include <Poco/DOM/Comment.h>
 #include <Poco/Util/XMLConfiguration.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
-#include <Common/ZooKeeper/KeeperException.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Exception.h>
 #include <Common/getResource.h>
-#include <base/errnoToString.h>
 #include <base/sort.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
+#include <Common/ZooKeeper/KeeperException.h>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 
@@ -232,9 +227,7 @@ void ConfigProcessor::doIncludesRecursive(
         XMLDocumentPtr config,
         XMLDocumentPtr include_from,
         Node * node,
-        zkutil::ZooKeeperNodeCache * zk_node_cache,
-        const zkutil::EventPtr & zk_changed_event,
-        std::unordered_set<std::string> & contributing_zk_paths)
+        const zkutil::EventPtr & zk_changed_event)
 {
     if (node->nodeType() == Node::TEXT_NODE)
     {
@@ -359,28 +352,6 @@ void ConfigProcessor::doIncludesRecursive(
         process_include(attr_nodes["incl"], get_incl_node, "Include not found: ");
     }
 
-    if (attr_nodes["from_zk"]) /// we have zookeeper subst
-    {
-        contributing_zk_paths.insert(attr_nodes["from_zk"]->getNodeValue());
-
-        if (zk_node_cache)
-        {
-            XMLDocumentPtr zk_document;
-            auto get_zk_node = [&](const std::string & name) -> const Node *
-            {
-                zkutil::ZooKeeperNodeCache::ZNode znode = zk_node_cache->get(name, zk_changed_event);
-                if (!znode.exists)
-                    return nullptr;
-
-                /// Enclose contents into a fake <from_zk> tag to allow pure text substitutions.
-                zk_document = dom_parser.parseString("<from_zk>" + znode.contents + "</from_zk>");
-                return getRootNode(zk_document.get());
-            };
-
-            process_include(attr_nodes["from_zk"], get_zk_node, "Could not get ZooKeeper node: ");
-        }
-    }
-
     if (attr_nodes["from_env"]) /// we have env subst
     {
         XMLDocumentPtr env_document;
@@ -399,13 +370,13 @@ void ConfigProcessor::doIncludesRecursive(
     }
 
     if (included_something)
-        doIncludesRecursive(config, include_from, node, zk_node_cache, zk_changed_event, contributing_zk_paths);
+        doIncludesRecursive(config, include_from, node, zk_changed_event);
     else
     {
         NodeListPtr children = node->childNodes();
         Node * child = nullptr;
         for (size_t i = 0; (child = children->item(i)); ++i)
-            doIncludesRecursive(config, include_from, child, zk_node_cache, zk_changed_event, contributing_zk_paths);
+            doIncludesRecursive(config, include_from, child, zk_changed_event);
     }
 }
 
@@ -450,8 +421,6 @@ ConfigProcessor::Files ConfigProcessor::getConfigMergeFiles(const std::string & 
 }
 
 XMLDocumentPtr ConfigProcessor::processConfig(
-    bool * has_zk_includes,
-    zkutil::ZooKeeperNodeCache * zk_node_cache,
     const zkutil::EventPtr & zk_changed_event)
 {
     LOG_DEBUG(log, "Processing configuration file '{}'.", path);
@@ -541,7 +510,6 @@ XMLDocumentPtr ConfigProcessor::processConfig(
         }
     }
 
-    std::unordered_set<std::string> contributing_zk_paths;
     try
     {
         Node * node = getRootNode(config.get())->getNodeByPath("include_from");
@@ -551,7 +519,7 @@ XMLDocumentPtr ConfigProcessor::processConfig(
         if (node)
         {
             /// if we include_from env or zk.
-            doIncludesRecursive(config, nullptr, node, zk_node_cache, zk_changed_event, contributing_zk_paths);
+            doIncludesRecursive(config, nullptr, node, zk_changed_event);
             include_from_path = node->innerText();
         }
         else
@@ -568,7 +536,7 @@ XMLDocumentPtr ConfigProcessor::processConfig(
             include_from = dom_parser.parse(include_from_path);
         }
 
-        doIncludesRecursive(config, include_from, getRootNode(config.get()), zk_node_cache, zk_changed_event, contributing_zk_paths);
+        doIncludesRecursive(config, include_from, getRootNode(config.get()), zk_changed_event);
     }
     catch (Exception & e)
     {
@@ -580,9 +548,6 @@ XMLDocumentPtr ConfigProcessor::processConfig(
         throw Poco::Exception("Failed to preprocess config '" + path + "': " + e.displayText(), e);
     }
 
-    if (has_zk_includes)
-        *has_zk_includes = !contributing_zk_paths.empty();
-
     WriteBufferFromOwnString comment;
     comment <<     " This file was generated automatically.\n";
     comment << "     Do not edit it: it is likely to be discarded and generated again before it's read next time.\n";
@@ -590,12 +555,6 @@ XMLDocumentPtr ConfigProcessor::processConfig(
     for (const std::string & contributing_file : contributing_files)
     {
         comment << "\n       " << contributing_file;
-    }
-    if (zk_node_cache && !contributing_zk_paths.empty())
-    {
-        comment << "\n     ZooKeeper nodes used to generate this file:";
-        for (const std::string & contributing_zk_path : contributing_zk_paths)
-            comment << "\n       " << contributing_zk_path;
     }
 
     comment << "      ";
@@ -607,55 +566,13 @@ XMLDocumentPtr ConfigProcessor::processConfig(
     return config;
 }
 
-ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig(bool allow_zk_includes)
+ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 {
-    bool has_zk_includes;
-    XMLDocumentPtr config_xml = processConfig(&has_zk_includes);
-
-    if (has_zk_includes && !allow_zk_includes)
-        throw Poco::Exception("Error while loading config '" + path + "': from_zk includes are not allowed!");
+    XMLDocumentPtr config_xml = processConfig();
 
     ConfigurationPtr configuration(new Poco::Util::XMLConfiguration(config_xml));
 
-    return LoadedConfig{configuration, has_zk_includes, /* loaded_from_preprocessed = */ false, config_xml, path};
-}
-
-ConfigProcessor::LoadedConfig ConfigProcessor::loadConfigWithZooKeeperIncludes(
-        zkutil::ZooKeeperNodeCache & zk_node_cache,
-        const zkutil::EventPtr & zk_changed_event,
-        bool fallback_to_preprocessed)
-{
-    XMLDocumentPtr config_xml;
-    bool has_zk_includes;
-    bool processed_successfully = false;
-    Node * zk_server_setting_node;
-    try
-    {
-        config_xml = processConfig(&has_zk_includes, &zk_node_cache, zk_changed_event);
-        zk_server_setting_node = config_xml->getNodeByPath("yandex/server_settings");
-        if (zk_server_setting_node)
-        {
-            mergeRecursive(config_xml, getRootNode(config_xml), zk_server_setting_node);
-        }
-        processed_successfully = true;
-    }
-    catch (const Poco::Exception & ex)
-    {
-        if (!fallback_to_preprocessed)
-            throw;
-
-        const auto * zk_exception = dynamic_cast<const Coordination::Exception *>(ex.nested());
-        if (!zk_exception)
-            throw;
-
-        LOG_WARNING(log, "Error while processing from_zk config includes: {}. Config will be loaded from preprocessed file: {}", zk_exception->message(), preprocessed_path);
-
-        config_xml = dom_parser.parse(preprocessed_path);
-    }
-
-    ConfigurationPtr configuration(new Poco::Util::XMLConfiguration(config_xml));
-
-    return LoadedConfig{configuration, has_zk_includes, !processed_successfully, config_xml, path};
+    return LoadedConfig{configuration, /* loaded_from_preprocessed = */ false, config_xml, path};
 }
 
 void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config, std::string preprocessed_dir)

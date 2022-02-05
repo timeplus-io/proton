@@ -12,10 +12,6 @@
 #include <IO/ReadBufferFromAzureBlobStorage.h>
 #endif
 
-#if USE_HDFS
-#include <Storages/HDFS/ReadBufferFromHDFS.h>
-#endif
-
 #include <base/logger_useful.h>
 #include <filesystem>
 #include <iostream>
@@ -48,22 +44,12 @@ SeekableReadBufferPtr ReadBufferFromWebServerGather::createImplementationBuffer(
     return std::make_unique<ReadBufferFromWebServer>(fs::path(uri) / path, context, settings, threadpool_read, read_until_position_);
 }
 
-
-#if USE_HDFS
-SeekableReadBufferPtr ReadBufferFromHDFSGather::createImplementationBuffer(const String & path, size_t read_until_position_) const
-{
-    return std::make_unique<ReadBufferFromHDFS>(hdfs_uri, fs::path(hdfs_directory) / path, config, buf_size, read_until_position_);
-}
-#endif
-
-
 ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(const RemoteMetadata & metadata_, const String & path_)
     : ReadBuffer(nullptr, 0)
     , metadata(metadata_)
     , canonical_path(path_)
 {
 }
-
 
 ReadBufferFromRemoteFSGather::ReadResult ReadBufferFromRemoteFSGather::readInto(char * data, size_t size, size_t offset, size_t ignore)
 {

@@ -33,15 +33,9 @@
 [submodule "contrib/llvm"]
 	path = contrib/llvm
 	url = https://github.com/ClickHouse-Extras/llvm
-[submodule "contrib/mariadb-connector-c"]
-	path = contrib/mariadb-connector-c
-	url = https://github.com/ClickHouse-Extras/mariadb-connector-c.git
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
 	url = https://github.com/ClickHouse-Extras/jemalloc.git
-[submodule "contrib/unixodbc"]
-	path = contrib/unixodbc
-	url = https://github.com/ClickHouse-Extras/UnixODBC.git
 [submodule "contrib/protobuf"]
 	path = contrib/protobuf
 	url = https://github.com/ClickHouse-Extras/protobuf.git
@@ -59,9 +53,6 @@
 [submodule "contrib/thrift"]
 	path = contrib/thrift
 	url = https://github.com/apache/thrift.git
-[submodule "contrib/libhdfs3"]
-	path = contrib/libhdfs3
-	url = https://github.com/ClickHouse-Extras/libhdfs3.git
 [submodule "contrib/libxml2"]
 	path = contrib/libxml2
 	url = https://github.com/GNOME/libxml2.git
@@ -151,17 +142,6 @@
 [submodule "contrib/openldap"]
 	path = contrib/openldap
 	url = https://github.com/ClickHouse-Extras/openldap.git
-[submodule "contrib/AMQP-CPP"]
-	path = contrib/AMQP-CPP
-	url = https://github.com/ClickHouse-Extras/AMQP-CPP.git
-[submodule "contrib/cassandra"]
-	path = contrib/cassandra
-	url = https://github.com/ClickHouse-Extras/cpp-driver.git
-	branch = clickhouse
-[submodule "contrib/libuv"]
-	path = contrib/libuv
-	url = https://github.com/ClickHouse-Extras/libuv.git
-	branch = clickhouse
 [submodule "contrib/fmtlib"]
 	path = contrib/fmtlib
 	url = https://github.com/fmtlib/fmt.git
@@ -208,9 +188,6 @@
 [submodule "contrib/NuRaft"]
 	path = contrib/NuRaft
 	url = https://github.com/ClickHouse-Extras/NuRaft.git
-[submodule "contrib/nanodbc"]
-	path = contrib/nanodbc
-	url = https://github.com/ClickHouse-Extras/nanodbc.git
 [submodule "contrib/datasketches-cpp"]
 	path = contrib/datasketches-cpp
 	url = https://github.com/ClickHouse-Extras/datasketches-cpp.git
@@ -253,9 +230,6 @@
 [submodule "contrib/nlp-data"]
 	path = contrib/nlp-data
 	url = https://github.com/ClickHouse-Extras/nlp-data.git
-[submodule "contrib/hive-metastore"]
-	path = contrib/hive-metastore
-	url = https://github.com/ClickHouse-Extras/hive-metastore
 [submodule "contrib/azure"]
 	path = contrib/azure
 	url = https://github.com/ClickHouse-Extras/azure-sdk-for-cpp.git

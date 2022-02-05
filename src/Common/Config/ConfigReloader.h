@@ -2,8 +2,6 @@
 
 #include "ConfigProcessor.h"
 #include <Common/ThreadPool.h>
-#include <Common/ZooKeeper/Common.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <time.h>
 #include <string>
 #include <thread>
@@ -35,8 +33,6 @@ public:
             const std::string & path,
             const std::string & include_from_path,
             const std::string & preprocessed_dir,
-            zkutil::ZooKeeperNodeCache && zk_node_cache,
-            const zkutil::EventPtr & zk_changed_event,
             Updater && updater,
             bool already_loaded);
 
@@ -79,8 +75,6 @@ private:
     std::string include_from_path;
     std::string preprocessed_dir;
     FilesChangesTracker files;
-    zkutil::ZooKeeperNodeCache zk_node_cache;
-    bool need_reload_from_zk = false;
     zkutil::EventPtr zk_changed_event = std::make_shared<Poco::Event>();
 
     Updater updater;

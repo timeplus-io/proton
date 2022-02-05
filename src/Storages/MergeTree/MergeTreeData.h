@@ -26,7 +26,6 @@
 #include <Disks/StoragePolicy.h>
 #include <Storages/extractKeyExpressionList.h>
 #include <Storages/PartitionCommands.h>
-#include <Storages/MergeTree/ZeroCopyLock.h>
 
 
 #include <boost/multi_index_container.hpp>
@@ -44,7 +43,6 @@ class MergeTreeDataMergerMutator;
 class MutationCommands;
 class Context;
 struct JobAndPool;
-struct ZeroCopyLock;
 
 /// Auxiliary struct holding information about the future merged or mutated part.
 struct EmergingPartInfo
@@ -1204,10 +1202,6 @@ private:
         DataPartsVector & duplicate_parts_to_remove,
         MutableDataPartsVector & parts_from_wal,
         DataPartsLock & part_lock);
-
-    /// Create zero-copy exclusive lock for part and disk. Useful for coordination of
-    /// distributed operations which can lead to data duplication. Implemented only in ReplicatedMergeTree.
-    virtual std::optional<ZeroCopyLock> tryCreateZeroCopyExclusiveLock(const DataPartPtr &, const DiskPtr &) { return std::nullopt; }
 
     /// proton: starts
     std::atomic<Int64> committed_sn = -1;

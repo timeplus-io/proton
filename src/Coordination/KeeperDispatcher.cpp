@@ -1,10 +1,9 @@
 #include <Coordination/KeeperDispatcher.h>
-#include <Common/setThreadName.h>
 #include <Common/ZooKeeper/KeeperException.h>
+#include <Common/setThreadName.h>
 #include <future>
 #include <chrono>
 #include <Poco/Path.h>
-#include <Common/hex.h>
 #include <filesystem>
 #include <Common/checkStackSize.h>
 

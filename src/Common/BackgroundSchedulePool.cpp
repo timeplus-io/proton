@@ -140,15 +140,6 @@ void BackgroundSchedulePoolTaskInfo::scheduleImpl(std::lock_guard<std::mutex> & 
         pool.queue.enqueueNotification(new TaskNotification(shared_from_this()));
 }
 
-Coordination::WatchCallback BackgroundSchedulePoolTaskInfo::getWatchCallback()
-{
-     return [t = shared_from_this()](const Coordination::WatchResponse &)
-     {
-         t->schedule();
-     };
-}
-
-
 BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Metric tasks_metric_, const char *thread_name_)
     : size(size_)
     , tasks_metric(tasks_metric_)

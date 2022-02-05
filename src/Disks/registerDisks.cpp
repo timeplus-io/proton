@@ -22,10 +22,6 @@ void registerDiskAzureBlobStorage(DiskFactory & factory);
 void registerDiskEncrypted(DiskFactory & factory);
 #endif
 
-#if USE_HDFS
-void registerDiskHDFS(DiskFactory & factory);
-#endif
-
 void registerDiskWebServer(DiskFactory & factory);
 
 
@@ -46,10 +42,6 @@ void registerDisks()
 
 #if USE_SSL
     registerDiskEncrypted(factory);
-#endif
-
-#if USE_HDFS
-    registerDiskHDFS(factory);
 #endif
 
     registerDiskWebServer(factory);

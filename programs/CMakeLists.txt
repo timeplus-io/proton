@@ -17,50 +17,18 @@ option (ENABLE_PROTON_LOCAL "Local files fast processing mode" ${ENABLE_PROTON_A
 # https://clickhouse.tech/docs/en/operations/utilities/clickhouse-benchmark/
 option (ENABLE_PROTON_BENCHMARK "Queries benchmarking mode" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_PROTON_EXTRACT_FROM_CONFIG "Configs processor (extract values etc.)" ${ENABLE_PROTON_ALL})
-
-# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-compressor/
-option (ENABLE_PROTON_COMPRESSOR "Data compressor and decompressor" ${ENABLE_PROTON_ALL})
-
-# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-copier/
-option (ENABLE_PROTON_COPIER "Inter-cluster data copying mode" ${ENABLE_PROTON_ALL})
-
 option (ENABLE_PROTON_FORMAT "Queries pretty-printer and formatter with syntax highlighting"
-    ${ENABLE_PROTON_ALL})
-
-# https://clickhouse.tech/docs/en/operations/utilities/clickhouse-obfuscator/
-option (ENABLE_PROTON_OBFUSCATOR "Table data obfuscator (convert real data to benchmark-ready one)"
-    ${ENABLE_PROTON_ALL})
-
-# https://clickhouse.com/docs/en/operations/utilities/odbc-bridge/
-# TODO Also needs NANODBC.
-if (ENABLE_ODBC)
-    option (ENABLE_PROTON_ODBC_BRIDGE "HTTP-server working like a proxy to ODBC driver"
-        ${ENABLE_PROTON_ALL})
-else ()
-    option (ENABLE_PROTON_ODBC_BRIDGE "HTTP-server working like a proxy to ODBC driver" OFF)
-endif ()
-
-option (ENABLE_PROTON_LIBRARY_BRIDGE "HTTP-server working like a proxy to Library dictionary source"
     ${ENABLE_PROTON_ALL})
 
 option (ENABLE_PROTON_DWAL_BENCHMARK "Distributed write ahead log benchmark" ${ENABLE_PROTON_ALL})
 
-# https://presentations.clickhouse.tech/matemarketing_2020/
-option (ENABLE_PROTON_GIT_IMPORT "A tool to analyze Git repositories" ${ENABLE_PROTON_ALL})
-
-option (ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER "A tool to export table data files to be later put to a static files web server" ${ENABLE_PROTON_ALL})
-
 option (ENABLE_PROTON_KEEPER "proton alternative to ZooKeeper" ${ENABLE_PROTON_ALL})
-
-option (ENABLE_PROTON_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into proton-keeper snapshot" ${ENABLE_PROTON_ALL})
 
 if (NOT ENABLE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
     # since ENABLE_NURAFT is set to OFF for FreeBSD and Darwin.
     message (STATUS "proton-keeper and proton-keeper-converter will not be built (lack of NuRaft)")
     set(ENABLE_PROTON_KEEPER OFF)
-    set(ENABLE_PROTON_KEEPER_CONVERTER OFF)
 endif()
 
 # proton: starts.
@@ -106,58 +74,16 @@ else()
     message(STATUS "Benchmark mode: OFF")
 endif()
 
-if (ENABLE_PROTON_EXTRACT_FROM_CONFIG)
-    message(STATUS "Extract from config mode: ON")
-else()
-    message(STATUS "Extract from config mode: OFF")
-endif()
-
-if (ENABLE_PROTON_COMPRESSOR)
-    message(STATUS "Compressor mode: ON")
-else()
-    message(STATUS "Compressor mode: OFF")
-endif()
-
-if (ENABLE_PROTON_COPIER)
-    message(STATUS "Copier mode: ON")
-else()
-    message(STATUS "Copier mode: OFF")
-endif()
-
 if (ENABLE_PROTON_FORMAT)
     message(STATUS "Format mode: ON")
 else()
     message(STATUS "Format mode: OFF")
 endif()
 
-if (ENABLE_PROTON_OBFUSCATOR)
-    message(STATUS "Obfuscator mode: ON")
-else()
-    message(STATUS "Obfuscator mode: OFF")
-endif()
-
-if (ENABLE_PROTON_ODBC_BRIDGE)
-    message(STATUS "ODBC bridge mode: ON")
-else()
-    message(STATUS "ODBC bridge mode: OFF")
-endif()
-
-if (ENABLE_PROTON_LIBRARY_BRIDGE)
-    message(STATUS "Library bridge mode: ON")
-else()
-    message(STATUS "Library bridge mode: OFF")
-endif()
-
 if (ENABLE_PROTON_INSTALL)
     message(STATUS "proton install: ON")
 else()
     message(STATUS "proton install: OFF")
-endif()
-
-if (ENABLE_PROTON_GIT_IMPORT)
-    message(STATUS "proton git-import: ON")
-else()
-    message(STATUS "proton git-import: OFF")
 endif()
 
 if (ENABLE_PROTON_KEEPER)
@@ -173,12 +99,6 @@ else()
     message(STATUS "proton metastore mode: OFF")
 endif()
 # proton: ends.
-
-if (ENABLE_PROTON_KEEPER_CONVERTER)
-    message(STATUS "proton keeper-converter mode: ON")
-else()
-    message(STATUS "proton keeper-converter mode: OFF")
-endif()
 
 if (ENABLE_PROTON_DWAL_BENCHMARK)
     message(STATUS "proton dwal-benchmark: ON")
@@ -245,23 +165,13 @@ add_subdirectory (server)
 add_subdirectory (client)
 add_subdirectory (local)
 add_subdirectory (benchmark)
-add_subdirectory (extract-from-config)
-add_subdirectory (compressor)
-add_subdirectory (copier)
 add_subdirectory (format)
-add_subdirectory (obfuscator)
 add_subdirectory (install)
-add_subdirectory (git-import)
 add_subdirectory (bash-completion)
-add_subdirectory (static-files-disk-uploader)
 add_subdirectory (distributed-wal)
 
 if (ENABLE_PROTON_KEEPER)
     add_subdirectory (keeper)
-endif()
-
-if (ENABLE_PROTON_KEEPER_CONVERTER)
-    add_subdirectory (keeper-converter)
 endif()
 
 # proton: starts.
@@ -270,27 +180,14 @@ if (ENABLE_PROTON_METASTORE)
 endif()
 # proton: ends.
 
-if (ENABLE_PROTON_ODBC_BRIDGE)
-    add_subdirectory (odbc-bridge)
-endif ()
-
-if (ENABLE_PROTON_LIBRARY_BRIDGE)
-    add_subdirectory (library-bridge)
-endif ()
-
 if (CLICKHOUSE_ONE_SHARED)
   add_library(clickhouse-lib SHARED
     ${CLICKHOUSE_SERVER_SOURCES}
     ${CLICKHOUSE_CLIENT_SOURCES}
     ${CLICKHOUSE_LOCAL_SOURCES}
     ${CLICKHOUSE_BENCHMARK_SOURCES}
-    ${CLICKHOUSE_COPIER_SOURCES}
-    ${CLICKHOUSE_EXTRACT_FROM_CONFIG_SOURCES}
-    ${CLICKHOUSE_COMPRESSOR_SOURCES}
     ${CLICKHOUSE_FORMAT_SOURCES}
-    ${CLICKHOUSE_OBFUSCATOR_SOURCES}
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
-    ${CLICKHOUSE_ODBC_BRIDGE_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
     ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES}
     ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_SOURCES}
@@ -301,13 +198,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_CLIENT_LINK}
       ${CLICKHOUSE_LOCAL_LINK}
       ${CLICKHOUSE_BENCHMARK_LINK}
-      ${CLICKHOUSE_COPIER_LINK}
-      ${CLICKHOUSE_EXTRACT_FROM_CONFIG_LINK}
-      ${CLICKHOUSE_COMPRESSOR_LINK}
       ${CLICKHOUSE_FORMAT_LINK}
-      ${CLICKHOUSE_OBFUSCATOR_LINK}
       ${CLICKHOUSE_GIT_IMPORT_LINK}
-      ${CLICKHOUSE_ODBC_BRIDGE_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
       ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
       ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_LINK})
@@ -317,13 +209,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_CLIENT_INCLUDE}
       ${CLICKHOUSE_LOCAL_INCLUDE}
       ${CLICKHOUSE_BENCHMARK_INCLUDE}
-      ${CLICKHOUSE_COPIER_INCLUDE}
-      ${CLICKHOUSE_EXTRACT_FROM_CONFIG_INCLUDE}
-      ${CLICKHOUSE_COMPRESSOR_INCLUDE}
       ${CLICKHOUSE_FORMAT_INCLUDE}
-      ${CLICKHOUSE_OBFUSCATOR_INCLUDE}
       ${CLICKHOUSE_GIT_IMPORT_INCLUDE}
-      ${CLICKHOUSE_ODBC_BRIDGE_INCLUDE}
       ${CLICKHOUSE_KEEPER_INCLUDE}
       ${CLICKHOUSE_KEEPER_CONVERTER_INCLUDE})
 
@@ -337,30 +224,14 @@ if (PROTON_SPLIT_BINARY)
         proton-client
         proton-local
         proton-benchmark
-        proton-extract-from-config
         proton-compressor
         proton-format
-        proton-obfuscator
         proton-git-import
-        proton-copier
-        proton-static-files-disk-uploader
         proton-dwal-benchmark
     )
 
-    if (ENABLE_PROTON_ODBC_BRIDGE)
-        list (APPEND CLICKHOUSE_ALL_TARGETS proton-odbc-bridge)
-    endif ()
-
-    if (ENABLE_PROTON_LIBRARY_BRIDGE)
-        list (APPEND CLICKHOUSE_ALL_TARGETS proton-library-bridge)
-    endif ()
-
     if (ENABLE_PROTON_KEEPER)
         list (APPEND CLICKHOUSE_ALL_TARGETS proton-keeper)
-    endif ()
-
-    if (ENABLE_PROTON_KEEPER_CONVERTER)
-        list (APPEND CLICKHOUSE_ALL_TARGETS proton-keeper-converter)
     endif ()
 
     # proton: starts.
@@ -398,32 +269,11 @@ else ()
     if (ENABLE_PROTON_BENCHMARK)
         clickhouse_target_link_split_lib(proton benchmark)
     endif ()
-    if (ENABLE_PROTON_COPIER)
-        clickhouse_target_link_split_lib(proton copier)
-    endif ()
-    if (ENABLE_PROTON_EXTRACT_FROM_CONFIG)
-        clickhouse_target_link_split_lib(proton extract-from-config)
-    endif ()
-    if (ENABLE_PROTON_COMPRESSOR)
-        clickhouse_target_link_split_lib(proton compressor)
-    endif ()
     if (ENABLE_PROTON_FORMAT)
         clickhouse_target_link_split_lib(proton format)
     endif ()
-    if (ENABLE_PROTON_OBFUSCATOR)
-        clickhouse_target_link_split_lib(proton obfuscator)
-    endif ()
-    if (ENABLE_PROTON_GIT_IMPORT)
-        clickhouse_target_link_split_lib(proton git-import)
-    endif ()
-    if (ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER)
-        clickhouse_target_link_split_lib(proton static-files-disk-uploader)
-    endif ()
     if (ENABLE_PROTON_KEEPER)
         clickhouse_target_link_split_lib(proton keeper)
-    endif()
-    if (ENABLE_PROTON_KEEPER_CONVERTER)
-        clickhouse_target_link_split_lib(proton keeper-converter)
     endif()
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)
@@ -458,50 +308,15 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-benchmark" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-benchmark)
     endif ()
-    if (ENABLE_PROTON_COPIER)
-        add_custom_target (proton-copier ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-copier DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-copier" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-copier)
-    endif ()
-    if (ENABLE_PROTON_EXTRACT_FROM_CONFIG)
-        add_custom_target (proton-extract-from-config ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-extract-from-config DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-extract-from-config" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-extract-from-config)
-    endif ()
-    if (ENABLE_PROTON_COMPRESSOR)
-        add_custom_target (proton-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-compressor DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-compressor" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-compressor)
-    endif ()
     if (ENABLE_PROTON_FORMAT)
         add_custom_target (proton-format ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-format DEPENDS proton)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-format" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-format)
     endif ()
-    if (ENABLE_PROTON_OBFUSCATOR)
-        add_custom_target (proton-obfuscator ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-obfuscator DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-obfuscator" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-obfuscator)
-    endif ()
-    if (ENABLE_PROTON_GIT_IMPORT)
-        add_custom_target (proton-git-import ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-git-import DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-git-import" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-git-import)
-    endif ()
-    if (ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER)
-        add_custom_target (proton-static-files-disk-uploader ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-static-files-disk-uploader DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-static-files-disk-uploader" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-static-files-disk-uploader)
-    endif ()
     if (ENABLE_PROTON_KEEPER)
         add_custom_target (proton-keeper ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-keeper DEPENDS proton)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
         list(APPEND PROTON_BUNDLE proton-keeper)
-    endif ()
-    if (ENABLE_PROTON_KEEPER_CONVERTER)
-        add_custom_target (proton-keeper-converter ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-keeper-converter DEPENDS proton)
-        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper-converter" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-keeper-converter)
     endif ()
     # proton: starts.
     if (ENABLE_PROTON_METASTORE)

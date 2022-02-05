@@ -1,5 +1,4 @@
 #include <Coordination/KeeperServer.h>
-#include <Coordination/Defines.h>
 
 #include "config_core.h"
 
@@ -8,12 +7,9 @@
 #include <Coordination/KeeperStateManager.h>
 #include <Coordination/WriteBufferFromNuraftBuffer.h>
 #include <Coordination/ReadBufferFromNuraftBuffer.h>
-#include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <chrono>
-#include <Common/ZooKeeper/ZooKeeperIO.h>
 #include <string>
-#include <filesystem>
 #include <Poco/Util/Application.h>
 #include <boost/algorithm/string.hpp>
 

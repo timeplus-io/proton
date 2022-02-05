@@ -7,7 +7,6 @@
 #include <Databases/DatabaseOnDisk.h>
 #include <Common/quoteString.h>
 #include <Storages/StorageMemory.h>
-#include <Storages/LiveView/TemporaryLiveViewCleaner.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Parsers/formatAST.h>
 #include <IO/ReadHelpers.h>
@@ -21,16 +20,6 @@
 #include <Common/filesystemHelpers.h>
 
 #include "config_core.h"
-
-#if USE_MYSQL
-#    include <Databases/MySQL/MaterializedMySQLSyncThread.h>
-#    include <Storages/StorageMaterializedMySQL.h>
-#endif
-
-#if USE_LIBPQXX
-#    include <Storages/PostgreSQL/StorageMaterializedPostgreSQL.h>
-#    include <Databases/PostgreSQL/DatabaseMaterializedPostgreSQL.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -153,16 +142,10 @@ void DatabaseCatalog::loadDatabases()
     std::lock_guard lock{tables_marked_dropped_mutex};
     if (!tables_marked_dropped.empty())
         (*drop_task)->schedule();
-
-    /// Another background thread which drops temporary LiveViews.
-    /// We should start it after loadMarkedAsDroppedTables() to avoid race condition.
-    TemporaryLiveViewCleaner::instance().startup();
 }
 
 void DatabaseCatalog::shutdownImpl()
 {
-    TemporaryLiveViewCleaner::shutdown();
-
     if (drop_task)
         (*drop_task)->deactivate();
 
@@ -280,22 +263,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
             return {};
         }
 
-#if USE_LIBPQXX
-        if (!context_->isInternalQuery() && (db_and_table.first->getEngineName() == "MaterializedPostgreSQL"))
-        {
-            db_and_table.second = std::make_shared<StorageMaterializedPostgreSQL>(std::move(db_and_table.second), getContext(),
-                                        assert_cast<const DatabaseMaterializedPostgreSQL *>(db_and_table.first.get())->getPostgreSQLDatabaseName(),
-                                        db_and_table.second->getStorageID().table_name);
-        }
-#endif
-
-#if USE_MYSQL
-        /// It's definitely not the best place for this logic, but behaviour must be consistent with DatabaseMaterializedMySQL::tryGetTable(...)
-        if (!context_->isInternalQuery() && db_and_table.first->getEngineName() == "MaterializedMySQL")
-        {
-            db_and_table.second = std::make_shared<StorageMaterializedMySQL>(std::move(db_and_table.second), db_and_table.first.get());
-        }
-#endif
         return db_and_table;
     }
 
@@ -598,7 +565,6 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
 {
-    TemporaryLiveViewCleaner::init(global_context_);
 }
 
 DatabaseCatalog & DatabaseCatalog::init(ContextMutablePtr global_context_)

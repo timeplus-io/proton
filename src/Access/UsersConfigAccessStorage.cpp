@@ -557,8 +557,7 @@ void UsersConfigAccessStorage::parseFromConfig(const Poco::Util::AbstractConfigu
 void UsersConfigAccessStorage::load(
     const String & users_config_path,
     const String & include_from_path,
-    const String & preprocessed_dir,
-    const zkutil::GetZooKeeper & get_zookeeper_function)
+    const String & preprocessed_dir)
 {
     std::lock_guard lock{load_mutex};
     path = std::filesystem::path{users_config_path}.lexically_normal();
@@ -567,8 +566,6 @@ void UsersConfigAccessStorage::load(
         users_config_path,
         include_from_path,
         preprocessed_dir,
-        zkutil::ZooKeeperNodeCache(get_zookeeper_function),
-        std::make_shared<Poco::Event>(),
         [&](Poco::AutoPtr<Poco::Util::AbstractConfiguration> new_config, bool /*initial_loading*/)
         {
             parseFromConfig(*new_config);

@@ -14,7 +14,6 @@
 #include <base/ErrorHandlers.h>
 #include <base/scope_guard.h>
 #include <Poco/Net/NetException.h>
-#include <Poco/Net/TCPServerParams.h>
 #include <Poco/Net/TCPServer.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Version.h>
@@ -413,15 +412,11 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Listening for {}", server.getDescription());
     }
 
-    zkutil::EventPtr unused_event = std::make_shared<Poco::Event>();
-    zkutil::ZooKeeperNodeCache unused_cache([] { return nullptr; });
     /// ConfigReloader have to strict parameters which are redundant in our case
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
         include_from_path,
         config().getString("path", ""),
-        std::move(unused_cache),
-        unused_event,
         [&](ConfigurationPtr config, bool /* initial_loading */)
         {
             if (config->has("keeper_server"))

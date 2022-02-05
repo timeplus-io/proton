@@ -1,6 +1,5 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/QueryLog.h>
@@ -13,21 +12,12 @@
 #include <Common/typeid_cast.h>
 
 /// proton: starts
-#include <Databases/DatabaseReplicated.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/BlockUtils.h>
 #include <base/ClockUtils.h>
 /// proton: ends
 
 #include "config_core.h"
-
-#if USE_MYSQL
-#   include <Databases/MySQL/DatabaseMaterializedMySQL.h>
-#endif
-
-#if USE_LIBPQXX
-#   include <Databases/PostgreSQL/DatabaseMaterializedPostgreSQL.h>
-#endif
 
 namespace DB
 {
@@ -58,8 +48,6 @@ InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, ContextMut
 BlockIO InterpreterDropQuery::execute()
 {
     auto & drop = query_ptr->as<ASTDropQuery &>();
-    if (!drop.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccessForDDLOnCluster());
 
     if (getContext()->getSettingsRef().database_atomic_wait_for_drop_and_detach_synchronously)
         drop.no_delay = true;
@@ -275,9 +263,6 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
 
         /// Prevents recursive drop from drop database query. The original query must specify a table.
         bool is_drop_or_detach_database = !query_ptr->as<ASTDropQuery>()->table;
-        bool is_replicated_ddl_query = typeid_cast<DatabaseReplicated *>(database.get()) &&
-                                       !context_->getClientInfo().is_replicated_database_internal &&
-                                       !is_drop_or_detach_database;
 
         AccessFlags drop_storage;
 
@@ -287,20 +272,6 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             drop_storage = AccessType::DROP_DICTIONARY;
         else
             drop_storage = AccessType::DROP_TABLE;
-
-        if (is_replicated_ddl_query)
-        {
-            if (query.kind == ASTDropQuery::Kind::Detach)
-                context_->checkAccess(drop_storage, table_id);
-            else if (query.kind == ASTDropQuery::Kind::Truncate)
-                context_->checkAccess(AccessType::TRUNCATE, table_id);
-            else if (query.kind == ASTDropQuery::Kind::Drop)
-                context_->checkAccess(drop_storage, table_id);
-
-            ddl_guard->releaseTableLock();
-            table.reset();
-            return typeid_cast<DatabaseReplicated *>(database.get())->tryEnqueueReplicatedDDL(query.clone(), context_);
-        }
 
         if (query.kind == ASTDropQuery::Kind::Detach)
         {
@@ -580,13 +551,6 @@ void InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind kind, ContextPtr 
         /// looks like expected behaviour and we have tests for it.
         auto drop_context = Context::createCopy(global_context);
         drop_context->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-        if (auto txn = current_context->getZooKeeperMetadataTransaction())
-        {
-            /// For Replicated database
-            drop_context->getClientInfo().is_replicated_database_internal = true;
-            drop_context->setQueryContext(std::const_pointer_cast<Context>(current_context));
-            drop_context->initZooKeeperMetadataTransaction(txn, true);
-        }
         InterpreterDropQuery drop_interpreter(ast_drop_query, drop_context);
         drop_interpreter.execute();
     }

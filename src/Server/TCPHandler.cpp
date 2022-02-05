@@ -1,8 +1,6 @@
 #include <algorithm>
-#include <iomanip>
 #include <iterator>
 #include <memory>
-#include <mutex>
 #include <vector>
 #include <string_view>
 #include <string.h>
@@ -23,9 +21,9 @@
 #include <IO/LimitReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
 #include <Formats/NativeReader.h>
 #include <Formats/NativeWriter.h>
+#include <Interpreters/Cluster.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/InternalTextLogsQueue.h>
@@ -33,15 +31,12 @@
 #include <Interpreters/Session.h>
 #include <Interpreters/ProfileEventsExt.h>
 #include <Server/TCPServer.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
-#include <Core/ExternalTable.h>
 #include <Access/Credentials.h>
 #include <Storages/ColumnDefault.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/DataTypeEnum.h>
 #include <Compression/CompressionFactory.h>
 #include <base/logger_useful.h>
 #include <Common/CurrentMetrics.h>
@@ -751,12 +746,7 @@ void TCPHandler::processTablesStatusRequest()
             continue;
 
         TableStatus status;
-        if (auto * replicated_table = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
-        {
-            status.is_replicated = true;
-            status.absolute_delay = replicated_table->getAbsoluteDelay();
-        }
-        else if (auto * distributed_merge_tree = dynamic_cast<StorageDistributedMergeTree *>(table.get())) /// proton: starts
+        if (auto * distributed_merge_tree = dynamic_cast<StorageDistributedMergeTree *>(table.get())) /// proton: starts
         {
             /// If it is just a virtual table, no table status
             if (distributed_merge_tree->isRemote())

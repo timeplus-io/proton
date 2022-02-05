@@ -25,7 +25,6 @@
 #include <Processors/Transforms/SquashingChunksTransform.h>
 #include <Processors/Transforms/getSourceFromASTInsertQuery.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageMaterializedView.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/checkStackSize.h>
 
@@ -264,8 +263,6 @@ BlockIO InterpreterInsertQuery::execute()
 
     StoragePtr table = getTable(query);
     StoragePtr inner_table;
-    if (const auto * mv = dynamic_cast<const StorageMaterializedView *>(table.get()))
-        inner_table = mv->getTargetTable();
 
     if (query.partition_by && !table->supportsPartitionBy())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "PARTITION BY clause is not supported by storage");

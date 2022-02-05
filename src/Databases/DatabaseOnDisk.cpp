@@ -124,7 +124,6 @@ String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
     create->as_database.clear();
     create->as_table.clear();
     create->if_not_exists = false;
-    create->is_populate = false;
     create->replace_view = false;
     create->replace_table = false;
     create->create_or_replace = false;

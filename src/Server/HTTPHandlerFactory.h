@@ -132,8 +132,6 @@ HTTPRequestHandlerFactoryPtr createDynamicHandlerFactory(IServer & server, const
 
 HTTPRequestHandlerFactoryPtr createPredefinedHandlerFactory(IServer & server, const std::string & config_prefix);
 
-HTTPRequestHandlerFactoryPtr createReplicasStatusHandlerFactory(IServer & server, const std::string & config_prefix);
-
 HTTPRequestHandlerFactoryPtr
 createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix);
 

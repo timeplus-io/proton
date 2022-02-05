@@ -8,7 +8,6 @@
 #include <Access/User.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/QueryLog.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <boost/range/algorithm/copy.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
 #include <boost/range/algorithm_ext/erase.hpp>
@@ -268,47 +267,6 @@ namespace
         current_user_access.checkAdminOption(roles_to_revoke_ids);
     }
 
-    /// Returns access rights which should be checked for executing GRANT/REVOKE on cluster.
-    /// This function is less accurate than checkGrantOption() because it cannot use any information about
-    /// access rights the grantees currently have (due to those grantees are located on multiple nodes,
-    /// we just don't have the full information about them).
-    AccessRightsElements getRequiredAccessForExecutingOnCluster(const AccessRightsElements & elements_to_grant, const AccessRightsElements & elements_to_revoke)
-    {
-        auto required_access = elements_to_grant;
-        required_access.insert(required_access.end(), elements_to_revoke.begin(), elements_to_revoke.end());
-        std::for_each(required_access.begin(), required_access.end(), [&](AccessRightsElement & element) { element.grant_option = true; });
-        return required_access;
-    }
-
-    /// Checks if the current user has enough roles granted with admin option to grant or revoke specified roles on cluster.
-    /// This function is less accurate than checkAdminOption() because it cannot use any information about
-    /// granted roles the grantees currently have (due to those grantees are located on multiple nodes,
-    /// we just don't have the full information about them).
-    void checkAdminOptionForExecutingOnCluster(const ContextAccess & current_user_access,
-                                               const std::vector<UUID> roles_to_grant,
-                                               const RolesOrUsersSet & roles_to_revoke)
-    {
-        if (roles_to_revoke.all)
-        {
-            /// Revoking all the roles on cluster always requires ROLE_ADMIN privilege
-            /// because when we send the query REVOKE ALL to each shard we don't know at this point
-            /// which roles exactly this is going to revoke on each shard.
-            /// However ROLE_ADMIN just allows to revoke every role, that's why we check it here.
-            current_user_access.checkAccess(AccessType::ROLE_ADMIN);
-            return;
-        }
-
-        if (current_user_access.isGranted(AccessType::ROLE_ADMIN))
-            return;
-
-        for (const auto & role_id : roles_to_grant)
-            current_user_access.checkAdminOption(role_id);
-
-
-        for (const auto & role_id : roles_to_revoke.getMatchingIDs())
-            current_user_access.checkAdminOption(role_id);
-    }
-
     template <typename T>
     void updateGrantedAccessRightsAndRolesTemplate(
         T & grantee,
@@ -395,15 +353,6 @@ BlockIO InterpreterGrantQuery::execute()
     std::vector<UUID> roles_to_grant;
     RolesOrUsersSet roles_to_revoke;
     collectRolesToGrantOrRevoke(access_control, query, roles_to_grant, roles_to_revoke);
-
-    /// Executing on cluster.
-    if (!query.cluster.empty())
-    {
-        auto required_access = getRequiredAccessForExecutingOnCluster(elements_to_grant, elements_to_revoke);
-        checkAdminOptionForExecutingOnCluster(*current_user_access, roles_to_grant, roles_to_revoke);
-        checkGranteesAreAllowed(access_control, *current_user_access, grantees);
-        return executeDDLQueryOnCluster(query_ptr, getContext(), std::move(required_access));
-    }
 
     /// Check if the current user has corresponding access rights granted with grant option.
     String current_database = getContext()->getCurrentDatabase();

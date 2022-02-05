@@ -1,5 +1,6 @@
+#include "IKeeper.h"
+
 #include <Common/ProfileEvents.h>
-#include <Common/ZooKeeper/IKeeper.h>
 
 
 namespace DB

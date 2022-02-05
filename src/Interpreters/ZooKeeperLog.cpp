@@ -1,7 +1,5 @@
 #include <Interpreters/ZooKeeperLog.h>
-#include <Columns/ColumnArray.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeDate.h>
@@ -10,9 +8,6 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/ProfileEventsExt.h>
-#include <Interpreters/QueryLog.h>
-#include <Poco/Net/IPAddress.h>
 #include <Common/IPv6ToBinary.h>
 #include <Common/ZooKeeper/ZooKeeperConstants.h>
 

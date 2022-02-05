@@ -2,9 +2,7 @@
 #include <Common/DNSResolver.h>
 #include <Common/ActionLock.h>
 #include <Common/typeid_cast.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/SymbolIndex.h>
-#include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Common/ShellCommand.h>
 #include <Interpreters/Context.h>
@@ -14,11 +12,8 @@
 #include <Interpreters/ExternalUserDefinedExecutableFunctionsLoader.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ActionLocksManager.h>
-#include <Interpreters/InterpreterDropQuery.h>
-#include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/QueryLog.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/PartLog.h>
 #include <Interpreters/QueryThreadLog.h>
 #include <Interpreters/QueryViewsLog.h>
@@ -30,19 +25,17 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ZooKeeperLog.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <IO/copyData.h>
 #include <Access/ContextAccess.h>
 #include <Access/Common/AllowedClientHosts.h>
-#include <Databases/IDatabase.h>
 #include <Disks/DiskRestartProxy.h>
+#include <Disks/IStoragePolicy.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageReplicatedMergeTree.h>
-#include <Storages/StorageFactory.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Common/ThreadFuzzer.h>
 #include <csignal>
-#include <algorithm>
 
 #include "config_core.h"
 
@@ -130,9 +123,6 @@ AccessType getRequiredAccessType(StorageActionBlockType action_type)
     else
         throw Exception("Unknown action type: " + std::to_string(action_type), ErrorCodes::LOGICAL_ERROR);
 }
-
-constexpr std::string_view table_is_not_replicated = "Table {} is not replicated";
-
 }
 
 /// Implements SYSTEM [START|STOP] <something action from ActionLocks>
@@ -202,9 +192,6 @@ InterpreterSystemQuery::InterpreterSystemQuery(const ASTPtr & query_ptr_, Contex
 BlockIO InterpreterSystemQuery::execute()
 {
     auto & query = query_ptr->as<ASTSystemQuery &>();
-
-    if (!query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccessForDDLOnCluster());
 
     using Type = ASTSystemQuery::Type;
 
@@ -408,23 +395,8 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::START_DISTRIBUTED_SENDS:
             startStopAction(ActionLocks::DistributedSend, true);
             break;
-        case Type::DROP_REPLICA:
-            dropReplica(query);
-            break;
-        case Type::SYNC_REPLICA:
-            syncReplica(query);
-            break;
         case Type::FLUSH_DISTRIBUTED:
             flushDistributed(query);
-            break;
-        case Type::RESTART_REPLICAS:
-            restartReplicas(system_context);
-            break;
-        case Type::RESTART_REPLICA:
-            restartReplica(table_id, system_context);
-            break;
-        case Type::RESTORE_REPLICA:
-            restoreReplica();
             break;
         case Type::RESTART_DISK:
             restartDisk(query.disk);
@@ -463,252 +435,6 @@ BlockIO InterpreterSystemQuery::execute()
     }
 
     return BlockIO();
-}
-
-void InterpreterSystemQuery::restoreReplica()
-{
-    getContext()->checkAccess(AccessType::SYSTEM_RESTORE_REPLICA, table_id);
-
-    const StoragePtr table_ptr = DatabaseCatalog::instance().getTable(table_id, getContext());
-
-    auto * const table_replicated_ptr = dynamic_cast<StorageReplicatedMergeTree *>(table_ptr.get());
-
-    if (table_replicated_ptr == nullptr)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, table_is_not_replicated.data(), table_id.getNameForLogs());
-
-    table_replicated_ptr->restoreMetadataInZooKeeper();
-}
-
-StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, ContextMutablePtr system_context, bool need_ddl_guard)
-{
-    auto table_ddl_guard = need_ddl_guard
-        ? DatabaseCatalog::instance().getDDLGuard(replica.getDatabaseName(), replica.getTableName())
-        : nullptr;
-
-    auto [database, table] = DatabaseCatalog::instance().tryGetDatabaseAndTable(replica, getContext());
-    ASTPtr create_ast;
-
-    /// Detach actions
-    if (!table || !dynamic_cast<const StorageReplicatedMergeTree *>(table.get()))
-        return nullptr;
-
-    table->flushAndShutdown();
-    {
-        /// If table was already dropped by anyone, an exception will be thrown
-        auto table_lock = table->lockExclusively(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
-        create_ast = database->getCreateTableQuery(replica.table_name, getContext());
-
-        database->detachTable(system_context, replica.table_name);
-    }
-    table.reset();
-
-    /// Attach actions
-    /// getCreateTableQuery must return canonical CREATE query representation, there are no need for AST postprocessing
-    auto & create = create_ast->as<ASTCreateQuery &>();
-    create.attach = true;
-
-    auto columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, system_context, true);
-    auto constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
-    auto data_path = database->getTableDataPath(create);
-
-    table = StorageFactory::instance().get(create,
-        data_path,
-        system_context,
-        system_context->getGlobalContext(),
-        columns,
-        constraints,
-        false);
-
-    database->attachTable(system_context, replica.table_name, table, data_path);
-
-    table->startup();
-    return table;
-}
-
-void InterpreterSystemQuery::restartReplica(const StorageID & replica, ContextMutablePtr system_context)
-{
-    getContext()->checkAccess(AccessType::SYSTEM_RESTART_REPLICA, replica);
-    if (!tryRestartReplica(replica, system_context))
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, table_is_not_replicated.data(), replica.getNameForLogs());
-}
-
-void InterpreterSystemQuery::restartReplicas(ContextMutablePtr system_context)
-{
-    std::vector<StorageID> replica_names;
-    auto & catalog = DatabaseCatalog::instance();
-
-    auto access = getContext()->getAccess();
-    bool access_is_granted_globally = access->isGranted(AccessType::SYSTEM_RESTART_REPLICA);
-
-    for (auto & elem : catalog.getDatabases())
-    {
-        for (auto it = elem.second->getTablesIterator(getContext()); it->isValid(); it->next())
-        {
-            if (dynamic_cast<const StorageReplicatedMergeTree *>(it->table().get()))
-            {
-                if (!access_is_granted_globally && !access->isGranted(AccessType::SYSTEM_RESTART_REPLICA, elem.first, it->name()))
-                {
-                    LOG_INFO(log, "Access {} denied, skipping {}.{}", "SYSTEM RESTART REPLICA", elem.first, it->name());
-                    continue;
-                }
-                replica_names.emplace_back(it->databaseName(), it->name());
-            }
-        }
-    }
-
-    if (replica_names.empty())
-        return;
-
-    TableGuards guards;
-
-    for (const auto & name : replica_names)
-        guards.emplace(UniqueTableName{name.database_name, name.table_name}, nullptr);
-
-    for (auto & guard : guards)
-        guard.second = catalog.getDDLGuard(guard.first.database_name, guard.first.table_name);
-
-    ThreadPool pool(std::min(size_t(getNumberOfPhysicalCPUCores()), replica_names.size()));
-
-    for (auto & replica : replica_names)
-    {
-        LOG_TRACE(log, "Restarting replica on {}", replica.getNameForLogs());
-        pool.scheduleOrThrowOnError([&]() { tryRestartReplica(replica, system_context, false); });
-    }
-    pool.wait();
-}
-
-void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
-{
-    if (query.replica.empty())
-        throw Exception("Replica name is empty", ErrorCodes::BAD_ARGUMENTS);
-
-    if (!table_id.empty())
-    {
-        getContext()->checkAccess(AccessType::SYSTEM_DROP_REPLICA, table_id);
-        StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
-
-        if (!dropReplicaImpl(query, table))
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, table_is_not_replicated.data(), table_id.getNameForLogs());
-    }
-    else if (query.database)
-    {
-        getContext()->checkAccess(AccessType::SYSTEM_DROP_REPLICA, query.getDatabase());
-        DatabasePtr database = DatabaseCatalog::instance().getDatabase(query.getDatabase());
-        for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            dropReplicaImpl(query, iterator->table());
-        LOG_TRACE(log, "Dropped replica {} from database {}", query.replica, backQuoteIfNeed(database->getDatabaseName()));
-    }
-    else if (query.is_drop_whole_replica)
-    {
-        auto databases = DatabaseCatalog::instance().getDatabases();
-        auto access = getContext()->getAccess();
-        bool access_is_granted_globally = access->isGranted(AccessType::SYSTEM_DROP_REPLICA);
-
-        for (auto & elem : databases)
-        {
-            DatabasePtr & database = elem.second;
-            for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            {
-                if (!access_is_granted_globally && !access->isGranted(AccessType::SYSTEM_DROP_REPLICA, elem.first, iterator->name()))
-                {
-                    LOG_INFO(log, "Access {} denied, skipping {}.{}", "SYSTEM DROP REPLICA", elem.first, iterator->name());
-                    continue;
-                }
-                dropReplicaImpl(query, iterator->table());
-            }
-            LOG_TRACE(log, "Dropped replica {} from database {}", query.replica, backQuoteIfNeed(database->getDatabaseName()));
-        }
-    }
-    else if (!query.replica_zk_path.empty())
-    {
-        getContext()->checkAccess(AccessType::SYSTEM_DROP_REPLICA);
-        String remote_replica_path = fs::path(query.replica_zk_path)  / "replicas" / query.replica;
-
-        /// This check is actually redundant, but it may prevent from some user mistakes
-        for (auto & elem : DatabaseCatalog::instance().getDatabases())
-        {
-            DatabasePtr & database = elem.second;
-            for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            {
-                if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
-                {
-                    StorageReplicatedMergeTree::Status status;
-                    storage_replicated->getStatus(status);
-                    if (status.zookeeper_path == query.replica_zk_path)
-                        throw Exception("There is a local table " + storage_replicated->getStorageID().getNameForLogs() +
-                                        ", which has the same table path in ZooKeeper. Please check the path in query. "
-                                        "If you want to drop replica of this table, use `DROP TABLE` "
-                                        "or `SYSTEM DROP REPLICA 'name' FROM db.table`", ErrorCodes::TABLE_WAS_NOT_DROPPED);
-                }
-            }
-        }
-
-        auto zookeeper = getContext()->getZooKeeper();
-
-        bool looks_like_table_path = zookeeper->exists(query.replica_zk_path + "/replicas") ||
-                                     zookeeper->exists(query.replica_zk_path + "/dropped");
-        if (!looks_like_table_path)
-            throw Exception("Specified path " + query.replica_zk_path + " does not look like a table path",
-                            ErrorCodes::TABLE_WAS_NOT_DROPPED);
-
-        if (zookeeper->exists(remote_replica_path + "/is_active"))
-            throw Exception("Can't remove replica: " + query.replica + ", because it's active",
-                ErrorCodes::TABLE_WAS_NOT_DROPPED);
-
-        StorageReplicatedMergeTree::dropReplica(zookeeper, query.replica_zk_path, query.replica, log);
-        LOG_INFO(log, "Dropped replica {}", remote_replica_path);
-    }
-    else
-        throw Exception("Invalid query", ErrorCodes::LOGICAL_ERROR);
-}
-
-bool InterpreterSystemQuery::dropReplicaImpl(ASTSystemQuery & query, const StoragePtr & table)
-{
-    auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(table.get());
-    if (!storage_replicated)
-        return false;
-
-    StorageReplicatedMergeTree::Status status;
-    auto zookeeper = getContext()->getZooKeeper();
-    storage_replicated->getStatus(status);
-
-    /// Do not allow to drop local replicas and active remote replicas
-    if (query.replica == status.replica_name)
-        throw Exception("We can't drop local replica, please use `DROP TABLE` "
-                        "if you want to clean the data and drop this replica", ErrorCodes::TABLE_WAS_NOT_DROPPED);
-
-    /// NOTE it's not atomic: replica may become active after this check, but before dropReplica(...)
-    /// However, the main usecase is to drop dead replica, which cannot become active.
-    /// This check prevents only from accidental drop of some other replica.
-    if (zookeeper->exists(status.zookeeper_path + "/replicas/" + query.replica + "/is_active"))
-        throw Exception("Can't drop replica: " + query.replica + ", because it's active",
-                        ErrorCodes::TABLE_WAS_NOT_DROPPED);
-
-    storage_replicated->dropReplica(zookeeper, status.zookeeper_path, query.replica, log);
-    LOG_TRACE(log, "Dropped replica {} of {}", query.replica, table->getStorageID().getNameForLogs());
-
-    return true;
-}
-
-void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
-{
-    getContext()->checkAccess(AccessType::SYSTEM_SYNC_REPLICA, table_id);
-    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
-
-    if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
-    {
-        LOG_TRACE(log, "Synchronizing entries in replica's queue with table's log and waiting for it to become empty");
-        if (!storage_replicated->waitForShrinkingQueueSize(0, getContext()->getSettingsRef().receive_timeout.totalMilliseconds()))
-        {
-            LOG_ERROR(log, "SYNC REPLICA {}: Timed out!", table_id.getNameForLogs());
-            throw Exception(
-                    "SYNC REPLICA " + table_id.getNameForLogs() + ": command timed out. "
-                    "See the 'receive_timeout' setting", ErrorCodes::TIMEOUT_EXCEEDED);
-        }
-        LOG_TRACE(log, "SYNC REPLICA {}: OK", table_id.getNameForLogs());
-    }
-    else
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, table_is_not_replicated.data(), table_id.getNameForLogs());
 }
 
 void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)

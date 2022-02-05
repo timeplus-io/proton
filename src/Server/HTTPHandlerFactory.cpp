@@ -3,7 +3,6 @@
 #include <Server/HTTP/HTTPRequestHandler.h>
 #include <Server/IServer.h>
 #include <Access/Credentials.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/Session.h>
 
 #include <Poco/Util/LayeredConfiguration.h>
@@ -11,7 +10,6 @@
 #include "HTTPHandler.h"
 #include "NotFoundHandler.h"
 #include "StaticRequestHandler.h"
-#include "ReplicasStatusHandler.h"
 #include "InterserverIOHTTPHandler.h"
 #include "PrometheusRequestHandler.h"
 #include "RestHTTPRequestHandler.h"
@@ -90,8 +88,6 @@ static inline auto createHandlersFactoryFromConfig(
                 main_handler_factory->addHandler(createPredefinedHandlerFactory(server, prefix + "." + key));
             else if (handler_type == "prometheus")
                 main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key));
-            else if (handler_type == "replicas_status")
-                main_handler_factory->addHandler(createReplicasStatusHandlerFactory(server, prefix + "." + key));
             else
                 throw Exception("Unknown handler type '" + handler_type + "' in config here: " + prefix + "." + key + ".handler.type",
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
@@ -176,11 +172,6 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     ping_handler->attachStrictPath("/ping");
     ping_handler->allowGetAndHeadRequest();
     factory.addHandler(ping_handler);
-
-    auto replicas_status_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<ReplicasStatusHandler>>(server);
-    replicas_status_handler->attachNonStrictPath("/replicas_status");
-    replicas_status_handler->allowGetAndHeadRequest();
-    factory.addHandler(replicas_status_handler);
 
     auto web_ui_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<WebUIRequestHandler>>(server, "play.html");
     web_ui_handler->attachNonStrictPath("/play");

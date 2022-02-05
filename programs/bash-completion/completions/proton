@@ -1,0 +1,33 @@
+[[ -v $_CLICKHOUSE_COMPLETION_LOADED ]] || source "$(dirname "${BASH_SOURCE[0]}")/proton-bootstrap"
+
+function _proton_get_utils()
+{
+    local cmd=$1 && shift
+    "$cmd" --help |& awk '/^proton.*args/ { print $2 }'
+}
+
+function _complete_for_proton_entrypoint_bin()
+{
+    local cur prev cword words
+    eval local cmd="$( _proton_quote "$1" )"
+    _proton_bin_exist "$cmd" || return 0
+
+    COMPREPLY=()
+    _get_comp_words_by_ref cur prev cword words
+
+    local util="$cur"
+    # complete utils, until it will be finished
+    if [[ $cword -lt 2 ]]; then
+        COMPREPLY=( $(compgen -W "$(_proton_get_utils "$cmd")" -- "$cur") )
+        return
+    fi
+    util="${words[1]}"
+
+    if _complete_for_proton_generic_bin_impl "$prev"; then
+        COMPREPLY=( $(compgen -W "$(_proton_get_options "$cmd" "$util")" -- "$cur") )
+    fi
+
+    return 0
+}
+
+_complete_proton_generic proton _complete_for_proton_entrypoint_bin

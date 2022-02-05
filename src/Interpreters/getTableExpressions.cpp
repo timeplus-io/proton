@@ -92,9 +92,8 @@ static NamesAndTypesList getColumnsFromTableExpression(
     }
     else if (table_expression.table_function)
     {
-        const auto table_function = table_expression.table_function;
         auto query_context = context->getQueryContext();
-        const auto & function_storage = query_context->executeTableFunction(table_function);
+        const auto & function_storage = query_context->executeTableFunction(table_expression.table_function);
         auto function_metadata_snapshot = function_storage->getInMemoryMetadataPtr();
         const auto & columns = function_metadata_snapshot->getColumns();
         names_and_type_list = columns.getOrdinary();

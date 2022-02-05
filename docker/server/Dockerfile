@@ -90,7 +90,6 @@ RUN groupadd -r proton --gid=101 \
         chmod 0755 /bin/su-exec && \
         rm /su-exec.c && \
         apt-get purge -y --auto-remove tcc libc-dev libc-dev-bin libc6-dev linux-libc-dev \
-    && proton-local -q 'SELECT * FROM system.build_options' \
     && rm -rf \
         /var/lib/apt/lists/* \
         /var/cache/debconf \

@@ -1,9 +1,10 @@
 #pragma once
 
+#include <Common/ZooKeeper/ZooKeeperConstants.h>
+
 #include <Core/Defines.h>
 #include <Core/BaseSettings.h>
 #include <Core/SettingsEnums.h>
-#include <Common/ZooKeeper/ZooKeeperConstants.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <IO/WriteBufferFromString.h>
 

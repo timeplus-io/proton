@@ -11,7 +11,6 @@
 #include <Server/ProtocolServerAdapter.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
@@ -1347,34 +1346,6 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                     total_number_of_bytes += table_merge_tree->totalBytes(settings).value();
                     total_number_of_rows += table_merge_tree->totalRows(settings).value();
                     total_number_of_parts += table_merge_tree->getPartsCount();
-                }
-
-                if (StorageReplicatedMergeTree * table_replicated_merge_tree = typeid_cast<StorageReplicatedMergeTree *>(table.get()))
-                {
-                    StorageReplicatedMergeTree::Status status;
-                    table_replicated_merge_tree->getStatus(status, false);
-
-                    calculateMaxAndSum(max_queue_size, sum_queue_size, status.queue.queue_size);
-                    calculateMaxAndSum(max_inserts_in_queue, sum_inserts_in_queue, status.queue.inserts_in_queue);
-                    calculateMaxAndSum(max_merges_in_queue, sum_merges_in_queue, status.queue.merges_in_queue);
-
-                    if (!status.is_readonly)
-                    {
-                        try
-                        {
-                            time_t absolute_delay = 0;
-                            time_t relative_delay = 0;
-                            table_replicated_merge_tree->getReplicaDelays(absolute_delay, relative_delay);
-
-                            calculateMax(max_absolute_delay, absolute_delay);
-                            calculateMax(max_relative_delay, relative_delay);
-                        }
-                        catch (...)
-                        {
-                            tryLogCurrentException(__PRETTY_FUNCTION__,
-                                "Cannot get replica delay for table: " + backQuoteIfNeed(db.first) + "." + backQuoteIfNeed(iterator->name()));
-                        }
-                    }
                 }
             }
         }

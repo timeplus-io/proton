@@ -1,6 +1,4 @@
 #include <Coordination/KeeperStorage.h>
-#include <Common/ZooKeeper/IKeeper.h>
-#include <Common/setThreadName.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/hex.h>
 #include <IO/WriteHelpers.h>
@@ -9,11 +7,8 @@
 #include <Poco/Base64Encoder.h>
 #include <boost/algorithm/string.hpp>
 #include <Coordination/pathUtils.h>
-#include <sstream>
 #include <iomanip>
-#include <mutex>
 #include <functional>
-#include <base/logger_useful.h>
 
 namespace DB
 {

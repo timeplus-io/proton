@@ -5,7 +5,6 @@
 #include <Access/SettingsProfile.h>
 #include <Access/Common/AccessFlags.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 
 
 namespace DB
@@ -47,12 +46,6 @@ BlockIO InterpreterCreateSettingsProfileQuery::execute()
         getContext()->checkAccess(AccessType::ALTER_SETTINGS_PROFILE);
     else
         getContext()->checkAccess(AccessType::CREATE_SETTINGS_PROFILE);
-
-    if (!query.cluster.empty())
-    {
-        query.replaceCurrentUserTag(getContext()->getUserName());
-        return executeDDLQueryOnCluster(query_ptr, getContext());
-    }
 
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)

@@ -386,22 +386,6 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
-/// CREATE|ATTACH LIVE VIEW [IF NOT EXISTS] [db.]name [UUID 'uuid'] [TO [db.]name] AS SELECT ...
-class ParserCreateLiveViewQuery : public IParserBase
-{
-protected:
-    const char * getName() const override { return "CREATE LIVE VIEW query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-};
-
-/// CREATE|ATTACH WINDOW VIEW [IF NOT EXISTS] [db.]name [TO [db.]name] [ENGINE [db.]name] [WATERMARK function] AS SELECT ...
-class ParserCreateWindowViewQuery : public IParserBase
-{
-protected:
-    const char * getName() const override { return "CREATE WINDOW VIEW query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-};
-
 class ParserTableOverrideDeclaration : public IParserBase
 {
 public:

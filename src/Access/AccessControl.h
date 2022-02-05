@@ -2,7 +2,6 @@
 
 #include <Access/MultipleAccessStorage.h>
 #include <Common/SettingsChanges.h>
-#include <Common/ZooKeeper/Common.h>
 #include <boost/container/flat_set.hpp>
 #include <memory>
 
@@ -60,14 +59,12 @@ public:
 
     void addUsersConfigStorage(const String & users_config_path_,
                                const String & include_from_path_,
-                               const String & preprocessed_dir_,
-                               const zkutil::GetZooKeeper & get_zookeeper_function_ = {});
+                               const String & preprocessed_dir_);
 
     void addUsersConfigStorage(const String & storage_name_,
                                const String & users_config_path_,
                                const String & include_from_path_,
-                               const String & preprocessed_dir_,
-                               const zkutil::GetZooKeeper & get_zookeeper_function_ = {});
+                               const String & preprocessed_dir_);
 
     void reloadUsersConfigs();
     void startPeriodicReloadingUsersConfigs();
@@ -85,22 +82,16 @@ public:
     /// Adds LDAPAccessStorage which allows querying remote LDAP server for user info.
     void addLDAPStorage(const String & storage_name_, const Poco::Util::AbstractConfiguration & config_, const String & prefix_);
 
-    void addReplicatedStorage(const String & storage_name,
-                              const String & zookeeper_path,
-                              const zkutil::GetZooKeeper & get_zookeeper_function);
-
     /// Adds storages from <users_directories> config.
     void addStoragesFromUserDirectoriesConfig(const Poco::Util::AbstractConfiguration & config,
                                               const String & key,
                                               const String & config_dir,
                                               const String & dbms_dir,
-                                              const String & include_from_path,
-                                              const zkutil::GetZooKeeper & get_zookeeper_function);
+                                              const String & include_from_path);
 
     /// Adds storages from the main config.
     void addStoragesFromMainConfig(const Poco::Util::AbstractConfiguration & config,
-                                   const String & config_path,
-                                   const zkutil::GetZooKeeper & get_zookeeper_function);
+                                   const String & config_path);
 
     /// Sets the default profile's name.
     /// The default profile's settings are always applied before any other profile's.

@@ -184,7 +184,6 @@ void registerFormats()
     /// proton: ends
 
     registerOutputFormatNull(factory);
-    registerOutputFormatMySQLWire(factory);
     registerOutputFormatMarkdown(factory);
     registerOutputFormatPostgreSQLWire(factory);
     registerOutputFormatCapnProto(factory);

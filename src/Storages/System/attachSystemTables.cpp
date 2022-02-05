@@ -4,12 +4,10 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachSystemTablesImpl.h>
 
-#include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemAggregateFunctionCombinators.h>
 #include <Storages/System/StorageSystemAsynchronousMetrics.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
 #include <Storages/System/StorageSystemCollations.h>
-#include <Storages/System/StorageSystemClusters.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/System/StorageSystemDataSkippingIndices.h>
@@ -22,31 +20,25 @@
 #include <Storages/System/StorageSystemGraphite.h>
 #include <Storages/System/StorageSystemMacros.h>
 #include <Storages/System/StorageSystemMerges.h>
-#include <Storages/System/StorageSystemReplicatedFetches.h>
 #include <Storages/System/StorageSystemMetrics.h>
 #include <Storages/System/StorageSystemModels.h>
 #include <Storages/System/StorageSystemMutations.h>
 #include <Storages/System/StorageSystemNumbers.h>
 #include <Storages/System/StorageSystemOne.h>
-#include <Storages/System/StorageSystemPartMovesBetweenShards.h>
 #include <Storages/System/StorageSystemParts.h>
 #include <Storages/System/StorageSystemProjectionParts.h>
 #include <Storages/System/StorageSystemPartsColumns.h>
 #include <Storages/System/StorageSystemProjectionPartsColumns.h>
 #include <Storages/System/StorageSystemProcesses.h>
-#include <Storages/System/StorageSystemReplicas.h>
-#include <Storages/System/StorageSystemReplicationQueue.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemMergeTreeSettings.h>
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
 #include <Storages/System/StorageSystemTables.h>
-#include <Storages/System/StorageSystemZooKeeper.h>
 #include <Storages/System/StorageSystemContributors.h>
 #include <Storages/System/StorageSystemErrors.h>
 #include <Storages/System/StorageSystemWarnings.h>
-#include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemLicenses.h>
 #include <Storages/System/StorageSystemTimeZones.h>
 #include <Storages/System/StorageSystemDisks.h>
@@ -132,7 +124,7 @@ void attachSystemTablesLocal(ContextPtr context, IDatabase & system_database)
 #endif
 }
 
-void attachSystemTablesServer(ContextPtr context, IDatabase & system_database, bool has_zookeeper)
+void attachSystemTablesServer(ContextPtr context, IDatabase & system_database)
 {
     attachSystemTablesLocal(context, system_database);
 
@@ -147,21 +139,12 @@ void attachSystemTablesServer(ContextPtr context, IDatabase & system_database, b
     attach<StorageSystemMetrics>(context, system_database, "metrics");
     attach<StorageSystemMerges>(context, system_database, "merges");
     attach<StorageSystemMutations>(context, system_database, "mutations");
-    attach<StorageSystemReplicas>(context, system_database, "replicas");
-    attach<StorageSystemReplicationQueue>(context, system_database, "replication_queue");
-    attach<StorageSystemDDLWorkerQueue>(context, system_database, "distributed_ddl_queue");
     attach<StorageSystemDistributionQueue>(context, system_database, "distribution_queue");
     attach<StorageSystemDictionaries>(context, system_database, "dictionaries");
     attach<StorageSystemModels>(context, system_database, "models");
-    attach<StorageSystemClusters>(context, system_database, "clusters");
     attach<StorageSystemGraphite>(context, system_database, "graphite_retentions");
     attach<StorageSystemMacros>(context, system_database, "macros");
-    attach<StorageSystemReplicatedFetches>(context, system_database, "replicated_fetches");
-    attach<StorageSystemPartMovesBetweenShards>(context, system_database, "part_moves_between_shards");
     attach<StorageSystemAsynchronousInserts>(context, system_database, "asynchronous_inserts");
-
-    if (has_zookeeper)
-        attach<StorageSystemZooKeeper>(context, system_database, "zookeeper");
 }
 
 void attachSystemTablesAsync(ContextPtr context, IDatabase & system_database, AsynchronousMetrics & async_metrics)

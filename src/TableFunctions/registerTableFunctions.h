@@ -6,7 +6,6 @@
 namespace DB
 {
 class TableFunctionFactory;
-void registerTableFunctionMerge(TableFunctionFactory & factory);
 void registerTableFunctionRemote(TableFunctionFactory & factory);
 void registerTableFunctionNumbers(TableFunctionFactory & factory);
 void registerTableFunctionNull(TableFunctionFactory & factory);
@@ -24,27 +23,7 @@ void registerTableFunctionS3Cluster(TableFunctionFactory & factory);
 void registerTableFunctionCOS(TableFunctionFactory & factory);
 #endif
 
-#if USE_HDFS
-void registerTableFunctionHDFS(TableFunctionFactory & factory);
-void registerTableFunctionHDFSCluster(TableFunctionFactory & factory);
-#endif
-
-void registerTableFunctionODBC(TableFunctionFactory & factory);
-void registerTableFunctionJDBC(TableFunctionFactory & factory);
-
 void registerTableFunctionView(TableFunctionFactory & factory);
-
-#if USE_MYSQL
-void registerTableFunctionMySQL(TableFunctionFactory & factory);
-#endif
-
-#if USE_LIBPQXX
-void registerTableFunctionPostgreSQL(TableFunctionFactory & factory);
-#endif
-
-#if USE_SQLITE
-void registerTableFunctionSQLite(TableFunctionFactory & factory);
-#endif
 
 void registerTableFunctionDictionary(TableFunctionFactory & factory);
 

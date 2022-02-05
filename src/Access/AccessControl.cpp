@@ -1,7 +1,6 @@
 #include <Access/AccessControl.h>
 #include <Access/MultipleAccessStorage.h>
 #include <Access/MemoryAccessStorage.h>
-#include <Access/ReplicatedAccessStorage.h>
 #include <Access/UsersConfigAccessStorage.h>
 #include <Access/DiskAccessStorage.h>
 #include <Access/LDAPAccessStorage.h>
@@ -17,6 +16,7 @@
 #include <Core/Settings.h>
 #include <base/find_symbols.h>
 #include <Poco/ExpireCache.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -181,19 +181,17 @@ void AccessControl::addUsersConfigStorage(const String & storage_name_, const Po
 void AccessControl::addUsersConfigStorage(
     const String & users_config_path_,
     const String & include_from_path_,
-    const String & preprocessed_dir_,
-    const zkutil::GetZooKeeper & get_zookeeper_function_)
+    const String & preprocessed_dir_)
 {
     addUsersConfigStorage(
-        UsersConfigAccessStorage::STORAGE_TYPE, users_config_path_, include_from_path_, preprocessed_dir_, get_zookeeper_function_);
+        UsersConfigAccessStorage::STORAGE_TYPE, users_config_path_, include_from_path_, preprocessed_dir_);
 }
 
 void AccessControl::addUsersConfigStorage(
     const String & storage_name_,
     const String & users_config_path_,
     const String & include_from_path_,
-    const String & preprocessed_dir_,
-    const zkutil::GetZooKeeper & get_zookeeper_function_)
+    const String & preprocessed_dir_)
 {
     auto storages = getStoragesPtr();
     for (const auto & storage : *storages)
@@ -206,7 +204,7 @@ void AccessControl::addUsersConfigStorage(
     }
     auto check_setting_name_function = [this](const std::string_view & setting_name) { checkSettingNameIsAllowed(setting_name); };
     auto new_storage = std::make_shared<UsersConfigAccessStorage>(storage_name_, check_setting_name_function);
-    new_storage->load(users_config_path_, include_from_path_, preprocessed_dir_, get_zookeeper_function_);
+    new_storage->load(users_config_path_, include_from_path_, preprocessed_dir_);
     addStorage(new_storage);
     LOG_DEBUG(getLogger(), "Added {} access storage '{}', path: {}", String(new_storage->getStorageType()), new_storage->getStorageName(), new_storage->getPath());
 }
@@ -239,23 +237,6 @@ void AccessControl::stopPeriodicReloadingUsersConfigs()
         if (auto users_config_storage = typeid_cast<std::shared_ptr<UsersConfigAccessStorage>>(storage))
             users_config_storage->stopPeriodicReloading();
     }
-}
-
-void AccessControl::addReplicatedStorage(
-    const String & storage_name_,
-    const String & zookeeper_path_,
-    const zkutil::GetZooKeeper & get_zookeeper_function_)
-{
-    auto storages = getStoragesPtr();
-    for (const auto & storage : *storages)
-    {
-        if (auto replicated_storage = typeid_cast<std::shared_ptr<ReplicatedAccessStorage>>(storage))
-            return;
-    }
-    auto new_storage = std::make_shared<ReplicatedAccessStorage>(storage_name_, zookeeper_path_, get_zookeeper_function_);
-    addStorage(new_storage);
-    LOG_DEBUG(getLogger(), "Added {} access storage '{}'", String(new_storage->getStorageType()), new_storage->getStorageName());
-    new_storage->startup();
 }
 
 void AccessControl::addDiskStorage(const String & directory_, bool readonly_)
@@ -311,8 +292,7 @@ void AccessControl::addStoragesFromUserDirectoriesConfig(
     const String & key,
     const String & config_dir,
     const String & dbms_dir,
-    const String & include_from_path,
-    const zkutil::GetZooKeeper & get_zookeeper_function)
+    const String & include_from_path)
 {
     Strings keys_in_user_directories;
     config.keys(key, keys_in_user_directories);
@@ -342,7 +322,7 @@ void AccessControl::addStoragesFromUserDirectoriesConfig(
             String path = config.getString(prefix + ".path");
             if (std::filesystem::path{path}.is_relative() && std::filesystem::exists(config_dir + path))
                 path = config_dir + path;
-            addUsersConfigStorage(name, path, include_from_path, dbms_dir, get_zookeeper_function);
+            addUsersConfigStorage(name, path, include_from_path, dbms_dir);
         }
         else if (type == DiskAccessStorage::STORAGE_TYPE)
         {
@@ -354,11 +334,6 @@ void AccessControl::addStoragesFromUserDirectoriesConfig(
         {
             addLDAPStorage(name, config, prefix);
         }
-        else if (type == ReplicatedAccessStorage::STORAGE_TYPE)
-        {
-            String zookeeper_path = config.getString(prefix + ".zookeeper_path");
-            addReplicatedStorage(name, zookeeper_path, get_zookeeper_function);
-        }
         else
             throw Exception("Unknown storage type '" + type + "' at " + prefix + " in config", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
     }
@@ -367,8 +342,7 @@ void AccessControl::addStoragesFromUserDirectoriesConfig(
 
 void AccessControl::addStoragesFromMainConfig(
     const Poco::Util::AbstractConfiguration & config,
-    const String & config_path,
-    const zkutil::GetZooKeeper & get_zookeeper_function)
+    const String & config_path)
 {
     String config_dir = std::filesystem::path{config_path}.remove_filename().string();
     String dbms_dir = config.getString("path", DBMS_DEFAULT_PATH);
@@ -391,7 +365,7 @@ void AccessControl::addStoragesFromMainConfig(
         if (users_config_path != config_path)
             checkForUsersNotInMainConfig(config, config_path, users_config_path, getLogger());
 
-        addUsersConfigStorage(users_config_path, include_from_path, dbms_dir, get_zookeeper_function);
+        addUsersConfigStorage(users_config_path, include_from_path, dbms_dir);
     }
 
     String disk_storage_dir = config.getString("access_control_path", "");
@@ -399,7 +373,7 @@ void AccessControl::addStoragesFromMainConfig(
         addDiskStorage(disk_storage_dir);
 
     if (has_user_directories)
-        addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path, get_zookeeper_function);
+        addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path);
 }
 
 

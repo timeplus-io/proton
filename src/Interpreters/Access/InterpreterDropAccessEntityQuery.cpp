@@ -4,7 +4,6 @@
 #include <Access/AccessControl.h>
 #include <Access/Common/AccessRightsElement.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 
 
 namespace DB
@@ -20,9 +19,6 @@ BlockIO InterpreterDropAccessEntityQuery::execute()
     auto & query = query_ptr->as<ASTDropAccessEntityQuery &>();
     auto & access_control = getContext()->getAccessControl();
     getContext()->checkAccess(getRequiredAccess());
-
-    if (!query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext());
 
     query.replaceEmptyDatabase(getContext()->getCurrentDatabase());
 

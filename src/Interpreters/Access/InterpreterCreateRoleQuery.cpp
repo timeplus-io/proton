@@ -3,7 +3,6 @@
 #include <Access/AccessControl.h>
 #include <Access/Role.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 
 
 namespace DB
@@ -39,9 +38,6 @@ BlockIO InterpreterCreateRoleQuery::execute()
         getContext()->checkAccess(AccessType::ALTER_ROLE);
     else
         getContext()->checkAccess(AccessType::CREATE_ROLE);
-
-    if (!query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext());
 
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)

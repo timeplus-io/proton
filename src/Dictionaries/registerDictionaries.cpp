@@ -7,18 +7,10 @@ namespace DB
 class DictionarySourceFactory;
 
 void registerDictionarySourceFile(DictionarySourceFactory & source_factory);
-void registerDictionarySourceMysql(DictionarySourceFactory & source_factory);
 void registerDictionarySourceClickHouse(DictionarySourceFactory & source_factory);
-void registerDictionarySourceMongoDB(DictionarySourceFactory & source_factory);
-void registerDictionarySourceCassandra(DictionarySourceFactory & source_factory);
-void registerDictionarySourceRedis(DictionarySourceFactory & source_factory);
-void registerDictionarySourceXDBC(DictionarySourceFactory & source_factory);
-void registerDictionarySourceJDBC(DictionarySourceFactory & source_factory);
-void registerDictionarySourcePostgreSQL(DictionarySourceFactory & source_factory);
 void registerDictionarySourceExecutable(DictionarySourceFactory & source_factory);
 void registerDictionarySourceExecutablePool(DictionarySourceFactory & source_factory);
 void registerDictionarySourceHTTP(DictionarySourceFactory & source_factory);
-void registerDictionarySourceLibrary(DictionarySourceFactory & source_factory);
 
 class DictionaryFactory;
 void registerDictionaryRangeHashed(DictionaryFactory & factory);
@@ -37,18 +29,10 @@ void registerDictionaries()
     {
         auto & source_factory = DictionarySourceFactory::instance();
         registerDictionarySourceFile(source_factory);
-        registerDictionarySourceMysql(source_factory);
         registerDictionarySourceClickHouse(source_factory);
-        registerDictionarySourceMongoDB(source_factory);
-        registerDictionarySourceRedis(source_factory);
-        registerDictionarySourceCassandra(source_factory);
-        registerDictionarySourceXDBC(source_factory);
-        registerDictionarySourceJDBC(source_factory);
-        registerDictionarySourcePostgreSQL(source_factory);
         registerDictionarySourceExecutable(source_factory);
         registerDictionarySourceExecutablePool(source_factory);
         registerDictionarySourceHTTP(source_factory);
-        registerDictionarySourceLibrary(source_factory);
     }
 
     {

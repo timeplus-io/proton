@@ -88,17 +88,6 @@ namespace
         explicit FunctionVersion(ContextPtr context) : FunctionConstantBase(VERSION_STRING, context->isDistributed()) {}
     };
 
-    class FunctionZooKeeperSessionUptime : public FunctionConstantBase<FunctionZooKeeperSessionUptime, UInt32, DataTypeUInt32>
-    {
-    public:
-        static constexpr auto name = "zookeeperSessionUptime";
-        explicit FunctionZooKeeperSessionUptime(ContextPtr context)
-            : FunctionConstantBase(context->getZooKeeperSessionUptime(), context->isDistributed())
-        {
-        }
-        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionZooKeeperSessionUptime>(context); }
-    };
-
 #if defined(OS_LINUX)
     class FunctionGetOSKernelVersion : public FunctionConstantBase<FunctionGetOSKernelVersion, String, DataTypeString>
     {
@@ -150,12 +139,6 @@ void registerFunctionVersion(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionVersion>(FunctionFactory::CaseInsensitive);
 }
-
-void registerFunctionZooKeeperSessionUptime(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionZooKeeperSessionUptime>();
-}
-
 
 void registerFunctionGetOSKernelVersion([[maybe_unused]] FunctionFactory & factory)
 {

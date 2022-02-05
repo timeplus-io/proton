@@ -36,19 +36,6 @@ struct StoragePostgreSQLConfiguration : ExternalDataSourceConfiguration
     String on_conflict;
 };
 
-
-struct StorageMySQLConfiguration : ExternalDataSourceConfiguration
-{
-    bool replace_query = false;
-    String on_duplicate_clause;
-};
-
-struct StorageMongoDBConfiguration : ExternalDataSourceConfiguration
-{
-    String options;
-};
-
-
 using StorageSpecificArgs = std::vector<std::pair<String, ASTPtr>>;
 
 struct ExternalDataSourceInfo

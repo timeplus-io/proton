@@ -1,11 +1,9 @@
 #include "MetaStoreDispatcher.h"
 
-#include <chrono>
-#include <future>
 #include <boost/algorithm/string.hpp>
 #include <Common/Stopwatch.h>
-#include <Common/ZooKeeper/KeeperException.h>
 #include <Common/setThreadName.h>
+#include <Common/ZooKeeper/KeeperException.h>
 
 namespace DB
 {

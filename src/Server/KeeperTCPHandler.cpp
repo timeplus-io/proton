@@ -3,10 +3,8 @@
 #if USE_NURAFT
 
 #include <Common/ZooKeeper/ZooKeeperIO.h>
-#include <Core/Types.h>
 #include <IO/WriteBufferFromPocoSocket.h>
 #include <IO/ReadBufferFromPocoSocket.h>
-#include <Poco/Net/NetException.h>
 #include <Common/CurrentThread.h>
 #include <Common/Stopwatch.h>
 #include <Common/NetException.h>
@@ -14,7 +12,6 @@
 #include <base/logger_useful.h>
 #include <chrono>
 #include <Common/PipeFDs.h>
-#include <Poco/Util/AbstractConfiguration.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <queue>
 #include <mutex>

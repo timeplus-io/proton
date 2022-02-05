@@ -7,7 +7,6 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/UserDefinedSQLFunctionFactory.h>
 #include <Interpreters/UserDefinedSQLObjectsLoader.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -32,9 +31,6 @@ BlockIO InterpreterCreateFunctionQuery::execute()
 
     if (create_function_query.or_replace)
         access_rights_elements.emplace_back(AccessType::DROP_FUNCTION);
-
-    if (!create_function_query.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), access_rights_elements);
 
     auto current_context = getContext();
     current_context->checkAccess(access_rights_elements);

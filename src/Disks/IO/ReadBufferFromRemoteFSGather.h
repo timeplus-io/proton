@@ -176,36 +176,4 @@ private:
     bool threadpool_read;
     ReadSettings settings;
 };
-
-
-#if USE_HDFS
-/// Reads data from HDFS using stored paths in metadata.
-class ReadBufferFromHDFSGather final : public ReadBufferFromRemoteFSGather
-{
-public:
-    ReadBufferFromHDFSGather(
-            const String & path_,
-            const Poco::Util::AbstractConfiguration & config_,
-            const String & hdfs_uri_,
-            IDiskRemote::Metadata metadata_,
-            size_t buf_size_)
-        : ReadBufferFromRemoteFSGather(metadata_, path_)
-        , config(config_)
-        , buf_size(buf_size_)
-    {
-        const size_t begin_of_path = hdfs_uri_.find('/', hdfs_uri_.find("//") + 2);
-        hdfs_directory = hdfs_uri_.substr(begin_of_path);
-        hdfs_uri = hdfs_uri_.substr(0, begin_of_path);
-    }
-
-    SeekableReadBufferPtr createImplementationBuffer(const String & path, size_t read_until_position) const override;
-
-private:
-    const Poco::Util::AbstractConfiguration & config;
-    String hdfs_uri;
-    String hdfs_directory;
-    size_t buf_size;
-};
-#endif
-
 }

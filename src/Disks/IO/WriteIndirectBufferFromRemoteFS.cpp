@@ -2,7 +2,6 @@
 
 #include <IO/WriteBufferFromS3.h>
 #include <IO/WriteBufferFromAzureBlobStorage.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <IO/WriteBufferFromHTTP.h>
 
 
@@ -61,11 +60,6 @@ class WriteIndirectBufferFromRemoteFS<WriteBufferFromS3>;
 #if USE_AZURE_BLOB_STORAGE
 template
 class WriteIndirectBufferFromRemoteFS<WriteBufferFromAzureBlobStorage>;
-#endif
-
-#if USE_HDFS
-template
-class WriteIndirectBufferFromRemoteFS<WriteBufferFromHDFS>;
 #endif
 
 template

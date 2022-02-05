@@ -30,9 +30,7 @@ struct QueryViewsLogElement
     enum class ViewType : int8_t
     {
         DEFAULT = 1,
-        MATERIALIZED = 2,
-        LIVE = 3,
-        WINDOW = 4,
+        STREAMING = 2,
     };
 
     struct ViewRuntimeStats

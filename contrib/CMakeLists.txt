@@ -64,8 +64,6 @@ add_contrib (libmetrohash)
 add_contrib (lz4-cmake lz4)
 add_contrib (murmurhash)
 add_contrib (replxx-cmake replxx)
-add_contrib (unixodbc-cmake unixodbc)
-add_contrib (nanodbc-cmake nanodbc)
 add_contrib (capnproto-cmake capnproto)
 add_contrib (yaml-cpp-cmake yaml-cpp)
 add_contrib (re2-cmake re2)
@@ -97,7 +95,6 @@ add_contrib (cityhash102)
 add_contrib (libfarmhash)
 add_contrib (icu-cmake icu)
 add_contrib (h3-cmake h3)
-add_contrib (mariadb-connector-c-cmake mariadb-connector-c)
 
 if (ENABLE_TESTS)
     add_contrib (googletest-cmake googletest)
@@ -115,9 +112,6 @@ add_contrib (base64-cmake base64)
 add_contrib (simdjson-cmake simdjson)
 add_contrib (rapidjson-cmake rapidjson)
 add_contrib (fastops-cmake fastops)
-add_contrib (libuv-cmake libuv)
-add_contrib (amqpcpp-cmake AMQP-CPP) # requires: libuv
-add_contrib (cassandra-cmake cassandra) # requires: libuv
 add_contrib (curl-cmake curl)
 add_contrib (azure-cmake azure)
 add_contrib (sentry-native-cmake sentry-native) # requires: curl
@@ -126,8 +120,6 @@ add_contrib (krb5-cmake krb5)
 add_contrib (cyrus-sasl-cmake cyrus-sasl) # for krb5
 add_contrib (libgsasl-cmake libgsasl) # requires krb5
 add_contrib (librdkafka-cmake librdkafka) # requires: libgsasl
-add_contrib (libhdfs3-cmake libhdfs3) # requires: protobuf, krb5
-add_contrib (hive-metastore-cmake hive-metastore) # requires: thrift/avro/arrow/libhdfs3
 add_contrib (cppkafka-cmake cppkafka)
 add_contrib (libpqxx-cmake libpqxx)
 add_contrib (libpq-cmake libpq)
@@ -144,7 +136,7 @@ if (ENABLE_NLP)
     add_contrib (cld2-cmake cld2)
 endif()
 
-add_contrib (sqlite-cmake sqlite-amalgamation)
+# add_contrib (sqlite-cmake sqlite-amalgamation)
 add_contrib (s2geometry-cmake s2geometry)
 
 # proton: starts

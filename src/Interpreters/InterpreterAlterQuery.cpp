@@ -1,15 +1,11 @@
 #include <Interpreters/InterpreterAlterQuery.h>
 
 #include <Access/Common/AccessRightsElement.h>
-#include <Databases/DatabaseFactory.h>
-#include <Databases/DatabaseReplicated.h>
-#include <Databases/IDatabase.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/MutationsInterpreter.h>
 #include <Interpreters/QueryLog.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/BlockUtils.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
@@ -17,9 +13,6 @@
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
-#include <Storages/IStorage.h>
-#include <Storages/LiveView/LiveViewCommands.h>
-#include <Storages/LiveView/StorageLiveView.h>
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
 #include <Common/typeid_cast.h>
@@ -107,25 +100,11 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 {
     BlockIO res;
 
-    if (!alter.cluster.empty())
-        return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
-
     getContext()->checkAccess(getRequiredAccess());
     auto table_id = getContext()->resolveStorageID(alter, Context::ResolveOrdinary);
     query_ptr->as<ASTAlterQuery &>().setDatabase(table_id.database_name);
 
     DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
-    if (typeid_cast<DatabaseReplicated *>(database.get())
-        && !getContext()->getClientInfo().is_replicated_database_internal
-        && !alter.isAttachAlter()
-        && !alter.isFetchAlter()
-        && !alter.isDropPartitionAlter())
-    {
-        auto guard = DatabaseCatalog::instance().getDDLGuard(table_id.database_name, table_id.table_name);
-        guard->releaseTableLock();
-        return typeid_cast<DatabaseReplicated *>(database.get())->tryEnqueueReplicatedDDL(query_ptr, getContext());
-    }
-
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (table->isStaticStorage())
         throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Table is read-only");
@@ -140,7 +119,6 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     AlterCommands alter_commands;
     PartitionCommands partition_commands;
     MutationCommands mutation_commands;
-    LiveViewCommands live_view_commands;
     for (const auto & child : alter.command_list->children)
     {
         auto * command_ast = child->as<ASTAlterCommand>();
@@ -160,21 +138,8 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 
             mutation_commands.emplace_back(std::move(*mut_command));
         }
-        else if (auto live_view_command = LiveViewCommand::parse(command_ast))
-        {
-            live_view_commands.emplace_back(std::move(*live_view_command));
-        }
         else
             throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    if (typeid_cast<DatabaseReplicated *>(database.get()))
-    {
-        int command_types_count = !mutation_commands.empty() + !partition_commands.empty() + !live_view_commands.empty() + !alter_commands.empty();
-        bool mixed_settings_amd_metadata_alter = alter_commands.hasSettingsAlterCommand() && !alter_commands.isSettingsAlter();
-        if (1 < command_types_count || mixed_settings_amd_metadata_alter)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "For Replicated databases it's not allowed "
-                                                         "to execute ALTERs of different types in single query");
     }
 
     if (!mutation_commands.empty())
@@ -190,21 +155,6 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())
             res.pipeline = QueryPipeline(std::move(partition_commands_pipe));
-    }
-
-    if (!live_view_commands.empty())
-    {
-        live_view_commands.validate(*table);
-        for (const LiveViewCommand & command : live_view_commands)
-        {
-            auto live_view = std::dynamic_pointer_cast<StorageLiveView>(table);
-            switch (command.type)
-            {
-                case LiveViewCommand::REFRESH:
-                    live_view->refresh();
-                    break;
-            }
-        }
     }
 
     if (!alter_commands.empty())

@@ -1,10 +1,12 @@
 #pragma once
 
+#include "IKeeper.h"
+
 #include <base/types.h>
+
 #include <future>
 #include <memory>
 #include <vector>
-#include <Common/ZooKeeper/IKeeper.h>
 #include <Poco/Event.h>
 
 

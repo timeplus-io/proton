@@ -97,10 +97,6 @@ else()
 endif()
 target_include_directories(_flatbuffers INTERFACE ${FLATBUFFERS_INCLUDE_DIR})
 
-# ===  hdfs
-# NOTE: cannot use ch_contrib::hdfs since it's INCLUDE_DIRECTORIES does not includes trailing "hdfs/"
-set(HDFS_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/libhdfs3/include/hdfs/")
-
 # arrow-cmake cmake file calling orc cmake subroutine which detects certain compiler features.
 # Apple Clang compiler failed to compile this code without specifying c++11 standard.
 # As result these compiler features detected as absent. In result it failed to compile orc itself.
@@ -222,8 +218,6 @@ set(ARROW_SRCS
         "${LIBRARY_DIR}/io/caching.cc"
         "${LIBRARY_DIR}/io/compressed.cc"
         "${LIBRARY_DIR}/io/file.cc"
-        "${LIBRARY_DIR}/io/hdfs.cc"
-        "${LIBRARY_DIR}/io/hdfs_internal.cc"
         "${LIBRARY_DIR}/io/interfaces.cc"
         "${LIBRARY_DIR}/io/memory.cc"
         "${LIBRARY_DIR}/io/slow.cc"

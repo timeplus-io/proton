@@ -736,23 +736,6 @@ public:
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
 
-    ReplicatedFetchList & getReplicatedFetchList();
-    const ReplicatedFetchList & getReplicatedFetchList() const;
-
-    /// If the current session is expired at the time of the call, synchronously creates and returns a new session with the startNewSession() call.
-    /// If no ZooKeeper configured, throws an exception.
-    std::shared_ptr<zkutil::ZooKeeper> getZooKeeper() const;
-    /// Same as above but return a zookeeper connection from auxiliary_zookeepers configuration entry.
-    std::shared_ptr<zkutil::ZooKeeper> getAuxiliaryZooKeeper(const String & name) const;
-
-    /// Try to connect to Keeper using get(Auxiliary)ZooKeeper. Useful for
-    /// internal Keeper start (check connection to some other node). Return true
-    /// if connected successfully (without exception) or our zookeeper client
-    /// connection configured for some other cluster without our node.
-    bool tryCheckClientConnectionToMyKeeperCluster() const;
-
-    UInt32 getZooKeeperSessionUptime() const;
-
 #if USE_NURAFT
     std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
 #endif
@@ -767,19 +750,6 @@ public:
     void initializeMetaStoreDispatcher() const;
     void shutdownMetaStoreDispatcher() const;
 /// proton: ends.
-
-    /// Set auxiliary zookeepers configuration at server starting or configuration reloading.
-    void reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & config);
-    /// Has ready or expired ZooKeeper
-    bool hasZooKeeper() const;
-    /// Has ready or expired auxiliary ZooKeeper
-    bool hasAuxiliaryZooKeeper(const String & name) const;
-    /// Reset current zookeeper session. Do not create a new one.
-    void resetZooKeeper() const;
-    // Reload Zookeeper
-    void reloadZooKeeperIfChanged(const ConfigurationPtr & config) const;
-
-    void setSystemZooKeeperLogAfterInitializationIfNeeded();
 
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
@@ -823,13 +793,8 @@ public:
     BackgroundSchedulePool & getMessageBrokerSchedulePool() const;
     BackgroundSchedulePool & getDistributedSchedulePool() const;
 
-    ThrottlerPtr getReplicatedFetchesThrottler() const;
-    ThrottlerPtr getReplicatedSendsThrottler() const;
-
     /// Has distributed_ddl configuration or not.
     bool hasDistributedDDL() const;
-    void setDDLWorker(std::unique_ptr<DDLWorker> ddl_worker);
-    DDLWorker & getDDLWorker() const;
 
     std::shared_ptr<Clusters> getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
@@ -953,18 +918,8 @@ public:
     void setTimeParamEnd(const String & end) { time_param.setEnd(end); }
     /// proton: ends.
 
-    /// Add started bridge command. It will be killed after context destruction
-    void addBridgeCommand(std::unique_ptr<ShellCommand> cmd) const;
-
     IHostContextPtr & getHostContext();
     const IHostContextPtr & getHostContext() const;
-
-    /// Initialize context of distributed DDL query with Replicated database.
-    void initZooKeeperMetadataTransaction(ZooKeeperMetadataTransactionPtr txn, bool attach_existing = false);
-    /// Returns context of current distributed DDL query or nullptr.
-    ZooKeeperMetadataTransactionPtr getZooKeeperMetadataTransaction() const;
-    /// Removes context of current distributed DDL.
-    void resetZooKeeperMetadataTransaction();
 
     PartUUIDsPtr getPartUUIDs() const;
     PartUUIDsPtr getIgnoredPartUUIDs() const;

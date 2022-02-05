@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/ZooKeeper/IKeeper.h>
-#include <Common/ZooKeeper/ZooKeeperConstants.h>
+#include "IKeeper.h"
+#include "ZooKeeperConstants.h"
 #include <Interpreters/ZooKeeperLog.h>
 
 #include <boost/noncopyable.hpp>

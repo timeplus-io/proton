@@ -15,14 +15,14 @@ endmacro()
 configure_bash_completion()
 foreach (name
     # set of functions
-    clickhouse-bootstrap
+    proton-bootstrap
 
     # binaries that accept settings as command line argument
-    clickhouse-client
-    clickhouse-local
-    clickhouse-benchmark
+    proton-client
+    proton-local
+    proton-benchmark
 
-    clickhouse
+    proton
 )
     install(FILES ${name} DESTINATION ${out})
 endforeach()

@@ -8,12 +8,8 @@
 #include <Processors/Transforms/SquashingChunksTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
-#include <Storages/LiveView/StorageLiveView.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeSink.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageValues.h>
 #include <Common/CurrentThread.h>
-#include <Common/MemoryTracker.h>
 #include <Common/ProfileEvents.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/ThreadStatus.h>
@@ -116,20 +112,6 @@ private:
     std::optional<State> state;
 };
 
-/// Insert into LiveView.
-class PushingToLiveViewSink final : public SinkToStorage
-{
-public:
-    PushingToLiveViewSink(const Block & header, StorageLiveView & live_view_, StoragePtr storage_holder_, ContextPtr context_);
-    String getName() const override { return "PushingToLiveViewSink"; }
-    void consume(Chunk chunk) override;
-
-private:
-    StorageLiveView & live_view;
-    StoragePtr storage_holder;
-    ContextPtr context;
-};
-
 /// For every view, collect exception.
 /// Has single output with empty header.
 /// If any exception happen before view processing, pass it.
@@ -167,7 +149,7 @@ Chain buildPushingToViewsChain(
     bool no_destination,
     ThreadStatus * thread_status,
     std::atomic_uint64_t * elapsed_counter_ms,
-    const Block & live_view_header)
+    const Block & /*live_view_header*/)
 {
     checkStackSize();
     Chain result_chain;
@@ -256,51 +238,11 @@ Chain buildPushingToViewsChain(
         runtime_stats->event_time = std::chrono::system_clock::now();
         runtime_stats->event_status = QueryViewsLogElement::ViewStatus::EXCEPTION_BEFORE_START;
 
-        auto & type = runtime_stats->type;
-        auto & target_name = runtime_stats->target_name;
         auto * view_thread_status = runtime_stats->thread_status.get();
         auto * view_counter_ms = &runtime_stats->elapsed_ms;
 
-        if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(dependent_table.get()))
-        {
-            type = QueryViewsLogElement::ViewType::MATERIALIZED;
-            result_chain.addTableLock(materialized_view->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout));
-
-            StoragePtr inner_table = materialized_view->getTargetTable();
-            auto inner_table_id = inner_table->getStorageID();
-            auto inner_metadata_snapshot = inner_table->getInMemoryMetadataPtr();
-            query = dependent_metadata_snapshot->getSelectQuery().inner_query;
-            target_name = inner_table_id.getFullTableName();
-
-            /// Get list of columns we get from select query.
-            auto header = InterpreterSelectQuery(query, select_context, SelectQueryOptions().analyze())
-                .getSampleBlock();
-
-            /// Insert only columns returned by select.
-            Names insert_columns;
-            const auto & inner_table_columns = inner_metadata_snapshot->getColumns();
-            for (const auto & column : header)
-            {
-                /// But skip columns which storage doesn't have.
-                if (inner_table_columns.hasPhysical(column.name))
-                    insert_columns.emplace_back(column.name);
-            }
-
-            InterpreterInsertQuery interpreter(nullptr, insert_context, false, false, false);
-            out = interpreter.buildChain(inner_table, inner_metadata_snapshot, insert_columns, view_thread_status, view_counter_ms);
-            out.addStorageHolder(dependent_table);
-            out.addStorageHolder(inner_table);
-        }
-        else if (auto * live_view = dynamic_cast<StorageLiveView *>(dependent_table.get()))
-        {
-            runtime_stats->type = QueryViewsLogElement::ViewType::LIVE;
-            query = live_view->getInnerQuery(); // Used only to log in system.query_views_log
-            out = buildPushingToViewsChain(
-                dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr(), true, view_thread_status, view_counter_ms, storage_header);
-        }
-        else
-            out = buildPushingToViewsChain(
-                dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr(), false, view_thread_status, view_counter_ms);
+        out = buildPushingToViewsChain(
+            dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr(), false, view_thread_status, view_counter_ms);
 
         views_data->views.emplace_back(ViewRuntimeData{ //-V614
             std::move(query),
@@ -308,15 +250,6 @@ Chain buildPushingToViewsChain(
             database_table,
             nullptr,
             std::move(runtime_stats)});
-
-        if (type == QueryViewsLogElement::ViewType::MATERIALIZED)
-        {
-            auto executing_inner_query = std::make_shared<ExecutingInnerQueryFromViewTransform>(
-                storage_header, views_data->views.back(), views_data);
-            executing_inner_query->setRuntimeData(view_thread_status, elapsed_counter_ms);
-
-            out.addSource(std::move(executing_inner_query));
-        }
 
         chains.emplace_back(std::move(out));
 
@@ -366,12 +299,6 @@ Chain buildPushingToViewsChain(
         result_chain.setNumThreads(max_parallel_streams);
     }
 
-    if (auto * live_view = dynamic_cast<StorageLiveView *>(storage.get()))
-    {
-        auto sink = std::make_shared<PushingToLiveViewSink>(live_view_header, *live_view, storage, context);
-        sink->setRuntimeData(thread_status, elapsed_counter_ms);
-        result_chain.addSource(std::move(sink));
-    }
     /// proton: starts.
     else if (auto * streaming_view = dynamic_cast<StorageStreamingView *>(storage.get()))
     {
@@ -564,25 +491,6 @@ ExecutingInnerQueryFromViewTransform::GenerateResult ExecutingInnerQueryFromView
         state.reset();
 
     return res;
-}
-
-PushingToLiveViewSink::PushingToLiveViewSink(const Block & header, StorageLiveView & live_view_, StoragePtr storage_holder_, ContextPtr context_)
-    : SinkToStorage(header)
-    , live_view(live_view_)
-    , storage_holder(std::move(storage_holder_))
-    , context(std::move(context_))
-{
-}
-
-void PushingToLiveViewSink::consume(Chunk chunk)
-{
-    Progress local_progress(chunk.getNumRows(), chunk.bytes(), 0);
-    StorageLiveView::writeIntoLiveView(live_view, getHeader().cloneWithColumns(chunk.detachColumns()), context);
-    auto * process = context->getProcessListElement();
-    if (process)
-        process->updateProgressIn(local_progress);
-    ProfileEvents::increment(ProfileEvents::SelectedRows, local_progress.read_rows);
-    ProfileEvents::increment(ProfileEvents::SelectedBytes, local_progress.read_bytes);
 }
 
 FinalizingViewsTransform::FinalizingViewsTransform(std::vector<Block> headers, ViewsDataPtr data)

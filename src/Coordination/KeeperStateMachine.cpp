@@ -1,6 +1,5 @@
 #include <Coordination/KeeperStateMachine.h>
 #include <Coordination/ReadBufferFromNuraftBuffer.h>
-#include <Coordination/WriteBufferFromNuraftBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <Common/ZooKeeper/ZooKeeperIO.h>
 #include <Coordination/KeeperSnapshotManager.h>

@@ -1,7 +1,10 @@
+#include <config_core.h>
+
 namespace DB
 {
 class FunctionFactory;
 
+#if USE_MATH_FUNCS
 void registerFunctionE(FunctionFactory & factory);
 void registerFunctionPi(FunctionFactory & factory);
 void registerFunctionExp(FunctionFactory & factory);
@@ -32,17 +35,19 @@ void registerFunctionTanh(FunctionFactory & factory);
 void registerFunctionAsinh(FunctionFactory & factory);
 void registerFunctionAcosh(FunctionFactory & factory);
 void registerFunctionAtanh(FunctionFactory & factory);
+void registerVectorFunctions(FunctionFactory &);
+void registerFunctionDegrees(FunctionFactory & factory);
+void registerFunctionRadians(FunctionFactory & factory);
+#endif
+
 void registerFunctionPow(FunctionFactory & factory);
 void registerFunctionSign(FunctionFactory & factory);
 void registerFunctionMax2(FunctionFactory & factory);
 void registerFunctionMin2(FunctionFactory & factory);
-void registerVectorFunctions(FunctionFactory &);
-void registerFunctionDegrees(FunctionFactory & factory);
-void registerFunctionRadians(FunctionFactory & factory);
-
 
 void registerFunctionsMath(FunctionFactory & factory)
 {
+#if USE_MATH_FUNCS
     registerFunctionE(factory);
     registerFunctionPi(factory);
     registerFunctionExp(factory);
@@ -73,13 +78,14 @@ void registerFunctionsMath(FunctionFactory & factory)
     registerFunctionAsinh(factory);
     registerFunctionAcosh(factory);
     registerFunctionAtanh(factory);
+    registerVectorFunctions(factory);
+    registerFunctionDegrees(factory);
+    registerFunctionRadians(factory);
+#endif
     registerFunctionPow(factory);
     registerFunctionSign(factory);
     registerFunctionMax2(factory);
     registerFunctionMin2(factory);
-    registerVectorFunctions(factory);
-    registerFunctionDegrees(factory);
-    registerFunctionRadians(factory);
 }
 
 }

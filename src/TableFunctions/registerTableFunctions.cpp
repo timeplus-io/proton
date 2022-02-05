@@ -1,14 +1,12 @@
 #include "registerTableFunctions.h"
 #include <TableFunctions/TableFunctionFactory.h>
 
-
 namespace DB
 {
 void registerTableFunctions()
 {
     auto & factory = TableFunctionFactory::instance();
 
-    registerTableFunctionMerge(factory);
     registerTableFunctionRemote(factory);
     registerTableFunctionNumbers(factory);
     registerTableFunctionNull(factory);
@@ -26,27 +24,7 @@ void registerTableFunctions()
     registerTableFunctionCOS(factory);
 #endif
 
-#if USE_HDFS
-    registerTableFunctionHDFS(factory);
-    registerTableFunctionHDFSCluster(factory);
-#endif
-
-    registerTableFunctionODBC(factory);
-    registerTableFunctionJDBC(factory);
-
     registerTableFunctionView(factory);
-
-#if USE_MYSQL
-    registerTableFunctionMySQL(factory);
-#endif
-
-#if USE_LIBPQXX
-    registerTableFunctionPostgreSQL(factory);
-#endif
-
-#if USE_SQLITE
-    registerTableFunctionSQLite(factory);
-#endif
 
     registerTableFunctionDictionary(factory);
 

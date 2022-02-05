@@ -8,7 +8,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTTableOverrides.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -661,308 +660,6 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
-bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
-{
-    ParserKeyword s_create("CREATE");
-    ParserKeyword s_attach("ATTACH");
-    ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserCompoundIdentifier table_name_p(true, true);
-    ParserKeyword s_as("AS");
-    ParserKeyword s_view("VIEW");
-    ParserKeyword s_live("LIVE");
-    ParserToken s_dot(TokenType::Dot);
-    ParserToken s_lparen(TokenType::OpeningRoundBracket);
-    ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserTablePropertiesDeclarationList table_properties_p;
-    ParserSelectWithUnionQuery select_p;
-
-    ASTPtr table;
-    ASTPtr to_table;
-    ASTPtr columns_list;
-    ASTPtr as_database;
-    ASTPtr as_table;
-    ASTPtr select;
-    ASTPtr live_view_timeout;
-    ASTPtr live_view_periodic_refresh;
-
-    String cluster_str;
-    bool attach = false;
-    bool if_not_exists = false;
-    bool with_and = false;
-    bool with_timeout = false;
-    bool with_periodic_refresh = false;
-
-    if (!s_create.ignore(pos, expected))
-    {
-        if (s_attach.ignore(pos, expected))
-            attach = true;
-        else
-            return false;
-    }
-
-    if (!s_live.ignore(pos, expected))
-        return false;
-
-    if (!s_view.ignore(pos, expected))
-       return false;
-
-    if (s_if_not_exists.ignore(pos, expected))
-       if_not_exists = true;
-
-    if (!table_name_p.parse(pos, table, expected))
-        return false;
-
-    if (ParserKeyword{"WITH"}.ignore(pos, expected))
-    {
-        if (ParserKeyword{"TIMEOUT"}.ignore(pos, expected))
-        {
-            if (!ParserNumber{}.parse(pos, live_view_timeout, expected))
-            {
-                live_view_timeout = std::make_shared<ASTLiteral>(static_cast<UInt64>(DEFAULT_TEMPORARY_LIVE_VIEW_TIMEOUT_SEC));
-            }
-
-            /// Optional - AND
-            if (ParserKeyword{"AND"}.ignore(pos, expected))
-                with_and = true;
-
-            with_timeout = true;
-        }
-
-        if (ParserKeyword{"REFRESH"}.ignore(pos, expected) || ParserKeyword{"PERIODIC REFRESH"}.ignore(pos, expected))
-        {
-            if (!ParserNumber{}.parse(pos, live_view_periodic_refresh, expected))
-                live_view_periodic_refresh = std::make_shared<ASTLiteral>(static_cast<UInt64>(DEFAULT_PERIODIC_LIVE_VIEW_REFRESH_SEC));
-
-            with_periodic_refresh = true;
-        }
-
-        else if (with_and)
-            return false;
-
-        if (!with_timeout && !with_periodic_refresh)
-            return false;
-    }
-
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
-
-    // TO [db.]table
-    if (ParserKeyword{"TO"}.ignore(pos, expected))
-    {
-        if (!table_name_p.parse(pos, to_table, expected))
-            return false;
-    }
-
-    /// Optional - a list of columns can be specified. It must fully comply with SELECT.
-    if (s_lparen.ignore(pos, expected))
-    {
-        if (!table_properties_p.parse(pos, columns_list, expected))
-            return false;
-
-        if (!s_rparen.ignore(pos, expected))
-            return false;
-    }
-
-    /// AS SELECT ...
-    if (!s_as.ignore(pos, expected))
-        return false;
-
-    if (!select_p.parse(pos, select, expected))
-        return false;
-
-    auto comment = parseComment(pos, expected);
-
-    auto query = std::make_shared<ASTCreateQuery>();
-    node = query;
-
-    query->attach = attach;
-    query->if_not_exists = if_not_exists;
-    query->is_live_view = true;
-
-    auto * table_id = table->as<ASTTableIdentifier>();
-    query->database = table_id->getDatabase();
-    query->table = table_id->getTable();
-    query->uuid = table_id->uuid;
-    query->cluster = cluster_str;
-
-    if (query->database)
-        query->children.push_back(query->database);
-    if (query->table)
-        query->children.push_back(query->table);
-
-    if (to_table)
-        query->to_table_id = to_table->as<ASTTableIdentifier>()->getTableId();
-
-    query->set(query->columns_list, columns_list);
-
-    tryGetIdentifierNameInto(as_database, query->as_database);
-    tryGetIdentifierNameInto(as_table, query->as_table);
-    query->set(query->select, select);
-
-    if (live_view_timeout)
-        query->live_view_timeout.emplace(live_view_timeout->as<ASTLiteral &>().value.safeGet<UInt64>());
-
-    if (live_view_periodic_refresh)
-        query->live_view_periodic_refresh.emplace(live_view_periodic_refresh->as<ASTLiteral &>().value.safeGet<UInt64>());
-
-    if (comment)
-        query->set(query->comment, comment);
-
-    return true;
-}
-
-bool ParserCreateWindowViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
-{
-    ParserKeyword s_create("CREATE");
-    ParserKeyword s_temporary("TEMPORARY");
-    ParserKeyword s_attach("ATTACH");
-    ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserCompoundIdentifier table_name_p(true);
-    ParserKeyword s_as("AS");
-    ParserKeyword s_view("VIEW");
-    ParserKeyword s_window("WINDOW");
-    ParserToken s_dot(TokenType::Dot);
-    ParserToken s_eq(TokenType::Equals);
-    ParserToken s_lparen(TokenType::OpeningRoundBracket);
-    ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p;
-    ParserTablePropertiesDeclarationList table_properties_p;
-    ParserIntervalOperatorExpression watermark_p;
-    ParserIntervalOperatorExpression lateness_p;
-    ParserSelectWithUnionQuery select_p;
-
-    ASTPtr table;
-    ASTPtr to_table;
-    ASTPtr columns_list;
-    ASTPtr storage;
-    ASTPtr watermark;
-    ASTPtr lateness;
-    ASTPtr as_database;
-    ASTPtr as_table;
-    ASTPtr select;
-
-    String cluster_str;
-    bool attach = false;
-    bool is_watermark_strictly_ascending = false;
-    bool is_watermark_ascending = false;
-    bool is_watermark_bounded = false;
-    bool allowed_lateness = false;
-    bool if_not_exists = false;
-
-    if (!s_create.ignore(pos, expected))
-    {
-        if (s_attach.ignore(pos, expected))
-            attach = true;
-        else
-            return false;
-    }
-
-    if (!s_window.ignore(pos, expected))
-        return false;
-
-    if (!s_view.ignore(pos, expected))
-       return false;
-
-    if (s_if_not_exists.ignore(pos, expected))
-       if_not_exists = true;
-
-    if (!table_name_p.parse(pos, table, expected))
-        return false;
-
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
-
-    // TO [db.]table
-    if (ParserKeyword{"TO"}.ignore(pos, expected))
-    {
-        if (!table_name_p.parse(pos, to_table, expected))
-            return false;
-    }
-
-    /// Optional - a list of columns can be specified. It must fully comply with SELECT.
-    if (s_lparen.ignore(pos, expected))
-    {
-        if (!table_properties_p.parse(pos, columns_list, expected))
-            return false;
-
-        if (!s_rparen.ignore(pos, expected))
-            return false;
-    }
-
-    /// Inner table ENGINE for WINDOW VIEW
-    storage_p.parse(pos, storage, expected);
-
-    // WATERMARK
-    if (ParserKeyword{"WATERMARK"}.ignore(pos, expected))
-    {
-        s_eq.ignore(pos, expected);
-
-        if (ParserKeyword("STRICTLY_ASCENDING").ignore(pos,expected))
-            is_watermark_strictly_ascending = true;
-        else if (ParserKeyword("ASCENDING").ignore(pos,expected))
-            is_watermark_ascending = true;
-        else if (watermark_p.parse(pos, watermark, expected))
-            is_watermark_bounded = true;
-        else
-            return false;
-    }
-
-    // ALLOWED LATENESS
-    if (ParserKeyword{"ALLOWED_LATENESS"}.ignore(pos, expected))
-    {
-        s_eq.ignore(pos, expected);
-        allowed_lateness = true;
-
-        if (!lateness_p.parse(pos, lateness, expected))
-            return false;
-    }
-
-    /// AS SELECT ...
-    if (!s_as.ignore(pos, expected))
-        return false;
-
-    if (!select_p.parse(pos, select, expected))
-        return false;
-
-
-    auto query = std::make_shared<ASTCreateQuery>();
-    node = query;
-
-    query->attach = attach;
-    query->if_not_exists = if_not_exists;
-    query->is_window_view = true;
-
-    StorageID table_id = table->as<ASTTableIdentifier>()->getTableId();
-    query->setDatabase(table_id.database_name);
-    query->setTable(table_id.table_name);
-    query->uuid = table_id.uuid;
-    query->cluster = cluster_str;
-
-    if (to_table)
-        query->to_table_id = to_table->as<ASTTableIdentifier>()->getTableId();
-
-    query->set(query->columns_list, columns_list);
-    query->set(query->storage, storage);
-    query->is_watermark_strictly_ascending = is_watermark_strictly_ascending;
-    query->is_watermark_ascending = is_watermark_ascending;
-    query->is_watermark_bounded = is_watermark_bounded;
-    query->watermark_function = watermark;
-    query->allowed_lateness = allowed_lateness;
-    query->lateness_function = lateness;
-
-    tryGetIdentifierNameInto(as_database, query->as_database);
-    tryGetIdentifierNameInto(as_table, query->as_table);
-    query->set(query->select, select);
-
-    return true;
-}
-
 bool ParserTableOverrideDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_table_override("TABLE OVERRIDE");
@@ -1190,7 +887,6 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserCompoundIdentifier table_name_p(true, true);
     ParserKeyword s_as("AS");
     ParserKeyword s_view("VIEW");
-    ParserKeyword s_materialized("MATERIALIZED");
     ParserKeyword s_populate("POPULATE");
     ParserKeyword s_or_replace("OR REPLACE");
     ParserToken s_dot(TokenType::Dot);
@@ -1214,9 +910,6 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     String cluster_str;
     bool attach = false;
     bool if_not_exists = false;
-    bool is_ordinary_view = false;
-    bool is_materialized_view = false;
-    bool is_populate = false;
     bool replace_view = false;
 
     if (!s_create.ignore(pos, expected))
@@ -1227,18 +920,11 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             return false;
     }
 
-    /// VIEW or MATERIALIZED VIEW
+    /// VIEW
     if (s_or_replace.ignore(pos, expected))
     {
         replace_view = true;
     }
-
-    if (!replace_view && s_materialized.ignore(pos, expected))
-    {
-        is_materialized_view = true;
-    }
-    else
-        is_ordinary_view = true;
 
     if (!s_view.ignore(pos, expected))
         return false;
@@ -1279,16 +965,6 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             return false;
     }
 
-    if (is_materialized_view && !to_table)
-    {
-        /// Internal ENGINE for MATERIALIZED VIEW must be specified.
-        if (!storage_p.parse(pos, storage, expected))
-            return false;
-
-        if (s_populate.ignore(pos, expected))
-            is_populate = true;
-    }
-
     /// AS SELECT ...
     if (!s_as.ignore(pos, expected))
         return false;
@@ -1303,9 +979,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_ordinary_view = is_ordinary_view;
-    query->is_materialized_view = is_materialized_view;
-    query->is_populate = is_populate;
+    query->is_ordinary_view = true;
     query->replace_view = replace_view;
 
     auto * table_id = table->as<ASTTableIdentifier>();
@@ -1446,8 +1120,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateDatabaseQuery database_p;
     ParserCreateViewQuery view_p;
     ParserCreateDictionaryQuery dictionary_p;
-    ParserCreateLiveViewQuery live_view_p;
-    ParserCreateWindowViewQuery window_view_p;
 
     /// proton: starts. Add to parse StreamingViewQuery
     ParserCreateStreamingViewQuery streaming_view_p;
@@ -1456,8 +1128,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || database_p.parse(pos, node, expected)
         || view_p.parse(pos, node, expected)
         || dictionary_p.parse(pos, node, expected)
-        || live_view_p.parse(pos, node, expected)
-        || window_view_p.parse(pos, node, expected)
         || streaming_view_p.parse(pos, node, expected);
     /// proton: ends.
 }
