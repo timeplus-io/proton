@@ -613,12 +613,12 @@ bool LDAPSimpleAuthClient::authenticate(const RoleSearchParamsList * role_search
 
 void LDAPClient::diag(const int, String)
 {
-    throw Exception("ClickHouse was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 }
 
 bool LDAPClient::openConnection()
 {
-    throw Exception("ClickHouse was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 }
 
 void LDAPClient::closeConnection() noexcept
@@ -627,12 +627,12 @@ void LDAPClient::closeConnection() noexcept
 
 LDAPClient::SearchResults LDAPClient::search(const SearchParams &)
 {
-    throw Exception("ClickHouse was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 }
 
 bool LDAPSimpleAuthClient::authenticate(const RoleSearchParamsList *, SearchResultsList *)
 {
-    throw Exception("ClickHouse was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 }
 
 #endif // USE_LDAP

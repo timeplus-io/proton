@@ -350,7 +350,7 @@ private:
         }
         else
         {
-            LOG_FATAL(log, "Calculated checksum of the ClickHouse binary ({0}) does not correspond"
+            LOG_FATAL(log, "Calculated checksum of the proton binary ({0}) does not correspond"
                 " to the reference checksum stored in the binary ({1})."
                 " It may indicate one of the following:"
                 " - the file was changed just after startup;"

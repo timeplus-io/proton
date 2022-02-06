@@ -291,7 +291,7 @@ void registerDictionarySourceClickHouse(DictionarySourceFactory & factory)
         String dictionary_database = config.getString(".dictionary.database", "");
 
         if (dictionary_name == configuration.table && dictionary_database == configuration.db)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "ClickHouseDictionarySource table cannot be dictionary table");
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "ProtonDictionarySource table cannot be dictionary table");
 
         return std::make_unique<ClickHouseDictionarySource>(dict_struct, configuration, sample_block, context);
     };

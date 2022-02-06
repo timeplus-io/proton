@@ -487,7 +487,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 
 void Keeper::logRevision() const
 {
-    Poco::Logger::root().information("Starting ClickHouse Keeper " + std::string{VERSION_STRING}
+    Poco::Logger::root().information("Starting proton Keeper " + std::string{VERSION_STRING}
         + " with revision " + std::to_string(ClickHouseRevision::getVersionRevision())
         + ", " + build_id_info
         + ", PID " + std::to_string(getpid()));

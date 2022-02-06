@@ -425,7 +425,7 @@ try
 
     if (queries_files.empty() && !config().has("query"))
     {
-        std::cerr << "\033[31m" << "ClickHouse compiled in fuzzing mode." << "\033[0m" << std::endl;
+        std::cerr << "\033[31m" << "proton compiled in fuzzing mode." << "\033[0m" << std::endl;
         std::cerr << "\033[31m" << "You have to provide a query with --query or --queries-file option." << "\033[0m" << std::endl;
         std::cerr << "\033[31m" << "The query have to use function getFuzzerData() inside." << "\033[0m" << std::endl;
         exit(1);
@@ -725,7 +725,7 @@ void LocalServer::printHelpMessage([[maybe_unused]] const OptionsDescription & o
         "Note: It is important not to use only one letter keys with single dash for \n"
         "for clickhouse-local arguments. It may work incorrectly.\n"
 
-        "ClickHouse is build with coverage guided fuzzer (libfuzzer) inside it.\n"
+        "proton is build with coverage guided fuzzer (libfuzzer) inside it.\n"
         "You have to provide a query which contains getFuzzerData function.\n"
         "This will take the data from fuzzing engine, pass it to getFuzzerData function and execute a query.\n"
         "Each time the data will be different, and it will last until some segfault or sanitizer assertion is found. \n";

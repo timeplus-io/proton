@@ -295,7 +295,7 @@ void MergeTreeWriteAheadLog::ActionMetadata::read(ReadBuffer & meta_in)
     readIntBinary(min_compatible_version, meta_in);
     if (min_compatible_version > WAL_VERSION)
         throw Exception("WAL metadata version " + toString(min_compatible_version)
-                        + " is not compatible with this ClickHouse version", ErrorCodes::UNKNOWN_FORMAT_VERSION);
+                        + " is not compatible with this proton version", ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
     size_t metadata_size;
     readVarUInt(metadata_size, meta_in);

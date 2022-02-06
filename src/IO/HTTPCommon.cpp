@@ -77,7 +77,7 @@ namespace
             /// Cannot resolve host in advance, otherwise SNI won't work in Poco.
             session = std::make_shared<Poco::Net::HTTPSClientSession>(host, port);
 #else
-            throw Exception("ClickHouse was built without HTTPS support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+            throw Exception("proton was built without HTTPS support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 #endif
         }
         else

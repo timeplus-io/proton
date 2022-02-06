@@ -1458,7 +1458,7 @@ void TCPHandler::receiveQuery()
         }
 #else
         throw Exception(
-            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
+            "Inter-server secret support is disabled, because proton was built without SSL library",
             ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }

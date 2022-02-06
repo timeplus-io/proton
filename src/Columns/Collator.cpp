@@ -107,7 +107,7 @@ Collator::Collator(const std::string & locale_)
         throw DB::Exception("Failed to open locale: " + locale + " with error: " + u_errorName(status), DB::ErrorCodes::UNSUPPORTED_COLLATION_LOCALE);
     }
 #else
-    throw DB::Exception("Collations support is disabled, because ClickHouse was built without ICU library", DB::ErrorCodes::SUPPORT_IS_DISABLED);
+    throw DB::Exception("Collations support is disabled, because proton was built without ICU library", DB::ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
 }
 

@@ -1005,7 +1005,7 @@ void MergeTreeData::loadDataPartsFromDisk(
             size_t size_of_part = IMergeTreeDataPart::calculateTotalSizeOnDisk(part->volume->getDisk(), part->getFullRelativePath());
             LOG_WARNING(log,
                 "Detaching stale part {}{} (size: {}), which should have been deleted after a move. "
-                "That can only happen after unclean restart of ClickHouse after move of a part having an operation blocking that stale copy of part.",
+                "That can only happen after unclean restart of proton after move of a part having an operation blocking that stale copy of part.",
                 getFullPathOnDisk(part_disk_ptr), part_name, formatReadableSizeWithBinarySuffix(size_of_part));
             std::lock_guard loading_lock(mutex);
             broken_parts_to_detach.push_back(part);

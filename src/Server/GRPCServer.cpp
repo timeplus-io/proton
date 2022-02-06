@@ -187,7 +187,7 @@ namespace
             return grpc::SslServerCredentials(options);
 #else
             throw DB::Exception(
-                "Can't use SSL in grpc, because ClickHouse was built without SSL library",
+                "Can't use SSL in grpc, because proton was built without SSL library",
                 DB::ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
         }

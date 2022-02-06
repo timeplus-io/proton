@@ -181,7 +181,7 @@ static bool checkEnums(const capnp::Type & capnp_type, const DataTypePtr column_
             capn_enum_values.insert(Type(enumerant.getOrdinal()));
         auto result = values == capn_enum_values;
         if (!result)
-            error_message += "The set of values in Enum from CapnProto schema is different from the set of values in ClickHouse Enum";
+            error_message += "The set of values in Enum from CapnProto schema is different from the set of values in proton Enum";
         return result;
     }
 
@@ -196,7 +196,7 @@ static bool checkEnums(const capnp::Type & capnp_type, const DataTypePtr column_
 
     auto result = names == capn_enum_names;
     if (!result)
-        error_message += "The set of names in Enum from CapnProto schema is different from the set of names in ClickHouse Enum";
+        error_message += "The set of names in Enum from CapnProto schema is different from the set of names in proton Enum";
     return result;
 }
 
@@ -420,7 +420,7 @@ void checkCapnProtoSchemaStructure(const capnp::StructSchema & schema, const Blo
         {
             auto e = Exception(
                 ErrorCodes::CAPN_PROTO_BAD_CAST,
-                "Cannot convert ClickHouse type {} to CapnProto type {}",
+                "Cannot convert proton type {} to CapnProto type {}",
                 type->getName(),
                 getCapnProtoFullTypeName(field.getType()));
             if (!additional_error_message.empty())
@@ -447,7 +447,7 @@ static DataTypePtr getEnumDataTypeFromEnumSchema(const capnp::EnumSchema & enum_
     if (enumerants.size() < 32768)
         return getEnumDataTypeFromEnumerants<Int16>(enumerants);
 
-    throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "ClickHouse supports only 8 and 16-but Enums");
+    throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "proton supports only 8 and 16-but Enums");
 }
 
 static DataTypePtr getDataTypeFromCapnProtoType(const capnp::Type & capnp_type)

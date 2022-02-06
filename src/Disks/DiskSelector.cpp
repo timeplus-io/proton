@@ -100,7 +100,7 @@ DiskSelectorPtr DiskSelector::updateFromConfig(
             writeBackQuotedString(name, warning);
         }
 
-        writeString(" disappeared from configuration, this change will be applied after restart of ClickHouse", warning);
+        writeString(" disappeared from configuration, this change will be applied after restart of proton", warning);
         LOG_WARNING(&Poco::Logger::get("DiskSelector"), fmt::runtime(warning.str()));
     }
 

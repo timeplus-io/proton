@@ -82,7 +82,7 @@ bool Authentication::areCredentialsValid(const Credentials & credentials, const 
             case AuthenticationType::SHA256_PASSWORD:
             case AuthenticationType::DOUBLE_SHA1_PASSWORD:
             case AuthenticationType::LDAP:
-                throw Authentication::Require<BasicCredentials>("ClickHouse Basic Authentication");
+                throw Authentication::Require<BasicCredentials>("proton Basic Authentication");
 
             case AuthenticationType::KERBEROS:
                 return external_authenticators.checkKerberosCredentials(auth_data.getKerberosRealm(), *gss_acceptor_context);
@@ -108,7 +108,7 @@ bool Authentication::areCredentialsValid(const Credentials & credentials, const 
             case AuthenticationType::SHA256_PASSWORD:
             case AuthenticationType::LDAP:
             case AuthenticationType::KERBEROS:
-                throw Authentication::Require<BasicCredentials>("ClickHouse Basic Authentication");
+                throw Authentication::Require<BasicCredentials>("proton Basic Authentication");
 
             case AuthenticationType::MAX:
                 break;

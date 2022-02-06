@@ -879,7 +879,7 @@ DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node)
                 return std::make_shared<DataTypeEnum16>(std::move(values));
             }
 
-            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "ClickHouse supports only 8 and 16-bit Enum.");
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "proton supports only 8 and 16-bit Enum.");
         }
         case avro::Type::AVRO_FIXED:
             return std::make_shared<DataTypeFixedString>(node->fixedSize());

@@ -162,7 +162,7 @@ void KeeperServer::startup(bool enable_ipv6)
 #if USE_SSL
         setSSLParams(asio_opts);
 #else
-        throw Exception{"SSL support for NuRaft is disabled because ClickHouse was built without SSL support.",
+        throw Exception{"SSL support for NuRaft is disabled because proton was built without SSL support.",
                         ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
     }

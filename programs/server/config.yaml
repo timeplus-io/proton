@@ -51,19 +51,19 @@ logger:
 http_port: 8123
 
 # Port for interaction by native protocol with:
-# - proton-client and other native ClickHouse tools (proton-benchmark, proton-copier);
+# - proton-client and other native proton tools (proton-benchmark, proton-copier);
 # - proton-server with other proton-servers for distributed query processing;
-# - ClickHouse drivers and applications supporting native protocol
+# - proton drivers and applications supporting native protocol
 # (this protocol is also informally called as "the TCP protocol");
 # See also 'tcp_port_secure' for secure connections.
 tcp_port: 9000
 
 # Compatibility with MySQL protocol.
-# ClickHouse will pretend to be MySQL for applications connecting to this port.
+# proton will pretend to be MySQL for applications connecting to this port.
 mysql_port: 9004
 
 # Compatibility with PostgreSQL protocol.
-# ClickHouse will pretend to be PostgreSQL for applications connecting to this port.
+# proton will pretend to be PostgreSQL for applications connecting to this port.
 postgresql_port: 9005
 
 # HTTP API with TLS (HTTPS).
@@ -78,7 +78,7 @@ postgresql_port: 9005
 
 # Native interface wrapped with PROXYv1 protocol
 # PROXYv1 header sent for every connection.
-# ClickHouse will extract information about proxy-forwarded client address from the header.
+# proton will extract information about proxy-forwarded client address from the header.
 # tcp_with_proxy_port: 9011
 
 # Port for communication between replicas. Used for data exchange.
@@ -168,7 +168,7 @@ grpc:
     # Enable if you want very detailed logs
     verbose_logs: false
 
-# Used with https_port and tcp_port_secure. Full ssl options list: https://github.com/ClickHouse-Extras/poco/blob/master/NetSSL_OpenSSL/include/Poco/Net/SSLManager.h#L71
+# Used with https_port and tcp_port_secure. Full ssl options list: https://github.com/proton-Extras/poco/blob/master/NetSSL_OpenSSL/include/Poco/Net/SSLManager.h#L71
 openSSL:
     server:
         # Used for https server AND secure tcp port
@@ -403,7 +403,7 @@ user_directories:
 #   # When a user authenticates, while still bound to LDAP, an LDAP search is performed using search_filter and the
 #   # name of the logged in user. For each entry found during that search, the value of the specified attribute is
 #   # extracted. For each attribute value that has the specified prefix, the prefix is removed, and the rest of the
-#   # value becomes the name of a local role defined in ClickHouse, which is expected to be created beforehand by
+#   # value becomes the name of a local role defined in proton, which is expected to be created beforehand by
 #   # CREATE ROLE command.
 #   # There can be multiple 'role_mapping' sections defined inside the same 'ldap' section. All of them will be
 #   # applied.
@@ -492,16 +492,16 @@ remap_executable: false
 # * [Debian/Ubuntu]
 # export MVN_URL=https://repo1.maven.org/maven2/ru/yandex//clickhouse-jdbc-bridge
 # export PKG_VER=$(curl -sL $MVN_URL/maven-metadata.xml | grep '<release>' | sed -e 's|.*>\(.*\)<.*|\1|')
-# wget https://github.com/ClickHouse/clickhouse-jdbc-bridge/releases/download/v$PKG_VER/clickhouse-jdbc-bridge_$PKG_VER-1_all.deb
+# wget https://github.com/proton/clickhouse-jdbc-bridge/releases/download/v$PKG_VER/clickhouse-jdbc-bridge_$PKG_VER-1_all.deb
 # apt install --no-install-recommends -f ./clickhouse-jdbc-bridge_$PKG_VER-1_all.deb
 # clickhouse-jdbc-bridge &
 # * [CentOS/RHEL]
 # export MVN_URL=https://repo1.maven.org/maven2/ru/yandex/clickhouse/clickhouse-jdbc-bridge
 # export PKG_VER=$(curl -sL $MVN_URL/maven-metadata.xml | grep '<release>' | sed -e 's|.*>\(.*\)<.*|\1|')
-# wget https://github.com/ClickHouse/clickhouse-jdbc-bridge/releases/download/v$PKG_VER/clickhouse-jdbc-bridge-$PKG_VER-1.noarch.rpm
+# wget https://github.com/proton/clickhouse-jdbc-bridge/releases/download/v$PKG_VER/clickhouse-jdbc-bridge-$PKG_VER-1.noarch.rpm
 # yum localinstall -y clickhouse-jdbc-bridge-$PKG_VER-1.noarch.rpm
 # clickhouse-jdbc-bridge &
-# Please refer to https://github.com/ClickHouse/clickhouse-jdbc-bridge#usage for more information.
+# Please refer to https://github.com/proton/clickhouse-jdbc-bridge#usage for more information.
 
 # jdbc_bridge:
 #     host: 127.0.0.1
@@ -824,7 +824,7 @@ top_level_domains_lists: ''
 dictionaries_config: '*_dictionary.xml'
 
 # Uncomment if you want data to be compressed 30-100% better.
-# Don't do that if you just started using ClickHouse.
+# Don't do that if you just started using proton.
 
 # compression:
 #     # Set of variants. Checked in order. Last matching case wins. If nothing matches, lz4 will be used.
@@ -946,16 +946,16 @@ query_masking_rules:
 
 send_crash_reports:
     # Changing <enabled> to true allows sending crash reports to
-    # the ClickHouse core developers team via Sentry https://sentry.io
+    # the proton core developers team via Sentry https://sentry.io
     # Doing so at least in pre-production environments is highly appreciated
     enabled: false
     # Change <anonymize> to true if you don't feel comfortable attaching the server hostname to the crash report
     anonymize: false
     # Default endpoint should be changed to different Sentry DSN only if you have
-    # some in-house engineers or hired consultants who're going to debug ClickHouse issues for you
+    # some in-house engineers or hired consultants who're going to debug proton issues for you
     endpoint: 'https://6f33034cfe684dd7a3ab9875e57b1c8d@o388870.ingest.sentry.io/5226277'
 
-# Uncomment to disable ClickHouse internal DNS caching.
+# Uncomment to disable proton internal DNS caching.
 # disable_internal_dns_cache: 1
 
 #rocksdb:

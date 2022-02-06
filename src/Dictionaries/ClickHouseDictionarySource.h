@@ -84,7 +84,7 @@ private:
     ContextMutablePtr context;
     ConnectionPoolWithFailoverPtr pool;
     const std::string load_all_query;
-    Poco::Logger * log = &Poco::Logger::get("ClickHouseDictionarySource");
+    Poco::Logger * log = &Poco::Logger::get("ProtonDictionarySource");
 };
 
 }

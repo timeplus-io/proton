@@ -29,10 +29,10 @@ private:
     const bool send_asynchronous_metrics;
     const bool send_status_info;
 
-    static inline constexpr auto profile_events_prefix = "ClickHouseProfileEvents_";
-    static inline constexpr auto current_metrics_prefix = "ClickHouseMetrics_";
-    static inline constexpr auto asynchronous_metrics_prefix = "ClickHouseAsyncMetrics_";
-    static inline constexpr auto current_status_prefix = "ClickHouseStatusInfo_";
+    static inline constexpr auto profile_events_prefix = "ProtonProfileEvents_";
+    static inline constexpr auto current_metrics_prefix = "ProtonMetrics_";
+    static inline constexpr auto asynchronous_metrics_prefix = "ProtonAsyncMetrics_";
+    static inline constexpr auto current_status_prefix = "ProtonStatusInfo_";
 };
 
 }

@@ -442,7 +442,7 @@ void GSSAcceptorContext::initHandles()
 
 String GSSAcceptorContext::processToken(const String &, Poco::Logger *)
 {
-    throw Exception("ClickHouse was built without GSS-API/Kerberos support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception("proton was built without GSS-API/Kerberos support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 }
 
 #endif // USE_KRB5

@@ -3300,7 +3300,7 @@ namespace
                 else if (max_abs < 32768)
                     return {field_descriptor->name(), getEnumDataType<Int16>(enum_descriptor)};
                 else
-                    throw Exception("ClickHouse supports only 8-bit and 16-bit enums", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception("proton supports only 8-bit and 16-bit enums", ErrorCodes::BAD_ARGUMENTS);
             }
             case FieldTypeId::TYPE_GROUP: [[fallthrough]];
             case FieldTypeId::TYPE_MESSAGE:

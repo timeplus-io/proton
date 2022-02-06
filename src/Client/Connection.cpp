@@ -1,6 +1,5 @@
 #include <memory>
 #include <Poco/Net/NetException.h>
-#include <Core/Defines.h>
 #include <Core/Settings.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
@@ -14,7 +13,6 @@
 #include <Formats/NativeWriter.h>
 #include <Client/Connection.h>
 #include <Client/ConnectionParameters.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
 #include <Common/NetException.h>
 #include <Common/CurrentMetrics.h>
@@ -230,7 +228,7 @@ void Connection::sendHello()
         sendClusterNameAndSalt();
 #else
         throw Exception(
-            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
+            "Inter-server secret support is disabled, because proton was built without SSL library",
             ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
@@ -519,7 +517,7 @@ void Connection::sendQuery(
             writeStringBinary(hash, *out);
 #else
         throw Exception(
-            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
+            "Inter-server secret support is disabled, because proton was built without SSL library",
             ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
         }

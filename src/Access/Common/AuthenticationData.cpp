@@ -75,7 +75,7 @@ AuthenticationData::Digest AuthenticationData::Util::encodeSHA256(const std::str
     return hash;
 #else
     throw DB::Exception(
-        "SHA256 passwords support is disabled, because ClickHouse was built without SSL library",
+        "SHA256 passwords support is disabled, because proton was built without SSL library",
         DB::ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
 }

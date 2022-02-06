@@ -543,7 +543,7 @@ struct DiskWriteCheckData
     char data[PAGE_SIZE]{};
     DiskWriteCheckData()
     {
-        static const char * magic_string = "ClickHouse disk local write check";
+        static const char * magic_string = "proton disk local write check";
         static size_t magic_string_len = strlen(magic_string);
         memcpy(data, magic_string, magic_string_len);
         memcpy(data + PAGE_SIZE - magic_string_len, magic_string, magic_string_len);
