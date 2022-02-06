@@ -135,7 +135,7 @@ private:
     Session session;
 
     bool send_progress;
-    String description = "clickhouse-local";
+    String description = "proton-local";
 
     std::optional<LocalQueryState> state;
     std::optional<ThreadStatus> thread_status;

@@ -154,7 +154,7 @@ Poco::AutoPtr<Poco::XML::Document> YAMLParser::parse(const String& path)
         throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Unable to open YAML configuration file {}", path);
     }
     Poco::AutoPtr<Poco::XML::Document> xml = new Document;
-    Poco::AutoPtr<Poco::XML::Element> root_node = xml->createElement("clickhouse");
+    Poco::AutoPtr<Poco::XML::Element> root_node = xml->createElement("proton");
     xml->appendChild(root_node);
     try
     {

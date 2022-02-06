@@ -10,7 +10,7 @@ using namespace DB;
 
 TEST(Common, ConfigHelperGetBool)
 {
-    std::string xml(R"CONFIG(<clickhouse>
+    std::string xml(R"CONFIG(<proton>
     <zero_as_false>0</zero_as_false>
     <one_as_true>1</one_as_true>
     <yes_as_true>Yes</yes_as_true>
@@ -20,7 +20,7 @@ TEST(Common, ConfigHelperGetBool)
     <has_empty_child_2><empty_child/><child>1</child></has_empty_child_2>
     <has_child_1><child>1</child></has_child_1>
     <has_child_2><child0>Yes</child0><child>1</child></has_child_2>
-</clickhouse>)CONFIG");
+</proton>)CONFIG");
 
     Poco::XML::DOMParser dom_parser;
     Poco::AutoPtr<Poco::XML::Document> document = dom_parser.parseString(xml);

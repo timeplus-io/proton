@@ -297,7 +297,7 @@ Changelog::Changelog(
     }
 
     if (existing_changelogs.empty())
-        LOG_WARNING(log, "No logs exists in {}. It's Ok if it's the first run of clickhouse-keeper.", changelogs_dir);
+        LOG_WARNING(log, "No logs exists in {}. It's Ok if it's the first run of proton-keeper.", changelogs_dir);
 }
 
 void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uint64_t logs_to_keep)

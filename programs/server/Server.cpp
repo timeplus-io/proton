@@ -743,7 +743,7 @@ if (ThreadFuzzer::instance().isEffective())
                     if (0 != mlock(addr, len))
                         LOG_WARNING(log, "Failed mlock: {}", errnoToString(ErrorCodes::SYSTEM_ERROR));
                     else
-                        LOG_TRACE(log, "The memory map of clickhouse executable has been mlock'ed, total {}", ReadableSize(len));
+                        LOG_TRACE(log, "The memory map of proton executable has been mlock'ed, total {}", ReadableSize(len));
                 }
                 catch (...)
                 {
@@ -1417,12 +1417,12 @@ if (ThreadFuzzer::instance().isEffective())
     if (!TasksStatsCounters::checkIfAvailable())
     {
         LOG_INFO(log, "It looks like this system does not have procfs mounted at /proc location,"
-            " neither clickhouse-server process has CAP_NET_ADMIN capability."
+            " neither proton-server process has CAP_NET_ADMIN capability."
             " 'taskstats' performance statistics will be disabled."
             " It could happen due to incorrect ClickHouse package installation."
             " You can try to resolve the problem manually with 'sudo setcap cap_net_admin=+ep {}'."
             " Note that it will not work on 'nosuid' mounted filesystems."
-            " It also doesn't work if you run clickhouse-server inside network namespace as it happens in some containers.",
+            " It also doesn't work if you run proton-server inside network namespace as it happens in some containers.",
             executable_path);
     }
 

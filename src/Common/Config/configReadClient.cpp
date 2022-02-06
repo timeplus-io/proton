@@ -21,12 +21,12 @@ bool configReadClient(Poco::Util::LayeredConfiguration & config, const std::stri
     std::string config_path;
     if (config.has("config-file"))
         config_path = config.getString("config-file");
-    else if (safeFsExists("./clickhouse-client.xml"))
-        config_path = "./clickhouse-client.xml";
-    else if (!home_path.empty() && safeFsExists(home_path + "/.clickhouse-client/config.xml"))
-        config_path = home_path + "/.clickhouse-client/config.xml";
-    else if (safeFsExists("/etc/clickhouse-client/config.xml"))
-        config_path = "/etc/clickhouse-client/config.xml";
+    else if (safeFsExists("./proton-client.xml"))
+        config_path = "./proton-client.xml";
+    else if (!home_path.empty() && safeFsExists(home_path + "/.proton-client/config.xml"))
+        config_path = home_path + "/.proton-client/config.xml";
+    else if (safeFsExists("/etc/proton-client/config.xml"))
+        config_path = "/etc/proton-client/config.xml";
 
     if (!config_path.empty())
     {

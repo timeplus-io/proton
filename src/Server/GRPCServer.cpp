@@ -47,11 +47,11 @@
 #include <grpc++/server_builder.h>
 
 
-using GRPCService = clickhouse::grpc::ClickHouse::AsyncService;
-using GRPCQueryInfo = clickhouse::grpc::QueryInfo;
-using GRPCResult = clickhouse::grpc::Result;
-using GRPCException = clickhouse::grpc::Exception;
-using GRPCProgress = clickhouse::grpc::Progress;
+using GRPCService = proton::grpc::Proton::AsyncService;
+using GRPCQueryInfo = proton::grpc::QueryInfo;
+using GRPCResult = proton::grpc::Result;
+using GRPCException = proton::grpc::Exception;
+using GRPCProgress = proton::grpc::Progress;
 
 namespace DB
 {
@@ -130,32 +130,32 @@ namespace
             throw Exception("Unknown compression level: '" + str + "'", ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
 
-    grpc_compression_algorithm convertCompressionAlgorithm(const ::clickhouse::grpc::CompressionAlgorithm & algorithm)
+    grpc_compression_algorithm convertCompressionAlgorithm(const ::proton::grpc::CompressionAlgorithm & algorithm)
     {
-        if (algorithm == ::clickhouse::grpc::NO_COMPRESSION)
+        if (algorithm == ::proton::grpc::NO_COMPRESSION)
             return GRPC_COMPRESS_NONE;
-        else if (algorithm == ::clickhouse::grpc::DEFLATE)
+        else if (algorithm == ::proton::grpc::DEFLATE)
             return GRPC_COMPRESS_DEFLATE;
-        else if (algorithm == ::clickhouse::grpc::GZIP)
+        else if (algorithm == ::proton::grpc::GZIP)
             return GRPC_COMPRESS_GZIP;
-        else if (algorithm == ::clickhouse::grpc::STREAM_GZIP)
+        else if (algorithm == ::proton::grpc::STREAM_GZIP)
             return GRPC_COMPRESS_STREAM_GZIP;
         else
-            throw Exception("Unknown compression algorithm: '" + ::clickhouse::grpc::CompressionAlgorithm_Name(algorithm) + "'", ErrorCodes::INVALID_GRPC_QUERY_INFO);
+            throw Exception("Unknown compression algorithm: '" + ::proton::grpc::CompressionAlgorithm_Name(algorithm) + "'", ErrorCodes::INVALID_GRPC_QUERY_INFO);
     }
 
-    grpc_compression_level convertCompressionLevel(const ::clickhouse::grpc::CompressionLevel & level)
+    grpc_compression_level convertCompressionLevel(const ::proton::grpc::CompressionLevel & level)
     {
-        if (level == ::clickhouse::grpc::COMPRESSION_NONE)
+        if (level == ::proton::grpc::COMPRESSION_NONE)
             return GRPC_COMPRESS_LEVEL_NONE;
-        else if (level == ::clickhouse::grpc::COMPRESSION_LOW)
+        else if (level == ::proton::grpc::COMPRESSION_LOW)
             return GRPC_COMPRESS_LEVEL_LOW;
-        else if (level == ::clickhouse::grpc::COMPRESSION_MEDIUM)
+        else if (level == ::proton::grpc::COMPRESSION_MEDIUM)
             return GRPC_COMPRESS_LEVEL_MED;
-        else if (level == ::clickhouse::grpc::COMPRESSION_HIGH)
+        else if (level == ::proton::grpc::COMPRESSION_HIGH)
             return GRPC_COMPRESS_LEVEL_HIGH;
         else
-            throw Exception("Unknown compression level: '" + ::clickhouse::grpc::CompressionLevel_Name(level) + "'", ErrorCodes::INVALID_GRPC_QUERY_INFO);
+            throw Exception("Unknown compression level: '" + ::proton::grpc::CompressionLevel_Name(level) + "'", ErrorCodes::INVALID_GRPC_QUERY_INFO);
     }
 
     /// Gets file's contents as a string, throws an exception if failed.
@@ -295,7 +295,7 @@ namespace
             grpc_context.set_compression_level(level);
         }
 
-        void setResultCompression(const ::clickhouse::grpc::Compression & compression)
+        void setResultCompression(const ::proton::grpc::Compression & compression)
         {
             setResultCompression(convertCompressionAlgorithm(compression.algorithm()), convertCompressionLevel(compression.level()));
         }
@@ -1518,15 +1518,15 @@ namespace
         if (!logs_queue)
             return;
 
-        static_assert(::clickhouse::grpc::LOG_NONE        == 0);
-        static_assert(::clickhouse::grpc::LOG_FATAL       == static_cast<int>(Poco::Message::PRIO_FATAL));
-        static_assert(::clickhouse::grpc::LOG_CRITICAL    == static_cast<int>(Poco::Message::PRIO_CRITICAL));
-        static_assert(::clickhouse::grpc::LOG_ERROR       == static_cast<int>(Poco::Message::PRIO_ERROR));
-        static_assert(::clickhouse::grpc::LOG_WARNING     == static_cast<int>(Poco::Message::PRIO_WARNING));
-        static_assert(::clickhouse::grpc::LOG_NOTICE      == static_cast<int>(Poco::Message::PRIO_NOTICE));
-        static_assert(::clickhouse::grpc::LOG_INFORMATION == static_cast<int>(Poco::Message::PRIO_INFORMATION));
-        static_assert(::clickhouse::grpc::LOG_DEBUG       == static_cast<int>(Poco::Message::PRIO_DEBUG));
-        static_assert(::clickhouse::grpc::LOG_TRACE       == static_cast<int>(Poco::Message::PRIO_TRACE));
+        static_assert(::proton::grpc::LOG_NONE        == 0);
+        static_assert(::proton::grpc::LOG_FATAL       == static_cast<int>(Poco::Message::PRIO_FATAL));
+        static_assert(::proton::grpc::LOG_CRITICAL    == static_cast<int>(Poco::Message::PRIO_CRITICAL));
+        static_assert(::proton::grpc::LOG_ERROR       == static_cast<int>(Poco::Message::PRIO_ERROR));
+        static_assert(::proton::grpc::LOG_WARNING     == static_cast<int>(Poco::Message::PRIO_WARNING));
+        static_assert(::proton::grpc::LOG_NOTICE      == static_cast<int>(Poco::Message::PRIO_NOTICE));
+        static_assert(::proton::grpc::LOG_INFORMATION == static_cast<int>(Poco::Message::PRIO_INFORMATION));
+        static_assert(::proton::grpc::LOG_DEBUG       == static_cast<int>(Poco::Message::PRIO_DEBUG));
+        static_assert(::proton::grpc::LOG_TRACE       == static_cast<int>(Poco::Message::PRIO_TRACE));
 
         MutableColumns columns;
         while (logs_queue->tryPop(columns))
@@ -1551,7 +1551,7 @@ namespace
                 StringRef query_id = column_query_id.getDataAt(row);
                 log_entry.set_query_id(query_id.data, query_id.size);
                 log_entry.set_thread_id(column_thread_id.getElement(row));
-                log_entry.set_level(static_cast<::clickhouse::grpc::LogsLevel>(column_level.getElement(row)));
+                log_entry.set_level(static_cast<::proton::grpc::LogsLevel>(column_level.getElement(row)));
                 StringRef source = column_source.getDataAt(row);
                 log_entry.set_source(source.data, source.size);
                 StringRef text = column_text.getDataAt(row);

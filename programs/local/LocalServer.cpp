@@ -254,7 +254,7 @@ void LocalServer::tryInitPath()
         /// as we can't accurately distinguish those situations we don't touch any existent folders
         /// we just try to pick some free name for our working folder
 
-        default_path = parent_folder / fmt::format("clickhouse-local-{}-{}-{}", getpid(), time(nullptr), randomSeed());
+        default_path = parent_folder / fmt::format("proton-local-{}-{}-{}", getpid(), time(nullptr), randomSeed());
 
         if (exists(default_path))
             throw Exception(ErrorCodes::FILE_ALREADY_EXISTS, "Unsuccessful attempt to create working directory: {} exist!", default_path.string());
@@ -361,7 +361,7 @@ static ConfigurationPtr getConfigurationFromXMLString(const char * xml_data)
 void LocalServer::setupUsers()
 {
     static const char * minimal_default_user_xml =
-        "<clickhouse>"
+        "<proton>"
         "    <profiles>"
         "        <default></default>"
         "    </profiles>"
@@ -378,7 +378,7 @@ void LocalServer::setupUsers()
         "    <quotas>"
         "        <default></default>"
         "    </quotas>"
-        "</clickhouse>";
+        "</proton>";
 
     ConfigurationPtr users_config;
 
@@ -556,7 +556,7 @@ void LocalServer::processConfig()
         // force enable logging
         config().setString("logger", "logger");
         // sensitive data rules are not used here
-        buildLoggers(config(), logger(), "clickhouse-local");
+        buildLoggers(config(), logger(), "proton-local");
     }
     else
     {
@@ -693,9 +693,9 @@ void LocalServer::processConfig()
 [[ maybe_unused ]] static std::string getHelpHeader()
 {
     return
-        "usage: clickhouse-local [initial table definition] [--query <query>]\n"
+        "usage: proton-local [initial table definition] [--query <query>]\n"
 
-        "clickhouse-local allows to execute SQL queries on your data files via single command line call."
+        "proton-local allows to execute SQL queries on your data files via single command line call."
         " To do so, initially you need to define your data source and its format."
         " After you can execute your SQL queries in usual manner.\n"
 
@@ -711,7 +711,7 @@ void LocalServer::processConfig()
     return
         "Example printing memory used by each Unix user:\n"
         "ps aux | tail -n +2 | awk '{ printf(\"%s\\t%s\\n\", $1, $4) }' | "
-        "clickhouse-local -S \"user String, mem Float64\" -q"
+        "proton-local -S \"user String, mem Float64\" -q"
             " \"SELECT user, round(sum(mem), 2) as mem_total FROM table GROUP BY user ORDER"
             " BY mem_total DESC FORMAT PrettyCompact\"";
 }
@@ -721,9 +721,9 @@ void LocalServer::printHelpMessage([[maybe_unused]] const OptionsDescription & o
 {
 #if defined(FUZZING_MODE)
     std::cout <<
-        "usage: clickhouse <clickhouse-local arguments> -- <libfuzzer arguments>\n"
+        "usage: proton <proton-local arguments> -- <libfuzzer arguments>\n"
         "Note: It is important not to use only one letter keys with single dash for \n"
-        "for clickhouse-local arguments. It may work incorrectly.\n"
+        "for proton-local arguments. It may work incorrectly.\n"
 
         "proton is build with coverage guided fuzzer (libfuzzer) inside it.\n"
         "You have to provide a query which contains getFuzzerData function.\n"

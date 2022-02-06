@@ -9,7 +9,6 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <csignal>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <fstream>
@@ -318,7 +317,7 @@ int ReplxxLineReader::executeEditor(const std::string & path)
 
 void ReplxxLineReader::openEditor()
 {
-    char filename[] = "clickhouse_replxx_XXXXXX.sql";
+    char filename[] = "proton_replxx_XXXXXX.sql";
     int fd = ::mkstemps(filename, 4);
     if (-1 == fd)
     {

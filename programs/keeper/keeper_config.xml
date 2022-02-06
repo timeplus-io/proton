@@ -1,4 +1,4 @@
-<clickhouse>
+<proton>
     <logger>
         <!-- Possible levels [1]:
 
@@ -15,8 +15,8 @@
             [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
         -->
         <level>trace</level>
-        <log>/var/log/clickhouse-keeper/clickhouse-keeper.log</log>
-        <errorlog>/var/log/clickhouse-keeper/clickhouse-keeper.err.log</errorlog>
+        <log>/var/log/proton-keeper/proton-keeper.log</log>
+        <errorlog>/var/log/proton-keeper/proton-keeper.err.log</errorlog>
         <!-- Rotation policy
              See https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/FileChannel.h#L54-L85
           -->
@@ -33,8 +33,8 @@
             <!-- Must be unique among all keeper serves -->
             <server_id>1</server_id>
 
-            <log_storage_path>/var/lib/clickhouse/coordination/logs</log_storage_path>
-            <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+            <log_storage_path>/var/lib/proton/coordination/logs</log_storage_path>
+            <snapshot_storage_path>/var/lib/proton/coordination/snapshots</snapshot_storage_path>
 
             <coordination_settings>
                 <operation_timeout_ms>10000</operation_timeout_ms>
@@ -62,15 +62,15 @@
     <openSSL>
       <server>
             <!-- Used for secure tcp port -->
-            <!-- openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /etc/clickhouse-server/server.key -out /etc/clickhouse-server/server.crt -->
-            <certificateFile>/etc/clickhouse-keeper/server.crt</certificateFile>
-            <privateKeyFile>/etc/clickhouse-keeper/server.key</privateKeyFile>
+            <!-- openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /etc/proton-server/server.key -out /etc/proton-server/server.crt -->
+            <certificateFile>/etc/proton-keeper/server.crt</certificateFile>
+            <privateKeyFile>/etc/proton-keeper/server.key</privateKeyFile>
             <!-- dhparams are optional. You can delete the <dhParamsFile> element.
                  To generate dhparams, use the following command:
-                  openssl dhparam -out /etc/clickhouse-keeper/dhparam.pem 4096
+                  openssl dhparam -out /etc/proton-keeper/dhparam.pem 4096
                  Only file format with BEGIN DH PARAMETERS is supported.
               -->
-            <dhParamsFile>/etc/clickhouse-keeper/dhparam.pem</dhParamsFile>
+            <dhParamsFile>/etc/proton-keeper/dhparam.pem</dhParamsFile>
             <verificationMode>none</verificationMode>
             <loadDefaultCAFile>true</loadDefaultCAFile>
             <cacheSessions>true</cacheSessions>
@@ -79,4 +79,4 @@
         </server>
     </openSSL>
 
-</clickhouse>
+</proton>

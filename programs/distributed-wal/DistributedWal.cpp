@@ -54,7 +54,7 @@ Block prepareData(Int32 batch_size)
     ColumnWithTypeAndName cpu_col_with_type(std::move(cpu_col), float64_type, "cpu");
     block.insert(cpu_col_with_type);
 
-    String log{"2021.01.13 03:48:02.311031 [ 4070  ] {} <Information> Application: It looks like the process has no CAP_IPC_LOCK capability, binary mlock will be disabled. It could happen due to incorrect proton package installation. You could resolve the problem manually with 'sudo setcap cap_ipc_lock=+ep /home/ghost/code/private-daisy/build/programs/clickhouse'. Note     that it will not work on 'nosuid' mounted filesystems"};
+    String log{"2021.01.13 03:48:02.311031 [ 4070  ] {} <Information> Application: It looks like the process has no CAP_IPC_LOCK capability, binary mlock will be disabled. It could happen due to incorrect proton package installation. You could resolve the problem manually with 'sudo setcap cap_ipc_lock=+ep /home/ghost/code/private-daisy/build/programs/proton '. Note     that it will not work on 'nosuid' mounted filesystems"};
     auto raw_col = string_type->createColumn();
     for (Int32 i = 0; i < batch_size; ++i)
     {

@@ -990,7 +990,7 @@ void BaseDaemon::setupWatchdog()
 
         if (argv0)
         {
-            const char * new_process_name = "clickhouse-watchdog";
+            const char * new_process_name = "proton-watchdog";
             memset(argv0, 0, original_process_name.size());
             memcpy(argv0, new_process_name, std::min(strlen(new_process_name), original_process_name.size()));
         }

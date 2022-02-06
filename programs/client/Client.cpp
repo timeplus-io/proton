@@ -516,9 +516,9 @@ void Client::connect()
         {
             std::cerr << std::endl
                 << "If you have installed proton and forgot password you can reset it in the configuration file." << std::endl
-                << "The password for default user is typically located at /etc/clickhouse-server/users.d/default-password.xml" << std::endl
+                << "The password for default user is typically located at /etc/proton-server/users.d/default-password.xml" << std::endl
                 << "and deleting this file will reset the password." << std::endl
-                << "See also /etc/clickhouse-server/users.xml on the server where proton is installed." << std::endl
+                << "See also /etc/proton-server/users.xml on the server where proton is installed." << std::endl
                 << std::endl;
         }
 

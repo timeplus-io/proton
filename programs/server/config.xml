@@ -5,7 +5,7 @@
   You can either move the settings to the right place inside "users.xml" file
    or add <skip_check_for_incorrect_settings>1</skip_check_for_incorrect_settings> here.
 -->
-<clickhouse>
+<proton>
     <logger>
         <!-- Possible levels [1]:
 
@@ -23,8 +23,8 @@
             [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
         -->
         <level>trace</level>
-        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
-        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <log>/var/log/proton-server/proton-server.log</log>
+        <errorlog>/var/log/proton-server/proton-server.err.log</errorlog>
         <!-- Rotation policy
              See https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/FileChannel.h#L54-L85
           -->
@@ -83,7 +83,7 @@
         </header>
     </http_options_response -->
 
-    <!-- It is the name that will be shown in the clickhouse-client.
+    <!-- It is the name that will be shown in the proton-client.
          By default, anything with "production" will be highlighted in red in query prompt.
     -->
     <!--display_name>production</display_name-->
@@ -95,8 +95,8 @@
     <http_port>8123</http_port>
 
     <!-- Port for interaction by native protocol with:
-         - clickhouse-client and other native ClickHouse tools (clickhouse-benchmark, clickhouse-copier);
-         - clickhouse-server with other clickhouse-servers for distributed query processing;
+         - proton-client and other native ClickHouse tools (proton-benchmark, proton-copier);
+         - proton-server with other proton-servers for distributed query processing;
          - ClickHouse drivers and applications supporting native protocol
          (this protocol is also informally called as "the TCP protocol");
          See also 'tcp_port_secure' for secure connections.
@@ -174,7 +174,7 @@
          - all users are restricted to subset of network addresses (see users.xml);
          - all users have strong passwords, only secure (TLS) interfaces are accessible, or connections are only made via TLS interfaces.
          - users without password have readonly access.
-         See also: https://www.shodan.io/search?query=clickhouse
+         See also: https://www.shodan.io/search?query=proton
       -->
     <!-- <listen_host>::</listen_host> -->
 
@@ -202,7 +202,7 @@
     <!-- For 'Connection: keep-alive' in HTTP 1.1 -->
     <keep_alive_timeout>3</keep_alive_timeout>
 
-    <!-- gRPC protocol (see src/Server/grpc_protos/clickhouse_grpc.proto for the API) -->
+    <!-- gRPC protocol (see src/Server/grpc_protos/proton_grpc.proto for the API) -->
     <!-- <grpc_port>9100</grpc_port> -->
     <grpc>
         <enable_ssl>false</enable_ssl>
@@ -236,15 +236,15 @@
     <!-- Used with https_port and tcp_port_secure. Full ssl options list: https://github.com/ClickHouse-Extras/poco/blob/master/NetSSL_OpenSSL/include/Poco/Net/SSLManager.h#L71 -->
     <openSSL>
         <server> <!-- Used for https server AND secure tcp port -->
-            <!-- openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /etc/clickhouse-server/server.key -out /etc/clickhouse-server/server.crt -->
-            <certificateFile>/etc/clickhouse-server/server.crt</certificateFile>
-            <privateKeyFile>/etc/clickhouse-server/server.key</privateKeyFile>
+            <!-- openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /etc/proton-server/server.key -out /etc/proton-server/server.crt -->
+            <certificateFile>/etc/proton-server/server.crt</certificateFile>
+            <privateKeyFile>/etc/proton-server/server.key</privateKeyFile>
             <!-- dhparams are optional. You can delete the <dhParamsFile> element.
                  To generate dhparams, use the following command:
-                  openssl dhparam -out /etc/clickhouse-server/dhparam.pem 4096
+                  openssl dhparam -out /etc/proton-server/dhparam.pem 4096
                  Only file format with BEGIN DH PARAMETERS is supported.
               -->
-            <dhParamsFile>/etc/clickhouse-server/dhparam.pem</dhParamsFile>
+            <dhParamsFile>/etc/proton-server/dhparam.pem</dhParamsFile>
             <verificationMode>none</verificationMode>
             <loadDefaultCAFile>true</loadDefaultCAFile>
             <cacheSessions>true</cacheSessions>
@@ -364,10 +364,10 @@
     <compiled_expression_cache_elements_size>10000</compiled_expression_cache_elements_size>
 
     <!-- Path to data directory, with trailing slash. -->
-    <path>/var/lib/clickhouse/</path>
+    <path>/var/lib/proton/</path>
 
     <!-- Path to temporary data for processing hard queries. -->
-    <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+    <tmp_path>/var/lib/proton/tmp/</tmp_path>
 
     <!-- Policy from the <storage_configuration> for the temporary files.
          If not set <tmp_path> is used, otherwise <tmp_path> is ignored.
@@ -381,7 +381,7 @@
     <!-- <tmp_policy>tmp</tmp_policy> -->
 
     <!-- Directory with user provided files that are accessible by 'file' table function. -->
-    <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+    <user_files_path>/var/lib/proton/user_files/</user_files_path>
 
     <!-- LDAP server definitions. -->
     <ldap_servers>
@@ -465,7 +465,7 @@
             <kerberos />
          Example:
             <kerberos>
-                <principal>HTTP/clickhouse.example.com@EXAMPLE.COM</principal>
+                <principal>HTTP/proton.example.com@EXAMPLE.COM</principal>
             </kerberos>
          Example:
             <kerberos>
@@ -481,7 +481,7 @@
         </users_xml>
         <local_directory>
             <!-- Path to folder where users created by SQL commands are stored. -->
-            <path>/var/lib/clickhouse/access/</path>
+            <path>/var/lib/proton/access/</path>
         </local_directory>
 
         <!-- To add an LDAP server as a remote user directory of users that are not defined locally, define a single 'ldap' section
@@ -525,7 +525,7 @@
                         <scope>subtree</scope>
                         <search_filter>(&amp;(objectClass=groupOfNames)(member={bind_dn}))</search_filter>
                         <attribute>cn</attribute>
-                        <prefix>clickhouse_</prefix>
+                        <prefix>proton_</prefix>
                     </role_mapping>
                 </ldap>
              Example (typical Active Directory with role mapping that relies on the detected user DN):
@@ -536,7 +536,7 @@
                         <attribute>CN</attribute>
                         <scope>subtree</scope>
                         <search_filter>(&amp;(objectClass=group)(member={user_dn}))</search_filter>
-                        <prefix>clickhouse_</prefix>
+                        <prefix>proton_</prefix>
                     </role_mapping>
                 </ldap>
         -->
@@ -580,7 +580,7 @@
     <!-- <umask>022</umask> -->
 
     <!-- Perform mlockall after startup to lower first queries latency
-          and to prevent clickhouse executable from being paged out under high IO load.
+          and to prevent proton executable from being paged out under high IO load.
          Enabling this option is recommended but will lead to increased startup time for up to a few seconds.
     -->
     <mlock_executable>true</mlock_executable>
@@ -593,20 +593,20 @@
 
          To install and run JDBC bridge in background:
          * [Debian/Ubuntu]
-           export MVN_URL=https://repo1.maven.org/maven2/ru/yandex/clickhouse/clickhouse-jdbc-bridge
+           export MVN_URL=https://repo1.maven.org/maven2/ru/yandex/proton/proton-jdbc-bridge
            export PKG_VER=$(curl -sL $MVN_URL/maven-metadata.xml | grep '<release>' | sed -e 's|.*>\(.*\)<.*|\1|')
-           wget https://github.com/ClickHouse/clickhouse-jdbc-bridge/releases/download/v$PKG_VER/clickhouse-jdbc-bridge_$PKG_VER-1_all.deb
-           apt install --no-install-recommends -f ./clickhouse-jdbc-bridge_$PKG_VER-1_all.deb
-           clickhouse-jdbc-bridge &
+           wget https://github.com/ClickHouse/proton-jdbc-bridge/releases/download/v$PKG_VER/proton-jdbc-bridge_$PKG_VER-1_all.deb
+           apt install --no-install-recommends -f ./proton-jdbc-bridge_$PKG_VER-1_all.deb
+           proton-jdbc-bridge &
 
          * [CentOS/RHEL]
-           export MVN_URL=https://repo1.maven.org/maven2/ru/yandex/clickhouse/clickhouse-jdbc-bridge
+           export MVN_URL=https://repo1.maven.org/maven2/ru/yandex/proton/proton-jdbc-bridge
            export PKG_VER=$(curl -sL $MVN_URL/maven-metadata.xml | grep '<release>' | sed -e 's|.*>\(.*\)<.*|\1|')
-           wget https://github.com/ClickHouse/clickhouse-jdbc-bridge/releases/download/v$PKG_VER/clickhouse-jdbc-bridge-$PKG_VER-1.noarch.rpm
-           yum localinstall -y clickhouse-jdbc-bridge-$PKG_VER-1.noarch.rpm
-           clickhouse-jdbc-bridge &
+           wget https://github.com/ClickHouse/proton-jdbc-bridge/releases/download/v$PKG_VER/proton-jdbc-bridge-$PKG_VER-1.noarch.rpm
+           yum localinstall -y proton-jdbc-bridge-$PKG_VER-1.noarch.rpm
+           proton-jdbc-bridge &
 
-         Please refer to https://github.com/ClickHouse/clickhouse-jdbc-bridge#usage for more information.
+         Please refer to https://github.com/ClickHouse/proton-jdbc-bridge#usage for more information.
     ]]>
     <!--
     <jdbc_bridge>
@@ -616,7 +616,7 @@
     -->
 
     <!-- Configuration of clusters that could be used in Distributed tables.
-         https://clickhouse.com/docs/en/operations/table_engines/distributed/
+         https://proton.com/docs/en/operations/table_engines/distributed/
       -->
     <remote_servers>
         <!-- Test only shard config for testing distributed storage -->
@@ -780,13 +780,13 @@
 
     <!-- If element has 'incl' attribute, then for it's value will be used corresponding substitution from another file.
          By default, path to file with substitutions is /etc/metrika.xml. It could be changed in config in 'include_from' element.
-         Values for substitutions are specified in /clickhouse/name_of_substitution elements in that file.
+         Values for substitutions are specified in /proton/name_of_substitution elements in that file.
       -->
 
     <!-- ZooKeeper is used to store metadata about replicas, when using Replicated tables.
          Optional. If you don't use replicated tables, you could omit that.
 
-         See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication/
+         See https://proton.com/docs/en/engines/table-engines/mergetree-family/replication/
       -->
 
     <!--
@@ -809,7 +809,7 @@
     <!-- Substitutions for parameters of replicated tables.
           Optional. If you don't use replicated tables, you could omit that.
 
-         See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication/#creating-replicated-tables
+         See https://proton.com/docs/en/engines/table-engines/mergetree-family/replication/#creating-replicated-tables
       -->
     <!--
     <macros>
@@ -896,7 +896,7 @@
         <database>system</database>
         <table>query_log</table>
         <!--
-            PARTITION BY expr: https://clickhouse.com/docs/en/table_engines/mergetree-family/custom_partitioning_key/
+            PARTITION BY expr: https://proton.com/docs/en/table_engines/mergetree-family/custom_partitioning_key/
             Example:
                 event_date
                 toMonday(event_date)
@@ -905,7 +905,7 @@
         -->
         <partition_by>toYYYYMM(event_date)</partition_by>
         <!--
-            Table TTL specification: https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree/#mergetree-table-ttl
+            Table TTL specification: https://proton.com/docs/en/engines/table-engines/mergetree-family/mergetree/#mergetree-table-ttl
             Example:
                 event_date + INTERVAL 1 WEEK
                 event_date + INTERVAL 7 DAY DELETE
@@ -1037,7 +1037,7 @@
     </session_log>
 
     <!-- Parameters for embedded dictionaries, used in Yandex.Metrica.
-         See https://clickhouse.com/docs/en/dicts/internal_dicts/
+         See https://proton.com/docs/en/dicts/internal_dicts/
     -->
 
     <!-- Path to file with region hierarchy. -->
@@ -1047,7 +1047,7 @@
     <!-- <path_to_regions_names_files>/opt/geo/</path_to_regions_names_files> -->
 
 
-    <!-- <top_level_domains_path>/var/lib/clickhouse/top_level_domains/</top_level_domains_path> -->
+    <!-- <top_level_domains_path>/var/lib/proton/top_level_domains/</top_level_domains_path> -->
     <!-- Custom TLD lists.
          Format: <name>/path/to/file</name>
 
@@ -1061,7 +1061,7 @@
     </top_level_domains_lists>
 
     <!-- Configuration of external dictionaries. See:
-         https://clickhouse.com/docs/en/sql-reference/dictionaries/external-dictionaries/external-dicts
+         https://proton.com/docs/en/sql-reference/dictionaries/external-dictionaries/external-dicts
     -->
     <dictionaries_config>*_dictionary.xml</dictionaries_config>
 
@@ -1118,7 +1118,7 @@
          Works only if ZooKeeper is enabled. Comment it if such functionality isn't required. -->
     <distributed_ddl>
         <!-- Path in ZooKeeper to queue with DDL queries -->
-        <path>/clickhouse/task_queue/ddl</path>
+        <path>/proton/task_queue/ddl</path>
 
         <!-- Settings from this profile will be used to execute DDL queries -->
         <!-- <profile>default</profile> -->
@@ -1149,7 +1149,7 @@
 
     <!-- Protection from accidental DROP.
          If size of a MergeTree table is greater than max_table_size_to_drop (in bytes) than table could not be dropped with any DROP query.
-         If you want do delete one table and don't want to change clickhouse-server config, you could create special file <clickhouse-path>/flags/force_drop_table and make DROP once.
+         If you want do delete one table and don't want to change proton-server config, you could create special file <proton-path>/flags/force_drop_table and make DROP once.
          By default max_table_size_to_drop is 50GB; max_table_size_to_drop=0 allows to DROP any tables.
          The same for max_partition_size_to_drop.
          Uncomment to disable protection.
@@ -1188,10 +1188,10 @@
         </default>
     </graphite_rollup_example>
 
-    <!-- Directory in <clickhouse-path> containing schema files for various input formats.
+    <!-- Directory in <proton-path> containing schema files for various input formats.
          The directory will be created if it doesn't exist.
       -->
-    <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+    <format_schema_path>/var/lib/proton/format_schemas/</format_schema_path>
 
     <!-- Default query masking rules, matching lines would be replaced with something else in the logs
         (both text logs and system.query_log).
@@ -1381,4 +1381,4 @@
         </schedule_intervals>
     </cluster_settings>
     -->
-</clickhouse>
+</proton>

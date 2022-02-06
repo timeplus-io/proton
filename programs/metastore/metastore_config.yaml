@@ -12,8 +12,8 @@ logger:
 
     # [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
     level: trace
-    log: ./clickhouse-metastore/clickhouse-metastore.log
-    errorlog: ./clickhouse-metastore/clickhouse-metastore.err.log
+    log: /var/lib/proton-metastore/proton-metastore.log
+    errorlog: /var/lib/proton-metastore/proton-metastore.err.log
     # Rotation policy
     # See https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/FileChannel.h#L54-L85
     size: 1000M

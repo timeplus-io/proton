@@ -509,12 +509,12 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                 if (!fs::exists(data_file))
                 {
                     WriteBufferFromFile out(data_file);
-                    out << "<clickhouse>\n"
+                    out << "<proton>\n"
                     "    <path>" << data_path.string() << "</path>\n"
                     "    <tmp_path>" << (data_path / "tmp").string() << "</tmp_path>\n"
                     "    <user_files_path>" << (data_path / "user_files").string() << "</user_files_path>\n"
                     "    <format_schema_path>" << (data_path / "format_schemas").string() << "</format_schema_path>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                     out.sync();
                     out.finalize();
                     fs::permissions(data_file, fs::perms::owner_read, fs::perm_options::replace);
@@ -526,12 +526,12 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                 if (!fs::exists(logger_file))
                 {
                     WriteBufferFromFile out(logger_file);
-                    out << "<clickhouse>\n"
+                    out << "<proton>\n"
                     "    <logger>\n"
                     "        <log>" << (log_path / "proton-server.log").string() << "</log>\n"
                     "        <errorlog>" << (log_path / "proton-server.err.log").string() << "</errorlog>\n"
                     "    </logger>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                     out.sync();
                     out.finalize();
                     fs::permissions(logger_file, fs::perms::owner_read, fs::perm_options::replace);
@@ -543,13 +543,13 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                 if (!fs::exists(user_directories_file))
                 {
                     WriteBufferFromFile out(user_directories_file);
-                    out << "<clickhouse>\n"
+                    out << "<proton>\n"
                     "    <user_directories>\n"
                     "        <local_directory>\n"
                     "            <path>" << (data_path / "access").string() << "</path>\n"
                     "        </local_directory>\n"
                     "    </user_directories>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                     out.sync();
                     out.finalize();
                     fs::permissions(user_directories_file, fs::perms::owner_read, fs::perm_options::replace);
@@ -561,7 +561,7 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                 if (!fs::exists(openssl_file))
                 {
                     WriteBufferFromFile out(openssl_file);
-                    out << "<clickhouse>\n"
+                    out << "<proton>\n"
                     "    <openSSL>\n"
                     "        <server>\n"
                     "            <certificateFile>" << (config_dir / "server.crt").string() << "</certificateFile>\n"
@@ -569,7 +569,7 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                     "            <dhParamsFile>" << (config_dir / "dhparam.pem").string() << "</dhParamsFile>\n"
                     "        </server>\n"
                     "    </openSSL>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                     out.sync();
                     out.finalize();
                     fs::permissions(openssl_file, fs::perms::owner_read, fs::perm_options::replace);
@@ -737,25 +737,25 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
                 hash_hex.resize(64);
                 for (size_t i = 0; i < 32; ++i)
                     writeHexByteLowercase(hash[i], &hash_hex[2 * i]);
-                out << "<clickhouse>\n"
+                out << "<proton>\n"
                     "    <users>\n"
                     "        <default>\n"
                     "            <password remove='1' />\n"
                     "            <password_sha256_hex>" << hash_hex << "</password_sha256_hex>\n"
                     "        </default>\n"
                     "    </users>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                 out.sync();
                 out.finalize();
                 fmt::print(HILITE "Password for default user is saved in file {}." END_HILITE "\n", password_file);
 #else
-                out << "<clickhouse>\n"
+                out << "<proton>\n"
                     "    <users>\n"
                     "        <default>\n"
                     "            <password><![CDATA[" << password << "]]></password>\n"
                     "        </default>\n"
                     "    </users>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                 out.sync();
                 out.finalize();
                 fmt::print(HILITE "Password for default user is saved in plaintext in file {}." END_HILITE "\n", password_file);
@@ -799,9 +799,9 @@ int mainEntryClickHouseInstall(int argc, char ** argv)
             {
                 std::string listen_file = config_d / "listen.xml";
                 WriteBufferFromFile out(listen_file);
-                out << "<clickhouse>\n"
+                out << "<proton>\n"
                     "    <listen_host>::</listen_host>\n"
-                    "</clickhouse>\n";
+                    "</proton>\n";
                 out.sync();
                 out.finalize();
                 fmt::print("The choice is saved in file {}.\n", listen_file);
@@ -1125,9 +1125,9 @@ int mainEntryClickHouseStart(int argc, char ** argv)
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
             ("binary-path", po::value<std::string>()->default_value("usr/bin"), "directory with binary")
-            ("config-path", po::value<std::string>()->default_value("etc/clickhouse-server"), "directory with configs")
-            ("pid-path", po::value<std::string>()->default_value("var/run/clickhouse-server"), "directory for pid file")
-            ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "clickhouse user")
+            ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "directory with configs")
+            ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
+            ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "proton user")
         ;
 
         po::variables_map options;

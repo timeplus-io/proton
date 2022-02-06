@@ -14,12 +14,12 @@ void NotFoundHandler::handleRequest(HTTPServerRequest & request, HTTPServerRespo
                          << "Use / or /ping for health checks.\n"
                          << "Or /replicas_status for more sophisticated health checks.\n\n"
                          << "Send queries from your program with POST method or GET /?query=...\n\n"
-                         << "Use clickhouse-client:\n\n"
+                         << "Use proton-client:\n\n"
                          << "For interactive data analysis:\n"
-                         << "    clickhouse-client\n\n"
+                         << "    proton-client\n\n"
                          << "For batch query processing:\n"
-                         << "    clickhouse-client --query='SELECT 1' > result\n"
-                         << "    clickhouse-client < query > result\n";
+                         << "    proton-client --query='SELECT 1' > result\n"
+                         << "    proton-client < query > result\n";
     }
     catch (...)
     {

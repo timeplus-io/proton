@@ -1,4 +1,4 @@
-<!-- Config set into /etc/clickhouse-client/. It's used if no other configs are found. -->
+<!-- Config set into /etc/proton-client/. It's used if no other configs are found. -->
 <config>
     <openSSL>
         <client> <!-- Used for connection to server's secure tcp port -->
@@ -14,7 +14,7 @@
         </client>
     </openSSL>
     <!--
-        It's a custom prompt settings for the clickhouse-client
+        It's a custom prompt settings for the proton-client
         Possible macros:
             {host}
             {port}
@@ -45,9 +45,9 @@
     <stacktrace>1</stacktrace>
     <database>default2</database>
     <pager>less -SR</pager>
-    <history_file>/home/user/clickhouse_custom_history.log</history_file>
+    <history_file>/home/user/proton_custom_history.log</history_file>
     <max_parser_depth>2500</max_parser_depth>
 
-        The same can be done on user-level configuration, just create & adjust: ~/.clickhouse-client/config.xml
+        The same can be done on user-level configuration, just create & adjust: ~/.proton-client/config.xml
     -->
 </config>

@@ -4,7 +4,6 @@
 #include <Common/ThreadProfileEvents.h>
 #include <Common/MemoryTrackerBlockerInThread.h>
 
-#include <Interpreters/AsynchronousInsertQueue.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/LimitReadBuffer.h>
@@ -21,7 +20,6 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
@@ -351,24 +349,24 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextPtr 
         span.finish_time_us = time_in_microseconds(std::chrono::system_clock::now());
 
         /// Keep values synchronized to type enum in QueryLogElement::createBlock.
-        span.attribute_names.push_back("clickhouse.query_status");
+        span.attribute_names.push_back("proton.query_status");
         span.attribute_values.push_back("ExceptionBeforeStart");
 
         span.attribute_names.push_back("db.statement");
         span.attribute_values.push_back(elem.query);
 
-        span.attribute_names.push_back("clickhouse.query_id");
+        span.attribute_names.push_back("proton.query_id");
         span.attribute_values.push_back(elem.client_info.current_query_id);
 
-        span.attribute_names.push_back("clickhouse.exception");
+        span.attribute_names.push_back("proton.exception");
         span.attribute_values.push_back(elem.exception);
 
-        span.attribute_names.push_back("clickhouse.exception_code");
+        span.attribute_names.push_back("proton.exception_code");
         span.attribute_values.push_back(elem.exception_code);
 
         if (!context->query_trace_context.tracestate.empty())
         {
-            span.attribute_names.push_back("clickhouse.tracestate");
+            span.attribute_names.push_back("proton.tracestate");
             span.attribute_values.push_back(
                 context->query_trace_context.tracestate);
         }
@@ -959,17 +957,17 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     span.finish_time_us = time_in_microseconds(finish_time);
 
                     /// Keep values synchronized to type enum in QueryLogElement::createBlock.
-                    span.attribute_names.push_back("clickhouse.query_status");
+                    span.attribute_names.push_back("proton.query_status");
                     span.attribute_values.push_back("QueryFinish");
 
                     span.attribute_names.push_back("db.statement");
                     span.attribute_values.push_back(elem.query);
 
-                    span.attribute_names.push_back("clickhouse.query_id");
+                    span.attribute_names.push_back("proton.query_id");
                     span.attribute_values.push_back(elem.client_info.current_query_id);
                     if (!context->query_trace_context.tracestate.empty())
                     {
-                        span.attribute_names.push_back("clickhouse.tracestate");
+                        span.attribute_names.push_back("proton.tracestate");
                         span.attribute_values.push_back(
                             context->query_trace_context.tracestate);
                     }

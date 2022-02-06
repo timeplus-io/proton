@@ -1,7 +1,7 @@
-<clickhouse>
+<proton>
     <logger>
         <console>true</console>
         <log remove="remove"/>
         <errorlog remove="remove"/>
     </logger>
-</clickhouse>
+</proton>
