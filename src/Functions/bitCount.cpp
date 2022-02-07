@@ -38,7 +38,7 @@ struct BitCountImpl
 #endif
 };
 
-struct NameBitCount { static constexpr auto name = "bitCount"; };
+struct NameBitCount { static constexpr auto name = "bit_count"; };
 using FunctionBitCount = FunctionUnaryArithmetic<BitCountImpl, NameBitCount, false /* is injective */>;
 
 }

@@ -26,7 +26,7 @@ namespace
 class FunctionH3GetResolution : public IFunction
 {
 public:
-    static constexpr auto name = "h3GetResolution";
+    static constexpr auto name = "h3_get_resolution";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3GetResolution>(); }
 

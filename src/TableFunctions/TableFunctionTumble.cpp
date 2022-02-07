@@ -71,7 +71,7 @@ void TableFunctionTumble::parseArguments(const ASTPtr & func_ast, ContextPtr con
     node->arguments->children.swap(args);
 
     /// Calculate column description
-    init(context, std::move(streaming_func_ast), "__TUMBLE(", std::move(timestamp_expr_ast));
+    init(context, std::move(streaming_func_ast), "__tumble(", std::move(timestamp_expr_ast));
 }
 
 DataTypePtr TableFunctionTumble::getElementType(const DataTypeTuple * tuple) const

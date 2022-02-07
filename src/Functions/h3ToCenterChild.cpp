@@ -30,7 +30,7 @@ namespace
     class FunctionH3ToCenterChild : public IFunction
     {
     public:
-        static constexpr auto name = "h3ToCenterChild";
+        static constexpr auto name = "h3_to_center_child";
 
         static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3ToCenterChild>(); }
 

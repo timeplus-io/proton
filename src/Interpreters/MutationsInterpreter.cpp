@@ -468,7 +468,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
             if (stages.empty() || !stages.back().column_to_updated.empty())
                 stages.emplace_back(context);
 
-            auto negated_predicate = makeASTFunction("isZeroOrNull", getPartitionAndPredicateExpressionForMutationCommand(command));
+            auto negated_predicate = makeASTFunction("is_zero_or_null", getPartitionAndPredicateExpressionForMutationCommand(command));
             stages.back().filters.push_back(negated_predicate);
         }
         else if (command.type == MutationCommand::UPDATE)
@@ -517,7 +517,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                     auto nested_update_exprs = getExpressionsOfUpdatedNestedSubcolumns(column, all_columns, command.column_to_update_expression);
                     if (!nested_update_exprs)
                     {
-                        function = makeASTFunction("validateNestedArraySizes",
+                        function = makeASTFunction("validate_nested_array_sizes",
                             condition,
                             update_expr->clone(),
                             std::make_shared<ASTIdentifier>(column));
@@ -526,7 +526,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                     else if (nested_update_exprs->size() > 1)
                     {
                         function = std::make_shared<ASTFunction>();
-                        function->name = "validateNestedArraySizes";
+                        function->name = "validate_nested_array_sizes";
                         function->arguments = std::make_shared<ASTExpressionList>();
                         function->children.push_back(function->arguments);
                         function->arguments->children.push_back(condition);
@@ -536,10 +536,10 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                     }
                 }
 
-                auto updated_column = makeASTFunction("_CAST",
+                auto updated_column = makeASTFunction("_cast",
                     makeASTFunction("if",
                         condition,
-                        makeASTFunction("_CAST",
+                        makeASTFunction("_cast",
                             update_expr->clone(),
                             type_literal),
                         std::make_shared<ASTIdentifier>(column)),
@@ -578,7 +578,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                     "Cannot materialize column `{}` because it doesn't have default expression", column.name);
 
             auto materialized_column = makeASTFunction(
-                "_CAST", column.default_desc.expression->clone(), std::make_shared<ASTLiteral>(column.type->getName()));
+                "_cast", column.default_desc.expression->clone(), std::make_shared<ASTLiteral>(column.type->getName()));
 
             stages.back().column_to_updated.emplace(column.name, materialized_column);
         }

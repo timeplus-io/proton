@@ -145,7 +145,7 @@ public:
 };
 
 
-struct NameMapContains { static constexpr auto name = "mapContains"; };
+struct NameMapContains { static constexpr auto name = "map_contains"; };
 
 class FunctionMapContains : public IFunction
 {
@@ -183,7 +183,7 @@ private:
 class FunctionMapKeys : public IFunction
 {
 public:
-    static constexpr auto name = "mapKeys";
+    static constexpr auto name = "map_keys";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapKeys>(); }
 
     String getName() const override
@@ -232,7 +232,7 @@ public:
 class FunctionMapValues : public IFunction
 {
 public:
-    static constexpr auto name = "mapValues";
+    static constexpr auto name = "map_values";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapValues>(); }
 
     String getName() const override
@@ -280,7 +280,7 @@ public:
 class FunctionMapContainsKeyLike : public IFunction
 {
 public:
-    static constexpr auto name = "mapContainsKeyLike";
+    static constexpr auto name = "map_contains_key_like";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapContainsKeyLike>(); }
     String getName() const override { return name; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*info*/) const override { return true; }
@@ -385,7 +385,7 @@ public:
 class FunctionExtractKeyLike : public IFunction
 {
 public:
-    static constexpr auto name = "mapExtractKeyLike";
+    static constexpr auto name = "map_extract_key_like";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionExtractKeyLike>(); }
 
     String getName() const override

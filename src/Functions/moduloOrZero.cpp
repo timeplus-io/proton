@@ -36,7 +36,7 @@ struct ModuloOrZeroImpl
 #endif
 };
 
-struct NameModuloOrZero { static constexpr auto name = "moduloOrZero"; };
+struct NameModuloOrZero { static constexpr auto name = "modulo_or_zero"; };
 using FunctionModuloOrZero = BinaryArithmeticOverloadResolver<ModuloOrZeroImpl, NameModuloOrZero>;
 
 }

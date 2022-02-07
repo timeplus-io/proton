@@ -24,7 +24,7 @@ namespace
     class FunctionBuildId : public FunctionConstantBase<FunctionBuildId, String, DataTypeString>
     {
     public:
-        static constexpr auto name = "buildId";
+        static constexpr auto name = "build_id";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionBuildId>(context); }
         explicit FunctionBuildId(ContextPtr context) : FunctionConstantBase(SymbolIndex::instance()->getBuildIDHex(), context->isDistributed()) {}
     };
@@ -35,7 +35,7 @@ namespace
     class FunctionHostName : public FunctionConstantBase<FunctionHostName, String, DataTypeString>
     {
     public:
-        static constexpr auto name = "hostName";
+        static constexpr auto name = "hostname";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionHostName>(context); }
         explicit FunctionHostName(ContextPtr context) : FunctionConstantBase(DNSResolver::instance().getHostName(), context->isDistributed()) {}
     };
@@ -44,7 +44,7 @@ namespace
     class FunctionServerUUID : public FunctionConstantBase<FunctionServerUUID, UUID, DataTypeUUID>
     {
     public:
-        static constexpr auto name = "serverUUID";
+        static constexpr auto name = "server_uuid";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionServerUUID>(context); }
         explicit FunctionServerUUID(ContextPtr context) : FunctionConstantBase(ServerUUID::get(), context->isDistributed()) {}
     };
@@ -53,7 +53,7 @@ namespace
     class FunctionTcpPort : public FunctionConstantBase<FunctionTcpPort, UInt16, DataTypeUInt16>
     {
     public:
-        static constexpr auto name = "tcpPort";
+        static constexpr auto name = "tcp_port";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionTcpPort>(context); }
         explicit FunctionTcpPort(ContextPtr context) : FunctionConstantBase(context->getTCPPort(), context->isDistributed()) {}
     };
@@ -92,7 +92,7 @@ namespace
     class FunctionGetOSKernelVersion : public FunctionConstantBase<FunctionGetOSKernelVersion, String, DataTypeString>
     {
     public:
-        static constexpr auto name = "getOSKernelVersion";
+        static constexpr auto name = "get_os_kernel_version";
         explicit FunctionGetOSKernelVersion(ContextPtr context) : FunctionConstantBase(Poco::Environment::osName() + " " + Poco::Environment::osVersion(), context->isDistributed()) {}
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionGetOSKernelVersion>(context); }
     };
@@ -111,7 +111,6 @@ void registerFunctionBuildId([[maybe_unused]] FunctionFactory & factory)
 void registerFunctionHostName(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionHostName>();
-    factory.registerAlias("hostname", "hostName");
 }
 
 void registerFunctionServerUUID(FunctionFactory & factory)
@@ -127,7 +126,6 @@ void registerFunctionTcpPort(FunctionFactory & factory)
 void registerFunctionTimezone(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTimezone>();
-    factory.registerAlias("timeZone", "timezone");
 }
 
 void registerFunctionUptime(FunctionFactory & factory)

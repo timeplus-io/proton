@@ -543,7 +543,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 "Date column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
                 ErrorCodes::BAD_ARGUMENTS);
 
-        auto partition_by_ast = makeASTFunction("toYYYYMM", std::make_shared<ASTIdentifier>(date_column_name));
+        auto partition_by_ast = makeASTFunction("to_YYYYMM", std::make_shared<ASTIdentifier>(date_column_name));
 
         metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_ast, metadata.columns, args.getContext());
 

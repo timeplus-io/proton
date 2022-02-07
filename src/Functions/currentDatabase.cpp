@@ -15,7 +15,7 @@ class FunctionCurrentDatabase : public IFunction
     const String db_name;
 
 public:
-    static constexpr auto name = "currentDatabase";
+    static constexpr auto name = "current_database";
     static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionCurrentDatabase>(context->getCurrentDatabase());

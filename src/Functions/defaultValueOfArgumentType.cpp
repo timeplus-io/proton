@@ -12,7 +12,7 @@ namespace
 class FunctionDefaultValueOfArgumentType : public IFunction
 {
 public:
-    static constexpr auto name = "defaultValueOfArgumentType";
+    static constexpr auto name = "default_value_of_argument_type";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionDefaultValueOfArgumentType>();

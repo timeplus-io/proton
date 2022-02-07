@@ -29,7 +29,7 @@ private:
     MultiVersion<Macros>::Version macros;
 
 public:
-    static constexpr auto name = "getMacro";
+    static constexpr auto name = "get_macro";
     static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionGetMacro>(context->getMacros());

@@ -9,7 +9,7 @@ namespace DB
 class FunctionArrayHasAny : public FunctionArrayHasAllAny
 {
 public:
-    static constexpr auto name = "hasAny";
+    static constexpr auto name = "has_any";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayHasAny>(); }
     FunctionArrayHasAny() : FunctionArrayHasAllAny(GatherUtils::ArraySearchType::Any, name) {}
 };

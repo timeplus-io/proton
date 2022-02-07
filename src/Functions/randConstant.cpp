@@ -112,7 +112,7 @@ public:
     }
 };
 
-struct NameRandConstant { static constexpr auto name = "randConstant"; };
+struct NameRandConstant { static constexpr auto name = "rand_constant"; };
 using FunctionBuilderRandConstant = RandomConstantOverloadResolver<UInt32, NameRandConstant>;
 
 }

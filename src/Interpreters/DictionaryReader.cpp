@@ -94,7 +94,7 @@ DictionaryReader::DictionaryReader(const String & dictionary_name, const Names &
     sample_block.insert(key);
 
     ColumnNumbers positions_has{0, key_position};
-    function_has = std::make_unique<FunctionWrapper>(FunctionFactory::instance().get("dictHas", context),
+    function_has = std::make_unique<FunctionWrapper>(FunctionFactory::instance().get("dict_has", context),
                                                         arguments_has, sample_block, positions_has, "has", DataTypeUInt8().getTypeId());
     functions_get.reserve(result_header.columns());
 

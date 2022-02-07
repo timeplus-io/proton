@@ -10,7 +10,7 @@ namespace
 
 struct NameMultiMatchAny
 {
-    static constexpr auto name = "multiMatchAny";
+    static constexpr auto name = "multi_match_any";
 };
 
 using FunctionMultiMatchAny = FunctionsMultiStringSearch<

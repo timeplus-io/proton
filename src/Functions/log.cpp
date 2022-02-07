@@ -35,7 +35,6 @@ using FunctionLog = FunctionMathUnary<UnaryFunctionVectorized<LogName, log>>;
 void registerFunctionLog(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionLog>(FunctionFactory::CaseInsensitive);
-    factory.registerAlias("ln", "log", FunctionFactory::CaseInsensitive);
 }
 
 }

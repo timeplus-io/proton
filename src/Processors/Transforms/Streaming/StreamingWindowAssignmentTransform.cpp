@@ -101,11 +101,11 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
         result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i - delta]).column);
 
     /// Insert window_begin and window_end
-    if (func_name == "__TUMBLE")
+    if (func_name == "__tumble")
     {
         assignTumbleWindow(result, expr_block);
     }
-    else if (func_name == "__HOP")
+    else if (func_name == "__hop")
     {
         assignHopWindow(result, expr_block);
     }

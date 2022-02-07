@@ -75,7 +75,7 @@ namespace ErrorCodes
 
 struct NameArrayAUC
 {
-    static constexpr auto name = "arrayAUC";
+    static constexpr auto name = "array_auc";
 };
 
 

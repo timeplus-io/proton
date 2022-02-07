@@ -148,7 +148,7 @@ void CollectJoinOnKeysMatcher::getIdentifiers(const ASTPtr & ast, std::vector<co
 {
     if (const auto * func = ast->as<ASTFunction>())
     {
-        if (func->name == "arrayJoin")
+        if (func->name == "array_join")
             throw Exception("Not allowed function in JOIN ON. Unexpected '" + queryToString(ast) + "'",
                             ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
     }

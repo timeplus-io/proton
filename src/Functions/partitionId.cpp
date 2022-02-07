@@ -21,7 +21,7 @@ namespace ErrorCodes
 class FunctionPartitionId : public IFunction
 {
 public:
-    static constexpr auto name = "partitionId";
+    static constexpr auto name = "partition_id";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionPartitionId>(); }
 

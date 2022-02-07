@@ -717,12 +717,12 @@ public:
 
 struct NameFormatDateTime
 {
-    static constexpr auto name = "formatDateTime";
+    static constexpr auto name = "format_datetime";
 };
 
 struct NameFromUnixTime
 {
-    static constexpr auto name = "FROM_UNIXTIME";
+    static constexpr auto name = "from_unixtime";
 };
 
 using FunctionFormatDateTime = FunctionFormatDateTimeImpl<NameFormatDateTime, false>;
@@ -734,7 +734,6 @@ void registerFunctionFormatDateTime(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionFormatDateTime>();
     factory.registerFunction<FunctionFROM_UNIXTIME>();
-    factory.registerAlias("fromUnixTimestamp", "FROM_UNIXTIME");
 }
 
 }

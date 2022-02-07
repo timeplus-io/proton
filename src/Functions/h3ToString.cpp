@@ -27,7 +27,7 @@ namespace
 class FunctionH3ToString : public IFunction
 {
 public:
-    static constexpr auto name = "h3ToString";
+    static constexpr auto name = "h3_to_string";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3ToString>(); }
 

@@ -16,7 +16,7 @@ class FunctionToTypeName : public IFunction
 {
 public:
 
-    static constexpr auto name = "toTypeName";
+    static constexpr auto name = "to_type_name";
 
     static FunctionPtr create(ContextPtr)
     {

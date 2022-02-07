@@ -58,8 +58,8 @@ struct ArraySortImpl
     }
 };
 
-struct NameArraySort { static constexpr auto name = "arraySort"; };
-struct NameArrayReverseSort { static constexpr auto name = "arrayReverseSort"; };
+struct NameArraySort { static constexpr auto name = "array_sort"; };
+struct NameArrayReverseSort { static constexpr auto name = "array_reverse_sort"; };
 
 using FunctionArraySort = FunctionArrayMapped<ArraySortImpl<true>, NameArraySort>;
 using FunctionArrayReverseSort = FunctionArrayMapped<ArraySortImpl<false>, NameArrayReverseSort>;

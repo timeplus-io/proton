@@ -52,7 +52,7 @@ namespace
 class FunctionFuzzBits : public IFunction
 {
 public:
-    static constexpr auto name = "fuzzBits";
+    static constexpr auto name = "fuzz_bits";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionFuzzBits>(); }
 

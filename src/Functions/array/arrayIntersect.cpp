@@ -38,7 +38,7 @@ namespace ErrorCodes
 class FunctionArrayIntersect : public IFunction
 {
 public:
-    static constexpr auto name = "arrayIntersect";
+    static constexpr auto name = "array_intersect";
     static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionArrayIntersect>(context); }
     explicit FunctionArrayIntersect(ContextPtr context_) : context(context_) {}
 

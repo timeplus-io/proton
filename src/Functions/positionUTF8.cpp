@@ -10,7 +10,7 @@ namespace
 
 struct NamePositionUTF8
 {
-    static constexpr auto name = "positionUTF8";
+    static constexpr auto name = "position_utf8";
 };
 
 using FunctionPositionUTF8 = FunctionsStringSearch<PositionImpl<NamePositionUTF8, PositionCaseSensitiveUTF8>>;

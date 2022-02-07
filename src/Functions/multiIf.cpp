@@ -35,7 +35,7 @@ namespace
 class FunctionMultiIf final : public FunctionIfBase
 {
 public:
-    static constexpr auto name = "multiIf";
+    static constexpr auto name = "multi_if";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMultiIf>(); }
 
     String getName() const override { return name; }

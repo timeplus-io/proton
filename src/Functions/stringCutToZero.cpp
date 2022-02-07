@@ -17,7 +17,7 @@ namespace ErrorCodes
 class FunctionToStringCutToZero : public IFunction
 {
 public:
-    static constexpr auto name = "toStringCutToZero";
+    static constexpr auto name = "to_string_cut_to_zero";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToStringCutToZero>(); }
 
     String getName() const override

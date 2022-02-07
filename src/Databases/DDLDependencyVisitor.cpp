@@ -51,10 +51,10 @@ bool DDLDependencyVisitor::needChildVisit(const ASTPtr & node, const ASTPtr & ch
 
 void DDLDependencyVisitor::visit(const ASTFunction & function, Data & data)
 {
-    if (function.name == "joinGet" ||
-        function.name == "dictHas" ||
-        function.name == "dictIsIn" ||
-        function.name.starts_with("dictGet"))
+    if (function.name == "join_get" ||
+        function.name == "dict_has" ||
+        function.name == "dict_is_in" ||
+        function.name.starts_with("dict_get"))
     {
         extractTableNameFromArgument(function, data, 0);
     }

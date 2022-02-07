@@ -1,6 +1,5 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnMap.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -644,18 +643,18 @@ void ConstantExpressionTemplate::TemplateStructure::addNodesToCastResult(const I
     {
         expr->setAlias("_expression");
 
-        auto is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>("_expression"));
+        auto is_null = makeASTFunction("is_null", std::make_shared<ASTIdentifier>("_expression"));
         is_null->setAlias("_is_expression_nullable");
 
-        auto default_value = makeASTFunction("defaultValueOfTypeName", std::make_shared<ASTLiteral>(result_column_type.getName()));
-        auto cast = makeASTFunction("_CAST", std::move(expr), std::make_shared<ASTLiteral>(result_column_type.getName()));
+        auto default_value = makeASTFunction("default_value_of_type_name", std::make_shared<ASTLiteral>(result_column_type.getName()));
+        auto cast = makeASTFunction("_cast", std::move(expr), std::make_shared<ASTLiteral>(result_column_type.getName()));
 
         auto cond = makeASTFunction("if", std::move(is_null), std::move(default_value), std::move(cast));
         expr = makeASTFunction("tuple", std::move(cond), std::make_shared<ASTIdentifier>("_is_expression_nullable"));
     }
     else
     {
-        expr = makeASTFunction("_CAST", std::move(expr), std::make_shared<ASTLiteral>(result_column_type.getName()));
+        expr = makeASTFunction("_cast", std::move(expr), std::make_shared<ASTLiteral>(result_column_type.getName()));
     }
 }
 

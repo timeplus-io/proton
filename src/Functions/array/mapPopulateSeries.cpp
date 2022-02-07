@@ -24,7 +24,7 @@ namespace ErrorCodes
 class FunctionMapPopulateSeries : public IFunction
 {
 public:
-    static constexpr auto name = "mapPopulateSeries";
+    static constexpr auto name = "map_populate_series";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapPopulateSeries>(); }
 
 private:

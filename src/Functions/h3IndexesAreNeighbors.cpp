@@ -26,7 +26,7 @@ namespace
 class FunctionH3IndexesAreNeighbors : public IFunction
 {
 public:
-    static constexpr auto name = "h3IndexesAreNeighbors";
+    static constexpr auto name = "h3_indexes_are_neighbors";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3IndexesAreNeighbors>(); }
 

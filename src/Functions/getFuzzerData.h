@@ -12,7 +12,7 @@ class FunctionGetFuzzerData : public IFunction
     inline static String fuzz_data;
 
 public:
-    static constexpr auto name = "getFuzzerData";
+    static constexpr auto name = "get_fuzzer_data";
 
     inline static FunctionPtr create(ContextPtr) { return create(); }
 

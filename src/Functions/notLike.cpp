@@ -9,7 +9,7 @@ namespace
 
 struct NameNotLike
 {
-    static constexpr auto name = "notLike";
+    static constexpr auto name = "not_like";
 };
 
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<NameNotLike, true, true>>;

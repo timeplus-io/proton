@@ -26,7 +26,7 @@ namespace ErrorCodes
 
 struct Base64Encode
 {
-    static constexpr auto name = "base64Encode";
+    static constexpr auto name = "base64_encode";
     static size_t getBufferSize(size_t string_length, size_t string_count)
     {
         return ((string_length - string_count) / 3 + string_count) * 4 + string_count;
@@ -35,7 +35,7 @@ struct Base64Encode
 
 struct Base64Decode
 {
-    static constexpr auto name = "base64Decode";
+    static constexpr auto name = "base64_decode";
 
     static size_t getBufferSize(size_t string_length, size_t string_count)
     {
@@ -45,7 +45,7 @@ struct Base64Decode
 
 struct TryBase64Decode
 {
-    static constexpr auto name = "tryBase64Decode";
+    static constexpr auto name = "try_base64_decode";
 
     static size_t getBufferSize(size_t string_length, size_t string_count)
     {

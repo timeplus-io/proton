@@ -28,7 +28,7 @@ namespace
 class FunctionInitializeAggregation : public IFunction, private WithContext
 {
 public:
-    static constexpr auto name = "initializeAggregation";
+    static constexpr auto name = "initialize_aggregation";
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionInitializeAggregation>(context_); }
     explicit FunctionInitializeAggregation(ContextPtr context_) : WithContext(context_) {}
 

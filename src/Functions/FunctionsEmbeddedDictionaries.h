@@ -470,15 +470,15 @@ public:
 };
 
 
-struct NameRegionToCity                { static constexpr auto name = "regionToCity"; };
-struct NameRegionToArea                { static constexpr auto name = "regionToArea"; };
-struct NameRegionToDistrict            { static constexpr auto name = "regionToDistrict"; };
-struct NameRegionToCountry             { static constexpr auto name = "regionToCountry"; };
-struct NameRegionToContinent           { static constexpr auto name = "regionToContinent"; };
-struct NameRegionToTopContinent        { static constexpr auto name = "regionToTopContinent"; };
-struct NameRegionToPopulation          { static constexpr auto name = "regionToPopulation"; };
-struct NameRegionHierarchy             { static constexpr auto name = "regionHierarchy"; };
-struct NameRegionIn                    { static constexpr auto name = "regionIn"; };
+struct NameRegionToCity                { static constexpr auto name = "region_to_city"; };
+struct NameRegionToArea                { static constexpr auto name = "region_to_area"; };
+struct NameRegionToDistrict            { static constexpr auto name = "region_to_district"; };
+struct NameRegionToCountry             { static constexpr auto name = "region_to_country"; };
+struct NameRegionToContinent           { static constexpr auto name = "region_to_continent"; };
+struct NameRegionToTopContinent        { static constexpr auto name = "region_to_top_continent"; };
+struct NameRegionToPopulation          { static constexpr auto name = "region_to_population"; };
+struct NameRegionHierarchy             { static constexpr auto name = "region_hierarchy"; };
+struct NameRegionIn                    { static constexpr auto name = "region_in"; };
 
 
 struct FunctionRegionToCity :
@@ -567,7 +567,7 @@ struct FunctionRegionHierarchy :
 class FunctionRegionToName : public IFunction
 {
 public:
-    static constexpr auto name = "regionToName";
+    static constexpr auto name = "region_to_name";
     static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionRegionToName>(context->getEmbeddedDictionaries().getRegionsNames());

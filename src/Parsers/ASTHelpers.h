@@ -9,7 +9,7 @@ namespace DB
 static inline bool isFunctionCast(const ASTFunction * function)
 {
     if (function)
-        return function->name == "CAST" || function->name == "_CAST";
+        return function->name == "cast" || function->name == "_cast";
     return false;
 }
 

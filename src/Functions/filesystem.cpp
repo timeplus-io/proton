@@ -12,19 +12,19 @@ namespace
 
 struct FilesystemAvailable
 {
-    static constexpr auto name = "filesystemAvailable";
+    static constexpr auto name = "filesystem_available";
     static std::uintmax_t get(const std::filesystem::space_info & spaceinfo) { return spaceinfo.available; }
 };
 
 struct FilesystemFree
 {
-    static constexpr auto name = "filesystemFree";
+    static constexpr auto name = "filesystem_free";
     static std::uintmax_t get(const std::filesystem::space_info & spaceinfo) { return spaceinfo.free; }
 };
 
 struct FilesystemCapacity
 {
-    static constexpr auto name = "filesystemCapacity";
+    static constexpr auto name = "filesystem_capacity";
     static std::uintmax_t get(const std::filesystem::space_info & spaceinfo) { return spaceinfo.capacity; }
 };
 

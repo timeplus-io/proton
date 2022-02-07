@@ -11,7 +11,7 @@ namespace DB
 class FunctionFQDN : public IFunction
 {
 public:
-    static constexpr auto name = "FQDN";
+    static constexpr auto name = "fqdn";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionFQDN>();

@@ -75,7 +75,7 @@ private:
 class GetServerPortOverloadResolver : public IFunctionOverloadResolver, WithContext
 {
 public:
-    static constexpr auto name = "getServerPort";
+    static constexpr auto name = "get_server_port";
 
     String getName() const override { return name; }
 

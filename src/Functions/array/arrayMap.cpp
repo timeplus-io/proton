@@ -27,7 +27,7 @@ struct ArrayMapImpl
     }
 };
 
-struct NameArrayMap { static constexpr auto name = "arrayMap"; };
+struct NameArrayMap { static constexpr auto name = "array_map"; };
 using FunctionArrayMap = FunctionArrayMapped<ArrayMapImpl, NameArrayMap>;
 
 void registerFunctionArrayMap(FunctionFactory & factory)

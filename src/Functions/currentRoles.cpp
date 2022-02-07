@@ -28,7 +28,7 @@ namespace
     class FunctionCurrentRoles : public IFunction
     {
     public:
-        static constexpr auto name = (kind == Kind::CURRENT_ROLES) ? "currentRoles" : ((kind == Kind::ENABLED_ROLES) ? "enabledRoles" : "defaultRoles");
+        static constexpr auto name = (kind == Kind::CURRENT_ROLES) ? "current_roles" : ((kind == Kind::ENABLED_ROLES) ? "enabled_roles" : "default_roles");
         static FunctionPtr create(const ContextPtr & context) { return std::make_shared<FunctionCurrentRoles>(context); }
 
         bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }

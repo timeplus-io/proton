@@ -42,19 +42,19 @@ struct CRCImpl
 constexpr UInt64 CRC64_ECMA = 0xc96c5795d7870f42ULL;
 struct CRC64ECMAImpl : public CRCImpl<UInt64, CRC64_ECMA>
 {
-    static constexpr auto name = "CRC64";
+    static constexpr auto name = "crc64";
 };
 
 constexpr UInt32 CRC32_IEEE = 0xedb88320;
 struct CRC32IEEEImpl : public CRCImpl<UInt32, CRC32_IEEE>
 {
-    static constexpr auto name = "CRC32IEEE";
+    static constexpr auto name = "crc32_ieee";
 };
 
 struct CRC32ZLIBImpl
 {
     using ReturnType = UInt32;
-    static constexpr auto name = "CRC32";
+    static constexpr auto name = "crc32";
 
     static UInt32 makeCRC(const unsigned char *buf, size_t size)
     {

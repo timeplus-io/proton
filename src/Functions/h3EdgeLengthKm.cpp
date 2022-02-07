@@ -29,7 +29,7 @@ namespace
 class FunctionH3EdgeLengthKm : public IFunction
 {
 public:
-    static constexpr auto name = "h3EdgeLengthKm";
+    static constexpr auto name = "h3_edge_length_km";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3EdgeLengthKm>(); }
 

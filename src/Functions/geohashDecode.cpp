@@ -26,7 +26,7 @@ namespace
 class FunctionGeohashDecode : public IFunction
 {
 public:
-    static constexpr auto name = "geohashDecode";
+    static constexpr auto name = "geohash_decode";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionGeohashDecode>(); }
 
     String getName() const override

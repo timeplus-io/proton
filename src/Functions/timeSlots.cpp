@@ -107,7 +107,7 @@ struct TimeSlotsImpl
 class FunctionTimeSlots : public IFunction
 {
 public:
-    static constexpr auto name = "timeSlots";
+    static constexpr auto name = "time_slots";
     static constexpr UInt32 TIME_SLOT_SIZE = 1800;
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionTimeSlots>(); }
 

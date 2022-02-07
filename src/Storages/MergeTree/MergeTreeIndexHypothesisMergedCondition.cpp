@@ -47,7 +47,7 @@ void MergeTreeIndexhypothesisMergedCondition::addIndex(const MergeTreeIndexPtr &
     if (!hypothesis_index)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Only hypothesis index is supported here");
 
-    static const NameSet relations = { "equals", "notEquals", "less", "lessOrEquals", "greaterOrEquals", "greater"};
+    static const NameSet relations = { "equals", "not_equals", "less", "less_or_equals", "greater_or_equals", "greater"};
 
     // TODO: move to index hypothesis
     std::vector<ASTPtr> compare_hypotheses_data;
@@ -103,9 +103,9 @@ bool MergeTreeIndexhypothesisMergedCondition::alwaysUnknownOrTrue() const
         formula = formula->clone(); /// do all operations with copy
         auto * func = formula->as<ASTFunction>();
         if (func && func->name == "less")
-            func->name = "lessOrEquals";
+            func->name = "less_or_equals";
         if (func && func->name == "greater")
-            func->name = "greaterOrEquals";
+            func->name = "greater_or_equals";
     }
 
     const auto weak_graph = std::make_unique<ComparisonGraph>(active_atomic_formulas);

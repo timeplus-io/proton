@@ -58,8 +58,8 @@ NamesAndTypesList QueryViewsLogElement::getNamesAndTypes()
 NamesAndAliases QueryViewsLogElement::getNamesAndAliases()
 {
     return {
-        {"ProfileEvents.Names", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapKeys(ProfileEvents)"},
-        {"ProfileEvents.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())}, "mapValues(ProfileEvents)"}};
+        {"ProfileEvents.Names", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "map_keys(ProfileEvents)"},
+        {"ProfileEvents.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())}, "map_values(ProfileEvents)"}};
 }
 
 void QueryViewsLogElement::appendToBlock(MutableColumns & columns) const

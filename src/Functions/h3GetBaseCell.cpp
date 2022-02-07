@@ -26,7 +26,7 @@ namespace
 class FunctionH3GetBaseCell : public IFunction
 {
 public:
-    static constexpr auto name = "h3GetBaseCell";
+    static constexpr auto name = "h3_get_base_cell";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3GetBaseCell>(); }
 

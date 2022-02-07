@@ -154,10 +154,10 @@ void prepareColumns(ASTCreateQuery & create)
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
 {
     /// FIXME: raw table might have different order by and partition by
-    auto new_order_by = makeASTFunction("toStartOfHour", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
+    auto new_order_by = makeASTFunction("to_start_of_hour", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
     create.storage->set(create.storage->order_by, new_order_by);
 
-    auto new_partition_by = makeASTFunction("toYYYYMMDD", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
+    auto new_partition_by = makeASTFunction("to_YYYYMMDD", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
     create.storage->set(create.storage->partition_by, new_partition_by);
 }
 

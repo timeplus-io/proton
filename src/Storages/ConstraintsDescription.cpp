@@ -105,7 +105,7 @@ std::vector<CNFQuery::AtomicFormula> ConstraintsDescription::getAtomicConstraint
 
 std::unique_ptr<ComparisonGraph> ConstraintsDescription::buildGraph() const
 {
-    static const NameSet relations = { "equals", "less", "lessOrEquals", "greaterOrEquals", "greater" };
+    static const NameSet relations = { "equals", "less", "less_or_equals", "greater_or_equals", "greater" };
 
     std::vector<ASTPtr> constraints_for_graph;
     auto atomic_formulas = getAtomicConstraintData();

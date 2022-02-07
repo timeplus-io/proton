@@ -80,7 +80,7 @@ struct ArrayAllImpl
     }
 };
 
-struct NameArrayAll { static constexpr auto name = "arrayAll"; };
+struct NameArrayAll { static constexpr auto name = "array_all"; };
 using FunctionArrayAll = FunctionArrayMapped<ArrayAllImpl, NameArrayAll>;
 
 void registerFunctionArrayAll(FunctionFactory & factory)

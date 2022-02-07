@@ -31,7 +31,7 @@ enum class ConvertToFixedStringExceptionMode
 class FunctionToFixedString : public IFunction
 {
 public:
-    static constexpr auto name = "toFixedString";
+    static constexpr auto name = "to_fixed_string";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToFixedString>(); }
     static FunctionPtr create() { return std::make_shared<FunctionToFixedString>(); }
 

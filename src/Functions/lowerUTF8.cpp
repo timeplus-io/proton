@@ -12,7 +12,7 @@ namespace
 
 struct NameLowerUTF8
 {
-    static constexpr auto name = "lowerUTF8";
+    static constexpr auto name = "lower_utf8";
 };
 
 using FunctionLowerUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>, NameLowerUTF8>;

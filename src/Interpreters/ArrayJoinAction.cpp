@@ -28,10 +28,10 @@ ArrayJoinAction::ArrayJoinAction(const NameSet & array_joined_columns_, bool arr
     {
         function_length = FunctionFactory::instance().get("length", context);
         function_greatest = FunctionFactory::instance().get("greatest", context);
-        function_arrayResize = FunctionFactory::instance().get("arrayResize", context);
+        function_arrayResize = FunctionFactory::instance().get("array_resize", context);
     }
     else if (is_left)
-        function_builder = FunctionFactory::instance().get("emptyArrayToSingle", context);
+        function_builder = FunctionFactory::instance().get("empty_array_to_single", context);
 }
 
 

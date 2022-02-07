@@ -36,7 +36,7 @@ class ExternalModelsLoader;
 class FunctionModelEvaluate final : public IFunction
 {
 public:
-    static constexpr auto name = "modelEvaluate";
+    static constexpr auto name = "model_evaluate";
 
     static FunctionPtr create(ContextPtr context)
     {

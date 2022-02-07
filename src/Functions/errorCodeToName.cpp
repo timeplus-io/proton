@@ -18,7 +18,7 @@ namespace ErrorCodes
 class FunctionErrorCodeToName : public IFunction
 {
 public:
-    static constexpr auto name = "errorCodeToName";
+    static constexpr auto name = "error_code_to_name";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionErrorCodeToName>();

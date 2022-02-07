@@ -29,7 +29,7 @@ namespace
 class FunctionH3HexAreaM2 : public IFunction
 {
 public:
-    static constexpr auto name = "h3HexAreaM2";
+    static constexpr auto name = "h3_hex_area_m2";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3HexAreaM2>(); }
 

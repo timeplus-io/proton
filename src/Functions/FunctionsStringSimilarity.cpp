@@ -478,39 +478,39 @@ struct NgramDistanceImpl
 
 struct NameNgramDistance
 {
-    static constexpr auto name = "ngramDistance";
+    static constexpr auto name = "ngram_distance";
 };
 struct NameNgramDistanceCaseInsensitive
 {
-    static constexpr auto name = "ngramDistanceCaseInsensitive";
+    static constexpr auto name = "ngram_distance_case_insensitive";
 };
 
 struct NameNgramDistanceUTF8
 {
-    static constexpr auto name = "ngramDistanceUTF8";
+    static constexpr auto name = "ngram_distance_utf8";
 };
 
 struct NameNgramDistanceUTF8CaseInsensitive
 {
-    static constexpr auto name = "ngramDistanceCaseInsensitiveUTF8";
+    static constexpr auto name = "ngram_distance_case_insensitive_utf8";
 };
 
 struct NameNgramSearch
 {
-    static constexpr auto name = "ngramSearch";
+    static constexpr auto name = "ngram_search";
 };
 struct NameNgramSearchCaseInsensitive
 {
-    static constexpr auto name = "ngramSearchCaseInsensitive";
+    static constexpr auto name = "ngram_search_case_insensitive";
 };
 struct NameNgramSearchUTF8
 {
-    static constexpr auto name = "ngramSearchUTF8";
+    static constexpr auto name = "ngram_search_utf8";
 };
 
 struct NameNgramSearchUTF8CaseInsensitive
 {
-    static constexpr auto name = "ngramSearchCaseInsensitiveUTF8";
+    static constexpr auto name = "ngram_search_case_insensitive_utf8";
 };
 
 using FunctionNgramDistance = FunctionsStringSimilarity<NgramDistanceImpl<4, UInt8, false, false, true>, NameNgramDistance>;

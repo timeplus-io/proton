@@ -63,10 +63,10 @@ std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema
     = {{"required", {}}, {"optional", {{"ttl_expression", "string"}}}};
 
 std::map<String, String> TableRestRouterHandler::granularity_func_mapping
-    = {{"M", "toYYYYMM(`" + RESERVED_EVENT_TIME + "`)"},
-       {"D", "toYYYYMMDD(`" + RESERVED_EVENT_TIME + "`)"},
-       {"H", "toStartOfHour(`" + RESERVED_EVENT_TIME + "`)"},
-       {"m", "toStartOfMinute(`" + RESERVED_EVENT_TIME + "`)"}};
+    = {{"M", "to_YYYYMM(`" + RESERVED_EVENT_TIME + "`)"},
+       {"D", "to_YYYYMMDD(`" + RESERVED_EVENT_TIME + "`)"},
+       {"H", "to_start_of_hour(`" + RESERVED_EVENT_TIME + "`)"},
+       {"m", "to_start_of_minute(`" + RESERVED_EVENT_TIME + "`)"}};
 
 bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {

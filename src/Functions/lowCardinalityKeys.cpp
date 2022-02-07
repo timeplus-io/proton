@@ -18,7 +18,7 @@ namespace
 class FunctionLowCardinalityKeys: public IFunction
 {
 public:
-    static constexpr auto name = "lowCardinalityKeys";
+    static constexpr auto name = "low_cardinality_keys";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionLowCardinalityKeys>(); }
 
     String getName() const override { return name; }

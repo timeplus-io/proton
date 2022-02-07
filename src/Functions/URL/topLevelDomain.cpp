@@ -40,7 +40,7 @@ struct ExtractTopLevelDomain
     }
 };
 
-struct NameTopLevelDomain { static constexpr auto name = "topLevelDomain"; };
+struct NameTopLevelDomain { static constexpr auto name = "top_level_domain"; };
 using FunctionTopLevelDomain = FunctionStringToString<ExtractSubstringImpl<ExtractTopLevelDomain>, NameTopLevelDomain>;
 
 void registerFunctionTopLevelDomain(FunctionFactory & factory)

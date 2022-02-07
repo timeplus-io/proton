@@ -10,7 +10,7 @@ namespace
 
 struct NamePositionCaseInsensitive
 {
-    static constexpr auto name = "positionCaseInsensitive";
+    static constexpr auto name = "position_case_insensitive";
 };
 
 using FunctionPositionCaseInsensitive = FunctionsStringSearch<PositionImpl<NamePositionCaseInsensitive, PositionCaseInsensitiveASCII>>;

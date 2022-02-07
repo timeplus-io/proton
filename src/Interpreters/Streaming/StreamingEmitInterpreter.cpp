@@ -299,7 +299,7 @@ void StreamingEmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery &
 {
     auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(3), std::make_shared<ASTLiteral>("UTC"));
     auto minus = makeASTFunction("minus", now, last_interval);
-    auto greater = makeASTFunction("greaterOrEquals", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME), minus);
+    auto greater = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME), minus);
 
     auto where = select_query.where();
     if (!where)

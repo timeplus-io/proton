@@ -15,7 +15,7 @@ struct IsFiniteImpl
     /// Assuming IEEE 754.
     /// NOTE gcc 7 doesn't vectorize this loop.
 
-    static constexpr auto name = "isFinite";
+    static constexpr auto name = "is_finite";
     template <typename T>
     static bool execute(const T t)
     {

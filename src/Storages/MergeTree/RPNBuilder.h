@@ -103,7 +103,7 @@ private:
         }
         else
         {
-            if (func->name == "and" || func->name == "indexHint")
+            if (func->name == "and" || func->name == "index_hint")
                 out.function = RPNElement::FUNCTION_AND;
             else if (func->name == "or")
                 out.function = RPNElement::FUNCTION_OR;

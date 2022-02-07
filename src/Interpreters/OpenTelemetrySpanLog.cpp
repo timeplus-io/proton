@@ -45,8 +45,8 @@ NamesAndAliases OpenTelemetrySpanLogElement::getNamesAndAliases()
 {
     return
     {
-        {"attribute.names", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "mapKeys(attribute)"},
-        {"attribute.values", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "mapKeys(attribute)"}
+        {"attribute.names", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "map_keys(attribute)"},
+        {"attribute.values", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "map_keys(attribute)"}
     };
 }
 

@@ -249,10 +249,10 @@ CREATE TABLE default.tests
     EXPECT_EQ(create->columns_list->columns->children.size(), 7);
 
     ASTFunction * order_by = create->storage->order_by->as<ASTFunction>();
-    EXPECT_EQ(order_by->name, "toStartOfHour");
+    EXPECT_EQ(order_by->name, "to_start_of_hour");
 
     ASTFunction * partition_by = create->storage->partition_by->as<ASTFunction>();
-    EXPECT_EQ(partition_by->name, "toYYYYMMDD");
+    EXPECT_EQ(partition_by->name, "to_YYYYMMDD");
 
     /// throw exception if try to add _tp_xxx column
     ast = queryToAST(R"###(
@@ -279,10 +279,10 @@ TTL ttl + toIntervalDay(1)
     create = ast->as<ASTCreateQuery>();
     prepareCreateQueryForDistributedMergeTree(*create);
     order_by = create->storage->order_by->as<ASTFunction>();
-    EXPECT_EQ(order_by->name, "toStartOfHour");
+    EXPECT_EQ(order_by->name, "to_start_of_hour");
 
     partition_by = create->storage->partition_by->as<ASTFunction>();
-    EXPECT_EQ(partition_by->name, "toYYYYMMDD");
+    EXPECT_EQ(partition_by->name, "to_YYYYMMDD");
 
     /// add event_time_column
     ast = queryToAST(R"###(
@@ -291,7 +291,7 @@ CREATE TABLE default.tests
     `timestamp`      DateTime64(3) DEFAULT now64(3),
     `ttl`            DateTime DEFAULT now()
 ) ENGINE = DistributedMergeTree(1, 1, rand())
-SETTINGS event_time_column = 'toStartOfHour(timestamp)'
+SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
     create = ast->as<ASTCreateQuery>();
 
@@ -299,12 +299,12 @@ SETTINGS event_time_column = 'toStartOfHour(timestamp)'
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
 CREATE TABLE default.tests (
   `timestamp` DateTime64(3) DEFAULT now64(3),
-  `ttl` DateTimeDEFAULTnow(),
-  `_tp_time` DateTime64(3,'UTC') DEFAULT toStartOfHour(timestamp) CODEC(DoubleDelta(), LZ4()),
+  `ttl` DateTime DEFAULT now(),
+  `_tp_time` DateTime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
   `_tp_index_time` DateTime64(3,'UTC') DEFAULT now64(3, 'UTC') CODEC(DoubleDelta(), LZ4())
 ) ENGINE = DistributedMergeTree(1, 1, rand())
-PARTITION BY toYYYYMMDD(_tp_time)
-ORDER BY toStartOfHour(_tp_time)SETTINGSevent_time_column='toStartOfHour(timestamp)')###"));
+PARTITION BY to_YYYYMMDD(_tp_time)
+ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
 }
 
 TEST(DDLHelper, prepareEngine)

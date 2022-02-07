@@ -22,11 +22,11 @@ namespace ErrorCodes
 
 struct NameStartsWith
 {
-    static constexpr auto name = "startsWith";
+    static constexpr auto name = "starts_with";
 };
 struct NameEndsWith
 {
-    static constexpr auto name = "endsWith";
+    static constexpr auto name = "ends_with";
 };
 
 DECLARE_MULTITARGET_CODE(

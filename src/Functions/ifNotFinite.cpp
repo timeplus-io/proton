@@ -15,7 +15,7 @@ namespace
 class FunctionIfNotFinite : public IFunction
 {
 public:
-    static constexpr auto name = "ifNotFinite";
+    static constexpr auto name = "if_not_finite";
 
     explicit FunctionIfNotFinite(ContextPtr context_) : context(context_) {}
 

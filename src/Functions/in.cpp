@@ -30,21 +30,21 @@ template <bool negative, bool global, bool null_is_skipped, bool ignore_set>
 struct FunctionInName;
 
 template <> struct FunctionInName<false, false, true, false> { static constexpr auto name = "in"; };
-template <> struct FunctionInName<false, true, true, false> { static constexpr auto name = "globalIn"; };
-template <> struct FunctionInName<true, false, true, false> { static constexpr auto name = "notIn"; };
-template <> struct FunctionInName<true, true, true, false> { static constexpr auto name = "globalNotIn"; };
-template <> struct FunctionInName<false, false, false, false> { static constexpr auto name = "nullIn"; };
-template <> struct FunctionInName<false, true, false, false> { static constexpr auto name = "globalNullIn"; };
-template <> struct FunctionInName<true, false, false, false> { static constexpr auto name = "notNullIn"; };
-template <> struct FunctionInName<true, true, false, false> { static constexpr auto name = "globalNotNullIn"; };
-template <> struct FunctionInName<false, false, true, true> { static constexpr auto name = "inIgnoreSet"; };
-template <> struct FunctionInName<false, true, true, true> { static constexpr auto name = "globalInIgnoreSet"; };
-template <> struct FunctionInName<true, false, true, true> { static constexpr auto name = "notInIgnoreSet"; };
-template <> struct FunctionInName<true, true, true, true> { static constexpr auto name = "globalNotInIgnoreSet"; };
-template <> struct FunctionInName<false, false, false, true> { static constexpr auto name = "nullInIgnoreSet"; };
-template <> struct FunctionInName<false, true, false, true> { static constexpr auto name = "globalNullInIgnoreSet"; };
-template <> struct FunctionInName<true, false, false, true> { static constexpr auto name = "notNullInIgnoreSet"; };
-template <> struct FunctionInName<true, true, false, true> { static constexpr auto name = "globalNotNullInIgnoreSet"; };
+template <> struct FunctionInName<false, true, true, false> { static constexpr auto name = "global_in"; };
+template <> struct FunctionInName<true, false, true, false> { static constexpr auto name = "not_in"; };
+template <> struct FunctionInName<true, true, true, false> { static constexpr auto name = "global_not_in"; };
+template <> struct FunctionInName<false, false, false, false> { static constexpr auto name = "null_in"; };
+template <> struct FunctionInName<false, true, false, false> { static constexpr auto name = "global_null_in"; };
+template <> struct FunctionInName<true, false, false, false> { static constexpr auto name = "not_null_in"; };
+template <> struct FunctionInName<true, true, false, false> { static constexpr auto name = "global_not_null_in"; };
+template <> struct FunctionInName<false, false, true, true> { static constexpr auto name = "in_ignore_set"; };
+template <> struct FunctionInName<false, true, true, true> { static constexpr auto name = "global_in_ignore_set"; };
+template <> struct FunctionInName<true, false, true, true> { static constexpr auto name = "not_in_ignore_set"; };
+template <> struct FunctionInName<true, true, true, true> { static constexpr auto name = "global_not_in_ignore_set"; };
+template <> struct FunctionInName<false, false, false, true> { static constexpr auto name = "null_in_ignore_set"; };
+template <> struct FunctionInName<false, true, false, true> { static constexpr auto name = "global_null_in_ignore_set"; };
+template <> struct FunctionInName<true, false, false, true> { static constexpr auto name = "not_null_in_ignore_set"; };
+template <> struct FunctionInName<true, true, false, true> { static constexpr auto name = "global_not_null_in_ignore_set"; };
 
 template <bool negative, bool global, bool null_is_skipped, bool ignore_set>
 class FunctionIn : public IFunction

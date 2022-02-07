@@ -134,7 +134,7 @@ struct ToValidUTF8Impl
 
 struct NameToValidUTF8
 {
-    static constexpr auto name = "toValidUTF8";
+    static constexpr auto name = "to_valid_utf8";
 };
 using FunctionToValidUTF8 = FunctionStringToString<ToValidUTF8Impl, NameToValidUTF8>;
 

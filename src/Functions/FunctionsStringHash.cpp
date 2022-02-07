@@ -559,122 +559,122 @@ struct MinHashImpl
 
 struct NameNgramSimHash
 {
-    static constexpr auto name = "ngramSimHash";
+    static constexpr auto name = "ngram_sim_hash";
 };
 
 struct NameNgramSimHashCaseInsensitive
 {
-    static constexpr auto name = "ngramSimHashCaseInsensitive";
+    static constexpr auto name = "ngram_sim_hash_case_insensitive";
 };
 
 struct NameNgramSimHashUTF8
 {
-    static constexpr auto name = "ngramSimHashUTF8";
+    static constexpr auto name = "ngram_sim_hash_utf8";
 };
 
 struct NameNgramSimHashCaseInsensitiveUTF8
 {
-    static constexpr auto name = "ngramSimHashCaseInsensitiveUTF8";
+    static constexpr auto name = "ngram_sim_hash_case_insensitive_utf8";
 };
 
 struct NameWordShingleSimHash
 {
-    static constexpr auto name = "wordShingleSimHash";
+    static constexpr auto name = "word_shingle_sim_hash";
 };
 
 struct NameWordShingleSimHashCaseInsensitive
 {
-    static constexpr auto name = "wordShingleSimHashCaseInsensitive";
+    static constexpr auto name = "word_shingle_sim_hash_case_insensitive";
 };
 
 struct NameWordShingleSimHashUTF8
 {
-    static constexpr auto name = "wordShingleSimHashUTF8";
+    static constexpr auto name = "word_shingle_sim_hash_utf8";
 };
 
 struct NameWordShingleSimHashCaseInsensitiveUTF8
 {
-    static constexpr auto name = "wordShingleSimHashCaseInsensitiveUTF8";
+    static constexpr auto name = "word_shingle_sim_hash_case_insensitive_utf8";
 };
 
 struct NameNgramMinHash
 {
-    static constexpr auto name = "ngramMinHash";
+    static constexpr auto name = "ngram_min_hash";
 };
 
 struct NameNgramMinHashCaseInsensitive
 {
-    static constexpr auto name = "ngramMinHashCaseInsensitive";
+    static constexpr auto name = "ngram_min_hash_case_insensitive";
 };
 
 struct NameNgramMinHashUTF8
 {
-    static constexpr auto name = "ngramMinHashUTF8";
+    static constexpr auto name = "ngram_min_hash_utf8";
 };
 
 struct NameNgramMinHashCaseInsensitiveUTF8
 {
-    static constexpr auto name = "ngramMinHashCaseInsensitiveUTF8";
+    static constexpr auto name = "ngram_min_hash_case_insensitive_utf8";
 };
 
 struct NameWordShingleMinHash
 {
-    static constexpr auto name = "wordShingleMinHash";
+    static constexpr auto name = "word_shingle_min_hash";
 };
 
 struct NameWordShingleMinHashCaseInsensitive
 {
-    static constexpr auto name = "wordShingleMinHashCaseInsensitive";
+    static constexpr auto name = "word_shingle_min_hash_case_insensitive";
 };
 
 struct NameWordShingleMinHashUTF8
 {
-    static constexpr auto name = "wordShingleMinHashUTF8";
+    static constexpr auto name = "word_shingle_min_hash_utf8";
 };
 
 struct NameWordShingleMinHashCaseInsensitiveUTF8
 {
-    static constexpr auto name = "wordShingleMinHashCaseInsensitiveUTF8";
+    static constexpr auto name = "word_shingle_min_hash_case_insensitive_utf8";
 };
 
 struct NameNgramMinHashArg
 {
-    static constexpr auto name = "ngramMinHashArg";
+    static constexpr auto name = "ngram_min_hash_arg";
 };
 
 struct NameNgramMinHashArgCaseInsensitive
 {
-    static constexpr auto name = "ngramMinHashArgCaseInsensitive";
+    static constexpr auto name = "ngram_min_hash_arg_case_insensitive";
 };
 
 struct NameNgramMinHashArgUTF8
 {
-    static constexpr auto name = "ngramMinHashArgUTF8";
+    static constexpr auto name = "ngram_min_hash_arg_utf8";
 };
 
 struct NameNgramMinHashArgCaseInsensitiveUTF8
 {
-    static constexpr auto name = "ngramMinHashArgCaseInsensitiveUTF8";
+    static constexpr auto name = "ngram_min_hash_arg_case_insensitive_utf8";
 };
 
 struct NameWordShingleMinHashArg
 {
-    static constexpr auto name = "wordShingleMinHashArg";
+    static constexpr auto name = "word_shingle_min_hash_arg";
 };
 
 struct NameWordShingleMinHashArgCaseInsensitive
 {
-    static constexpr auto name = "wordShingleMinHashArgCaseInsensitive";
+    static constexpr auto name = "word_shingle_min_hash_arg_case_insensitive";
 };
 
 struct NameWordShingleMinHashArgUTF8
 {
-    static constexpr auto name = "wordShingleMinHashArgUTF8";
+    static constexpr auto name = "word_shingle_min_hash_arg_utf8";
 };
 
 struct NameWordShingleMinHashArgCaseInsensitiveUTF8
 {
-    static constexpr auto name = "wordShingleMinHashArgCaseInsensitiveUTF8";
+    static constexpr auto name = "word_shingle_min_hash_arg_case_insensitive_utf8";
 };
 
 // SimHash

@@ -22,9 +22,9 @@ inline Inequality getInequality(const std::string & func_name)
         inequality = Inequality::Less;
     else if (func_name == "greater")
         inequality = Inequality::Greater;
-    else if (func_name == "lessOrEquals")
+    else if (func_name == "less_or_equals")
         inequality = Inequality::LessOrEquals;
-    else if (func_name == "greaterOrEquals")
+    else if (func_name == "greater_or_equals")
         inequality = Inequality::GreaterOrEquals;
     return inequality;
 }

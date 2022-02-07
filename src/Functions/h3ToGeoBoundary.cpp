@@ -26,7 +26,7 @@ namespace ErrorCodes
 class FunctionH3ToGeoBoundary : public IFunction
 {
 public:
-    static constexpr auto name = "h3ToGeoBoundary";
+    static constexpr auto name = "h3_to_geo_boundary";
     String getName() const override { return name; }
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3ToGeoBoundary>(); }
 

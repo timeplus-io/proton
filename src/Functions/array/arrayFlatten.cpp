@@ -18,7 +18,7 @@ namespace ErrorCodes
 class ArrayFlatten : public IFunction
 {
 public:
-    static constexpr auto name = "arrayFlatten";
+    static constexpr auto name = "array_flatten";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<ArrayFlatten>(); }
 
@@ -124,7 +124,6 @@ private:
 void registerFunctionArrayFlatten(FunctionFactory & factory)
 {
     factory.registerFunction<ArrayFlatten>();
-    factory.registerAlias("flatten", "arrayFlatten", FunctionFactory::CaseInsensitive);
 }
 
 }

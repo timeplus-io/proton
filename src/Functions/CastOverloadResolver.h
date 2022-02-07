@@ -103,16 +103,16 @@ private:
 
 struct CastOverloadName
 {
-    static constexpr auto cast_name = "CAST";
-    static constexpr auto accurate_cast_name = "accurateCast";
-    static constexpr auto accurate_cast_or_null_name = "accurateCastOrNull";
+    static constexpr auto cast_name = "cast";
+    static constexpr auto accurate_cast_name = "accurate_cast";
+    static constexpr auto accurate_cast_or_null_name = "accurate_cast_or_null";
 };
 
 struct CastInternalOverloadName
 {
-    static constexpr auto cast_name = "_CAST";
-    static constexpr auto accurate_cast_name = "accurate_Cast";
-    static constexpr auto accurate_cast_or_null_name = "accurate_CastOrNull";
+    static constexpr auto cast_name = "_cast";
+    static constexpr auto accurate_cast_name = "_accurate_cast";
+    static constexpr auto accurate_cast_or_null_name = "_accurate_cast_or_null";
 };
 
 template <CastType cast_type> using CastOverloadResolver = CastOverloadResolverImpl<cast_type, false, CastOverloadName, CastName>;

@@ -98,7 +98,7 @@ bool KeyDescription::moduloToModuloLegacyRecursive(ASTPtr node_expr)
     {
         if (function_expr->name == "modulo")
         {
-            function_expr->name = "moduloLegacy";
+            function_expr->name = "modulo_legacy";
             modulo_in_ast = true;
         }
         if (function_expr->arguments)

@@ -6,7 +6,7 @@
 namespace DB
 {
 
-struct NameFirstSignificantSubdomainCustom { static constexpr auto name = "firstSignificantSubdomainCustom"; };
+struct NameFirstSignificantSubdomainCustom { static constexpr auto name = "first_significant_subdomain_custom"; };
 
 using FunctionFirstSignificantSubdomainCustom = FunctionCutToFirstSignificantSubdomainCustomImpl<ExtractFirstSignificantSubdomain<true>, NameFirstSignificantSubdomainCustom>;
 

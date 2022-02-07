@@ -32,7 +32,7 @@ namespace
 class FunctionH3ToGeo : public IFunction
 {
 public:
-    static constexpr auto name = "h3ToGeo";
+    static constexpr auto name = "h3_to_geo";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3ToGeo>(); }
 

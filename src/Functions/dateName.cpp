@@ -50,7 +50,7 @@ using DateTypeToTimeType = typename DataTypeToTimeTypeMap<DataType>::TimeType;
 class FunctionDateNameImpl : public IFunction
 {
 public:
-    static constexpr auto name = "dateName";
+    static constexpr auto name = "date_name";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionDateNameImpl>(); }
 

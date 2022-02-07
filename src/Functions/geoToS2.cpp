@@ -31,7 +31,7 @@ namespace
 class FunctionGeoToS2 : public IFunction
 {
 public:
-    static constexpr auto name = "geoToS2";
+    static constexpr auto name = "geo_to_s2";
 
     static FunctionPtr create(ContextPtr)
     {

@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchFirstIndex
 {
-    static constexpr auto name = "multiSearchFirstIndex";
+    static constexpr auto name = "multi_search_first_index";
 };
 
 using FunctionMultiSearchFirstIndex

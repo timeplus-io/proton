@@ -33,7 +33,7 @@ namespace ErrorCodes
 class FunctionArraySlice : public IFunction
 {
 public:
-    static constexpr auto name = "arraySlice";
+    static constexpr auto name = "array_slice";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArraySlice>(); }
 
     String getName() const override { return name; }

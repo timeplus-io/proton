@@ -28,7 +28,7 @@ namespace
 class FunctionH3ExactEdgeLengthRads : public IFunction
 {
 public:
-    static constexpr auto name = "h3ExactEdgeLengthRads";
+    static constexpr auto name = "h3_exact_edge_length_rads";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3ExactEdgeLengthRads>(); }
 

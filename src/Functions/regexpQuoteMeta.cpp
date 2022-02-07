@@ -19,7 +19,7 @@ namespace
 class FunctionRegexpQuoteMeta : public IFunction
 {
 public:
-    static constexpr auto name = "regexpQuoteMeta";
+    static constexpr auto name = "regexp_quote_meta";
 
     static FunctionPtr create(ContextPtr)
     {

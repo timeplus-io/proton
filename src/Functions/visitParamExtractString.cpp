@@ -17,15 +17,11 @@ struct ExtractString
     }
 };
 
-struct NameVisitParamExtractString { static constexpr auto name = "visitParamExtractString"; };
-using FunctionVisitParamExtractString = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractString>, NameVisitParamExtractString>;
-
-struct NameSimpleJSONExtractString { static constexpr auto name = "simpleJSONExtractString"; };
+struct NameSimpleJSONExtractString { static constexpr auto name = "simple_json_extract_string"; };
 using FunctionSimpleJSONExtractString = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractString>, NameSimpleJSONExtractString>;
 
 void registerFunctionVisitParamExtractString(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionVisitParamExtractString>();
     factory.registerFunction<FunctionSimpleJSONExtractString>();
 }
 

@@ -30,7 +30,7 @@ bool extractIdentifiers(const ASTFunction & func, std::unordered_set<ASTPtr *> &
             ///     ┌─number─┬─any(arrayJoin(array(array(), array())))─┐
             ///     │      0 │ []                                      │
             ///     └────────┴─────────────────────────────────────────┘
-            if (arg_func->name == "arrayJoin")
+            if (arg_func->name == "array_join")
                 return false;
 
             if (arg_func->name == "lambda")

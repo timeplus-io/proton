@@ -10,7 +10,7 @@ namespace
 
 struct NameReplaceRegexpAll
 {
-    static constexpr auto name = "replaceRegexpAll";
+    static constexpr auto name = "replace_regex";
 };
 
 using FunctionReplaceRegexpAll = FunctionStringReplace<ReplaceRegexpImpl<false>, NameReplaceRegexpAll>;

@@ -48,7 +48,7 @@ static inline llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * arg, bo
 #endif
 };
 
-struct NameBitSwapLastTwo { static constexpr auto name = "__bitSwapLastTwo"; };
+struct NameBitSwapLastTwo { static constexpr auto name = "__bit_swap_last_two"; };
 using FunctionBitSwapLastTwo = FunctionUnaryArithmetic<BitSwapLastTwoImpl, NameBitSwapLastTwo, true>;
 
 }

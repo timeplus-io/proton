@@ -28,10 +28,10 @@ struct CutToFirstSignificantSubdomainCustom
     }
 };
 
-struct NameCutToFirstSignificantSubdomainCustom { static constexpr auto name = "cutToFirstSignificantSubdomainCustom"; };
+struct NameCutToFirstSignificantSubdomainCustom { static constexpr auto name = "cut_to_first_significant_subdomain_custom"; };
 using FunctionCutToFirstSignificantSubdomainCustom = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<true>, NameCutToFirstSignificantSubdomainCustom>;
 
-struct NameCutToFirstSignificantSubdomainCustomWithWWW { static constexpr auto name = "cutToFirstSignificantSubdomainCustomWithWWW"; };
+struct NameCutToFirstSignificantSubdomainCustomWithWWW { static constexpr auto name = "cut_to_first_significant_subdomain_custom_with_www"; };
 using FunctionCutToFirstSignificantSubdomainCustomWithWWW = FunctionCutToFirstSignificantSubdomainCustomImpl<CutToFirstSignificantSubdomainCustom<false>, NameCutToFirstSignificantSubdomainCustomWithWWW>;
 
 void registerFunctionCutToFirstSignificantSubdomainCustom(FunctionFactory & factory)

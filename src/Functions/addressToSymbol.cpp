@@ -27,7 +27,7 @@ namespace
 class FunctionAddressToSymbol : public IFunction
 {
 public:
-    static constexpr auto name = "addressToSymbol";
+    static constexpr auto name = "address_to_symbol";
     static FunctionPtr create(ContextPtr context)
     {
         context->checkAccess(AccessType::addressToSymbol);

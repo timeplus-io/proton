@@ -32,7 +32,7 @@ bool parseCurrentUserTag(IParser::Pos & pos, Expected & expected)
 {
     return IParserBase::wrapParseImpl(pos, [&]
     {
-        if (!ParserKeyword{"CURRENT_USER"}.ignore(pos, expected) && !ParserKeyword{"currentUser"}.ignore(pos, expected))
+        if (!ParserKeyword{"CURRENT_USER"}.ignore(pos, expected) && !ParserKeyword{"current_user"}.ignore(pos, expected))
             return false;
 
         if (ParserToken{TokenType::OpeningRoundBracket}.ignore(pos, expected))

@@ -47,7 +47,7 @@ namespace ErrorCodes
 class FunctionIPv6NumToString : public IFunction
 {
 public:
-    static constexpr auto name = "IPv6NumToString";
+    static constexpr auto name = "ipv6_num_to_string";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv6NumToString>(); }
 
     String getName() const override { return name; }
@@ -118,7 +118,7 @@ public:
 class FunctionCutIPv6 : public IFunction
 {
 public:
-    static constexpr auto name = "cutIPv6";
+    static constexpr auto name = "cut_ipv6";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionCutIPv6>(); }
 
     String getName() const override { return name; }
@@ -243,7 +243,7 @@ private:
 class FunctionIPv6StringToNum : public IFunction
 {
 public:
-    static constexpr auto name = "IPv6StringToNum";
+    static constexpr auto name = "ipv6_string_to_num";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv6StringToNum>(); }
 
     static inline bool tryParseIPv4(const char * pos)
@@ -385,7 +385,7 @@ public:
 class FunctionIPv4StringToNum : public IFunction
 {
 public:
-    static constexpr auto name = "IPv4StringToNum";
+    static constexpr auto name = "ipv4_string_to_num";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv4StringToNum>(); }
 
     String getName() const override
@@ -450,7 +450,7 @@ public:
 class FunctionIPv4ToIPv6 : public IFunction
 {
 public:
-    static constexpr auto name = "IPv4ToIPv6";
+    static constexpr auto name = "ipv4_to_ipv6";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv4ToIPv6>(); }
 
     String getName() const override { return name; }
@@ -506,7 +506,7 @@ private:
 class FunctionToIPv4 : public FunctionIPv4StringToNum
 {
 public:
-    static constexpr auto name = "toIPv4";
+    static constexpr auto name = "to_ipv4";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToIPv4>(); }
 
     String getName() const override
@@ -531,7 +531,7 @@ public:
 class FunctionToIPv6 : public FunctionIPv6StringToNum
 {
 public:
-    static constexpr auto name = "toIPv6";
+    static constexpr auto name = "to_ipv6";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToIPv6>(); }
 
     String getName() const override { return name; }
@@ -551,7 +551,7 @@ public:
 class FunctionMACNumToString : public IFunction
 {
 public:
-    static constexpr auto name = "MACNumToString";
+    static constexpr auto name = "mac_num_to_string";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMACNumToString>(); }
 
     String getName() const override
@@ -653,7 +653,7 @@ struct ParseMACImpl
                | (UInt64(unhex(pos[16])));
     }
 
-    static constexpr auto name = "MACStringToNum";
+    static constexpr auto name = "mac_string_to_num";
 };
 
 struct ParseOUIImpl
@@ -674,7 +674,7 @@ struct ParseOUIImpl
                | (UInt64(unhex(pos[7])));
     }
 
-    static constexpr auto name = "MACStringToOUI";
+    static constexpr auto name = "mac_string_to_oui";
 };
 
 
@@ -778,7 +778,7 @@ private:
 #endif
 
 public:
-    static constexpr auto name = "IPv6CIDRToRange";
+    static constexpr auto name = "ipv6_cidr_to_range";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv6CIDRToRange>(); }
 
     String getName() const override { return name; }
@@ -893,8 +893,8 @@ private:
     }
 
 public:
-    static constexpr auto name = "IPv4CIDRToRange";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv4CIDRToRange>(); }
+    static constexpr auto name = "ipv4_cidr_to_range";
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIPv5CIDRToRange>(); }
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
@@ -974,7 +974,7 @@ public:
 class FunctionIsIPv4String : public FunctionIPv4StringToNum
 {
 public:
-    static constexpr auto name = "isIPv4String";
+    static constexpr auto name = "is_ipv4_string";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIsIPv4String>(); }
 
@@ -1022,7 +1022,7 @@ public:
 class FunctionIsIPv6String : public FunctionIPv6StringToNum
 {
 public:
-    static constexpr auto name = "isIPv6String";
+    static constexpr auto name = "is_ipv6_string";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIsIPv6String>(); }
 
@@ -1069,8 +1069,8 @@ public:
     }
 };
 
-struct NameFunctionIPv4NumToString { static constexpr auto name = "IPv4NumToString"; };
-struct NameFunctionIPv4NumToStringClassC { static constexpr auto name = "IPv4NumToStringClassC"; };
+struct NameFunctionIPv4NumToString { static constexpr auto name = "ipv4_num_to_string"; };
+struct NameFunctionIPv4NumToStringClassC { static constexpr auto name = "ipv4_num_to_string_class_c"; };
 
 void registerFunctionsCoding(FunctionFactory & factory)
 {
@@ -1092,12 +1092,6 @@ void registerFunctionsCoding(FunctionFactory & factory)
     factory.registerFunction<FunctionIPv4StringToNum>();
     factory.registerFunction<FunctionIPv6NumToString>();
     factory.registerFunction<FunctionIPv6StringToNum>();
-
-    /// MysQL compatibility aliases:
-    factory.registerAlias("INET_ATON", FunctionIPv4StringToNum::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("INET6_NTOA", FunctionIPv6NumToString::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("INET6_ATON", FunctionIPv6StringToNum::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("INET_NTOA", NameFunctionIPv4NumToString::name, FunctionFactory::CaseInsensitive);
 }
 
 }

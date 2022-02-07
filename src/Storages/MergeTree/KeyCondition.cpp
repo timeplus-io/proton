@@ -115,7 +115,7 @@ static String firstStringThatIsGreaterThanAllStringsWithPrefix(const String & pr
 const KeyCondition::AtomMap KeyCondition::atom_map
 {
     {
-        "notEquals",
+        "not_equals",
         [] (RPNElement & out, const Field & value)
         {
             out.function = RPNElement::FUNCTION_NOT_IN_RANGE;
@@ -151,7 +151,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "lessOrEquals",
+        "less_or_equals",
         [] (RPNElement & out, const Field & value)
         {
             out.function = RPNElement::FUNCTION_IN_RANGE;
@@ -160,7 +160,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "greaterOrEquals",
+        "greater_or_equals",
         [] (RPNElement & out, const Field & value)
         {
             out.function = RPNElement::FUNCTION_IN_RANGE;
@@ -177,7 +177,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "notIn",
+        "not_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_NOT_IN_SET;
@@ -185,7 +185,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "globalIn",
+        "global_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IN_SET;
@@ -193,7 +193,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "globalNotIn",
+        "global_not_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_NOT_IN_SET;
@@ -201,7 +201,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "nullIn",
+        "null_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IN_SET;
@@ -209,7 +209,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "notNullIn",
+        "not_null_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_NOT_IN_SET;
@@ -217,7 +217,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "globalNullIn",
+        "global_null_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IN_SET;
@@ -225,7 +225,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "globalNotNullIn",
+        "global_not_null_in",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_NOT_IN_SET;
@@ -245,7 +245,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "notEmpty",
+        "not_empty",
         [] (RPNElement & out, const Field & value)
         {
             if (value.getType() != Field::Types::String)
@@ -278,7 +278,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "startsWith",
+        "starts_with",
         [] (RPNElement & out, const Field & value)
         {
             if (value.getType() != Field::Types::String)
@@ -299,7 +299,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "isNotNull",
+        "is_not_null",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IS_NOT_NULL;
@@ -309,7 +309,7 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         }
     },
     {
-        "isNull",
+        "is_null",
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IS_NULL;
@@ -323,32 +323,32 @@ const KeyCondition::AtomMap KeyCondition::atom_map
 
 
 static const std::map<std::string, std::string> inverse_relations = {
-        {"equals", "notEquals"},
-        {"notEquals", "equals"},
-        {"less", "greaterOrEquals"},
-        {"greaterOrEquals", "less"},
-        {"greater", "lessOrEquals"},
-        {"lessOrEquals", "greater"},
-        {"in", "notIn"},
-        {"notIn", "in"},
-        {"globalIn", "globalNotIn"},
-        {"globalNotIn", "globalIn"},
-        {"nullIn", "notNullIn"},
-        {"notNullIn", "nullIn"},
-        {"globalNullIn", "globalNotNullIn"},
-        {"globalNullNotIn", "globalNullIn"},
-        {"isNull", "isNotNull"},
-        {"isNotNull", "isNull"},
-        {"like", "notLike"},
-        {"notLike", "like"},
-        {"empty", "notEmpty"},
-        {"notEmpty", "empty"},
+        {"equals", "not_equals"},
+        {"not_equals", "equals"},
+        {"less", "greater_or_equals"},
+        {"greater_or_equals", "less"},
+        {"greater", "less_or_equals"},
+        {"less_or_equals", "greater"},
+        {"in", "not_in"},
+        {"not_in", "in"},
+        {"global_in", "global_not_in"},
+        {"global_not_in", "global_in"},
+        {"null_in", "not_null_in"},
+        {"not_null_in", "null_in"},
+        {"global_null_in", "global_not_null_in"},
+        {"global_null_not_in", "global_null_in"},
+        {"is_null", "is_not_null"},
+        {"is_not_null", "is_null"},
+        {"like", "not_like"},
+        {"not_like", "like"},
+        {"empty", "not_empty"},
+        {"not_empty", "empty"},
 };
 
 
 bool isLogicalOperator(const String & func_name)
 {
-    return (func_name == "and" || func_name == "or" || func_name == "not" || func_name == "indexHint");
+    return (func_name == "and" || func_name == "or" || func_name == "not" || func_name == "index_hint");
 }
 
 /// The node can be one of:
@@ -370,7 +370,7 @@ ASTPtr cloneASTWithInversionPushDown(const ASTPtr node, const bool need_inversio
         const auto result_node = makeASTFunction(func->name);
 
         /// indexHint() is a special case - logical NOOP function
-        if (result_node->name != "indexHint" && need_inversion)
+        if (result_node->name != "index_hint" && need_inversion)
         {
             result_node->name = (result_node->name == "and") ? "or" : "and";
         }
@@ -1193,8 +1193,8 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
 
             /// If we use this key condition to prune partitions by single value, we cannot relax conditions for NOT.
             if (single_point
-                && (func_name == "notLike" || func_name == "notIn" || func_name == "globalNotIn" || func_name == "notNullIn"
-                    || func_name == "globalNotNullIn" || func_name == "notEquals" || func_name == "notEmpty"))
+                && (func_name == "not_like" || func_name == "not_in" || func_name == "global_not_in" || func_name == "not_null_in"
+                    || func_name == "global_not_null_in" || func_name == "not_equals" || func_name == "not_empty"))
                 strict_condition = true;
 
             if (functionIsInOrGlobalInOperator(func_name))
@@ -1266,14 +1266,14 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
                     func_name = "greater";
                 else if (func_name == "greater")
                     func_name = "less";
-                else if (func_name == "greaterOrEquals")
-                    func_name = "lessOrEquals";
-                else if (func_name == "lessOrEquals")
-                    func_name = "greaterOrEquals";
-                else if (func_name == "in" || func_name == "notIn" ||
-                         func_name == "like" || func_name == "notLike" ||
-                         func_name == "ilike" || func_name == "notIlike" ||
-                         func_name == "startsWith")
+                else if (func_name == "greater_or_equals")
+                    func_name = "less_or_equals";
+                else if (func_name == "less_or_equals")
+                    func_name = "greater_or_equals";
+                else if (func_name == "in" || func_name == "not_in" ||
+                         func_name == "like" || func_name == "not_like" ||
+                         func_name == "ilike" || func_name == "not_ilike" ||
+                         func_name == "starts_with")
                 {
                     /// "const IN data_column" doesn't make sense (unlike "data_column IN const")
                     return false;
@@ -1341,9 +1341,9 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
             if (is_constant_transformed)
             {
                 if (func_name == "less")
-                    func_name = "lessOrEquals";
+                    func_name = "less_or_equals";
                 else if (func_name == "greater")
-                    func_name = "greaterOrEquals";
+                    func_name = "greater_or_equals";
             }
 
         }
@@ -1396,7 +1396,7 @@ bool KeyCondition::tryParseLogicalOperatorFromAST(const ASTFunction * func, RPNE
     }
     else
     {
-        if (func->name == "and" || func->name == "indexHint")
+        if (func->name == "and" || func->name == "index_hint")
             out.function = RPNElement::FUNCTION_AND;
         else if (func->name == "or")
             out.function = RPNElement::FUNCTION_OR;

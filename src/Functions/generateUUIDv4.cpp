@@ -14,7 +14,7 @@ DECLARE_SEVERAL_IMPLEMENTATIONS(
 class FunctionGenerateUUIDv4 : public IFunction
 {
 public:
-    static constexpr auto name = "generateUUIDv4";
+    static constexpr auto name = "generate_uuidv4";
 
     String getName() const override
     {

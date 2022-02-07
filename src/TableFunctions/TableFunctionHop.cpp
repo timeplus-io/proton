@@ -79,7 +79,7 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     node->arguments->children.swap(args);
 
     /// Calculate column description
-    init(context, std::move(streaming_func_ast), "__HOP(", std::move(timestamp_expr_ast));
+    init(context, std::move(streaming_func_ast), "__hop(", std::move(timestamp_expr_ast));
 }
 
 DataTypePtr TableFunctionHop::getElementType(const DataTypeTuple * tuple) const

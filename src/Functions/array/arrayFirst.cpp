@@ -123,11 +123,11 @@ struct ArrayFirstLastImpl
     }
 };
 
-struct NameArrayFirst { static constexpr auto name = "arrayFirst"; };
+struct NameArrayFirst { static constexpr auto name = "array_first"; };
 using ArrayFirstImpl = ArrayFirstLastImpl<ArrayFirstLastStrategy::First>;
 using FunctionArrayFirst = FunctionArrayMapped<ArrayFirstImpl, NameArrayFirst>;
 
-struct NameArrayLast { static constexpr auto name = "arrayLast"; };
+struct NameArrayLast { static constexpr auto name = "array_last"; };
 using ArrayLastImpl = ArrayFirstLastImpl<ArrayFirstLastStrategy::Last>;
 using FunctionArrayLast = FunctionArrayMapped<ArrayLastImpl, NameArrayLast>;
 

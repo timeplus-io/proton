@@ -320,8 +320,8 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
         {
             const char * operators[] =
             {
-                "isNull",          " IS NULL",
-                "isNotNull",       " IS NOT NULL",
+                "is_null",          " IS NULL",
+                "is_not_null",       " IS NOT NULL",
                 nullptr
             };
 
@@ -392,20 +392,20 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 "modulo",          " % ",
                 "plus",            " + ",
                 "minus",           " - ",
-                "notEquals",       " != ",
-                "lessOrEquals",    " <= ",
-                "greaterOrEquals", " >= ",
+                "not_equals",       " != ",
+                "less_or_equals",    " <= ",
+                "greater_or_equals", " >= ",
                 "less",            " < ",
                 "greater",         " > ",
                 "equals",          " = ",
                 "like",            " LIKE ",
                 "ilike",           " ILIKE ",
-                "notLike",         " NOT LIKE ",
-                "notILike",        " NOT ILIKE ",
+                "not_like",         " NOT LIKE ",
+                "not_ilike",        " NOT ILIKE ",
                 "in",              " IN ",
-                "notIn",           " NOT IN ",
-                "globalIn",        " GLOBAL IN ",
-                "globalNotIn",     " GLOBAL NOT IN ",
+                "not_in",           " NOT IN ",
+                "global_in",        " GLOBAL IN ",
+                "global_not_in",     " GLOBAL NOT IN ",
                 nullptr
             };
 
@@ -419,13 +419,13 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                     settings.ostr << (settings.hilite ? hilite_operator : "") << func[1] << (settings.hilite ? hilite_none : "");
 
                     bool special_hilite = settings.hilite
-                        && (name == "like" || name == "notLike" || name == "ilike" || name == "notILike")
+                        && (name == "like" || name == "not_like" || name == "ilike" || name == "not_ilike")
                         && highlightStringLiteralWithMetacharacters(arguments->children[1], settings, "%_");
 
                     /// Format x IN 1 as x IN (1): put parens around rhs even if there is a single element in set.
                     const auto * second_arg_func = arguments->children[1]->as<ASTFunction>();
                     const auto * second_arg_literal = arguments->children[1]->as<ASTLiteral>();
-                    bool extra_parents_around_in_rhs = (name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn")
+                    bool extra_parents_around_in_rhs = (name == "in" || name == "not_in" || name == "global_in" || name == "global_not_in")
                         && !second_arg_func
                         && !(second_arg_literal
                              && (second_arg_literal->value.getType() == Field::Types::Tuple
@@ -448,7 +448,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 }
             }
 
-            if (!written && name == "arrayElement"sv)
+            if (!written && name == "array_element"sv)
             {
                 if (frame.need_parens)
                     settings.ostr << '(';
@@ -463,7 +463,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                     settings.ostr << ')';
             }
 
-            if (!written && name == "tupleElement"sv)
+            if (!written && name == "tuple_element"sv)
             {
                 // fuzzer sometimes may insert tupleElement() created from ASTLiteral:
                 //
@@ -632,8 +632,8 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
     if (arguments)
     {
         bool special_hilite_regexp = settings.hilite
-            && (name == "match" || name == "extract" || name == "extractAll" || name == "replaceRegexpOne"
-                || name == "replaceRegexpAll");
+            && (name == "match" || name == "extract" || name == "extract_all" || name == "replace_regexp_one"
+                || name == "replace_regex");
 
         for (size_t i = 0, size = arguments->children.size(); i < size; ++i)
         {

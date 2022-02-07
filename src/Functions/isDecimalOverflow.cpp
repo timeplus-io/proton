@@ -26,7 +26,7 @@ namespace
 class FunctionIsDecimalOverflow : public IFunction
 {
 public:
-    static constexpr auto name = "isDecimalOverflow";
+    static constexpr auto name = "is_decimal_overflow";
 
     static FunctionPtr create(ContextPtr)
     {

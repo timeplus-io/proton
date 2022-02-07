@@ -76,7 +76,7 @@ struct FunctionDetectTonalityImpl
 
 struct NameDetectTonality
 {
-    static constexpr auto name = "detectTonality";
+    static constexpr auto name = "detect_tonality";
 };
 
 using FunctionDetectTonality = FunctionTextClassificationFloat<FunctionDetectTonalityImpl, NameDetectTonality>;

@@ -29,7 +29,7 @@ namespace
 class FunctionTupleToNameValuePairs : public IFunction
 {
 public:
-    static constexpr auto name = "tupleToNameValuePairs";
+    static constexpr auto name = "tuple_to_name_value_pairs";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionTupleToNameValuePairs>();

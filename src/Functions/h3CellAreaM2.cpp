@@ -28,7 +28,7 @@ namespace
 class FunctionH3CellAreaM2 final : public IFunction
 {
 public:
-    static constexpr auto name = "h3CellAreaM2";
+    static constexpr auto name = "h3_cell_area_m2";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3CellAreaM2>(); }
 

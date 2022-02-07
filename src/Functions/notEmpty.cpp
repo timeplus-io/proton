@@ -11,7 +11,7 @@ namespace
 
 struct NameNotEmpty
 {
-    static constexpr auto name = "notEmpty";
+    static constexpr auto name = "not_empty";
 };
 using FunctionNotEmpty = FunctionStringOrArrayToT<EmptyImpl<true>, NameNotEmpty, UInt8, false>;
 

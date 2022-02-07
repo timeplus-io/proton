@@ -297,7 +297,7 @@ private:
 
     void visitDDL(ASTFunction & function, ASTPtr & node) const
     {
-        if (function.name == "currentDatabase")
+        if (function.name == "current_database")
         {
             node = std::make_shared<ASTLiteral>(database_name);
             return;

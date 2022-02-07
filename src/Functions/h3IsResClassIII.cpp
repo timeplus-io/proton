@@ -26,7 +26,7 @@ namespace
 class FunctionH3IsResClassIII : public IFunction
 {
 public:
-    static constexpr auto name = "h3IsResClassIII";
+    static constexpr auto name = "h3_is_res_class_iii";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3IsResClassIII>(); }
 

@@ -17,7 +17,7 @@ namespace
 class FunctionAssumeNotNull : public IFunction
 {
 public:
-    static constexpr auto name = "assumeNotNull";
+    static constexpr auto name = "assume_not_null";
 
     static FunctionPtr create(ContextPtr)
     {

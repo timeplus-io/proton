@@ -363,19 +363,19 @@ struct ArrayAggregateImpl
     }
 };
 
-struct NameArrayMin { static constexpr auto name = "arrayMin"; };
+struct NameArrayMin { static constexpr auto name = "array_min"; };
 using FunctionArrayMin = FunctionArrayMapped<ArrayAggregateImpl<AggregateOperation::min>, NameArrayMin>;
 
-struct NameArrayMax { static constexpr auto name = "arrayMax"; };
+struct NameArrayMax { static constexpr auto name = "array_max"; };
 using FunctionArrayMax = FunctionArrayMapped<ArrayAggregateImpl<AggregateOperation::max>, NameArrayMax>;
 
-struct NameArraySum { static constexpr auto name = "arraySum"; };
+struct NameArraySum { static constexpr auto name = "array_sum"; };
 using FunctionArraySum = FunctionArrayMapped<ArrayAggregateImpl<AggregateOperation::sum>, NameArraySum>;
 
-struct NameArrayAverage { static constexpr auto name = "arrayAvg"; };
+struct NameArrayAverage { static constexpr auto name = "array_avg"; };
 using FunctionArrayAverage = FunctionArrayMapped<ArrayAggregateImpl<AggregateOperation::average>, NameArrayAverage>;
 
-struct NameArrayProduct { static constexpr auto name = "arrayProduct"; };
+struct NameArrayProduct { static constexpr auto name = "array_product"; };
 using FunctionArrayProduct = FunctionArrayMapped<ArrayAggregateImpl<AggregateOperation::product>, NameArrayProduct>;
 
 void registerFunctionArrayAggregation(FunctionFactory & factory)

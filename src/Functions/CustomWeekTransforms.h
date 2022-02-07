@@ -28,7 +28,7 @@ namespace ErrorCodes
 
 struct ToYearWeekImpl
 {
-    static constexpr auto name = "toYearWeek";
+    static constexpr auto name = "to_year_week";
 
     static inline UInt32 execute(Int64 t, UInt8 week_mode, const DateLUTImpl & time_zone)
     {
@@ -58,7 +58,7 @@ struct ToYearWeekImpl
 
 struct ToStartOfWeekImpl
 {
-    static constexpr auto name = "toStartOfWeek";
+    static constexpr auto name = "to_start_of_week";
 
     static inline UInt16 execute(Int64 t, UInt8 week_mode, const DateLUTImpl & time_zone)
     {
@@ -84,7 +84,7 @@ struct ToStartOfWeekImpl
 
 struct ToWeekImpl
 {
-    static constexpr auto name = "toWeek";
+    static constexpr auto name = "to_week";
 
     static inline UInt8 execute(Int64 t, UInt8 week_mode, const DateLUTImpl & time_zone)
     {

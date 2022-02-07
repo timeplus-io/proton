@@ -29,7 +29,7 @@ struct RoundAgeImpl
 #endif
 };
 
-struct NameRoundAge { static constexpr auto name = "roundAge"; };
+struct NameRoundAge { static constexpr auto name = "round_age"; };
 using FunctionRoundAge = FunctionUnaryArithmetic<RoundAgeImpl, NameRoundAge, false>;
 
 }

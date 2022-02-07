@@ -133,7 +133,7 @@ private:
 class FunctionDictHas final : public IFunction
 {
 public:
-    static constexpr auto name = "dictHas";
+    static constexpr auto name = "dict_has";
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -678,23 +678,23 @@ private:
 template<typename DataType, typename Name>
 using FunctionDictGet = FunctionDictGetImpl<DataType, Name, DictionaryGetFunctionType::get>;
 
-struct NameDictGetUInt8 { static constexpr auto name = "dictGetUInt8"; };
-struct NameDictGetUInt16 { static constexpr auto name = "dictGetUInt16"; };
-struct NameDictGetUInt32 { static constexpr auto name = "dictGetUInt32"; };
-struct NameDictGetUInt64 { static constexpr auto name = "dictGetUInt64"; };
-struct NameDictGetInt8 { static constexpr auto name = "dictGetInt8"; };
-struct NameDictGetInt16 { static constexpr auto name = "dictGetInt16"; };
-struct NameDictGetInt32 { static constexpr auto name = "dictGetInt32"; };
-struct NameDictGetInt64 { static constexpr auto name = "dictGetInt64"; };
-struct NameDictGetFloat32 { static constexpr auto name = "dictGetFloat32"; };
-struct NameDictGetFloat64 { static constexpr auto name = "dictGetFloat64"; };
-struct NameDictGetDate { static constexpr auto name = "dictGetDate"; };
-struct NameDictGetDateTime { static constexpr auto name = "dictGetDateTime"; };
-struct NameDictGetUUID { static constexpr auto name = "dictGetUUID"; };
-struct NameDictGetDecimal32 { static constexpr auto name = "dictGetDecimal32"; };
-struct NameDictGetDecimal64 { static constexpr auto name = "dictGetDecimal64"; };
-struct NameDictGetDecimal128 { static constexpr auto name = "dictGetDecimal128"; };
-struct NameDictGetString { static constexpr auto name = "dictGetString"; };
+struct NameDictGetUInt8 { static constexpr auto name = "dict_get_uint8"; };
+struct NameDictGetUInt16 { static constexpr auto name = "dict_get_uint16"; };
+struct NameDictGetUInt32 { static constexpr auto name = "dict_get_uint32"; };
+struct NameDictGetUInt64 { static constexpr auto name = "dict_get_uint64"; };
+struct NameDictGetInt8 { static constexpr auto name = "dict_get_int8"; };
+struct NameDictGetInt16 { static constexpr auto name = "dict_get_int16"; };
+struct NameDictGetInt32 { static constexpr auto name = "dict_get_int32"; };
+struct NameDictGetInt64 { static constexpr auto name = "dict_get_int64"; };
+struct NameDictGetFloat32 { static constexpr auto name = "dict_get_float32"; };
+struct NameDictGetFloat64 { static constexpr auto name = "dict_get_float64"; };
+struct NameDictGetDate { static constexpr auto name = "dict_get_date"; };
+struct NameDictGetDateTime { static constexpr auto name = "dict_get_datetime"; };
+struct NameDictGetUUID { static constexpr auto name = "dict_get_uuid"; };
+struct NameDictGetDecimal32 { static constexpr auto name = "dict_get_decimal32"; };
+struct NameDictGetDecimal64 { static constexpr auto name = "dict_get_decimal64"; };
+struct NameDictGetDecimal128 { static constexpr auto name = "dict_get_decimal128"; };
+struct NameDictGetString { static constexpr auto name = "dict_get_string"; };
 
 using FunctionDictGetUInt8 = FunctionDictGet<DataTypeUInt8, NameDictGetUInt8>;
 using FunctionDictGetUInt16 = FunctionDictGet<DataTypeUInt16, NameDictGetUInt16>;
@@ -717,23 +717,23 @@ using FunctionDictGetString = FunctionDictGet<DataTypeString, NameDictGetString>
 template<typename DataType, typename Name>
 using FunctionDictGetOrDefault = FunctionDictGetImpl<DataType, Name, DictionaryGetFunctionType::getOrDefault>;
 
-struct NameDictGetUInt8OrDefault { static constexpr auto name = "dictGetUInt8OrDefault"; };
-struct NameDictGetUInt16OrDefault { static constexpr auto name = "dictGetUInt16OrDefault"; };
-struct NameDictGetUInt32OrDefault { static constexpr auto name = "dictGetUInt32OrDefault"; };
-struct NameDictGetUInt64OrDefault { static constexpr auto name = "dictGetUInt64OrDefault"; };
-struct NameDictGetInt8OrDefault { static constexpr auto name = "dictGetInt8OrDefault"; };
-struct NameDictGetInt16OrDefault { static constexpr auto name = "dictGetInt16OrDefault"; };
-struct NameDictGetInt32OrDefault { static constexpr auto name = "dictGetInt32OrDefault"; };
-struct NameDictGetInt64OrDefault { static constexpr auto name = "dictGetInt64OrDefault"; };
-struct NameDictGetFloat32OrDefault { static constexpr auto name = "dictGetFloat32OrDefault"; };
-struct NameDictGetFloat64OrDefault { static constexpr auto name = "dictGetFloat64OrDefault"; };
-struct NameDictGetDateOrDefault { static constexpr auto name = "dictGetDateOrDefault"; };
-struct NameDictGetDateTimeOrDefault { static constexpr auto name = "dictGetDateTimeOrDefault"; };
-struct NameDictGetUUIDOrDefault { static constexpr auto name = "dictGetUUIDOrDefault"; };
-struct NameDictGetDecimal32OrDefault { static constexpr auto name = "dictGetDecimal32OrDefault"; };
-struct NameDictGetDecimal64OrDefault { static constexpr auto name = "dictGetDecimal64OrDefault"; };
-struct NameDictGetDecimal128OrDefault { static constexpr auto name = "dictGetDecimal128OrDefault"; };
-struct NameDictGetStringOrDefault { static constexpr auto name = "dictGetStringOrDefault"; };
+struct NameDictGetUInt8OrDefault { static constexpr auto name = "dict_get_uint8_or_default"; };
+struct NameDictGetUInt16OrDefault { static constexpr auto name = "dict_get_uint16_or_default"; };
+struct NameDictGetUInt32OrDefault { static constexpr auto name = "dict_get_uint32_or_default"; };
+struct NameDictGetUInt64OrDefault { static constexpr auto name = "dict_get_uint64_or_default"; };
+struct NameDictGetInt8OrDefault { static constexpr auto name = "dict_get_int8_or_default"; };
+struct NameDictGetInt16OrDefault { static constexpr auto name = "dict_get_int16_or_default"; };
+struct NameDictGetInt32OrDefault { static constexpr auto name = "dict_get_int32_or_default"; };
+struct NameDictGetInt64OrDefault { static constexpr auto name = "dict_get_int64_or_default"; };
+struct NameDictGetFloat32OrDefault { static constexpr auto name = "dict_get_float32_or_default"; };
+struct NameDictGetFloat64OrDefault { static constexpr auto name = "dict_get_float64_or_default"; };
+struct NameDictGetDateOrDefault { static constexpr auto name = "dict_get_date_or_default"; };
+struct NameDictGetDateTimeOrDefault { static constexpr auto name = "dict_get_datetime_or_default"; };
+struct NameDictGetUUIDOrDefault { static constexpr auto name = "dict_get_uuid_or_default"; };
+struct NameDictGetDecimal32OrDefault { static constexpr auto name = "dict_get_decimal32_or_default"; };
+struct NameDictGetDecimal64OrDefault { static constexpr auto name = "dict_get_decimal64_or_default"; };
+struct NameDictGetDecimal128OrDefault { static constexpr auto name = "dict_get_decimal128_or_default"; };
+struct NameDictGetStringOrDefault { static constexpr auto name = "dict_get_string_or_default"; };
 
 using FunctionDictGetUInt8OrDefault = FunctionDictGetOrDefault<DataTypeUInt8, NameDictGetUInt8OrDefault>;
 using FunctionDictGetUInt16OrDefault = FunctionDictGetOrDefault<DataTypeUInt16, NameDictGetUInt16OrDefault>;
@@ -756,7 +756,7 @@ using FunctionDictGetStringOrDefault = FunctionDictGetOrDefault<DataTypeString, 
 class FunctionDictGetOrNull final : public IFunction
 {
 public:
-    static constexpr auto name = "dictGetOrNull";
+    static constexpr auto name = "dict_get_or_null";
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -921,7 +921,7 @@ private:
 class FunctionDictGetHierarchy final : public IFunction
 {
 public:
-    static constexpr auto name = "dictGetHierarchy";
+    static constexpr auto name = "dict_get_hierarchy";
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -982,7 +982,7 @@ private:
 class FunctionDictIsIn final : public IFunction
 {
 public:
-    static constexpr auto name = "dictIsIn";
+    static constexpr auto name = "dict_is_in";
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -1049,7 +1049,7 @@ private:
 class FunctionDictGetChildren final : public IFunction
 {
 public:
-    static constexpr auto name = "dictGetChildren";
+    static constexpr auto name = "dict_get_children";
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -1109,7 +1109,7 @@ private:
 class FunctionDictGetDescendants final : public IFunction
 {
 public:
-    static constexpr auto name = "dictGetDescendants";
+    static constexpr auto name = "dict_get_descendants";
 
     static FunctionPtr create(ContextPtr context)
     {

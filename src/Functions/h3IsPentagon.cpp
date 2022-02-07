@@ -26,7 +26,7 @@ namespace
 class FunctionH3IsPentagon : public IFunction
 {
 public:
-    static constexpr auto name = "h3IsPentagon";
+    static constexpr auto name = "h3_is_pentagon";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3IsPentagon>(); }
 

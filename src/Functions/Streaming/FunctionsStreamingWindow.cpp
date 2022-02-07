@@ -119,8 +119,8 @@ namespace
 template <>
 struct WindowImpl<TUMBLE>
 {
-    static constexpr auto name = "__TUMBLE";
-    static constexpr auto external_name = "TUMBLE";
+    static constexpr auto name = "__tumble";
+    static constexpr auto external_name = "tumble";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {
@@ -310,8 +310,8 @@ struct WindowImpl<TUMBLE>
 template <>
 struct WindowImpl<HOP>
 {
-    static constexpr auto name = "__HOP";
-    static constexpr auto external_name = "HOP";
+    static constexpr auto name = "__hop";
+    static constexpr auto external_name = "hop";
 
     [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
     {

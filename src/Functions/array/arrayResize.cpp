@@ -24,7 +24,7 @@ namespace ErrorCodes
 class FunctionArrayResize : public IFunction
 {
 public:
-    static constexpr auto name = "arrayResize";
+    static constexpr auto name = "array_resize";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayResize>(); }
 
     String getName() const override { return name; }

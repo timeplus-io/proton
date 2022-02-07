@@ -46,7 +46,7 @@ class FunctionDateDiff : public IFunction
 {
     using ColumnDateTime64 = ColumnDecimal<DateTime64>;
 public:
-    static constexpr auto name = "dateDiff";
+    static constexpr auto name = "date_diff";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionDateDiff>(); }
 
     String getName() const override

@@ -10,7 +10,7 @@ class FunctionArrayEnumerateDense : public FunctionArrayEnumerateExtended<Functi
 {
     using Base = FunctionArrayEnumerateExtended<FunctionArrayEnumerateDense>;
 public:
-    static constexpr auto name = "arrayEnumerateDense";
+    static constexpr auto name = "array_enumerate_dense";
     using Base::create;
 };
 

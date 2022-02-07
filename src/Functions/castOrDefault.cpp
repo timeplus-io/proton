@@ -33,7 +33,7 @@ namespace ErrorCodes
 class FunctionCastOrDefault final : public IFunction
 {
 public:
-    static constexpr auto name = "accurateCastOrDefault";
+    static constexpr auto name = "accurate_cast_or_default";
 
     static FunctionPtr create(ContextPtr context)
     {
@@ -310,28 +310,28 @@ private:
     FunctionCastOrDefault impl;
 };
 
-struct NameToUInt8OrDefault { static constexpr auto name = "toUInt8OrDefault"; };
-struct NameToUInt16OrDefault { static constexpr auto name = "toUInt16OrDefault"; };
-struct NameToUInt32OrDefault { static constexpr auto name = "toUInt32OrDefault"; };
-struct NameToUInt64OrDefault { static constexpr auto name = "toUInt64OrDefault"; };
-struct NameToUInt256OrDefault { static constexpr auto name = "toUInt256OrDefault"; };
-struct NameToInt8OrDefault { static constexpr auto name = "toInt8OrDefault"; };
-struct NameToInt16OrDefault { static constexpr auto name = "toInt16OrDefault"; };
-struct NameToInt32OrDefault { static constexpr auto name = "toInt32OrDefault"; };
-struct NameToInt64OrDefault { static constexpr auto name = "toInt64OrDefault"; };
-struct NameToInt128OrDefault { static constexpr auto name = "toInt128OrDefault"; };
-struct NameToInt256OrDefault { static constexpr auto name = "toInt256OrDefault"; };
-struct NameToFloat32OrDefault { static constexpr auto name = "toFloat32OrDefault"; };
-struct NameToFloat64OrDefault { static constexpr auto name = "toFloat64OrDefault"; };
-struct NameToDateOrDefault { static constexpr auto name = "toDateOrDefault"; };
-struct NameToDate32OrDefault { static constexpr auto name = "toDate32OrDefault"; };
-struct NameToDateTimeOrDefault { static constexpr auto name = "toDateTimeOrDefault"; };
-struct NameToDateTime64OrDefault { static constexpr auto name = "toDateTime64OrDefault"; };
-struct NameToDecimal32OrDefault { static constexpr auto name = "toDecimal32OrDefault"; };
-struct NameToDecimal64OrDefault { static constexpr auto name = "toDecimal64OrDefault"; };
-struct NameToDecimal128OrDefault { static constexpr auto name = "toDecimal128OrDefault"; };
-struct NameToDecimal256OrDefault { static constexpr auto name = "toDecimal256OrDefault"; };
-struct NameToUUIDOrDefault { static constexpr auto name = "toUUIDOrDefault"; };
+struct NameToUInt8OrDefault { static constexpr auto name = "to_uint8_or_default"; };
+struct NameToUInt16OrDefault { static constexpr auto name = "to_uint16_or_default"; };
+struct NameToUInt32OrDefault { static constexpr auto name = "to_uint32_or_default"; };
+struct NameToUInt64OrDefault { static constexpr auto name = "to_uint64_or_default"; };
+struct NameToUInt256OrDefault { static constexpr auto name = "to_uint256_or_default"; };
+struct NameToInt8OrDefault { static constexpr auto name = "to_int8_or_default"; };
+struct NameToInt16OrDefault { static constexpr auto name = "to_int16_or_default"; };
+struct NameToInt32OrDefault { static constexpr auto name = "to_int32_or_default"; };
+struct NameToInt64OrDefault { static constexpr auto name = "to_int64_or_default"; };
+struct NameToInt128OrDefault { static constexpr auto name = "to_int128_or_default"; };
+struct NameToInt256OrDefault { static constexpr auto name = "to_int256_or_default"; };
+struct NameToFloat32OrDefault { static constexpr auto name = "to_float32_or_default"; };
+struct NameToFloat64OrDefault { static constexpr auto name = "to_float64_or_default"; };
+struct NameToDateOrDefault { static constexpr auto name = "to_date_or_default"; };
+struct NameToDate32OrDefault { static constexpr auto name = "to_date32_or_default"; };
+struct NameToDateTimeOrDefault { static constexpr auto name = "to_datetime_or_default"; };
+struct NameToDateTime64OrDefault { static constexpr auto name = "to_datetime64_or_default"; };
+struct NameToDecimal32OrDefault { static constexpr auto name = "to_decimal32_or_default"; };
+struct NameToDecimal64OrDefault { static constexpr auto name = "to_decimal64_or_default"; };
+struct NameToDecimal128OrDefault { static constexpr auto name = "to_decimal128_or_default"; };
+struct NameToDecimal256OrDefault { static constexpr auto name = "to_decimal256_or_default"; };
+struct NameToUUIDOrDefault { static constexpr auto name = "to_uuid_or_default"; };
 
 using FunctionToUInt8OrDefault = FunctionCastOrDefaultTyped<DataTypeUInt8, NameToUInt8OrDefault>;
 using FunctionToUInt16OrDefault = FunctionCastOrDefaultTyped<DataTypeUInt16, NameToUInt16OrDefault>;

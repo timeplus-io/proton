@@ -28,7 +28,7 @@ static constexpr size_t max_arrays_size_in_columns = 1000000000;
 class FunctionArrayWithConstant : public IFunction
 {
 public:
-    static constexpr auto name = "arrayWithConstant";
+    static constexpr auto name = "array_with_constant";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayWithConstant>(); }
 

@@ -545,11 +545,11 @@ template <> struct CompileOp<GreaterOrEqualsOp>
 
 
 struct NameEquals          { static constexpr auto name = "equals"; };
-struct NameNotEquals       { static constexpr auto name = "notEquals"; };
+struct NameNotEquals       { static constexpr auto name = "not_equals"; };
 struct NameLess            { static constexpr auto name = "less"; };
 struct NameGreater         { static constexpr auto name = "greater"; };
-struct NameLessOrEquals    { static constexpr auto name = "lessOrEquals"; };
-struct NameGreaterOrEquals { static constexpr auto name = "greaterOrEquals"; };
+struct NameLessOrEquals    { static constexpr auto name = "less_or_equals"; };
+struct NameGreaterOrEquals { static constexpr auto name = "greater_or_equals"; };
 
 
 template <template <typename, typename> class Op, typename Name>

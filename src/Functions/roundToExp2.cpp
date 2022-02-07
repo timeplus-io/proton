@@ -76,7 +76,7 @@ struct RoundToExp2Impl
 #endif
 };
 
-struct NameRoundToExp2 { static constexpr auto name = "roundToExp2"; };
+struct NameRoundToExp2 { static constexpr auto name = "round_to_exp2"; };
 using FunctionRoundToExp2 = FunctionUnaryArithmetic<RoundToExp2Impl, NameRoundToExp2, false>;
 
 }

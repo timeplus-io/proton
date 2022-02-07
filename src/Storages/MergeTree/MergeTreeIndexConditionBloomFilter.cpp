@@ -285,12 +285,12 @@ bool MergeTreeIndexConditionBloomFilter::traverseFunction(const ASTPtr & node, B
             }
         }
         else if (function->name == "equals" ||
-                 function->name == "notEquals" ||
+                 function->name == "not_equals" ||
                  function->name == "has" ||
-                 function->name == "mapContains" ||
-                 function->name == "indexOf" ||
-                 function->name == "hasAny" ||
-                 function->name == "hasAll")
+                 function->name == "map_contains" ||
+                 function->name == "index_of" ||
+                 function->name == "has_any" ||
+                 function->name == "has_all")
         {
             Field const_value;
             DataTypePtr const_type;
@@ -336,10 +336,10 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTIn(
         const auto & converted_column = castColumn(ColumnWithTypeAndName{column, type, ""}, index_type);
         out.predicate.emplace_back(std::make_pair(position, BloomFilterHash::hashWithColumn(index_type, converted_column, 0, row_size)));
 
-        if (function_name == "in"  || function_name == "globalIn")
+        if (function_name == "in"  || function_name == "global_in")
             out.function = RPNElement::FUNCTION_IN;
 
-        if (function_name == "notIn"  || function_name == "globalNotIn")
+        if (function_name == "not_in"  || function_name == "global_not_in")
             out.function = RPNElement::FUNCTION_NOT_IN;
 
         return true;
@@ -368,9 +368,9 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTIn(
             return match_with_subtype;
         }
 
-        if (function->name == "arrayElement")
+        if (function->name == "array_element")
         {
-            /** Try to parse arrayElement for mapKeys index.
+            /** Try to parse arrayElement for map_keys index.
               * It is important to ignore keys like column_map['Key'] IN ('') because if key does not exists in map
               * we return default value for arrayElement.
               *
@@ -395,12 +395,12 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTIn(
                 return false;
 
             const auto & col_name = column_ast_identifier->name();
-            auto map_keys_index_column_name = fmt::format("mapKeys({})", col_name);
-            auto map_values_index_column_name = fmt::format("mapValues({})", col_name);
+            auto map_keys_index_column_name = fmt::format("map_keys({})", col_name);
+            auto map_values_index_column_name = fmt::format("map_values({})", col_name);
 
             if (header.has(map_keys_index_column_name))
             {
-                /// For mapKeys we serialize key argument with bloom filter
+                /// For map_keys we serialize key argument with bloom filter
 
                 auto & argument = function->arguments.get()->children[1];
 
@@ -435,10 +435,10 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTIn(
                 return false;
             }
 
-            if (function_name == "in"  || function_name == "globalIn")
+            if (function_name == "in"  || function_name == "global_in")
                 out.function = RPNElement::FUNCTION_IN;
 
-            if (function_name == "notIn"  || function_name == "globalNotIn")
+            if (function_name == "not_in"  || function_name == "global_not_in")
                 out.function = RPNElement::FUNCTION_NOT_IN;
 
             return true;
@@ -463,8 +463,8 @@ static bool indexOfCanUseBloomFilter(const ASTPtr & parent)
             return true;
         }
         else if (function->name == "equals" /// notEquals is not applicable
-            || function->name == "greater" || function->name == "greaterOrEquals"
-            || function->name == "less" || function->name == "lessOrEquals")
+            || function->name == "greater" || function->name == "greater_or_equals"
+            || function->name == "less" || function->name == "less_or_equals")
         {
             if (function->arguments->children.size() != 2)
                 return false;
@@ -493,11 +493,11 @@ static bool indexOfCanUseBloomFilter(const ASTPtr & parent)
             Field zero(0);
             return (function->name == "equals"  /// indexOf(...) = c, c != 0
                     && !applyVisitor(FieldVisitorAccurateEquals(), constant->value, zero))
-                || (function->name == "notEquals"  /// indexOf(...) != c, c = 0
+                || (function->name == "not_equals"  /// indexOf(...) != c, c = 0
                     && applyVisitor(FieldVisitorAccurateEquals(), constant->value, zero))
                 || (function->name == (reversed ? "less" : "greater")   /// indexOf(...) > c, c >= 0
                     && !applyVisitor(FieldVisitorAccurateLess(), constant->value, zero))
-                || (function->name == (reversed ? "lessOrEquals" : "greaterOrEquals")   /// indexOf(...) >= c, c > 0
+                || (function->name == (reversed ? "less_or_equals" : "greater_or_equals")   /// indexOf(...) >= c, c > 0
                     && applyVisitor(FieldVisitorAccurateLess(), zero, constant->value));
         }
     }
@@ -520,7 +520,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
         const DataTypePtr & index_type = header.getByPosition(position).type;
         const auto * array_type = typeid_cast<const DataTypeArray *>(index_type.get());
 
-        if (function_name == "has" || function_name == "indexOf")
+        if (function_name == "has" || function_name == "index_of")
         {
             if (!array_type)
                 throw Exception("First argument for function " + function_name + " must be an array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -536,7 +536,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
                 out.predicate.emplace_back(std::make_pair(position, BloomFilterHash::hashWithField(actual_type.get(), converted_field)));
             }
         }
-        else if (function_name == "hasAny" || function_name == "hasAll")
+        else if (function_name == "has_any" || function_name == "has_all")
         {
             if (!array_type)
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "First argument for function {} must be an array.", function_name);
@@ -561,7 +561,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
                 column = std::move(mutable_column);
             }
 
-            out.function = function_name == "hasAny" ?
+            out.function = function_name == "has_any" ?
                 RPNElement::FUNCTION_HAS_ANY :
                 RPNElement::FUNCTION_HAS_ALL;
             out.predicate.emplace_back(std::make_pair(position, BloomFilterHash::hashWithColumn(actual_type, column, 0, column->size())));
@@ -580,14 +580,14 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
         return true;
     }
 
-    if (function_name == "mapContains" || function_name == "has")
+    if (function_name == "map_contains" || function_name == "has")
     {
         const auto * key_ast_identifier = key_ast.get()->as<const ASTIdentifier>();
         if (!key_ast_identifier)
             return false;
 
         const auto & col_name = key_ast_identifier->name();
-        auto map_keys_index_column_name = fmt::format("mapKeys({})", col_name);
+        auto map_keys_index_column_name = fmt::format("map_keys({})", col_name);
 
         if (!header.has(map_keys_index_column_name))
             return false;
@@ -629,9 +629,9 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
             return match_with_subtype;
         }
 
-        if (function->name == "arrayElement" && (function_name == "equals" || function_name == "notEquals"))
+        if (function->name == "array_element" && (function_name == "equals" || function_name == "not_equals"))
         {
-            /** Try to parse arrayElement for mapKeys index.
+            /** Try to parse arrayElement for map_keys index.
               * It is important to ignore keys like column_map['Key'] = '' because if key does not exists in map
               * we return default value for arrayElement.
               *
@@ -647,8 +647,8 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
 
             const auto & col_name = column_ast_identifier->name();
 
-            auto map_keys_index_column_name = fmt::format("mapKeys({})", col_name);
-            auto map_values_index_column_name = fmt::format("mapValues({})", col_name);
+            auto map_keys_index_column_name = fmt::format("map_keys({})", col_name);
+            auto map_values_index_column_name = fmt::format("map_values({})", col_name);
 
             size_t position = 0;
             Field const_value = value_field;

@@ -20,7 +20,6 @@ using FunctionLower = FunctionStringToString<LowerUpperImpl<'A', 'Z'>, NameLower
 void registerFunctionLower(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionLower>(FunctionFactory::CaseInsensitive);
-    factory.registerAlias("lcase", NameLower::name, FunctionFactory::CaseInsensitive);
 }
 
 }

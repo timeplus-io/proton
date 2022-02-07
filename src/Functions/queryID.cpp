@@ -11,7 +11,7 @@ class FunctionQueryID : public IFunction
     const String query_id;
 
 public:
-    static constexpr auto name = "queryID";
+    static constexpr auto name = "query_id";
     static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionQueryID>(context->getClientInfo().current_query_id);
@@ -41,6 +41,5 @@ public:
 void registerFunctionQueryID(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionQueryID>();
-    factory.registerAlias("query_id", FunctionQueryID::name, FunctionFactory::CaseInsensitive);
 }
 }

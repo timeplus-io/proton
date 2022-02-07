@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchAnyUTF8
 {
-    static constexpr auto name = "multiSearchAnyUTF8";
+    static constexpr auto name = "multi_search_any_utf8";
 };
 using FunctionMultiSearchUTF8 = FunctionsMultiStringSearch<MultiSearchImpl<NameMultiSearchAnyUTF8, PositionCaseSensitiveUTF8>>;
 

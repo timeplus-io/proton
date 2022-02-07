@@ -2,20 +2,15 @@
 #include <Parsers/queryToString.h>
 #include <Functions/FunctionsComparison.h>
 #include <Functions/FunctionsLogical.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/CrossToInnerJoinVisitor.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/IdentifierSemantic.h>
-#include <Interpreters/misc.h>
-#include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/parseQuery.h>
 
 namespace DB

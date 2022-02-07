@@ -16,15 +16,11 @@ struct HasParam
     }
 };
 
-struct NameVisitParamHas           { static constexpr auto name = "visitParamHas"; };
-using FunctionVisitParamHas = FunctionsStringSearch<ExtractParamImpl<NameVisitParamHas, HasParam>>;
-
-struct NameSimpleJSONHas           { static constexpr auto name = "simpleJSONHas"; };
+struct NameSimpleJSONHas           { static constexpr auto name = "simple_json_has"; };
 using FunctionSimpleJSONHas = FunctionsStringSearch<ExtractParamImpl<NameSimpleJSONHas, HasParam>>;
 
 void registerFunctionVisitParamHas(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionVisitParamHas>();
     factory.registerFunction<FunctionSimpleJSONHas>();
 }
 

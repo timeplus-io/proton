@@ -20,7 +20,7 @@ class FunctionNullIf : public IFunction
 private:
     ContextPtr context;
 public:
-    static constexpr auto name = "nullIf";
+    static constexpr auto name = "null_if";
 
     static FunctionPtr create(ContextPtr context)
     {

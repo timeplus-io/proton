@@ -121,12 +121,12 @@ struct CharsetClassificationImpl
 
 struct NameDetectCharset
 {
-    static constexpr auto name = "detectCharset";
+    static constexpr auto name = "detect_charset";
 };
 
 struct NameDetectLanguageUnknown
 {
-    static constexpr auto name = "detectLanguageUnknown";
+    static constexpr auto name = "detect_language_unknown";
 };
 
 

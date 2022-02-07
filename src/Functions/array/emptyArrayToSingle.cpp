@@ -26,7 +26,7 @@ namespace ErrorCodes
 class FunctionEmptyArrayToSingle : public IFunction
 {
 public:
-    static constexpr auto name = "emptyArrayToSingle";
+    static constexpr auto name = "empty_array_to_single";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionEmptyArrayToSingle>(); }
 
     String getName() const override { return name; }

@@ -80,7 +80,7 @@ private:
 class ToTimeZoneOverloadResolver : public IFunctionOverloadResolver
 {
 public:
-    static constexpr auto name = "toTimezone";
+    static constexpr auto name = "to_timezone";
 
     String getName() const override { return name; }
 
@@ -126,7 +126,6 @@ public:
 void registerFunctionToTimeZone(FunctionFactory & factory)
 {
     factory.registerFunction<ToTimeZoneOverloadResolver>();
-    factory.registerAlias("toTimeZone", "toTimezone");
 }
 
 }

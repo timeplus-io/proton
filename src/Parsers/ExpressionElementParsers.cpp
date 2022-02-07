@@ -288,7 +288,7 @@ ASTPtr createFunctionCast(const ASTPtr & expr_ast, const ASTPtr & type_ast)
     expr_list_args->children.push_back(std::move(type_literal));
 
     auto func_node = std::make_shared<ASTFunction>();
-    func_node->name = "CAST";
+    func_node->name = "cast";
     func_node->arguments = std::move(expr_list_args);
     func_node->children.push_back(func_node->arguments);
 
@@ -319,7 +319,7 @@ namespace
             {
                 if (ParserExpression().parse(pos, type_node, expected))
                 {
-                    node = makeASTFunction("CAST", expr_node, type_node);
+                    node = makeASTFunction("cast", expr_node, type_node);
                     return true;
                 }
             }
@@ -423,7 +423,7 @@ namespace
                 auto quote_meta_list_args = std::make_shared<ASTExpressionList>();
                 quote_meta_list_args->children = {to_remove};
 
-                quote_meta_func_node->name = "regexpQuoteMeta";
+                quote_meta_func_node->name = "regexp_quote_meta";
                 quote_meta_func_node->arguments = std::move(quote_meta_list_args);
                 quote_meta_func_node->children.push_back(quote_meta_func_node->arguments);
 
@@ -449,7 +449,7 @@ namespace
                     to_remove,
                     std::make_shared<ASTLiteral>("]*$")
                 };
-                func_name = "replaceRegexpAll";
+                func_name = "replace_regex";
             }
             else
             {
@@ -470,7 +470,7 @@ namespace
                         std::make_shared<ASTLiteral>("]*$")
                     };
                 }
-                func_name = "replaceRegexpOne";
+                func_name = "replace_regexp_one";
             }
 
             pattern_func_node->name = "concat";
@@ -483,18 +483,18 @@ namespace
         {
             if (trim_left && trim_right)
             {
-                func_name = "trimBoth";
+                func_name = "trim_both";
             }
             else
             {
                 if (trim_left)
                 {
-                    func_name = "trimLeft";
+                    func_name = "trim_left";
                 }
                 else
                 {
                     /// trim_right == false not possible
-                    func_name = "trimRight";
+                    func_name = "trim_right";
                 }
             }
         }
@@ -628,7 +628,7 @@ namespace
                 return false;
 
             auto res = std::make_shared<ASTFunction>();
-            res->name = "dateDiff";
+            res->name = "date_diff";
             res->arguments = expr_list;
             res->children.push_back(res->arguments);
             node = std::move(res);
@@ -649,7 +649,7 @@ namespace
         if (!ParserExpression().parse(pos, right_node, expected))
             return false;
 
-        node = makeASTFunction("dateDiff", std::make_shared<ASTLiteral>(interval_kind.toDateDiffUnit()), left_node, right_node);
+        node = makeASTFunction("date_diff", std::make_shared<ASTLiteral>(interval_kind.toDateDiffUnit()), left_node, right_node);
         return true;
     }
 
@@ -822,7 +822,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
       * If you do not report that the first option is an error, then the argument will be interpreted as 2014 - 01 - 01 - some number,
       *  and the query silently returns an unexpected result.
       */
-    if (function_name == "toDate"
+    if (function_name == "to_date"
         && contents_end - contents_begin == strlen("2014-01-01")
         && contents_begin[0] >= '2' && contents_begin[0] <= '3'
         && contents_begin[1] >= '0' && contents_begin[1] <= '9'
@@ -836,7 +836,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         && contents_begin[9] >= '0' && contents_begin[9] <= '9')
     {
         std::string contents_str(contents_begin, contents_end - contents_begin);
-        throw Exception("Argument of function toDate is unquoted: toDate(" + contents_str + "), must be: toDate('" + contents_str + "')"
+        throw Exception("Argument of function to_date is unquoted: to_date(" + contents_str + "), must be: to_date('" + contents_str + "')"
             , ErrorCodes::SYNTAX_ERROR);
     }
 
@@ -2175,7 +2175,7 @@ bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     expr_list_args->children.push_back(std::move(name_literal));
 
     auto function_node = std::make_shared<ASTFunction>();
-    function_node->name = "globalVariable";
+    function_node->name = "global_variable";
     function_node->arguments = expr_list_args;
     function_node->children.push_back(expr_list_args);
 

@@ -10,7 +10,7 @@ namespace
 
 struct NameCountSubstringsCaseInsensitive
 {
-    static constexpr auto name = "countSubstringsCaseInsensitive";
+    static constexpr auto name = "count_substrings_case_insensitive";
 };
 
 using FunctionCountSubstringsCaseInsensitive = FunctionsStringSearch<CountSubstringsImpl<NameCountSubstringsCaseInsensitive, PositionCaseInsensitiveASCII>>;

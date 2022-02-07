@@ -106,7 +106,7 @@ struct FunctionDetectProgrammingLanguageImpl
 
 struct NameDetectProgrammingLanguage
 {
-    static constexpr auto name = "detectProgrammingLanguage";
+    static constexpr auto name = "detect_programming_language";
 };
 
 

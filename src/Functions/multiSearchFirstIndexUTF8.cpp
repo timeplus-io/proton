@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchFirstIndexUTF8
 {
-    static constexpr auto name = "multiSearchFirstIndexUTF8";
+    static constexpr auto name = "multi_search_first_index_utf8";
 };
 
 using FunctionMultiSearchFirstIndexUTF8

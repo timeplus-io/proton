@@ -196,8 +196,8 @@ private:
     static void visit(ASTFunction & func, ASTPtr &, Data & data)
     {
         if ((data.getContext()->getSettingsRef().prefer_global_in_and_join
-             && (func.name == "in" || func.name == "notIn" || func.name == "nullIn" || func.name == "notNullIn"))
-            || func.name == "globalIn" || func.name == "globalNotIn" || func.name == "globalNullIn" || func.name == "globalNotNullIn")
+             && (func.name == "in" || func.name == "not_in" || func.name == "null_in" || func.name == "not_null_in"))
+            || func.name == "global_in" || func.name == "global_not_in" || func.name == "global_null_in" || func.name == "global_not_null_in")
         {
             ASTPtr & ast = func.arguments->children[1];
 
@@ -205,14 +205,14 @@ private:
             /// NOTE: We don't support passing table functions to IN.
             if (ast->as<ASTLiteral>() || ast->as<ASTFunction>())
             {
-                if (func.name == "globalIn")
+                if (func.name == "global_in")
                     func.name = "in";
-                else if (func.name == "globalNotIn")
-                    func.name = "notIn";
-                else if (func.name == "globalNullIn")
-                    func.name = "nullIn";
-                else if (func.name == "globalNotNullIn")
-                    func.name = "notNullIn";
+                else if (func.name == "global_not_in")
+                    func.name = "not_in";
+                else if (func.name == "global_null_in")
+                    func.name = "null_in";
+                else if (func.name == "global_not_null_in")
+                    func.name = "not_null_in";
                 return;
             }
 

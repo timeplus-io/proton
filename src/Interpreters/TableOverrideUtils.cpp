@@ -33,7 +33,7 @@ public:
 
     static bool needChildVisit(const ASTPtr & node, const ASTPtr & child)
     {
-        if (const auto * f = node->as<ASTFunction>(); f && f->name == "assumeNotNull")
+        if (const auto * f = node->as<ASTFunction>(); f && f->name == "assume_not_null")
             return false;
         return RequiredSourceColumnsMatcher::needChildVisit(node, child);
     }

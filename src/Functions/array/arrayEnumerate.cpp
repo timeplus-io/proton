@@ -20,7 +20,7 @@ namespace ErrorCodes
 class FunctionArrayEnumerate : public IFunction
 {
 public:
-    static constexpr auto name = "arrayEnumerate";
+    static constexpr auto name = "array_enumerate";
 
     static FunctionPtr create(ContextPtr)
     {

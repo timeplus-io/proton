@@ -30,7 +30,7 @@ namespace
 class FunctionS2CellsIntersect : public IFunction
 {
 public:
-    static constexpr auto name = "s2CellsIntersect";
+    static constexpr auto name = "s2_cells_intersect";
 
     static FunctionPtr create(ContextPtr)
     {

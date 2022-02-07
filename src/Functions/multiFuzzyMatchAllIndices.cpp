@@ -10,7 +10,7 @@ namespace
 
 struct NameMultiFuzzyMatchAllIndices
 {
-    static constexpr auto name = "multiFuzzyMatchAllIndices";
+    static constexpr auto name = "multi_fuzzy_match_all_indices";
 };
 
 using FunctionMultiFuzzyMatchAllIndices = FunctionsMultiStringFuzzySearch<

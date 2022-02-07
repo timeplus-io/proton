@@ -30,7 +30,7 @@ namespace
 
 struct NormalizeNFCImpl
 {
-    static constexpr auto name = "normalizeUTF8NFC";
+    static constexpr auto name = "normalize_utf8_nfc";
 
     static constexpr auto expansionFactor = 3;
 
@@ -42,7 +42,7 @@ struct NormalizeNFCImpl
 
 struct NormalizeNFDImpl
 {
-    static constexpr auto name = "normalizeUTF8NFD";
+    static constexpr auto name = "normalize_utf8_nfd";
 
     static constexpr auto expansionFactor = 4;
 
@@ -54,7 +54,7 @@ struct NormalizeNFDImpl
 
 struct NormalizeNFKCImpl
 {
-    static constexpr auto name = "normalizeUTF8NFKC";
+    static constexpr auto name = "normalize_utf8_nfkc";
 
     static constexpr auto expansionFactor = 18;
 
@@ -67,7 +67,7 @@ struct NormalizeNFKCImpl
 
 struct NormalizeNFKDImpl
 {
-    static constexpr auto name = "normalizeUTF8NFKD";
+    static constexpr auto name = "normalize_utf8_nfkd";
 
     static constexpr auto expansionFactor = 18;
 

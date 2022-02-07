@@ -66,7 +66,7 @@ private:
 
 public:
     /// Get the name of the function.
-    static constexpr auto name = "alphaTokens";
+    static constexpr auto name = "alpha_tokens";
     static String getName() { return name; }
 
     static size_t getNumberOfArguments() { return 1; }
@@ -124,7 +124,7 @@ private:
 
 public:
     /// Get the name of the function.
-    static constexpr auto name = "splitByNonAlpha";
+    static constexpr auto name = "split_by_non_alpha";
     static String getName() { return name; }
 
     static size_t getNumberOfArguments() { return 1; }
@@ -182,7 +182,7 @@ private:
 
 public:
     /// Get the name of the function.
-    static constexpr auto name = "splitByWhitespace";
+    static constexpr auto name = "split_by_whitespace";
     static String getName() { return name; }
 
     static size_t getNumberOfArguments() { return 1; }
@@ -241,7 +241,7 @@ private:
     char sep;
 
 public:
-    static constexpr auto name = "splitByChar";
+    static constexpr auto name = "split_by_char";
     static String getName() { return name; }
     static size_t getNumberOfArguments() { return 2; }
 
@@ -315,7 +315,7 @@ private:
     String sep;
 
 public:
-    static constexpr auto name = "splitByString";
+    static constexpr auto name = "split_by_string";
     static String getName() { return name; }
     static size_t getNumberOfArguments() { return 2; }
 
@@ -392,7 +392,7 @@ private:
     Pos pos;
     Pos end;
 public:
-    static constexpr auto name = "splitByRegexp";
+    static constexpr auto name = "split_by_regexp";
     static String getName() { return name; }
     static size_t getNumberOfArguments() { return 2; }
 
@@ -475,7 +475,7 @@ private:
     Pos pos;
     Pos end;
 public:
-    static constexpr auto name = "extractAll";
+    static constexpr auto name = "extract_all";
     static String getName() { return name; }
     static size_t getNumberOfArguments() { return 2; }
 
@@ -754,7 +754,7 @@ private:
     }
 
 public:
-    static constexpr auto name = "arrayStringConcat";
+    static constexpr auto name = "array_string_concat";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayStringConcat>(); }
 
     String getName() const override

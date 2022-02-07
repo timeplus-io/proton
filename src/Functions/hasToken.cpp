@@ -11,7 +11,7 @@ namespace
 
 struct NameHasToken
 {
-    static constexpr auto name = "hasToken";
+    static constexpr auto name = "has_token";
 };
 
 using FunctionHasToken = FunctionsStringSearch<HasTokenImpl<NameHasToken, VolnitskyCaseSensitiveToken, false>>;

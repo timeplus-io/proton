@@ -25,7 +25,7 @@ namespace ErrorCodes
 class FunctionArrayConcat : public IFunction
 {
 public:
-    static constexpr auto name = "arrayConcat";
+    static constexpr auto name = "array_concat";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayConcat>(); }
 
     String getName() const override { return name; }

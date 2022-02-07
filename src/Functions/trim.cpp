@@ -16,21 +16,21 @@ namespace
 
 struct TrimModeLeft
 {
-    static constexpr auto name = "trimLeft";
+    static constexpr auto name = "trim_left";
     static constexpr bool trim_left = true;
     static constexpr bool trim_right = false;
 };
 
 struct TrimModeRight
 {
-    static constexpr auto name = "trimRight";
+    static constexpr auto name = "trim_right";
     static constexpr bool trim_left = false;
     static constexpr bool trim_right = true;
 };
 
 struct TrimModeBoth
 {
-    static constexpr auto name = "trimBoth";
+    static constexpr auto name = "trim_both";
     static constexpr bool trim_left = true;
     static constexpr bool trim_right = true;
 };

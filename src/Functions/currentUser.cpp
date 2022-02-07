@@ -15,7 +15,7 @@ class FunctionCurrentUser : public IFunction
     const String user_name;
 
 public:
-    static constexpr auto name = "currentUser";
+    static constexpr auto name = "current_user";
     static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionCurrentUser>(context->getClientInfo().initial_user);
@@ -54,7 +54,6 @@ public:
 void registerFunctionCurrentUser(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionCurrentUser>();
-    factory.registerAlias("user", FunctionCurrentUser::name, FunctionFactory::CaseInsensitive);
 }
 
 }

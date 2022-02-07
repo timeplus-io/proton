@@ -9,7 +9,7 @@ namespace
 
 struct IsNaNImpl
 {
-    static constexpr auto name = "isNaN";
+    static constexpr auto name = "is_nan";
     template <typename T>
     static bool execute(const T t)
     {

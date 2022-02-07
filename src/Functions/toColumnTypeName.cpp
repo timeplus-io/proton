@@ -13,7 +13,7 @@ namespace
 class FunctionToColumnTypeName : public IFunction
 {
 public:
-    static constexpr auto name = "toColumnTypeName";
+    static constexpr auto name = "to_column_type_name";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionToColumnTypeName>();

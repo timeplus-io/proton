@@ -21,7 +21,7 @@ ASTPtr normalizeAtom(const ASTPtr & atom)
 {
     static const std::map<std::string, std::string> inverse_relations =
     {
-        {"lessOrEquals", "greaterOrEquals"},
+        {"less_or_equals", "greater_or_equals"},
         {"less", "greater"},
     };
 
@@ -52,7 +52,7 @@ ComparisonGraph::ComparisonGraph(const ASTs & atomic_formulas)
     {
         {"equals", Edge::EQUAL},
         {"greater", Edge::GREATER},
-        {"greaterOrEquals", Edge::GREATER_OR_EQUAL},
+        {"greater_or_equals", Edge::GREATER_OR_EQUAL},
     };
 
     /// Firstly build an intermediate graph,
@@ -124,7 +124,7 @@ ComparisonGraph::ComparisonGraph(const ASTs & atomic_formulas)
     std::tie(ast_const_lower_bound, ast_const_upper_bound) = buildConstBounds();
 
     /// Find expressions that are known to be unequal.
-    static const std::unordered_set<String> not_equals_functions = {"notEquals", "greater"};
+    static const std::unordered_set<String> not_equals_functions = {"not_equals", "greater"};
 
     /// Explicitly save unequal components.
     /// TODO: Build a graph for unequal components.
@@ -376,10 +376,10 @@ ComparisonGraph::CompareResult ComparisonGraph::functionNameToCompareResult(cons
     static const std::unordered_map<std::string, CompareResult> relation_to_compare =
     {
         {"equals", CompareResult::EQUAL},
-        {"notEquals", CompareResult::NOT_EQUAL},
+        {"not_equals", CompareResult::NOT_EQUAL},
         {"less", CompareResult::LESS},
-        {"lessOrEquals", CompareResult::LESS_OR_EQUAL},
-        {"greaterOrEquals", CompareResult::GREATER_OR_EQUAL},
+        {"less_or_equals", CompareResult::LESS_OR_EQUAL},
+        {"greater_or_equals", CompareResult::GREATER_OR_EQUAL},
         {"greater", CompareResult::GREATER},
     };
 

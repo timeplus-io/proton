@@ -1,7 +1,6 @@
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnVector.h>
 #include <Common/BitHelpers.h>
 #include <Common/hex.h>
 #include <DataTypes/DataTypeString.h>
@@ -29,7 +28,7 @@ class FunctionUUIDNumToString : public IFunction
 {
 
 public:
-    static constexpr auto name = "UUIDNumToString";
+    static constexpr auto name = "uuid_num_to_string";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionUUIDNumToString>(); }
 
     String getName() const override
@@ -128,7 +127,7 @@ private:
     }
 
 public:
-    static constexpr auto name = "UUIDStringToNum";
+    static constexpr auto name = "uuid_string_to_num";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionUUIDStringToNum>(); }
 
     String getName() const override

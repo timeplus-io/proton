@@ -24,7 +24,7 @@ namespace
 class FunctionGetScalar : public IFunction, WithContext
 {
 public:
-    static constexpr auto name = "__getScalar";
+    static constexpr auto name = "__get_scalar";
     static FunctionPtr create(ContextPtr context_)
     {
         return std::make_shared<FunctionGetScalar>(context_);
@@ -131,13 +131,13 @@ private:
 
 struct GetShardNum
 {
-    static constexpr auto name = "shardNum";
+    static constexpr auto name = "shard_num";
     static constexpr auto scalar_name = "_shard_num";
 };
 
 struct GetShardCount
 {
-    static constexpr auto name = "shardCount";
+    static constexpr auto name = "shard_count";
     static constexpr auto scalar_name = "_shard_count";
 };
 

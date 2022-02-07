@@ -19,7 +19,7 @@ namespace ErrorCodes
 class FunctionTupleHammingDistance : public ITupleFunction
 {
 public:
-    static constexpr auto name = "tupleHammingDistance";
+    static constexpr auto name = "tuple_hamming_distance";
 
     explicit FunctionTupleHammingDistance(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionTupleHammingDistance>(context_); }

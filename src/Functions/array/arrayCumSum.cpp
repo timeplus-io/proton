@@ -155,7 +155,7 @@ struct ArrayCumSumImpl
 
 };
 
-struct NameArrayCumSum { static constexpr auto name = "arrayCumSum"; };
+struct NameArrayCumSum { static constexpr auto name = "array_cum_sum"; };
 using FunctionArrayCumSum = FunctionArrayMapped<ArrayCumSumImpl, NameArrayCumSum>;
 
 void registerFunctionArrayCumSum(FunctionFactory & factory)

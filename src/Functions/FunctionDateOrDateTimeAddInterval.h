@@ -39,7 +39,7 @@ namespace ErrorCodes
 
 struct AddSecondsImpl
 {
-    static constexpr auto name = "addSeconds";
+    static constexpr auto name = "add_seconds";
 
     static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl &)
@@ -64,7 +64,7 @@ struct AddSecondsImpl
 
 struct AddMinutesImpl
 {
-    static constexpr auto name = "addMinutes";
+    static constexpr auto name = "add_minutes";
 
     static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl &)
@@ -89,7 +89,7 @@ struct AddMinutesImpl
 
 struct AddHoursImpl
 {
-    static constexpr auto name = "addHours";
+    static constexpr auto name = "add_hours";
 
     static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl &)
@@ -113,7 +113,7 @@ struct AddHoursImpl
 
 struct AddDaysImpl
 {
-    static constexpr auto name = "addDays";
+    static constexpr auto name = "add_days";
 
     static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl & time_zone)
@@ -139,7 +139,7 @@ struct AddDaysImpl
 
 struct AddWeeksImpl
 {
-    static constexpr auto name = "addWeeks";
+    static constexpr auto name = "add_weeks";
 
     static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int32 delta, const DateLUTImpl & time_zone)
@@ -165,7 +165,7 @@ struct AddWeeksImpl
 
 struct AddMonthsImpl
 {
-    static constexpr auto name = "addMonths";
+    static constexpr auto name = "add_months";
 
     static inline DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl & time_zone)
@@ -191,7 +191,7 @@ struct AddMonthsImpl
 
 struct AddQuartersImpl
 {
-    static constexpr auto name = "addQuarters";
+    static constexpr auto name = "add_quarters";
 
     static inline DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int32 delta, const DateLUTImpl & time_zone)
@@ -217,7 +217,7 @@ struct AddQuartersImpl
 
 struct AddYearsImpl
 {
-    static constexpr auto name = "addYears";
+    static constexpr auto name = "add_years";
 
     static inline DecimalUtils::DecimalComponents<DateTime64>
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl & time_zone)
@@ -254,14 +254,14 @@ struct SubtractIntervalImpl : public Transform
     }
 };
 
-struct SubtractSecondsImpl : SubtractIntervalImpl<AddSecondsImpl> { static constexpr auto name = "subtractSeconds"; };
-struct SubtractMinutesImpl : SubtractIntervalImpl<AddMinutesImpl> { static constexpr auto name = "subtractMinutes"; };
-struct SubtractHoursImpl : SubtractIntervalImpl<AddHoursImpl> { static constexpr auto name = "subtractHours"; };
-struct SubtractDaysImpl : SubtractIntervalImpl<AddDaysImpl> { static constexpr auto name = "subtractDays"; };
-struct SubtractWeeksImpl : SubtractIntervalImpl<AddWeeksImpl> { static constexpr auto name = "subtractWeeks"; };
-struct SubtractMonthsImpl : SubtractIntervalImpl<AddMonthsImpl> { static constexpr auto name = "subtractMonths"; };
-struct SubtractQuartersImpl : SubtractIntervalImpl<AddQuartersImpl> { static constexpr auto name = "subtractQuarters"; };
-struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl> { static constexpr auto name = "subtractYears"; };
+struct SubtractSecondsImpl : SubtractIntervalImpl<AddSecondsImpl> { static constexpr auto name = "subtract_seconds"; };
+struct SubtractMinutesImpl : SubtractIntervalImpl<AddMinutesImpl> { static constexpr auto name = "subtract_minutes"; };
+struct SubtractHoursImpl : SubtractIntervalImpl<AddHoursImpl> { static constexpr auto name = "subtract_hours"; };
+struct SubtractDaysImpl : SubtractIntervalImpl<AddDaysImpl> { static constexpr auto name = "subtract_days"; };
+struct SubtractWeeksImpl : SubtractIntervalImpl<AddWeeksImpl> { static constexpr auto name = "subtract_weeks"; };
+struct SubtractMonthsImpl : SubtractIntervalImpl<AddMonthsImpl> { static constexpr auto name = "subtract_months"; };
+struct SubtractQuartersImpl : SubtractIntervalImpl<AddQuartersImpl> { static constexpr auto name = "subtract_quarters"; };
+struct SubtractYearsImpl : SubtractIntervalImpl<AddYearsImpl> { static constexpr auto name = "subtract_years"; };
 
 
 template <typename Transform>

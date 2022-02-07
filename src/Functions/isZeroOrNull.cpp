@@ -24,7 +24,7 @@ namespace
 class FunctionIsZeroOrNull : public IFunction
 {
 public:
-    static constexpr auto name = "isZeroOrNull";
+    static constexpr auto name = "is_zero_or_null";
 
     static FunctionPtr create(ContextPtr)
     {

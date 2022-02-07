@@ -11,7 +11,7 @@ namespace
 
 struct NameUpperUTF8
 {
-    static constexpr auto name = "upperUTF8";
+    static constexpr auto name = "upper_utf8";
 };
 
 using FunctionUpperUTF8 = FunctionStringToString<LowerUpperUTF8Impl<'a', 'z', Poco::Unicode::toUpper, UTF8CyrillicToCase<false>>, NameUpperUTF8>;

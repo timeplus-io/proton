@@ -32,7 +32,7 @@ namespace
 class FunctionRunningAccumulate : public IFunction
 {
 public:
-    static constexpr auto name = "runningAccumulate";
+    static constexpr auto name = "running_accumulate";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionRunningAccumulate>();

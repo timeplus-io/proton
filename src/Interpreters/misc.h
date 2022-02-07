@@ -13,27 +13,27 @@ namespace ErrorCodes
 
 inline bool functionIsInOperator(const std::string & name)
 {
-    return name == "in" || name == "notIn" || name == "nullIn" || name == "notNullIn";
+    return name == "in" || name == "not_in" || name == "null_in" || name == "not_null_in";
 }
 
 inline bool functionIsInOrGlobalInOperator(const std::string & name)
 {
-    return functionIsInOperator(name) || name == "globalIn" || name == "globalNotIn" || name == "globalNullIn" || name == "globalNotNullIn";
+    return functionIsInOperator(name) || name == "global_in" || name == "global_not_in" || name == "global_null_in" || name == "global_not_null_in";
 }
 
 inline bool functionIsLikeOperator(const std::string & name)
 {
-    return name == "like" || name == "ilike" || name == "notLike" || name == "notILike";
+    return name == "like" || name == "ilike" || name == "not_like" || name == "not_ilike";
 }
 
 inline bool functionIsJoinGet(const std::string & name)
 {
-    return startsWith(name, "joinGet");
+    return startsWith(name, "join_get");
 }
 
 inline bool functionIsDictGet(const std::string & name)
 {
-    return startsWith(name, "dictGet") || (name == "dictHas") || (name == "dictIsIn");
+    return startsWith(name, "dict_get") || (name == "dict_has") || (name == "dict_is_in");
 }
 
 inline bool checkFunctionIsInOrGlobalInOperator(const ASTFunction & func)

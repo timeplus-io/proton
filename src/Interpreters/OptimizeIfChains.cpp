@@ -48,7 +48,7 @@ void OptimizeIfChainsVisitor::visit(ASTPtr & current_ast)
 
         auto chain = ifChain(child);
         std::reverse(chain.begin(), chain.end());
-        child->as<ASTFunction>()->name = "multiIf";
+        child->as<ASTFunction>()->name = "multi_if";
         child->as<ASTFunction>()->arguments->children = std::move(chain);
     }
 }

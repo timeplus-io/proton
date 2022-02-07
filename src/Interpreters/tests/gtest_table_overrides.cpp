@@ -81,8 +81,8 @@ INSTANTIATE_TEST_SUITE_P(ApplyTableOverrides, TableOverrideTest,
         "CREATE TABLE db.b (`id` Int64) ENGINE = MergeTree PARTITION BY id % 5"
     },
     {
-        "CREATE DATABASE db TABLE OVERRIDE `tbl` (PARTITION BY toYYYYMM(created))",
+        "CREATE DATABASE db TABLE OVERRIDE `tbl` (PARTITION BY to_YYYYMM(created))",
         "CREATE TABLE db.tbl (id Int64, created DateTime) ENGINE=Foo",
-        "CREATE TABLE db.tbl (`id` Int64, `created` DateTime) ENGINE = Foo PARTITION BY toYYYYMM(created)",
+        "CREATE TABLE db.tbl (`id` Int64, `created` DateTime) ENGINE = Foo PARTITION BY to_YYYYMM(created)",
     }
 }));

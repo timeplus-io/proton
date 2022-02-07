@@ -17,7 +17,7 @@ namespace
 {
     struct DecodeXMLComponentName
     {
-        static constexpr auto name = "decodeXMLComponent";
+        static constexpr auto name = "decode_xml_component";
     };
 
     class FunctionDecodeXMLComponentImpl

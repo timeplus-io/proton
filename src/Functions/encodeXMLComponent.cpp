@@ -15,7 +15,7 @@ namespace
 {
     struct EncodeXMLComponentName
     {
-        static constexpr auto name = "encodeXMLComponent";
+        static constexpr auto name = "encode_xml_component";
     };
 
     class FunctionEncodeXMLComponentImpl

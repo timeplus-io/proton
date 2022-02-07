@@ -1,5 +1,4 @@
 #include <Columns/ColumnConst.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
@@ -206,9 +205,6 @@ public:
 void registerFunctionNeighbor(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionNeighbor>();
-    /// proton: starts.
-    factory.registerAlias("neighborInBlock", FunctionNeighbor::name);
-    /// proton: ends.
 }
 
 }

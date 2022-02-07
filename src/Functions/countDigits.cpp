@@ -26,7 +26,7 @@ namespace
 class FunctionCountDigits : public IFunction
 {
 public:
-    static constexpr auto name = "countDigits";
+    static constexpr auto name = "count_digits";
 
     static FunctionPtr create(ContextPtr)
     {

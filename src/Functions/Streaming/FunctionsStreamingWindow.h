@@ -9,9 +9,9 @@ namespace DB
 {
 /** Streaming Window functions:
   *
-  * __TUMBLE(time_attr, interval [, alignment, [, timezone]])
+  * __tumble(time_attr, interval [, alignment, [, timezone]])
   *
-  * __HOP(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
+  * __hop(time_attr, hop_interval, window_interval [, alignment, [, timezone]])
   *
   */
 enum WindowFunctionName
@@ -99,7 +99,7 @@ ADD_TIME(Second, 1)
 template <WindowFunctionName type>
 struct WindowImpl
 {
-    static constexpr auto name = "UNKNOWN";
+    static constexpr auto name = "unknown";
 
     static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name);
 

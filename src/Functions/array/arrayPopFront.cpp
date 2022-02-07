@@ -8,7 +8,7 @@ namespace DB
 class FunctionArrayPopFront : public FunctionArrayPop
 {
 public:
-    static constexpr auto name = "arrayPopFront";
+    static constexpr auto name = "array_pop_front";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayPopFront>(); }
     FunctionArrayPopFront() : FunctionArrayPop(true, name) {}
 };

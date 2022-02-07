@@ -9,7 +9,7 @@ namespace
 
 struct NameNotILike
 {
-    static constexpr auto name = "notILike";
+    static constexpr auto name = "not_ilike";
 };
 
 using NotILikeImpl = MatchImpl<NameNotILike, true, true, /*case-insensitive*/true>;

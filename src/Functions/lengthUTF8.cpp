@@ -62,7 +62,7 @@ struct LengthUTF8Impl
 
 struct NameLengthUTF8
 {
-    static constexpr auto name = "lengthUTF8";
+    static constexpr auto name = "length_utf8";
 };
 using FunctionLengthUTF8 = FunctionStringOrArrayToT<LengthUTF8Impl, NameLengthUTF8, UInt64>;
 

@@ -16,15 +16,11 @@ struct ExtractBool
     }
 };
 
-struct NameVisitParamExtractBool   { static constexpr auto name = "visitParamExtractBool"; };
-using FunctionVisitParamExtractBool = FunctionsStringSearch<ExtractParamImpl<NameVisitParamExtractBool, ExtractBool>>;
-
-struct NameSimpleJSONExtractBool   { static constexpr auto name = "simpleJSONExtractBool"; };
+struct NameSimpleJSONExtractBool   { static constexpr auto name = "simple_json_extract_bool"; };
 using FunctionSimpleJSONExtractBool = FunctionsStringSearch<ExtractParamImpl<NameSimpleJSONExtractBool, ExtractBool>>;
 
 void registerFunctionVisitParamExtractBool(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionVisitParamExtractBool>();
     factory.registerFunction<FunctionSimpleJSONExtractBool>();
 }
 

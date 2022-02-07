@@ -34,7 +34,7 @@ namespace
 class FunctionS2CapUnion : public IFunction
 {
 public:
-    static constexpr auto name = "s2CapUnion";
+    static constexpr auto name = "s2_cap_union";
 
     static FunctionPtr create(ContextPtr)
     {

@@ -50,20 +50,20 @@ namespace
 
 const std::unordered_set<String> possibly_injective_function_names
 {
-        "dictGet",
-        "dictGetString",
-        "dictGetUInt8",
-        "dictGetUInt16",
-        "dictGetUInt32",
-        "dictGetUInt64",
-        "dictGetInt8",
-        "dictGetInt16",
-        "dictGetInt32",
-        "dictGetInt64",
-        "dictGetFloat32",
-        "dictGetFloat64",
-        "dictGetDate",
-        "dictGetDateTime"
+        "dict_get",
+        "dict_get_string",
+        "dict_get_uint8",
+        "dict_get_uint16",
+        "dict_get_uint32",
+        "dict_get_uint64",
+        "dict_get_int8",
+        "dict_get_int16",
+        "dict_get_int32",
+        "dict_get_int64",
+        "dict_get_float32",
+        "dict_get_float64",
+        "dict_get_date",
+        "dict_get_datetime"
 };
 
 /** You can not completely remove GROUP BY. Because if there were no aggregate functions, then it turns out that there will be no aggregation.
@@ -711,7 +711,7 @@ void optimizeFuseQuantileFunctions(ASTPtr & query)
                 continue;
             for (size_t i = 0; i < functions.size(); ++i)
             {
-                std::shared_ptr<ASTFunction> ast_new = makeASTFunction("arrayElement", func_base, std::make_shared<ASTLiteral>(i + 1));
+                std::shared_ptr<ASTFunction> ast_new = makeASTFunction("array_element", func_base, std::make_shared<ASTLiteral>(i + 1));
                 if (const auto & alias = (*functions[i])->tryGetAlias(); !alias.empty())
                     ast_new->setAlias(alias);
                 *functions[i] = ast_new;

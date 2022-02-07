@@ -11,7 +11,7 @@ namespace DB
 class FunctionConnectionId : public IFunction, WithContext
 {
 public:
-    static constexpr auto name = "connectionId";
+    static constexpr auto name = "connection_id";
 
     explicit FunctionConnectionId(ContextPtr context_) : WithContext(context_) {}
 
@@ -33,8 +33,7 @@ public:
 
 void registerFunctionConnectionId(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionConnectionId>(FunctionFactory::CaseInsensitive);
-    factory.registerAlias("connection_id", "connectionID", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionConnectionId>(FunctionFactory::CaseSensitive);
 }
 
 }

@@ -27,7 +27,7 @@ namespace
 class FunctionEvalMLMethod : public IFunction
 {
 public:
-    static constexpr auto name = "evalMLMethod";
+    static constexpr auto name = "eval_ml_method";
     static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionEvalMLMethod>(context);

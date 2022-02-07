@@ -10,7 +10,7 @@ namespace
 
 struct NameCountSubstrings
 {
-    static constexpr auto name = "countSubstrings";
+    static constexpr auto name = "count_substrings";
 };
 
 using FunctionCountSubstrings = FunctionsStringSearch<CountSubstringsImpl<NameCountSubstrings, PositionCaseSensitiveASCII>>;

@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchAllPositions
 {
-    static constexpr auto name = "multiSearchAllPositions";
+    static constexpr auto name = "multi_search_all_positions";
 };
 
 using FunctionMultiSearchAllPositions

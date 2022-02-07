@@ -38,7 +38,7 @@ struct RoundDurationImpl
 #endif
 };
 
-struct NameRoundDuration { static constexpr auto name = "roundDuration"; };
+struct NameRoundDuration { static constexpr auto name = "round_duration"; };
 using FunctionRoundDuration = FunctionUnaryArithmetic<RoundDurationImpl, NameRoundDuration, false>;
 
 }

@@ -15,7 +15,7 @@ namespace ErrorCodes
 class FunctionMonthName : public IFunction
 {
 public:
-    static constexpr auto name = "monthName";
+    static constexpr auto name = "month_name";
 
     static constexpr auto month_str = "month";
 

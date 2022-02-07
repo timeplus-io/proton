@@ -217,7 +217,7 @@ namespace DB
 
     struct NameRunningConcurrency
     {
-        static constexpr auto name = "runningConcurrency";
+        static constexpr auto name = "running_concurrency";
     };
 
     void registerFunctionRunningConcurrency(FunctionFactory & factory)

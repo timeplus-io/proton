@@ -16,7 +16,7 @@ namespace
 class FunctionByteSize : public IFunction
 {
 public:
-    static constexpr auto name = "byteSize";
+    static constexpr auto name = "byte_size";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionByteSize>();

@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchAnyCaseInsensitive
 {
-    static constexpr auto name = "multiSearchAnyCaseInsensitive";
+    static constexpr auto name = "multi_search_any_case_insensitive";
 };
 using FunctionMultiSearchCaseInsensitive
     = FunctionsMultiStringSearch<MultiSearchImpl<NameMultiSearchAnyCaseInsensitive, PositionCaseInsensitiveASCII>>;

@@ -56,15 +56,11 @@ struct ExtractRaw
     }
 };
 
-struct NameVisitParamExtractRaw    { static constexpr auto name = "visitParamExtractRaw"; };
-using FunctionVisitParamExtractRaw = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractRaw>, NameVisitParamExtractRaw>;
-
-struct NameSimpleJSONExtractRaw    { static constexpr auto name = "simpleJSONExtractRaw"; };
+struct NameSimpleJSONExtractRaw    { static constexpr auto name = "simple_json_extract_raw"; };
 using FunctionSimpleJSONExtractRaw = FunctionsStringSearchToString<ExtractParamToStringImpl<ExtractRaw>, NameSimpleJSONExtractRaw>;
 
 void registerFunctionVisitParamExtractRaw(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionVisitParamExtractRaw>();
     factory.registerFunction<FunctionSimpleJSONExtractRaw>();
 }
 

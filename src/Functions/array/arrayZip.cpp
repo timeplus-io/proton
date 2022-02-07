@@ -22,7 +22,7 @@ namespace ErrorCodes
 class FunctionArrayZip : public IFunction
 {
 public:
-    static constexpr auto name = "arrayZip";
+    static constexpr auto name = "array_zip";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayZip>(); }
 
     String getName() const override

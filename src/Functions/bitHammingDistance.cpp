@@ -24,7 +24,7 @@ struct BitHammingDistanceImpl
 
 struct NameBitHammingDistance
 {
-    static constexpr auto name = "bitHammingDistance";
+    static constexpr auto name = "bit_hamming_distance";
 };
 using FunctionBitHammingDistance = BinaryArithmeticOverloadResolver<BitHammingDistanceImpl, NameBitHammingDistance>;
 

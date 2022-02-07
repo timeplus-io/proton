@@ -42,7 +42,7 @@ struct BitRotateRightImpl
 #endif
 };
 
-struct NameBitRotateRight { static constexpr auto name = "bitRotateRight"; };
+struct NameBitRotateRight { static constexpr auto name = "bit_rotate_right"; };
 using FunctionBitRotateRight = BinaryArithmeticOverloadResolver<BitRotateRightImpl, NameBitRotateRight, true, false>;
 
 }

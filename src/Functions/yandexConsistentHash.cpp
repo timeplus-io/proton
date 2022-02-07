@@ -9,7 +9,7 @@ namespace DB
 /// An O(1) time and space consistent hash algorithm by Konstantin Oblakov
 struct YandexConsistentHashImpl
 {
-    static constexpr auto name = "yandexConsistentHash";
+    static constexpr auto name = "yandex_consistent_hash";
 
     using HashType = UInt64;
     /// Actually it supports UInt64, but it is efficient only if n <= 32768

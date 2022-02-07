@@ -7,7 +7,7 @@ namespace
 struct VerticalImpl
 {
     static constexpr auto Kind = DB::ExtractAllGroupsResultKind::VERTICAL;
-    static constexpr auto Name = "extractAllGroupsVertical";
+    static constexpr auto Name = "extract_all_groups";
 };
 
 }
@@ -18,7 +18,6 @@ namespace DB
 void registerFunctionExtractAllGroupsVertical(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionExtractAllGroups<VerticalImpl>>();
-    factory.registerAlias("extractAllGroups", VerticalImpl::Name, FunctionFactory::CaseSensitive);
 }
 
 }

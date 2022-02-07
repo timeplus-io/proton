@@ -313,9 +313,6 @@ void registerFunctionPadString(FunctionFactory & factory)
     factory.registerFunction<FunctionPadString<false, true>>();  /// leftPadUTF8
     factory.registerFunction<FunctionPadString<true, false>>();  /// rightPad
     factory.registerFunction<FunctionPadString<true, true>>();   /// rightPadUTF8
-
-    factory.registerAlias("lpad", "leftPad", FunctionFactory::CaseInsensitive);
-    factory.registerAlias("rpad", "rightPad", FunctionFactory::CaseInsensitive);
 }
 
 }

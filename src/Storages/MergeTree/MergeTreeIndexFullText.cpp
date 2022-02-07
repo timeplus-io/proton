@@ -1,11 +1,8 @@
 #include <Storages/MergeTree/MergeTreeIndexFullText.h>
 
 #include <Columns/ColumnArray.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/misc.h>
@@ -14,7 +11,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSubquery.h>
-#include <Core/Defines.h>
 
 #include <Poco/Logger.h>
 
@@ -343,7 +339,7 @@ bool MergeTreeConditionFullText::traverseAtomAST(const ASTPtr & node, Block & bl
         {
             if (tryPrepareSetBloomFilter(arguments, out))
             {
-                if (function->name == "notIn")
+                if (function->name == "not_in")
                 {
                     out.function = RPNElement::FUNCTION_NOT_IN;
                     return true;
@@ -356,15 +352,15 @@ bool MergeTreeConditionFullText::traverseAtomAST(const ASTPtr & node, Block & bl
             }
         }
         else if (function->name == "equals" ||
-                 function->name == "notEquals" ||
+                 function->name == "not_equals" ||
                  function->name == "has" ||
-                 function->name == "mapContains" ||
+                 function->name == "map_contains" ||
                  function->name == "like" ||
-                 function->name == "notLike" ||
-                 function->name == "hasToken" ||
-                 function->name == "startsWith" ||
-                 function->name == "endsWith" ||
-                 function->name == "multiSearchAny")
+                 function->name == "not_like" ||
+                 function->name == "has_token" ||
+                 function->name == "starts_with" ||
+                 function->name == "ends_with" ||
+                 function->name == "multi_search_any")
         {
             Field const_value;
             DataTypePtr const_type;
@@ -373,7 +369,7 @@ bool MergeTreeConditionFullText::traverseAtomAST(const ASTPtr & node, Block & bl
                 if (traverseASTEquals(function->name, arguments[0], const_type, const_value, out))
                     return true;
             }
-            else if (KeyCondition::getConstant(arguments[0], block_with_constants, const_value, const_type) && (function->name == "equals" || function->name == "notEquals"))
+            else if (KeyCondition::getConstant(arguments[0], block_with_constants, const_value, const_type) && (function->name == "equals" || function->name == "not_equals"))
             {
                 if (traverseASTEquals(function->name, arguments[1], const_type, const_value, out))
                     return true;
@@ -399,13 +395,13 @@ bool MergeTreeConditionFullText::traverseASTEquals(
 
     size_t key_column_num = 0;
     bool key_exists = getKey(key_ast->getColumnName(), key_column_num);
-    bool map_key_exists = getKey(fmt::format("mapKeys({})", key_ast->getColumnName()), key_column_num);
+    bool map_key_exists = getKey(fmt::format("map_keys({})", key_ast->getColumnName()), key_column_num);
 
     if (const auto * function = key_ast->as<ASTFunction>())
     {
-        if (function->name == "arrayElement")
+        if (function->name == "array_element")
         {
-            /** Try to parse arrayElement for mapKeys index.
+            /** Try to parse arrayElement for map_keys index.
               * It is important to ignore keys like column_map['Key'] = '' because if key does not exists in map
               * we return default value for arrayElement.
               *
@@ -422,11 +418,11 @@ bool MergeTreeConditionFullText::traverseASTEquals(
             const auto & map_column_name = column_ast_identifier->name();
 
             size_t map_keys_key_column_num = 0;
-            auto map_keys_index_column_name = fmt::format("mapKeys({})", map_column_name);
+            auto map_keys_index_column_name = fmt::format("map_keys({})", map_column_name);
             bool map_keys_exists = getKey(map_keys_index_column_name, map_keys_key_column_num);
 
             size_t map_values_key_column_num = 0;
-            auto map_values_index_column_name = fmt::format("mapValues({})", map_column_name);
+            auto map_values_index_column_name = fmt::format("map_values({})", map_column_name);
             bool map_values_exists = getKey(map_values_index_column_name, map_values_key_column_num);
 
             if (map_keys_exists)
@@ -460,7 +456,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
     if (!key_exists && !map_key_exists)
         return false;
 
-    if (map_key_exists && (function_name == "has" || function_name == "mapContains"))
+    if (map_key_exists && (function_name == "has" || function_name == "map_contains"))
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_HAS;
@@ -479,7 +475,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
         return true;
     }
 
-    if (function_name == "notEquals")
+    if (function_name == "not_equals")
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_NOT_EQUALS;
@@ -506,7 +502,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
         token_extractor->stringLikeToBloomFilter(value.data(), value.size(), *out.bloom_filter);
         return true;
     }
-    else if (function_name == "notLike")
+    else if (function_name == "not_like")
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_NOT_EQUALS;
@@ -515,7 +511,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
         token_extractor->stringLikeToBloomFilter(value.data(), value.size(), *out.bloom_filter);
         return true;
     }
-    else if (function_name == "hasToken")
+    else if (function_name == "has_token")
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_EQUALS;
@@ -524,7 +520,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
         token_extractor->stringToBloomFilter(value.data(), value.size(), *out.bloom_filter);
         return true;
     }
-    else if (function_name == "startsWith")
+    else if (function_name == "starts_with")
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_EQUALS;
@@ -533,7 +529,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
         token_extractor->stringToBloomFilter(value.data(), value.size(), *out.bloom_filter);
         return true;
     }
-    else if (function_name == "endsWith")
+    else if (function_name == "ends_with")
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_EQUALS;
@@ -542,7 +538,7 @@ bool MergeTreeConditionFullText::traverseASTEquals(
         token_extractor->stringToBloomFilter(value.data(), value.size(), *out.bloom_filter);
         return true;
     }
-    else if (function_name == "multiSearchAny")
+    else if (function_name == "multi_search_any")
     {
         out.key_column = key_column_num;
         out.function = RPNElement::FUNCTION_MULTI_SEARCH;

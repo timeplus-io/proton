@@ -40,14 +40,14 @@ void WatermarkTransform::initWatermark(
     ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
 {
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
-    if (watermark_settings.func_name == "__TUMBLE")
+    if (watermark_settings.func_name == "__tumble")
     {
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::SYNTAX_ERROR);
 
         watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), proc_time, log);
     }
-    else if (watermark_settings.func_name == "__HOP")
+    else if (watermark_settings.func_name == "__hop")
     {
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::SYNTAX_ERROR);

@@ -94,22 +94,22 @@ struct CustomizeFunctionsData
     }
 };
 
-char countdistinct[] = "countdistinct";
+char countdistinct[] = "count_distinct";
 using CustomizeCountDistinctVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsData<countdistinct>>, true>;
 
-char countifdistinct[] = "countifdistinct";
+char countifdistinct[] = "count_if_distinct";
 using CustomizeCountIfDistinctVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsData<countifdistinct>>, true>;
 
 char in[] = "in";
 using CustomizeInVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsData<in>>, true>;
 
-char notIn[] = "notin";
+char notIn[] = "not_in";
 using CustomizeNotInVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsData<notIn>>, true>;
 
-char globalIn[] = "globalin";
+char globalIn[] = "global_in";
 using CustomizeGlobalInVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsData<globalIn>>, true>;
 
-char globalNotIn[] = "globalnotin";
+char globalNotIn[] = "global_not_in";
 using CustomizeGlobalNotInVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsData<globalNotIn>>, true>;
 
 template <char const * func_suffix>
@@ -130,7 +130,7 @@ struct CustomizeFunctionsSuffixData
 };
 
 /// Swap 'if' and 'distinct' suffixes to make execution more optimal.
-char ifDistinct[] = "ifdistinct";
+char ifDistinct[] = "if_distinct";
 using CustomizeIfDistinctVisitor = InDepthNodeVisitor<OneTypeMatcher<CustomizeFunctionsSuffixData<ifDistinct>>, true>;
 
 /// Used to rewrite all aggregate functions to add -OrNull suffix to them if setting `aggregate_functions_null_for_empty` is set.
@@ -155,6 +155,7 @@ struct CustomizeAggregateFunctionsSuffixData
 };
 
 // Used to rewrite aggregate functions with -OrNull suffix in some cases, such as sumIfOrNull, we should rewrite to sumOrNullIf
+// proton: FIXME, prefix, suffix to make sure they work
 struct CustomizeAggregateFunctionsMoveSuffixData
 {
     using TypeToVisit = ASTFunction;
@@ -167,17 +168,17 @@ struct CustomizeAggregateFunctionsMoveSuffixData
 
         auto prefix_size = prefix.size();
 
-        if (endsWith(prefix, "MergeState"))
-            return prefix.substr(0, prefix_size - 10) + customized_func_suffix + "MergeState";
+        if (endsWith(prefix, "_merge_state"))
+            return prefix.substr(0, prefix_size - 10) + customized_func_suffix + "_merge_state";
 
-        if (endsWith(prefix, "Merge"))
-            return prefix.substr(0, prefix_size - 5) + customized_func_suffix + "Merge";
+        if (endsWith(prefix, "_merge"))
+            return prefix.substr(0, prefix_size - 5) + customized_func_suffix + "_merge";
 
-        if (endsWith(prefix, "State"))
-            return prefix.substr(0, prefix_size - 5) + customized_func_suffix + "State";
+        if (endsWith(prefix, "_state"))
+            return prefix.substr(0, prefix_size - 5) + customized_func_suffix + "_state";
 
-        if (endsWith(prefix, "If"))
-            return prefix.substr(0, prefix_size - 2) + customized_func_suffix + "If";
+        if (endsWith(prefix, "_if"))
+            return prefix.substr(0, prefix_size - 2) + customized_func_suffix + "_if";
 
         return name;
     }
@@ -341,21 +342,21 @@ void translateQualifiedNames(ASTPtr & query, const ASTSelectQuery & select_query
 // sumCount().
 void replaceWithSumCount(String column_name, ASTFunction & func)
 {
-    auto func_base = makeASTFunction("sumCount", std::make_shared<ASTIdentifier>(column_name));
+    auto func_base = makeASTFunction("sum_count", std::make_shared<ASTIdentifier>(column_name));
     auto exp_list = std::make_shared<ASTExpressionList>();
     if (func.name == "sum" || func.name == "count")
     {
         /// Rewrite "sum" to sumCount().1, rewrite "count" to sumCount().2
         UInt8 idx = (func.name == "sum" ? 1 : 2);
-        func.name = "tupleElement";
+        func.name = "tuple_element";
         exp_list->children.push_back(func_base);
         exp_list->children.push_back(std::make_shared<ASTLiteral>(idx));
     }
     else
     {
         /// Rewrite "avg" to sumCount().1 / sumCount().2
-        auto new_arg1 = makeASTFunction("tupleElement", func_base, std::make_shared<ASTLiteral>(UInt8(1)));
-        auto new_arg2 = makeASTFunction("tupleElement", func_base, std::make_shared<ASTLiteral>(UInt8(2)));
+        auto new_arg1 = makeASTFunction("tuple_element", func_base, std::make_shared<ASTLiteral>(UInt8(1)));
+        auto new_arg2 = makeASTFunction("tuple_element", func_base, std::make_shared<ASTLiteral>(UInt8(2)));
         func.name = "divide";
         exp_list->children.push_back(new_arg1);
         exp_list->children.push_back(new_arg2);
@@ -383,7 +384,7 @@ void fuseSumCountAggregates(std::unordered_map<String, FuseSumCountAggregates> &
 bool hasArrayJoin(const ASTPtr & ast)
 {
     if (const ASTFunction * function = ast->as<ASTFunction>())
-        if (function->name == "arrayJoin")
+        if (function->name == "array_join")
             return true;
 
     for (const auto & child : ast->children)
@@ -829,7 +830,7 @@ struct RewriteShardNum
         String alias = identifier.tryGetAlias();
         if (alias.empty())
             alias = "_shard_num";
-        ast = makeASTFunction("shardNum");
+        ast = makeASTFunction("shard_num");
         ast->setAlias(alias);
     }
 };
@@ -1115,7 +1116,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
         if (!array_join_sources.empty())
         {
-            ss << ", arrayJoin columns:";
+            ss << ", array_join columns:";
             for (const auto & name : array_join_sources)
                 ss << " '" << name << "'";
         }
@@ -1356,10 +1357,10 @@ void TreeRewriter::normalize(
     CustomizeCountDistinctVisitor::Data data_count_distinct{settings.count_distinct_implementation};
     CustomizeCountDistinctVisitor(data_count_distinct).visit(query);
 
-    CustomizeCountIfDistinctVisitor::Data data_count_if_distinct{settings.count_distinct_implementation.toString() + "If"};
+    CustomizeCountIfDistinctVisitor::Data data_count_if_distinct{settings.count_distinct_implementation.toString() + "_if"};
     CustomizeCountIfDistinctVisitor(data_count_if_distinct).visit(query);
 
-    CustomizeIfDistinctVisitor::Data data_distinct_if{"DistinctIf"};
+    CustomizeIfDistinctVisitor::Data data_distinct_if{"distinct_if"};
     CustomizeIfDistinctVisitor(data_distinct_if).visit(query);
 
     ExistsExpressionVisitor::Data exists;
@@ -1367,16 +1368,16 @@ void TreeRewriter::normalize(
 
     if (settings.transform_null_in)
     {
-        CustomizeInVisitor::Data data_null_in{"nullIn"};
+        CustomizeInVisitor::Data data_null_in{"null_in"};
         CustomizeInVisitor(data_null_in).visit(query);
 
-        CustomizeNotInVisitor::Data data_not_null_in{"notNullIn"};
+        CustomizeNotInVisitor::Data data_not_null_in{"not_null_in"};
         CustomizeNotInVisitor(data_not_null_in).visit(query);
 
-        CustomizeGlobalInVisitor::Data data_global_null_in{"globalNullIn"};
+        CustomizeGlobalInVisitor::Data data_global_null_in{"global_null_in"};
         CustomizeGlobalInVisitor(data_global_null_in).visit(query);
 
-        CustomizeGlobalNotInVisitor::Data data_global_not_null_in{"globalNotNullIn"};
+        CustomizeGlobalNotInVisitor::Data data_global_not_null_in{"global_not_null_in"};
         CustomizeGlobalNotInVisitor(data_global_not_null_in).visit(query);
     }
 
@@ -1394,12 +1395,12 @@ void TreeRewriter::normalize(
     /// Rewrite all aggregate functions to add -OrNull suffix to them
     if (settings.aggregate_functions_null_for_empty)
     {
-        CustomizeAggregateFunctionsOrNullVisitor::Data data_or_null{"OrNull"};
+        CustomizeAggregateFunctionsOrNullVisitor::Data data_or_null{"_or_null"};
         CustomizeAggregateFunctionsOrNullVisitor(data_or_null).visit(query);
     }
 
     /// Move -OrNull suffix ahead, this should execute after add -OrNull suffix
-    CustomizeAggregateFunctionsMoveOrNullVisitor::Data data_or_null{"OrNull"};
+    CustomizeAggregateFunctionsMoveOrNullVisitor::Data data_or_null{"_or_null"};
     CustomizeAggregateFunctionsMoveOrNullVisitor(data_or_null).visit(query);
 
     /// Creates a dictionary `aliases`: alias -> ASTPtr

@@ -16,7 +16,7 @@ class FunctionArrayEnumerateUniq : public FunctionArrayEnumerateExtended<Functio
 {
     using Base = FunctionArrayEnumerateExtended<FunctionArrayEnumerateUniq>;
 public:
-    static constexpr auto name = "arrayEnumerateUniq";
+    static constexpr auto name = "array_enumerate_uniq";
     using Base::create;
 };
 

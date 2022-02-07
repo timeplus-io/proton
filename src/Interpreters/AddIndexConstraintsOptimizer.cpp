@@ -47,8 +47,8 @@ namespace
         {
             {"equals", ComparisonGraph::CompareResult::EQUAL},
             {"less", ComparisonGraph::CompareResult::LESS},
-            {"lessOrEquals", ComparisonGraph::CompareResult::LESS_OR_EQUAL},
-            {"greaterOrEquals", ComparisonGraph::CompareResult::GREATER_OR_EQUAL},
+            {"less_or_equals", ComparisonGraph::CompareResult::LESS_OR_EQUAL},
+            {"greater_or_equals", ComparisonGraph::CompareResult::GREATER_OR_EQUAL},
             {"greater", ComparisonGraph::CompareResult::GREATER},
         };
         return relations;
@@ -60,8 +60,8 @@ namespace
         {
             {ComparisonGraph::CompareResult::EQUAL, "equals"},
             {ComparisonGraph::CompareResult::LESS, "less"},
-            {ComparisonGraph::CompareResult::LESS_OR_EQUAL, "lessOrEquals"},
-            {ComparisonGraph::CompareResult::GREATER_OR_EQUAL, "greaterOrEquals"},
+            {ComparisonGraph::CompareResult::LESS_OR_EQUAL, "less_or_equals"},
+            {ComparisonGraph::CompareResult::GREATER_OR_EQUAL, "greater_or_equals"},
             {ComparisonGraph::CompareResult::GREATER, "greater"},
         };
         return relations;
@@ -173,7 +173,7 @@ void AddIndexConstraintsOptimizer::perform(CNFQuery & cnf_query)
     if (!and_group.empty())
     {
         CNFQuery::OrGroup new_or_group;
-        new_or_group.insert(CNFQuery::AtomicFormula{false, makeASTFunction("indexHint", TreeCNFConverter::fromCNF(CNFQuery(std::move(and_group))))});
+        new_or_group.insert(CNFQuery::AtomicFormula{false, makeASTFunction("index_hint", TreeCNFConverter::fromCNF(CNFQuery(std::move(and_group))))});
         cnf_query.appendGroup(CNFQuery::AndGroup{new_or_group});
     }
 }

@@ -25,7 +25,7 @@ ASTPtr transformEmptyToSubcolumn(const String & name_in_storage, const String & 
 ASTPtr transformNotEmptyToSubcolumn(const String & name_in_storage, const String & subcolumn_name)
 {
     auto ast = transformToSubcolumn(name_in_storage, subcolumn_name);
-    return makeASTFunction("notEquals", ast, std::make_shared<ASTLiteral>(0u));
+    return makeASTFunction("not_equals", ast, std::make_shared<ASTLiteral>(0u));
 }
 
 ASTPtr transformIsNotNullToSubcolumn(const String & name_in_storage, const String & subcolumn_name)
@@ -50,17 +50,17 @@ const std::unordered_map<String, std::tuple<TypeIndex, String, decltype(&transfo
 {
     {"length",    {TypeIndex::Array, "size0", transformToSubcolumn}},
     {"empty",     {TypeIndex::Array, "size0", transformEmptyToSubcolumn}},
-    {"notEmpty",  {TypeIndex::Array, "size0", transformNotEmptyToSubcolumn}},
-    {"isNull",    {TypeIndex::Nullable, "null", transformToSubcolumn}},
-    {"isNotNull", {TypeIndex::Nullable, "null", transformIsNotNullToSubcolumn}},
+    {"not_empty",  {TypeIndex::Array, "size0", transformNotEmptyToSubcolumn}},
+    {"is_null",    {TypeIndex::Nullable, "null", transformToSubcolumn}},
+    {"is_not_null", {TypeIndex::Nullable, "null", transformIsNotNullToSubcolumn}},
     {"count",     {TypeIndex::Nullable, "null", transformCountNullableToSubcolumn}},
-    {"mapKeys",   {TypeIndex::Map, "keys", transformToSubcolumn}},
-    {"mapValues", {TypeIndex::Map, "values", transformToSubcolumn}},
+    {"map_keys",   {TypeIndex::Map, "keys", transformToSubcolumn}},
+    {"map_values", {TypeIndex::Map, "values", transformToSubcolumn}},
 };
 
 const std::unordered_map<String, std::tuple<TypeIndex, String, decltype(&transformMapContainsToSubcolumn)>> binary_function_to_subcolumn
 {
-    {"mapContains", {TypeIndex::Map, "keys", transformMapContainsToSubcolumn}},
+    {"map_contains", {TypeIndex::Map, "keys", transformMapContainsToSubcolumn}},
 };
 
 }
@@ -96,7 +96,7 @@ void RewriteFunctionToSubcolumnData::visit(ASTFunction & function, ASTPtr & ast)
     }
     else
     {
-        if (function.name == "tupleElement" && column_type_id == TypeIndex::Tuple)
+        if (function.name == "tuple_element" && column_type_id == TypeIndex::Tuple)
         {
             const auto * literal = arguments[1]->as<ASTLiteral>();
             if (!literal)

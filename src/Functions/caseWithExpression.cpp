@@ -19,7 +19,7 @@ namespace
 class FunctionCaseWithExpression : public IFunction
 {
 public:
-    static constexpr auto name = "caseWithExpression";
+    static constexpr auto name = "case_with_expression";
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionCaseWithExpression>(context_); }
 
     explicit FunctionCaseWithExpression(ContextPtr context_) : context(context_) {}

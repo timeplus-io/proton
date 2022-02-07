@@ -29,10 +29,10 @@ struct CutToFirstSignificantSubdomain
     }
 };
 
-struct NameCutToFirstSignificantSubdomain { static constexpr auto name = "cutToFirstSignificantSubdomain"; };
+struct NameCutToFirstSignificantSubdomain { static constexpr auto name = "cut_to_first_significant_subdomain"; };
 using FunctionCutToFirstSignificantSubdomain = FunctionStringToString<ExtractSubstringImpl<CutToFirstSignificantSubdomain<true>>, NameCutToFirstSignificantSubdomain>;
 
-struct NameCutToFirstSignificantSubdomainWithWWW { static constexpr auto name = "cutToFirstSignificantSubdomainWithWWW"; };
+struct NameCutToFirstSignificantSubdomainWithWWW { static constexpr auto name = "cut_to_first_significant_subdomain_with_www"; };
 using FunctionCutToFirstSignificantSubdomainWithWWW = FunctionStringToString<ExtractSubstringImpl<CutToFirstSignificantSubdomain<false>>, NameCutToFirstSignificantSubdomainWithWWW>;
 
 void registerFunctionCutToFirstSignificantSubdomain(FunctionFactory & factory)

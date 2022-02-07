@@ -20,7 +20,7 @@ void ExpressionInfoMatcher::visit(const ASTPtr & ast, Data & data)
 
 void ExpressionInfoMatcher::visit(const ASTFunction & ast_function, const ASTPtr &, Data & data)
 {
-    if (ast_function.name == "arrayJoin")
+    if (ast_function.name == "array_join")
     {
         data.is_array_join = true;
     }

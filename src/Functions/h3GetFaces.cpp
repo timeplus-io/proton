@@ -28,7 +28,7 @@ namespace
 class FunctionH3GetFaces : public IFunction
 {
 public:
-    static constexpr auto name = "h3GetFaces";
+    static constexpr auto name = "h3_get_faces";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3GetFaces>(); }
 

@@ -16,7 +16,7 @@ private:
     bool first;
 
 public:
-    static constexpr auto name = "extractURLParameterNames";
+    static constexpr auto name = "extract_url_parameter_names";
     static String getName() { return name; }
 
     static size_t getNumberOfArguments() { return 1; }
@@ -85,7 +85,7 @@ public:
     }
 };
 
-struct NameExtractURLParameterNames { static constexpr auto name = "extractURLParameterNames"; };
+struct NameExtractURLParameterNames { static constexpr auto name = "extract_url_parameter_names"; };
 using FunctionExtractURLParameterNames = FunctionTokens<ExtractURLParameterNamesImpl>;
 
 void registerFunctionExtractURLParameterNames(FunctionFactory & factory)

@@ -35,7 +35,7 @@ namespace
 class FunctionH3ToChildren : public IFunction
 {
 public:
-    static constexpr auto name = "h3ToChildren";
+    static constexpr auto name = "h3_to_children";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3ToChildren>(); }
 

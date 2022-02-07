@@ -14,7 +14,7 @@ namespace
 class FunctionIsConstant : public IFunction
 {
 public:
-    static constexpr auto name = "isConstant";
+    static constexpr auto name = "is_constant";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionIsConstant>();

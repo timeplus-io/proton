@@ -27,7 +27,7 @@ namespace
 class FunctionS2RectAdd : public IFunction
 {
 public:
-    static constexpr auto name = "s2RectAdd";
+    static constexpr auto name = "s2_rect_add";
 
     static FunctionPtr create(ContextPtr)
     {

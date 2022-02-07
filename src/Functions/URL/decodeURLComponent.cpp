@@ -117,8 +117,8 @@ struct DecodeURLComponentImpl
 };
 
 
-struct NameDecodeURLComponent { static constexpr auto name = "decodeURLComponent"; };
-struct NameDecodeURLFormComponent { static constexpr auto name = "decodeURLFormComponent"; };
+struct NameDecodeURLComponent { static constexpr auto name = "decode_url_component"; };
+struct NameDecodeURLFormComponent { static constexpr auto name = "decode_url_form_component"; };
 using FunctionDecodeURLComponent = FunctionStringToString<DecodeURLComponentImpl<false>, NameDecodeURLComponent>;
 using FunctionDecodeURLFormComponent = FunctionStringToString<DecodeURLComponentImpl<true>, NameDecodeURLFormComponent>;
 

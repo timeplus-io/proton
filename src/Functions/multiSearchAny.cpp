@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchAny
 {
-    static constexpr auto name = "multiSearchAny";
+    static constexpr auto name = "multi_search_any";
 };
 
 using FunctionMultiSearch = FunctionsMultiStringSearch<MultiSearchImpl<NameMultiSearchAny, PositionCaseSensitiveASCII>>;

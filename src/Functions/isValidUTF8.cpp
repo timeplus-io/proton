@@ -252,7 +252,7 @@ SOFTWARE.
 
 struct NameIsValidUTF8
 {
-    static constexpr auto name = "isValidUTF8";
+    static constexpr auto name = "is_valid_utf8";
 };
 using FunctionValidUTF8 = FunctionStringOrArrayToT<ValidUTF8Impl, NameIsValidUTF8, UInt8>;
 

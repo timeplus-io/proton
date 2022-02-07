@@ -70,7 +70,7 @@ struct ReverseUTF8Impl
 
 struct NameReverseUTF8
 {
-    static constexpr auto name = "reverseUTF8";
+    static constexpr auto name = "reverse_utf8";
 };
 using FunctionReverseUTF8 = FunctionStringToString<ReverseUTF8Impl, NameReverseUTF8, true>;
 

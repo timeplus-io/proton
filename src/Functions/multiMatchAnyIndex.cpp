@@ -10,7 +10,7 @@ namespace
 
 struct NameMultiMatchAnyIndex
 {
-    static constexpr auto name = "multiMatchAnyIndex";
+    static constexpr auto name = "multi_match_any_index";
 };
 
 using FunctionMultiMatchAnyIndex = FunctionsMultiStringSearch<

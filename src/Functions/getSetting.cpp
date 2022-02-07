@@ -22,7 +22,7 @@ namespace
 class FunctionGetSetting : public IFunction, WithContext
 {
 public:
-    static constexpr auto name = "getSetting";
+    static constexpr auto name = "get_setting";
 
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionGetSetting>(context_); }
     explicit FunctionGetSetting(ContextPtr context_) : WithContext(context_) {}

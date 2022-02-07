@@ -24,7 +24,7 @@ namespace ErrorCodes
 class FunctionArrayDistinct : public IFunction
 {
 public:
-    static constexpr auto name = "arrayDistinct";
+    static constexpr auto name = "array_distinct";
 
     static FunctionPtr create(ContextPtr)
     {

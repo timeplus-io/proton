@@ -116,11 +116,11 @@ struct ArrayFirstLastIndexImpl
     }
 };
 
-struct NameArrayFirstIndex { static constexpr auto name = "arrayFirstIndex"; };
+struct NameArrayFirstIndex { static constexpr auto name = "array_first_index"; };
 using ArrayFirstIndexImpl = ArrayFirstLastIndexImpl<ArrayFirstLastIndexStrategy::First>;
 using FunctionArrayFirstIndex = FunctionArrayMapped<ArrayFirstIndexImpl, NameArrayFirstIndex>;
 
-struct NameArrayLastIndex { static constexpr auto name = "arrayLastIndex"; };
+struct NameArrayLastIndex { static constexpr auto name = "array_last_index"; };
 using ArrayLastIndexImpl = ArrayFirstLastIndexImpl<ArrayFirstLastIndexStrategy::Last>;
 using FunctionArrayLastIndex = FunctionArrayMapped<ArrayLastIndexImpl, NameArrayLastIndex>;
 

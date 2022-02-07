@@ -8,7 +8,6 @@
 #include <Common/assert_cast.h>
 
 #include <Core/AccurateComparison.h>
-#include <Core/Settings.h>
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnLowCardinality.h>
@@ -25,7 +24,6 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -470,22 +468,22 @@ public:
 };
 
 
-struct NameJSONHas { static constexpr auto name{"JSONHas"}; };
-struct NameIsValidJSON { static constexpr auto name{"isValidJSON"}; };
-struct NameJSONLength { static constexpr auto name{"JSONLength"}; };
-struct NameJSONKey { static constexpr auto name{"JSONKey"}; };
-struct NameJSONType { static constexpr auto name{"JSONType"}; };
-struct NameJSONExtractInt { static constexpr auto name{"JSONExtractInt"}; };
-struct NameJSONExtractUInt { static constexpr auto name{"JSONExtractUInt"}; };
-struct NameJSONExtractFloat { static constexpr auto name{"JSONExtractFloat"}; };
-struct NameJSONExtractBool { static constexpr auto name{"JSONExtractBool"}; };
-struct NameJSONExtractString { static constexpr auto name{"JSONExtractString"}; };
-struct NameJSONExtract { static constexpr auto name{"JSONExtract"}; };
-struct NameJSONExtractKeysAndValues { static constexpr auto name{"JSONExtractKeysAndValues"}; };
-struct NameJSONExtractRaw { static constexpr auto name{"JSONExtractRaw"}; };
-struct NameJSONExtractArrayRaw { static constexpr auto name{"JSONExtractArrayRaw"}; };
-struct NameJSONExtractKeysAndValuesRaw { static constexpr auto name{"JSONExtractKeysAndValuesRaw"}; };
-struct NameJSONExtractKeys { static constexpr auto name{"JSONExtractKeys"}; };
+struct NameJSONHas { static constexpr auto name{"json_has"}; };
+struct NameIsValidJSON { static constexpr auto name{"is_valid_json"}; };
+struct NameJSONLength { static constexpr auto name{"json_length"}; };
+struct NameJSONKey { static constexpr auto name{"json_key"}; };
+struct NameJSONType { static constexpr auto name{"json_type"}; };
+struct NameJSONExtractInt { static constexpr auto name{"json_extract_int"}; };
+struct NameJSONExtractUInt { static constexpr auto name{"json_extract_uint"}; };
+struct NameJSONExtractFloat { static constexpr auto name{"json_extract_float"}; };
+struct NameJSONExtractBool { static constexpr auto name{"json_extract_bool"}; };
+struct NameJSONExtractString { static constexpr auto name{"json_extract_string"}; };
+struct NameJSONExtract { static constexpr auto name{"json_extract"}; };
+struct NameJSONExtractKeysAndValues { static constexpr auto name{"json_extract_keys_and_values"}; };
+struct NameJSONExtractRaw { static constexpr auto name{"json_extract_raw"}; };
+struct NameJSONExtractArrayRaw { static constexpr auto name{"json_extract_array_raw"}; };
+struct NameJSONExtractKeysAndValuesRaw { static constexpr auto name{"json_extract_keys_and_values_raw"}; };
+struct NameJSONExtractKeys { static constexpr auto name{"json_extract_keys"}; };
 
 
 template <typename JSONParser>

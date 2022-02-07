@@ -30,7 +30,7 @@ namespace
 class FunctionExtractGroups : public IFunction
 {
 public:
-    static constexpr auto name = "extractGroups";
+    static constexpr auto name = "extract_groups";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionExtractGroups>(); }
 
     String getName() const override { return name; }

@@ -38,7 +38,7 @@ namespace
 class FunctionS2CapContains : public IFunction
 {
 public:
-    static constexpr auto name = "s2CapContains";
+    static constexpr auto name = "s2_cap_contains";
 
     static FunctionPtr create(ContextPtr)
     {

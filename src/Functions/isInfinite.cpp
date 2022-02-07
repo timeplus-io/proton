@@ -11,7 +11,7 @@ namespace
 
 struct IsInfiniteImpl
 {
-    static constexpr auto name = "isInfinite";
+    static constexpr auto name = "is_infinite";
     template <typename T>
     static bool execute(const T t)
     {

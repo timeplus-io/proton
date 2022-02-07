@@ -23,7 +23,7 @@ namespace
 class FunctionFinalizeAggregation : public IFunction
 {
 public:
-    static constexpr auto name = "finalizeAggregation";
+    static constexpr auto name = "finalize_aggregation";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionFinalizeAggregation>();

@@ -23,7 +23,7 @@ namespace ErrorCodes
 class FunctionArrayReverse : public IFunction
 {
 public:
-    static constexpr auto name = "arrayReverse";
+    static constexpr auto name = "array_reverse";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayReverse>(); }
 
     String getName() const override { return name; }

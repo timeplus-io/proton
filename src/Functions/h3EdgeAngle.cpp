@@ -28,7 +28,7 @@ namespace
 class FunctionH3EdgeAngle : public IFunction
 {
 public:
-    static constexpr auto name = "h3EdgeAngle";
+    static constexpr auto name = "h3_edge_angle";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3EdgeAngle>(); }
 

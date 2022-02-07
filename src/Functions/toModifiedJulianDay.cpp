@@ -220,12 +220,12 @@ namespace DB
 
     struct NameToModifiedJulianDay
     {
-        static constexpr auto name = "toModifiedJulianDay";
+        static constexpr auto name = "to_modified_julian_day";
     };
 
     struct NameToModifiedJulianDayOrNull
     {
-        static constexpr auto name = "toModifiedJulianDayOrNull";
+        static constexpr auto name = "to_modified_julian_day_or_null";
     };
 
     void registerFunctionToModifiedJulianDay(FunctionFactory & factory)

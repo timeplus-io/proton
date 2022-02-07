@@ -212,7 +212,7 @@ void ExecuteScalarSubqueriesMatcher::visit(const ASTSubquery & subquery, ASTPtr 
     }
     else
     {
-        auto func = makeASTFunction("__getScalar", std::make_shared<ASTLiteral>(scalar_query_hash_str));
+        auto func = makeASTFunction("__get_scalar", std::make_shared<ASTLiteral>(scalar_query_hash_str));
         func->alias = subquery.alias;
         func->prefer_alias_to_column_name = subquery.prefer_alias_to_column_name;
         ast = std::move(func);

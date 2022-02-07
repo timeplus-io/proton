@@ -18,7 +18,7 @@ namespace DB
 class FunctionVisibleWidth : public IFunction
 {
 public:
-    static constexpr auto name = "visibleWidth";
+    static constexpr auto name = "visible_width";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionVisibleWidth>();

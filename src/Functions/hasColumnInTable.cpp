@@ -28,7 +28,7 @@ namespace
 class FunctionHasColumnInTable : public IFunction, WithContext
 {
 public:
-    static constexpr auto name = "hasColumnInTable";
+    static constexpr auto name = "has_column_in_table";
     static FunctionPtr create(ContextPtr context_)
     {
         return std::make_shared<FunctionHasColumnInTable>(context_->getGlobalContext());

@@ -215,7 +215,7 @@ class IColumn;
     \
     M(Bool, http_native_compression_disable_checksumming_on_decompress, false, "If you uncompress the POST data from the client compressed by the native format, do not check the checksum.", 0) \
     /** proton: starts */                       \
-    M(String, count_distinct_implementation, "uniqueExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
+    M(String, count_distinct_implementation, "unique_exact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
     /** proton: ends */                       \
     \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \

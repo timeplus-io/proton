@@ -37,7 +37,7 @@ struct BitNotImpl
 #endif
 };
 
-struct NameBitNot { static constexpr auto name = "bitNot"; };
+struct NameBitNot { static constexpr auto name = "bit_not"; };
 using FunctionBitNot = FunctionUnaryArithmetic<BitNotImpl, NameBitNot, true>;
 
 }

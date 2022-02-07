@@ -409,7 +409,7 @@ void MergeTreePartition::create(const StorageMetadataPtr & metadata_snapshot, Bl
     /// Executing partition_by expression adds new columns to passed block according to partition functions.
     /// The block is passed by reference and is used afterwards. `moduloLegacy` needs to be substituted back
     /// with just `modulo`, because it was a temporary substitution.
-    static constexpr auto modulo_legacy_function_name = "moduloLegacy";
+    static constexpr auto modulo_legacy_function_name = "modulo_legacy";
 
     size_t i = 0;
     for (const auto & element : partition_key_names_and_types)

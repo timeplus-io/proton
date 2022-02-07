@@ -120,8 +120,8 @@ struct ArrayFillImpl
     }
 };
 
-struct NameArrayFill { static constexpr auto name = "arrayFill"; };
-struct NameArrayReverseFill { static constexpr auto name = "arrayReverseFill"; };
+struct NameArrayFill { static constexpr auto name = "array_fill"; };
+struct NameArrayReverseFill { static constexpr auto name = "array_reverse_fill"; };
 using FunctionArrayFill = FunctionArrayMapped<ArrayFillImpl<false>, NameArrayFill>;
 using FunctionArrayReverseFill = FunctionArrayMapped<ArrayFillImpl<true>, NameArrayReverseFill>;
 

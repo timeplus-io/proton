@@ -107,8 +107,8 @@ struct ArraySplitImpl
     }
 };
 
-struct NameArraySplit { static constexpr auto name = "arraySplit"; };
-struct NameArrayReverseSplit { static constexpr auto name = "arrayReverseSplit"; };
+struct NameArraySplit { static constexpr auto name = "array_split"; };
+struct NameArrayReverseSplit { static constexpr auto name = "array_reverse_split"; };
 using FunctionArraySplit = FunctionArrayMapped<ArraySplitImpl<false>, NameArraySplit>;
 using FunctionArrayReverseSplit = FunctionArrayMapped<ArraySplitImpl<true>, NameArrayReverseSplit>;
 

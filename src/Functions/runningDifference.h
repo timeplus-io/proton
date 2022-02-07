@@ -28,13 +28,13 @@ struct FunctionRunningDifferenceName;
 template <>
 struct FunctionRunningDifferenceName<true>
 {
-    static constexpr auto name = "runningDifference";
+    static constexpr auto name = "running_difference";
 };
 
 template <>
 struct FunctionRunningDifferenceName<false>
 {
-    static constexpr auto name = "runningDifferenceStartingWithFirstValue";
+    static constexpr auto name = "running_difference_starting_with_first_value";
 };
 
 /** Calculate difference of consecutive values in columns.

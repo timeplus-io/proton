@@ -29,7 +29,7 @@ namespace ErrorCodes
 class FunctionArrayUniq : public IFunction
 {
 public:
-    static constexpr auto name = "arrayUniq";
+    static constexpr auto name = "array_uniq";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionArrayUniq>(); }
 

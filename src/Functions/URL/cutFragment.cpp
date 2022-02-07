@@ -5,7 +5,7 @@
 namespace DB
 {
 
-struct NameCutFragment { static constexpr auto name = "cutFragment"; };
+struct NameCutFragment { static constexpr auto name = "cut_fragment"; };
 using FunctionCutFragment = FunctionStringToString<CutSubstringImpl<ExtractFragment<false>>, NameCutFragment>;
 
 void registerFunctionCutFragment(FunctionFactory & factory)

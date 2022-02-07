@@ -99,7 +99,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
     }
     else
     {
-        String partition_by = config.getString(config_prefix + ".partition_by", "toYYYYMM(event_date)");
+        String partition_by = config.getString(config_prefix + ".partition_by", "to_YYYYMM(event_date)");
         engine = "ENGINE = MergeTree";
         if (!partition_by.empty())
             engine += " PARTITION BY (" + partition_by + ")";

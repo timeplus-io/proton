@@ -17,7 +17,7 @@ private:
     mutable std::atomic<size_t> rows{0};
 
 public:
-    static constexpr auto name = "rowNumberInAllBlocks";
+    static constexpr auto name = "row_number_in_all_blocks";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionRowNumberInAllBlocks>();

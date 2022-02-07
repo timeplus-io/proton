@@ -111,7 +111,7 @@ T combineHashesFunc(T t1, T t2)
 #if USE_SSL
 struct HalfMD5Impl
 {
-    static constexpr auto name = "halfMD5";
+    static constexpr auto name = "half_md5";
     using ReturnType = UInt64;
 
     static UInt64 apply(const char * begin, size_t size)
@@ -144,7 +144,7 @@ struct HalfMD5Impl
 
 struct MD4Impl
 {
-    static constexpr auto name = "MD4";
+    static constexpr auto name = "md4";
     enum { length = MD4_DIGEST_LENGTH };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -158,7 +158,7 @@ struct MD4Impl
 
 struct MD5Impl
 {
-    static constexpr auto name = "MD5";
+    static constexpr auto name = "md5";
     enum { length = MD5_DIGEST_LENGTH };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -172,7 +172,7 @@ struct MD5Impl
 
 struct SHA1Impl
 {
-    static constexpr auto name = "SHA1";
+    static constexpr auto name = "sha1";
     enum { length = SHA_DIGEST_LENGTH };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -186,7 +186,7 @@ struct SHA1Impl
 
 struct SHA224Impl
 {
-    static constexpr auto name = "SHA224";
+    static constexpr auto name = "sha224";
     enum { length = SHA224_DIGEST_LENGTH };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -200,7 +200,7 @@ struct SHA224Impl
 
 struct SHA256Impl
 {
-    static constexpr auto name = "SHA256";
+    static constexpr auto name = "sha256";
     enum { length = SHA256_DIGEST_LENGTH };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -214,7 +214,7 @@ struct SHA256Impl
 
 struct SHA384Impl
 {
-    static constexpr auto name = "SHA384";
+    static constexpr auto name = "sha384";
     enum { length = SHA384_DIGEST_LENGTH };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -228,7 +228,7 @@ struct SHA384Impl
 
 struct SHA512Impl
 {
-    static constexpr auto name = "SHA512";
+    static constexpr auto name = "sha512";
     enum { length = 64 };
 
     static void apply(const char * begin, const size_t size, unsigned char * out_char_data)
@@ -243,7 +243,7 @@ struct SHA512Impl
 
 struct SipHash64Impl
 {
-    static constexpr auto name = "sipHash64";
+    static constexpr auto name = "sip_hash64";
     using ReturnType = UInt64;
 
     static UInt64 apply(const char * begin, size_t size)
@@ -261,7 +261,7 @@ struct SipHash64Impl
 
 struct SipHash128Impl
 {
-    static constexpr auto name = "sipHash128";
+    static constexpr auto name = "sip_hash128";
 
     using ReturnType = UInt128;
 
@@ -287,7 +287,7 @@ struct SipHash128Impl
   */
 struct MurmurHash2Impl32
 {
-    static constexpr auto name = "murmurHash2_32";
+    static constexpr auto name = "murmur_hash2_32";
 
     using ReturnType = UInt32;
 
@@ -306,7 +306,7 @@ struct MurmurHash2Impl32
 
 struct MurmurHash2Impl64
 {
-    static constexpr auto name = "murmurHash2_64";
+    static constexpr auto name = "murmur_hash2_64";
     using ReturnType = UInt64;
 
     static UInt64 apply(const char * data, const size_t size)
@@ -325,7 +325,7 @@ struct MurmurHash2Impl64
 /// To be compatible with gcc: https://github.com/gcc-mirror/gcc/blob/41d6b10e96a1de98e90a7c0378437c3255814b16/libstdc%2B%2B-v3/include/bits/functional_hash.h#L191
 struct GccMurmurHashImpl
 {
-    static constexpr auto name = "gccMurmurHash";
+    static constexpr auto name = "gcc_murmur_hash";
     using ReturnType = UInt64;
 
     static UInt64 apply(const char * data, const size_t size)
@@ -343,7 +343,7 @@ struct GccMurmurHashImpl
 
 struct MurmurHash3Impl32
 {
-    static constexpr auto name = "murmurHash3_32";
+    static constexpr auto name = "murmur_hash3_32";
     using ReturnType = UInt32;
 
     static UInt32 apply(const char * data, const size_t size)
@@ -367,7 +367,7 @@ struct MurmurHash3Impl32
 
 struct MurmurHash3Impl64
 {
-    static constexpr auto name = "murmurHash3_64";
+    static constexpr auto name = "murmur_hash3_64";
     using ReturnType = UInt64;
 
     static UInt64 apply(const char * data, const size_t size)
@@ -391,7 +391,7 @@ struct MurmurHash3Impl64
 
 struct MurmurHash3Impl128
 {
-    static constexpr auto name = "murmurHash3_128";
+    static constexpr auto name = "murmur_hash3_128";
 
     using ReturnType = UInt128;
 
@@ -415,7 +415,7 @@ struct MurmurHash3Impl128
 ///  but obtain the same result as it is done in signed integers with two's complement arithmetic.
 struct JavaHashImpl
 {
-    static constexpr auto name = "javaHash";
+    static constexpr auto name = "java_hash";
     using ReturnType = Int32;
 
     static Int32 apply(const char * data, const size_t size)
@@ -436,7 +436,7 @@ struct JavaHashImpl
 
 struct JavaHashUTF16LEImpl
 {
-    static constexpr auto name = "javaHashUTF16LE";
+    static constexpr auto name = "java_hash_utf16_le";
     using ReturnType = Int32;
 
     static Int32 apply(const char * raw_data, const size_t raw_size)
@@ -474,7 +474,7 @@ struct JavaHashUTF16LEImpl
 ///  after 3.0, Hive uses murmur-hash3.
 struct HiveHashImpl
 {
-    static constexpr auto name = "hiveHash";
+    static constexpr auto name = "hive_hash";
     using ReturnType = Int32;
 
     static Int32 apply(const char * data, const size_t size)
@@ -492,7 +492,7 @@ struct HiveHashImpl
 
 struct ImplCityHash64
 {
-    static constexpr auto name = "cityHash64";
+    static constexpr auto name = "city_hash64";
     using ReturnType = UInt64;
     using uint128_t = CityHash_v1_0_2::uint128;
 
@@ -504,7 +504,7 @@ struct ImplCityHash64
 // see farmhash.h for definition of NAMESPACE_FOR_HASH_FUNCTIONS
 struct ImplFarmFingerprint64
 {
-    static constexpr auto name = "farmFingerprint64";
+    static constexpr auto name = "farm_fingerprint64";
     using ReturnType = UInt64;
     using uint128_t = NAMESPACE_FOR_HASH_FUNCTIONS::uint128_t;
 
@@ -516,7 +516,7 @@ struct ImplFarmFingerprint64
 // see farmhash.h for definition of NAMESPACE_FOR_HASH_FUNCTIONS
 struct ImplFarmHash64
 {
-    static constexpr auto name = "farmHash64";
+    static constexpr auto name = "farm_hash64";
     using ReturnType = UInt64;
     using uint128_t = NAMESPACE_FOR_HASH_FUNCTIONS::uint128_t;
 
@@ -527,7 +527,7 @@ struct ImplFarmHash64
 
 struct ImplMetroHash64
 {
-    static constexpr auto name = "metroHash64";
+    static constexpr auto name = "metro_hash64";
     using ReturnType = UInt64;
     using uint128_t = CityHash_v1_0_2::uint128;
 
@@ -550,7 +550,7 @@ struct ImplMetroHash64
 
 struct ImplXxHash32
 {
-    static constexpr auto name = "xxHash32";
+    static constexpr auto name = "xx_hash32";
     using ReturnType = UInt32;
 
     static auto apply(const char * s, const size_t len) { return XXH32(s, len, 0); }
@@ -570,7 +570,7 @@ struct ImplXxHash32
 
 struct ImplXxHash64
 {
-    static constexpr auto name = "xxHash64";
+    static constexpr auto name = "xx_hash64";
     using ReturnType = UInt64;
     using uint128_t = CityHash_v1_0_2::uint128;
 
@@ -1256,7 +1256,7 @@ struct URLHierarchyHashImpl
 class FunctionURLHash : public IFunction
 {
 public:
-    static constexpr auto name = "URLHash";
+    static constexpr auto name = "url_hash";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionURLHash>(); }
 
     String getName() const override { return name; }
@@ -1370,8 +1370,8 @@ private:
 };
 
 
-struct NameIntHash32 { static constexpr auto name = "intHash32"; };
-struct NameIntHash64 { static constexpr auto name = "intHash64"; };
+struct NameIntHash32 { static constexpr auto name = "int_hash32"; };
+struct NameIntHash64 { static constexpr auto name = "int_hash64"; };
 
 using FunctionSipHash64 = FunctionAnyHash<SipHash64Impl>;
 using FunctionIntHash32 = FunctionIntHash<IntHash32Impl, NameIntHash32>;

@@ -11,7 +11,7 @@ namespace
 
 struct NameHasTokenCaseInsensitive
 {
-    static constexpr auto name = "hasTokenCaseInsensitive";
+    static constexpr auto name = "has_token_case_insensitive";
 };
 
 using FunctionHasTokenCaseInsensitive

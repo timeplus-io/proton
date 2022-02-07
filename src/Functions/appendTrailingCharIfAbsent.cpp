@@ -23,7 +23,7 @@ namespace
 class FunctionAppendTrailingCharIfAbsent : public IFunction
 {
 public:
-    static constexpr auto name = "appendTrailingCharIfAbsent";
+    static constexpr auto name = "append_trailing_char_if_absent";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionAppendTrailingCharIfAbsent>();

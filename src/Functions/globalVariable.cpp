@@ -29,7 +29,7 @@ namespace
 class FunctionGlobalVariable : public IFunction
 {
 public:
-    static constexpr auto name = "globalVariable";
+    static constexpr auto name = "global_variable";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionGlobalVariable>();

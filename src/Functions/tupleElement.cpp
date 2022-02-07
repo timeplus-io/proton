@@ -29,7 +29,7 @@ namespace
 class FunctionTupleElement : public IFunction
 {
 public:
-    static constexpr auto name = "tupleElement";
+    static constexpr auto name = "tuple_element";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionTupleElement>();

@@ -7,9 +7,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ASTWithAlias.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/IAST.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
 #include <Common/ProtonCommon.h>
@@ -101,7 +99,7 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
             context->getTimeParam().getStart(),
             context->getSettingsRef().max_query_size,
             context->getSettingsRef().max_parser_depth);
-        new_node = makeASTFunction("greaterOrEquals", std::make_shared<ASTIdentifier>("_time"), new_node);
+        new_node = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>("_time"), new_node);
     }
 
     if (!context->getTimeParam().getEnd().empty())

@@ -13,7 +13,7 @@ namespace
 class FunctionDumpColumnStructure : public IFunction
 {
 public:
-    static constexpr auto name = "dumpColumnStructure";
+    static constexpr auto name = "dump_column_structure";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionDumpColumnStructure>();

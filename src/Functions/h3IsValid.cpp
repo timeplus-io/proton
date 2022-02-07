@@ -25,7 +25,7 @@ namespace
 class FunctionH3IsValid : public IFunction
 {
 public:
-    static constexpr auto name = "h3IsValid";
+    static constexpr auto name = "h3_is_valid";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3IsValid>(); }
 

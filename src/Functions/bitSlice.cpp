@@ -28,7 +28,7 @@ class FunctionBitSlice : public IFunction
     const UInt8 word_size = 8;
 
 public:
-    static constexpr auto name = "bitSlice";
+    static constexpr auto name = "bit_slice";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionBitSlice>(); }
 
     String getName() const override { return name; }

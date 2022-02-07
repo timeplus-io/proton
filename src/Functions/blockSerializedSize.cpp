@@ -13,7 +13,7 @@ namespace
 class FunctionBlockSerializedSize : public IFunction
 {
 public:
-    static constexpr auto name = "blockSerializedSize";
+    static constexpr auto name = "block_serialized_size";
 
     static FunctionPtr create(ContextPtr)
     {

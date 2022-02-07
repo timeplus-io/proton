@@ -35,7 +35,7 @@ namespace
 class FunctionBitmaskToList : public IFunction
 {
 public:
-    static constexpr auto name = "bitmaskToList";
+    static constexpr auto name = "bitmask_to_list";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionBitmaskToList>(); }
 
     String getName() const override
@@ -132,7 +132,7 @@ private:
 class FunctionBitmaskToArray : public IFunction
 {
 public:
-    static constexpr auto name = "bitmaskToArray";
+    static constexpr auto name = "bitmask_to_array";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionBitmaskToArray>(); }
 
     String getName() const override
@@ -219,7 +219,7 @@ public:
 class FunctionBitPositionsToArray : public IFunction
 {
 public:
-    static constexpr auto name = "bitPositionsToArray";
+    static constexpr auto name = "bit_positions_to_array";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionBitPositionsToArray>(); }
 
     String getName() const override

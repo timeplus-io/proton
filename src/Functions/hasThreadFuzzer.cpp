@@ -15,7 +15,7 @@ namespace
 class FunctionHasThreadFuzzer : public IFunction
 {
 public:
-    static constexpr auto name = "hasThreadFuzzer";
+    static constexpr auto name = "has_thread_fuzzer";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionHasThreadFuzzer>();

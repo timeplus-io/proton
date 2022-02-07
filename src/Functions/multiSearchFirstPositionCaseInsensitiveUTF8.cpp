@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchFirstPositionCaseInsensitiveUTF8
 {
-    static constexpr auto name = "multiSearchFirstPositionCaseInsensitiveUTF8";
+    static constexpr auto name = "multi_search_first_position_case_insensitive_utf8";
 };
 
 using FunctionMultiSearchFirstPositionCaseInsensitiveUTF8 = FunctionsMultiStringSearch<

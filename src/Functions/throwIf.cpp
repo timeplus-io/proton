@@ -25,7 +25,7 @@ namespace
 class FunctionThrowIf : public IFunction
 {
 public:
-    static constexpr auto name = "throwIf";
+    static constexpr auto name = "throw_if";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionThrowIf>();

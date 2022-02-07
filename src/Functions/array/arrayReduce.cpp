@@ -36,7 +36,7 @@ namespace ErrorCodes
 class FunctionArrayReduce : public IFunction, private WithContext
 {
 public:
-    static constexpr auto name = "arrayReduce";
+    static constexpr auto name = "array_reduce";
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionArrayReduce>(context_); }
     explicit FunctionArrayReduce(ContextPtr context_) : WithContext(context_) {}
 

@@ -94,10 +94,10 @@ private:
                 auto * concrete = function->as<ASTFunction>();
 
                 if (concrete->name == "in")
-                    concrete->name = "globalIn";
-                else if (concrete->name == "notIn")
-                    concrete->name = "globalNotIn";
-                else if (concrete->name == "globalIn" || concrete->name == "globalNotIn")
+                    concrete->name = "global_in";
+                else if (concrete->name == "not_in")
+                    concrete->name = "global_not_in";
+                else if (concrete->name == "global_in" || concrete->name == "global_not_in")
                 {
                     /// Already processed.
                 }
@@ -152,7 +152,7 @@ public:
     static bool needChildVisit(ASTPtr & node, const ASTPtr & child)
     {
         if (auto * function = node->as<ASTFunction>())
-            if (function->name == "in" || function->name == "notIn")
+            if (function->name == "in" || function->name == "not_in")
                 return false; /// Processed, process others
 
         if (const auto * t = node->as<ASTTablesInSelectQueryElement>())
@@ -166,7 +166,7 @@ public:
 private:
     static void visit(ASTFunction & node, ASTPtr &, Data & data)
     {
-        if (node.name == "in" || node.name == "notIn")
+        if (node.name == "in" || node.name == "not_in")
         {
             if (node.arguments->children.size() != 2)
             {

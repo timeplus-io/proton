@@ -42,7 +42,7 @@ namespace ArrayImpl
 class FunctionArrayElement : public IFunction
 {
 public:
-    static constexpr auto name = "arrayElement";
+    static constexpr auto name = "array_element";
     static FunctionPtr create(ContextPtr context);
 
     String getName() const override;

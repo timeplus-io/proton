@@ -439,7 +439,7 @@ private:
 struct BitmapSubsetInRangeImpl
 {
 public:
-    static constexpr auto name = "bitmapSubsetInRange";
+    static constexpr auto name = "bitmap_subset_in_range";
     template <typename T>
     static void apply(
         const AggregateFunctionGroupBitmapData<T> & bitmap_data_0,
@@ -454,7 +454,7 @@ public:
 struct BitmapSubsetLimitImpl
 {
 public:
-    static constexpr auto name = "bitmapSubsetLimit";
+    static constexpr auto name = "bitmap_subset_limit";
     template <typename T>
     static void apply(
         const AggregateFunctionGroupBitmapData<T> & bitmap_data_0,
@@ -469,7 +469,7 @@ public:
 struct BitmapSubsetOffsetLimitImpl
 {
 public:
-    static constexpr auto name = "subBitmap";
+    static constexpr auto name = "sub_bitmap";
     template <typename T>
     static void apply(
         const AggregateFunctionGroupBitmapData<T> & bitmap_data_0,
@@ -488,7 +488,7 @@ using FunctionBitmapSubsetOffsetLimit = FunctionBitmapSubset<BitmapSubsetOffsetL
 class FunctionBitmapTransform : public IFunction
 {
 public:
-    static constexpr auto name = "bitmapTransform";
+    static constexpr auto name = "bitmap_transform";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionBitmapTransform>(); }
 
@@ -732,7 +732,7 @@ private:
 struct BitmapCardinalityImpl
 {
 public:
-    static constexpr auto name = "bitmapCardinality";
+    static constexpr auto name = "bitmap_cardinality";
     template <typename T>
     static UInt64 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data)
     {
@@ -743,7 +743,7 @@ public:
 struct BitmapMinImpl
 {
 public:
-    static constexpr auto name = "bitmapMin";
+    static constexpr auto name = "bitmap_min";
     template <typename T>
     static UInt64 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data)
     {
@@ -754,7 +754,7 @@ public:
 struct BitmapMaxImpl
 {
 public:
-    static constexpr auto name = "bitmapMax";
+    static constexpr auto name = "bitmap_max";
     template <typename T>
     static UInt64 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data)
     {
@@ -830,7 +830,7 @@ struct BitmapHasAnyImpl
 class FunctionBitmapContains : public IFunction
 {
 public:
-    static constexpr auto name = "bitmapContains";
+    static constexpr auto name = "bitmap_contains";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionBitmapContains>(); }
 
@@ -1079,7 +1079,7 @@ struct BitmapAndnotImpl
 
 struct NameBitmapAnd
 {
-    static constexpr auto name = "bitmapAnd";
+    static constexpr auto name = "bitmap_and";
 };
 
 template <template <typename> class Impl, typename Name>
@@ -1199,43 +1199,43 @@ private:
 
 struct NameBitmapBuild
 {
-    static constexpr auto name = "bitmapBuild";
+    static constexpr auto name = "bitmap_build";
 };
 using FunctionBitmapBuild = FunctionBitmapBuildImpl<NameBitmapBuild>;
 
 struct NameBitmapToArray
 {
-    static constexpr auto name = "bitmapToArray";
+    static constexpr auto name = "bitmap_to_array";
 };
 using FunctionBitmapToArray = FunctionBitmapToArrayImpl<NameBitmapToArray>;
 
 struct NameBitmapCardinality
 {
-    static constexpr auto name = "bitmapCardinality";
+    static constexpr auto name = "bitmap_cardinality";
 };
 struct NameBitmapAndCardinality
 {
-    static constexpr auto name = "bitmapAndCardinality";
+    static constexpr auto name = "bitmap_and_cardinality";
 };
 struct NameBitmapOrCardinality
 {
-    static constexpr auto name = "bitmapOrCardinality";
+    static constexpr auto name = "bitmap_or_cardinality";
 };
 struct NameBitmapXorCardinality
 {
-    static constexpr auto name = "bitmapXorCardinality";
+    static constexpr auto name = "bitmap_xor_cardinality";
 };
 struct NameBitmapAndnotCardinality
 {
-    static constexpr auto name = "bitmapAndnotCardinality";
+    static constexpr auto name = "bitmap_andnot_cardinality";
 };
 struct NameBitmapHasAll
 {
-    static constexpr auto name = "bitmapHasAll";
+    static constexpr auto name = "bitmap_has_all";
 };
 struct NameBitmapHasAny
 {
-    static constexpr auto name = "bitmapHasAny";
+    static constexpr auto name = "bitmap_has_any";
 };
 
 using FunctionBitmapSelfCardinality = FunctionBitmapSelfCardinalityImpl<BitmapCardinalityImpl>;
@@ -1250,15 +1250,15 @@ using FunctionBitmapHasAny = FunctionBitmapCardinality<BitmapHasAnyImpl, NameBit
 
 struct NameBitmapOr
 {
-    static constexpr auto name = "bitmapOr";
+    static constexpr auto name = "bitmap_or";
 };
 struct NameBitmapXor
 {
-    static constexpr auto name = "bitmapXor";
+    static constexpr auto name = "bitmap_xor";
 };
 struct NameBitmapAndnot
 {
-    static constexpr auto name = "bitmapAndnot";
+    static constexpr auto name = "bitmap_andnot";
 };
 using FunctionBitmapAnd = FunctionBitmap<BitmapAndImpl, NameBitmapAnd>;
 using FunctionBitmapOr = FunctionBitmap<BitmapOrImpl, NameBitmapOr>;

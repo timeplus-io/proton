@@ -52,7 +52,7 @@ struct ZeroTransform
 
 struct ToDateImpl
 {
-    static constexpr auto name = "toDate";
+    static constexpr auto name = "to_date";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -76,7 +76,7 @@ struct ToDateImpl
 
 struct ToDate32Impl
 {
-    static constexpr auto name = "toDate32";
+    static constexpr auto name = "to_date32";
 
     static inline Int32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -101,7 +101,7 @@ struct ToDate32Impl
 
 struct ToStartOfDayImpl
 {
-    static constexpr auto name = "toStartOfDay";
+    static constexpr auto name = "to_start_of_day";
 
     //TODO: right now it is hardcoded to produce DateTime only, needs fixing later. See date_and_time_type_details::ResultDataTypeMap for deduction of result type example.
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
@@ -126,7 +126,7 @@ struct ToStartOfDayImpl
 
 struct ToMondayImpl
 {
-    static constexpr auto name = "toMonday";
+    static constexpr auto name = "to_monday";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -152,7 +152,7 @@ struct ToMondayImpl
 
 struct ToStartOfMonthImpl
 {
-    static constexpr auto name = "toStartOfMonth";
+    static constexpr auto name = "to_start_of_month";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -176,7 +176,7 @@ struct ToStartOfMonthImpl
 
 struct ToStartOfQuarterImpl
 {
-    static constexpr auto name = "toStartOfQuarter";
+    static constexpr auto name = "to_start_of_quarter";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -200,7 +200,7 @@ struct ToStartOfQuarterImpl
 
 struct ToStartOfYearImpl
 {
-    static constexpr auto name = "toStartOfYear";
+    static constexpr auto name = "to_start_of_year";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -226,7 +226,7 @@ struct ToStartOfYearImpl
 struct ToTimeImpl
 {
     /// When transforming to time, the date will be equated to 1970-01-01.
-    static constexpr auto name = "__toTime";
+    static constexpr auto name = "__to_time";
 
     static UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -250,7 +250,7 @@ struct ToTimeImpl
 
 struct ToStartOfMinuteImpl
 {
-    static constexpr auto name = "toStartOfMinute";
+    static constexpr auto name = "to_start_of_minute";
 
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -277,7 +277,7 @@ struct ToStartOfMinuteImpl
 // -1.01 => -2
 struct ToStartOfSecondImpl
 {
-    static constexpr auto name = "toStartOfSecond";
+    static constexpr auto name = "to_start_of_second";
 
     static inline DateTime64 execute(const DateTime64 & datetime64, Int64 scale_multiplier, const DateLUTImpl &)
     {
@@ -313,7 +313,7 @@ struct ToStartOfSecondImpl
 
 struct ToStartOfFiveMinuteImpl
 {
-    static constexpr auto name = "toStartOfFiveMinute";
+    static constexpr auto name = "to_start_of_five_minute";
 
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -337,7 +337,7 @@ struct ToStartOfFiveMinuteImpl
 
 struct ToStartOfTenMinutesImpl
 {
-    static constexpr auto name = "toStartOfTenMinutes";
+    static constexpr auto name = "to_start_of_ten_minutes";
 
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -361,7 +361,7 @@ struct ToStartOfTenMinutesImpl
 
 struct ToStartOfFifteenMinutesImpl
 {
-    static constexpr auto name = "toStartOfFifteenMinutes";
+    static constexpr auto name = "to_start_of_fifteen_minutes";
 
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -386,7 +386,7 @@ struct ToStartOfFifteenMinutesImpl
 /// Round to start of half-an-hour length interval with unspecified offset. This transform is specific for Yandex.Metrica.
 struct TimeSlotImpl
 {
-    static constexpr auto name = "timeSlot";
+    static constexpr auto name = "time_slot";
 
     //static inline DecimalUtils::DecimalComponents<DateTime64> execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl &)
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl &)
@@ -414,7 +414,7 @@ struct TimeSlotImpl
 
 struct ToStartOfHourImpl
 {
-    static constexpr auto name = "toStartOfHour";
+    static constexpr auto name = "to_start_of_hour";
 
     static inline UInt32 execute(const DecimalUtils::DecimalComponents<DateTime64> & t, const DateLUTImpl & time_zone)
     {
@@ -441,7 +441,7 @@ struct ToStartOfHourImpl
 
 struct ToYearImpl
 {
-    static constexpr auto name = "toYear";
+    static constexpr auto name = "to_year";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -465,7 +465,7 @@ struct ToYearImpl
 
 struct ToQuarterImpl
 {
-    static constexpr auto name = "toQuarter";
+    static constexpr auto name = "to_quarter";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -489,7 +489,7 @@ struct ToQuarterImpl
 
 struct ToMonthImpl
 {
-    static constexpr auto name = "toMonth";
+    static constexpr auto name = "to_month";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -513,7 +513,7 @@ struct ToMonthImpl
 
 struct ToDayOfMonthImpl
 {
-    static constexpr auto name = "toDayOfMonth";
+    static constexpr auto name = "to_day_of_month";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -537,7 +537,7 @@ struct ToDayOfMonthImpl
 
 struct ToDayOfWeekImpl
 {
-    static constexpr auto name = "toDayOfWeek";
+    static constexpr auto name = "to_day_of_week";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -561,7 +561,7 @@ struct ToDayOfWeekImpl
 
 struct ToDayOfYearImpl
 {
-    static constexpr auto name = "toDayOfYear";
+    static constexpr auto name = "to_day_of_year";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -585,7 +585,7 @@ struct ToDayOfYearImpl
 
 struct ToHourImpl
 {
-    static constexpr auto name = "toHour";
+    static constexpr auto name = "to_hour";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -609,7 +609,7 @@ struct ToHourImpl
 
 struct TimezoneOffsetImpl
 {
-    static constexpr auto name = "timezoneOffset";
+    static constexpr auto name = "timezone_offset";
 
     static inline time_t execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -636,7 +636,7 @@ struct TimezoneOffsetImpl
 
 struct ToMinuteImpl
 {
-    static constexpr auto name = "toMinute";
+    static constexpr auto name = "to_minute";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -660,7 +660,7 @@ struct ToMinuteImpl
 
 struct ToSecondImpl
 {
-    static constexpr auto name = "toSecond";
+    static constexpr auto name = "to_second";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -684,7 +684,7 @@ struct ToSecondImpl
 
 struct ToISOYearImpl
 {
-    static constexpr auto name = "toISOYear";
+    static constexpr auto name = "to_iso_year";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -708,7 +708,7 @@ struct ToISOYearImpl
 
 struct ToStartOfISOYearImpl
 {
-    static constexpr auto name = "toStartOfISOYear";
+    static constexpr auto name = "to_start_of_iso_year";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -732,7 +732,7 @@ struct ToStartOfISOYearImpl
 
 struct ToISOWeekImpl
 {
-    static constexpr auto name = "toISOWeek";
+    static constexpr auto name = "to_iso_week";
 
     static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -756,7 +756,7 @@ struct ToISOWeekImpl
 
 struct ToRelativeYearNumImpl
 {
-    static constexpr auto name = "toRelativeYearNum";
+    static constexpr auto name = "to_relative_year_num";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -780,7 +780,7 @@ struct ToRelativeYearNumImpl
 
 struct ToRelativeQuarterNumImpl
 {
-    static constexpr auto name = "toRelativeQuarterNum";
+    static constexpr auto name = "to_relative_quarter_num";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -804,7 +804,7 @@ struct ToRelativeQuarterNumImpl
 
 struct ToRelativeMonthNumImpl
 {
-    static constexpr auto name = "toRelativeMonthNum";
+    static constexpr auto name = "to_relative_month_num";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -828,7 +828,7 @@ struct ToRelativeMonthNumImpl
 
 struct ToRelativeWeekNumImpl
 {
-    static constexpr auto name = "toRelativeWeekNum";
+    static constexpr auto name = "to_relative_week_num";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -852,7 +852,7 @@ struct ToRelativeWeekNumImpl
 
 struct ToRelativeDayNumImpl
 {
-    static constexpr auto name = "toRelativeDayNum";
+    static constexpr auto name = "to_relative_day_num";
 
     static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -877,7 +877,7 @@ struct ToRelativeDayNumImpl
 
 struct ToRelativeHourNumImpl
 {
-    static constexpr auto name = "toRelativeHourNum";
+    static constexpr auto name = "to_relative_hour_num";
 
     static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -901,7 +901,7 @@ struct ToRelativeHourNumImpl
 
 struct ToRelativeMinuteNumImpl
 {
-    static constexpr auto name = "toRelativeMinuteNum";
+    static constexpr auto name = "to_relative_minute_num";
 
     static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -925,7 +925,7 @@ struct ToRelativeMinuteNumImpl
 
 struct ToRelativeSecondNumImpl
 {
-    static constexpr auto name = "toRelativeSecondNum";
+    static constexpr auto name = "to_relative_second_num";
 
     static inline Int64 execute(Int64 t, const DateLUTImpl &)
     {
@@ -949,7 +949,7 @@ struct ToRelativeSecondNumImpl
 
 struct ToYYYYMMImpl
 {
-    static constexpr auto name = "toYYYYMM";
+    static constexpr auto name = "to_YYYYMM";
 
     static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -973,7 +973,7 @@ struct ToYYYYMMImpl
 
 struct ToYYYYMMDDImpl
 {
-    static constexpr auto name = "toYYYYMMDD";
+    static constexpr auto name = "to_YYYYMMDD";
 
     static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -997,7 +997,7 @@ struct ToYYYYMMDDImpl
 
 struct ToYYYYMMDDhhmmssImpl
 {
-    static constexpr auto name = "toYYYYMMDDhhmmss";
+    static constexpr auto name = "to_YYYYMMDDhhmmss";
 
     static inline UInt64 execute(Int64 t, const DateLUTImpl & time_zone)
     {

@@ -28,7 +28,7 @@ namespace
 class FunctionS2RectUnion : public IFunction
 {
 public:
-    static constexpr auto name = "s2RectUnion";
+    static constexpr auto name = "s2_rect_union";
 
     static FunctionPtr create(ContextPtr)
     {

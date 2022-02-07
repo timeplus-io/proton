@@ -12,7 +12,7 @@ struct BitTestAnyImpl
     static inline UInt8 apply(A a, B b) { return (a & b) != 0; }
 };
 
-struct NameBitTestAny { static constexpr auto name = "bitTestAny"; };
+struct NameBitTestAny { static constexpr auto name = "bit_test_any"; };
 using FunctionBitTestAny = FunctionBitTestMany<BitTestAnyImpl, NameBitTestAny>;
 
 }

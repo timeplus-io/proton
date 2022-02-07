@@ -19,7 +19,7 @@ namespace ErrorCodes
 class FunctionArrayJoin : public IFunction
 {
 public:
-    static constexpr auto name = "arrayJoin";
+    static constexpr auto name = "array_join";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionArrayJoin>();

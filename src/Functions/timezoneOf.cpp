@@ -26,7 +26,7 @@ namespace
 class FunctionTimezoneOf : public IFunction
 {
 public:
-    static constexpr auto name = "timezoneOf";
+    static constexpr auto name = "timezone_of";
     String getName() const override { return name; }
     static FunctionPtr create(ContextPtr) { return std::make_unique<FunctionTimezoneOf>(); }
 
@@ -70,7 +70,6 @@ public:
 void registerFunctionTimezoneOf(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTimezoneOf>();
-    factory.registerAlias("timeZoneOf", "timezoneOf");
 }
 
 }

@@ -698,7 +698,7 @@ query_log:
     # toMonday(event_date)
     # toYYYYMM(event_date)
     # toStartOfHour(event_time)
-    partition_by: toYYYYMM(event_date)
+    partition_by: to_YYYYMM(event_date)
 
     # Table TTL specification: https://proton.tech/docs/en/engines/table-engines/mergetree-family/mergetree/#mergetree-table-ttl
     # Example:
@@ -719,7 +719,7 @@ query_log:
 trace_log:
     database: system
     table: trace_log
-    partition_by: toYYYYMM(event_date)
+    partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
 
 # Query thread log. Has information about all threads participated in query execution.
@@ -727,7 +727,7 @@ trace_log:
 query_thread_log:
     database: system
     table: query_thread_log
-    partition_by: toYYYYMM(event_date)
+    partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
 
 # Query views log. Has information about all dependent views associated with a query.
@@ -735,7 +735,7 @@ query_thread_log:
 query_views_log:
     database: system
     table: query_views_log
-    partition_by: toYYYYMM(event_date)
+    partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
 
 # Uncomment if use part log.
@@ -743,7 +743,7 @@ query_views_log:
 part_log:
     database: system
     table: part_log
-    partition_by: toYYYYMM(event_date)
+    partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
 
 # Uncomment to write text log into table.
@@ -785,7 +785,7 @@ opentelemetry_span_log:
     # system.
     engine: |-
         engine MergeTree
-             partition by toYYYYMM(finish_date)
+             partition by to_YYYYMM(finish_date)
              order by (finish_date, finish_time_us, trace_id)
     database: system
     table: opentelemetry_span_log

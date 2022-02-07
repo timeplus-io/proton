@@ -159,7 +159,7 @@ private:
     }
 
 public:
-    static constexpr auto name = "convertCharset";
+    static constexpr auto name = "convert_charset";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionConvertCharset>(); }
 
     String getName() const override

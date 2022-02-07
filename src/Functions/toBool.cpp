@@ -13,7 +13,7 @@ namespace
     class FunctionToBool : public IFunction
     {
     public:
-        static constexpr auto name = "toBool";
+        static constexpr auto name = "to_bool";
 
         static FunctionPtr create(ContextPtr)
         {

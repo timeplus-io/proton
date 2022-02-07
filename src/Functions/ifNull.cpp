@@ -19,7 +19,7 @@ namespace
 class FunctionIfNull : public IFunction
 {
 public:
-    static constexpr auto name = "ifNull";
+    static constexpr auto name = "if_null";
 
     explicit FunctionIfNull(ContextPtr context_) : context(context_) {}
 

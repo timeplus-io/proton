@@ -175,17 +175,17 @@ public:
 
 struct NameJSONExists
 {
-    static constexpr auto name{"JSON_EXISTS"};
+    static constexpr auto name{"json_exists"};
 };
 
 struct NameJSONValue
 {
-    static constexpr auto name{"JSON_VALUE"};
+    static constexpr auto name{"json_value"};
 };
 
 struct NameJSONQuery
 {
-    static constexpr auto name{"JSON_QUERY"};
+    static constexpr auto name{"json_query"};
 };
 
 template <typename JSONParser>

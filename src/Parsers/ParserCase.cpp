@@ -1,5 +1,4 @@
 #include <Parsers/ParserCase.h>
-#include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -81,7 +80,7 @@ bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         function_args->children = std::move(args);
 
         auto function = std::make_shared<ASTFunction>();
-        function->name = "caseWithExpression";
+        function->name = "case_with_expression";
         function->arguments = function_args;
         function->children.push_back(function->arguments);
 
@@ -96,7 +95,7 @@ bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         function_args->children = std::move(args);
 
         auto function = std::make_shared<ASTFunction>();
-        function->name = "multiIf";
+        function->name = "multi_if";
         function->arguments = function_args;
         function->children.push_back(function->arguments);
 

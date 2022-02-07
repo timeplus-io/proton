@@ -10,7 +10,7 @@ namespace
 
 struct NameCountSubstringsCaseInsensitiveUTF8
 {
-    static constexpr auto name = "countSubstringsCaseInsensitiveUTF8";
+    static constexpr auto name = "count_substrings_case_insensitive_utf8";
 };
 
 using FunctionCountSubstringsCaseInsensitiveUTF8 = FunctionsStringSearch<

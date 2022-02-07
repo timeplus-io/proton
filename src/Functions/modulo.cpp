@@ -159,10 +159,10 @@ using FunctionModulo = BinaryArithmeticOverloadResolver<ModuloImpl, NameModulo, 
 void registerFunctionModulo(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionModulo>();
-    factory.registerAlias("mod", "modulo", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("mod", "modulo", FunctionFactory::CaseSensitive);
 }
 
-struct NameModuloLegacy { static constexpr auto name = "moduloLegacy"; };
+struct NameModuloLegacy { static constexpr auto name = "modulo_legacy"; };
 using FunctionModuloLegacy = BinaryArithmeticOverloadResolver<ModuloLegacyImpl, NameModuloLegacy, false>;
 
 void registerFunctionModuloLegacy(FunctionFactory & factory)

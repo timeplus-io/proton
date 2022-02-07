@@ -26,7 +26,7 @@ namespace
 class FunctionRandomPrintableASCII : public IFunction
 {
 public:
-    static constexpr auto name = "randomPrintableASCII";
+    static constexpr auto name = "random_printable_ascii";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionRandomPrintableASCII>(); }
 
     String getName() const override

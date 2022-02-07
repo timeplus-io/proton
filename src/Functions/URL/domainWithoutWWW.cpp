@@ -5,7 +5,7 @@
 namespace DB
 {
 
-struct NameDomainWithoutWWW { static constexpr auto name = "domainWithoutWWW"; };
+struct NameDomainWithoutWWW { static constexpr auto name = "domain_without_www"; };
 using FunctionDomainWithoutWWW = FunctionStringToString<ExtractSubstringImpl<ExtractDomain<true>>, NameDomainWithoutWWW>;
 
 

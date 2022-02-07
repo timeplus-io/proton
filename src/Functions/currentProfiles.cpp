@@ -26,7 +26,7 @@ namespace
     class FunctionCurrentProfiles : public IFunction
     {
     public:
-        static constexpr auto name = (kind == Kind::CURRENT_PROFILES) ? "currentProfiles" : ((kind == Kind::ENABLED_PROFILES) ? "enabledProfiles" : "defaultProfiles");
+        static constexpr auto name = (kind == Kind::CURRENT_PROFILES) ? "current_profiles" : ((kind == Kind::ENABLED_PROFILES) ? "enabled_profiles" : "default_profiles");
         static FunctionPtr create(const ContextPtr & context) { return std::make_shared<FunctionCurrentProfiles>(context); }
 
         bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }

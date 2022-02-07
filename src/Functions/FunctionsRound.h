@@ -626,7 +626,7 @@ public:
 class FunctionRoundDown : public IFunction
 {
 public:
-    static constexpr auto name = "roundDown";
+    static constexpr auto name = "round_down";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionRoundDown>(); }
 
     String getName() const override { return name; }
@@ -798,7 +798,7 @@ private:
 
 
 struct NameRound { static constexpr auto name = "round"; };
-struct NameRoundBankers { static constexpr auto name = "roundBankers"; };
+struct NameRoundBankers { static constexpr auto name = "round_bankers"; };
 struct NameCeil { static constexpr auto name = "ceil"; };
 struct NameFloor { static constexpr auto name = "floor"; };
 struct NameTrunc { static constexpr auto name = "trunc"; };

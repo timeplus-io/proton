@@ -137,24 +137,24 @@ const char * IntervalKind::toNameOfFunctionExtractTimePart() const
     switch (kind)
     {
         case IntervalKind::Second:
-            return "toSecond";
+            return "to_second";
         case IntervalKind::Minute:
-            return "toMinute";
+            return "to_minute";
         case IntervalKind::Hour:
-            return "toHour";
+            return "to_hour";
         case IntervalKind::Day:
-            return "toDayOfMonth";
+            return "to_day_of_month";
         case IntervalKind::Week:
             // TODO: SELECT toRelativeWeekNum(toDate('2017-06-15')) - toRelativeWeekNum(toStartOfYear(toDate('2017-06-15')))
             // else if (ParserKeyword("WEEK").ignore(pos, expected))
             //    function_name = "toRelativeWeekNum";
             throw Exception("The syntax 'EXTRACT(WEEK FROM date)' is not supported, cannot extract the number of a week", ErrorCodes::SYNTAX_ERROR);
         case IntervalKind::Month:
-            return "toMonth";
+            return "to_month";
         case IntervalKind::Quarter:
-            return "toQuarter";
+            return "to_quarter";
         case IntervalKind::Year:
-            return "toYear";
+            return "to_year";
     }
     __builtin_unreachable();
 }

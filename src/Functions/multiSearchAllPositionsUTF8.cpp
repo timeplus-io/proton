@@ -11,7 +11,7 @@ namespace
 
 struct NameMultiSearchAllPositionsUTF8
 {
-    static constexpr auto name = "multiSearchAllPositionsUTF8";
+    static constexpr auto name = "multi_search_all_positions_utf8";
 };
 
 using FunctionMultiSearchAllPositionsUTF8

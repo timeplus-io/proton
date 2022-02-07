@@ -3,7 +3,7 @@
 
 namespace DB
 {
-struct NameCountEqual { static constexpr auto name = "countEqual"; };
+struct NameCountEqual { static constexpr auto name = "count_equal"; };
 
 using FunctionCountEqual = FunctionArrayIndex<CountEqualAction, NameCountEqual>;
 

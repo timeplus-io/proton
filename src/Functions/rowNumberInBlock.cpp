@@ -12,7 +12,7 @@ namespace
 class FunctionRowNumberInBlock : public IFunction
 {
 public:
-    static constexpr auto name = "rowNumberInBlock";
+    static constexpr auto name = "row_number_in_block";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionRowNumberInBlock>();

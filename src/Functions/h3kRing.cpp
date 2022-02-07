@@ -31,7 +31,7 @@ namespace
 class FunctionH3KRing : public IFunction
 {
 public:
-    static constexpr auto name = "h3kRing";
+    static constexpr auto name = "h3k_ring";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3KRing>(); }
 

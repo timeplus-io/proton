@@ -189,9 +189,6 @@ void registerFunctions()
 
     /// proton: starts
     registerFunctionsStreamingWindow(factory);
-    registerJSONFunctionAlias(factory);
-    registerFunctionsDateTimeAlias(factory);
-    registerFunctionsRegexAlias(factory);
     /// proton: ends
 
 #if USE_SSL

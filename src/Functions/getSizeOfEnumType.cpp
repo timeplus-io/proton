@@ -19,7 +19,7 @@ namespace
 class FunctionGetSizeOfEnumType : public IFunction
 {
 public:
-    static constexpr auto name = "getSizeOfEnumType";
+    static constexpr auto name = "get_size_of_enum_type";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionGetSizeOfEnumType>();

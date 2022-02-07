@@ -10,7 +10,7 @@ class FunctionArrayEnumerateDenseRanked : public FunctionArrayEnumerateRankedExt
     using Base = FunctionArrayEnumerateRankedExtended<FunctionArrayEnumerateDenseRanked>;
 
 public:
-    static constexpr auto name = "arrayEnumerateDenseRanked";
+    static constexpr auto name = "array_enumerate_dense_ranked";
     using Base::create;
 };
 

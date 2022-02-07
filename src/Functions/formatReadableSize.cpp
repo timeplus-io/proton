@@ -9,7 +9,7 @@ namespace
 {
     struct Impl
     {
-        static constexpr auto name = "formatReadableSize";
+        static constexpr auto name = "format_readable_size";
 
         static void format(double value, DB::WriteBuffer & out)
         {

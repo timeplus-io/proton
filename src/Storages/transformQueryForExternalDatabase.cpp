@@ -1,6 +1,5 @@
 #include <Common/typeid_cast.h>
 #include <Columns/ColumnConst.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -123,17 +122,17 @@ bool isCompatible(IAST & node)
             || name == "or"
             || name == "not"
             || name == "equals"
-            || name == "notEquals"
+            || name == "not_equals"
             || name == "less"
             || name == "greater"
-            || name == "lessOrEquals"
-            || name == "greaterOrEquals"
+            || name == "less_or_equals"
+            || name == "greater_or_equals"
             || name == "like"
-            || name == "notLike"
+            || name == "not_like"
             || name == "in"
-            || name == "notIn"
-            || name == "isNull"
-            || name == "isNotNull"
+            || name == "not_in"
+            || name == "is_null"
+            || name == "is_not_null"
             || name == "tuple"))
             return false;
 
@@ -149,7 +148,7 @@ bool isCompatible(IAST & node)
         }
 
         /// If the right hand side of IN is a table identifier (example: x IN table), then it's not compatible.
-        if ((name == "in" || name == "notIn")
+        if ((name == "in" || name == "not_in")
             && (function->arguments->children.size() != 2 || function->arguments->children[1]->as<ASTTableIdentifier>()))
             return false;
 

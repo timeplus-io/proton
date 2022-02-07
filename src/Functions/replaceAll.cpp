@@ -10,7 +10,7 @@ namespace
 
 struct NameReplaceAll
 {
-    static constexpr auto name = "replaceAll";
+    static constexpr auto name = "replace_all";
 };
 
 using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
@@ -20,7 +20,6 @@ using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameR
 void registerFunctionReplaceAll(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReplaceAll>();
-    factory.registerAlias("replace", NameReplaceAll::name, FunctionFactory::CaseInsensitive);
 }
 
 }

@@ -13,7 +13,7 @@ namespace
     class FunctionToJSONString : public IFunction
     {
     public:
-        static constexpr auto name = "toJSONString";
+        static constexpr auto name = "to_json_string";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionToJSONString>(context); }
 
         explicit FunctionToJSONString(ContextPtr context) : format_settings(getFormatSettings(context)) {}

@@ -16,7 +16,7 @@ private:
     Pos end;
 
 public:
-    static constexpr auto name = "URLHierarchy";
+    static constexpr auto name = "url_hierarchy";
     static String getName() { return name; }
 
     static size_t getNumberOfArguments() { return 1; }
@@ -102,7 +102,7 @@ public:
 };
 
 
-struct NameURLHierarchy { static constexpr auto name = "URLHierarchy"; };
+struct NameURLHierarchy { static constexpr auto name = "url_hierarchy"; };
 using FunctionURLHierarchy = FunctionTokens<URLHierarchyImpl>;
 
 void registerFunctionURLHierarchy(FunctionFactory & factory)

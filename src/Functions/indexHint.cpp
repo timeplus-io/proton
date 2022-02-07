@@ -22,7 +22,7 @@ namespace DB
 class FunctionIndexHint : public IFunction
 {
 public:
-    static constexpr auto name = "indexHint";
+    static constexpr auto name = "index_hint";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionIndexHint>();

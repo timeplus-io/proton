@@ -105,7 +105,7 @@ struct FunctionDetectLanguageImpl
 class FunctionDetectLanguageMixed : public IFunction
 {
 public:
-    static constexpr auto name = "detectLanguageMixed";
+    static constexpr auto name = "detect_language_mixed";
 
     /// Number of top results
     static constexpr auto top_N = 3;
@@ -215,7 +215,7 @@ public:
 
 struct NameDetectLanguage
 {
-    static constexpr auto name = "detectLanguage";
+    static constexpr auto name = "detect_language";
 };
 
 

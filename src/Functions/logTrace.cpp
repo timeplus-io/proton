@@ -20,7 +20,7 @@ namespace
     class FunctionLogTrace : public IFunction
     {
     public:
-        static constexpr auto name = "logTrace";
+        static constexpr auto name = "log_trace";
         static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionLogTrace>(); }
 
         String getName() const override { return name; }

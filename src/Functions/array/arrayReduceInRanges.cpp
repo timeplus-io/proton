@@ -39,7 +39,7 @@ class FunctionArrayReduceInRanges : public IFunction, private WithContext
 {
 public:
     static const size_t minimum_step = 64;
-    static constexpr auto name = "arrayReduceInRanges";
+    static constexpr auto name = "array_reduce_in_ranges";
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionArrayReduceInRanges>(context_); }
     explicit FunctionArrayReduceInRanges(ContextPtr context_) : WithContext(context_) {}
 

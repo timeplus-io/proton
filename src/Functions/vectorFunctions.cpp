@@ -140,7 +140,7 @@ using FunctionTupleDivide = FunctionTupleOperator<DivideName>;
 class FunctionTupleNegate : public ITupleFunction
 {
 public:
-    static constexpr auto name = "tupleNegate";
+    static constexpr auto name = "tuple_negate";
 
     explicit FunctionTupleNegate(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionTupleNegate>(context_); }
@@ -296,7 +296,7 @@ using FunctionTupleDivideByNumber = FunctionTupleOperatorByNumber<DivideName>;
 class FunctionDotProduct : public ITupleFunction
 {
 public:
-    static constexpr auto name = "dotProduct";
+    static constexpr auto name = "dot_product";
 
     explicit FunctionDotProduct(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionDotProduct>(context_); }
@@ -420,7 +420,7 @@ template <>
 class FunctionLNorm<L1Label> : public ITupleFunction
 {
 public:
-    static constexpr auto name = "L1Norm";
+    static constexpr auto name = "l1_norm";
 
     explicit FunctionLNorm(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionLNorm>(context_); }
@@ -522,7 +522,7 @@ template <>
 class FunctionLNorm<L2Label> : public ITupleFunction
 {
 public:
-    static constexpr auto name = "L2Norm";
+    static constexpr auto name = "l2_norm";
 
     explicit FunctionLNorm(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionLNorm>(context_); }
@@ -627,7 +627,7 @@ template <>
 class FunctionLNorm<LinfLabel> : public ITupleFunction
 {
 public:
-    static constexpr auto name = "LinfNorm";
+    static constexpr auto name = "linf_norm";
 
     explicit FunctionLNorm(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionLNorm>(context_); }
@@ -729,7 +729,7 @@ template <>
 class FunctionLNorm<LpLabel> : public ITupleFunction
 {
 public:
-    static constexpr auto name = "LpNorm";
+    static constexpr auto name = "lp_norm";
 
     explicit FunctionLNorm(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionLNorm>(context_); }
@@ -1068,9 +1068,7 @@ public:
 void registerVectorFunctions(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTuplePlus>();
-    factory.registerAlias("vectorSum", FunctionTuplePlus::name, FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTupleMinus>();
-    factory.registerAlias("vectorDifference", FunctionTupleMinus::name, FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTupleMultiply>();
     factory.registerFunction<FunctionTupleDivide>();
     factory.registerFunction<FunctionTupleNegate>();
@@ -1079,37 +1077,21 @@ void registerVectorFunctions(FunctionFactory & factory)
     factory.registerFunction<FunctionTupleDivideByNumber>();
 
     factory.registerFunction<FunctionDotProduct>();
-    factory.registerAlias("scalarProduct", FunctionDotProduct::name, FunctionFactory::CaseInsensitive);
 
     factory.registerFunction<FunctionL1Norm>();
     factory.registerFunction<FunctionL2Norm>();
     factory.registerFunction<FunctionLinfNorm>();
     factory.registerFunction<FunctionLpNorm>();
 
-    factory.registerAlias("normL1", FunctionL1Norm::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("normL2", FunctionL2Norm::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("normLinf", FunctionLinfNorm::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("normLp", FunctionLpNorm::name, FunctionFactory::CaseInsensitive);
-
     factory.registerFunction<FunctionL1Distance>();
     factory.registerFunction<FunctionL2Distance>();
     factory.registerFunction<FunctionLinfDistance>();
     factory.registerFunction<FunctionLpDistance>();
 
-    factory.registerAlias("distanceL1", FunctionL1Distance::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("distanceL2", FunctionL2Distance::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("distanceLinf", FunctionLinfDistance::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("distanceLp", FunctionLpDistance::name, FunctionFactory::CaseInsensitive);
-
     factory.registerFunction<FunctionL1Normalize>();
     factory.registerFunction<FunctionL2Normalize>();
     factory.registerFunction<FunctionLinfNormalize>();
     factory.registerFunction<FunctionLpNormalize>();
-
-    factory.registerAlias("normalizeL1", FunctionL1Normalize::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("normalizeL2", FunctionL2Normalize::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("normalizeLinf", FunctionLinfNormalize::name, FunctionFactory::CaseInsensitive);
-    factory.registerAlias("normalizeLp", FunctionLpNormalize::name, FunctionFactory::CaseInsensitive);
 
     factory.registerFunction<FunctionCosineDistance>();
 }

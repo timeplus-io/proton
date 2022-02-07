@@ -23,7 +23,7 @@ namespace ErrorCodes
 class FunctionValidateNestedArraySizes : public IFunction
 {
 public:
-    static constexpr auto name = "validateNestedArraySizes";
+    static constexpr auto name = "validate_nested_array_sizes";
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionValidateNestedArraySizes>(); }
 
     String getName() const override { return name; }

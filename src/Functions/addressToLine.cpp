@@ -35,7 +35,7 @@ namespace
 class FunctionAddressToLine : public IFunction
 {
 public:
-    static constexpr auto name = "addressToLine";
+    static constexpr auto name = "address_to_line";
     static FunctionPtr create(ContextPtr context)
     {
         context->checkAccess(AccessType::addressToLine);

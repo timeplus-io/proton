@@ -31,7 +31,7 @@ namespace
 class FunctionS2GetNeighbors : public IFunction
 {
 public:
-    static constexpr auto name = "s2GetNeighbors";
+    static constexpr auto name = "s2_get_neighbors";
 
     static FunctionPtr create(ContextPtr)
     {

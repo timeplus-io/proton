@@ -17,7 +17,7 @@ private:
     mutable std::atomic<size_t> columns_number{0};
 
 public:
-    static constexpr auto name = "blockNumber";
+    static constexpr auto name = "block_number";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionBlockNumber>();

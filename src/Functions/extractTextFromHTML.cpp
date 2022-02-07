@@ -294,7 +294,7 @@ size_t extract(const char * __restrict src, size_t size, char * __restrict dst)
 class FunctionExtractTextFromHTML : public IFunction
 {
 public:
-    static constexpr auto name = "extractTextFromHTML";
+    static constexpr auto name = "extract_text_from_html";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionExtractTextFromHTML>(); }
     String getName() const override { return name; }

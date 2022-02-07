@@ -22,7 +22,7 @@ inline int32_t JumpConsistentHash(uint64_t key, int32_t num_buckets)
 
 struct JumpConsistentHashImpl
 {
-    static constexpr auto name = "jumpConsistentHash";
+    static constexpr auto name = "jump_consistent_hash";
 
     using HashType = UInt64;
     using ResultType = Int32;

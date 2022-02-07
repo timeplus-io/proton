@@ -10,7 +10,7 @@ namespace
 
 struct NamePositionCaseInsensitiveUTF8
 {
-    static constexpr auto name = "positionCaseInsensitiveUTF8";
+    static constexpr auto name = "position_case_insensitive_utf8";
 };
 
 using FunctionPositionCaseInsensitiveUTF8

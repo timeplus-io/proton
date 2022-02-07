@@ -29,7 +29,7 @@ const char * ParserMultiplicativeExpression::operators[] =
     "/",     "divide",
     "%",     "modulo",
     "MOD",   "modulo",
-    "DIV",   "intDiv",
+    "DIV",   "int_div",
     nullptr
 };
 
@@ -50,21 +50,21 @@ const char * ParserAdditiveExpression::operators[] =
 const char * ParserComparisonExpression::operators[] =
 {
     "==",            "equals",
-    "!=",            "notEquals",
-    "<>",            "notEquals",
-    "<=",            "lessOrEquals",
-    ">=",            "greaterOrEquals",
+    "!=",            "not_equals",
+    "<>",            "not_equals",
+    "<=",            "less_or_equals",
+    ">=",            "greater_or_equals",
     "<",             "less",
     ">",             "greater",
     "=",             "equals",
     "LIKE",          "like",
     "ILIKE",         "ilike",
-    "NOT LIKE",      "notLike",
-    "NOT ILIKE",     "notILike",
+    "NOT LIKE",      "not_like",
+    "NOT ILIKE",     "not_ilike",
     "IN",            "in",
-    "NOT IN",        "notIn",
-    "GLOBAL IN",     "globalIn",
-    "GLOBAL NOT IN", "globalNotIn",
+    "NOT IN",        "not_in",
+    "GLOBAL IN",     "global_in",
+    "GLOBAL NOT IN", "global_not_in",
     nullptr
 };
 
@@ -82,13 +82,13 @@ const char * ParserLogicalNotExpression::operators[] =
 
 const char * ParserArrayElementExpression::operators[] =
 {
-    "[", "arrayElement",
+    "[", "array_element",
     nullptr
 };
 
 const char * ParserTupleElementExpression::operators[] =
 {
-    ".", "tupleElement",
+    ".", "tuple_element",
     nullptr
 };
 
@@ -218,13 +218,13 @@ static bool modifyAST(ASTPtr ast, SubqueryFunctionType type)
     String operator_name = function->name;
 
     auto function_equals = operator_name == "equals";
-    auto function_not_equals = operator_name == "notEquals";
+    auto function_not_equals = operator_name == "not_equals";
 
     String aggregate_function_name;
     if (function_equals || function_not_equals)
     {
-        if (operator_name == "notEquals")
-            function->name = "notIn";
+        if (operator_name == "not_equals")
+            function->name = "not_in";
         else
             function->name = "in";
 
@@ -234,13 +234,13 @@ static bool modifyAST(ASTPtr ast, SubqueryFunctionType type)
             return true;
         }
 
-        aggregate_function_name = "singleValueOrNull";
+        aggregate_function_name = "single_value_or_null";
     }
-    else if (operator_name == "greaterOrEquals" || operator_name == "greater")
+    else if (operator_name == "greater_or_equals" || operator_name == "greater")
     {
         aggregate_function_name = (type == SubqueryFunctionType::ANY ? "min" : "max");
     }
-    else if (operator_name == "lessOrEquals" || operator_name == "less")
+    else if (operator_name == "less_or_equals" || operator_name == "less")
     {
         aggregate_function_name = (type == SubqueryFunctionType::ANY ? "max" : "min");
     }
@@ -462,8 +462,8 @@ bool ParserBetweenExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         else
         {
             /// BETWEEN
-            f_left_expr->name = "greaterOrEquals";
-            f_right_expr->name = "lessOrEquals";
+            f_left_expr->name = "greater_or_equals";
+            f_right_expr->name = "less_or_equals";
             f_combined_expression->name = "and";
         }
 
@@ -787,7 +787,7 @@ bool ParserNullityChecking::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         args->children.push_back(node_comp);
 
         auto function = std::make_shared<ASTFunction>();
-        function->name = is_not ? "isNotNull" : "isNull";
+        function->name = is_not ? "is_not_null" : "is_null";
         function->arguments = args;
         function->children.push_back(function->arguments);
 
@@ -821,7 +821,7 @@ bool ParserDateOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
     auto exp_list = std::make_shared<ASTExpressionList>();
 
     /// the first argument of the function is the previous element, the second is the next one
-    function->name = "toDate";
+    function->name = "to_date";
     function->arguments = exp_list;
     function->children.push_back(exp_list);
 
@@ -853,7 +853,7 @@ bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expe
     auto exp_list = std::make_shared<ASTExpressionList>();
 
     /// the first argument of the function is the previous element, the second is the next one
-    function->name = "toDateTime";
+    function->name = "to_date_time";
     function->arguments = exp_list;
     function->children.push_back(exp_list);
 

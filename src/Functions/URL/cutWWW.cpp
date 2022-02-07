@@ -51,7 +51,7 @@ struct ExtractWWW
     }
 };
 
-struct NameCutWWW { static constexpr auto name = "cutWWW"; };
+struct NameCutWWW { static constexpr auto name = "cut_www"; };
 using FunctionCutWWW = FunctionStringToString<CutSubstringImpl<ExtractWWW>, NameCutWWW>;
 
 void registerFunctionCutWWW(FunctionFactory & factory)

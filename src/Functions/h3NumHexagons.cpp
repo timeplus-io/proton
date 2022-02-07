@@ -28,7 +28,7 @@ namespace
 class FunctionH3NumHexagons : public IFunction
 {
 public:
-    static constexpr auto name = "h3NumHexagons";
+    static constexpr auto name = "h3_num_hexagons";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionH3NumHexagons>(); }
 

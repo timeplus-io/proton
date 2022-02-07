@@ -148,7 +148,7 @@ struct ArrayDifferenceImpl
     }
 };
 
-struct NameArrayDifference { static constexpr auto name = "arrayDifference"; };
+struct NameArrayDifference { static constexpr auto name = "array_difference"; };
 using FunctionArrayDifference = FunctionArrayMapped<ArrayDifferenceImpl, NameArrayDifference>;
 
 void registerFunctionArrayDifference(FunctionFactory & factory)

@@ -547,7 +547,7 @@ void ScopeStack::addArrayJoin(const std::string & source_name, std::string resul
 
     const auto * source_node = stack.front().index->tryGetNode(source_name);
     if (!source_node)
-        throw Exception("Expression with arrayJoin cannot depend on lambda argument: " + source_name,
+        throw Exception("Expression with array_join cannot depend on lambda argument: " + source_name,
                         ErrorCodes::BAD_ARGUMENTS);
 
     const auto & node = stack.front().actions_dag->addArrayJoin(*source_node, std::move(result_name));
@@ -707,7 +707,7 @@ ASTs ActionsMatcher::doUntuple(const ASTFunction * function, ActionsMatcher::Dat
         auto literal = std::make_shared<ASTLiteral>(UInt64(++tid));
         visit(*literal, literal, data);
 
-        auto func = makeASTFunction("tupleElement", tuple_ast, literal);
+        auto func = makeASTFunction("tuple_element", tuple_ast, literal);
         if (!func_alias.empty())
             func->setAlias(func_alias + "." + toString(tid));
         auto function_builder = FunctionFactory::instance().get(func->name, data.getContext());
@@ -783,10 +783,10 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
         throw Exception("Unexpected lambda expression", ErrorCodes::UNEXPECTED_EXPRESSION);
 
     /// Function arrayJoin.
-    if (node.name == "arrayJoin")
+    if (node.name == "array_join")
     {
         if (node.arguments->children.size() != 1)
-            throw Exception("arrayJoin requires exactly 1 argument", ErrorCodes::TYPE_MISMATCH);
+            throw Exception("array_join requires exactly 1 argument", ErrorCodes::TYPE_MISMATCH);
 
         ASTPtr arg = node.arguments->children.at(0);
         visit(arg, data);
@@ -825,10 +825,10 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
     }
 
     /// A special function `indexHint`. Everything that is inside it is not calculated
-    if (node.name == "indexHint")
+    if (node.name == "index_hint")
     {
         // Arguments are removed. We add function instead of constant column to avoid constant folding.
-        data.addFunction(FunctionFactory::instance().get("indexHint", data.getContext()), {}, column_name);
+        data.addFunction(FunctionFactory::instance().get("index_hint", data.getContext()), {}, column_name);
         return;
     }
 

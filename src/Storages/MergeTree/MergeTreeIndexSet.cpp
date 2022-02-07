@@ -342,7 +342,7 @@ void MergeTreeIndexConditionSet::traverseAST(ASTPtr & node) const
     if (atomFromAST(node))
     {
         if (node->as<ASTIdentifier>() || node->as<ASTFunction>())
-            node = makeASTFunction("__bitWrapperFunc", node);
+            node = makeASTFunction("__bit_wrapper_func", node);
     }
     else
         node = std::make_shared<ASTLiteral>(UNKNOWN_FIELD);
@@ -393,9 +393,9 @@ bool MergeTreeIndexConditionSet::operatorFromAST(ASTPtr & node)
         if (args.size() != 1)
             return false;
 
-        func->name = "__bitSwapLastTwo";
+        func->name = "__bit_swap_last_two";
     }
-    else if (func->name == "and" || func->name == "indexHint")
+    else if (func->name == "and" || func->name == "index_hint")
     {
         auto last_arg = args.back();
         args.pop_back();
@@ -403,12 +403,12 @@ bool MergeTreeIndexConditionSet::operatorFromAST(ASTPtr & node)
         ASTPtr new_func;
         if (args.size() > 1)
             new_func = makeASTFunction(
-                    "__bitBoolMaskAnd",
+                    "__bit_bool_mask_and",
                     node,
                     last_arg);
         else
             new_func = makeASTFunction(
-                    "__bitBoolMaskAnd",
+                    "__bit_bool_mask_and",
                     args.back(),
                     last_arg);
 
@@ -422,12 +422,12 @@ bool MergeTreeIndexConditionSet::operatorFromAST(ASTPtr & node)
         ASTPtr new_func;
         if (args.size() > 1)
             new_func = makeASTFunction(
-                    "__bitBoolMaskOr",
+                    "__bit_bool_mask_or",
                     node,
                     last_arg);
         else
             new_func = makeASTFunction(
-                    "__bitBoolMaskOr",
+                    "__bit_bool_mask_or",
                     args.back(),
                     last_arg);
 
@@ -451,7 +451,7 @@ bool MergeTreeIndexConditionSet::checkASTUseless(const ASTPtr & node, bool atomi
 
         const ASTs & args = func->arguments->children;
 
-        if (func->name == "and" || func->name == "indexHint")
+        if (func->name == "and" || func->name == "index_hint")
             return std::all_of(args.begin(), args.end(), [this, atomic](const auto & arg) { return checkASTUseless(arg, atomic); });
         else if (func->name == "or")
             return std::any_of(args.begin(), args.end(), [this, atomic](const auto & arg) { return checkASTUseless(arg, atomic); });

@@ -28,7 +28,7 @@ namespace
 class FunctionRandomStringUTF8 : public IFunction
 {
 public:
-    static constexpr auto name = "randomStringUTF8";
+    static constexpr auto name = "random_string_utf8";
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionRandomStringUTF8>(); }
 

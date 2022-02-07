@@ -181,7 +181,7 @@ struct NameConcat
 };
 struct NameConcatAssumeInjective
 {
-    static constexpr auto name = "concatAssumeInjective";
+    static constexpr auto name = "concat_assume_injective";
 };
 
 using FunctionConcat = ConcatImpl<NameConcat, false>;
@@ -232,7 +232,7 @@ private:
 
 void registerFunctionsConcat(FunctionFactory & factory)
 {
-    factory.registerFunction<ConcatOverloadResolver>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<ConcatOverloadResolver>(FunctionFactory::CaseSensitive);
     factory.registerFunction<FunctionConcatAssumeInjective>();
 }
 

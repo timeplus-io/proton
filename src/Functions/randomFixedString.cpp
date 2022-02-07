@@ -29,7 +29,7 @@ template <typename RandImpl>
 class FunctionRandomFixedStringImpl : public IFunction
 {
 public:
-    static constexpr auto name = "randomFixedString";
+    static constexpr auto name = "random_fixed_string";
 
     String getName() const override { return name; }
 

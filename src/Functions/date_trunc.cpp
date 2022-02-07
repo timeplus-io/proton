@@ -155,10 +155,7 @@ private:
 
 void registerFunctionDateTrunc(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionDateTrunc>(FunctionFactory::CaseInsensitive);
-
-    /// Compatibility alias.
-    factory.registerAlias("dateTrunc", FunctionDateTrunc::name);
+    factory.registerFunction<FunctionDateTrunc>(FunctionFactory::CaseSensitive);
 }
 
 }

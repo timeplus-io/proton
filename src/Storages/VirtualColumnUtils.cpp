@@ -53,7 +53,7 @@ bool isValidFunction(const ASTPtr & expression, const std::function<bool(const A
 bool extractFunctions(const ASTPtr & expression, const std::function<bool(const ASTPtr &)> & is_constant, std::vector<ASTPtr> & result)
 {
     const auto * function = expression->as<ASTFunction>();
-    if (function && (function->name == "and" || function->name == "indexHint"))
+    if (function && (function->name == "and" || function->name == "index_hint"))
     {
         bool ret = true;
         for (const auto & child : function->arguments->children)

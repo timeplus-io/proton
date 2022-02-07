@@ -589,7 +589,7 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
                 args->children.push_back(std::make_shared<ASTLiteral>(lower));
 
                 lower_function = std::make_shared<ASTFunction>();
-                lower_function->name = "greaterOrEquals";
+                lower_function->name = "greater_or_equals";
                 lower_function->arguments = args;
                 lower_function->children.push_back(lower_function->arguments);
 

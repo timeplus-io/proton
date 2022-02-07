@@ -304,12 +304,12 @@ static void pushPullNotInAtom(CNFQuery::AtomicFormula & atom, const std::unorder
 static void pullNotOut(CNFQuery::AtomicFormula & atom)
 {
     static const std::unordered_map<std::string, std::string> inverse_relations = {
-        {"notEquals", "equals"},
-        {"greaterOrEquals", "less"},
-        {"greater", "lessOrEquals"},
-        {"notIn", "in"},
-        {"notLike", "like"},
-        {"notEmpty", "empty"},
+        {"not_equals", "equals"},
+        {"greater_or_equals", "less"},
+        {"greater", "less_or_equals"},
+        {"not_in", "in"},
+        {"not_like", "like"},
+        {"not_empty", "empty"},
     };
 
     pushPullNotInAtom(atom, inverse_relations);
@@ -321,18 +321,18 @@ void pushNotIn(CNFQuery::AtomicFormula & atom)
         return;
 
     static const std::unordered_map<std::string, std::string> inverse_relations = {
-        {"equals", "notEquals"},
-        {"less", "greaterOrEquals"},
-        {"lessOrEquals", "greater"},
-        {"in", "notIn"},
-        {"like", "notLike"},
-        {"empty", "notEmpty"},
-        {"notEquals", "equals"},
-        {"greaterOrEquals", "less"},
-        {"greater", "lessOrEquals"},
-        {"notIn", "in"},
-        {"notLike", "like"},
-        {"notEmpty", "empty"},
+        {"equals", "not_equals"},
+        {"less", "greater_or_equals"},
+        {"less_or_equals", "greater"},
+        {"in", "not_in"},
+        {"like", "not_like"},
+        {"empty", "not_empty"},
+        {"not_equals", "equals"},
+        {"greater_or_equals", "less"},
+        {"greater", "less_or_equals"},
+        {"not_in", "in"},
+        {"not_like", "like"},
+        {"not_empty", "empty"},
     };
 
     pushPullNotInAtom(atom, inverse_relations);

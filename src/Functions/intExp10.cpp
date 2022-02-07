@@ -33,7 +33,7 @@ struct IntExp10Impl
 #endif
 };
 
-struct NameIntExp10 { static constexpr auto name = "intExp10"; };
+struct NameIntExp10 { static constexpr auto name = "int_exp10"; };
 /// Assumed to be injective for the purpose of query optimization, but in fact it is not injective because of possible overflow.
 using FunctionIntExp10 = FunctionUnaryArithmetic<IntExp10Impl, NameIntExp10, true>;
 
