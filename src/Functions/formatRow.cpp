@@ -34,7 +34,7 @@ template <bool no_newline>
 class FunctionFormatRow : public IFunction
 {
 public:
-    static constexpr auto name = no_newline ? "formatRowNoNewline" : "formatRow";
+    static constexpr auto name = no_newline ? "format_row_no_newline" : "format_row";
 
     FunctionFormatRow(const String & format_name_, ContextPtr context_) : format_name(format_name_), context(context_)
     {
@@ -92,7 +92,7 @@ template <bool no_newline>
 class FormatRowOverloadResolver : public IFunctionOverloadResolver
 {
 public:
-    static constexpr auto name = no_newline ? "formatRowNoNewline" : "formatRow";
+    static constexpr auto name = no_newline ? "format_row_no_newline" : "format_row";
     static FunctionOverloadResolverPtr create(ContextPtr context) { return std::make_unique<FormatRowOverloadResolver>(context); }
     explicit FormatRowOverloadResolver(ContextPtr context_) : context(context_) { }
     String getName() const override { return name; }

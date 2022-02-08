@@ -41,7 +41,7 @@ template <FunctionSleepVariant variant>
 class FunctionSleep : public IFunction
 {
 public:
-    static constexpr auto name = variant == FunctionSleepVariant::PerBlock ? "sleep" : "sleepEachRow";
+    static constexpr auto name = variant == FunctionSleepVariant::PerBlock ? "sleep" : "sleep_each_row";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionSleep<variant>>();

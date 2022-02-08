@@ -4,7 +4,6 @@
 #include <Columns/ColumnsNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Parsers/queryNormalization.h>
-#include <base/find_symbols.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/SipHash.h>
 
@@ -50,7 +49,7 @@ template <bool keep_names>
 class FunctionNormalizedQueryHash : public IFunction
 {
 public:
-    static constexpr auto name = keep_names ? "normalizedQueryHashKeepNames" : "normalizedQueryHash";
+    static constexpr auto name = keep_names ? "normalized_query_hash_keep_names" : "normalized_query_hash";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionNormalizedQueryHash>();

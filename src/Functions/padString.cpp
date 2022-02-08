@@ -144,7 +144,7 @@ namespace
     class FunctionPadString : public IFunction
     {
     public:
-        static constexpr auto name = is_right_pad ? (is_utf8 ? "rightPadUTF8" : "rightPad") : (is_utf8 ? "leftPadUTF8" : "leftPad");
+        static constexpr auto name = is_right_pad ? (is_utf8 ? "right_pad_utf8" : "right_pad") : (is_utf8 ? "left_pad_utf8" : "left_pad");
         static FunctionPtr create(const ContextPtr) { return std::make_shared<FunctionPadString>(); }
 
         String getName() const override { return name; }

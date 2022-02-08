@@ -287,7 +287,7 @@ template <DictionaryGetFunctionType dictionary_get_function_type>
 class FunctionDictGetNoType final : public IFunction
 {
 public:
-    static constexpr auto name = dictionary_get_function_type == DictionaryGetFunctionType::get ? "dictGet" : "dictGetOrDefault";
+    static constexpr auto name = dictionary_get_function_type == DictionaryGetFunctionType::get ? "dict_get" : "dict_get_or_default";
 
     static FunctionPtr create(ContextPtr context)
     {

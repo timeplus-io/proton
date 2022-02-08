@@ -739,14 +739,11 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         parsed_special_function = parseTrim(true, false, pos, node, expected);
     else if (function_name_lowercase == "rtrim")
         parsed_special_function = parseTrim(false, true, pos, node, expected);
-    else if (function_name_lowercase == "dateadd" || function_name_lowercase == "date_add"
-        || function_name_lowercase == "timestampadd" || function_name_lowercase == "timestamp_add")
+    else if (function_name_lowercase == "date_add" || function_name_lowercase == "timestamp_add")
         parsed_special_function = parseDateAdd("plus", pos, node, expected);
-    else if (function_name_lowercase == "datesub" || function_name_lowercase == "date_sub"
-        || function_name_lowercase == "timestampsub" || function_name_lowercase == "timestamp_sub")
+    else if (function_name_lowercase == "date_sub" || function_name_lowercase == "timestamp_sub")
         parsed_special_function = parseDateAdd("minus", pos, node, expected);
-    else if (function_name_lowercase == "datediff" || function_name_lowercase == "date_diff"
-        || function_name_lowercase == "timestampdiff" || function_name_lowercase == "timestamp_diff")
+    else if (function_name_lowercase == "date_diff" || function_name_lowercase == "timestamp_diff")
         parsed_special_function = parseDateDiff(pos, node, expected);
 
     if (parsed_special_function.has_value())

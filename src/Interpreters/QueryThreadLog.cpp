@@ -2,7 +2,6 @@
 #include <array>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeMap.h>
@@ -13,7 +12,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/ProfileEventsExt.h>
 #include <Interpreters/QueryLog.h>
-#include <Poco/Net/IPAddress.h>
 #include <Common/ClickHouseRevision.h>
 
 

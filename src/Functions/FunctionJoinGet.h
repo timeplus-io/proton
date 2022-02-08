@@ -27,7 +27,7 @@ public:
         , result_columns(result_columns_)
     {}
 
-    static constexpr auto name = or_null ? "joinGetOrNull" : "joinGet";
+    static constexpr auto name = or_null ? "join_get_or_null" : "join_get";
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
@@ -47,7 +47,7 @@ template <bool or_null>
 class FunctionJoinGet final : public IFunctionBase, WithContext
 {
 public:
-    static constexpr auto name = or_null ? "joinGetOrNull" : "joinGet";
+    static constexpr auto name = or_null ? "join_get_or_null" : "join_get";
 
     FunctionJoinGet(ContextPtr context_,
                     TableLockHolder table_lock_,
@@ -83,7 +83,7 @@ template <bool or_null>
 class JoinGetOverloadResolver final : public IFunctionOverloadResolver, WithContext
 {
 public:
-    static constexpr auto name = or_null ? "joinGetOrNull" : "joinGet";
+    static constexpr auto name = or_null ? "join_get_or_null" : "join_get";
     static FunctionOverloadResolverPtr create(ContextPtr context_) { return std::make_unique<JoinGetOverloadResolver>(context_); }
 
     explicit JoinGetOverloadResolver(ContextPtr context_) : WithContext(context_) {}
