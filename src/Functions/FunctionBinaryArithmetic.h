@@ -692,16 +692,17 @@ class FunctionBinaryArithmetic : public IFunction
         std::string function_name;
         if (interval_data_type)
         {
-            function_name = fmt::format("{}{}s",
+            function_name = fmt::format("{}_{}s",
                 is_plus ? "add" : "subtract",
                 interval_data_type->getKind().toString());
+            function_name = Poco::toLower(function_name);
         }
         else
         {
             if (isDate(type_time))
-                function_name = is_plus ? "addDays" : "subtractDays";
+                function_name = is_plus ? "add_days" : "subtract_days";
             else
-                function_name = is_plus ? "addSeconds" : "subtractSeconds";
+                function_name = is_plus ? "add_seconds" : "subtract_seconds";
         }
 
         return FunctionFactory::instance().get(function_name, context);
@@ -722,15 +723,15 @@ class FunctionBinaryArithmetic : public IFunction
         std::string function_name;
         if (is_plus)
         {
-            function_name = "tuplePlus";
+            function_name = "tuple_plus";
         }
         else if (is_minus)
         {
-            function_name = "tupleMinus";
+            function_name = "tuple_minus";
         }
         else
         {
-            function_name = "dotProduct";
+            function_name = "dot_product";
         }
 
         return FunctionFactory::instance().get(function_name, context);
@@ -755,11 +756,11 @@ class FunctionBinaryArithmetic : public IFunction
         std::string function_name;
         if (is_multiply)
         {
-            function_name = "tupleMultiplyByNumber";
+            function_name = "tuple_multiply_by_number";
         }
         else
         {
-            function_name = "tupleDivideByNumber";
+            function_name = "tuple_divide_by_number";
         }
 
         return FunctionFactory::instance().get(function_name, context);
@@ -1726,7 +1727,7 @@ public:
     bool hasInformationAboutMonotonicity() const override
     {
         const std::string_view name_view = Name::name;
-        return (name_view == "minus" || name_view == "plus" || name_view == "divide" || name_view == "intDiv");
+        return (name_view == "minus" || name_view == "plus" || name_view == "divide" || name_view == "int_div");
     }
 
     Monotonicity getMonotonicityForRange(const IDataType &, const Field & left_point, const Field & right_point) const override
@@ -1736,7 +1737,7 @@ public:
         // For simplicity, we treat null values as monotonicity breakers, except for variable / non-zero constant.
         if (left_point.isNull() || right_point.isNull())
         {
-            if (name_view == "divide" || name_view == "intDiv")
+            if (name_view == "divide" || name_view == "int_div")
             {
                 // variable / constant
                 if (right.column && isColumnConst(*right.column))
@@ -1818,7 +1819,7 @@ public:
                     return {false, true, false};
             }
         }
-        if (name_view == "divide" || name_view == "intDiv")
+        if (name_view == "divide" || name_view == "int_div")
         {
             // const / variable
             if (left.column && isColumnConst(*left.column))
