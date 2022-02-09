@@ -1437,21 +1437,21 @@ struct NameToDecimal128 { static constexpr auto name = "to_decimal128"; };
 struct NameToDecimal256 { static constexpr auto name = "to_decimal256"; };
 
 
-#define DEFINE_NAME_TO_INTERVAL(INTERVAL_KIND) \
+#define DEFINE_NAME_TO_INTERVAL(INTERVAL_NAME, INTERVAL_KIND) \
     struct NameToInterval ## INTERVAL_KIND \
     { \
-        static constexpr auto name = "toInterval" #INTERVAL_KIND; \
+        static constexpr auto name = "to_interval_" #INTERVAL_NAME; \
         static constexpr auto kind = IntervalKind::INTERVAL_KIND; \
     };
 
-DEFINE_NAME_TO_INTERVAL(Second)
-DEFINE_NAME_TO_INTERVAL(Minute)
-DEFINE_NAME_TO_INTERVAL(Hour)
-DEFINE_NAME_TO_INTERVAL(Day)
-DEFINE_NAME_TO_INTERVAL(Week)
-DEFINE_NAME_TO_INTERVAL(Month)
-DEFINE_NAME_TO_INTERVAL(Quarter)
-DEFINE_NAME_TO_INTERVAL(Year)
+DEFINE_NAME_TO_INTERVAL(second, Second)
+DEFINE_NAME_TO_INTERVAL(minute, Minute)
+DEFINE_NAME_TO_INTERVAL(hour, Hour)
+DEFINE_NAME_TO_INTERVAL(day, Day)
+DEFINE_NAME_TO_INTERVAL(week, Week)
+DEFINE_NAME_TO_INTERVAL(month, Month)
+DEFINE_NAME_TO_INTERVAL(quarter, Quarter)
+DEFINE_NAME_TO_INTERVAL(year, Year)
 
 #undef DEFINE_NAME_TO_INTERVAL
 

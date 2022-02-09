@@ -746,8 +746,31 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     else if (function_name_lowercase == "date_diff" || function_name_lowercase == "timestamp_diff")
         parsed_special_function = parseDateDiff(pos, node, expected);
 
+    /// proton: starts. we shall show original name.
+    /// e.g. for 'date_add(now(), 1s)', we don't show 'now() + 1s'.
     if (parsed_special_function.has_value())
+    {
+        if (auto parsed_special_func = node->as<ASTFunction>())
+        {
+            WriteBufferFromOwnString ostr;
+            writeString(function_name_lowercase, ostr);
+            writeChar('(', ostr);
+            if (parsed_special_func->arguments)
+            {
+                for (auto it = parsed_special_func->arguments->children.begin(); it != parsed_special_func->arguments->children.end(); ++it)
+                {
+                    if (it != parsed_special_func->arguments->children.begin())
+                        writeCString(", ", ostr);
+
+                    (*it)->appendColumnName(ostr);
+                }
+            }
+            writeChar(')', ostr);
+            parsed_special_func->code_name = ostr.str();
+        }
         return parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos);
+    }
+    /// proton: ends
 
     auto pos_after_bracket = pos;
     auto old_expected = expected;
@@ -782,32 +805,8 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserExpressionList contents(false, is_table_function);
 
     const char * contents_begin = pos->begin;
-
-    /// proton: starts.
-    /// The tumble/hop function arguments support interval alias expression
-    bool allow_interval_alias = is_table_function;
-    if (allow_interval_alias)
-    {
-        auto func_name = getIdentifierName(identifier);
-        allow_interval_alias = func_name == "tumble" || func_name == "hop";
-    }
-
-    if (allow_interval_alias)
-    {
-        ParserList interval_alias_content{
-            std::make_unique<ParserIntervalAliasExpression>(std::make_unique<ParserExpressionWithOptionalAlias>(false, is_table_function)),
-            std::make_unique<ParserToken>(TokenType::Comma)};
-
-        if (!interval_alias_content.parse(pos, expr_list_args, expected))
-            return false;
-    }
-    else
-    {
-        if (!contents.parse(pos, expr_list_args, expected))
-            return false;
-    }
-    /// proton: ends.
-
+    if (!contents.parse(pos, expr_list_args, expected))
+        return false;
     const char * contents_end = pos->begin;
 
     if (pos->type != TokenType::ClosingRoundBracket)

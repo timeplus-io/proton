@@ -518,9 +518,9 @@ bool TaskStatusService::createTaskTable()
                     `last_modified` Int64, \
                     `_time` Datetime64(3) DEFAULT fromUnixTimestamp64Milli(created, 'UTC')) \
                     ENGINE = DistributedMergeTree(1,{},rand()) \
-                    ORDER BY (toMinute(_time), user, id) \
-                    PARTITION BY toDate(_time) \
-                    TTL toDateTime(_time + toIntervalDay(7)) DELETE \
+                    ORDER BY (to_minute(_time), user, id) \
+                    PARTITION BY to_date(_time) \
+                    TTL to_datetime(_time + to_interval_day(7)) DELETE \
                     SETTINGS index_granularity = 8192",
         replicas);
 
@@ -563,10 +563,10 @@ bool TaskStatusService::createTaskTable()
         "name" : "last_modified",
         "type" : "Int64"
         }],
-        "order_by_expression" : "(toMinute(_time), user, id)",
+        "order_by_expression" : "(to_minute(_time), user, id)",
         "partition_by_granularity" : "D",
         "order_by_granularity": "H",
-        "ttl_expression" : "toDateTime(_time + toIntervalDay(7)) DELETE",
+        "ttl_expression" : "to_datetime(_time + to_interval_day(7)) DELETE",
         "_time_column": "fromUnixTimestamp64Milli(created, 'UTC')"
         }
     )d";

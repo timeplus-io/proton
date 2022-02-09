@@ -1,6 +1,5 @@
 #include "ParserEmitQuery.h"
 #include "ASTEmitQuery.h"
-#include "ParserIntervalAliasExpression.h"
 
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionListParsers.h>
@@ -43,7 +42,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr delay_interval;
     ASTPtr last_interval;
 
-    ParserIntervalAliasExpression interval_alias_p(std::make_unique<ParserIntervalOperatorExpression>());
+    ParserIntervalOperatorExpression interval_alias_p;
     do
     {
         if (ParserKeyword("PERIODIC").ignore(pos, expected))

@@ -137,7 +137,7 @@ CREATE TABLE default.tests
 ) ENGINE = DistributedMergeTree(2, 1, rand())
 PARTITION BY ttl
 ORDER BY ttl
-TTL ttl + toIntervalDay(1)
+TTL ttl + to_interval_day(1)
 )###")),
         ignoreEmptyChars(R"###(
 {
@@ -153,7 +153,7 @@ TTL ttl + toIntervalDay(1)
 	"replication_factor": 1,
 	"shard_by_expression": "rand()",
 	"shards": 2,
-    "ttl":"ttl + toIntervalDay(1)"
+    "ttl":"ttl + to_interval_day(1)"
 })###"));
 }
 
@@ -162,7 +162,7 @@ TEST(DDLHelper, getJSONFromAlterQuery)
     /// modify ttl
     EXPECT_EQ(
         ignoreEmptyChars(queryToJSON(R"###(ALTER TABLE tests MODIFY TTL ttl + INTERVAL 1 DAY)###")),
-        ignoreEmptyChars(R"###({"ttl_expression": "ttl + toIntervalDay(1)"})###"));
+        ignoreEmptyChars(R"###({"ttl_expression": "ttl + to_interval_day(1)"})###"));
 
     /// add column
     EXPECT_EQ(
@@ -274,7 +274,7 @@ CREATE TABLE default.tests
 ) ENGINE = DistributedMergeTree(2, 1, rand())
 PARTITION BY ttl
 ORDER BY ttl
-TTL ttl + toIntervalDay(1)
+TTL ttl + to_interval_day(1)
 )###");
     create = ast->as<ASTCreateQuery>();
     prepareCreateQueryForDistributedMergeTree(*create);

@@ -52,6 +52,13 @@ void ASTFunction::appendColumnNameImpl(WriteBuffer & ostr) const
     }
 
     /// proton: starts. rename back
+    /// If 'code_name' exists, we show this directly.
+    if (!code_name.empty())
+    {
+        writeString(code_name, ostr);
+        return;
+    }
+
     const std::string * show_name = &name;
     auto iter = streaming_func_map.find(name);
     if (iter != streaming_func_map.end())
@@ -257,6 +264,14 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
         return;
     }
 
+    /// proton: starts. show code_name directly if exists
+    if (!code_name.empty())
+    {
+        settings.ostr << code_name;
+        return;
+    }
+    /// proton: ends.
+
     /// Should this function to be written as operator?
     bool written = false;
 
@@ -344,40 +359,6 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 break;
             }
         }
-
-        /// proton: starts. show interval alias for the literal interval
-        /// e.g. toIntervalSecond(1)  ->  1s
-        if (!written && arguments->children.size() == 1 && arguments->children[0]->as<ASTLiteral>() != nullptr)
-        {
-            const char * operators[] =
-            {
-                "toIntervalSecond",         "s",
-                "toIntervalMinute",         "m",
-                "toIntervalHour",           "h",
-                "toIntervalDay",            "d",
-                "toIntervalWeek",           "w",
-                "toIntervalMonth",          "M",
-                "toIntervalQuarter",        "q",
-                "toIntervalYear",           "y",
-                nullptr
-            };
-
-            for (const char ** func = operators; *func; func += 2)
-            {
-                if (strcasecmp(name.c_str(), func[0]) != 0)
-                {
-                    continue;
-                }
-
-                arguments->formatImpl(settings, state, nested_need_parens);
-                settings.ostr << (settings.hilite ? hilite_operator : "") << func[1] << (settings.hilite ? hilite_none : "");
-
-                written = true;
-
-                break;
-            }
-        }
-        /// proton: ends.
 
         /** need_parens - do we need parentheses around the expression with the operator.
           * They are needed only if this expression is included in another expression with the operator.

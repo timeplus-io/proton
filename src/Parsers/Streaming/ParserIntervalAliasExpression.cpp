@@ -75,6 +75,10 @@ bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected
     function->arguments = exp_list;
     function->children.push_back(exp_list);
 
+    /// Set code name: '+1s' '-10m' '1h' ...
+    for (auto iter = pos_begin; iter != pos; ++iter)
+        function->code_name.append(iter->begin, iter->size());
+
     exp_list->children.push_back(expr);
 
     node = function;

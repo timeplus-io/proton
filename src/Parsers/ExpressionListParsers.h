@@ -282,7 +282,7 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
-/// Optional conversion to INTERVAL data type. Example: "INTERVAL x SECOND" parsed as "toIntervalSecond(x)".
+/// Optional conversion to INTERVAL data type. Example: "INTERVAL x SECOND" parsed as "to_interval_second(x)".
 class ParserIntervalOperatorExpression : public IParserBase
 {
 protected:

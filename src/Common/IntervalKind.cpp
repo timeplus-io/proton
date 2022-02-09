@@ -112,21 +112,21 @@ const char * IntervalKind::toNameOfFunctionToIntervalDataType() const
     switch (kind)
     {
         case IntervalKind::Second:
-            return "toIntervalSecond";
+            return "to_interval_second";
         case IntervalKind::Minute:
-            return "toIntervalMinute";
+            return "to_interval_minute";
         case IntervalKind::Hour:
-            return "toIntervalHour";
+            return "to_interval_hour";
         case IntervalKind::Day:
-            return "toIntervalDay";
+            return "to_interval_day";
         case IntervalKind::Week:
-            return "toIntervalWeek";
+            return "to_interval_week";
         case IntervalKind::Month:
-            return "toIntervalMonth";
+            return "to_interval_month";
         case IntervalKind::Quarter:
-            return "toIntervalQuarter";
+            return "to_interval_quarter";
         case IntervalKind::Year:
-            return "toIntervalYear";
+            return "to_interval_year";
     }
     __builtin_unreachable();
 }

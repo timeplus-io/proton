@@ -21,21 +21,21 @@ namespace
 {
     std::optional<IntervalKind> mapIntervalKind(const String & func_name)
     {
-        if (func_name == "toIntervalSecond")
+        if (func_name == "to_interval_second")
             return IntervalKind::Second;
-        else if (func_name == "toIntervalMinute")
+        else if (func_name == "to_interval_minute")
             return IntervalKind::Minute;
-        else if (func_name == "toIntervalHour")
+        else if (func_name == "to_interval_hour")
             return IntervalKind::Hour;
-        else if (func_name == "toIntervalDay")
+        else if (func_name == "to_interval_day")
             return IntervalKind::Day;
-        else if (func_name == "toIntervalWeek")
+        else if (func_name == "to_interval_week")
             return IntervalKind::Week;
-        else if (func_name == "toIntervalMonth")
+        else if (func_name == "to_interval_month")
             return IntervalKind::Month;
-        else if (func_name == "toIntervalQuarter")
+        else if (func_name == "to_interval_quarter")
             return IntervalKind::Quarter;
-        else if (func_name == "toIntervalYear")
+        else if (func_name == "to_interval_year")
             return IntervalKind::Year;
         else
             return {};

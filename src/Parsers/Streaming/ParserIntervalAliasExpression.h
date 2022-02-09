@@ -9,7 +9,7 @@ namespace DB
 ///     <n> is a signed integer value like 1 +1 -1
 ///     <t> is a simple unit of time like s(seconds) or h(hours)
 /// Example:
-/// 1) "1s" parsed as "toIntervalSecond(1)"
+/// 1) "1s" parsed as "to_interval_second(1)"
 ///
 /// The unit of time supports [Case Sensitive]:
 /// 'seconds' - 's'

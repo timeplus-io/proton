@@ -17,6 +17,10 @@
 #include <Parsers/parseIntervalKind.h>
 #include <Common/StringUtils/StringUtils.h>
 
+/// proton: starts.
+#include <Parsers/Streaming/ParserIntervalAliasExpression.h>
+/// proton: ends.
+
 using namespace std::literals;
 
 
@@ -908,6 +912,11 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
 {
     auto begin = pos;
 
+    /// proton: starts. support interval alias
+    if (ParserIntervalAliasExpression().parse(pos, node, expected))
+        return true;
+    /// proton: ends.
+
     /// If no INTERVAL keyword, go to the nested parser.
     if (!ParserKeyword("INTERVAL").ignore(pos, expected))
         return next_parser.parse(pos, node, expected);
@@ -932,6 +941,17 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
     function->children.push_back(exp_list);
 
     exp_list->children.push_back(expr);
+
+    /// Set code name: 'INTERVAL 1 SECOND' 'INTERVAL -10 MINUTE' ...
+    auto expr_begin = begin;
+    auto expr_end = pos;
+    ++expr_begin;
+    --expr_end;
+    function->code_name = "INTERVAL ";
+    for (auto iter = expr_begin; iter != expr_end; ++iter)
+        function->code_name.append(iter->begin, iter->size());
+    function->code_name.append(" ");
+    function->code_name.append(interval_kind.toKeyword());
 
     node = function;
     return true;

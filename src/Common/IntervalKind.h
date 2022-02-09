@@ -45,7 +45,7 @@ struct IntervalKind
 
     /// Returns the name of the function converting a number to the interval data type.
     /// For example, `IntervalKind{IntervalKind::Day}.getToIntervalDataTypeFunctionName()`
-    /// returns "toIntervalDay".
+    /// returns "to_interval_day".
     const char * toNameOfFunctionToIntervalDataType() const;
 
     /// Returns the name of the function extracting time part from a date or a time.
