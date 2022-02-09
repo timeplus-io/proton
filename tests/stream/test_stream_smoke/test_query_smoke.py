@@ -52,6 +52,8 @@ def query_result_check(test_set, order_check=False):
             query_results_dict != None
         )  # if no statement_results_query_id matches expected_result_query_id, case failed
         query_result = query_results_dict.get("query_result")
+        logging.info(f"\n test_run: expected_result = {expected_result}")
+        logging.info(f"\n test_run: query_result = {query_result}")
         query_result_column_types = query_results_dict.get("query_result_column_types")
         assert type(expected_result) == type(
             query_result
@@ -88,13 +90,16 @@ def query_result_check(test_set, order_check=False):
                             for i in range(
                                 len(expected_result_row)
                             ):  # for each filed of each row of each query_results
-                                logging.debug("test_run: column_type:", query_result_column_types[i][1])
                                 expected_result_field = expected_result_row[i]
                                 query_result_field = query_result_row[i]
-                                logging.debug(f"test_run: query_result_column_types[i] = {query_result_column_types[i]}")
                                 if "Array" in query_result_column_types[i][1]:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")
+                                    else:
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: not match")
                                 elif "Float" in query_result_column_types[i][1]:
                                     if math.isclose(
                                         float(expected_result_field),
@@ -102,20 +107,38 @@ def query_result_check(test_set, order_check=False):
                                         rel_tol=1e-2,
                                     ):
                                         expected_result_row_field_check_arry[i] = 1
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")
+                                    else:
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: not match")                                                                                
                                 elif "Int" in query_result_column_types[i][1]:
                                     if int(expected_result_field) == int(
                                         query_result_field
                                     ):
                                         expected_result_row_field_check_arry[i] = 1
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")
+                                    else:
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")                                                                                
                                 else:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")
+                                    else: 
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: not match")                                        
 
+                            logging.debug(f"test_run: expected_result_row_field_check_arry = {expected_result_row_field_check_arry}")
+                            expected_result_row_check = 1
                             for i in range(len(expected_result_row_field_check_arry)):
                                 expected_result_row_check = (
                                     expected_result_row_check
                                     * expected_result_row_field_check_arry[i]
                                 )
+                            logging.debug(f"test_run: expected_result_row_check = {expected_result_row_check}")
                             if expected_result_row_check == 1:
                                 expected_result_check_arry[row_step] = 1
                         assert expected_result_check_arry[row_step] == 1

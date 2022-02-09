@@ -1,4 +1,4 @@
-import os, sys, logging, subprocess, time, datetime, json, csv, argparse
+import os, sys, logging, subprocess, time, datetime, json, csv, argparse, getopt
 from helpers.s3_helper import S3Helper
 from helpers.compress_files import compress_file_fast
 import pytest
@@ -61,14 +61,15 @@ def upload_results(
     return report_url
 
 
-def ci_runner(local_all_results_folder_path, local_mode, pr_number="0", commit_sha="0"):
+def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", commit_sha="0"):
 
     timestamp = str(datetime.datetime.now())
     report_file_name = f"report_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
     retcode = pytest.main(
-        ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
+        ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
     )
+
     with open(".status", "w") as status_result:
         status_result.write(str(retcode))
 
@@ -82,7 +83,7 @@ def ci_runner(local_all_results_folder_path, local_mode, pr_number="0", commit_s
         f"ci_runner: downloaded_log_files_paths = {downloaded_log_files_paths}"
     )
 
-    if local_mode == False:
+    if run_mode == 'github':
         pr_number = os.getenv("GITHUB_REF_NAME", pr_number)
         commit_sha = os.getenv("GITHUB_SHA", commit_sha)
 
@@ -105,16 +106,36 @@ if __name__ == "__main__":
     #logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     cur_dir = cur_dir = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description="Run CI in local mode")
-    parser.add_argument(
-        "-l",
-        "--local",
-        action="store_true",
-        help="run CI in default 'github' mode or 'local' mdoe",
-    )
-    args = parser.parse_args()
-    if args.local:
-        os.environ["PROTON_CI_MODE"] = "local"
-    else:
-        os.environ["PROTON_CI_MODE"] = "github"
+    run_mode = 'github'
+    loop = 1
 
-    ci_runner(cur_dir, args.local)
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "loop="])
+    except(getopt.GetoptError) as error:
+        print(f"command error: {error}")
+        print(f"usage: python3 ci_runner.py --local --loop=30")
+        sys.exit(1)
+    print(f"opts = {opts}")
+    for name, value in opts:
+        if name in ("--local", "-l"):
+            os.environ["PROTON_CI_MODE"] = "local"
+            run_mode = 'local'
+        
+        if name in ("--loop"):
+            if value.isdigit() == False:
+                print(f"usage: python3 ci_runner.py --local --loop=30")
+                sys.exit(1)
+            else:
+                loop = int(value)
+    print(f"ci_runner: run_mode = {run_mode}, loop = {loop}")
+
+    i = 0
+    while i < loop:
+        ci_runner(cur_dir, run_mode)
+        i += 1
+
+
+
+
+
+

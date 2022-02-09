@@ -1,0 +1,9 @@
+# Description file for Iris data set
+title: Iris Flower Data Set
+description: >-
+  Famous iris plant data set published in Ronald Fisher's 1936 paper
+  "The use of multiple measurements in taxonomic problems." Commonly
+  used to illustrate statistical and machine learning procedures.
+size: 150 rows
+sources: 
+  - https://archive.ics.uci.edu/ml/datasets/iris

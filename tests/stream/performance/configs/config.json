@@ -1,0 +1,42 @@
+{
+    "rest_setting": {
+        "table_ddl_url": "http://localhost:8123/proton/v1/ddl/tables",
+        "ingest_url": "http://localhost:8123/proton/v1/ingest/tables",
+        "query_url": "http://localhost:8123/proton/v1/search",
+        "health_check_url": "http://localhost:8123/proton/ping",
+        "info_url": "http://localhost:8123/proton/info",
+        "params": {
+            "headers": {
+                "Content-Type": "application/json"
+            }
+        }
+    },
+    "proton_server": "localhost",
+    "proton_server_native_port": "9000",
+    "setting_1": {
+        "db_engine":"proton",
+        "rest_setting": {
+            "table_ddl_url": "http://localhost:8123/proton/v1/ddl/tables",
+            "ingest_url": "http://localhost:8123/proton/v1/ingest/tables",
+            "query_url": "http://localhost:8123/proton/v1/search",
+            "health_check_url": "http://localhost:8123/proton/ping",
+            "info_url": "http://localhost:8123/proton/info",
+            "params": {
+                "headers": {
+                    "Content-Type": "application/json"
+                }
+            }
+        },
+        "proton_server": "localhost",
+        "proton_server_native_port": "9000"
+    },
+    "setting_mz": {
+        "db_engine": "Materialize",
+        "mz_port": "6875",
+        "mz_user": "materialize",
+        "mz_password": "materialize",
+        "mz_db": "materialize",
+        "kafka_broker": "kafka:9092"
+    }
+
+}

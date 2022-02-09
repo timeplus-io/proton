@@ -53,6 +53,10 @@ from requests.api import request
 cur_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(cur_path)
 
+logger = logging.getLogger(__name__)
+
+
+#alive = mp.Value('b', True)
 
 def rockets_env_var_get():
     proton_server = os.environ.get("PROTON_HOST")
@@ -99,7 +103,7 @@ def rockets_context(config_file=None, tests_file=None, docker_compose_file=None)
     if config == None:
         with open(config_file) as f:
             config = json.load(f)
-        logging.debug(f"rockets_context: config reading from config files: {config}")
+        logger.debug(f"rockets_context: config reading from config files: {config}")
 
     if config == None:
         raise Exception("No config env vars nor config file")
@@ -123,10 +127,10 @@ def rockets_context(config_file=None, tests_file=None, docker_compose_file=None)
     )  # data path queue for query results, query_execute and threads created by query_execute process pushed query results into this queue.
 
     # query_exe_client = mp.Process(target=query_execute_new, args=(config, query_exe_queue, query_results_queue))
-
+    alive = mp.Value('b', True)
     query_exe_client = mp.Process(
         target=query_execute,
-        args=(config, query_exe_child_conn, query_results_queue),
+        args=(config, query_exe_child_conn, query_results_queue, alive),
     )  # Create query_exe_client process
 
     rockets_context = {
@@ -137,6 +141,7 @@ def rockets_context(config_file=None, tests_file=None, docker_compose_file=None)
         "query_exe_parent_conn": query_exe_parent_conn,
         "query_exe_child_conn": query_exe_child_conn,
         "query_results_queue": query_results_queue,
+        "alive": alive
     }
     """
     rockets_context = {
@@ -168,22 +173,32 @@ def kill_query(proton_client, query_2_kill):
 
     kill_sql = f"kill query where query_id = '{query_2_kill}'"
     # run the timer and then kill the query
-    logging.debug(
+    logger.debug(
         f"kill_query: datetime.now = {datetime.datetime.now()}, kill_sql = {kill_sql}."
     )
     kill_res = proton_client.execute(kill_sql)
-    logging.debug(
+    logger.debug(
         f"kill_query: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res}"
     )
     while len(kill_res):
         time.sleep(0.2)
         kill_res = proton_client.execute(kill_sql)
-        logging.debug(f"kill_query: kill_res = {kill_res}")
+        logger.debug(f"kill_query: kill_res = {kill_res}")
 
 
 def query_run_py(
     statement_2_run, settings, query_results_queue=None, config=None, pyclient=None
-):
+):    
+
+    logger = logging.getLogger()
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"  
+    )
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.INFO)    
+
     try:
         if pyclient == None:
             proton_server = config.get("proton_server")
@@ -205,21 +220,21 @@ def query_run_py(
         query_result_column_types = []
         query_result_list = []
 
-        logging.debug(
-            f"query_run_py: query_id = {query_id}, query = {query} to be execute........."
+        logger.debug(
+            f"query_run_py: query_id = {query_id}, query = {query} to be execute @ {str(datetime.datetime.now())}........."
         )
         query_result_iter = pyclient.execute_iter(
             query, with_column_types=True, query_id=query_id, settings=settings
         )
 
-        logging.debug(
-            f"query_run_py: query_run_py: query_id = {query_id}, query = {query} executed......"
+        logger.debug(
+            f"query_run_py: query_run_py: query_id = {query_id}, query = {query} executed @ {str(datetime.datetime.now())}......"
         )
 
         i = 0
         for element in query_result_iter:
-            logging.debug(
-                f"query_execute: element in query_result_iter in query_id: {query_id} = {element}"
+            logger.debug(
+                f"query_execute: element got @ {str(datetime.datetime.now())} in query_result_iter in query_id: {query_id} = {element}"
             )
 
             if isinstance(element, list) or isinstance(element, tuple):
@@ -246,7 +261,7 @@ def query_run_py(
             "query_result_column_types": query_result_column_types,
             "query_result": query_result_list,
         }
-        logging.debug(f"query_run_py: query_results of query={query} = {query_results}")
+        logger.info(f"query_run_py: query_results of query={query} = {query_results}")
 
         
         if query_results_queue != None:
@@ -256,7 +271,7 @@ def query_run_py(
         if run_mode == "process" or query_type == "stream":
             pyclient.disconnect()        
 
-    except (errors.ServerException) as error:
+    except (BaseException, errors.ServerException) as error:
         if isinstance(error, errors.ServerException):
             if (
                 error.code == 394
@@ -273,14 +288,15 @@ def query_run_py(
                     "query_result_column_types": query_result_column_types,
                     "query_result": query_result_list,
                 }
-                logging.debug(
-                    "query_execute func: query_results: {} collected from query_result_iter at {}".format(
+                logger.debug(
+                    "query_run_py: query_results: {} collected from query_result_iter at {}".format(
                         query_results, datetime.datetime.now()
                     )
                 )  
                 message_2_send = json.dumps(query_results)
                 if query_results_queue != None:
                     query_results_queue.put(message_2_send)
+                    logger.info(f"query_run_py: query_results message_2_send = {message_2_send} was sent.")
             else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -292,7 +308,7 @@ def query_run_py(
                     "query_end": query_end_time_str,
                     "query_result": f"error_code:{error.code}",
                 }
-                logging.debug(
+                logger.debug(
                     "query_run_py: db exception, none-cancel query_results: {}".format(
                         query_results
                     )
@@ -311,7 +327,7 @@ def query_run_py(
                 "query_state": "exception",
                 "query_start": query_start_time_str,
                 "query_end": query_end_time_str,
-                "query_result": "error_code:10000",
+                "query_result": f"error_code:10000, error: {error}",
             }
             # if it's not db excelption, send 10000 as error_code
             message_2_send = json.dumps(query_results)
@@ -323,15 +339,22 @@ def query_run_py(
 
     finally:
 
-        logging.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
+        logger.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
         return query_results
 
 
-def query_execute(config, child_conn, query_results_queue):
-    logging.basicConfig(level=logging.DEBUG, filename="rockets.log")
+def query_execute(config, child_conn, query_results_queue, alive):
     # query_result_list = query_result_list
+    logger = logging.getLogger()
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"  
+    )
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.INFO)    
 
-    logging.debug(f"query_execute starts...")
+    logger.debug(f"query_execute starts...")
 
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
@@ -348,23 +371,24 @@ def query_execute(config, child_conn, query_results_queue):
     i = 0  # query
     query_procs = []  # a list of query_run_py processes started for queries of one case
     auto_terminate_queries = []
-    while (not tear_down) and query_run_count > 0:
+    print(f"query_execute: alive = {alive}, alive.value = {alive.value}")
+    while (not tear_down) and query_run_count > 0 and alive.value:
         try:
 
             query_proc = None
            
-            logging.debug(
+            logger.debug(
                 f"query_execute: tear_down = {tear_down}, query_run_count = {query_run_count}, wait for message from rockets_run......"
             )
             message_recv = child_conn.recv()
-            logging.debug(f"query_execute: message_recv = {message_recv}")
+            logger.debug(f"query_execute: message_recv = {message_recv}")
 
             if message_recv == "tear_down":
                 tear_down = True
                 break
 
             elif message_recv == "test_steps_done":
-                logging.debug(
+                logger.debug(
                     f"query_execute: test_steps_done received @ {datetime.datetime.now()}, query_procs={query_procs}"
                 )
                 retry = 1000  # if one case run out 600s, all the processes running the streaming queries will be killed, be careful about this timeout, if some case do need run longer time, tune this setting!
@@ -378,7 +402,7 @@ def query_execute(config, child_conn, query_results_queue):
                         exitcode = process.exitcode
                         terminate = proc.get("terminate")
                         query_end_timer = proc.get("query_end_timer")
-                        logging.debug(
+                        logger.debug(
                             f"query_execute: query_procs pop, process = {process}, exitcode = {exitcode}"
                         )
 
@@ -389,7 +413,7 @@ def query_execute(config, child_conn, query_results_queue):
                             if query_end_timer != None:
                                 time.sleep(int(query_end_timer))
                             kill_query(client, query_id)
-                        logging.debug(
+                        logger.debug(
                             f"query_execute: query_procs = {query_procs} after trying to remove"
                         )
                     time.sleep(0.1)
@@ -403,7 +427,7 @@ def query_execute(config, child_conn, query_results_queue):
                         if process.exitcode == None:
                             process.terminate()
                             query = proc.get("query")
-                            logging.debug(
+                            logger.debug(
                                 f"query_execute: process={process}, query={query} is terminated after retry timeout."
                             )
                 query_procs = (
@@ -420,7 +444,7 @@ def query_execute(config, child_conn, query_results_queue):
             # query_run_count -= 1
             else:
                 statement_2_run = json.loads(json.dumps(message_recv))
-                logging.debug(f"query_execute: statement_2_run = {statement_2_run}")
+                logger.debug(f"query_execute: statement_2_run = {statement_2_run}")
                 query_id = str(statement_2_run.get("query_id"))
                 query_client = statement_2_run.get("client")
                 query_type = statement_2_run.get("query_type")
@@ -428,28 +452,36 @@ def query_execute(config, child_conn, query_results_queue):
                 if terminate == "auto":
                     auto_terminate_queries.append(statement_2_run)
                 run_mode = statement_2_run.get("run_mode")
-
+                wait = statement_2_run.get("wait")
                 query = statement_2_run.get("query")
                 query_end_timer = statement_2_run.get("query_end_timer")
                 query_start_time_str = str(datetime.datetime.now())
                 query_end_time_str = str(datetime.datetime.now())
 
                 if run_mode == "process" or query_type == "stream":
+
                     query_run_args = (
                         statement_2_run,
                         settings,
                         query_results_queue,
                         config,
                     )
+                    if wait != None:
+                        wait = int(wait)
+                        print(f"query_execute: wait for {wait} to start run query = {query}")
+                        time.sleep(wait)                    
                     query_proc = mp.Process(target=query_run_py, args=query_run_args)
                     query_proc.start()
 
-                    logging.debug(
+                    logger.debug(
                         f"query_execute: start a proc for query = {query}, query_run_args = {query_run_args}, query_proc.pid = {query_proc.pid}"
                     )
 
                 else:
-                    logging.debug(f"query_execute: query_run_py run local...")
+                    logger.debug(f"query_execute: query_run_py run local...")
+                    if wait != None:
+                        wait = int(wait)
+                        time.sleep(wait)
                     query_results = query_run_py(
                         statement_2_run,
                         settings,
@@ -460,14 +492,14 @@ def query_execute(config, child_conn, query_results_queue):
 
                     message_2_send = json.dumps(query_results)
                     query_results_queue.put(message_2_send)
-                    logging.debug(
+                    logger.debug(
                         f"query_execute: query_run_py run local, query_id = {query_id}, query={query}, message_2_send = {query_results} pushed to query_results_queue "
                     )
                     time.sleep(0.2) #wait for the queue push completed, if no sleep the rockets_rum process got the results_done message too fast and then go to next case, the reulsts in queue will be lost, todo: put a beacon message to indicate the messages of cases done
 
                 query_run_count = query_run_count - 1
         except (BaseException, errors.ServerException) as error:
-            logging.debug(f"query_execute: error = {error}")
+            logger.debug(f"query_execute: error = {error}")
             if isinstance(error, errors.ServerException):
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -477,9 +509,9 @@ def query_execute(config, child_conn, query_results_queue):
                     "query_state": "run",
                     "query_start": query_start_time_str,
                     "query_end": query_end_time_str,
-                    "query_result": f"error_code:{error.code}",
+                    "query_result": f"error_code:{error.code}, error = {error}",
                 }
-                logging.debug(
+                logger.debug(
                     "query_execute: db exception, none-cancel query_results: {}".format(
                         query_results
                     )
@@ -510,7 +542,7 @@ def query_execute(config, child_conn, query_results_queue):
                     }
                 )  # put every query_run process into array for case_done check
     if query_run_count == 0:
-        logging.debug(
+        logger.debug(
             "Super, 1000 queries hit by a single test suite, we are in great time, by James @ Jan 10, 2022!"
         )
     if len(query_procs) != 0:
@@ -521,11 +553,11 @@ def query_execute(config, child_conn, query_results_queue):
     client.disconnect()
     # query_exe_queue.put("tear_down_done")
     child_conn.send("tear_down_done")
-    logging.debug(f"query_execute: tear_down completed and end")
+    logger.info(f"query_execute: tear_down completed and end")
 
 
 def query_walk_through(statements, query_conn):
-    logging.debug(f"query_walk_through: start..., statements = {statements}.")
+    #logger.debug(f"query_walk_through: start..., statements = {statements}.")
     statement_id_run = 0
     querys_results = []
     query_results_json_str = ""
@@ -551,16 +583,13 @@ def query_walk_through(statements, query_conn):
                 "terminate"
             ] = "auto"  # for stream query, by default auto-terminate
 
-        # query = statements[statement_id_run].get("query")
-        # query_type = statements[statement_id_run].get("query_type")
-        # query_end_timer = statements[statement_id_run].get("query_end_timer")
-        logging.debug(f"query_walk_through: statement = {statement}.")
+        #logger.debug(f"query_walk_through: statement = {statement}.")
         if query_end_timer == None:
             query_end_timer = 0
 
         # query_exe_queue.put(statement)
         query_conn.send(statement)
-        logging.debug(
+        logger.debug(
             # f"query_walk_through: statement query_id = {query_id} was pushed into query_exe_queue."
             f"query_walk_through: statement query_id = {query_id} was send to query_execute."
         )
@@ -573,7 +602,7 @@ def query_walk_through(statements, query_conn):
         statement_id_run += 1
         # time.sleep(1) # wait the query_execute execute the stream command
 
-    logging.debug(f"query_walk_through: end... stream_query_id = {stream_query_id}")
+    logger.debug(f"query_walk_through: end... stream_query_id = {stream_query_id}")
     return querys_results
 
 
@@ -605,7 +634,7 @@ def input_walk_through_pyclient(proton_client, inputs, table_schema):
                 f"insert into {table_name} {table_columns_str} values {batch_str}"
             )
             input_result = proton_client.execute(input_sql)
-            logging.debug(
+            logger.debug(
                 "input_walk_through_pyclient: {} done at {}.".format(
                     input_sql, datetime.datetime.now()
                 )
@@ -616,29 +645,47 @@ def input_walk_through_pyclient(proton_client, inputs, table_schema):
     return input_results
 
 
-def input_batch_rest(input_url, input_batch, table_schema):
+def input_batch_rest(rest_setting, input_batch, table_schema):
     # todo: complete the input by rest
-    logging.debug(f"input_batch_rest: input_batch = {input_batch}")
+    logger.debug(f"input_batch_rest: input_batch = {input_batch}")
+    input_url = rest_setting.get("ingest_url")
+    query_url = rest_setting.get("query_url")
     input_batch_record = {}
     table_name = table_schema.get("name")
     input_rest_columns = []
     input_rest_body_data = []
     input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
+    depends_on = input_batch.get("depends_on")
+    
+    if depends_on != None:
+        query_body = json.dumps({"query":"select query_id from system.processes"})
+        res = requests.post(query_url, data=query_body)
+        res_json = res.json()
+        query_id_list = res_json.get("data")
+        if query_id_list != None and len(query_id_list) > 0:
+            retry = 20 
+            depends_on_exists = False
+            while retry >0 and depends_on_exists != True:
+                for element in query_id_list:
+                    if depends_on in element: depends_on_exists = True
+                time.sleep(0.5)
+                retry -= 1    
+        
     for element in table_schema.get("columns"):
         input_rest_columns.append(element.get("name"))
-    logging.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
+    logger.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
     input_batch_data = input_batch.get("data")
     for row in input_batch_data:
-        logging.debug(f"input_batch_rest: row_data = {row}")
+        logger.debug(f"input_batch_rest: row_data = {row}")
         input_rest_body_data.append(
             row
         )  # get data from inputs batch dict as rest ingest body.
     input_rest_body = json.dumps(input_rest_body)
     input_url = f"{input_url}/{table_name}"
-    logging.debug(f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}")
+    logger.debug(f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}")
     
     res = requests.post(input_url, data=input_rest_body)
-    logging.debug(f"input_batch_rest: response of input_batch_rest request res = {res}")
+    logger.debug(f"input_batch_rest: response of input_batch_rest request res = {res}")
     
     
 
@@ -648,12 +695,12 @@ def input_batch_rest(input_url, input_batch, table_schema):
 
     """
     if res.status_code != 200:
-        logging.debug(f"table input rest access failed, status code={res.status_code}") 
+        logger.debug(f"table input rest access failed, status code={res.status_code}") 
         raise Exception(f"table input rest access failed, status code={res.status_code}")
     else:
         input_batch_record["input_batch"] =input_rest_body_data
         input_batch_record["timestamp"] = str(datetime.datetime.now())
-        #logging.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
+        #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
     """
     return input_batch_record
 
@@ -680,17 +727,24 @@ def input_walk_through_rest(
 
     for batch in inputs:
         table_name = batch.get("table_name")
+        wait = batch.get("wait")
+        depends_on = batch.get("depends_on")
         table_schema = find_schema(table_name, table_schemas)
         if table_schema != None:
             # table_schema.pop("type")
-            logging.debug(f"input_walk_through_rest: table_schema = {table_schema}")
+            logger.debug(f"input_walk_through_rest: table_schema = {table_schema}")
             batch_sleep_before_input = batch.get("sleep")
             if batch_sleep_before_input != None:
                 time.sleep(int(batch_sleep_before_input))
-            input_batch_record = input_batch_rest(input_url, batch, table_schema)
+            if wait != None:
+                logger.debug(f"input_walk_through_rest: wait for {wait} s to start inputs.")
+                wait = int(wait)
+                time.sleep(wait)
+
+            input_batch_record = input_batch_rest(rest_setting, batch, table_schema)
             inputs_record.append(input_batch_record)
         else:
-            logging.debug(
+            logger.debug(
                 f"input_walk_through_rest: table_schema of table name {table_schema} not founded in table schemas {table_schemas}"
             )
         # time.sleep(0.5)
@@ -713,68 +767,77 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
                         )
                     else:
                         time.sleep(1)  # sleep to wait the table drop completed.
-                        logging.info(
+                        logger.info(
                             "env_setup: table {} is dropped".format(table_name)
                         )
         else:
-            logging.info(f"env_setup: table {table_name} does not exit")
+            logger.debug(f"env_setup: table {table_name} does not exit")
     else:
         raise Exception(f"table list rest acces failed, status code={res.status_code}")
 
 
 def table_exist(table_ddl_url, table_name):
-    logging.debug(f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}")
+    logger.debug(f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}")
     res = requests.get(table_ddl_url)
-    logging.debug(f"table_exist: res.status_code = {res.status_code}")
+    logger.debug(f"table_exist: res.status_code = {res.status_code}")
     if res.status_code == 200:
         res_json = res.json()
         table_list = res_json.get("data")
         if len(table_list) > 0:
             for element in table_list:
                 element_name = element.get("name")
-                # logging.debug(f"table_exist: element_name = {element_name}, table_name = {table_name}")
+                # logger.debug(f"table_exist: element_name = {element_name}, table_name = {table_name}")
                 if element_name == table_name:
-                    logging.debug(f"table_exist: table {table_name} exists.")
+                    logger.debug(f"table_exist: table '{table_name}' exists.")
                     return True
             return False
         else:
-            logging.debug("table_exist: False")
+            logger.debug("table '{table_name}' ")
             return False
 
 
 def create_table_rest(table_ddl_url, table_schema):
-    # logging.debug(f"create_table_rest: table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
+    logger.debug(f"create_table_rest: table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
     table_name = table_schema.get("name")
     type = table_schema.get("type")
     if type != None: table_schema.pop("type")  # type is not legal key/value for rest api
-    res = requests.post(
-        table_ddl_url, data=json.dumps(table_schema)
-    )  # create the table w/ table schema
-    if res.status_code == 200:
-        logging.debug(f"table {table_name} create_rest is called successfully.")
+    event_time_column = table_schema.get("event_time_column")
+    columns = table_schema.get("columns")
+    if event_time_column != None:
+        table_schema_for_rest = {"name":table_name, "columns":columns, "event_time_column": event_time_column}
     else:
-        raise Exception(
-            f"table create rest access failed, status code={res.status_code}"
-        )
-    # show tables and check if table_name creates
+        table_schema_for_rest = {"name":table_name, "columns":columns}
+    res = requests.post(
+        table_ddl_url, data=json.dumps(table_schema_for_rest)
+    )  # create the table w/ table schema
+    
+    if res.status_code == 200:
+        logger.info(f"table {table_name} create_rest is called successfully.")
+    else:
+        return res
+    #    raise Exception(
+    #        f"table create rest access failed, status code={res.status_code}"
+    #    )
+    
 
-    create_table_time_out = 5  # set how many times wait and list table to check if table creation completed.
+    create_table_time_out = 10  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
         if table_exist(table_ddl_url, table_name):
-            logging.debug(f"table {table_name} is created sussufully.")
+            logger.debug(f"table {table_name} is created sussufully.")
             break
         else:
             time.sleep(2)
             # res = requests.post(table_ddl_url, data=json.dumps(table_schema)) #currently the health check rest is not accurate, retry here and remove later
         create_table_time_out -= 1
     # time.sleep(1) # wait the table creation completed
+    return res
 
 
 def compose_up(compose_file_path):
-    logging.debug(f"compose_up: compose_file_path = {compose_file_path}")
+    logger.debug(f"compose_up: compose_file_path = {compose_file_path}")
     try:
         cmd = f"docker-compose -f {compose_file_path} up -d"
-        logging.debug(f"compose_up: cmd = {cmd}")
+        logger.debug(f"compose_up: cmd = {cmd}")
         res = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT)
         return True
     except (subprocess.CalledProcessError) as Error:
@@ -783,7 +846,7 @@ def compose_up(compose_file_path):
 
 def env_health_check(health_check_url):
     try:
-        logging.debug(f"env_health_check: health_check_url = {health_check_url}")
+        logger.debug(f"env_health_check: health_check_url = {health_check_url}")
         res = requests.get(health_check_url)
         if res.status_code == 200:
             return True
@@ -815,9 +878,9 @@ def create_table_pyclient(client, table_schema):
     table_name = table_schema.get("name")
     if table_type == "view":
         sql_2_run = table_schema.get("sql_2_run")
-        logging.debug(f"create_table_pyclient: sql_2_run = {sql_2_run}")
+        logger.debug(f"create_table_pyclient: sql_2_run = {sql_2_run}")
         client.execute(sql_2_run)
-        logging.debug(f"create_table_pyclient: done")
+        logger.debug(f"create_table_pyclient: done")
 
 
 def drop_table_if_exist_pylient(client, table_schema):
@@ -825,81 +888,97 @@ def drop_table_if_exist_pylient(client, table_schema):
     table_name = table_schema.get("name")
     if table_type == "view":
         sql_2_run = f"drop view if exists {table_name}"
-        logging.debug(f"drop_table_if_exist_pyclient: sql_2_run = {sql_2_run}")
+        logger.debug(f"drop_table_if_exist_pyclient: sql_2_run = {sql_2_run}")
         client.execute(sql_2_run)
-        logging.debug(f"drop_table_if_exist_pyclient: view {table_name} droped")
+        logger.debug(f"drop_table_if_exist_pyclient: view {table_name} droped")
 
 
 def env_setup(
     client, rest_setting, test_suite_config, env_compose_file, proton_ci_mode
 ):
-    
-    try:
-        ci_mode = proton_ci_mode
-        logging.info(f"env_setup: ci_mode = {ci_mode}")
-        logging.debug(f"env_setup: rest_setting = {rest_setting}")
-        health_url = rest_setting.get("health_check_url")
-        logging.debug(f"env_setup: health_url = {health_url}")
-        if ci_mode == "local":
-            env_docker_compose_res = True
-            logging.info(f"Bypass docker compose up.")
-        else:
-            env_docker_compose_res = compose_up(env_compose_file)
-            logging.info(f"env_setup: docker compose up...")
-        logging.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
-        env_health_check_res = env_health_check(health_url)
-        logging.info(f"env_setup: env_health_check_res: {env_health_check_res}")
-        if env_docker_compose_res:
-            retry = 10
-            while env_health_check_res == False and retry > 0:
-                time.sleep(2)
-                env_health_check_res = env_health_check(health_url)
-                logging.debug(f"env_setup: retry = {retry}")
-                retry -= 1
+    ci_mode = proton_ci_mode
+    logger.info(f"env_setup: ci_mode = {ci_mode}")
+    logger.debug(f"env_setup: rest_setting = {rest_setting}")
+    health_url = rest_setting.get("health_check_url")
+    logger.debug(f"env_setup: health_url = {health_url}")
+    if ci_mode == "local":
+        env_docker_compose_res = True
+        logger.info(f"Bypass docker compose up.")
+    else:
+        env_docker_compose_res = compose_up(env_compose_file)
+        logger.info(f"env_setup: docker compose up...")
+    logger.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
+    env_health_check_res = env_health_check(health_url)
+    logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
+    if env_docker_compose_res:
+        retry = 10
+        while env_health_check_res == False and retry > 0:
+            time.sleep(2)
+            env_health_check_res = env_health_check(health_url)
+            logger.debug(f"env_setup: retry = {retry}")
+            retry -= 1
 
-            if env_health_check_res == False:
-                raise Exception("Env health check failure.")
-        else:
-            raise Exception("Env docker compose up failure.")
-        if ci_mode == "github":
-            time.sleep(
-                10
-            )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
+        if env_health_check_res == False:
+            raise Exception("Env health check failure.")
+    else:
+        raise Exception("Env docker compose up failure.")
+    if ci_mode == "github":
+        time.sleep(
+            10
+        )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
 
-        table_ddl_url = rest_setting.get("table_ddl_url")
-        params = rest_setting.get("params")
-        table_schemas = test_suite_config.get("table_schemas")
-        for table_schema in table_schemas:
-            table_name = table_schema.get("name")
-            table_type = table_schema.get("type")
+    table_ddl_url = rest_setting.get("table_ddl_url")
+    params = rest_setting.get("params")
+    table_schemas = test_suite_config.get("table_schemas")
+    for table_schema in table_schemas:
+        table_name = table_schema.get("name")
+        reset = table_schema.get("reset")
+        logger.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
+
+        table_type = table_schema.get("type")
+        if reset != None and reset == "False":
+            pass
+        else:
             if table_type == "table":
                 drop_table_if_exist_rest(table_ddl_url, table_name)
 
 
-        for table_schema in table_schemas:
-            table_type = table_schema.get("type")
+    for table_schema in table_schemas:
+        table_type = table_schema.get("type")
+        table_name = table_schema.get("name")
+        if table_exist(table_ddl_url, table_name):
+            pass
+        else:
             if table_type == "table":
                 create_table_rest(table_ddl_url, table_schema)
             elif table_type == "view":
                 create_table_pyclient(client, table_schema)
 
-        setup = test_suite_config.get("setup")
-        logging.debug(f"env_setup: setup = {setup}")
-        if setup != None:
-            setup_inputs = setup.get("inputs")
-            if setup_inputs != None:
-                setup_input_res = input_walk_through_rest(
-                    rest_setting, setup_inputs, table_schemas
-                )
-    except(BaseException) as error:
-        raise(f"env_setup exception: error, please check if rest interface and create view if exist ddl problem")
+    setup = test_suite_config.get("setup")
+    logger.debug(f"env_setup: setup = {setup}")
+    if setup != None:
+        setup_inputs = setup.get("inputs")
+        if setup_inputs != None:
+            setup_input_res = input_walk_through_rest(
+                rest_setting, setup_inputs, table_schemas
+            )
+
     return
 
+def find_table_reset_in_table_schemas(table, table_schemas):
+    for table_schema in table_schemas:
+        name = table_schema.get("name")
+        if name != None and name == table:
+            reset = table_schema.get("reset")
+            if reset != None and reset == "False":
+                reset_is_false = False
+                return False
+    return True
 
 # @pytest.fixture(scope="module")
 def rockets_run(test_context):
     #todo: split tests.json to test_suite_config.json and tests.json
-    logging.info("rockets_run starts......")
+    logger.info("rockets_run starts......")
     docker_compose_file = test_context.get("docker_compose_file")
     config = test_context.get("config")
     rest_setting = config.get("rest_setting")
@@ -910,8 +989,10 @@ def rockets_run(test_context):
     q_exec_client_conn = test_context.get("query_exe_child_conn")
     query_exe_queue = test_context.get("query_exe_queue")
     query_results_queue = test_context.get("query_results_queue")
+    alive = test_context.get("alive")
+    logger.debug(f"rockets_run: alive.value = {alive.value}")
     q_exec_client.start()  # start the query execute process
-    logging.debug(f"q_exec_client: {q_exec_client} started.")
+    logger.debug(f"q_exec_client: {q_exec_client} started.")
     test_suite = test_context.get("test_suite")
     test_suite_config = test_suite.get("test_suite_config")
     table_ddl_url = rest_setting.get("table_ddl_url")
@@ -927,7 +1008,7 @@ def rockets_run(test_context):
     if tests_2_run == None:  # if tests_2_run is not set, run all tests.
         test_run_list = tests
     else:  # if tests_2_run is set in test_suite_config, run the id list.
-        logging.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
+        logger.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
         ids_2_run = tests_2_run.get("ids_2_run")
         tags_2_run = tests_2_run.get("tags_2_run")
         tags_2_skip = tests_2_run.get("tags_2_skip")
@@ -973,11 +1054,9 @@ def rockets_run(test_context):
 
         assert len(test_run_list) != 0
 
-        logging.debug(
+        logger.debug(
             f"rockets_run: tests_run_id_list = {test_run_id_list}, {len(tests)} cases in total, {len(test_run_list)} cases to run in total"
         )
-
-    logging.info("rockets_run env_etup done")
 
     test_id_run = 0
     test_sets = []
@@ -986,7 +1065,7 @@ def rockets_run(test_context):
         env_setup(
             client, rest_setting, test_suite_config, docker_compose_file, proton_ci_mode
         )
-        logging.info("rockets_run env_etup done")
+        logger.info("rockets_run env_etup done")
 
         test_id_run = 0
         test_sets = []
@@ -998,7 +1077,7 @@ def rockets_run(test_context):
             test_id = test_case.get("id")
             test_name = test_case.get("name")
             steps = test_case.get("steps")
-            # logging.debug(f"rockets_run: test_id = {test_id}, test_case = {test_case}, steps = {steps}")
+            # logger.debug(f"rockets_run: test_id = {test_id}, test_case = {test_case}, steps = {steps}")
             expected_results = test_case.get("expected_results")
             step_id = 0
             auto_terminate_queries = []
@@ -1010,28 +1089,33 @@ def rockets_run(test_context):
                     for (
                         input
                     ) in inputs:  # clean table data before each inputs walk through
-                        logging.debug(f"rockets_run: input in inputs = {input}")
+                        logger.debug(f"rockets_run: input in inputs = {input}")
                         table = input.get("table_name")
-                        logging.debug(
+                        is_table_reset = None
+                        logger.debug(
                             f"rockets_run: table of input in inputs = {table}"
-                        )
-                        res = client.execute(f"drop table {table}")
-                        tables.append(table)
-                        logging.debug(
-                            f"rockets_run: drop table {table} res = {res}"
-                        )
+                        )                        
+                        is_table_reset = find_table_reset_in_table_schemas(table, table_schemas)
+                        if is_table_reset != None and is_table_reset == False:
+                            pass
+                        else:
+                            res = client.execute(f"drop table {table}")
+                            tables.append(table)
+                            logger.debug(
+                                f"rockets_run: drop table {table} res = {res}"
+                            )
                         
-                        for table_schema in table_schemas:
-                            name = table_schema.get("name")
-                            if name == table and table_exist(table_ddl_url, table):
-                                logging.debug(f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}") 
-                                while table_exist(table_ddl_url, table): 
-                                    logging.debug(f"{name} not dropped succesfully yet, wait ...")
-                                    time.sleep(0.2)
-                                logging.debug(f"rockets_run: drop table and re-create once case starts, table {table} is dropped")
-                                res = create_table_rest(table_ddl_url, table_schema)
+                            for table_schema in table_schemas:
+                                name = table_schema.get("name")
+                                if name == table and table_exist(table_ddl_url, table):
+                                    logger.debug(f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}") 
+                                    while table_exist(table_ddl_url, table): 
+                                        logger.debug(f"{name} not dropped succesfully yet, wait ...")
+                                        time.sleep(0.2)
+                                    logger.debug(f"rockets_run: drop table and re-create once case starts, table {table} is dropped")
+                                    res = create_table_rest(table_ddl_url, table_schema)
                 if len(tables) > 0:
-                    logging.debug(f"tables: {tables} are dropted and recreated.")
+                    logger.debug(f"tables: {tables} are dropted and recreated.")
                
             
             for step in steps:
@@ -1044,7 +1128,7 @@ def rockets_run(test_context):
                         step_statements, query_conn
                     )
                     statement_result_from_query_execute = query_walk_through_res
-                    logging.debug(
+                    logger.debug(
                         f"rockets_run: query_walk_through_res = {query_walk_through_res}"
                     )
 
@@ -1055,21 +1139,21 @@ def rockets_run(test_context):
                         for element in statement_result_from_query_execute:
                             statements_results.append(element)
 
-                    logging.info(
+                    logger.info(
                         f"rockets_run: {test_id_run}, test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
                     )
 
                     statements_id += 1
                 elif "inputs" in step:
                     inputs = step.get("inputs")
-                    logging.info(
+                    logger.info(
                         f"rockets_run: {test_id_run}, test_id = {test_id} inputs = {inputs}"
                     )
 
                     inputs_record = input_walk_through_rest(
                         rest_setting, inputs, table_schemas
                     )  # inputs walk through rest_client
-                    logging.info(
+                    logger.info(
                         f"rockets_run: {test_id_run}, test_id = {test_id} input_walk_through done"
                     )
                     # time.sleep(0.5) #wait for the data inputs done.
@@ -1082,7 +1166,7 @@ def rockets_run(test_context):
                 query_conn.recv()
             )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
 
-            logging.debug(
+            logger.debug(
                 f"rockets_run: mssage_recv from query_exe_queue = {message_recv}"
             )
             assert message_recv == "case_result_done"
@@ -1092,7 +1176,7 @@ def rockets_run(test_context):
             ):  # collect all the query_results from queue after "case_result_done" received
                 time.sleep(0.2)
                 message_recv = query_results_queue.get()
-                logging.debug(f"rockets_run: message_recv of query_results_queue.get() = {message_recv}")
+                logger.debug(f"rockets_run: message_recv of query_results_queue.get() = {message_recv}")
                 query_results = json.loads(message_recv)
                 statements_results.append(query_results)
 
@@ -1109,7 +1193,7 @@ def rockets_run(test_context):
             test_id_run += 1
 
     except (BaseException) as error:
-        logging.info("exception:", error)
+        logger.info("exception:", error)
     finally:
         TESTS_QUERY_RESULTS = test_sets
         query_conn.send("tear_down")
@@ -1117,8 +1201,10 @@ def rockets_run(test_context):
         query_results_queue.close()
         query_conn.close()
         q_exec_client_conn.close()
-        q_exec_client.terminate()
+        alive.value = False
+        #q_exec_client.terminate()
         q_exec_client.join()
+        del alive
         client.disconnect()
         return test_sets
 
@@ -1128,30 +1214,39 @@ if __name__ == "__main__":
     cur_file_path = os.path.dirname(os.path.abspath(__file__))
     cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
-    logging_config_file = f"{cur_file_path}/logging.conf"
-    if os.path.exists(logging_config_file):
-        logging.basicConfig(
-            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
-        )  # todo: add log stuff
-        logging.config.fileConfig(logging_config_file)  # need logging.conf
-        logger = logging.getLogger("rockets")
-    else:
-        logging.info("no logging.conf exists under ../helper, no logging.")
 
-    logging.info("rockets_main starts......")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"  
+    )
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.DEBUG)
+
+    logging_config_file = f"{cur_file_path}/logger.conf"
+#    if os.path.exists(logging_config_file):
+#        logger.basicConfig(
+#            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
+#        )  # todo: add log stuff
+#        logger.config.fileConfig(logging_config_file)  # need logger.conf
+#        logger = logger.getLogger("rockets")
+#    else:
+#        logger.info("no logger.conf exists under ../helper, no logger.")
+
+    logger.info("rockets_main starts......")
 
     argv = sys.argv[1:]  # get -d to specify the test_sutie path
     try:
         opts, args = getopt.getopt(argv, "d:")
     except:
-        logging.info("Error")
+        logger.info("Error")
         sys.exit(2)
 
     for opt, arg in opts:
         if opt in ["-d"]:
             test_suite_path = arg
     if test_suite_path == None:
-        logging.info("No test suite directory specificed by -d, exit.")
+        logger.info("No test suite directory specificed by -d, exit.")
         sys.exit(0)
     config_file = f"{test_suite_path}/configs/config.json"
     tests_file = f"{test_suite_path}/tests.json"
@@ -1163,9 +1258,9 @@ if __name__ == "__main__":
         )  # need to have config env vars/config.json and test.json when run rockets.py as a test debug tooling.
         test_sets = rockets_run(rockets_context)
         # output the test_sets one by one
-        logging.info("main: ouput test_sets......")
+        logger.info("main: ouput test_sets......")
         for test_set in test_sets:
             test_set_json = json.dumps(test_set)
-            logging.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
+            logger.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
     else:
-        logging.info("No tests.json exists under test suite folder.")
+        logger.info("No tests.json exists under test suite folder.")

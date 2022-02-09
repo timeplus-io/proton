@@ -1,0 +1,117 @@
+{
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "test_suite_config": {
+        "proton_ci_mode": "local",
+        "table_schemas":[
+            {
+                "name": "iris",
+                "type": "table",
+                "reset": "False",
+                "config": "setting_1",
+                "columns": [
+                    {
+                        "name": "sepal_length",
+                        "type": "Float64"
+                    },
+                    {
+                        "name": "sepal_width",
+                        "type": "Float64"
+                    },
+                    {
+                        "name": "petal_length",
+                        "type": "Float64"
+                    },
+                    {
+                        "name": "petal_width",
+                        "type": "Float64"
+                    },
+                    {
+                        "name": "species",
+                        "type": "String"
+                    },
+                    {
+                        "name": "_perf_row_id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "String"
+                    },                     
+                    {
+                        "name": "perf_event_time",
+                        "type": "Datetime64(3)",
+                        "default": "now64(3)"
+                    }
+                ],
+                "event_time_column":"perf_event_time"
+            },
+
+            {
+                "name": "iris_d",
+                "type": "table",
+                "config": "setting_1",
+                "columns": [
+                    {
+                        "name": "species",
+                        "type": "String"
+                    },
+                    {
+                        "name": "alias",
+                        "type": "String"
+                    }
+
+                ]}
+
+        ],
+        "setup": {
+            "inputs": [
+                {"table_name":"iris_d", "data": [
+                ["Iris-setosa", "setosa"],
+                ["Iris-versicolor", "versicolor"],
+                ["Iris-virginica", "virginica"]]
+                }
+            ]
+        },
+        "tests_2_run": {"ids_2_run": [0], "tags_2_run":[], "tags_2_skip":["bug", "todo", "to_support"]} 
+    },
+
+    "tests": [
+        {
+            "id": 0,
+            "tags": ["latency"],
+            "name": "tail laterncy - proton",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "config_set": "setting_1", "query_id": 101, "run_mode":"process", "workers": 30, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
+                ]},
+                    
+
+                {"inputs": [
+                    {"table_name": "iris","input_id": 201, "workers":69, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
+                ]}
+
+            ]               
+        },
+        {
+            "id": 1,
+            "tags": ["latency"],
+            "name": "tail laterncy - Materialize",
+            "description": "tail query latency w/single source",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python","config_set": "setting_mz", "query_id": 101, "run_mode":"process", "workers": 10, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from dim_user_info_table", "result_keep":"True", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
+                ]}
+
+            ]               
+        }
+
+    ]
+}
+
+
