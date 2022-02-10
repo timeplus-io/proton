@@ -1693,7 +1693,7 @@
         },
         {
             "id": 60,
-            "tags": ["materilized view", "bug", "global aggregation"],
+            "tags": ["materilized view", "global aggregation"],
             "name": "streaming tail from materilized view as global aggregation by sum and group by id w/by 5s periodic",
             "description": "create materilized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv",
             "steps":[
@@ -1730,7 +1730,7 @@
         },
         {
             "id": 61,
-            "tags": ["materilized view","bug", "global aggregation"],
+            "tags": ["materilized view", "global aggregation"],
             "name": "hist tail from materilized view as global aggregation by sum and group by id w/by 5s periodic",
             "description": "create materilized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv",
             "steps":[
@@ -1767,7 +1767,7 @@
         },        
         {
             "id": 62,
-            "tags": ["materilized view","bug", "tumble window"],
+            "tags": ["materilized view", "tumble window", "todo"],
             "name": "streaming tail from materilized view as 5s tumble window aggregation by sum and group by id",
             "description": "create materilized view as materilized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table ",
             "steps":[
@@ -1797,16 +1797,16 @@
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":[
-                ["dev1", "123.3", "2020-02-02 20:01:00+00:00", "2020-02-02 20:01:05+00:00"],
-                ["dev2", "117.3", "2020-02-02 20:01:00+00:00", "2020-02-02 20:01:05+00:00"],
-                ["dev8", "67", "2020-02-02 20:01:00+00:00", "2020-02-02 20:01:05+00:00"]
+                ["dev1", "123.3", "2020-02-02 20:01:00", "2020-02-02 20:01:05"],
+                ["dev2", "117.3", "2020-02-02 20:01:00", "2020-02-02 20:01:05"],
+                ["dev8", "67", "2020-02-02 20:01:00", "2020-02-02 20:01:05"]
                 ]}
             ]                
         },
 
         {
             "id": 63,
-            "tags": ["materilized view", "bug", "tumble window"],
+            "tags": ["materilized view", "tumble window"],
             "name": "streaming tail from materilized view as 5s tumble window aggregation by sum and group by id",
             "description": "create materilized view as materilized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, response should use utc time.",
             "steps":[
@@ -1845,7 +1845,7 @@
 
         {
             "id": 64,
-            "tags": ["materilized view","bug", "tumble window"],
+            "tags": ["materilized view", "tumble window"],
             "name": "hist tail from materilized view as 5s tumble window aggregation by sum and group by id, designate eventtime colume in tumble sql",
             "description": "create materilized view as materilized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from hist(mv), designated timestamp as eventtime column in tumble sql",
             "steps":[
@@ -1885,7 +1885,7 @@
 
         {
             "id": 65,
-            "tags": ["materilized view", "hop window", "todo"],
+            "tags": ["materilized view", "hop window"],
             "name": "streaming tail from materilized view as 5s tumble window(w/delay) aggregation by sum and group by id",
             "description": "create materilized view as materilized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, response should use utc time.",
             "steps":[

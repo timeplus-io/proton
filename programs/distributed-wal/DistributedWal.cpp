@@ -635,7 +635,7 @@ void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_m
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
-        auto record = make_shared<DWAL::Record>(OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size));
+        auto record = make_shared<DWAL::Record>(OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size), DWAL::NO_SCHEMA);
         record->partition_key = i % result.partitions;
         record->headers["_idem"] = to_string(i);
 
@@ -702,7 +702,7 @@ void ingestSync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mu
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
-        Record record{OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size)};
+        Record record{OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size), DWAL::NO_SCHEMA};
         record.partition_key = i % dresult.partitions;
         record.headers["_idem"] = to_string(i);
 
@@ -828,7 +828,7 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
             KafkaWALContext ctx{tpo.topic, tpo.partition, tpo.offset};
             ctx.auto_offset_reset = bench_settings.consumer_settings.auto_offset_reset;
             ctx.consume_callback_max_messages = bench_settings.consumer_settings.max_messages;
-            ctx.schemas.push_back(table_schema);
+            // ctx.schemas.push_back(table_schema); ? error: no member named 'schemas' in 'DWAL::KafkaWALContext'
 
             atomic_int32_t consumed = 0;
             Int32 batch = 100;

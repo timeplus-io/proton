@@ -160,9 +160,9 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     ///     hist(table1), hist(table2)      -> hop(hist(table1), ...), hop(hist(table2), ...)
     auto table_expressions{getTableExpressions(select_query)};
     if (table_expressions.size() > 1)
-        Exception("No support several tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
+        throw Exception("No support several tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
 
-    auto table_expression = table_expressions[ 0];
+    auto table_expression = table_expressions[0];
     if (!hasAggregates(query, select_query) || !table_expression)
         return false;
 

@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cerrno>
+#include <csignal>
 #include <cstring>
 #include <unistd.h>
 #include <functional>

@@ -98,10 +98,10 @@ bool ParserCreateStreamingViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expecte
     query->if_not_exists = if_not_exists;
     query->is_streaming_view = true;
 
-    auto table_id = table->as<ASTTableIdentifier>()->getTableId();
-    query->setDatabase(table_id.getDatabaseName());
-    query->setTable(table_id.getTableName());
-    query->uuid = table_id.uuid;
+    const auto & table_identifier = table->as<ASTTableIdentifier &>();
+    query->setDatabase(table_identifier.getDatabaseName());
+    query->setTable(table_identifier.shortName());
+    query->uuid = table_identifier.uuid;
     query->cluster = cluster_str;
 
     if (to_table)

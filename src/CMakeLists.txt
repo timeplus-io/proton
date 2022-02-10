@@ -177,6 +177,11 @@ add_subdirectory(Common/Config)
 
 # proton: starts
 option(ENABLE_NATIVE_LOG "Enable NativeLog" ON)
+
+if (OS_DARWIN)
+    set(ENABLE_NATIVE_LOG OFF)
+endif()
+
 if (ENABLE_NATIVE_LOG)
     add_subdirectory (NativeLog)
 endif()
@@ -528,6 +533,12 @@ if (ENABLE_TESTS)
 
     # attach all dbms gtest sources
     grep_gtest_sources("${proton_SOURCE_DIR}/src" dbms_gtest_sources)
+
+    # exclude all gtests of NativeLog
+    if (NOT ENABLE_NATIVE_LOG)
+        list(FILTER dbms_gtest_sources EXCLUDE REGEX "NativeLog/*")
+    endif()
+
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
 
     # gtest framework has substandard code
