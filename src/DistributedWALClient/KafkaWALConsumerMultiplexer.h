@@ -11,7 +11,6 @@
 
 namespace DWAL
 {
-
 /// KafkaWALConsumerMultiplexer has a dedicated thread consuming a list of topic partitions
 /// in a dedicated consumer group by using high level KafkaWALConsumer. It then routes
 /// the records to different targets by calling the corresponding callbacks.
@@ -24,7 +23,7 @@ public:
     {
     private:
         ConsumeCallback callback;
-        void * data;
+        ConsumeCallbackData * data;
 
         /// Only support same callback per topic
         std::vector<int32_t> partitions;
@@ -32,7 +31,7 @@ public:
         int64_t last_call_ts = DB::MonotonicMilliseconds::now();
 
     public:
-        CallbackContext(ConsumeCallback callback_, void * data_, int32_t partition_)
+        CallbackContext(ConsumeCallback callback_, ConsumeCallbackData * data_, int32_t partition_)
             : callback(callback_), data(data_), partitions({partition_})
         {
         }
@@ -88,7 +87,7 @@ public:
     /// The lifetime of CallbackContext in the returned Result is maintained by
     /// multiplexer but polled by caller to decided that the `callback and data` is not
     /// referenced by multiplexer any more
-    Result addSubscription(const TopicPartitionOffset & tpo, ConsumeCallback callback, void * data);
+    Result addSubscription(const TopicPartitionOffset & tpo, ConsumeCallback callback, ConsumeCallbackData * data);
 
     /// Return true if the subscription is good, otherwise false
     /// Remove the registered callback for a partition of a topic.

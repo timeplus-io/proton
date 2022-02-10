@@ -1,4 +1,5 @@
 #include "KafkaWALConsumerMultiplexer.h"
+#include "KafkaWALCommon.h"
 
 #include <Common/setThreadName.h>
 #include <base/logger_useful.h>
@@ -60,9 +61,9 @@ void KafkaWALConsumerMultiplexer::shutdown()
 }
 
 KafkaWALConsumerMultiplexer::Result
-KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset & tpo, ConsumeCallback callback, void * data)
+KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset & tpo, ConsumeCallback callback, ConsumeCallbackData * data)
 {
-    assert(callback && consumer);
+    assert(callback && consumer && data);
 
     std::weak_ptr<CallbackContext> ctx;
     {
@@ -151,10 +152,27 @@ void KafkaWALConsumerMultiplexer::backgroundPoll()
     LOG_INFO(log, "Polling consumer multiplexer started");
     setThreadName("KWalCMPoller");
 
+    auto kmsg_to_record = [this](rd_kafka_message_t * rkmessage) -> RecordPtr {
+        assert(rkmessage);
+
+        CallbackContextPtr callback_ctx;
+        {
+            std::lock_guard lock{callbacks_mutex};
+
+            auto iter = callbacks.find(rd_kafka_topic_name(rkmessage->rkt));
+            if (likely(iter != callbacks.end()))
+            {
+                callback_ctx = iter->second;
+            }
+        }
+
+        return kafkaMsgToRecord(rkmessage, *callback_ctx->data, true);
+    };
+
     auto last_flush = DB::MonotonicSeconds::now();
     while (!stopped.test())
     {
-        auto result = consumer->consume(shared_subscription_flush_threshold_count, shared_subscription_flush_threshold_ms);
+        auto result = consumer->consume(shared_subscription_flush_threshold_count, shared_subscription_flush_threshold_ms, kmsg_to_record);
 
         if (!result.records.empty())
         {

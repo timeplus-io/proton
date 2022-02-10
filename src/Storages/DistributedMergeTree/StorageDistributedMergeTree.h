@@ -197,6 +197,8 @@ public:
     Int32 getReplicationFactor() const { return replication_factor; }
 
     size_t getRandomShardIndex();
+    size_t getNextShardIndex() const;
+
     Int32 currentShard() const { return shard; }
     void getIngestionStatuses(const std::vector<String> & poll_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
     {
@@ -277,7 +279,7 @@ private:
     void progressSequencesWithoutLock(const SequencePair & seq);
     Int64 maxCommittedSN() const;
 
-    static void consumeCallback(DWAL::RecordPtrs records, void * data);
+    static void consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data);
 
     /// Shared mode consumption
     void addSubscription();
@@ -339,8 +341,10 @@ private:
     mutable std::mutex rng_mutex;
     pcg64 rng;
 
+    mutable std::atomic_uint_fast64_t next_shard = 0;
+
     /// Outstanding async ingest records
-    std::atomic_uint64_t outstanding_blocks = 0;
+    std::atomic_uint_fast64_t outstanding_blocks = 0;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;

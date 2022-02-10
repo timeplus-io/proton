@@ -204,7 +204,7 @@ DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std:
         else
         {
             assert(false);
-            return DWAL::OpCode::UNKNOWN;
+            return DWAL::OpCode::MAX_OPS_CODE;
         }
     }
 
@@ -221,7 +221,7 @@ std::map<ASTAlterCommand::Type, DWAL::OpCode> command_type_to_opCode
 DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
 {
     if (alter.command_list->children.empty())
-        return DWAL::OpCode::UNKNOWN;
+        return DWAL::OpCode::MAX_OPS_CODE;
 
     for (const auto & child : alter.command_list->children)
     {
@@ -234,7 +234,7 @@ DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
             }
         }
     }
-    return DWAL::OpCode::UNKNOWN;
+    return DWAL::OpCode::MAX_OPS_CODE;
 }
 
 String getJSONFromCreateQuery(const ASTCreateQuery & create)

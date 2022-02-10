@@ -125,7 +125,7 @@ void CatalogService::doBroadcast()
 
 void CatalogService::append(Block && block)
 {
-    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(block)};
+    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(block), DWAL::NO_SCHEMA};
     record.partition_key = 0;
     setupRecordHeaders(record, "1");
 

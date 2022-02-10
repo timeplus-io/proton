@@ -170,7 +170,7 @@ int32_t KafkaWALConsumer::removeSubscriptions(const TopicPartitionOffsets & part
     return DB::ErrorCodes::OK;
 }
 
-ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms)
+ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms, std::function<RecordPtr(rd_kafka_message_t*)> deserialize)
 {
     ConsumeResult result;
     if (count > 100)
@@ -191,7 +191,8 @@ ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms)
         {
             if (likely(rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR))
             {
-                result.records.push_back(kafkaMsgToRecord(rkmessage, true));
+                /// result.records.push_back();
+                result.records.push_back(deserialize(rkmessage));
                 rd_kafka_message_destroy(rkmessage);
             }
             else

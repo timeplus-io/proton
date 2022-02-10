@@ -15,6 +15,7 @@
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/Util/AbstractConfiguration.h>
 
+#include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
 
@@ -172,6 +173,8 @@ DDLService::DDLService(const ContextMutablePtr & global_context_)
 
 Int32 DDLService::append(const DWAL::Record & ddl_record) const
 {
+    assert(!ddl_record.hasSchema());
+
     if (ready())
         return dwal->append(ddl_record, dwal_append_ctx).err;
     else
@@ -339,7 +342,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
         {
             createDWAL(database, table, shards, replication_factor, url_parameters);
         }
-        catch (Exception e)
+        catch (const Exception & e)
         {
             LOG_ERROR(log, "Failed to create topic for table payload={} exception={}", payload, e.message());
             failDDL(query_id, user, payload, e.message());
@@ -348,7 +351,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
 
         const String & hosts_val = record->headers.at("hosts");
         std::vector<String> hosts;
-        boost::algorithm::split(hosts, hosts_val, [](auto ch) { return ch == ','; });
+        boost::algorithm::split(hosts, hosts_val, boost::is_any_of(","));
         assert(!hosts.empty());
 
         std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST))};

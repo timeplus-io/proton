@@ -7,6 +7,7 @@
 #include <DistributedWALClient/ByteVector.h>
 #include <DistributedWALClient/OpCodes.h>
 #include <DistributedWALClient/Record.h>
+#include <DistributedWALClient/SchemaProvider.h>
 
 #include <gtest/gtest.h>
 
@@ -15,6 +16,8 @@ using namespace DB;
 using namespace DWAL;
 using namespace std;
 
+namespace
+{
 std::unique_ptr<Record> createRecord()
 {
     Block block;
@@ -59,10 +62,30 @@ std::unique_ptr<Record> createRecord()
     time_col_inner->insertValue(1612296044.256326);
     time_col_inner->insertValue(1612276044.256326);
 
-    ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, "_time");
+    ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, "_tp_time");
     block.insert(time_col_with_type);
 
-    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block));
+    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), DWAL::NO_SCHEMA);
+}
+
+struct TestSchemaProvider : public DWAL::SchemaProvider
+{
+    TestSchemaProvider()
+        : header(createRecord()->block.cloneEmpty())
+    {
+    }
+
+    const DB::Block & getSchema(uint16_t /*schema_version*/) const override
+    {
+        return header;
+    }
+
+    DB::Block header;
+};
+
+
+EmptySchemaProvider empty_schema_provider;
+TestSchemaProvider test_schema_provider;
 }
 
 void checkRecord(const std::vector<String> & cols, const Record & expect, const Record & actual)
@@ -93,7 +116,7 @@ void checkRecord(const std::vector<String> & cols, const Record & expect, const 
         {
             if (col_name == "id")
                 EXPECT_EQ(col_expected.column->get64(i), col_got.column->get64(i));
-            else if (col_name == "cpu" || col_name == "_time")
+            else if (col_name == "cpu" || col_name == "_tp_time")
                 EXPECT_EQ(col_expected.column->getFloat64(i), col_got.column->getFloat64(i));
             else if (col_name == "raw")
                 EXPECT_EQ(col_expected.column->getDataAt(i), col_got.column->getDataAt(i));
@@ -103,67 +126,146 @@ void checkRecord(const std::vector<String> & cols, const Record & expect, const 
     }
 }
 
-TEST(CheckRecordSerializationDeserialization, Sender)
+TEST(RecordSerde, Native)
 {
     auto r = createRecord();
-    ByteVector data{Record::write(*r, false)};
-    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size());
-    auto cols = std::vector<String>{"id", "cpu", "raw", "_time"};
+    ByteVector data{Record::write(*r)};
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_provider);
+    auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
     checkRecord(cols, *r, *rr);
 }
 
-TEST(CheckRecordSerializationDeserialization, Compression)
+TEST(RecordSerde, NativeCompression)
 {
     auto r = createRecord();
-    ByteVector data{Record::write(*r, true)};
-    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size());
-    auto cols = std::vector<String>{"id", "cpu", "raw", "_time"};
+    ByteVector data{Record::write(*r, DB::CompressionMethodByte::LZ4)};
+
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_provider);
+    auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
     checkRecord(cols, *r, *rr);
 }
 
-TEST(CheckRecordSerializationDeserialization, WriteBenchmark)
+TEST(RecordSerde, NativeInSchema)
 {
     auto r = createRecord();
+    /// force a schema
+    r->schema_version = 0;
 
-    int32_t n = 1000000;
-    auto write_loop = [&](bool compressed) {
-        for (auto i = 0; i < n; i++)
-        {
-            Record::write(*r, compressed);
-        }
-    };
+    ByteVector data{Record::write(*r)};
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_provider);
+    auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
-    auto t = std::chrono::high_resolution_clock::now();
-    write_loop(false);
-    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
-
-    t = std::chrono::high_resolution_clock::now();
-    write_loop(true);
-    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
-    std::cout << "write uncompressed: " << int32_t(n / duration0.count()) << "/s write compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+    checkRecord(cols, *r, *rr);
 }
 
-TEST(CheckRecordSerializationDeserialization, ReadBenchmark)
+TEST(RecordSerde, NativeInSchemaCompression)
+{
+    auto r = createRecord();
+    /// force a schema
+    r->schema_version = 0;
+
+    ByteVector data{Record::write(*r, DB::CompressionMethodByte::LZ4)};
+
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_provider);
+    auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
+
+    checkRecord(cols, *r, *rr);
+}
+
+TEST(RecordSerde, WriteBenchNative)
 {
     auto r = createRecord();
 
     int32_t n = 1000000;
-    auto read_loop = [&](bool compressed) {
-    	ByteVector data{Record::write(*r, compressed)};
+    auto write_loop = [&](DB::CompressionMethodByte codec) {
         for (auto i = 0; i < n; i++)
         {
-            Record::read(reinterpret_cast<char *>(data.data()), data.size());
+            Record::write(*r, codec);
         }
     };
 
     auto t = std::chrono::high_resolution_clock::now();
-    read_loop(false);
+    write_loop(DB::CompressionMethodByte::NONE);
     std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
 
     t = std::chrono::high_resolution_clock::now();
-    read_loop(true);
+    write_loop(DB::CompressionMethodByte::LZ4);
     std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
-    std::cout << "read uncompressed: " << int32_t(n / duration0.count()) << "/s read compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+    std::cout << "write uncompressed: " << int32_t(n / duration0.count()) << "/s, write compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+}
+
+TEST(RecordSerde, ReadBenchmarkNative)
+{
+    auto r = createRecord();
+
+    int32_t n = 1000000;
+    auto read_loop = [&](DB::CompressionMethodByte codec) {
+    	ByteVector data{Record::write(*r, codec)};
+        for (auto i = 0; i < n; i++)
+        {
+            Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_provider);
+        }
+    };
+
+    auto t = std::chrono::high_resolution_clock::now();
+    read_loop(DB::CompressionMethodByte::NONE);
+    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
+
+    t = std::chrono::high_resolution_clock::now();
+    read_loop(DB::CompressionMethodByte::LZ4);
+    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
+    std::cout << "read uncompressed: " << int32_t(n / duration0.count()) << "/s, read compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+}
+
+
+TEST(RecordSerde, WriteBenchmarkNativeInSchema)
+{
+    auto r = createRecord();
+    /// force a schema
+    r->schema_version = 0;
+
+    int32_t n = 1000000;
+    auto write_loop = [&](DB::CompressionMethodByte codec) {
+        for (auto i = 0; i < n; i++)
+        {
+            Record::write(*r, codec);
+        }
+    };
+
+    auto t = std::chrono::high_resolution_clock::now();
+    write_loop(DB::CompressionMethodByte::NONE);
+    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
+
+    t = std::chrono::high_resolution_clock::now();
+    write_loop(DB::CompressionMethodByte::LZ4);
+    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
+    std::cout << "write in schema uncompressed: " << int32_t(n / duration0.count()) << "/s, write in schema compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+}
+
+TEST(RecordSerde, SchemaReadBenchmark)
+{
+
+    auto r{createRecord()};
+    /// force a schema
+    r->schema_version = 0;
+
+    int32_t n = 1000000;
+    auto read_loop = [&](DB::CompressionMethodByte codec) {
+        ByteVector data{Record::write(*r, codec)};
+        for (auto i = 0; i < n; i++)
+        {
+            Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_provider);
+        }
+    };
+
+    auto t = std::chrono::high_resolution_clock::now();
+    read_loop(DB::CompressionMethodByte::NONE);
+    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
+
+    t = std::chrono::high_resolution_clock::now();
+    read_loop(DB::CompressionMethodByte::LZ4);
+    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
+    std::cout << "read in schema uncompressed: " << int32_t(n / duration0.count()) << "/s, read in schema compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
 }

@@ -10,9 +10,7 @@
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/addMissingDefaults.h>
-#include <Interpreters/getTableExpressions.h>
 #include <Interpreters/processColumnTransformers.h>
-#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -22,7 +20,7 @@
 #include <Processors/Transforms/CountingTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
-#include <Processors/Transforms/SquashingChunksTransform.h>
+/// #include <Processors/Transforms/SquashingChunksTransform.h>
 #include <Processors/Transforms/getSourceFromASTInsertQuery.h>
 #include <Storages/StorageDistributed.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -191,7 +189,7 @@ Chain InterpreterInsertQuery::buildChainImpl(
         query = query_ptr->as<ASTInsertQuery>();
 
     const Settings & settings = context_ptr->getSettingsRef();
-    bool null_as_default = query && query->select && context_ptr->getSettingsRef().insert_null_as_default;
+    bool null_as_default = query && query->select && settings.insert_null_as_default;
 
     /// We create a pipeline of several streams, into which we will write data.
     Chain out;
@@ -199,26 +197,22 @@ Chain InterpreterInsertQuery::buildChainImpl(
     /// Keep a reference to the context to make sure it stays alive until the chain is executed and destroyed
     out.addInterpreterContext(context_ptr);
 
-    /// NOTE: we explicitly ignore bound materialized views when inserting into Kafka Storage.
-    ///       Otherwise we'll get duplicates when MV reads same rows again from Kafka.
-    if (table->noPushingToViews() && !no_destination)
-    {
-        auto sink = table->write(query_ptr, metadata_snapshot, context_ptr);
-        sink->setRuntimeData(thread_status, elapsed_counter_ms);
-        out.addSource(std::move(sink));
-    }
-    else
-    {
-        out = buildPushingToViewsChain(table, metadata_snapshot, context_ptr, query_ptr, no_destination, thread_status, elapsed_counter_ms);
-    }
+    auto sink = table->write(query_ptr, metadata_snapshot, context_ptr);
+    sink->setRuntimeData(thread_status, elapsed_counter_ms);
+    out.addSource(std::move(sink));
 
     /// Note that we wrap transforms one on top of another, so we write them in reverse of data processing order.
 
+    /// proton: we don't support constraints
     /// Checking constraints. It must be done after calculation of all defaults, so we can check them on calculated columns.
-    if (const auto & constraints = metadata_snapshot->getConstraints(); !constraints.empty())
-        out.addSource(std::make_shared<CheckConstraintsTransform>(
-            table->getStorageID(), out.getInputHeader(), metadata_snapshot->getConstraints(), context_ptr));
+    /// if (const auto & constraints = metadata_snapshot->getConstraints(); !constraints.empty())
+    ///    out.addSource(std::make_shared<CheckConstraintsTransform>(
+    ///        table->getStorageID(), out.getInputHeader(), metadata_snapshot->getConstraints(), context_ptr));
 
+    /// proton: light insert. We don't like to insert missing columns which don't have defaults
+    /// to streaming store since it is inefficient and blow streaming storage.
+    /// Instead during query, we refill the missing columns.
+    /// With this change, the block i streaming store may contain partial columns of the table schema
     auto adding_missing_defaults_dag = addMissingDefaults(
         query_sample_block,
         out.getInputHeader().getNamesAndTypesList(),
@@ -237,15 +231,16 @@ Chain InterpreterInsertQuery::buildChainImpl(
 
     /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
     /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-    if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
-    {
-        bool table_prefers_large_blocks = table->prefersLargeBlocks();
+    /// proton: we simply disable squash for distributed merge tree since wal client has buffering already
+    /// if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
+    /// {
+    ///    bool table_prefers_large_blocks = table->prefersLargeBlocks();
 
-        out.addSource(std::make_shared<SquashingChunksTransform>(
-            out.getInputHeader(),
-            table_prefers_large_blocks ? settings.min_insert_block_size_rows : settings.max_block_size,
-            table_prefers_large_blocks ? settings.min_insert_block_size_bytes : 0));
-    }
+    ///    out.addSource(std::make_shared<SquashingChunksTransform>(
+    ///        out.getInputHeader(),
+    ///        table_prefers_large_blocks ? settings.min_insert_block_size_rows : settings.max_block_size,
+    ///        table_prefers_large_blocks ? settings.min_insert_block_size_bytes : 0));
+    /// }
 
     auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status);
     counting->setProcessListElement(context_ptr->getProcessListElement());

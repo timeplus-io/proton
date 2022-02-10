@@ -11,7 +11,6 @@
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTSelectQuery.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
@@ -21,11 +20,9 @@
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <Processors/Sinks/EmptySink.h>
-#include <Processors/Sinks/SinkToStorage.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
-#include <Processors/Transforms/buildPushingToViewsChain.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Common/ProtonCommon.h>
 

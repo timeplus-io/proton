@@ -41,7 +41,7 @@ public:
 
     /// `callback` will be invoked against the recrods for a partition of a topic
     /// The callback happens in the same thread as the caller
-    int32_t consume(ConsumeCallback callback, void * data, const KafkaWALContext & ctx) const;
+    int32_t consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const;
 
     ConsumeResult consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const;
 

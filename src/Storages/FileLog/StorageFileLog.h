@@ -36,8 +36,6 @@ public:
 
     std::string getName() const override { return "FileLog"; }
 
-    bool noPushingToViews() const override { return true; }
-
     void startup() override;
     void shutdown() override;
 

@@ -42,7 +42,7 @@ public:
     int32_t addSubscriptions(const TopicPartitionOffsets & partitions);
     int32_t removeSubscriptions(const TopicPartitionOffsets & partitions);
 
-    ConsumeResult consume(uint32_t count, int32_t timeout_ms);
+    ConsumeResult consume(uint32_t count, int32_t timeout_ms, std::function<RecordPtr(struct rd_kafka_message_s*)> deserialize);
 
     int32_t stopConsume();
 

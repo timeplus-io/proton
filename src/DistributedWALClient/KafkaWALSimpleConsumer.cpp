@@ -177,7 +177,7 @@ inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALCont
     return DB::ErrorCodes::OK;
 }
 
-int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, const KafkaWALContext & ctx) const
+int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
 
@@ -190,7 +190,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, c
     struct WrappedData
     {
         ConsumeCallback callback;
-        void * data;
+        ConsumeCallbackData * data;
 
         RecordPtrs records;
         const KafkaWALContext & ctx;
@@ -201,7 +201,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, c
 
         WrappedData(
             ConsumeCallback callback_,
-            void * data_,
+            ConsumeCallbackData * data_,
             const KafkaWALContext & ctx_,
             Poco::Logger * log_)
             : callback(callback_), data(data_), ctx(ctx_), log(log_)
@@ -213,7 +213,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, c
     WrappedData wrapped_data{callback, data, ctx, log};
 
     auto kcallback = [](rd_kafka_message_t * rkmessage, void * kdata) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        auto wrapped = static_cast<WrappedData *>(kdata);
+        auto * wrapped = static_cast<WrappedData *>(kdata);
 
         if (likely(rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR))
         {
@@ -224,7 +224,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, c
             }
 
             auto bytes = rkmessage->len;
-            auto record = kafkaMsgToRecord(rkmessage);
+            auto record = kafkaMsgToRecord(rkmessage, *wrapped->data, false);
 
             if (likely(record))
             {
@@ -321,6 +321,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, void * data, c
 ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
+    assert(ctx.schema_provider);
 
     auto err = startConsumingIfNotYet(ctx);
     if (err != 0)
@@ -349,7 +350,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
                     continue;
                 }
 
-                auto record = kafkaMsgToRecord(rkmessage);
+                auto record = kafkaMsgToRecord(rkmessage, *ctx.schema_provider, false);
                 if (likely(record))
                 {
                     result.records.push_back(record);

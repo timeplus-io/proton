@@ -6,7 +6,6 @@
 #include <gtest/gtest.h>
 
 #include <Common/tests/gtest_global_context.h>
-#include <Common/tests/gtest_global_register.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
@@ -29,7 +28,7 @@ void tryRegisterAggregateFunctions()
 static ConfigProcessor::LoadedConfig loadConfiguration(const std::string & config_path)
 {
     ConfigProcessor config_processor(config_path, true, true);
-    ConfigProcessor::LoadedConfig config = config_processor.loadConfig(false);
+    ConfigProcessor::LoadedConfig config = config_processor.loadConfig();
     return config;
 }
 

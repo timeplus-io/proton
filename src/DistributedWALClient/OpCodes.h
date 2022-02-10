@@ -3,7 +3,7 @@
 namespace DWAL
 {
 /// Operation codes
-enum class OpCode : uint8_t
+enum class OpCode : uint16_t
 {
     /// Data
     ADD_DATA_BLOCK = 0,
@@ -29,7 +29,5 @@ enum class OpCode : uint8_t
     DELETE_DICTIONARY,
 
     MAX_OPS_CODE,
-
-    UNKNOWN = 0x3F,
 };
 }

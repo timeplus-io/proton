@@ -81,6 +81,7 @@
 #include <base/getFQDNOrHostName.h>
 #include <Coordination/MetaStoreDispatcher.h>
 
+#include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -3051,7 +3052,7 @@ std::vector<String> Context::parseQueryStatusPollId(const String & poll_id) cons
     }
 
     std::vector<String> names;
-    boost::algorithm::split(names, components[1], [](auto ch) { return ch == '.'; });
+    boost::algorithm::split(names, components[1], boost::is_any_of("."));
     if (names.size() != 2)
     {
         throw Exception("Invalid poll ID: " + poll_id, ErrorCodes::INVALID_POLL_ID);

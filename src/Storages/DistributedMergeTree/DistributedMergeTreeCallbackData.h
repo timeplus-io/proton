@@ -3,21 +3,24 @@
 /// proton: starts. Added for proton
 
 #include <DistributedWALClient/Record.h>
+#include <DistributedWALClient/Results.h>
 #include <Storages/MergeTree/SequenceInfo.h>
 
 namespace DB
 {
-
 class StorageDistributedMergeTree;
 
 using RecordsSequenceRangesPair = std::pair<DWAL::RecordPtrs, SequenceRanges>;
 
-struct DistributedMergeTreeCallbackData
+struct DistributedMergeTreeCallbackData : public DWAL::ConsumeCallbackData
 {
-    DistributedMergeTreeCallbackData(
-        StorageDistributedMergeTree * storage_, const SequenceRanges & missing_sequence_ranges_)
-        : storage(storage_), missing_sequence_ranges(missing_sequence_ranges_)
+    DistributedMergeTreeCallbackData(StorageDistributedMergeTree * storage_, const SequenceRanges & missing_sequence_ranges_);
+
+    const Block & getSchema(UInt16 schema_version) const override
     {
+        (void)schema_version;
+        /// proton: FIXME, MVCC schema version
+        return header;
     }
 
     void commit(DWAL::RecordPtrs records);
@@ -27,9 +30,7 @@ struct DistributedMergeTreeCallbackData
 
     /// For testing
     static std::vector<RecordsSequenceRangesPair> categorizeRecordsAccordingToSequenceRanges(
-        const DWAL::RecordPtrs & records,
-        const SequenceRanges & sequence_ranges,
-        DWAL::RecordSN max_committed_sn);
+        const DWAL::RecordPtrs & records, const SequenceRanges & sequence_ranges, DWAL::RecordSN max_committed_sn);
 
 private:
     bool finishRecovery() const { return missing_sequence_ranges.empty() && recovery_records.empty(); }
@@ -40,6 +41,7 @@ private:
 
 private:
     StorageDistributedMergeTree * storage;
+    Block header;
 
     std::atomic_uint16_t outstanding_commits = 0;
     SequenceRanges missing_sequence_ranges;

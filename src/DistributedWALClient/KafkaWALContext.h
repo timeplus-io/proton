@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SchemaProvider.h"
+
 #include <boost/algorithm/string/join.hpp>
 
 #include <string>
@@ -74,6 +76,9 @@ struct KafkaWALContext
     /// Per topic max message size
     int32_t message_max_bytes = -1;
 
+    std::shared_ptr<EmptySchemaProvider> empty_schema_provider;
+    const SchemaProvider * schema_provider;
+
     static std::string topicPartitonKey(const std::string & topic, int32_t partition) { return topic + "$" + std::to_string(partition); }
 
     std::string key() const { return topicPartitonKey(topic, partition); }
@@ -111,11 +116,19 @@ struct KafkaWALContext
     std::shared_ptr<rd_kafka_topic_s> topic_handle;
     bool topic_consuming_started = false;
 
-    KafkaWALContext(const std::string & topic_, int32_t partition_, int64_t offset_) : topic(topic_), partition(partition_), offset(offset_) { }
+    KafkaWALContext(const std::string & topic_, int32_t partition_, int64_t offset_)
+        : topic(topic_), partition(partition_), offset(offset_), empty_schema_provider(new EmptySchemaProvider), schema_provider(empty_schema_provider.get())
+    {
+    }
 
     KafkaWALContext(
         const std::string & topic_, int32_t partitions_, int32_t replication_factor_, const std::string & cleanup_policy_ = "delete")
-        : topic(topic_), partitions(partitions_), replication_factor(replication_factor_), cleanup_policy(cleanup_policy_)
+        : topic(topic_)
+        , partitions(partitions_)
+        , replication_factor(replication_factor_)
+        , cleanup_policy(cleanup_policy_)
+        , empty_schema_provider(new EmptySchemaProvider)
+        , schema_provider(empty_schema_provider.get())
     {
     }
 

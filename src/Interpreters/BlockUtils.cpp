@@ -101,7 +101,7 @@ void appendDDLBlock(
     DWAL::OpCode opCode,
     const Poco::Logger * log)
 {
-    DWAL::Record record{opCode, std::move(block)};
+    DWAL::Record record{opCode, std::move(block), DWAL::NO_SCHEMA};
     record.headers["_version"] = "1";
 
     const auto & query_params = context->getQueryParameters();

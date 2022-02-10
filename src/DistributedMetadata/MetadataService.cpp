@@ -7,6 +7,8 @@
 #include <base/logger_useful.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <boost/algorithm/string/trim.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 
 
 namespace DB
@@ -295,8 +297,8 @@ void MetadataService::startup()
     {
         /// Node only with corresponding service role has corresponding data consuming capability
         auto node_role = config.getString(SYSTEM_ROLES_KEY + "." + key, "");
-        /// boost::trim(node_role);
-        /// boost::to_lower(node_role);
+        boost::algorithm::trim(node_role);
+        boost::algorithm::to_lower(node_role);
         node_roles += node_role + ",";
 
         if (node_role == this_role && !pool)
@@ -308,7 +310,7 @@ void MetadataService::startup()
                 /// First try to create corresponding dwal
                 doCreateDWal(kctx);
             }
-            catch (Exception e)
+            catch (const Exception & e)
             {
                 LOG_ERROR(log, "{}", e.message());
                 throw;

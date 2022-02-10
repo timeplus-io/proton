@@ -101,8 +101,9 @@ static ExpressionActionsPtr buildShardingKeyExpression(const ASTPtr & sharding_k
 
 static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFactory::Arguments & args)
 {
-    UInt64 replication_factor = 0;
+    /// DistributedMergeTree(shards, replicas, sharding_expr)
     UInt64 shards = 0;
+    UInt64 replication_factor = 0;
     ASTs & engine_args = args.engine_args;
 
     if (engine_args.size() != 3)
@@ -110,18 +111,7 @@ static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFac
         throw Exception("Storage DistributedMergeTree requires 3 parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    ASTLiteral * replication_factor_ast = engine_args[0]->as<ASTLiteral>();
-    if (replication_factor_ast && replication_factor_ast->value.getType() == Field::Types::UInt64)
-    {
-        replication_factor = safeGet<UInt64>(replication_factor_ast->value);
-    }
-    else
-    {
-        throw Exception("Replication factor must be an unsigned integer" + getMergeTreeVerboseHelp(true),
-                ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    ASTLiteral * shards_ast = engine_args[1]->as<ASTLiteral>();
+    ASTLiteral * shards_ast = engine_args[0]->as<ASTLiteral>();
     if (shards_ast && shards_ast->value.getType() == Field::Types::UInt64)
     {
         shards = safeGet<UInt64>(shards_ast->value);
@@ -129,6 +119,17 @@ static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFac
     else
     {
         throw Exception("Shards must be an unsigned integer" + getMergeTreeVerboseHelp(true),
+                        ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    ASTLiteral * replication_factor_ast = engine_args[1]->as<ASTLiteral>();
+    if (replication_factor_ast && replication_factor_ast->value.getType() == Field::Types::UInt64)
+    {
+        replication_factor = safeGet<UInt64>(replication_factor_ast->value);
+    }
+    else
+    {
+        throw Exception("Replication factor must be an unsigned integer" + getMergeTreeVerboseHelp(true),
                 ErrorCodes::BAD_ARGUMENTS);
     }
 
@@ -153,7 +154,7 @@ static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFac
                 ErrorCodes::BAD_ARGUMENTS);
     }
 
-    return {replication_factor, shards, engine_args[2]};
+    return {shards, replication_factor, engine_args[2]};
 }
 /// proton: ends
 
@@ -356,7 +357,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     if (distributed)
     {
-        std::tie(replication_factor, shards, sharding_key) = distributedParameters(args);
+        std::tie(shards, replication_factor, sharding_key) = distributedParameters(args);
         arg_num += 3;
     }
 

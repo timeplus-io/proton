@@ -16,7 +16,6 @@ StreamingStoreSource::StreamingStoreSource(
     DWAL::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
     : SourceWithProgress(header)
-    , storage(std::move(storage_))
     , context(std::move(context_))
     , column_names(header.getNames())
     , header_chunk(header.getColumns(), 0)
@@ -24,7 +23,7 @@ StreamingStoreSource::StreamingStoreSource(
     , consumer(std::move(consumer_))
     , log(log_)
 {
-    reader = std::make_unique<StreamingBlockReader>(storage->getStorageID(), context, shard, offset, consumer, log);
+    reader = std::make_unique<StreamingBlockReader>(std::move(storage_), shard, offset, consumer, log);
     iter = result_chunks.begin();
 
     last_flush_ms = MonotonicMilliseconds::now();

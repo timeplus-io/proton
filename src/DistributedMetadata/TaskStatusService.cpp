@@ -100,7 +100,7 @@ namespace
     {
         std::vector<TaskStatusService::TaskStatusPtr> tasks = {task};
         auto block = buildBlock(tasks);
-        return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block));
+        return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block), DWAL::NO_SCHEMA);
     }
 }
 
@@ -153,8 +153,9 @@ void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
     {
         assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
 
-        auto task_ptr = buildTaskStatusFromRecord(record);
-        updateTaskStatus(task_ptr);
+        auto task = buildTaskStatusFromRecord(record);
+        if (task)
+            updateTaskStatus(task);
     }
 
     /// FIXME: Checkpointing
@@ -250,13 +251,16 @@ TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(co
 {
     std::vector<TaskStatusService::TaskStatusPtr> tasks;
     buildTaskStatusFromBlock(record->block, tasks);
-    assert(tasks.size() > 0);
+    if (tasks.empty())
+        return nullptr;
+
     return tasks[0];
 }
 
 void TaskStatusService::buildTaskStatusFromBlock(const Block & block, std::vector<TaskStatusService::TaskStatusPtr> & res) const
 {
-    validateSchema(block, {"id", "status", "progress", "reason", "user", "context", "last_modified", "created"});
+    if (!validateSchema(block, {"id", "status", "progress", "reason", "user", "context", "last_modified", "created"}))
+        return;
 
     const auto & id_col = block.findByName("id")->column;
     const auto & status_col = block.findByName("status")->column;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Record.h"
+#include "SchemaProvider.h"
 
 namespace DWAL
 {
@@ -22,7 +23,10 @@ struct ConsumeResult
 };
 
 using AppendCallback = void (*)(const AppendResult & result, void * data);
-using ConsumeCallback = void (*)(RecordPtrs records, void * data);
+
+using ConsumeCallbackData = SchemaProvider;
+
+using ConsumeCallback = void (*)(RecordPtrs records, ConsumeCallbackData * data);
 
 struct DescribeResult
 {

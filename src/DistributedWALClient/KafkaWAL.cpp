@@ -393,7 +393,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const Kaf
         headers.swap(header_ptr);
     }
 
-    ByteVector data{Record::write(record, ctx.client_side_compression)};
+    ByteVector data{Record::write(record)};
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -466,7 +466,7 @@ void KafkaWAL::poll(int32_t timeout_ms, const KafkaWALContext &) const
     rd_kafka_poll(producer_handle.get(), timeout_ms);
 }
 
-int32_t KafkaWAL::consume(ConsumeCallback callback, void * data, const KafkaWALContext & ctx) const
+int32_t KafkaWAL::consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const
 {
     return consumer->consume(callback, data, ctx);
 }
@@ -499,7 +499,7 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
     }
 
     KConfParams params = {
-        std::make_pair("compression.type", ctx.client_side_compression ? "none" : "snappy"),
+        std::make_pair("compression.type", ctx.client_side_compression ? "uncompressed" : "snappy"),
         std::make_pair("cleanup.policy", ctx.cleanup_policy),
     };
 

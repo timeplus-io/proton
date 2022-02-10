@@ -192,7 +192,7 @@ DWAL::OpCode getOpCodeFromSQL(const String & query)
     if (const auto * alter = ast->as<ASTAlterQuery>())
         return getOpCodeFromQuery(*alter);
 
-    return DWAL::OpCode::UNKNOWN;
+    return DWAL::OpCode::MAX_OPS_CODE;
 }
 
 TEST(DDLHelper, getOpCodeFromQuery)

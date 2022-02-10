@@ -28,7 +28,7 @@ namespace DWAL
 
 /// The overall steps of CRUD a topic by using this calss are:
 /// 1. init an instance `wal` by calling ctor
-/// 2. parepare KafkaWALContext ctx
+/// 2. prepare KafkaWALContext ctx
 /// 3. call wal->describe(..., ctx) to check if the topic exists
 /// 4. call wal->create(..., ctx) to create a topic according to params in ctx
 /// 5. call wal->remove(..., ctx) to delete the topic
@@ -46,7 +46,7 @@ namespace DWAL
 /// 3. init consumer topic handle as `wal->initConsumerTopicHandle(ctx)`
 /// 4. consume data by calling `consume` like `wal->consume(..., ctx)`
 /// 5. commit offset by calling `wal->commit(..., ctx)`
-/// 6. stop consumeing by calling `wal->stopConsume(..., ctx)`
+/// 6. stop consuming by calling `wal->stopConsume(..., ctx)`
 /// 7. dtor `wal`
 
 class KafkaWAL final
@@ -69,7 +69,7 @@ public:
     void poll(int32_t timeout_ms, const KafkaWALContext & ctx) const;
 
     /// register a consumer callback for topic, partition
-    int32_t consume(ConsumeCallback callback, void * data, const KafkaWALContext & ctx) const;
+    int32_t consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const;
 
     ConsumeResult consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const;
 

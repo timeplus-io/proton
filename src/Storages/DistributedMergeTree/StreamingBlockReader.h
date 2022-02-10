@@ -2,7 +2,6 @@
 
 #include <DistributedWALClient/KafkaWALContext.h>
 #include <DistributedWALClient/KafkaWALSimpleConsumer.h>
-#include <Interpreters/Context_fwd.h>
 
 namespace Poco
 {
@@ -11,27 +10,28 @@ namespace Poco
 
 namespace DB
 {
-
-struct StorageID;
+class IStorage;
 
 /// StreamingBlockReader read blocks from streaming storage
-class StreamingBlockReader final
+class StreamingBlockReader final : DWAL::SchemaProvider
 {
 public:
     StreamingBlockReader(
-        const StorageID & storage_id,
-        ContextPtr context_,
+        std::shared_ptr<IStorage> storage_,
         Int32 shard_,
         Int64 offset,
         const DWAL::KafkaWALSimpleConsumerPtr & consumer_,
         Poco::Logger * log_);
 
-    ~StreamingBlockReader();
+    ~StreamingBlockReader() override;
+
+    const Block & getSchema(UInt16 schema_version) const override;
 
     DWAL::RecordPtrs read(UInt32 count, Int32 timeout_ms);
 
 private:
-    ContextPtr context;
+    std::shared_ptr<IStorage> storage;
+    Block header;
 
     DWAL::KafkaWALSimpleConsumerPtr consumer;
     DWAL::KafkaWALContext consume_ctx;

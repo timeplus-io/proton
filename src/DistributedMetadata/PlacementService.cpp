@@ -248,7 +248,7 @@ void PlacementService::doBroadcast()
     ColumnWithTypeAndName disk_space_col_with_type{std::move(disk_space_col), uint64_type, "disk_space"};
     disk_block.insert(disk_space_col_with_type);
 
-    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(disk_block)};
+    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(disk_block), DWAL::NO_SCHEMA};
     record.partition_key = 0;
     setupRecordHeaders(record, "1");
 

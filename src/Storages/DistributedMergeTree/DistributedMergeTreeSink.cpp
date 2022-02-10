@@ -69,7 +69,7 @@ BlocksWithShard DistributedMergeTreeSink::shardBlock(const Block & block) const
         else
         {
             /// Randomly pick one shard to ingest this block
-            shard = storage.getRandomShardIndex();
+            shard = storage.getNextShardIndex();
         }
     }
 
@@ -90,27 +90,24 @@ inline IngestMode DistributedMergeTreeSink::getIngestMode() const
 
 void DistributedMergeTreeSink::consume(Chunk chunk)
 {
-    auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    if (block.rows() == 0)
-    {
+    if (chunk.getNumRows() == 0)
         return;
-    }
 
+    auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     /// 1) Split block by sharding key
     BlocksWithShard blocks{shardBlock(block)};
 
-    /// FIXME, if one block is too large in size (bigger than max size of a Kafka record can have),
-    /// further split the bock
-
     auto ingest_mode = getIngestMode();
 
-    /// 2) Commit each sharded block to corresponding Kafka partition
+    /// 2) Commit each sharded block to corresponding streaming store partition
     /// we failed the whole insert whenever single block failed
+    /// proton: FIXME. Once we MVCC schema, each block will be bound to a schema version, for now, it is 0.
+    UInt16 schema_version = 0;
     const auto & idem_key = query_context->getIdempotentKey();
     auto ingest_time = query_context->getIngestTime();
     for (auto & current_block : blocks)
     {
-        DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(current_block.block)};
+        DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(current_block.block), schema_version};
         record.partition_key = current_block.shard;
         if (!idem_key.empty())
             record.setIdempotentKey(idem_key);

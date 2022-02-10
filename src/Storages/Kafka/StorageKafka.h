@@ -36,8 +36,6 @@ class StorageKafka final : public shared_ptr_helper<StorageKafka>, public IStora
 public:
     std::string getName() const override { return "Kafka"; }
 
-    bool noPushingToViews() const override { return true; }
-
     void startup() override;
     void shutdown() override;
 

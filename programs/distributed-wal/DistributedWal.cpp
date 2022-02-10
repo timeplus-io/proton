@@ -562,7 +562,7 @@ KafkaWALPtrs createDWals(const BenchmarkSettings & bench_settings, Int32 size)
     return wals;
 }
 
-struct Data
+struct Data : public DWAL::ConsumeCallbackData
 {
     mutex & cmutex;
     RecordContainer & inflights;
@@ -570,6 +570,8 @@ struct Data
     Int32 & total;
     Int32 & failed;
     UInt64 correlation_id;
+    DB::Block header;
+
     Data(
         mutex & cmutex_, RecordContainer & inflights_, ResultQueue & result_queue_, Int32 & total_, Int32 & failed_, UInt64 correlation_id_)
         : cmutex(cmutex_)
@@ -578,7 +580,13 @@ struct Data
         , total(total_)
         , failed(failed_)
         , correlation_id(correlation_id_)
+        , header(prepareData(0))
     {
+    }
+
+    const DB::Block & getSchema(UInt16) const override
+    {
+        return header;
     }
 };
 
@@ -758,28 +766,34 @@ Int64 ingest(KafkaWALPtrs & wals, ResultQueues & result_queues, const BenchmarkS
     return chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - bench_start).count();
 }
 
-struct ConsumeContext
+struct ConsumeContext : public DWAL::ConsumeCallbackData
 {
     mutex & stdout_mutex;
     atomic_int32_t & consumed;
     KafkaWALContext & ctx;
     KafkaWALPtr & dwal;
     bool dumpdata;
+    DB::Block header;
 
     ConsumeContext(mutex & stdout_mutex_, atomic_int32_t & consumed_, KafkaWALContext & ctx_, KafkaWALPtr & dwal_, bool dumpdata_)
-        : stdout_mutex(stdout_mutex_), consumed(consumed_), ctx(ctx_), dwal(dwal_), dumpdata(dumpdata_)
+        : stdout_mutex(stdout_mutex_), consumed(consumed_), ctx(ctx_), dwal(dwal_), dumpdata(dumpdata_), header(prepareData(0))
     {
+    }
+
+    const DB::Block & getSchema(UInt16) const override
+    {
+        return header;
     }
 };
 
-void doConsume(DWAL::RecordPtrs records, void * data)
+void doConsume(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data)
 {
     if (records.empty())
     {
         return;
     }
 
-    auto cctx = static_cast<ConsumeContext *>(data);
+    auto cctx = dynamic_cast<ConsumeContext *>(data);
 
     cctx->consumed += records.size();
     for (const auto & record : records)
@@ -802,6 +816,8 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
     mutex stdout_mutex;
     ThreadPool worker_pool{bench_settings.consumer_settings.kafka_topic_partition_offsets.size()};
 
+    auto table_schema{prepareData(0)};
+
     for (size_t jobid = 0; jobid < bench_settings.consumer_settings.kafka_topic_partition_offsets.size(); ++jobid)
     {
         worker_pool.scheduleOrThrowOnError([&, jobid] {
@@ -812,6 +828,7 @@ void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
             KafkaWALContext ctx{tpo.topic, tpo.partition, tpo.offset};
             ctx.auto_offset_reset = bench_settings.consumer_settings.auto_offset_reset;
             ctx.consume_callback_max_messages = bench_settings.consumer_settings.max_messages;
+            ctx.schemas.push_back(table_schema);
 
             atomic_int32_t consumed = 0;
             Int32 batch = 100;
@@ -876,13 +893,14 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
 
     atomic_int32_t consumed = 0;
 
-    struct CallbackData
+    struct CallbackData : public DWAL::ConsumeCallbackData
     {
         const BenchmarkSettings & settings;
         atomic_int32_t & consumed;
         mutex & stdout_mutex;
         Int32 jobid;
         KafkaWALConsumerMultiplexerPtr & wal;
+        DB::Block header;
 
         CallbackData(
             const BenchmarkSettings & settings_,
@@ -890,12 +908,17 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
             mutex & stdout_mutex_,
             KafkaWALConsumerMultiplexerPtr & wal_,
             Int32 jobid_)
-            : settings(settings_), consumed(consumed_), stdout_mutex(stdout_mutex_), jobid(jobid_), wal(wal_)
+            : settings(settings_), consumed(consumed_), stdout_mutex(stdout_mutex_), jobid(jobid_), wal(wal_), header(prepareData(0))
         {
+        }
+
+        const DB::Block & getSchema(UInt16) const override
+        {
+            return header;
         }
     };
 
-    auto callback = [](RecordPtrs records, void * data) -> void {
+    auto callback = [](RecordPtrs records, DWAL::ConsumeCallbackData * data) -> void {
         auto pdata = static_cast<CallbackData *>(data);
 
         pdata->consumed += records.size();

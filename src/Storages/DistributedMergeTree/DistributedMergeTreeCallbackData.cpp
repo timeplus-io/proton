@@ -7,6 +7,11 @@
 
 namespace DB
 {
+DistributedMergeTreeCallbackData::DistributedMergeTreeCallbackData(StorageDistributedMergeTree * storage_, const SequenceRanges & missing_sequence_ranges_)
+    : storage(storage_), header(storage->getInMemoryMetadataPtr()->getSampleBlock()), missing_sequence_ranges(missing_sequence_ranges_)
+{
+}
+
 void DistributedMergeTreeCallbackData::wait() const
 {
     while (outstanding_commits != 0)

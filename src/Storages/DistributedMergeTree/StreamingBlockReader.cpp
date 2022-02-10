@@ -3,6 +3,7 @@
 #include <DistributedWALClient/KafkaWALCommon.h>
 #include <DistributedWALClient/KafkaWALSimpleConsumer.h>
 #include <Interpreters/StorageID.h>
+#include <Storages/IStorage.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -13,10 +14,14 @@ namespace ErrorCodes
 }
 
 StreamingBlockReader::StreamingBlockReader(
-    const StorageID & storage_id, ContextPtr context_, Int32 shard_, Int64 offset, const DWAL::KafkaWALSimpleConsumerPtr & consumer_, Poco::Logger * log_)
-    : context(context_)
+    std::shared_ptr<IStorage> storage_, Int32 shard_, Int64 offset, const DWAL::KafkaWALSimpleConsumerPtr & consumer_, Poco::Logger * log_)
+    : storage(std::move(storage_))
+    , header(storage->getInMemoryMetadataPtr()->getSampleBlock())
     , consumer(consumer_)
-    , consume_ctx(DWAL::escapeDWALName(storage_id.getDatabaseName(), storage_id.getTableName()), shard_, Int64{-1} /* latest */)
+    , consume_ctx(
+          DWAL::escapeDWALName(storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName()),
+          shard_,
+          Int64{-1} /* latest */)
     , log(log_)
 {
     if (offset == -1)
@@ -26,6 +31,7 @@ StreamingBlockReader::StreamingBlockReader(
 
     consume_ctx.offset = offset;
     consume_ctx.enforce_offset = true;
+    consume_ctx.schema_provider = this;
     consumer->initTopicHandle(consume_ctx);
 
     LOG_INFO(log, "Start streaming reading from topic={} shard={} offset={}", consume_ctx.topic, shard_, offset);
@@ -36,6 +42,11 @@ StreamingBlockReader::~StreamingBlockReader()
     LOG_INFO(log, "Stop streaming reading from topic={} shard={}", consume_ctx.topic, consume_ctx.partition);
 
     consumer->stopConsume(consume_ctx);
+}
+
+const Block & StreamingBlockReader::getSchema(UInt16 /*schema_version*/) const
+{
+    return header;
 }
 
 DWAL::RecordPtrs StreamingBlockReader::read(UInt32 count, Int32 timeout_ms)

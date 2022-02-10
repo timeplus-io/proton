@@ -983,6 +983,11 @@ size_t StorageDistributedMergeTree::getRandomShardIndex()
     return std::uniform_int_distribution<size_t>(0, shards - 1)(rng);
 }
 
+size_t StorageDistributedMergeTree::getNextShardIndex() const
+{
+    return next_shard++ % shards;
+}
+
 DWAL::RecordSN StorageDistributedMergeTree::lastSN() const
 {
     std::lock_guard lock(sns_mutex);
@@ -1396,7 +1401,8 @@ DWAL::RecordSN StorageDistributedMergeTree::snLoaded() const
 void StorageDistributedMergeTree::backgroundPoll()
 {
     /// Sleep a while to let librdkafka to populate topic / partition metadata
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    /// std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(20000000001));
 
     setThreadName("DistMergeTree");
 
@@ -1499,9 +1505,9 @@ inline void StorageDistributedMergeTree::periodicallyCommit()
     last_commit_ts = MonotonicSeconds::now();
 }
 
-void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, void * data)
+void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data)
 {
-    auto cdata = static_cast<DistributedMergeTreeCallbackData *>(data);
+    auto * cdata = dynamic_cast<DistributedMergeTreeCallbackData *>(data);
 
     if (records.empty())
     {

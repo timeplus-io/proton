@@ -1,10 +1,11 @@
 #include "KafkaWALCommon.h"
+#include "KafkaWALContext.h"
 #include "KafkaWALStats.h"
 
-#include <Common/Exception.h>
-#include <Common/hex.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
+#include <Common/Exception.h>
+#include <Common/hex.h>
 
 #include <cstring>
 
@@ -178,11 +179,13 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
     return topic_handle;
 }
 
-RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, bool copy_topic)
+RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaProvider & schema_provider, bool copy_topic)
 {
     assert(msg != nullptr);
+
     auto consume_time = DB::UTCMilliseconds::now();
-    auto record = Record::read(static_cast<const char *>(msg->payload), msg->len);
+    RecordPtr record = Record::read(static_cast<const char *>(msg->payload), msg->len, schema_provider);
+
     if (unlikely(!record))
     {
         return nullptr;

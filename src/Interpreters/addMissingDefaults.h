@@ -27,4 +27,15 @@ using ActionsDAGPtr = std::shared_ptr<ActionsDAG>;
 ActionsDAGPtr addMissingDefaults(
     const Block & header, const NamesAndTypesList & required_columns,
     const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false);
+
+/// proton: make insert as light as possible. After tailing from streaming store, we will add other missing columns
+/** Adds 2 types of columns into block
+  * 1. Columns, that are missed inside request, but present in table with defaults (columns with default values)
+  * 2. Columns that materialized from other columns (materialized columns)
+  * Also can substitute NULL with DEFAULT value in case of INSERT SELECT query (null_as_default) if according setting is 1.
+  * All three types of columns are materialized (not constants).
+  */
+ActionsDAGPtr addMissingDefaultsForDefaults(
+    const Block & header, const NamesAndTypesList & required_columns,
+    const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false);
 }
