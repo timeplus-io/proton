@@ -3,7 +3,6 @@
 #include "MetadataService.h"
 
 #include <Core/BackgroundSchedulePool.h>
-/// #include <DataStreams/IBlockStream_fwd.h>
 
 #include <optional>
 
@@ -72,9 +71,11 @@ private:
 
     bool tableExists();
     bool createTaskTable();
+    void createTaskTableIfNotExists();
 
     bool persistentTaskStatuses(const std::vector<TaskStatusPtr> & tasks);
     void persistentFinishedTask();
+    void doPersistentFinishedTask();
 
 private:
     mutable std::shared_mutex indexes_lock;
@@ -84,7 +85,7 @@ private:
     std::mutex tasks_lock;
     std::deque<std::pair<SteadyClock, String>> timed_tasks;
     std::unordered_map<Int64, std::vector<TaskStatusPtr>> finished_tasks;
-    std::unique_ptr<BackgroundSchedulePoolTaskHolder> persistent_task;
+    BackgroundSchedulePoolTaskHolder persistent_task;
 
     bool table_exists = false;
 

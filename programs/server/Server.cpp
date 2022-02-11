@@ -1419,7 +1419,7 @@ if (ThreadFuzzer::instance().isEffective())
         LOG_INFO(log, "It looks like this system does not have procfs mounted at /proc location,"
             " neither proton-server process has CAP_NET_ADMIN capability."
             " 'taskstats' performance statistics will be disabled."
-            " It could happen due to incorrect ClickHouse package installation."
+            " It could happen due to incorrect proton package installation."
             " You can try to resolve the problem manually with 'sudo setcap cap_net_admin=+ep {}'."
             " Note that it will not work on 'nosuid' mounted filesystems."
             " It also doesn't work if you run proton-server inside network namespace as it happens in some containers.",
@@ -1429,7 +1429,7 @@ if (ThreadFuzzer::instance().isEffective())
     if (!hasLinuxCapability(CAP_SYS_NICE))
     {
         LOG_INFO(log, "It looks like the process has no CAP_SYS_NICE capability, the setting 'os_thread_priority' will have no effect."
-            " It could happen due to incorrect ClickHouse package installation."
+            " It could happen due to incorrect proton package installation."
             " You could resolve the problem manually with 'sudo setcap cap_sys_nice=+ep {}'."
             " Note that it will not work on 'nosuid' mounted filesystems.",
             executable_path);
@@ -1529,10 +1529,7 @@ if (ThreadFuzzer::instance().isEffective())
         /// proton: starts
         initDistributedMetadataServicesPost(global_context);
         auto & task_status_service = DB::TaskStatusService::instance(global_context);
-        if (global_context->isDistributed() && task_status_service.nodeRoles().find("task") != String::npos)
-        {
-            task_status_service.schedulePersistentTask();
-        }
+        task_status_service.schedulePersistentTask();
         /// proton: ends
 
         SCOPE_EXIT_SAFE({

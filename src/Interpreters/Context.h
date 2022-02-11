@@ -441,6 +441,7 @@ public:
 
     /// proton: starts
     String getPasswordByUserName(const String & user_name) const;
+    void setUserByName(const String & user_name);
     /// proton: ends
 
     void setCurrentRoles(const std::vector<UUID> & current_roles_);

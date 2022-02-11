@@ -11,7 +11,6 @@
 #include <Core/ProtocolDefines.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 
 namespace DWAL

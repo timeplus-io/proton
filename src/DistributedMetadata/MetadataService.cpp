@@ -2,13 +2,13 @@
 
 #include <DistributedWALClient/KafkaWALPool.h>
 #include <Interpreters/Context.h>
-#include <Common/setThreadName.h>
 #include <base/getFQDNOrHostName.h>
 #include <base/logger_useful.h>
+#include <Common/setThreadName.h>
 
-#include <Poco/Util/AbstractConfiguration.h>
-#include <boost/algorithm/string/trim.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/trim.hpp>
+#include <Poco/Util/AbstractConfiguration.h>
 
 
 namespace DB
@@ -173,8 +173,8 @@ void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
         }
         else if (err == ErrorCodes::INVALID_REPLICATION_FACTOR)
         {
-            throw Exception("Topic " + ctx.topic + " create failed due to invalid replication factor.",
-                            ErrorCodes::INVALID_REPLICATION_FACTOR);
+            throw Exception(
+                "Topic " + ctx.topic + " create failed due to invalid replication factor.", ErrorCodes::INVALID_REPLICATION_FACTOR);
         }
         else
         {
@@ -200,7 +200,11 @@ void MetadataService::tailingRecords()
     }
     catch (...)
     {
-        LOG_ERROR(log, "Failed to consume data, exception={}", getCurrentExceptionMessage(true, true));
+        LOG_ERROR(
+            log,
+            "MetaData service failed to consume data, topic={} exception={}",
+            dwal_consume_ctx.topic,
+            getCurrentExceptionMessage(true, true));
     }
 }
 
@@ -208,9 +212,7 @@ void MetadataService::doTailingRecords()
 {
     auto thr_name = log->name();
     if (thr_name.size() > 15)
-    {
         thr_name = String{thr_name.begin(), thr_name.begin() + 14};
-    }
 
     setThreadName(thr_name.c_str());
 

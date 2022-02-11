@@ -112,12 +112,11 @@ void CatalogService::doBroadcast()
         "name = 'tasks')))",
         cols);
 
-    /// FIXME, QueryScope
-    /// CurrentThread::attachQueryContext(context);
-    auto context = Context::createCopy(global_context);
-    context->makeQueryContext();
+    auto query_context = Context::createCopy(global_context);
+    query_context->makeQueryContext();
+    /// CurrentThread::QueryScope query_scope{query_context};
 
-    executeNonInsertQuery(query, context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    executeNonInsertQuery(query, query_context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         append(std::move(block));
         assert(!block);
     });
@@ -129,7 +128,7 @@ void CatalogService::append(Block && block)
     record.partition_key = 0;
     setupRecordHeaders(record, "1");
 
-    const auto & result = dwal->append(record, dwal_append_ctx);
+    const auto & result = appendRecord(record);
     if (result.err != ErrorCodes::OK)
     {
         LOG_ERROR(log, "Failed to appended {} tables to DWAL", record.block.rows());
@@ -771,6 +770,7 @@ void CatalogService::processRecords(const DWAL::RecordPtrs & records)
 {
     for (const auto & record : records)
     {
+        assert(!record->hasSchema());
         assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
 
         if (!record->hasIdempotentKey())

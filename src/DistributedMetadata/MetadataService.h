@@ -7,7 +7,6 @@
 
 #include <optional>
 
-
 namespace DB
 {
 class Context;
@@ -24,6 +23,7 @@ public:
     bool ready() const { return started.test(); }
 
     const String & nodeRoles() const { return node_roles; }
+    bool hasCurrentRole() const { return node_roles.find(role()) != String::npos; }
     std::vector<DWAL::KafkaWALClusterPtr> clusters();
 
 private:
@@ -49,6 +49,14 @@ protected:
 
     void doCreateDWal(const DWAL::KafkaWALContext & ctx) const;
     void doDeleteDWal(const DWAL::KafkaWALContext & ctx) const;
+
+    DWAL::AppendResult appendRecord(const DWAL::Record & record) const
+    {
+        /// A centralized place to append record for metadata services
+        /// for easy record checking
+        assert(!record.hasSchema());
+        return dwal->append(record, dwal_append_ctx);
+    }
 
 protected:
     struct ConfigSettings

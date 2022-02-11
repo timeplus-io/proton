@@ -94,17 +94,37 @@ users:
         # Quota for user.
         quota: default
 
+        allow_databases:
+            - database: default
+
+        default_database: default
+
         # User can create other users and grant rights to them.
         # access_management: 1
     system:
-        password: ''
+        password: 'sys@t+'
+
+        allow_databases:
+            - database: system
+
+        default_database: system
 
     pgadmin:
+        allow_databases:
+            - database: default
+
+        default_database: default
+
         password: 'pgadmin'
         networks:
             ip: '::/0'
 
     neutron:
+        allow_databases:
+            - database: neutron
+
+        default_database: neutron
+
         password: 'neutron@t+'
         networks:
             ip: '::/0'

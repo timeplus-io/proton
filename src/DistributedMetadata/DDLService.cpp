@@ -173,10 +173,8 @@ DDLService::DDLService(const ContextMutablePtr & global_context_)
 
 Int32 DDLService::append(const DWAL::Record & ddl_record) const
 {
-    assert(!ddl_record.hasSchema());
-
     if (ready())
-        return dwal->append(ddl_record, dwal_append_ctx).err;
+        return appendRecord(ddl_record).err;
     else
         throw Exception("System is still initiating", ErrorCodes::RESOURCE_NOT_INITED);
 }
@@ -559,6 +557,7 @@ void DDLService::processRecords(const DWAL::RecordPtrs & records)
 {
     for (auto & record : records)
     {
+        assert(!record->hasSchema());
         switch (record->op_code)
         {
             case DWAL::OpCode::CREATE_TABLE:

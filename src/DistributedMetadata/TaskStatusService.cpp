@@ -134,15 +134,16 @@ MetadataService::ConfigSettings TaskStatusService::configSettings() const
 
 Int32 TaskStatusService::append(TaskStatusPtr task)
 {
-    auto record = buildRecord(task);
-
-    const auto & result = dwal->append(record, dwal_append_ctx);
+    /// FIXME, we shall translate to `INSERT INTO system.tasks`
+    /*const auto & result = appendRecord(buildRecord(task));
     if (result.err != ErrorCodes::OK)
     {
         LOG_ERROR(log, "Failed to commit task {}", task->id);
         return result.err;
-    }
+    }*/
 
+    (void)task;
+    (void)buildRecord;
     return 0;
 }
 
@@ -151,6 +152,7 @@ void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
     /// Consume records and build in-memory indexes
     for (const auto & record : records)
     {
+        assert(!record->hasSchema());
         assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
 
         auto task = buildTaskStatusFromRecord(record);
@@ -240,11 +242,12 @@ bool TaskStatusService::tableExists()
         return true;
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    ///std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     /// Try topic name
-    auto result = dwal->describe(DWAL::escapeDWALName("system", "tasks"), dwal_append_ctx);
-    table_exists = (result.err == ErrorCodes::OK);
-    return table_exists;
+    ///auto result = dwal->describe(DWAL::escapeDWALName("system", "tasks"), dwal_append_ctx);
+    ///table_exists = (result.err == ErrorCodes::OK);
+    ///return table_exists;
+    return false;
 }
 
 TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const
@@ -330,10 +333,10 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String
     CurrentThread::detachQueryIfNotDetached();
     /// FIXME: Remove DISTINCT when we resolve the checkpointing issue
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
-                          "reason, user, context, created, last_modified "
-                          "FROM system.tasks "
-                          "WHERE user <> '' AND id == '{}' "
-                          "ORDER BY last_modified DESC";
+                                      "reason, user, context, created, last_modified "
+                                      "FROM system.tasks "
+                                      "WHERE user <> '' AND id == '{}' "
+                                      "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, id);
 
     std::vector<TaskStatusService::TaskStatusPtr> res;
@@ -392,10 +395,10 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
     assert(!user.empty());
     CurrentThread::detachQueryIfNotDetached();
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
-                          "reason, user, context, created, last_modified "
-                          "FROM system.tasks "
-                          "WHERE user == '{}' "
-                          "ORDER BY last_modified DESC";
+                                      "reason, user, context, created, last_modified "
+                                      "FROM system.tasks "
+                                      "WHERE user == '{}' "
+                                      "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, user);
 
     auto query_context = Context::createCopy(global_context);
@@ -406,37 +409,58 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
 
 void TaskStatusService::schedulePersistentTask()
 {
-    if (!tableExists())
-    {
-        for (int i = 0; i < RETRY_TIMES; ++i)
-        {
-            if (createTaskTable())
-            {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_INTERVAL_MS));
-        }
+    if (!global_context->isDistributedEnv() || !hasCurrentRole())
+        return;
 
-        if (!tableExists())
-        {
-            throw Exception("Failed to create system tasks table", ErrorCodes::UNKNOWN_EXCEPTION);
-        }
-    }
-
-    auto task_holder = global_context->getSchedulePool().createTask("PersistentTask", [this]() { this->persistentFinishedTask(); });
-    persistent_task = std::make_unique<BackgroundSchedulePoolTaskHolder>(std::move(task_holder));
-    (*persistent_task)->activate();
-    (*persistent_task)->schedule();
+    persistent_task = global_context->getSchedulePool().createTask("PersistentTask", [this]() { this->persistentFinishedTask(); });
+    persistent_task->activate();
+    persistent_task->scheduleAfter(2000, false);
 }
 
 void TaskStatusService::preShutdown()
 {
     if (persistent_task)
-        (*persistent_task)->deactivate();
+        persistent_task->deactivate();
+}
+
+void TaskStatusService::createTaskTableIfNotExists()
+{
+    if (!tableExists())
+    {
+        for (int i = 0; i < RETRY_TIMES; ++i)
+        {
+            if (createTaskTable())
+                break;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_INTERVAL_MS));
+        }
+
+        if (!tableExists())
+            throw Exception("Failed to create system tasks table", ErrorCodes::UNKNOWN_EXCEPTION);
+    }
 }
 
 void TaskStatusService::persistentFinishedTask()
 {
+    try
+    {
+        doPersistentFinishedTask();
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "Persistent finished task failed: {}", e.message());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "Persistent finished task failed: ", getCurrentExceptionMessage(true, true));
+    }
+    persistent_task->scheduleAfter(RESCHEDULE_TIME_MS);
+}
+
+void TaskStatusService::doPersistentFinishedTask()
+{
+    createTaskTableIfNotExists();
+
     {
         std::unique_lock guard(indexes_lock);
         for (auto it = indexed_by_id.begin(); it != indexed_by_id.end();)
@@ -497,8 +521,6 @@ void TaskStatusService::persistentFinishedTask()
         persistentTaskStatuses(persistent_list);
         LOG_DEBUG(log, "Persistent {} finished tasks", persistent_list.size());
     }
-
-    (*persistent_task)->scheduleAfter(RESCHEDULE_TIME_MS);
 }
 
 bool TaskStatusService::createTaskTable()
@@ -520,11 +542,13 @@ bool TaskStatusService::createTaskTable()
                     `context` String, \
                     `created` Int64, \
                     `last_modified` Int64, \
-                    `_time` Datetime64(3) DEFAULT fromUnixTimestamp64Milli(created, 'UTC')) \
+                    `_tp_time` DateTime64(3, 'UTC') DEFAULT from_unix_timestamp64_milli(created, 'UTC'), \
+                    `_tp_index_time` DateTime64(3, 'UTC') \
+                     ) \
                     ENGINE = DistributedMergeTree(1,{},rand()) \
-                    ORDER BY (to_minute(_time), user, id) \
-                    PARTITION BY to_date(_time) \
-                    TTL to_datetime(_time + to_interval_day(7)) DELETE \
+                    ORDER BY (to_minute(_tp_time), user, id) \
+                    PARTITION BY to_date(_tp_time) \
+                    TTL to_datetime(_tp_time + to_interval_day(7)) DELETE \
                     SETTINGS index_granularity = 8192",
         replicas);
 
@@ -567,29 +591,31 @@ bool TaskStatusService::createTaskTable()
         "name" : "last_modified",
         "type" : "Int64"
         }],
-        "order_by_expression" : "(to_minute(_time), user, id)",
+        "order_by_expression" : "(to_minute(_tp_time), user, id)",
         "partition_by_granularity" : "D",
         "order_by_granularity": "H",
-        "ttl_expression" : "to_datetime(_time + to_interval_day(7)) DELETE",
-        "_time_column": "fromUnixTimestamp64Milli(created, 'UTC')"
+        "ttl_expression" : "to_datetime(_tp_time + to_interval_day(7)) DELETE",
+        "_time_column": "from_unix_timestamp64_milli(created, 'UTC')"
         }
     )d";
 
-    auto context = Context::createCopy(global_context);
-    context->setCurrentQueryId("");
-    context->setQueryParameter("_payload", query_payload);
-
-    /// FIXME, internal system credentials
-    /// auto user_id = global_context->getAccessControlManager().login(BasicCredentials{"system", ""}, SocketAddress{"127.0.0.1"});
-    /// FIXME, context->setUser() interface has been changed
-    /// context->setUser("system");
-    context->setDistributedDDLOperation(true);
-    CurrentThread::QueryScope query_scope{context};
+    auto query_context = Context::createCopy(global_context);
+    query_context->makeQueryContext();
+    query_context->setCurrentQueryId("");
+    query_context->setQueryParameter("_payload", query_payload);
+    query_context->setUserByName("system");
+    query_context->setDistributedDDLOperation(true);
+    /// CurrentThread::QueryScope query_scope{query_context};
 
     try
     {
         executeNonInsertQuery(
-            query, context, [](Block &&) {}, true);
+            query, query_context, [](Block &&) {}, true);
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "Create task table failed: {}", e.message());
+        return false;
     }
     catch (...)
     {

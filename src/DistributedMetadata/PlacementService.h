@@ -47,7 +47,7 @@ private:
     NodeMetricsContainer nodes_metrics;
 
     PlacementStrategyPtr strategy;
-    std::unique_ptr<BackgroundSchedulePoolTaskHolder> broadcast_task;
+    BackgroundSchedulePoolTaskHolder broadcast_task;
 
     size_t reschedule_interval;
 };

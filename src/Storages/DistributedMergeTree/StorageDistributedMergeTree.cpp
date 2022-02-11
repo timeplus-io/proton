@@ -209,6 +209,15 @@ namespace
 
         return buf.str();
     }
+
+    String mapTopic(const StorageID & table_id)
+    {
+        if (table_id.getDatabaseName() == "system" && table_id.getTableName() == "tasks")
+            /// FIXME, fetch this from TaskStatusService
+            return "__system_tasks";
+
+        return DWAL::escapeDWALName(table_id.getDatabaseName(), table_id.getTableName());
+    }
 }
 
 StorageDistributedMergeTree::StorageDistributedMergeTree(
@@ -236,7 +245,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
-    , topic(DWAL::escapeDWALName(table_id_.getDatabaseName(), table_id_.getTableName()))
+    , topic(mapTopic(table_id_))
     , dwal_append_ctx(topic, shards_, replication_factor_)
     , dwal_consume_ctx(topic, shards_, replication_factor_)
     , ingesting_blocks(120)
@@ -1401,8 +1410,7 @@ DWAL::RecordSN StorageDistributedMergeTree::snLoaded() const
 void StorageDistributedMergeTree::backgroundPoll()
 {
     /// Sleep a while to let librdkafka to populate topic / partition metadata
-    /// std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    std::this_thread::sleep_for(std::chrono::milliseconds(20000000001));
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     setThreadName("DistMergeTree");
 

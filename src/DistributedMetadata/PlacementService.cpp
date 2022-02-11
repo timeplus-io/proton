@@ -124,7 +124,7 @@ std::vector<NodeMetricsPtr> PlacementService::nodes() const
 void PlacementService::preShutdown()
 {
     if (broadcast_task)
-        (*broadcast_task)->deactivate();
+        broadcast_task->deactivate();
 }
 
 void PlacementService::processRecords(const DWAL::RecordPtrs & records)
@@ -132,7 +132,9 @@ void PlacementService::processRecords(const DWAL::RecordPtrs & records)
     /// Node metrics schema: node, disk_free
     for (const auto & record : records)
     {
+        assert(!record->hasSchema());
         assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
+
         if (!record->hasIdempotentKey())
         {
             LOG_ERROR(log, "Invalid metric record, missing idempotent key");
@@ -204,10 +206,9 @@ void PlacementService::scheduleBroadcast()
     }
 
     /// Schedule the broadcast task
-    auto task_holder = global_context->getSchedulePool().createTask("PlacementBroadcast", [this]() { this->broadcast(); });
-    broadcast_task = std::make_unique<BackgroundSchedulePoolTaskHolder>(std::move(task_holder));
-    (*broadcast_task)->activate();
-    (*broadcast_task)->schedule();
+    broadcast_task = global_context->getSchedulePool().createTask("PlacementBroadcast", [this]() { this->broadcast(); });
+    broadcast_task->activate();
+    broadcast_task->schedule();
 }
 
 void PlacementService::broadcast()
@@ -220,7 +221,8 @@ void PlacementService::broadcast()
     {
         LOG_ERROR(log, "Failed to broadcast node metrics, error={}", getCurrentExceptionMessage(true, true));
     }
-    (*broadcast_task)->scheduleAfter(reschedule_interval);
+
+    broadcast_task->scheduleAfter(reschedule_interval);
 }
 
 void PlacementService::doBroadcast()
@@ -254,7 +256,6 @@ void PlacementService::doBroadcast()
 
     const String table_count_query = "SELECT count(*) as table_counts FROM system.tables WHERE database != 'system'";
 
-    /// FIXME, QueryScope
     auto context = Context::createCopy(global_context);
     context->makeQueryContext();
     executeNonInsertQuery(table_count_query, context, [&record](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
@@ -264,7 +265,7 @@ void PlacementService::doBroadcast()
 
     record.headers["_broadcast_time"] = std::to_string(UTCMilliseconds::now());
 
-    const auto & result = dwal->append(record, dwal_append_ctx);
+    const auto & result = appendRecord(record);
     if (result.err != ErrorCodes::OK)
     {
         /// FIXME: Error handling

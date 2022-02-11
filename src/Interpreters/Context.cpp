@@ -127,6 +127,7 @@ namespace ErrorCodes
     /// proton: starts
     extern const int ACCESS_DENIED;
     extern const int INVALID_POLL_ID;
+    extern const int UNKNOWN_USER;
     /// proton: ends
 }
 
@@ -712,6 +713,14 @@ String Context::getPasswordByUserName(const String & user_name) const
             return user->auth_data.getPassword();
 
     return "";
+}
+
+void Context::setUserByName(const String & user_name)
+{
+    if (auto id = getAccessControl().find<User>(user_name))
+        setUser(*id);
+    else
+        throw Exception(ErrorCodes::UNKNOWN_USER, "User {} doesn't exist", user_name);
 }
 /// proton: ends
 

@@ -5,7 +5,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int ILLEGAL_COLUMN;
@@ -41,8 +40,7 @@ void DistributedMergeTreeColumnValidateMatcher::visit(ASTColumnDeclaration & col
         if (data.is_distributed_merge_tree && (!func || func->name.compare("DateTime64")))
         {
             throw Exception(
-                "The type of " + RESERVED_EVENT_TIME + " column must be DateTime64 in DistributedMergeTree Engine",
-                ErrorCodes::ILLEGAL_COLUMN);
+                ErrorCodes::ILLEGAL_COLUMN, "The type of {} column must be DateTime64, but got {}", RESERVED_EVENT_TIME, func->name);
         }
         else
         {
