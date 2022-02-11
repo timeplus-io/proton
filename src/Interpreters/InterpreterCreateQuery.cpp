@@ -891,6 +891,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     {
         /// it comes from TCPHandler, therefore update column definitions if required
         prepareCreateQueryForDistributedMergeTree(create);
+        prepareEngineSettings(create, ctx);
 
         /// Build json payload here from SQL statement
         payload = getJSONFromCreateQuery(create);

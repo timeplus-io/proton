@@ -156,6 +156,7 @@ struct Settings;
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of DistributedMergeTree table. Default is '_tp_time'.", 0)                                     \
     M(Int64, shard, -1, "Current shard number", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
+    M(String, storage_type, "hybrid", "DistributedMergeTree can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
     M(String, streaming_storage, "kafka", "Backend streaming storage for write ahead log implementation", 0) \
     M(String, streaming_storage_cluster_id, "", "Backend streaming storage cluster id", 0) \
     M(String, streaming_storage_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \

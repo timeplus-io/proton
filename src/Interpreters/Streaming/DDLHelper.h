@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DistributedMetadata/CatalogService.h>
-
+#include <DistributedWALClient/Record.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -11,7 +11,11 @@
 
 namespace DB
 {
+void getAndValidateStorageSetting(
+    std::function<String(const String &)> get_setting, std::function<void(const String &, const String &)> handle_setting);
 void prepareEngine(ASTCreateQuery & create);
+/// prepare engine settings for REST API call
+void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx);
 void prepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
 void prepareCreateQueryForDistributedMergeTree(ASTCreateQuery & create);

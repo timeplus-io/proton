@@ -1,15 +1,17 @@
 #include "DDLHelper.h"
 
-#include <Common/ProtonCommon.h>
 #include "ASTToJSONUtils.h"
 
+#include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
+#include <Common/ProtonCommon.h>
 
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -21,6 +23,65 @@ namespace ErrorCodes
     extern const int TABLE_ALREADY_EXISTS;
     extern const int BAD_ARGUMENTS;
     extern const int ILLEGAL_COLUMN;
+    extern const int INVALID_SETTING_VALUE;
+}
+
+namespace
+{
+    const std::vector<String> CREATE_TABLE_SETTINGS = {
+        "streaming_storage_cluster_id",
+        "streaming_storage_subscription_mode",
+        "streaming_storage_auto_offset_reset",
+        "streaming_storage_request_required_acks",
+        "streaming_storage_request_timeout_ms",
+        "streaming_storage_retention_bytes",
+        "streaming_storage_retention_ms",
+        "streaming_storage_flush_messages",
+        "streaming_storage_flush_ms",
+        "distributed_ingest_mode",
+        "distributed_flush_threshold_ms",
+        "distributed_flush_threshold_count",
+        "distributed_flush_threshold_bytes",
+        "storage_type",
+        "streaming_storage",
+    };
+}
+
+void getAndValidateStorageSetting(
+    std::function<String(const String &)> get_setting, std::function<void(const String &, const String &)> handle_setting)
+{
+    for (const auto & key : CREATE_TABLE_SETTINGS)
+    {
+        const auto & value = get_setting(key);
+        if (value.empty())
+            continue;
+
+        if (key == "streaming_storage_subscription_mode")
+        {
+            if (value != "shared" && value != "dedicated")
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE, "streaming_storage_subscription_mode only supports 'shared' or 'dedicated'");
+        }
+        else if (key == "streaming_storage_auto_offset_reset")
+        {
+            if (value != "earliest" && value != "latest")
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE, "streaming_storage_auto_offset_reset only supports 'earliest' or 'latest'");
+        }
+        else if (key == "distributed_ingest_mode")
+        {
+            if (value != "async" && value != "sync" && value != "fire_and_forget" && value != "ordered")
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE,
+                    "distributed_ingest_mode only supports 'async' or 'sync' or 'fire_and_forget' or 'ordered'");
+        }
+        else if (key == "storage_type")
+        {
+            if (value != "hybrid" && value != "streaming")
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "storage_type only supports 'hybrid' or 'streaming'");
+        }
+        handle_setting(key, value);
+    }
 }
 
 ASTPtr functionToAST(const String & query)
@@ -54,6 +115,28 @@ void prepareEngine(ASTCreateQuery & create)
     auto engine = makeASTFunction(
         "DistributedMergeTree", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
     create.storage->set(create.storage->engine, engine);
+}
+
+void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
+{
+    Poco::URI uri;
+
+    getAndValidateStorageSetting(
+        [&](const String & key) {
+            if (!create.storage || !create.storage->settings)
+                return String();
+
+            Field field_value("");
+            create.storage->settings->changes.tryGet(key, field_value);
+
+            String value;
+            field_value.tryGet<String>(value);
+            return value;
+        },
+        [&](const String & key, const String & value) { uri.addQueryParameter(key, value); });
+
+    /// Compose URL params for key values
+    ctx->setQueryParameter("url_parameters", uri.getRawQuery());
 }
 
 void prepareColumns(ASTCreateQuery & create)

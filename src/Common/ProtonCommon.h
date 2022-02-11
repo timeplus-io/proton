@@ -30,4 +30,6 @@ const String DEFAULT_EVENT_TIME = "now64(3, 'UTC')";
 const UInt64 DEFAULT_SHARDS = 1;
 const UInt64 DEFAULT_REPLICAS = 1;
 const String DEFAULT_SHARDING_EXPR = "rand()";
+const String DEFAULT_STORAGE_TYPE = "hybrid";
+const String STORAGE_TYPE_STREAMING = "streaming";
 }

@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
+#include <Interpreters/Streaming/DDLHelper.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
@@ -25,22 +26,6 @@ namespace ErrorCodes
 
 namespace
 {
-    const std::vector<String> CREATE_TABLE_SETTINGS = {
-        "streaming_storage_cluster_id",
-        "streaming_storage_subscription_mode",
-        "streaming_storage_auto_offset_reset",
-        "streaming_storage_request_required_acks",
-        "streaming_storage_request_timeout_ms",
-        "streaming_storage_retention_bytes",
-        "streaming_storage_retention_ms",
-        "streaming_storage_flush_messages",
-        "streaming_storage_flush_ms",
-        "distributed_ingest_mode",
-        "distributed_flush_threshold_ms",
-        "distributed_flush_threshold_count",
-        "distributed_flush_threshold_bytes",
-    };
-
     enum class DeleteMode
     {
         TRUNCATE,
@@ -307,59 +292,19 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
         create_segments.push_back(", shard=" + shard);
     }
 
-    for (const auto & key : CREATE_TABLE_SETTINGS)
-    {
-        if (hasQueryParameter(key))
-        {
-            auto result = getAndValidateStorageSetting(key);
-            if (result.empty())
-            {
-                return "";
-            }
-            create_segments.push_back(", " + result);
-        }
-    }
+    getAndValidateStorageSetting(
+        [this](const auto & key) -> String {
+            if (hasQueryParameter(key))
+                return getQueryParameter(key);
+
+            return "";
+        },
+        [&](const auto & key, const auto & value) {
+            if (key != "subtype")
+                create_segments.push_back(fmt::format(", {}='{}'", key, value));
+        });
 
     return boost::algorithm::join(create_segments, " ");
 }
 
-String TableRestRouterHandler::getAndValidateStorageSetting(const String & key) const
-{
-    const auto & value = getQueryParameter(key);
-
-    if (value.empty())
-    {
-        return value;
-    }
-
-    if (key == "streaming_storage_subscription_mode")
-    {
-        if (value != "shared" && value != "dedicated")
-        {
-            return "";
-        }
-
-        return fmt::format("{}='{}'", key, value);
-    }
-    else if (key == "streaming_storage_auto_offset_reset")
-    {
-        if (value != "earliest" && value != "latest")
-        {
-            return "";
-        }
-        return fmt::format("{}='{}'", key, value);
-    }
-    else if (key == "distributed_ingest_mode")
-    {
-        if (value != "async" && value != "sync" && value != "fire_and_forget" && value != "ordered")
-        {
-            return "";
-        }
-        return fmt::format("{}='{}'", key, value);
-    }
-    else
-    {
-        return fmt::format("{}={}", key, value);
-    }
-}
 }

@@ -451,17 +451,25 @@ void StorageDistributedMergeTree::startup()
         LOG_INFO(log, "Starting");
         storage->startup();
 
-        if (storage_settings.get()->streaming_storage_subscription_mode.value == "shared")
+        if (storage_settings.get()->storage_type.value == "hybrid")
         {
-            /// Shared mode, register callback
-            addSubscription();
+            if (storage_settings.get()->streaming_storage_subscription_mode.value == "shared")
+            {
+                /// Shared mode, register callback
+                addSubscription();
+                LOG_INFO(log, "Tailing streaming store in shared subscription mode");
+            }
+            else
+            {
+                /// Dedicated mode has dedicated poll thread
+                poller.emplace(1);
+                poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
+                LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
+            }
         }
         else
-        {
-            /// Dedicated mode has dedicated poll thread
-            poller.emplace(1);
-            poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
-        }
+            LOG_INFO(log, "Pure streaming storage mode, skip indexing data to historical store");
+
         LOG_INFO(log, "Started");
     }
 }
