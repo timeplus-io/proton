@@ -334,7 +334,7 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String
     /// FIXME: Remove DISTINCT when we resolve the checkpointing issue
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                                       "reason, user, context, created, last_modified "
-                                      "FROM system.tasks "
+                                      "FROM hist(system.tasks) "
                                       "WHERE user <> '' AND id == '{}' "
                                       "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, id);
@@ -396,7 +396,7 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
     CurrentThread::detachQueryIfNotDetached();
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                                       "reason, user, context, created, last_modified "
-                                      "FROM system.tasks "
+                                      "FROM hist(system.tasks) "
                                       "WHERE user == '{}' "
                                       "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, user);
