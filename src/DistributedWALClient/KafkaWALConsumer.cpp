@@ -2,8 +2,8 @@
 #include "KafkaWALCommon.h"
 
 #include <base/ClockUtils.h>
-#include <Common/Exception.h>
 #include <base/logger_useful.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -28,7 +28,7 @@ KafkaWALConsumer::KafkaWALConsumer(std::unique_ptr<KafkaWALSettings> settings_)
     : settings(std::move(settings_))
     , consumer_handle(nullptr, rd_kafka_destroy)
     , log(&Poco::Logger::get("KafkaWALConsumer"))
-    , stats(std::make_unique<KafkaWALStats>(log, "consumer"))
+    , stats(std::make_unique<KafkaWALStats>("consumer", log))
 {
 }
 
@@ -96,7 +96,7 @@ void KafkaWALConsumer::initHandle()
         /// ensuring no on-the-wire or on-disk corruption to the messages occurred
         std::make_pair("check.crcs", std::to_string(settings->check_crcs)),
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
-        std::make_pair("security.protocol", settings->security_protocol.c_str()), 
+        std::make_pair("security.protocol", settings->security_protocol.c_str()),
     };
 
     if (!settings->debug.empty())
@@ -170,7 +170,7 @@ int32_t KafkaWALConsumer::removeSubscriptions(const TopicPartitionOffsets & part
     return DB::ErrorCodes::OK;
 }
 
-ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms, std::function<RecordPtr(rd_kafka_message_t*)> deserialize)
+ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms, std::function<RecordPtr(rd_kafka_message_t *)> deserialize)
 {
     ConsumeResult result;
     if (count > 100)

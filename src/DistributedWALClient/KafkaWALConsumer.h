@@ -51,6 +51,7 @@ public:
 
 private:
     void initHandle();
+    void handleError(int err);
 
 private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);

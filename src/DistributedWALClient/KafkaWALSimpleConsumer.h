@@ -60,6 +60,7 @@ private:
     void initHandle();
 
     int32_t startConsumingIfNotYet(const KafkaWALContext & ctx) const;
+    void checkLastError(const KafkaWALContext & ctx) const;
 
 private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);

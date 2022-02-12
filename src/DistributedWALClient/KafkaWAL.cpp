@@ -207,7 +207,7 @@ KafkaWAL::KafkaWAL(std::unique_ptr<KafkaWALSettings> settings_)
     , consumer(std::make_unique<KafkaWALSimpleConsumer>(settings->clone()))
     , poller(1)
     , log(&Poco::Logger::get("KafkaWAL"))
-    , stats{std::make_unique<KafkaWALStats>(log, "producer")}
+    , stats{std::make_unique<KafkaWALStats>("producer", log)}
 {
 }
 

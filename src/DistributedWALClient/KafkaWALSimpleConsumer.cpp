@@ -11,6 +11,8 @@ namespace ErrorCodes
 {
     extern const int OK;
     extern const int RESOURCE_NOT_INITED;
+    extern const int RESOURCE_NOT_FOUND;
+    extern const int DWAL_FATAL_ERROR;
 }
 }
 
@@ -21,7 +23,7 @@ KafkaWALSimpleConsumer::KafkaWALSimpleConsumer(std::unique_ptr<KafkaWALSettings>
     , consumer_handle(nullptr, rd_kafka_destroy)
     , poller(1)
     , log(&Poco::Logger::get("KafkaWALSimpleConsumer"))
-    , stats{std::make_unique<KafkaWALStats>(log, "simple_consumer")}
+    , stats{std::make_unique<KafkaWALStats>("simple_consumer", log)}
 {
 }
 
@@ -145,6 +147,9 @@ inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALCont
 
     if (unlikely(!ctx.topic_consuming_started))
     {
+        /// Since SimpleConsumer can be reused by different topic / shard.
+        /// Clean the last error
+        stats->last_err = 0;
         int res = 0;
         if (ctx.enforce_offset)
         {
@@ -177,6 +182,25 @@ inline int32_t KafkaWALSimpleConsumer::startConsumingIfNotYet(const KafkaWALCont
     return DB::ErrorCodes::OK;
 }
 
+void KafkaWALSimpleConsumer::checkLastError(const KafkaWALContext & ctx) const
+{
+    int32_t last_err = stats->last_err;
+    switch (last_err)
+    {
+        case RD_KAFKA_RESP_ERR__UNKNOWN_PARTITION:
+        case RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART:
+        case RD_KAFKA_RESP_ERR__UNKNOWN_TOPIC:
+            LOG_ERROR(log, "topic={} partition={} doesn't exist", ctx.topic, ctx.partition);
+            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Underlying streaming topic doesn't exist");
+        case RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN:
+            LOG_ERROR(log, "Streaming store are gone");
+            throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store is gone");
+        case RD_KAFKA_RESP_ERR__FATAL:
+            LOG_ERROR(log, "Streaming store has fatal error");
+            throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store has fatal error");
+    }
+}
+
 int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
@@ -186,6 +210,8 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
     {
         return err;
     }
+
+    checkLastError(ctx);
 
     struct WrappedData
     {
@@ -328,6 +354,8 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
     {
         return {.err = mapErrorCode(rd_kafka_last_error()), .records = {}};
     }
+
+    checkLastError(ctx);
 
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
         static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free};

@@ -7,7 +7,7 @@
 
 namespace Poco
 {
-    class Logger;
+class Logger;
 }
 
 struct rd_kafka_s;
@@ -27,7 +27,9 @@ struct KafkaWALStatsSnap
 
 struct KafkaWALStats
 {
-    explicit KafkaWALStats(Poco::Logger * log_, const std::string & type_) : log(log_), type(type_) { }
+    KafkaWALStats(const std::string & type_, Poco::Logger * log_) : type(type_), log(log_)
+    {
+    }
 
     std::string stats() const
     {
@@ -87,8 +89,10 @@ private:
     /// void logOffsetCommits(struct rd_kafka_s * rk, rd_kafka_resp_err_t err, struct rd_kafka_topic_partition_list_s * offsets);
 
 public:
-    Poco::Logger * log;
+    std::atomic_int32_t last_err = 0;
+
     std::string type;
+    Poco::Logger * log;
 
     std::atomic_uint64_t received = 0;
     std::atomic_uint64_t dropped = 0;

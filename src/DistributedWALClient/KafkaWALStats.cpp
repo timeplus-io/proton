@@ -30,6 +30,8 @@ void KafkaWALStats::logErr(struct rd_kafka_s * rk, int err, const char * reason)
     {
         LOG_WARNING(log, "Error occurred, error={}, reason={}", rd_kafka_err2str(static_cast<rd_kafka_resp_err_t>(err)), reason);
     }
+
+    last_err = err;
 }
 
 void KafkaWALStats::logThrottle(struct rd_kafka_s * /* rk */, const char * broker_name, int32_t broker_id, int throttle_time_ms)
