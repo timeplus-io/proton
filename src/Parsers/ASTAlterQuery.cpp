@@ -563,6 +563,11 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
         case AlterObjectType::TABLE:
             settings.ostr << "ALTER TABLE ";
             break;
+        /// proton: starts
+        case AlterObjectType::STREAM:
+            settings.ostr << "ALTER STREAM ";
+            break;
+        /// proton: ends
         case AlterObjectType::DATABASE:
             settings.ostr << "ALTER DATABASE ";
             break;

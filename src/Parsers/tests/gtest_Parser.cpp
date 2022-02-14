@@ -5,6 +5,9 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
+/// proton: starts
+#include <Parsers/ParserDropQuery.h>
+/// proton: ends
 #include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/formatAST.h>
@@ -226,3 +229,59 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateDatabaseQuery, ParserTest,
             "CREATE DATABASE db\nENGINE = Foo\nSETTINGS a = 1, b = 2\nTABLE OVERRIDE `a`\n(\n    ORDER BY (`id`, `version`)\n)\nCOMMENT 'db comment'"
         }
 })));
+
+/// proton: starts. CREATE STREAM test cases
+INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery, ParserTest,
+                         ::testing::Combine(
+                             ::testing::Values(std::make_shared<ParserCreateQuery>()),
+                             ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+                                 {
+                                     "CREATE STREAM tests (`device` String)",
+                                     "CREATE STREAM tests\n(\n    `device` String\n)"
+                                 }
+                             })));
+/// proton: ends
+
+/// proton: starts. ALTER STREAM test cases
+INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
+                         ::testing::Combine(
+                             ::testing::Values(std::make_shared<ParserAlterQuery>()),
+                             ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+                                 {
+                                     "ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY",
+                                     "ALTER STREAM tests\n    MODIFY TTL ttl + 1d"
+                                 },
+                                 {
+                                     "ALTER stream tests MODIFY COLUMN id UInt64 DEFAULT 64",
+                                     "ALTER STREAM tests\n    MODIFY COLUMN `id` UInt64 DEFAULT 64"
+                                 },
+                                 {
+                                     "ALTER STREAM tests RENAME COLUMN id to id1",
+                                     "ALTER STREAM tests\n    RENAME COLUMN id TO id1"
+                                 },
+                                 {
+                                     "ALTER STREAM tests DROP COLUMN id1",
+                                     "ALTER STREAM tests\n    DROP COLUMN id1"
+                                 }
+                             })));
+/// proton: ends
+
+/// proton: starts. DROP STREAM test cases
+INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
+                         ::testing::Combine(
+                             ::testing::Values(std::make_shared<ParserDropQuery>()),
+                             ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+                                 {
+                                     "DROP STREAM tests",
+                                     "DROP STREAM tests"
+                                 },
+                                 {
+                                     "TRUNCATE STREAM tests",
+                                     "TRUNCATE STREAM tests"
+                                 },
+                                 {
+                                     "TRUNCATE tests",
+                                     "TRUNCATE TABLE tests"
+                                 }
+                             })));
+/// proton: ends

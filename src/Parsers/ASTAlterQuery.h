@@ -220,6 +220,9 @@ public:
     enum class AlterObjectType
     {
         TABLE,
+        /// proton: starts
+        STREAM,
+        /// proton: ends
         DATABASE,
         LIVE_VIEW,
         UNKNOWN,

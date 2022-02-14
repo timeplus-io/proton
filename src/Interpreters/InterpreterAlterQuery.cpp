@@ -87,7 +87,11 @@ BlockIO InterpreterAlterQuery::execute()
         return executeToDatabase(alter);
     }
     else if (alter.alter_object == ASTAlterQuery::AlterObjectType::TABLE
-            || alter.alter_object == ASTAlterQuery::AlterObjectType::LIVE_VIEW)
+            || alter.alter_object == ASTAlterQuery::AlterObjectType::LIVE_VIEW
+    /// proton: starts
+            || alter.alter_object == ASTAlterQuery::AlterObjectType::STREAM
+    /// proton: ends
+             )
     {
         return executeToTable(alter);
     }

@@ -67,6 +67,7 @@ public:
     bool if_not_exists{false};
     bool is_ordinary_view{false};
     /// proton: starts.
+    bool is_stream{false};
     bool is_streaming_view{false};
     /// proton: ends.
     bool replace_view{false}; /// CREATE OR REPLACE VIEW

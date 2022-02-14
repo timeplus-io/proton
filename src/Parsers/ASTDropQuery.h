@@ -31,6 +31,10 @@ public:
     /// Same as above
     bool is_view{false};
 
+    /// proton: starts. To print word 'STREAM'
+    bool is_stream{false};
+    /// proton: ends
+
     bool no_delay{false};
 
     // We detach the object permanently, so it will not be reattached back during server restart.

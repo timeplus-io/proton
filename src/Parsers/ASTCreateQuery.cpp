@@ -273,6 +273,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         if (is_ordinary_view)
             what = "VIEW";
         /// proton: starts.
+        else if (is_stream)
+            what = "STREAM";
         else if (is_streaming_view)
             what = "STREAMING VIEW";
         /// proton: ends.

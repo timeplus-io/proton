@@ -154,6 +154,9 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         }
         default:
             break;
+        /// proton: starts
+        case ASTAlterQuery::AlterObjectType::STREAM:
+        /// proton: ends
         case ASTAlterQuery::AlterObjectType::TABLE:
         {
             if (s_add_column.ignore(pos, expected))
@@ -848,14 +851,23 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserKeyword s_alter_table("ALTER TABLE");
     ParserKeyword s_alter_live_view("ALTER LIVE VIEW");
+    /// proton: starts
+    ParserKeyword s_alter_stream("ALTER STREAM");
+    /// proton: ends
     ParserKeyword s_alter_database("ALTER DATABASE");
 
     ASTAlterQuery::AlterObjectType alter_object_type;
-
     if (s_alter_table.ignore(pos, expected))
+    /// proton: ends
     {
         alter_object_type = ASTAlterQuery::AlterObjectType::TABLE;
     }
+    /// proton: starts
+    else if (s_alter_stream.ignore(pos, expected))
+    {
+        alter_object_type = ASTAlterQuery::AlterObjectType::STREAM;
+    }
+    /// proton: ends
     else if (s_alter_live_view.ignore(pos, expected))
     {
         alter_object_type = ASTAlterQuery::AlterObjectType::LIVE_VIEW;
