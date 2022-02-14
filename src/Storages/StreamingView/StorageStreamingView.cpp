@@ -334,7 +334,7 @@ void StorageStreamingView::read(
     /// 1) read newest streaming data in target table.      [streaming query from target table]
     ///     e.g. "select * from streaming_view;" <=> "select * from target_table" (streaming)
     /// 2) read newest data snapshot in memory              [historical query from memory table]
-    ///     e.g. "select * from hist(streaming_view);" <=> "select * from memory_table" (historical)
+    ///     e.g. "select * from table(streaming_view);" <=> "select * from memory_table" (historical)
 
     /// In some cases, the view background thread has exception, we check it before users access this view
     checkValid();

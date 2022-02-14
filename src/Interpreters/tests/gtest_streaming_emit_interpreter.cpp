@@ -193,10 +193,10 @@ TEST_F(StreamingEmitInterpreterTest, LastXRuleGlobalAggr)
     EXPECT_EQ(
         checkLastXRule(
             /* lastX query */
-            "SELECT device, avg(temperature) FROM hist(default.devices) group by device emit stream PERIODIC interval 5 second "
+            "SELECT device, avg(temperature) FROM table(default.devices) group by device emit stream PERIODIC interval 5 second "
             "AND LAST 1m",
             /* check query */
-            "SELECT device, avg(temperature) FROM hop(hist(default.devices), now(), interval 5 second, interval 60 second) group by device, "
+            "SELECT device, avg(temperature) FROM hop(table(default.devices), now(), interval 5 second, interval 60 second) group by device, "
             "window_end emit stream settings seek_to='-60s'"),
         true)
         << "Last-X Global Aggregation for table_function";

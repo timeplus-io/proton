@@ -83,7 +83,7 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
     }
     else if (auto * table_func = arg->as<ASTFunction>())
     {
-        /// tumble(hist(devices), ...)
+        /// tumble(table(devices), ...)
         auto query_context = context->getQueryContext();
         const auto & function_storage = query_context->executeTableFunction(arg);
         if (auto * streaming_storage = function_storage->as<ProxyDistributedMergeTree>())

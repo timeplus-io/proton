@@ -111,7 +111,7 @@
                 {
                     "name": "test_join_v",
                     "type": "view",
-                    "sql_2_run": "create view if not exists test_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time, _tp_index_time from test as a join hist(test_d) as b on a.id =b.id"
+                    "sql_2_run": "create view if not exists test_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time, _tp_index_time from test as a join table(test_d) as b on a.id =b.id"
                 }
 
         ],
@@ -129,7 +129,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "bug", "to_support"]} 
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "bug", "to_support"]}
     },
 
     "tests": [
@@ -157,7 +157,7 @@
 
                 {"statements": [
                     {"client":"python", "wait": 4, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '101'"},
-                    {"client":"python", "query_type": "hist", "query_end_timer": 5, "query":"select id, max(value) from hist(test) group by id, location"}
+                    {"client":"python", "query_type": "hist", "query_end_timer": 5, "query":"select id, max(value) from table(test) group by id, location"}
                 ]
                 }
 
@@ -744,7 +744,7 @@
             "description": "stream tail join hist",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":0, "query":"select a.id, b.type, a.value from test as a join hist(test_d) as b on a.id = b.id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":0, "query":"select a.id, b.type, a.value from test as a join table(test_d) as b on a.id = b.id"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -786,7 +786,7 @@
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "hist", "query":"select a.id, b.type, a.value from hist(test) as a join hist(test_d) as b on a.id = b.id where a.value < 70"}]}
+                    {"client":"python","query_id":"101", "query_type": "hist", "query":"select a.id, b.type, a.value from table(test) as a join table(test_d) as b on a.id = b.id where a.value < 70"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["dev1", "roof", 57.3],
@@ -814,7 +814,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 { "statements": [
-                    {"client":"python","query_id":"101", "query_type": "hist", "query_end_timer":5, "query":"select a.id, b.type, max(value) from hist(test) as a join hist(test_d) as b on a.id = b.id group by a.id, b.type"}]}
+                    {"client":"python","query_id":"101", "query_type": "hist", "query_end_timer":5, "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id group by a.id, b.type"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["dev1", "roof", 66],
@@ -847,7 +847,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "hist", "query_end_timer":5, "query":"select a.id, b.type, max(value) from hist(test) as a join hist(test_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
+                    {"client":"python","query_id":"101", "query_type": "hist", "query_end_timer":5, "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
             ],
 
             "expected_results": [{"query_id":"101","expected_results":
@@ -863,7 +863,7 @@
             "description": "global stream aggregation join hist",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join hist(test_d) as b on a.id = b.id group by a.id, b.type emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -896,7 +896,7 @@
             "description": "global stream aggregation join hist w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -926,7 +926,7 @@
             "description": "stream stream aggregation join",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join hist(test_d) as b on a.id = b.id group by a.id, b.type, window_start, window_end"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join table(test_d) as b on a.id = b.id group by a.id, b.type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -961,7 +961,7 @@
             "description": "stream stream aggregation join hist w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -1279,7 +1279,7 @@
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "hist", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from hist(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
+                    {"client":"python","query_id":"101", "query_type": "hist", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
             ],            
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1311,7 +1311,7 @@
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 2, "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from hist(test)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
+                    {"client":"python", "wait": 2, "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
             ],                   
      
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1332,7 +1332,7 @@
             "description": "tumble count based on tumble join hist subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1363,7 +1363,7 @@
             "description": "hop count based on tumble join hist subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
                 { "inputs": [
                     {"table_name":"test", "depends_on":"101","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1395,7 +1395,7 @@
             "description": "tumble count based on hop join hist subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 3 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 3 second) group by id, window_start, window_end"}]},
                 { "inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1426,7 +1426,7 @@
             "description": "hop count based on hopping sum subquery",
             "steps":[
                 { "statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1455,7 +1455,7 @@
             "description": "global count based on tail join hist subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1486,7 +1486,7 @@
             "description": "tumble count based on tail join hist subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1516,7 +1516,7 @@
             "description": "hop count based on tail join hist subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join hist(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from hop(joined_stream,timestamp, 2s, 5s) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from hop(joined_stream,timestamp, 2s, 5s) group by id, window_start, window_end"}]},
                 { "inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1752,7 +1752,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "hist", "wait": 5, "query_end_timer":1, "query":"select id, sum_value from hist(test_stream_sum_view)"},
+                    {"client":"python", "query_id":"101", "query_type": "hist", "wait": 5, "query_end_timer":1, "query":"select id, sum_value from table(test_stream_sum_view)"},
                     {"client":"python", "wait": 6, "query_type": "hist", "query":"drop view if exists test_stream_sum_view"}
                 ]
                 }                
@@ -1847,7 +1847,7 @@
             "id": 64,
             "tags": ["materilized view", "tumble window"],
             "name": "hist tail from materilized view as 5s tumble window aggregation by sum and group by id, designate eventtime colume in tumble sql",
-            "description": "create materilized view as materilized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from hist(mv), designated timestamp as eventtime column in tumble sql",
+            "description": "create materilized view as materilized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from table(mv), designated timestamp as eventtime column in tumble sql",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "hist", "query":"create streaming view if not exists test_stream_tumble_v as select id, sum(value) as sum_value, window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"}
@@ -1867,7 +1867,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "query_id":"101", "wait": 5, "run_mode":"hist", "query_type": "batch", "query":"select id, sum_value from hist(test_stream_tumble_v)"},
+                    {"client":"python", "query_id":"101", "wait": 5, "run_mode":"hist", "query_type": "batch", "query":"select id, sum_value from table(test_stream_tumble_v)"},
                     {"client":"python",  "query_type": "hist", "wait": 2, "query":"drop view if exists test_stream_tumble_v"}
                     
                 ]

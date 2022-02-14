@@ -29,7 +29,7 @@ void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr conte
     if (func_ast->children.size() != 1)
         throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    /// hist(table_id)
+    /// table(table_id)
     auto * node = func_ast->as<ASTFunction>();
     ASTs & args = node->arguments->children;
     if (args.size() != 1)
@@ -65,6 +65,6 @@ DataTypePtr TableFunctionHist::getElementType(const DataTypeTuple * tuple) const
 
 void registerTableFunctionHist(TableFunctionFactory & factory)
 {
-    factory.registerFunction("hist", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHist>("hist"); });
+    factory.registerFunction("table", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHist>("table"); });
 }
 }
