@@ -105,7 +105,7 @@
             "input_info_table": "input_info",
             "steps":[
                 {"statements": [
-                    {"client":"python","config_set": "setting_mz", "query_id": 101, "run_mode":"process", "workers": 10, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from dim_user_info_table", "result_keep":"True", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
+                    {"client":"python","config_set": "setting_mz", "query_id": 101, "run_mode":"process", "workers": 2, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from dim_user_info_table", "result_keep":"True", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
                 ]}
 
             ]               

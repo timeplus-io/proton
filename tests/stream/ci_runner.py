@@ -67,7 +67,7 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
     report_file_name = f"report_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
     retcode = pytest.main(
-        ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
+        ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
     )
 
     with open(".status", "w") as status_result:

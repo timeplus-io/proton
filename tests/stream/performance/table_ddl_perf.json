@@ -1,0 +1,81 @@
+{
+    "commments":
+        "'Tests covering the steam query smoke cases.'",
+    "rest_setting": {
+        "table_ddl_url": "'http://localhost:8123/proton/v1/ddl/tables'",
+        "ingest_url": "'http://localhost:8123/proton/v1/ingest/tables'",
+        "query_url": "'http://localhost:8123/proton/v1/search'",
+        "health_check_url": "'http://localhost:8123/proton/ping'",
+        "info_url": "'http://localhost:8123/proton/info'",
+        "params": {
+            "headers": {
+                "Content-Type": "application/json"
+            }
+        }
+    },
+    "proton_server": "'localhost'",
+    "proton_server_native_port": "9000",
+    "table_schema":         {
+        "name": "test",
+        "type": "table",
+        "columns": [
+            {
+                "name": "id",
+                "type": "String"
+            },
+            {
+                "name": "location",
+                "type": "String"
+            },
+            {
+                "name": "value",
+                "type": "Float32"
+            },
+            {
+                "name": "json",
+                "type": "String"
+    
+            },
+            {
+                "name": "timestamp",
+                "type": "Datetime64(3)",
+                "default": "now64(3)"
+            }
+        ],
+        "event_time_column":"timestamp"
+    },
+    "table_schemas":[
+        {
+            "name": "test",
+            "type": "table",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "String"
+                },
+                {
+                    "name": "location",
+                    "type": "String"
+                },
+                {
+                    "name": "value",
+                    "type": "Float32"
+                },
+                {
+                    "name": "json",
+                    "type": "String"
+        
+                },
+                {
+                    "name": "timestamp",
+                    "type": "Datetime64(3)",
+                    "default": "now64(3)"
+                }
+            ],
+            "event_time_column":"timestamp"
+        }
+
+    ]             
+}
+
+

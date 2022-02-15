@@ -17,12 +17,16 @@ from clickhouse_driver import errors
 from requests.api import request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from helpers import rockets
+from helpers.rockets import env_setup
+from helpers.rockets import reset_tables_of_test_inputs
+
+
+logger = logging.getLogger(__name__)
 
 
 def input_batch_rest(input_url, input_batch, table_schema):
     # todo: complete the input by rest
-    logging.debug(f"input_batch_rest: input_batch = {input_batch}")
+    logger.debug(f"input_batch_rest: input_batch = {input_batch}")
     input_batch_record = {}
     table_name = table_schema.get("name")
     input_rest_columns = []
@@ -30,10 +34,10 @@ def input_batch_rest(input_url, input_batch, table_schema):
     input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
     for element in table_schema.get("columns"):
         input_rest_columns.append(element.get("name"))
-    logging.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
+    logger.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
     input_batch_data = input_batch.get("data")
     for row in input_batch_data:
-        logging.debug(f"input_batch_rest: row_data = {row}")
+        logger.debug(f"input_batch_rest: row_data = {row}")
         input_rest_body_data.append(
             row
         )  # get data from inputs batch dict as rest ingest body.
@@ -71,16 +75,19 @@ def input_walk_through_rest(
 
     for batch in inputs:
         table_name = batch.get("table_name")
+        wait = batch.get("wait")
+        if wait != None:
+            time.sleep(wait)
         table_schema = find_schema(table_name, table_schemas)
         if table_schema != None:
             batch_sleep_before_input = batch.get("sleep")
             if batch_sleep_before_input != None:
                 time.sleep(int(batch_sleep_before_input))
-            logging.debug(f"input_walk_through_rest: table_schema = {table_schema}")
+            logger.debug(f"input_walk_through_rest: table_schema = {table_schema}")
             input_batch_record = input_batch_rest(input_url, batch, table_schema)
             inputs_record.append(input_batch_record)
         else:
-            logging.debug(
+            logger.debug(
                 f"input_walk_through_rest: table_schema of table name {table_schema} not founded in table schemas {table_schemas}"
             )
         # time.sleep(0.5)
@@ -88,7 +95,7 @@ def input_walk_through_rest(
     return inputs_record
 
 
-def input_walk(test_id_run, config_file, tests_file):
+def input_walk(test_id_run, config_file, tests_file, setup = False):
     input_results = []
     with open(config_file) as f:
         config = json.load(f)
@@ -104,16 +111,20 @@ def input_walk(test_id_run, config_file, tests_file):
     tests = test_suite.get("tests")
     tests_2_run = test_suite_config.get("tests_2_run")
     test_run_list = []
-    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
-    logging.info(f"rockets_run: proton_ci_mode = {proton_ci_mode}")
+    #proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    #logging.info(f"rockets_run: proton_ci_mode = {proton_ci_mode}")
     client = Client(host=proton_server, port=proton_server_native_port)
+    if setup:
+        env_setup(
+            client, rest_setting, test_suite_config
+        )
 
     for test in tests:
         test_id = str(test.get("id"))
         if test_id == str(test_id_run):
-            logging.debug(f"input_walk: test_id = {test_id} ...... test = {test}...... test_id_run = {test_id_run}")
+            logger.debug(f"input_walk: test_id = {test_id} ...... test = {test}...... test_id_run = {test_id_run}")
             steps = test.get("steps")
-            logging.debug(f"input_walk: steps = {steps}")
+            logger.debug(f"input_walk: steps = {steps}")
             for step in steps:
                 print(f"input_walk: step = {step}")
                 if "inputs" in step:
@@ -131,29 +142,33 @@ if __name__ == "__main__":
     cur_file_path = os.path.dirname(os.path.abspath(__file__))
     cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
-    logging_config_file = f"{cur_file_path}/logging.conf"
-    if os.path.exists(logging_config_file):
-        logging.basicConfig(
-            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
-        )  # todo: add log stuff
-        logging.config.fileConfig(logging_config_file)  # need logging.conf
-        logger = logging.getLogger("rockets")
-    else:
-        print("no logging.conf exists under ../helper, no logging.")
 
-    logging.info("rockets_main starts......")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"  
+    )
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.INFO)
 
+    logger.info("input_walk starts......")
+
+    test_suite_path = "." #default ./
+    setup = False
     argv = sys.argv[1:]
     try:
-        opts, args = getopt.getopt(argv, "i:")
-        for opt, arg in opts:
-            if opt in ["-i"]:
-                test_id_run = int(arg)
+        opts, args = getopt.getopt(argv, 'i:d:', ["setup"])
+        for name, value in opts:
+            if name in ["-i"]:
+                test_id_run = int(value)
+            if name in ["-d"]:
+                test_suite_path = value
+            if name in ["--setup"]:
+                setup = True
     except:
         print("Error")
 
-    test_suite_path = "."
     config_file = f"{test_suite_path}/configs/config.json"
     tests_file = f"{test_suite_path}/tests.json"
 
-    input_walk(test_id_run, config_file, tests_file)
+    input_walk(test_id_run, config_file, tests_file, setup)

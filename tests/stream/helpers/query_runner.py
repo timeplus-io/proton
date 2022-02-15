@@ -19,8 +19,8 @@ from helpers.rockets import kill_query
 
 from helpers.bucks import query_walk_through
 from helpers.bucks import env_var_get
-from helpers.bucks import clear_case_env
-from helpers.bucks import clear_case_env
+
+from helpers.bucks import reset_tables_of_test_inputs
 
 from helpers.mz import *
 
@@ -445,8 +445,8 @@ def test_suite_run(test_context, proc_target_func=query_execute, case_2_run="all
 
     if case_2_run != "all":
         for test in tests:
-            test_id = test.get("test_id")
-            if case_2_run == test_id:
+            test_id = test.get("id")
+            if case_2_run == str(test_id):
                 test_run_list.append(test)
     else:
         if tests_2_run == None:  # if tests_2_run is not set, run all tests.
@@ -534,8 +534,8 @@ def test_suite_run(test_context, proc_target_func=query_execute, case_2_run="all
             auto_terminate_queries = []
             # scan steps to find out tables used in inputs and truncate all the tables
 
-            res_clear_case_env = clear_case_env(
-                client, test, table_schemas, table_ddl_url
+            res_clear_case_env = reset_tables_of_test_inputs(
+                client, table_ddl_url, table_schemas, test
             )
 
             for step in steps:

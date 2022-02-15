@@ -19,6 +19,11 @@ from helpers.rockets import create_table_rest
 from helpers.rockets import find_schema
 from helpers.rockets import drop_table_if_exist_rest
 from helpers.rockets import find_table_reset_in_table_schemas
+from helpers.rockets import reset_tables_of_test_inputs
+from helpers.rockets import TABLE_CREATE_RECORDS
+from helpers.rockets import TABLE_DROP_RECORDS
+from helpers.rockets import VIEW_CREATE_RECORDS
+
 
 
 # alive = mp.Value('b', False)
@@ -758,7 +763,7 @@ def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
                 # print("input_walk_through: field:", field)
                 if isinstance(field, str):
                     # field.replace('"', '\\"')  # proton does
-                    # field.replace("\'", '\"')
+                    field = field.replace("'", '"')
                     row_str = (
                         row_str + "'" + field + "'" + ","
                     )  # python client does not support "", so put ' here
@@ -1206,9 +1211,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
             auto_terminate_queries = []
             # scan steps to find out tables used in inputs and truncate all the tables
 
-            res_clear_case_env = clear_case_env(
-                client, test, table_schemas, table_ddl_url
-            )
+            res_clear_case_env =reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test)
 
             for step in steps:
                 statements_id = 0
