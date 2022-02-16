@@ -127,7 +127,7 @@ public:
         const ColumnPtr interval_column = ColumnConst::create(ColumnInt64::create(1, interval_value), input_rows_count);
         temp_columns[1] = {interval_column, std::make_shared<DataTypeInterval>(datepart_kind), ""};
 
-        auto to_start_of_interval = FunctionFactory::instance().get("toStartOfInterval", context);
+        auto to_start_of_interval = FunctionFactory::instance().get("to_start_of_interval", context);
 
         if (arguments.size() == 2)
             return to_start_of_interval->build(temp_columns)->execute(temp_columns, result_type, input_rows_count);

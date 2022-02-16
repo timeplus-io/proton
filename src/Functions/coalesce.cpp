@@ -110,9 +110,9 @@ public:
                 break;
         }
 
-        auto is_not_null = FunctionFactory::instance().get("isNotNull", context);
-        auto assume_not_null = FunctionFactory::instance().get("assumeNotNull", context);
-        auto multi_if = FunctionFactory::instance().get("multiIf", context);
+        auto is_not_null = FunctionFactory::instance().get("is_not_null", context);
+        auto assume_not_null = FunctionFactory::instance().get("assume_not_null", context);
+        auto multi_if = FunctionFactory::instance().get("multi_if", context);
 
         ColumnsWithTypeAndName multi_if_args;
         ColumnsWithTypeAndName tmp_args(1);

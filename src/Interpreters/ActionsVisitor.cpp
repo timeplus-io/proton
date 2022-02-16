@@ -816,7 +816,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                 auto argument_name = node.arguments->children.at(0)->getColumnName();
 
                 data.addFunction(
-                        FunctionFactory::instance().get(node.name + "IgnoreSet", data.getContext()),
+                        FunctionFactory::instance().get(node.name + "_ignore_set", data.getContext()),
                         { argument_name, argument_name },
                         column_name);
             }

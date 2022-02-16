@@ -64,11 +64,11 @@ public:
 
         ColumnsWithTypeAndName columns{arguments[0]};
 
-        auto is_not_null = FunctionFactory::instance().get("isNotNull", context)->build(columns);
+        auto is_not_null = FunctionFactory::instance().get("is_not_null", context)->build(columns);
         auto is_not_null_type = std::make_shared<DataTypeUInt8>();
         auto is_not_null_res = is_not_null->execute(columns, is_not_null_type, input_rows_count);
 
-        auto assume_not_null = FunctionFactory::instance().get("assumeNotNull", context)->build(columns);
+        auto assume_not_null = FunctionFactory::instance().get("assume_not_null", context)->build(columns);
         auto assume_not_null_type = removeNullable(arguments[0].type);
         auto assume_nut_null_res = assume_not_null->execute(columns, assume_not_null_type, input_rows_count);
 

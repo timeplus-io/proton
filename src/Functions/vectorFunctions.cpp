@@ -893,7 +893,7 @@ public:
 
         ColumnWithTypeAndName minus_res{type, {}};
 
-        auto func = FunctionFactory::instance().get(std::string("L") + FuncLabel::name + "Norm", context);
+        auto func = FunctionFactory::instance().get(std::string("l") + FuncLabel::name + "_norm", context);
         if constexpr (FuncLabel::name[0] == 'p')
             return func->build({minus_res, arguments[2]})->getResultType();
         else
@@ -908,7 +908,7 @@ public:
 
         ColumnWithTypeAndName minus_res{column, type, {}};
 
-        auto func = FunctionFactory::instance().get(std::string("L") + FuncLabel::name + "Norm", context);
+        auto func = FunctionFactory::instance().get(std::string("l") + FuncLabel::name + "_norm", context);
         if constexpr (FuncLabel::name[0] == 'p')
         {
             auto func_elem = func->build({minus_res, arguments[2]});
@@ -935,7 +935,7 @@ class FunctionLNormalize : public ITupleFunction
 {
 public:
     /// constexpr cannot be used due to std::string has not constexpr constructor in this compiler version
-    static inline auto name = std::string("L") + FuncLabel::name + "Normalize";
+    static inline auto name = std::string("l") + FuncLabel::name + "_normalize";
 
     explicit FunctionLNormalize(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionLNormalize>(context_); }
@@ -994,7 +994,7 @@ class FunctionCosineDistance : public ITupleFunction
 {
 public:
     /// constexpr cannot be used due to std::string has not constexpr constructor in this compiler version
-    static inline auto name = "cosineDistance";
+    static inline auto name = "cosine_distance";
 
     explicit FunctionCosineDistance(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionCosineDistance>(context_); }

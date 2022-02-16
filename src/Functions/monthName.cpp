@@ -22,7 +22,7 @@ public:
     static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionMonthName>(context); }
 
     explicit FunctionMonthName(ContextPtr context_)
-        : function_resolver(FunctionFactory::instance().get("dateName", std::move(context_)))
+        : function_resolver(FunctionFactory::instance().get("date_name", std::move(context_)))
         {}
 
     String getName() const override { return name; }

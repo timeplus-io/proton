@@ -105,7 +105,7 @@ DictionaryReader::DictionaryReader(const String & dictionary_name, const Names &
         arguments_get[1].column = DataTypeString().createColumnConst(1, src_column_names[i]);
         ColumnNumbers positions_get{0, column_name_pos, key_position};
         functions_get.emplace_back(
-            FunctionWrapper(FunctionFactory::instance().get("dictGet", context),
+            FunctionWrapper(FunctionFactory::instance().get("dict_get", context),
                             arguments_get, sample_block, positions_get, column.name, column.type->getTypeId()));
     }
 }

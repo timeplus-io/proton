@@ -288,7 +288,7 @@ FunctionArrayIntersect::CastArgumentsResult FunctionArrayIntersect::castColumns(
 static ColumnPtr callFunctionNotEquals(ColumnWithTypeAndName first, ColumnWithTypeAndName second, ContextPtr context)
 {
     ColumnsWithTypeAndName args{first, second};
-    auto eq_func = FunctionFactory::instance().get("notEquals", context)->build(args);
+    auto eq_func = FunctionFactory::instance().get("not_equals", context)->build(args);
     return eq_func->execute(args, eq_func->getResultType(), args.front().column->size());
 }
 
