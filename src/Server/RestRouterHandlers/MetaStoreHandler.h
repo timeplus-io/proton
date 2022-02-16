@@ -27,8 +27,8 @@ private:
     std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & payload) const override;
     std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & payload) const override;
 
-    std::pair<String, Int32> doGet(const Poco::JSON::Object::Ptr & payload, const Strings & request_keys) const;
-    std::pair<String, Int32> doList(const Poco::JSON::Object::Ptr & payload, const String & request_prefix) const;
+    std::pair<String, Int32> doGet(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const Strings & request_keys) const;
+    std::pair<String, Int32> doList(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const String & request_prefix) const;
 
     std::pair<String, Int32> forwardRequest(const Poco::JSON::Object::Ptr & payload, const String & uri_parameter = {}) const;
     bool streamingInput() const override { return false; }

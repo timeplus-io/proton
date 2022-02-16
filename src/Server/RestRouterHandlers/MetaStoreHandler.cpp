@@ -36,7 +36,8 @@ namespace
         return resp_str_stream.str();
     }
 
-    String buildResponse(const String & namespace_, const std::vector<String> & keys, const std::vector<String> & values, const String & query_id)
+    String
+    buildResponse(const String & namespace_, const std::vector<String> & keys, const std::vector<String> & values, const String & query_id)
     {
         assert(keys.size() == values.size());
 
@@ -57,7 +58,7 @@ namespace
         return resp_str_stream.str();
     }
 
-    String buildResponse(const String & namespace_, const std::vector<std::pair<String, String> > & kv_pairs, const String & query_id)
+    String buildResponse(const String & namespace_, const std::vector<std::pair<String, String>> & kv_pairs, const String & query_id)
     {
         Poco::JSON::Object resp;
         resp.set("request_id", query_id);
@@ -76,13 +77,26 @@ namespace
         return resp_str_stream.str();
     }
 
-    std::vector<std::pair<String, String> > parseRequestPairsFromJSONObject(const Poco::JSON::Object::Ptr & object)
+    std::vector<std::pair<String, String>> parseRequestPairsFromJSONObject(const Poco::JSON::Object::Ptr & object)
     {
-        std::vector<std::pair<String, String> > pairs;
+        std::vector<std::pair<String, String>> pairs;
         for (const auto & [key, value] : *object)
             pairs.emplace_back(key, value.extract<String>());
 
         return pairs;
+    }
+
+    std::pair<String, String> parseRequestNamespaceAndKeyFromPath(const String & path)
+    {
+        /// PATH: '/proton/metastore/{namespace}[/{key}] ...'
+        constexpr char prefix[] = "/proton/metastore/";
+        assert(path.starts_with(prefix));
+        size_t root_len = strlen(prefix);
+        auto namespace_end = path.find_first_of('/', root_len);
+        if (namespace_end == std::string::npos)
+            return {path.substr(root_len), ""};
+        else
+            return {String(path, root_len, namespace_end - root_len), path.substr(namespace_end + 1)};
     }
 }
 
@@ -91,21 +105,27 @@ std::pair<String, Int32> MetaStoreHandler::executeGet(const Poco::JSON::Object::
     try
     {
         /// So far, only support single key
-        auto request_key = getPathParameter("key", getQueryParameter("key"));
+        auto [request_namespace, request_key] = parseRequestNamespaceAndKeyFromPath(this->query_uri.getPath());
+        if (request_key.empty())
+            request_key = getQueryParameter("key");
+
         auto request_prefix = getQueryParameter("key_prefix");
 
         if (!request_key.empty())
         {
             /// get by 'key'
             if (!request_prefix.empty())
-                return {jsonErrorResponse("Invalid get request: conflicting parameters 'key' and 'key_prefix'.", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+                return {
+                    jsonErrorResponse(
+                        "Invalid get request: conflicting parameters 'key' and 'key_prefix'.", ErrorCodes::BAD_REQUEST_PARAMETER),
+                    HTTPResponse::HTTP_BAD_REQUEST};
 
-            return doGet(payload, {request_key});
+            return doGet(payload, request_namespace, {request_key});
         }
         else
         {
             /// list by 'key_prefix'
-            return doList(payload, request_prefix);
+            return doList(payload, request_namespace, request_prefix);
         }
     }
     catch (...)
@@ -117,15 +137,14 @@ std::pair<String, Int32> MetaStoreHandler::executeGet(const Poco::JSON::Object::
     }
 }
 
-std::pair<String, Int32> MetaStoreHandler::doGet(const Poco::JSON::Object::Ptr & payload, const Strings & request_keys) const
+std::pair<String, Int32>
+MetaStoreHandler::doGet(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const Strings & request_keys) const
 {
     assert(!request_keys.empty());
 
     if (!metastore_dispatcher->hasLeader())
         return {
             jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
-
-    auto namespace_ = getPathParameter("namespace");
 
     /// If true, execute read requests as writes through whole RAFT consesus with similar speed
     bool enable_quorum_reads = getQueryParameterBool("quorum_reads", metastore_dispatcher->getSettings()->quorum_reads);
@@ -157,13 +176,12 @@ std::pair<String, Int32> MetaStoreHandler::doGet(const Poco::JSON::Object::Ptr &
 }
 
 
-std::pair<String, Int32> MetaStoreHandler::doList(const Poco::JSON::Object::Ptr & payload, const String & request_prefix) const
+std::pair<String, Int32>
+MetaStoreHandler::doList(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const String & request_prefix) const
 {
     if (!metastore_dispatcher->hasLeader())
         return {
             jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
-
-    auto namespace_ = getPathParameter("namespace");
 
     /// If true, execute read requests as writes through whole RAFT consesus with similar speed
     bool enable_quorum_reads = getQueryParameterBool("quorum_reads", metastore_dispatcher->getSettings()->quorum_reads);
@@ -198,15 +216,17 @@ std::pair<String, Int32> MetaStoreHandler::executePost(const Poco::JSON::Object:
 {
     try
     {
+        auto [namespace_, key] = parseRequestNamespaceAndKeyFromPath(this->query_uri.getPath());
         const auto & request_pairs = parseRequestPairsFromJSONObject(payload);
         if (request_pairs.empty())
-            return {jsonErrorResponse("Invalid request data: expected map of key-value(s).", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+            return {
+                jsonErrorResponse("Invalid request data: expected map of key-value(s).", ErrorCodes::BAD_REQUEST_PARAMETER),
+                HTTPResponse::HTTP_BAD_REQUEST};
 
         if (!metastore_dispatcher->hasLeader())
             return {
-                jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
-
-        auto namespace_ = getPathParameter("namespace");
+                jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER),
+                HTTPResponse::HTTP_BAD_REQUEST};
 
         if (metastore_dispatcher->isLeader() || metastore_dispatcher->isSupportAutoForward())
         {
@@ -241,15 +261,19 @@ std::pair<String, Int32> MetaStoreHandler::executeDelete(const Poco::JSON::Objec
     try
     {
         /// So far, only support single key
-        auto request_key = getPathParameter("key", getQueryParameter("key"));
+        auto [namespace_, request_key] = parseRequestNamespaceAndKeyFromPath(this->query_uri.getPath());
         if (request_key.empty())
-            return {jsonErrorResponse("Invalid request data: expected delete-key.", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+            request_key = getQueryParameter("key");
+
+        if (request_key.empty())
+            return {
+                jsonErrorResponse("Invalid request data: expected delete-key.", ErrorCodes::BAD_REQUEST_PARAMETER),
+                HTTPResponse::HTTP_BAD_REQUEST};
 
         if (!metastore_dispatcher->hasLeader())
             return {
-                jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
-
-        auto namespace_ = getPathParameter("namespace");
+                jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER),
+                HTTPResponse::HTTP_BAD_REQUEST};
 
         if (metastore_dispatcher->isLeader() || metastore_dispatcher->isSupportAutoForward())
         {
@@ -281,11 +305,8 @@ std::pair<String, Int32> MetaStoreHandler::executeDelete(const Poco::JSON::Objec
 
 std::pair<String, Int32> MetaStoreHandler::forwardRequest(const Poco::JSON::Object::Ptr & payload, const String & uri_parameter) const
 {
-    Poco::URI uri{fmt::format(
-        METASTORE_URL,
-        metastore_dispatcher->getLeaderHostname(),
-        metastore_dispatcher->getHttpPort(),
-        uri_parameter)};
+    Poco::URI uri{
+        fmt::format(METASTORE_URL, metastore_dispatcher->getLeaderHostname(), metastore_dispatcher->getHttpPort(), uri_parameter)};
     std::stringstream req_body_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     payload->stringify(req_body_stream, 0);
     const String & body = req_body_stream.str();

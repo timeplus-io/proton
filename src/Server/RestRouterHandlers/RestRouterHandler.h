@@ -207,6 +207,7 @@ private:
 
     void setupHTTPContext(const HTTPServerRequest & request)
     {
+        query_uri = Poco::URI(request.getURI());
         accepted_encoding = request.get("Accept-Encoding", "");
         content_encoding = request.get("Content-Encoding", "");
         content_length = request.getContentLength64();
@@ -230,6 +231,7 @@ protected:
     ContextMutablePtr query_context;
     Poco::Logger * log;
 
+    Poco::URI query_uri;
     std::unordered_map<String, String> path_parameters;
     std::unique_ptr<HTMLForm> query_parameters;
     String accepted_encoding;

@@ -174,17 +174,10 @@ public:
     {
         auto & factory = RestRouterFactory::instance();
 #if USE_NURAFT
-        /// GET/DELETE: /proton/metastore/{namespace} [/{key}] [?{params}]
+        /// GET/POST/DELETE: /proton/metastore/{namespace} [/{key}] [?{params}]
         factory.registerRouterHandler(
-            "/proton/metastore/(?P<namespace>[%\\w]+)(/?$|/(?P<key>[/%\\w]+))(\\?[\\w\\-=&#/]+){0,1}",
-            "GET/DELETE",
-            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<DB::MetaStoreHandler>(query_context);
-            });
-        /// POST: /proton/metastore/{namespace} [?{params}]
-        factory.registerRouterHandler(
-            "/proton/metastore/(?P<namespace>[%\\w]+)(\\?[\\w\\-=&#/]+){0,1}",
-            "POST",
+            "/proton/metastore/[\\w\\W]+",
+            "GET/POST/DELETE",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::MetaStoreHandler>(query_context);
             });
