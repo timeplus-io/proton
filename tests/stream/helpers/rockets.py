@@ -55,7 +55,7 @@ sys.path.append(cur_path)
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)" 
+        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
     )
 
 TABLE_CREATE_RECORDS = []
@@ -197,16 +197,16 @@ def kill_query(proton_client, query_2_kill):
 
 def query_run_py(
     statement_2_run, settings, query_results_queue=None, config=None, pyclient=None, telemetry_shared_list=None
-):    
+):
     query_run_start = datetime.datetime.now()
     logger = logging.getLogger(__name__)
     #formatter = logging.Formatter(
-    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"  
+    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
     #)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
-    logger.setLevel(logging.INFO)    
+    logger.setLevel(logging.INFO)
 
     try:
         if pyclient == None:
@@ -272,11 +272,11 @@ def query_run_py(
         }
         logger.info(f"query_run_py: query_results of query={query} = {query_results}")
 
-        
+
         if query_results_queue != None:
             message_2_send = json.dumps(query_results)
             query_results_queue.put(message_2_send)
-        
+
         if run_mode == "process" or query_type == "stream":
             logger.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
             query_run_complete = datetime.datetime.now()
@@ -287,7 +287,7 @@ def query_run_py(
             else:
                 print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
 
-            pyclient.disconnect()        
+            pyclient.disconnect()
 
     except (BaseException, errors.ServerException) as error:
         if isinstance(error, errors.ServerException):
@@ -310,13 +310,13 @@ def query_run_py(
                     "query_run_py: query_results: {} collected from query_result_iter at {}".format(
                         query_results, datetime.datetime.now()
                     )
-                )  
+                )
                 message_2_send = json.dumps(query_results)
                 if query_results_queue != None:
                     query_results_queue.put(message_2_send)
-                    logger.info(f"query_run_py: query_results message_2_send = {message_2_send} was sent.")    
-            
-                
+                    logger.info(f"query_run_py: query_results message_2_send = {message_2_send} was sent.")
+
+
             else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -350,7 +350,7 @@ def query_run_py(
                 else:
                     print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
 
-                pyclient.disconnect()    
+                pyclient.disconnect()
 
         else:
             query_results = {
@@ -375,8 +375,8 @@ def query_run_py(
             if telemetry_shared_list != None:
                 telemetry_shared_list.append({"statement_2_run":statement_2_run, "time_spent": time_spent_ms})
             else:
-                print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.                        
-            pyclient.disconnect()  
+                print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
+            pyclient.disconnect()
 
     finally:
 
@@ -388,12 +388,12 @@ def query_execute(config, child_conn, query_results_queue, alive):
     # query_result_list = query_result_list
     logger = logging.getLogger(__name__)
     #formatter = logging.Formatter(
-    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"  
+    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"
     #)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
-    logger.setLevel(logging.INFO)    
+    logger.setLevel(logging.INFO)
 
     logger.debug(f"query_execute starts...")
     telemetry_shard_list = [] #telemetry list for query_run timing
@@ -418,7 +418,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
         try:
 
             query_proc = None
-           
+
             logger.debug(
                 f"query_execute: tear_down = {tear_down}, query_run_count = {query_run_count}, wait for message from rockets_run......"
             )
@@ -502,7 +502,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
 
                 if run_mode == "process" or query_type == "stream":
                     mp_mgr = mp.Manager() # create a multiprocess.Manager object
-                    telemetry_shared_list = mp_mgr.list()                     
+                    telemetry_shared_list = mp_mgr.list()
 
                     query_run_args = (
                         statement_2_run,
@@ -516,7 +516,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
                         wait = int(wait)
                         print(f"query_execute: wait for {wait} to start run query = {query}")
                         time.sleep(wait)
-                   
+
                     query_proc = mp.Process(target=query_run_py, args=query_run_args)
                     query_procs.append(
                         {
@@ -526,7 +526,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
                             "query_id": query_id,
                             "query": query,
                         }# have to put append before start, otherwise exception when append shared list.
-                )  # put every query_run process into array for case_done check                    
+                )  # put every query_run process into array for case_done check
                     query_proc.start()
 
                     logger.debug(
@@ -725,14 +725,14 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
     depends_on = input_batch.get("depends_on")
     depends_on_exists = False
     if depends_on != None:
-        
+
         query_body = json.dumps({"query":"select query_id from system.processes"})
         res = requests.post(query_url, data=query_body)
         res_json = res.json()
         query_id_list = res_json.get("data")
         logger.debug(f"query_id_list: {query_id_list}")
         if query_id_list != None and len(query_id_list) > 0:
-            retry = 20 
+            retry = 20
             #depends_on_exists = False
             while retry >0 and depends_on_exists != True:
                 for element in query_id_list:
@@ -743,8 +743,8 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
                 res = requests.post(query_url, data=query_body)
                 res_json = res.json()
                 query_id_list = res_json.get("data")
-    logger.debug(f"depends_on = {depends_on}, depends_on_exists = {depends_on_exists}")        
-        
+    logger.debug(f"depends_on = {depends_on}, depends_on_exists = {depends_on_exists}")
+
     for element in table_schema.get("columns"):
         input_rest_columns.append(element.get("name"))
     logger.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
@@ -757,11 +757,11 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
     input_rest_body = json.dumps(input_rest_body)
     input_url = f"{input_url}/{table_name}"
     logger.debug(f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}")
-    
+
     res = requests.post(input_url, data=input_rest_body)
     logger.debug(f"input_batch_rest: response of input_batch_rest request res = {res}")
-    
-    
+
+
 
     assert res.status_code == 200
     input_batch_record["input_batch"] = input_rest_body_data
@@ -769,12 +769,12 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
 
     """
     if res.status_code != 200:
-        logger.debug(f"table input rest access failed, status code={res.status_code}") 
+        logger.debug(f"table input rest access failed, status code={res.status_code}")
         raise Exception(f"table input rest access failed, status code={res.status_code}")
     else:
         input_batch_record["input_batch"] =input_rest_body_data
         input_batch_record["timestamp"] = str(datetime.datetime.now())
-        #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
+        #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data))
     """
     return input_batch_record
 
@@ -897,18 +897,18 @@ def create_table_rest(table_ddl_url, table_schema):
         table_schema_for_rest = {"name":table_name, "columns":columns, "event_time_column": event_time_column}
     else:
         table_schema_for_rest = {"name":table_name, "columns":columns}
-    
-   
+
+
     res = requests.post(
         table_ddl_url, data=json.dumps(table_schema_for_rest)
     )  # create the table w/ table schema
     create_start_time = datetime.datetime.now()
-    
+
     if res.status_code == 200:
         logger.info(f"table {table_name} create_rest is called successfully.")
     else:
         return res
-    
+
 
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
@@ -1089,7 +1089,7 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                 is_table_reset = None
                 logger.debug(
                     f"rockets_run: table of input in inputs = {table}"
-                )                        
+                )
                 is_table_reset = find_table_reset_in_table_schemas(table, table_schemas)
                 if (is_table_reset != None and is_table_reset == False) or table in tables_recreated:
                     pass
@@ -1112,12 +1112,12 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                     logger.debug(
                         f"rockets_run: drop table {table} res = {res}"
                     )
-                
+
                     for table_schema in table_schemas:
                         name = table_schema.get("name")
                         if name == table and table_exist(table_ddl_url, table):
-                            logger.debug(f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}") 
-                            while table_exist(table_ddl_url, table): 
+                            logger.debug(f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
+                            while table_exist(table_ddl_url, table):
                                 logger.debug(f"{name} not dropped succesfully yet, wait ...")
                                 time.sleep(0.2)
                             logger.debug(f"rockets_run: drop table and re-create once case starts, table {table} is dropped")
@@ -1125,16 +1125,16 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                             while not table_exist(table_ddl_url, table):
                                 logger.debug(f"{name} not recreated successfully yet, wait ...")
                                 time.sleep(0.2)
-                            tables_recreated.append(name) 
-                        elif name == table and not table_exist(table_ddl_url, table): 
+                            tables_recreated.append(name)
+                        elif name == table and not table_exist(table_ddl_url, table):
                             create_table_rest(table_ddl_url, table_schema)
                             while not table_exist(table_ddl_url, table):
                                 logger.debug(f"{name} not recreated successfully yet, wait ...")
                                 time.sleep(0.2)
-                            tables_recreated.append(name) 
+                            tables_recreated.append(name)
         if len(tables_recreated) > 0:
             logger.debug(f"tables: {tables_recreated} are dropted and recreated.")
-    return tables_recreated     
+    return tables_recreated
 
 
 # @pytest.fixture(scope="module")
@@ -1244,10 +1244,10 @@ def rockets_run(test_context):
             step_id = 0
             auto_terminate_queries = []
             # scan steps to find out tables used in inputs and truncate all the tables
-            
+
             tables_recreated = reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
             logger.info(f"tables: {tables_recreated} are dropted and recreated.")
-            
+
             for step in steps:
                 statements_id = 0
                 inputs_id = 0
@@ -1344,7 +1344,7 @@ def rockets_run(test_context):
             time_spent_create = time_spent_create + item.get("time_spent")
             count += 1
         avg_time_spent_create = time_spent_create / count
-        logger.info(f'table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}') 
+        logger.info(f'table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}')
         count = 0
         time_spent_drop = 0
         for item in TABLE_DROP_RECORDS:
@@ -1352,7 +1352,7 @@ def rockets_run(test_context):
             count += 1
         avg_time_spent_drop = time_spent_drop / count
         logger.info(f'table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}')
-            
+
         return test_sets
 
 
