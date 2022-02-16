@@ -90,9 +90,9 @@ StoragePtr StorageFactory::get(
         /// Exception: any type is allowed in View, because plain (non-materialized) View does not store anything itself.
         checkAllTypesAreAllowedInTable(columns.getAll());
 
-        if (query.is_streaming_view)
+        if (query.is_materialized_view)
         {
-            name = "StreamingView";
+            name = "MaterializedView";
         }
         else
         {

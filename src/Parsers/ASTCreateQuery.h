@@ -68,7 +68,7 @@ public:
     bool is_ordinary_view{false};
     /// proton: starts.
     bool is_stream{false};
-    bool is_streaming_view{false};
+    bool is_materialized_view{false};
     /// proton: ends.
     bool replace_view{false}; /// CREATE OR REPLACE VIEW
 
@@ -109,7 +109,7 @@ public:
         return removeOnCluster<ASTCreateQuery>(clone(), new_database);
     }
 
-    bool isView() const { return is_ordinary_view || is_streaming_view; }
+    bool isView() const { return is_ordinary_view || is_materialized_view; }
 
     virtual QueryKind getQueryKind() const override { return QueryKind::Create; }
 

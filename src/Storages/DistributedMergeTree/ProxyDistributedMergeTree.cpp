@@ -10,7 +10,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages//Kafka/StorageKafka.h>
 #include <Storages/StorageView.h>
-#include <Storages/StreamingView/StorageStreamingView.h>
+#include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
 
 #include <base/logger_useful.h>
@@ -131,8 +131,8 @@ void ProxyDistributedMergeTree::read(
             processed_stage,
             max_block_size,
             num_streams);
-    else if (auto * streaming_view = storage->as<StorageStreamingView>())
-        return streaming_view->read(
+    else if (auto * materialized_view = storage->as<StorageMaterializedView>())
+        return materialized_view->read(
             query_plan,
             updated_column_names,
             underlying_storage_metadata_snapshot,
@@ -175,9 +175,9 @@ NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
     if (!storage)
         return {};
 
-    auto * streaming_view = storage->as<StorageStreamingView>();
-    if (streaming_view)
-        return streaming_view->getVirtuals();
+    auto * materialized_view = storage->as<StorageMaterializedView>();
+    if (materialized_view)
+        return materialized_view->getVirtuals();
 
     auto * distributed = storage->as<StorageDistributedMergeTree>();
     if (!distributed)

@@ -90,19 +90,9 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
             streaming = streaming_storage->isStreaming();
         return function_storage->getStorageID();
     }
-    else if (String table; tryGetIdentifierNameInto(arg, table))
+    else if (auto * identifier = arg->as<ASTIdentifier>())
     {
-        ParserCompoundIdentifier table_name_p(true);
-        table = "`" + table + "`";   /// add back quoted
-        Tokens tokens(table.data(), table.data() + table.size(), context->getSettingsRef().max_query_size);
-        IParser::Pos pos(tokens, context->getSettingsRef().max_parser_depth);
-        Expected expected;
-
-        ASTPtr table_ast;
-        if (!table_name_p.parse(pos, table_ast, expected))
-            throw Exception("First argument is an invalid table name", ErrorCodes::BAD_ARGUMENTS);
-
-        storage_id = table_ast->as<ASTTableIdentifier>()->getTableId();
+        storage_id = identifier->createTable()->getTableId();
     }
     else
     {
@@ -164,8 +154,8 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         }
         else
         {
-            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "StreamingView" && storage->getName() != "Kafka")
-                throw Exception("Storage engine is not DistributedMergeTree or StreamingView or Kafka", ErrorCodes::BAD_ARGUMENTS);
+            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
+                throw Exception("Storage engine is not DistributedMergeTree or MaterializedView or Kafka", ErrorCodes::BAD_ARGUMENTS);
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
             columns = underlying_storage_metadata_snapshot->getColumns();
         }

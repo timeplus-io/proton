@@ -613,7 +613,7 @@ but Proton run the query in a streaming way by only applying the new data to the
 To create a materialized streaming view, user can use this SQL spec
 
 ```sql
-CREATE STREAMING VIEW [IF NOT EIXSTS] <streaming_view_name> AS <normal Proton streaming select query >
+CREATE MATERIALIZED VIEW [IF NOT EIXSTS] <streaming_view_name> AS <normal Proton streaming select query >
 SETTINGS key1=value1, key2=value2, ...
 ```
 
@@ -640,8 +640,8 @@ The materialized data gets stored in in-memory table and internal physical depen
    2. Always appends the results of the underlying query to the internal physical table
 
 There are 2 modes to query streaming view
-1. Streaming mode: like `SELECT * FROM streaming_view`. In this mode, the query is against the underlying inner physical table.
-2. Historical mode: like `SELECT * FROM hist(streaming_view)`. In this mode, the query is aginst the in-memory table and it always returns the latest snapshot of data.
+1. Streaming mode: like `SELECT * FROM materialized_view`. In this mode, the query is against the underlying inner physical table.
+2. Historical mode: like `SELECT * FROM hist(materialized_view)`. In this mode, the query is aginst the in-memory table and it always returns the latest snapshot of data.
 
 **Note** Users have a chance to tune the in-memory table size by setting up the following 2 settings
 1. `max_streaming_view_cached_block_count`: By default it is 100 blocks
@@ -653,7 +653,7 @@ The in-memory data will be discarded as well and will not be replayed across sys
 Examples
 
 ```sql
-CREATE STREAMING VIEW count_sv AS
+CREATE MATERIALIZED VIEW count_sv AS
 SELECT device, count(*) FROM device_utils GROUP BY device
 SETTINGS max_streaming_view_cached_block_count=1000,  max_streaming_view_cached_block_bytes=10000000;
 ```

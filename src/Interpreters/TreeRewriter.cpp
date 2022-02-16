@@ -46,7 +46,7 @@
 /// proton: starts.
 #include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
-#include <Storages/StreamingView/StorageStreamingView.h>
+#include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends.
 
@@ -1144,7 +1144,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         }
         else if (const auto * distributed = storage->as<StorageDistributedMergeTree>())
             streaming = true;
-        else if (const auto * streaming_view = storage->as<StorageStreamingView>())
+        else if (const auto * materialized_view = storage->as<StorageMaterializedView>())
             streaming = true;
         else if (const auto * streaming_kafka = storage->as<StorageKafka>())
             streaming = true;

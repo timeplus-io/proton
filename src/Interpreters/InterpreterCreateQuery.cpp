@@ -705,7 +705,7 @@ void InterpreterCreateQuery::validateTableStructure(const ASTCreateQuery & creat
     const auto & settings = getContext()->getSettingsRef();
 
     /// Check low cardinality types in creating table if it was not allowed in setting
-    if (!create.attach && !settings.allow_suspicious_low_cardinality_types && !create.is_streaming_view)
+    if (!create.attach && !settings.allow_suspicious_low_cardinality_types && !create.is_materialized_view)
     {
         for (const auto & name_and_type_pair : properties.columns.getAllPhysical())
         {
@@ -799,7 +799,7 @@ static void generateUUIDForTable(ASTCreateQuery & create)
     /// then MV will create inner table. We should generate UUID of inner table here,
     /// so it will be the same on all hosts if query in ON CLUSTER or database engine is Replicated.
     /// proton: starts.
-    bool need_uuid_for_inner_table = !create.attach && create.is_streaming_view;
+    bool need_uuid_for_inner_table = !create.attach && create.is_materialized_view;
     /// proton: ends.
     if (need_uuid_for_inner_table && create.to_inner_uuid == UUIDHelpers::Nil)
         create.to_inner_uuid = UUIDHelpers::generateV4();
@@ -966,12 +966,13 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     if (internal)
     {
         auto & task_service = TaskStatusService::instance(ctx);
-        while (true)
+        int retries = 0;
+        while (retries < 3)
         {
             /// Loop wait to finish, sleep interval too large?
             /// Actually, the create delay is about '1s'
             LOG_INFO(log, "Wait for creating DistributedMergeTree to complete, query={} query_id={} ...", query, ctx->getCurrentQueryId());
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << retries)));
 
             auto task_status = task_service.findById(ctx->getCurrentQueryId());
             if (task_status)
@@ -981,7 +982,11 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
                 else if (task_status->status == TaskStatusService::TaskStatus::FAILED)
                     throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Fail to create table {}.{}: {}", create.database, create.table, task_status->reason);
             }
+            ++retries;
         }
+
+        if (retries >= 3)
+            throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Timeout for create table {}.{}", create.database, create.table);
     }
 
     /// FIXME, project tasks status
@@ -1421,9 +1426,9 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
 {
     /// If the query is a CREATE SELECT, insert the data into the table.
-    /// proton: starts. Add `!create.is_streaming_view`
+    /// proton: starts. Add `!create.is_materialized_view`
     if (create.select && !create.attach
-        && !create.is_ordinary_view && !create.is_streaming_view)
+        && !create.is_ordinary_view && !create.is_materialized_view)
     /// proton: ends.
     {
         auto insert = std::make_shared<ASTInsertQuery>();

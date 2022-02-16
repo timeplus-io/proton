@@ -1,4 +1,4 @@
-#include "ParserCreateStreamingViewQuery.h"
+#include "ParserCreateMaterializedViewQuery.h"
 
 #include <IO/ReadHelpers.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -12,14 +12,14 @@
 
 namespace DB
 {
-bool ParserCreateStreamingViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserCompoundIdentifier table_name_p(true);
     ParserKeyword s_as("AS");
-    ParserKeyword s_streaming_view("STREAMING VIEW");
+    ParserKeyword s_streaming_view("MATERIALIZED VIEW");
 
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -96,7 +96,7 @@ bool ParserCreateStreamingViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expecte
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_streaming_view = true;
+    query->is_materialized_view = true;
 
     const auto & table_identifier = table->as<ASTTableIdentifier &>();
     query->setDatabase(table_identifier.getDatabaseName());

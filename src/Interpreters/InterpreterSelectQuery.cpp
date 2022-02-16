@@ -11,7 +11,7 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
 #include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
-#include <Storages/StreamingView/StorageStreamingView.h>
+#include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -2141,12 +2141,12 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         query_plan.addStep(std::move(adding_limits_and_quota));
 
         /// proton: starts. Streaming Window
-        /// Supports: TableFunction, DistributedMergeTree, StreamingView
+        /// Supports: TableFunction, DistributedMergeTree, MaterializedView
         if (auto * streaming_distributed = storage->as<ProxyDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan, streaming_distributed);
         else if (auto * distributed = storage->as<StorageDistributedMergeTree>())
             buildStreamingProcessingQueryPlan(query_plan);
-        else if (auto * streaming_view = storage->as<StorageStreamingView>())
+        else if (auto * materialized_view = storage->as<StorageMaterializedView>())
             buildStreamingProcessingQueryPlan(query_plan);
         else if (auto * streaming_kafka = storage->as<StorageKafka>())
             buildStreamingProcessingQueryPlan(query_plan);

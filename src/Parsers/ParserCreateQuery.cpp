@@ -19,7 +19,7 @@
 #include <Common/typeid_cast.h>
 
 /// proton: starts
-#include <Parsers/Streaming/ParserCreateStreamingViewQuery.h>
+#include <Parsers/Streaming/ParserCreateMaterializedViewQuery.h>
 /// proton: ends.
 
 namespace DB
@@ -1134,8 +1134,8 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateViewQuery view_p;
     ParserCreateDictionaryQuery dictionary_p;
 
-    /// proton: starts. Add to parse StreamingViewQuery
-    ParserCreateStreamingViewQuery streaming_view_p;
+    /// proton: starts. Add to parse MaterializedViewQuery
+    ParserCreateMaterializedViewQuery streaming_view_p;
 
     return table_p.parse(pos, node, expected)
         || database_p.parse(pos, node, expected)

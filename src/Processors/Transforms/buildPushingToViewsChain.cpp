@@ -18,7 +18,7 @@
 #include <base/logger_useful.h>
 
 /// proton: starts.
-#include <Storages/StreamingView/StorageStreamingView.h>
+#include <Storages/Streaming/StorageMaterializedView.h>
 /// proton: ends.
 
 #include <atomic>
@@ -300,9 +300,9 @@ Chain buildPushingToViewsChain(
     }
 
     /// proton: starts.
-    else if (auto * streaming_view = dynamic_cast<StorageStreamingView *>(storage.get()))
+    else if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
     {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "No support insert into StreamingView");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No support insert into MaterializedView");
     }
     /// proton: ends.
     /// Do not push to destination table if the flag is set

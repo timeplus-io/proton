@@ -15,18 +15,18 @@ class CompletedPipelineExecutor;
 class InterpreterSelectQuery;
 struct ExtraBlock;
 
-class StorageStreamingView final : public shared_ptr_helper<StorageStreamingView>, public IStorage, WithMutableContext
+class StorageMaterializedView final : public shared_ptr_helper<StorageMaterializedView>, public IStorage, WithMutableContext
 {
-    friend struct shared_ptr_helper<StorageStreamingView>;
-    friend class PushingToStreamingViewMemorySink;
-    friend class StreamingViewMemorySource;
+    friend struct shared_ptr_helper<StorageMaterializedView>;
+    friend class PushingToMaterializedViewMemorySink;
+    friend class MaterializedViewMemorySource;
 
     using VirtualColumns = std::vector<std::tuple<String, DataTypePtr, std::function<Int64()>>>;
 
 public:
-    ~StorageStreamingView() override;
+    ~StorageMaterializedView() override;
 
-    std::string getName() const override { return "StreamingView"; }
+    std::string getName() const override { return "MaterializedView"; }
 
     bool isView() const override { return true; }
 
@@ -116,7 +116,7 @@ private:
     ThreadFromGlobalPool background_thread;
 
 protected:
-    StorageStreamingView(
+    StorageMaterializedView(
         const StorageID & table_id_,
         ContextPtr local_context,
         const ASTCreateQuery & query,

@@ -1,4 +1,4 @@
-#include "StorageStreamingView.h"
+#include "StorageMaterializedView.h"
 
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
@@ -47,12 +47,12 @@ namespace
     }
 }
 
-StorageStreamingView::InMemoryTable::InMemoryTable(size_t max_blocks_count_, size_t max_blocks_bytes_)
+StorageMaterializedView::InMemoryTable::InMemoryTable(size_t max_blocks_count_, size_t max_blocks_bytes_)
     : max_blocks_count(max_blocks_count_), max_blocks_bytes(max_blocks_bytes_)
 {
 }
 
-void StorageStreamingView::InMemoryTable::write(Block && block)
+void StorageMaterializedView::InMemoryTable::write(Block && block)
 {
     std::lock_guard lock(mutex);
     total_blocks_bytes += block.allocatedBytes();
@@ -66,41 +66,41 @@ void StorageStreamingView::InMemoryTable::write(Block && block)
     }
 }
 
-StorageStreamingView::Data StorageStreamingView::InMemoryTable::get() const
+StorageMaterializedView::Data StorageMaterializedView::InMemoryTable::get() const
 {
     std::shared_lock lock(mutex);
     return data;
 }
 
-class CheckStreamingViewValidTransform : public ISimpleTransform
+class CheckMaterializedViewValidTransform : public ISimpleTransform
 {
 public:
-    CheckStreamingViewValidTransform(const Block & header_, const StorageStreamingView & view_)
+    CheckMaterializedViewValidTransform(const Block & header_, const StorageMaterializedView & view_)
         : ISimpleTransform(header_, header_, false), view(view_)
     {
     }
 
-    String getName() const override { return "CheckStreamingViewValidTransform"; }
+    String getName() const override { return "CheckMaterializedViewValidTransform"; }
 
 protected:
     void transform(Chunk &) override { view.checkValid(); }
 
 private:
-    const StorageStreamingView & view;
+    const StorageMaterializedView & view;
 };
 
-class StreamingViewMemorySource : public SourceWithProgress
+class MaterializedViewMemorySource : public SourceWithProgress
 {
 public:
-    StreamingViewMemorySource(const StorageStreamingView & view_, const Block & header)
+    MaterializedViewMemorySource(const StorageMaterializedView & view_, const Block & header)
         : SourceWithProgress(header)
         , column_names_and_types(header.getNamesAndTypesList())
-        , data(view_.memory_table ? view_.memory_table->get() : StorageStreamingView::Data())
+        , data(view_.memory_table ? view_.memory_table->get() : StorageMaterializedView::Data())
         , iter(data.begin())
     {
     }
 
-    String getName() const override { return "StreamingViewMemory"; }
+    String getName() const override { return "MaterializedViewMemory"; }
 
 protected:
     Chunk generate() override
@@ -124,23 +124,23 @@ protected:
 
 private:
     const NamesAndTypesList column_names_and_types;
-    StorageStreamingView::Data data;
-    StorageStreamingView::DataConstIterator iter;
+    StorageMaterializedView::Data data;
+    StorageMaterializedView::DataConstIterator iter;
 };
 
-class PushingToStreamingViewMemorySink final : public ExceptionKeepingTransform
+class PushingToMaterializedViewMemorySink final : public ExceptionKeepingTransform
 {
 private:
-    StorageStreamingView & view;
-    const StorageStreamingView::VirtualColumns & to_calc_virtual_columns;
+    StorageMaterializedView & view;
+    const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns;
     size_t expected_virtual_num = 0;
 
 public:
-    PushingToStreamingViewMemorySink(
+    PushingToMaterializedViewMemorySink(
         const Block & in_header,
         const Block & out_header,
-        StorageStreamingView & view_,
-        const StorageStreamingView::VirtualColumns & to_calc_virtual_columns_)
+        StorageMaterializedView & view_,
+        const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns_)
         : ExceptionKeepingTransform(in_header, out_header)
         , view(view_)
         , to_calc_virtual_columns(to_calc_virtual_columns_)
@@ -149,7 +149,7 @@ public:
         assert(expected_virtual_num <= to_calc_virtual_columns.size());
     }
 
-    String getName() const override { return "PushingToStreamingViewMemory"; }
+    String getName() const override { return "PushingToMaterializedViewMemory"; }
 
 protected:
     void onConsume(Chunk chunk) override
@@ -188,11 +188,11 @@ protected:
     Chunk cur_chunk;
 };
 
-StorageStreamingView::StorageStreamingView(
+StorageMaterializedView::StorageMaterializedView(
     const StorageID & table_id_, ContextPtr local_context, const ASTCreateQuery & query, const ColumnsDescription & columns_, bool attach_)
     : IStorage(table_id_)
     , WithMutableContext(local_context->getGlobalContext())
-    , log(&Poco::Logger::get("StorageStreamingView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
+    , log(&Poco::Logger::get("StorageMaterializedView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
     , is_attach(attach_)
     , virtual_columns({{RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
 {
@@ -220,7 +220,7 @@ StorageStreamingView::StorageStreamingView(
     target_table_id = StorageID(getStorageID().database_name, generateInnerTableName(getStorageID()), query.to_inner_uuid);
 }
 
-StorageStreamingView::~StorageStreamingView()
+StorageMaterializedView::~StorageMaterializedView()
 {
     shutdown();
 }
@@ -232,7 +232,7 @@ StorageStreamingView::~StorageStreamingView()
 ///                             InMemoryTable                                       TargetTable
 /// global_aggr:    (view_properties, RESERVED_VIEW_VERSION)        (view_properties, RESERVED_VIEW_VERSION)
 /// others:         (view_properties)                               (view_properties)
-void StorageStreamingView::startup()
+void StorageMaterializedView::startup()
 {
     try
     {
@@ -272,7 +272,7 @@ void StorageStreamingView::startup()
         background_status.exception = std::current_exception();
         background_status.has_exception = true;
 
-        LOG_ERROR(log, "{}", getExceptionMessage(background_status.exception, false));
+        LOG_ERROR(log, "MaterializedView '{}' startup error: {}", getName(), getExceptionMessage(background_status.exception, false));
 
         /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
         /// And it should be able to safely destroy table after exception in "startup" method.
@@ -286,7 +286,7 @@ void StorageStreamingView::startup()
     }
 }
 
-void StorageStreamingView::shutdown()
+void StorageMaterializedView::shutdown()
 {
     if (shutdown_called.test_and_set())
         return;
@@ -305,7 +305,7 @@ void StorageStreamingView::shutdown()
         memory_table.reset();
 }
 
-Pipe StorageStreamingView::read(
+Pipe StorageMaterializedView::read(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
@@ -320,7 +320,7 @@ Pipe StorageStreamingView::read(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
 
-void StorageStreamingView::read(
+void StorageMaterializedView::read(
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
@@ -332,9 +332,9 @@ void StorageStreamingView::read(
 {
     /// There are two paths:
     /// 1) read newest streaming data in target table.      [streaming query from target table]
-    ///     e.g. "select * from streaming_view;" <=> "select * from target_table" (streaming)
+    ///     e.g. "select * from materialized_view;" <=> "select * from target_table" (streaming)
     /// 2) read newest data snapshot in memory              [historical query from memory table]
-    ///     e.g. "select * from table(streaming_view);" <=> "select * from memory_table" (historical)
+    ///     e.g. "select * from table(materialized_view);" <=> "select * from memory_table" (historical)
 
     /// In some cases, the view background thread has exception, we check it before users access this view
     checkValid();
@@ -359,7 +359,7 @@ void StorageStreamingView::read(
 
         /// Add valid check of the view
         /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.
-        pipe.addTransform(std::make_shared<CheckStreamingViewValidTransform>(header, *this));
+        pipe.addTransform(std::make_shared<CheckMaterializedViewValidTransform>(header, *this));
 
         auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Target");
         query_plan.addStep(std::move(read_step));
@@ -371,12 +371,12 @@ void StorageStreamingView::read(
         auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
             query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
 
-        adding_limits_and_quota->setStepDescription("Lock destination table for StreamingView");
+        adding_limits_and_quota->setStepDescription("Lock destination table for MaterializedView");
         query_plan.addStep(std::move(adding_limits_and_quota));
     }
     else
     {
-        Pipe pipe(std::make_shared<StreamingViewMemorySource>(*this, header));
+        Pipe pipe(std::make_shared<MaterializedViewMemorySource>(*this, header));
 
         /// Materializing const column
         pipe.addTransform(std::make_shared<MaterializingTransform>(header));
@@ -386,12 +386,12 @@ void StorageStreamingView::read(
     }
 }
 
-void StorageStreamingView::drop()
+void StorageMaterializedView::drop()
 {
     dropInnerTableIfAny(true, getContext());
 }
 
-void StorageStreamingView::dropInnerTableIfAny(bool no_delay, ContextPtr local_context)
+void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr local_context)
 {
     /// So far, the target tabel is always inner table
     if (target_table_id)
@@ -400,7 +400,7 @@ void StorageStreamingView::dropInnerTableIfAny(bool no_delay, ContextPtr local_c
     target_table_storage = nullptr;
 }
 
-void StorageStreamingView::checkTableCanBeRenamed() const
+void StorageMaterializedView::checkTableCanBeRenamed() const
 {
     auto dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
     if (dependencies.size() > 0)
@@ -414,7 +414,7 @@ void StorageStreamingView::checkTableCanBeRenamed() const
     }
 }
 
-void StorageStreamingView::renameInMemory(const StorageID & new_table_id)
+void StorageMaterializedView::renameInMemory(const StorageID & new_table_id)
 {
     auto old_table_id = getStorageID();
     auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -425,7 +425,7 @@ void StorageStreamingView::renameInMemory(const StorageID & new_table_id)
     DatabaseCatalog::instance().updateDependency(select_query.select_table_id, old_table_id, select_query.select_table_id, getStorageID());
 }
 
-StoragePtr StorageStreamingView::getTargetTable()
+StoragePtr StorageMaterializedView::getTargetTable()
 {
     /// Cache the target table storage
     if (!target_table_storage)
@@ -434,16 +434,16 @@ StoragePtr StorageStreamingView::getTargetTable()
     return target_table_storage;
 }
 
-void StorageStreamingView::checkValid() const
+void StorageMaterializedView::checkValid() const
 {
     if (background_status.has_exception)
         throw Exception(
             getExceptionErrorCode(background_status.exception),
-            "Bad StreamingView, please drop it or try recovery by restart server. background exception: {}",
+            "Bad MaterializedView, please drop it or try recovery by restart server. background exception: {}",
             getExceptionMessage(background_status.exception, false));
 }
 
-NamesAndTypesList StorageStreamingView::getVirtuals() const
+NamesAndTypesList StorageMaterializedView::getVirtuals() const
 {
     if (is_global_aggr_query)
         return NamesAndTypesList{NameAndTypePair(RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>())};
@@ -451,13 +451,12 @@ NamesAndTypesList StorageStreamingView::getVirtuals() const
         return {};
 }
 
-void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
     /// Init in memory table
     const auto & settings = local_context->getSettingsRef();
     memory_table.reset(new InMemoryTable(
-        is_global_aggr_query ? 1 /* only cache current block result */
-                             : settings.max_streaming_view_cached_block_count,
+        1 /* only cache current block result */,
         settings.max_streaming_view_cached_block_bytes));
 
     /// If there is a Create request, then we need create the target inner table.
@@ -502,10 +501,10 @@ void StorageStreamingView::initInnerTable(const StorageMetadataPtr & metadata_sn
         getTargetTable();
 }
 
-void StorageStreamingView::buildBackgroundPipeline(
+void StorageMaterializedView::buildBackgroundPipeline(
     InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
-    /// [Pipeline]: `Source` -> `Converting` -> `PushingToStreamingViewMemorySink` -> `Materializing const` -> `target_table`
+    /// [Pipeline]: `Source` -> `Converting` -> `PushingToMaterializedViewMemorySink` -> `Materializing const` -> `target_table`
     background_pipeline = inner_interpreter.buildQueryPipeline();
     background_pipeline.resize(1);
     const auto & current_header = background_pipeline.getHeader();
@@ -533,7 +532,7 @@ void StorageStreamingView::buildBackgroundPipeline(
     }
 
     background_pipeline.addSimpleTransform([&, this](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
-        return std::make_shared<PushingToStreamingViewMemorySink>(cur_header, out_header, *this, virtual_columns);
+        return std::make_shared<PushingToMaterializedViewMemorySink>(cur_header, out_header, *this, virtual_columns);
     });
 
     /// Materializing const columns
@@ -560,7 +559,7 @@ void StorageStreamingView::buildBackgroundPipeline(
     local_context->setupQueryStatusPollId();
 }
 
-void StorageStreamingView::executeBackgroundPipeline()
+void StorageMaterializedView::executeBackgroundPipeline()
 {
     background_executor = background_pipeline.execute();
     background_thread = ThreadFromGlobalPool{[this]() {
@@ -580,11 +579,11 @@ void StorageStreamingView::executeBackgroundPipeline()
     }};
 }
 
-void registerStorageStreamingView(StorageFactory & factory)
+void registerStorageMaterializedView(StorageFactory & factory)
 {
-    factory.registerStorage("StreamingView", [](const StorageFactory::Arguments & args) {
+    factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args) {
         /// Pass local_context here to convey setting for inner table
-        return StorageStreamingView::create(args.table_id, args.getLocalContext(), args.query, args.columns, args.attach);
+        return StorageMaterializedView::create(args.table_id, args.getLocalContext(), args.query, args.columns, args.attach);
     });
 }
 

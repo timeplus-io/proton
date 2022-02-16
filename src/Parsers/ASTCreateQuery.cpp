@@ -275,8 +275,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         /// proton: starts.
         else if (is_stream)
             what = "STREAM";
-        else if (is_streaming_view)
-            what = "STREAMING VIEW";
+        else if (is_materialized_view)
+            what = "MATERIALIZED VIEW";
         /// proton: ends.
 
         settings.ostr
@@ -321,10 +321,10 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (to_table_id)
     {
-        assert(is_streaming_view && to_inner_uuid == UUIDHelpers::Nil);
+        assert(is_materialized_view && to_inner_uuid == UUIDHelpers::Nil);
         /// proton: starts. Specified streaming view with `INTO`
         settings.ostr
-            << (settings.hilite ? hilite_keyword : "") << (is_streaming_view ? " INTO " : " TO ") << (settings.hilite ? hilite_none : "")
+            << (settings.hilite ? hilite_keyword : "") << (is_materialized_view ? " INTO " : " TO ") << (settings.hilite ? hilite_none : "")
             << (!to_table_id.database_name.empty() ? backQuoteIfNeed(to_table_id.database_name) + "." : "")
             << backQuoteIfNeed(to_table_id.table_name);
     }
@@ -332,8 +332,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (to_inner_uuid != UUIDHelpers::Nil)
     {
         /// proton: starts.
-        assert(is_streaming_view && !to_table_id);
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << (is_streaming_view ? " INTO INNER UUID " : " TO INNER UUID ") << (settings.hilite ? hilite_none : "")
+        assert(is_materialized_view && !to_table_id);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << (is_materialized_view ? " INTO INNER UUID " : " TO INNER UUID ") << (settings.hilite ? hilite_none : "")
                       << quoteString(toString(to_inner_uuid));
         /// proton: ends.
     }
