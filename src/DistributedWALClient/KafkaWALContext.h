@@ -76,8 +76,7 @@ struct KafkaWALContext
     /// Per topic max message size
     int32_t message_max_bytes = -1;
 
-    std::shared_ptr<EmptySchemaProvider> empty_schema_provider;
-    const SchemaProvider * schema_provider;
+    SchemaContext schema_ctx;
 
     static std::string topicPartitonKey(const std::string & topic, int32_t partition) { return topic + "$" + std::to_string(partition); }
 
@@ -117,7 +116,7 @@ struct KafkaWALContext
     bool topic_consuming_started = false;
 
     KafkaWALContext(const std::string & topic_, int32_t partition_, int64_t offset_)
-        : topic(topic_), partition(partition_), offset(offset_), empty_schema_provider(new EmptySchemaProvider), schema_provider(empty_schema_provider.get())
+        : topic(topic_), partition(partition_), offset(offset_)
     {
     }
 
@@ -127,8 +126,6 @@ struct KafkaWALContext
         , partitions(partitions_)
         , replication_factor(replication_factor_)
         , cleanup_policy(cleanup_policy_)
-        , empty_schema_provider(new EmptySchemaProvider)
-        , schema_provider(empty_schema_provider.get())
     {
     }
 

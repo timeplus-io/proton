@@ -14,7 +14,12 @@ namespace ErrorCodes
 }
 
 StreamingBlockReader::StreamingBlockReader(
-    std::shared_ptr<IStorage> storage_, Int32 shard_, Int64 offset, const DWAL::KafkaWALSimpleConsumerPtr & consumer_, Poco::Logger * log_)
+    std::shared_ptr<IStorage> storage_,
+    Int32 shard_,
+    Int64 offset,
+    std::vector<size_t> column_positions,
+    const DWAL::KafkaWALSimpleConsumerPtr & consumer_,
+    Poco::Logger * log_)
     : storage(std::move(storage_))
     , header(storage->getInMemoryMetadataPtr()->getSampleBlock())
     , consumer(consumer_)
@@ -31,10 +36,18 @@ StreamingBlockReader::StreamingBlockReader(
 
     consume_ctx.offset = offset;
     consume_ctx.enforce_offset = true;
-    consume_ctx.schema_provider = this;
+    consume_ctx.schema_ctx.schema_provider = this;
+    consume_ctx.schema_ctx.read_schema_version = 0;
+    consume_ctx.schema_ctx.column_positions = std::move(column_positions);
     consumer->initTopicHandle(consume_ctx);
 
-    LOG_INFO(log, "Start streaming reading from topic={} shard={} offset={}", consume_ctx.topic, shard_, offset);
+    LOG_INFO(
+        log,
+        "Start streaming reading from topic={} shard={} offset={} column_positions={}",
+        consume_ctx.topic,
+        shard_,
+        offset,
+        fmt::join(consume_ctx.schema_ctx.column_positions.begin(), consume_ctx.schema_ctx.column_positions.end(), ","));
 }
 
 StreamingBlockReader::~StreamingBlockReader()

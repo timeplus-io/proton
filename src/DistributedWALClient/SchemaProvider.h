@@ -20,4 +20,17 @@ struct EmptySchemaProvider : public SchemaProvider
 private:
     DB::Block header;
 };
+
+
+struct SchemaContext
+{
+    SchemaContext(): empty_schema_provider(new EmptySchemaProvider), schema_provider(empty_schema_provider.get()) { }
+    explicit SchemaContext(const SchemaProvider & provider): schema_provider(&provider) { }
+
+    std::shared_ptr<EmptySchemaProvider> empty_schema_provider;
+    const SchemaProvider * schema_provider;
+    uint16_t read_schema_version = 0;
+    std::vector<size_t> column_positions;
+};
+
 };

@@ -216,6 +216,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
     struct WrappedData
     {
         ConsumeCallback callback;
+        SchemaContext schema_ctx;
         ConsumeCallbackData * data;
 
         RecordPtrs records;
@@ -232,6 +233,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
             Poco::Logger * log_)
             : callback(callback_), data(data_), ctx(ctx_), log(log_)
         {
+            schema_ctx.schema_provider = data;
             records.reserve(100);
         }
     };
@@ -250,7 +252,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
             }
 
             auto bytes = rkmessage->len;
-            auto record = kafkaMsgToRecord(rkmessage, *wrapped->data, false);
+            auto record = kafkaMsgToRecord(rkmessage, wrapped->schema_ctx, false);
 
             if (likely(record))
             {
@@ -347,7 +349,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
 ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
-    assert(ctx.schema_provider);
+    assert(ctx.schema_ctx.schema_provider);
 
     auto err = startConsumingIfNotYet(ctx);
     if (err != 0)
@@ -378,7 +380,7 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
                     continue;
                 }
 
-                auto record = kafkaMsgToRecord(rkmessage, *ctx.schema_provider, false);
+                auto record = kafkaMsgToRecord(rkmessage, ctx.schema_ctx, false);
                 if (likely(record))
                 {
                     result.records.push_back(record);

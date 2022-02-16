@@ -166,7 +166,7 @@ void KafkaWALConsumerMultiplexer::backgroundPoll()
             }
         }
 
-        return kafkaMsgToRecord(rkmessage, *callback_ctx->data, true);
+        return kafkaMsgToRecord(rkmessage, callback_ctx->schema_ctx, true);
     };
 
     auto last_flush = DB::MonotonicSeconds::now();

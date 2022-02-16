@@ -49,7 +49,7 @@ ByteVector Record::write(const Record & record, DB::CompressionMethodByte codec)
     return data;
 }
 
-RecordPtr Record::read(const char * data, size_t size, const SchemaProvider & schema_provider)
+RecordPtr Record::read(const char * data, size_t size, const SchemaContext & schema_ctx)
 {
     DB::ReadBufferFromMemory rb{data, size};
 
@@ -57,7 +57,7 @@ RecordPtr Record::read(const char * data, size_t size, const SchemaProvider & sc
     readIntBinary(wire_flags, rb);
 
     if (likely(Record::version(wire_flags) == Version::NATIVE_IN_SCHEMA))
-        return readInSchema(rb, wire_flags, schema_provider);
+        return readInSchema(rb, wire_flags, schema_ctx);
 
     auto method = codec(wire_flags);
     if (likely(method == DB::CompressionMethodByte::NONE))
@@ -105,20 +105,20 @@ ByteVector Record::writeInSchema(const Record & record, DB::CompressionMethodByt
     return data;
 }
 
-RecordPtr Record::readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, const SchemaProvider & schema_provider)
+RecordPtr Record::readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, const SchemaContext & schema_ctx)
 {
     assert(version(flags) == Version::NATIVE_IN_SCHEMA);
 
     uint16_t schema_ver = 0;
     if (likely(codec(flags) == DB::CompressionMethodByte::NONE))
     {
-        SchemaNativeReader reader(rb, schema_ver, schema_provider);
+        SchemaNativeReader reader(rb, schema_ver, schema_ctx);
         return std::make_shared<Record>(Record::opcode(flags), reader.read(), schema_ver);
     }
     else
     {
         DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
-        SchemaNativeReader reader(compressed_in, schema_ver, schema_provider);
+        SchemaNativeReader reader(compressed_in, schema_ver, schema_ctx);
         return std::make_shared<Record>(Record::opcode(flags), reader.read(), schema_ver);
     }
 }

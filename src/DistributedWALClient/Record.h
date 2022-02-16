@@ -96,7 +96,7 @@ struct Record
 
     static ByteVector write(const Record & record, DB::CompressionMethodByte codec = DB::CompressionMethodByte::NONE);
 
-    static std::shared_ptr<Record> read(const char * data, size_t size, const SchemaProvider & schema_provider);
+    static std::shared_ptr<Record> read(const char * data, size_t size, const SchemaContext & schema_ctx);
 
     Record(OpCode op_code_, DB::Block && block_, uint16_t schema_version_)
         : op_code(op_code_), block(std::move(block_)), schema_version(schema_version_)
@@ -106,7 +106,7 @@ struct Record
 
 private:
     static ByteVector writeInSchema(const Record & record, DB::CompressionMethodByte codec);
-    static std::shared_ptr<Record> readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, const SchemaProvider & schema_provider);
+    static std::shared_ptr<Record> readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, const SchemaContext & schema_ctx);
 };
 
 using Records = std::vector<Record>;

@@ -15,15 +15,14 @@ namespace DWAL
 class SchemaNativeReader final
 {
 public:
-    SchemaNativeReader(DB::ReadBuffer & istr_, uint16_t & schema_version_, const SchemaProvider & schema_);
+    SchemaNativeReader(DB::ReadBuffer & istr_, uint16_t & schema_version_, const SchemaContext & schema_ctx_);
 
     DB::Block read();
-    DB::Block read(const std::vector<size_t> & column_positions);
 
 private:
     DB::ReadBuffer & istr;
     uint16_t & schema_version;
-    const SchemaProvider & schema;
+    const SchemaContext & schema_ctx;
 };
 
 }

@@ -179,12 +179,12 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
     return topic_handle;
 }
 
-RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaProvider & schema_provider, bool copy_topic)
+RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaContext & schema_ctx, bool copy_topic)
 {
     assert(msg != nullptr);
 
     auto consume_time = DB::UTCMilliseconds::now();
-    RecordPtr record = Record::read(static_cast<const char *>(msg->payload), msg->len, schema_provider);
+    RecordPtr record = Record::read(static_cast<const char *>(msg->payload), msg->len, schema_ctx);
 
     if (unlikely(!record))
     {

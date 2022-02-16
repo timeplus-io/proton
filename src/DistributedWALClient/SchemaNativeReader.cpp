@@ -53,8 +53,8 @@ namespace
     }
 }
 
-SchemaNativeReader::SchemaNativeReader(DB::ReadBuffer & istr_, uint16_t & schema_version_, const SchemaProvider & schema_)
-    : istr(istr_), schema_version(schema_version_), schema(schema_)
+SchemaNativeReader::SchemaNativeReader(DB::ReadBuffer & istr_, uint16_t & schema_version_, const SchemaContext & schema_ctx_)
+    : istr(istr_), schema_version(schema_version_), schema_ctx(schema_ctx_)
 {
 }
 
@@ -76,73 +76,13 @@ DB::Block SchemaNativeReader::read()
     readVarUInt(columns, istr);
     readVarUInt(rows, istr);
 
-    const auto & header = schema.getSchema(schema_version);
+    const auto & header = schema_ctx.schema_provider->getSchema(schema_version);
     assert(rows > 0);
     assert(columns > 0);
     assert(columns == header.columns());
+    assert(schema_version == schema_ctx.read_schema_version);
 
-    for (auto column : header)
-    {
-        auto info = column.type->createSerializationInfo({});
-
-        uint8_t has_custom;
-        readBinary(has_custom, istr);
-        if (has_custom)
-            info->deserializeFromKindsBinary(istr);
-
-        auto serialization = column.type->getSerialization(*info);
-
-        /// Data
-        DB::ColumnPtr read_column = column.type->createColumn(*serialization);
-
-        readData(*serialization, read_column, istr, rows);
-        column.column = std::move(read_column);
-
-        res.insert(std::move(column));
-    }
-
-    //    if (rows && header)
-    //    {
-    //        /// Allow to skip columns. Fill them with default values.
-    //        Block tmp_res;
-    //
-    //        for (auto & col : header)
-    //        {
-    //            if (res.has(col.name))
-    //                tmp_res.insert(res.getByName(col.name));
-    //            else
-    //                tmp_res.insert({col.type->createColumn()->cloneResized(rows), col.type, col.name});
-    //        }
-    //
-    //        res.swap(tmp_res);
-    //    }
-
-    return res;
-}
-
-DB::Block SchemaNativeReader::read(const std::vector<size_t> & column_positions)
-{
-    DB::Block res;
-
-    if (istr.eof())
-    {
-        schema_version = NO_SCHEMA;
-        return res;
-    }
-
-    /// Dimensions
-    uint16_t columns = 0;
-    uint32_t rows = 0;
-
-    readVarUInt(schema_version, istr);
-    readVarUInt(columns, istr);
-    readVarUInt(rows, istr);
-
-    const auto & header = schema.getSchema(schema_version);
-    assert(rows > 0);
-    assert(columns > 0);
-    assert(columns == header.columns());
-
+    const auto & column_positions = schema_ctx.column_positions;
     for (size_t pos = 0; auto column : header)
     {
         auto info = column.type->createSerializationInfo({});

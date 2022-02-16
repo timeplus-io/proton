@@ -23,6 +23,7 @@ public:
     {
     private:
         ConsumeCallback callback;
+        SchemaContext schema_ctx;
         ConsumeCallbackData * data;
 
         /// Only support same callback per topic
@@ -34,6 +35,7 @@ public:
         CallbackContext(ConsumeCallback callback_, ConsumeCallbackData * data_, int32_t partition_)
             : callback(callback_), data(data_), partitions({partition_})
         {
+            schema_ctx.schema_provider = data;
         }
 
         friend class KafkaWALConsumerMultiplexer;

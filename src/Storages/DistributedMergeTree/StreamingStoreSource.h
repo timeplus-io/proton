@@ -30,6 +30,7 @@ public:
 
 private:
     void readAndProcess();
+    std::vector<size_t> calculateColumnPositions(const Block & header, const Block & schema);
 
 private:
     std::shared_ptr<IStorage> storage;

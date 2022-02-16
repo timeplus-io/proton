@@ -102,6 +102,13 @@ namespace
         auto block = buildBlock(tasks);
         return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block), DWAL::NO_SCHEMA);
     }
+
+    /// Escape input string to make it legal to `INSERT INTO`
+    String & escapeValue(String & s)
+    {
+        std::replace(s.begin(), s.end(), '\'', ' ');
+        return s;
+    }
 }
 
 const String TaskStatusService::TaskStatus::SUBMITTED = "SUBMITTED";
@@ -548,35 +555,35 @@ bool TaskStatusService::persistentTaskStatuses(std::vector<TaskStatusPtr> tasks)
     createTaskTableIfNotExists();
 
     assert(!tasks.empty());
-    String query = "INSERT INTO system.tasks \
-                    (id, status, progress, reason, user, context, created, last_modified) \
-                    VALUES ";
 
     auto context = Context::createCopy(global_context);
     context->setCurrentQueryId("");
     CurrentThread::QueryScope query_scope{context};
 
-    constexpr auto * value_template = "{}('{}', '{}', '{}', '{}', '{}', '{}', {}, {})";
-    String delimiter = "";
+    String query = "INSERT INTO system.tasks \
+                    (id, status, progress, reason, user, context, created, last_modified) \
+                    VALUES ";
+
+    std::vector<String> values;
+    values.reserve(tasks.size());
 
     for (const auto & task : tasks)
     {
         auto created = std::to_string(task->created == -1 ? (UTCMilliseconds::now()) : task->created);
         auto last_modified = std::to_string(task->last_modified == -1 ? (UTCMilliseconds::now()) : task->last_modified);
-        String value = fmt::format(
-            value_template,
-            delimiter,
+        values.push_back(fmt::format(
+            "('{}', '{}', '{}', '{}', '{}', '{}', {}, {})",
             task->id,
             task->status,
             task->progress,
-            task->reason,
-            task->user,
-            task->context,
+            escapeValue(task->reason),
+            escapeValue(task->user),
+            escapeValue(task->context),
             created,
-            last_modified);
-        query += value;
-        delimiter = ",";
+            last_modified));
     }
+
+    query += boost::algorithm::join(values,  ", ");
 
     LOG_INFO(log, "Persistent {} tasks. ", tasks.size());
     ReadBufferFromString in(query);
@@ -589,8 +596,8 @@ bool TaskStatusService::persistentTaskStatuses(std::vector<TaskStatusPtr> tasks)
     }
     catch (...)
     {
+        LOG_ERROR(log, "Persistent task failed", getCurrentExceptionMessage(true, true));
         return false;
-        LOG_ERROR(log, "Persistent task failed. ", getCurrentExceptionMessage(true, true));
     }
     return true;
 }

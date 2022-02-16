@@ -16,6 +16,8 @@ using namespace DB;
 using namespace DWAL;
 using namespace std;
 
+extern Block createBlockBig(size_t rows);
+
 namespace
 {
 std::unique_ptr<Record> createRecord()
@@ -68,24 +70,73 @@ std::unique_ptr<Record> createRecord()
     return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), DWAL::NO_SCHEMA);
 }
 
+std::unique_ptr<Record> createRecordBig(size_t rows)
+{
+    Block block(createBlockBig(rows));
+    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), DWAL::NO_SCHEMA);
+}
+
 struct TestSchemaProvider : public DWAL::SchemaProvider
 {
-    TestSchemaProvider()
-        : header(createRecord()->block.cloneEmpty())
-    {
-    }
+    TestSchemaProvider() : header(createRecord()->block.cloneEmpty()) { }
 
-    const DB::Block & getSchema(uint16_t /*schema_version*/) const override
-    {
-        return header;
-    }
+    const DB::Block & getSchema(uint16_t /*schema_version*/) const override { return header; }
 
     DB::Block header;
 };
 
-
 EmptySchemaProvider empty_schema_provider;
+SchemaContext empty_schema_ctx(empty_schema_provider);
 TestSchemaProvider test_schema_provider;
+SchemaContext test_schema_ctx(test_schema_provider);
+
+std::unordered_map<String, std::pair<int64_t, int64_t>> write_bench_results;
+std::unordered_map<String, std::pair<int64_t, int64_t>> read_bench_results;
+
+/// Change this base_iterations to 1000 to do benchmark for longer time
+constexpr int32_t base_iterations = 10;
+
+void writeBench(const Record & r, const String & test_case, int32_t n = 10000000)
+{
+    auto write_loop = [&](DB::CompressionMethodByte codec) {
+        for (auto i = 0; i < n; i++)
+            Record::write(r, codec);
+    };
+
+    auto t = std::chrono::high_resolution_clock::now();
+    write_loop(DB::CompressionMethodByte::NONE);
+    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
+
+    t = std::chrono::high_resolution_clock::now();
+    write_loop(DB::CompressionMethodByte::LZ4);
+    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
+    std::cout << test_case << ", write uncompressed: " << int32_t(n * r.block.rows() / duration0.count())
+              << " eps, write compressed: " << int32_t(n * r.block.rows() / duration1.count()) << " eps" << std::endl;
+
+    ASSERT_FALSE(write_bench_results.contains(test_case));
+    write_bench_results[test_case] = {int64_t(n * r.block.rows() / duration0.count()), int64_t(n * r.block.rows() / duration1.count())};
+}
+
+void readBench(const Record & r, const SchemaContext & schema_ctx, const String & test_case, int32_t n = 1000000)
+{
+    auto read_loop = [&](DB::CompressionMethodByte codec) {
+        ByteVector data{Record::write(r, codec)};
+        for (auto i = 0; i < n; i++)
+            Record::read(reinterpret_cast<char *>(data.data()), data.size(), schema_ctx);
+    };
+
+    auto t = std::chrono::high_resolution_clock::now();
+    read_loop(DB::CompressionMethodByte::NONE);
+    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
+
+    t = std::chrono::high_resolution_clock::now();
+    read_loop(DB::CompressionMethodByte::LZ4);
+    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
+    std::cout << test_case << ", read uncompressed: " << int32_t(n * r.block.rows() / duration0.count())
+              << " eps, read compressed: " << int32_t(n * r.block.rows() / duration1.count()) << " eps" << std::endl;
+
+    ASSERT_FALSE(read_bench_results.contains(test_case));
+    read_bench_results[test_case] = {int64_t(n * r.block.rows() / duration0.count()), int64_t(n * r.block.rows() / duration1.count())};
 }
 
 void checkRecord(const std::vector<String> & cols, const Record & expect, const Record & actual)
@@ -113,24 +164,16 @@ void checkRecord(const std::vector<String> & cols, const Record & expect, const 
         EXPECT_EQ(col_expected.column->size(), col_got.column->size());
 
         for (size_t i = 0; i < col_got.column->size(); ++i)
-        {
-            if (col_name == "id")
-                EXPECT_EQ(col_expected.column->get64(i), col_got.column->get64(i));
-            else if (col_name == "cpu" || col_name == "_tp_time")
-                EXPECT_EQ(col_expected.column->getFloat64(i), col_got.column->getFloat64(i));
-            else if (col_name == "raw")
-                EXPECT_EQ(col_expected.column->getDataAt(i), col_got.column->getDataAt(i));
-            else
-                ASSERT_TRUE(false);
-        }
+            EXPECT_EQ(col_expected.column->compareAt(i, i, *col_got.column, -1), 0);
     }
+}
 }
 
 TEST(RecordSerde, Native)
 {
     auto r = createRecord();
     ByteVector data{Record::write(*r)};
-    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_provider);
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_ctx);
     auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
     checkRecord(cols, *r, *rr);
@@ -141,7 +184,7 @@ TEST(RecordSerde, NativeCompression)
     auto r = createRecord();
     ByteVector data{Record::write(*r, DB::CompressionMethodByte::LZ4)};
 
-    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_provider);
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_ctx);
     auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
     checkRecord(cols, *r, *rr);
@@ -152,9 +195,10 @@ TEST(RecordSerde, NativeInSchema)
     auto r = createRecord();
     /// force a schema
     r->schema_version = 0;
+    test_schema_ctx.column_positions.clear();
 
     ByteVector data{Record::write(*r)};
-    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_provider);
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_ctx);
     auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
     checkRecord(cols, *r, *rr);
@@ -165,10 +209,11 @@ TEST(RecordSerde, NativeInSchemaCompression)
     auto r = createRecord();
     /// force a schema
     r->schema_version = 0;
+    test_schema_ctx.column_positions.clear();
 
     ByteVector data{Record::write(*r, DB::CompressionMethodByte::LZ4)};
 
-    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_provider);
+    auto rr = Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_ctx);
     auto cols = std::vector<String>{"id", "cpu", "raw", "_tp_time"};
 
     checkRecord(cols, *r, *rr);
@@ -177,95 +222,286 @@ TEST(RecordSerde, NativeInSchemaCompression)
 TEST(RecordSerde, WriteBenchNative)
 {
     auto r = createRecord();
-
-    int32_t n = 1000000;
-    auto write_loop = [&](DB::CompressionMethodByte codec) {
-        for (auto i = 0; i < n; i++)
-        {
-            Record::write(*r, codec);
-        }
-    };
-
-    auto t = std::chrono::high_resolution_clock::now();
-    write_loop(DB::CompressionMethodByte::NONE);
-    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
-
-    t = std::chrono::high_resolution_clock::now();
-    write_loop(DB::CompressionMethodByte::LZ4);
-    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
-    std::cout << "write uncompressed: " << int32_t(n / duration0.count()) << "/s, write compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+    writeBench(*r, "Native");
 }
 
 TEST(RecordSerde, ReadBenchmarkNative)
 {
     auto r = createRecord();
-
-    int32_t n = 1000000;
-    auto read_loop = [&](DB::CompressionMethodByte codec) {
-    	ByteVector data{Record::write(*r, codec)};
-        for (auto i = 0; i < n; i++)
-        {
-            Record::read(reinterpret_cast<char *>(data.data()), data.size(), empty_schema_provider);
-        }
-    };
-
-    auto t = std::chrono::high_resolution_clock::now();
-    read_loop(DB::CompressionMethodByte::NONE);
-    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
-
-    t = std::chrono::high_resolution_clock::now();
-    read_loop(DB::CompressionMethodByte::LZ4);
-    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
-    std::cout << "read uncompressed: " << int32_t(n / duration0.count()) << "/s, read compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+    readBench(*r, empty_schema_ctx, "Native");
 }
-
 
 TEST(RecordSerde, WriteBenchmarkNativeInSchema)
 {
     auto r = createRecord();
     /// force a schema
     r->schema_version = 0;
-
-    int32_t n = 1000000;
-    auto write_loop = [&](DB::CompressionMethodByte codec) {
-        for (auto i = 0; i < n; i++)
-        {
-            Record::write(*r, codec);
-        }
-    };
-
-    auto t = std::chrono::high_resolution_clock::now();
-    write_loop(DB::CompressionMethodByte::NONE);
-    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
-
-    t = std::chrono::high_resolution_clock::now();
-    write_loop(DB::CompressionMethodByte::LZ4);
-    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
-    std::cout << "write in schema uncompressed: " << int32_t(n / duration0.count()) << "/s, write in schema compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+    writeBench(*r, "NativeInSchema");
 }
 
-TEST(RecordSerde, SchemaReadBenchmark)
+TEST(RecordSerde, ReadBenchmarkNativeInSchema)
 {
-
     auto r{createRecord()};
     /// force a schema
     r->schema_version = 0;
+    test_schema_ctx.column_positions.clear();
 
-    int32_t n = 1000000;
-    auto read_loop = [&](DB::CompressionMethodByte codec) {
-        ByteVector data{Record::write(*r, codec)};
-        for (auto i = 0; i < n; i++)
+    readBench(*r, test_schema_ctx, "NativeInSchema");
+}
+
+TEST(RecordSerde, ReadBenchmarkNativeInSchemaSkip)
+{
+    auto r{createRecord()};
+    /// force a schema
+    r->schema_version = 0;
+    /// only read the second column
+    test_schema_ctx.column_positions = {1};
+
+    readBench(*r, test_schema_ctx, "NativeInSchemaSkip");
+}
+
+TEST(RecordSerde, WriteBenchNativeBig)
+{
+    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
+        {1, 100 * base_iterations}, {10, 100 * base_iterations}, {100, 100 * base_iterations}, {1000, 100 * base_iterations}};
+    for (auto [rows, iterations] : rows_iterations)
+    {
+        auto r = createRecordBig(rows);
+        writeBench(*r, "NativeBig_" + std::to_string(rows), iterations);
+    }
+}
+
+TEST(RecordSerde, ReadBenchmarkNativeBig)
+{
+    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
+        {1, 10 * base_iterations}, {10, 10 * base_iterations}, {100, 10 * base_iterations}, {1000, 10 * base_iterations}};
+    for (auto [rows, iterations] : rows_iterations)
+    {
+        auto r = createRecordBig(rows);
+        readBench(*r, empty_schema_ctx, "NativeBig_" + std::to_string(rows), iterations);
+    }
+}
+
+TEST(RecordSerde, WriteBenchmarkNativeInSchemaBig)
+{
+    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
+        {1, 100 * base_iterations}, {10, 100 * base_iterations}, {100, 100 * base_iterations}, {1000, 100 * base_iterations}};
+    for (auto [rows, iterations] : rows_iterations)
+    {
+        auto r = createRecordBig(rows);
+        /// force a schema
+        r->schema_version = 0;
+        writeBench(*r, "NativeInSchemaBig_" + std::to_string(rows), iterations);
+    }
+}
+
+TEST(RecordSerde, ReadBenchmarkNativeInSchemaBig)
+{
+    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
+        {1, 100 * base_iterations}, {10, 100 * base_iterations}, {100, 100 * base_iterations}, {1000, 100 * base_iterations}};
+    for (auto [rows, iterations] : rows_iterations)
+    {
+        auto r{createRecordBig(rows)};
+        /// force a schema
+        r->schema_version = 0;
+        test_schema_ctx.column_positions.clear();
+        readBench(*r, test_schema_ctx, "NativeInSchemaBig_" + std::to_string(rows), iterations);
+    }
+}
+
+TEST(RecordSerde, ReadBenchmarkNativeInSchemaSkipBig)
+{
+    std::vector<std::pair<int32_t, int32_t>> rows_iterations{
+        {1, 1000 * base_iterations}, {10, 1000 * base_iterations}, {100, 1000 * base_iterations}, {1000, 1000 * base_iterations}};
+    for (auto [rows, iterations] : rows_iterations)
+    {
+        auto r{createRecordBig(rows)};
+        /// force a schema
+        r->schema_version = 0;
+        /// only read the second column
+        test_schema_ctx.column_positions = {1};
+
+        readBench(*r, test_schema_ctx, "NativeInSchemaSkipBig_" + std::to_string(rows), iterations);
+    }
+}
+
+TEST(RecordSerde, Summary)
+{
+    {
+        ASSERT_TRUE(write_bench_results.contains("Native"));
+        const auto & write_native = write_bench_results["Native"];
+
+        ASSERT_TRUE(write_bench_results.contains("NativeInSchema"));
+        const auto & write_native_in_schema = write_bench_results["NativeInSchema"];
+
+        ASSERT_TRUE(read_bench_results.contains("Native"));
+        const auto & read_native = read_bench_results["Native"];
+
+        ASSERT_TRUE(read_bench_results.contains("NativeInSchema"));
+        const auto & read_native_in_schema = read_bench_results["NativeInSchema"];
+
+        ASSERT_TRUE(read_bench_results.contains("NativeInSchemaSkip"));
+        const auto & read_native_in_schema_skip = read_bench_results["NativeInSchemaSkip"];
+
+        auto r = createRecord();
+        std::cout << fmt::format("Small block with rows={} columns={}:", r->block.rows(), r->block.columns()) << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Write / Compression Native-Write: {}/{} = {:.2f}",
+                         write_native.first,
+                         write_native.second,
+                         (write_native.first * 1.0) / write_native.second)
+                  << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Write-In-Schema / Compression Native-Write-In-Schema: {}/{} = {:.2f}",
+                         write_native_in_schema.first,
+                         write_native_in_schema.second,
+                         (write_native_in_schema.first * 1.0) / write_native_in_schema.second)
+                  << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Write-In-Schema / Uncompression Native-Write: {}/{} = {:.2f}",
+                         write_native_in_schema.first,
+                         write_native.first,
+                         (write_native_in_schema.first * 1.0) / write_native.first)
+                  << "\n"
+                  << fmt::format(
+                         "Compression Native-Write-In-Schema / Compression Native-Write: {}/{} = {:.2f}",
+                         write_native_in_schema.second,
+                         write_native.second,
+                         (write_native_in_schema.second * 1.0) / write_native.second)
+                  << "\n----------\n"
+                  << fmt::format(
+                         "Uncompression Native-Read / Compression Native-Read: {}/{} = {:.2f}",
+                         read_native.first,
+                         read_native.second,
+                         (read_native.first * 1.0) / read_native.second)
+                  << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Read-In-Schema / Compression Native-Read-In-Schema: {}/{} = {:.2f}",
+                         read_native_in_schema.first,
+                         read_native_in_schema.second,
+                         (read_native_in_schema.first * 1.0) / read_native_in_schema.second)
+                  << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Read-In-Schema-Skip / Compression Native-Read-In-Schema-Skip: {}/{} = {:.2f}",
+                         read_native_in_schema_skip.first,
+                         read_native_in_schema_skip.second,
+                         (read_native_in_schema_skip.first * 1.0) / read_native_in_schema_skip.second)
+                  << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Read-In-Schema / Uncompression Native-Read: {}/{} = {:.2f}",
+                         read_native_in_schema.first,
+                         read_native.first,
+                         (read_native_in_schema.first * 1.0) / read_native.first)
+                  << "\n"
+                  << fmt::format(
+                         "Uncompression Native-Read-In-Schema-Skip / Uncompression Native-Read: {}/{} = {:.2f}",
+                         read_native_in_schema_skip.first,
+                         read_native.first,
+                         (read_native_in_schema_skip.first * 1.0) / read_native.first)
+                  << "\n"
+                  << fmt::format(
+                         "Compression Native-Read-In-Schema / Compression Native-Read: {}/{} = {:.2f}",
+                         read_native_in_schema.second,
+                         read_native.second,
+                         (read_native_in_schema.second * 1.0) / read_native.second)
+                  << "\n"
+                  << fmt::format(
+                         "Compression Native-Read-In-Schema-Skip / Compression Native-Read: {}/{} = {:.2f}",
+                         read_native_in_schema_skip.second,
+                         read_native.second,
+                         (read_native_in_schema_skip.second * 1.0) / read_native.second)
+            << "\n***********\n";
+    }
+
+    {
+        auto block{createBlockBig(1)};
+
+        for (auto rows : {1, 10, 100, 1000})
         {
-            Record::read(reinterpret_cast<char *>(data.data()), data.size(), test_schema_provider);
+            auto rows_str = std::to_string(rows);
+
+            ASSERT_TRUE(write_bench_results.contains("NativeBig_" + rows_str));
+            const auto & write_native = write_bench_results["NativeBig_" + rows_str];
+
+            ASSERT_TRUE(write_bench_results.contains("NativeInSchemaBig_" + rows_str));
+            const auto & write_native_in_schema = write_bench_results["NativeInSchemaBig_" + rows_str];
+
+            ASSERT_TRUE(read_bench_results.contains("NativeBig_" + rows_str));
+            const auto & read_native = read_bench_results["NativeBig_" + rows_str];
+
+            ASSERT_TRUE(read_bench_results.contains("NativeInSchemaBig_" + rows_str));
+            const auto & read_native_in_schema = read_bench_results["NativeInSchemaBig_" + rows_str];
+
+            ASSERT_TRUE(read_bench_results.contains("NativeInSchemaSkipBig_" + rows_str));
+            const auto & read_native_in_schema_skip = read_bench_results["NativeInSchemaSkipBig_" + rows_str];
+
+            std::cout << fmt::format("Big block with rows={} columns={}:", rows, block.columns()) << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Write / Compression Native-Write: {}/{} = {:.2f}",
+                             write_native.first,
+                             write_native.second,
+                             (write_native.first * 1.0) / write_native.second)
+                      << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Write-In-Schema / Compression Native-Write-In-Schema: {}/{} = {:.2f}",
+                             write_native_in_schema.first,
+                             write_native_in_schema.second,
+                             (write_native_in_schema.first * 1.0) / write_native_in_schema.second)
+                      << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Write-In-Schema / Uncompression Native-Write: {}/{} = {:.2f}",
+                             write_native_in_schema.first,
+                             write_native.first,
+                             (write_native_in_schema.first * 1.0) / write_native.first)
+                      << "\n"
+                      << fmt::format(
+                             "Compression Native-Write-In-Schema / Compression Native-Write: {}/{} = {:.2f}",
+                             write_native_in_schema.second,
+                             write_native.second,
+                             (write_native_in_schema.second * 1.0) / write_native.second)
+                      << "\n----------\n"
+                      << fmt::format(
+                             "Uncompression Native-Read / Compression Native-Read: {}/{} = {:.2f}",
+                             read_native.first,
+                             read_native.second,
+                             (read_native.first * 1.0) / read_native.second)
+                      << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Read-In-Schema / Compression Native-Read-In-Schema: {}/{} = {:.2f}",
+                             read_native_in_schema.first,
+                             read_native_in_schema.second,
+                             (read_native_in_schema.first * 1.0) / read_native_in_schema.second)
+                      << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Read-In-Schema-Skip / Compression Native-Read-In-Schema-Skip: {}/{} = {:.2f}",
+                             read_native_in_schema_skip.first,
+                             read_native_in_schema_skip.second,
+                             (read_native_in_schema_skip.first * 1.0) / read_native_in_schema_skip.second)
+                      << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Read-In-Schema / Uncompression Native-Read: {}/{} = {:.2f}",
+                             read_native_in_schema.first,
+                             read_native.first,
+                             (read_native_in_schema.first * 1.0) / read_native.first)
+                      << "\n"
+                      << fmt::format(
+                             "Uncompression Native-Read-In-Schema-Skip / Uncompression Native-Read: {}/{} = {:.2f}",
+                             read_native_in_schema_skip.first,
+                             read_native.first,
+                             (read_native_in_schema_skip.first * 1.0) / read_native.first)
+                      << "\n"
+                      << fmt::format(
+                             "Compression Native-Read-In-Schema / Compression Native-Read: {}/{} = {:.2f}",
+                             read_native_in_schema.second,
+                             read_native.second,
+                             (read_native_in_schema.second * 1.0) / read_native.second)
+                      << "\n"
+                      << fmt::format(
+                             "Compression Native-Read-In-Schema-Skip / Compression Native-Read: {}/{} = {:.2f}",
+                             read_native_in_schema_skip.second,
+                             read_native.second,
+                             (read_native_in_schema_skip.second * 1.0) / read_native.second)
+                      << "\n==========\n";
         }
-    };
-
-    auto t = std::chrono::high_resolution_clock::now();
-    read_loop(DB::CompressionMethodByte::NONE);
-    std::chrono::duration<double> duration0 = std::chrono::high_resolution_clock::now() - t;
-
-    t = std::chrono::high_resolution_clock::now();
-    read_loop(DB::CompressionMethodByte::LZ4);
-    std::chrono::duration<double> duration1 = std::chrono::high_resolution_clock::now() - t;
-    std::cout << "read in schema uncompressed: " << int32_t(n / duration0.count()) << "/s, read in schema compressed: " << int32_t(n / duration1.count()) << "/s" << std::endl;
+    }
 }
