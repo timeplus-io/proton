@@ -200,4 +200,11 @@ void SerializationFixedString::deserializeTextCSV(IColumn & column, ReadBuffer &
 }
 
 
+/// proton: starts
+void SerializationFixedString::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+{
+    istr.ignore(limit * n);
+}
+/// proton: ends
+
 }

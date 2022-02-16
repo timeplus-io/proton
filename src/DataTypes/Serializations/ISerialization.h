@@ -251,6 +251,17 @@ public:
         DeserializeBinaryBulkStatePtr & state,
         SubstreamsCache * cache) const;
 
+    /// proton: starts
+    /// Skip deserialization of a column. Used for streaming processing
+    virtual void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const;
+
+    /// Common serialization shall override this method
+    virtual void deserializeBinaryBulkSkip(ReadBuffer & /*istr*/, size_t /*limit*/) const { assert(0); }
+    /// proton: ends
+
     /** Override these methods for data types that require just single stream (most of data types).
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;

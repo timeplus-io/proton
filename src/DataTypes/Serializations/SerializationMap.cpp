@@ -308,4 +308,13 @@ void SerializationMap::deserializeBinaryBulkWithMultipleStreams(
     nested->deserializeBinaryBulkWithMultipleStreams(column_map.getNestedColumnPtr(), limit, settings, state, cache);
 }
 
+/// proton: starts
+void SerializationMap::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    nested->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+}
+/// proton: ends
 }

@@ -130,6 +130,23 @@ size_t deserializeOffsets(IColumn::Offsets & offsets,
     return total_rows;
 }
 
+/// proton: starts
+/// Returns number of  groups read
+size_t deserializeOffsetsSkip(ReadBuffer & istr)
+{
+    size_t total_groups = 0;
+    while (!istr.eof())
+    {
+        size_t group_size;
+        readVarUInt(group_size, istr);
+        ++total_groups;
+
+        if (group_size & END_OF_GRANULE_FLAG)
+            return total_groups;
+    }
+    return total_groups;
+}
+/// proton: ends
 }
 
 SerializationSparse::SerializationSparse(const SerializationPtr & nested_)
@@ -376,5 +393,32 @@ void SerializationSparse::serializeTextXML(const IColumn & column, size_t row_nu
     const auto & column_sparse = assert_cast<const ColumnSparse &>(column);
     nested->serializeTextXML(column_sparse.getValuesColumn(), column_sparse.getValueIndex(row_num), ostr, settings);
 }
+
+
+/// proton: starts
+void SerializationSparse::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t /*limit*/,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    auto * state_sparse = checkAndGetState<DeserializeStateSparse>(state);
+
+    if (!settings.continuous_reading)
+        state_sparse->reset();
+
+    size_t num_values = 0;
+    settings.path.push_back(Substream::SparseOffsets);
+    if (auto * stream = settings.getter(settings.path))
+        num_values = deserializeOffsetsSkip(*stream);
+
+    if (num_values >= 1)
+        num_values -= 1;
+
+    settings.path.back() = Substream::SparseElements;
+    nested->deserializeBinaryBulkWithMultipleStreamsSkip(num_values, settings, state_sparse->nested);
+    settings.path.pop_back();
+}
+/// proton: ends
+
 
 }

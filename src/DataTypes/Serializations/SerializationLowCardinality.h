@@ -66,6 +66,13 @@ public:
     void deserializeTextRaw(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
     void serializeTextRaw(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const override;
 
+    /// proton: starts
+    void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const override;
+    /// proton: ends
+
 private:
     template <typename ... Params>
     using SerializeFunctionPtr = void (ISerialization::*)(const IColumn &, size_t, Params ...) const;

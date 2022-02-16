@@ -129,4 +129,10 @@ void SerializationUUID::deserializeBinaryBulk(IColumn & column, ReadBuffer & ist
     x.resize(initial_size + size / sizeof(UUID));
 }
 
+/// proton: starts
+void SerializationUUID::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+{
+    istr.ignore(sizeof(UUID) * limit);
+}
+/// proton: ends
 }

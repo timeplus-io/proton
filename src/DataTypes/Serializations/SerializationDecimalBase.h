@@ -27,6 +27,10 @@ public:
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
     void deserializeBinary(IColumn & column, ReadBuffer & istr) const override;
     void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
+
+    /// proton: starts
+    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    /// proton: ends
 };
 
 }

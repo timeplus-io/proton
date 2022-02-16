@@ -135,6 +135,17 @@ void ISerialization::deserializeBinaryBulkWithMultipleStreams(
     }
 }
 
+/// proton: starts
+void ISerialization::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & /*state*/) const
+{
+    if (ReadBuffer * stream = settings.getter(settings.path))
+        deserializeBinaryBulkSkip(*stream, limit);
+}
+/// proton: ends
+
 namespace
 {
 

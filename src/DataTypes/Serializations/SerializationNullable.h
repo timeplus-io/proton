@@ -91,6 +91,13 @@ public:
     template <typename ReturnType = bool, bool escaped>
     static ReturnType deserializeTextEscapedAndRawImpl(IColumn & column, ReadBuffer & istr, const FormatSettings & settings, const SerializationPtr & nested);
 
+    /// proton: starts
+    void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const override;
+    /// proton: ends
+
 private:
     struct SubcolumnCreator : public ISubcolumnCreator
     {

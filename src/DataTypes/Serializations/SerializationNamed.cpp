@@ -74,4 +74,14 @@ void SerializationNamed::addToPath(SubstreamPath & path) const
     path.back().escape_tuple_delimiter = escape_delimiter;
 }
 
+void SerializationNamed::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    addToPath(settings.path);
+    nested_serialization->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+    settings.path.pop_back();
+}
+
 }

@@ -18,6 +18,7 @@ public:
     SchemaNativeReader(DB::ReadBuffer & istr_, uint16_t & schema_version_, const SchemaProvider & schema_);
 
     DB::Block read();
+    DB::Block read(const std::vector<size_t> & column_positions);
 
 private:
     DB::ReadBuffer & istr;

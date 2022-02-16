@@ -56,6 +56,13 @@ public:
         DeserializeBinaryBulkStatePtr & state,
         SubstreamsCache * cache) const override;
 
+    /// proton: starts
+    void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const override;
+    /// proton: ends
+
 private:
     struct SubcolumnCreator : public ISubcolumnCreator
     {

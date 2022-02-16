@@ -140,4 +140,18 @@ void SerializationWrapper::serializeTextXML(const IColumn & column, size_t row_n
     nested_serialization->serializeTextXML(column, row_num, ostr, settings);
 }
 
+/// proton: starts
+void SerializationWrapper::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    nested_serialization->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+}
+
+void SerializationWrapper::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+{
+    nested_serialization->deserializeBinaryBulkSkip(istr, limit);
+}
+/// proton: ends
 }

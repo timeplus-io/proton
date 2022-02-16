@@ -66,6 +66,14 @@ public:
 
     const ElementSerializations & getElementsSerializations() const { return elems; }
 
+    /// proton: starts
+    void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const override;
+    /// proton: ends
+
+
 private:
     ElementSerializations elems;
     bool have_explicit_names;

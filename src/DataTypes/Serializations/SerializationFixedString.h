@@ -45,6 +45,10 @@ public:
     /// If the length is less than getN() the function will add zero characters up to getN().
     /// If the length is greater than getN() the function will throw an exception.
     static void alignStringLength(size_t n, PaddedPODArray<UInt8> & data, size_t string_start);
+
+    /// proton: starts
+    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    /// proton: ends
 };
 
 }

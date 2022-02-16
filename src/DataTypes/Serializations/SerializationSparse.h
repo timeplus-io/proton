@@ -83,6 +83,13 @@ public:
 
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const override;
 
+    /// proton: starts
+    void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const override;
+    /// proton: ends
+
 private:
     struct SubcolumnCreator : public ISubcolumnCreator
     {

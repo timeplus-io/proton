@@ -394,4 +394,15 @@ size_t SerializationTuple::getPositionByName(const String & name) const
     throw Exception("Tuple doesn't have element with name '" + name + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 }
 
+/// proton: starts
+void SerializationTuple::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    auto * tuple_state = checkAndGetState<DeserializeBinaryBulkStateTuple>(state);
+    for (size_t i = 0; i < elems.size(); ++i)
+        elems[i]->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, tuple_state->states[i]);
+}
+/// proton: ends
 }

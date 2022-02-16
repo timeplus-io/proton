@@ -64,6 +64,14 @@ void SerializationDecimalBase<T>::deserializeBinaryBulk(IColumn & column, ReadBu
     x.resize(initial_size + size / sizeof(FieldType));
 }
 
+/// proton: starts
+template <typename T>
+void SerializationDecimalBase<T>::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+{
+    istr.ignore(sizeof(FieldType) * limit);
+}
+/// proton: ends
+
 template class SerializationDecimalBase<Decimal32>;
 template class SerializationDecimalBase<Decimal64>;
 template class SerializationDecimalBase<Decimal128>;

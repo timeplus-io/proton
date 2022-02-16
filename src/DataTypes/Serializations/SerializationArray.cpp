@@ -10,7 +10,6 @@
 #include <IO/WriteBufferFromString.h>
 
 #include <Formats/FormatSettings.h>
-#include <Formats/ProtobufReader.h>
 
 namespace DB
 {
@@ -132,6 +131,19 @@ namespace
 
         offset_values.resize(i);
     }
+
+    /// proton: starts
+    size_t deserializeArraySizesPositionIndependentSkip(ReadBuffer & istr, UInt64 limit)
+    {
+        /// First skip limit - 1 elements
+        istr.ignore(sizeof(ColumnArray::Offset) * (limit - 1));
+
+        size_t last_offset = 0;
+        Field last(last_offset);
+        SerializationNumber<ColumnArray::Offset>().deserializeBinary(last, istr);
+        return last.get<size_t>();
+    }
+    /// proton: ends
 
     ColumnPtr arraySizesToOffsets(const IColumn & column)
     {
@@ -553,4 +565,38 @@ void SerializationArray::deserializeTextCSV(IColumn & column, ReadBuffer & istr,
     }
 }
 
+
+/// proton: starts
+void SerializationArray::deserializeBinaryBulkWithMultipleStreamsSkip(size_t limit, DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr & state) const
+{
+    assert(limit > 0);
+
+    size_t last_offset = 0;
+    settings.path.push_back(Substream::ArraySizes);
+    if (auto * stream = settings.getter(settings.path))
+    {
+        if (settings.position_independent_encoding)
+        {
+            last_offset = deserializeArraySizesPositionIndependentSkip(*stream, limit);
+        }
+        else
+        {
+            /// We need deserialize the last offset to calculates nested limit
+            /// first skip the n - 1 elements
+            SerializationNumber<ColumnArray::Offset>().deserializeBinaryBulkSkip(*stream, limit - 1);
+
+            /// deserialize the last one
+            Field last(last_offset);
+            SerializationNumber<ColumnArray::Offset>().deserializeBinary(last, *stream);
+            last_offset = last.get<size_t>();
+        }
+    }
+
+    settings.path.back() = Substream::ArrayElements;
+
+    nested->deserializeBinaryBulkWithMultipleStreamsSkip(last_offset, settings, state);
+
+    settings.path.pop_back();
+}
+/// proton: ends
 }

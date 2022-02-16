@@ -649,4 +649,23 @@ template bool SerializationNullable::deserializeTextCSVImpl<bool>(IColumn & colu
 template bool SerializationNullable::deserializeTextJSONImpl<bool>(IColumn & column, ReadBuffer & istr, const FormatSettings &, const SerializationPtr & nested);
 template bool SerializationNullable::deserializeTextRawImpl<bool>(IColumn & column, ReadBuffer & istr, const FormatSettings &, const SerializationPtr & nested);
 
+
+/// proton: starts
+void SerializationNullable::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    settings.path.push_back(Substream::NullMap);
+    if (auto * stream = settings.getter(settings.path))
+    {
+        SerializationNumber<UInt8>().deserializeBinaryBulkSkip(*stream, limit);
+    }
+
+    settings.path.back() = Substream::NullableElements;
+    nested->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+    settings.path.pop_back();
+}
+/// proton: ends
+
 }

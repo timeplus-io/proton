@@ -834,4 +834,78 @@ void SerializationLowCardinality::deserializeImpl(
     low_cardinality_column.insertFromFullColumn(*temp_column, 0);
 }
 
+
+/// proton: starts
+void SerializationLowCardinality::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    assert(settings.native_format);
+    /// native_format, no global dictionary
+
+    settings.path.push_back(Substream::DictionaryKeys);
+    auto * keys_stream = settings.getter(settings.path);
+    settings.path.back() = Substream::DictionaryIndexes;
+    auto * indexes_stream = settings.getter(settings.path);
+    settings.path.pop_back();
+
+    if (!keys_stream && !indexes_stream)
+        return;
+
+    if (!keys_stream)
+        throw Exception("Got empty stream for SerializationLowCardinality keys.", ErrorCodes::LOGICAL_ERROR);
+
+    if (!indexes_stream)
+        throw Exception("Got empty stream for SerializationLowCardinality indexes.", ErrorCodes::LOGICAL_ERROR);
+
+    auto * low_cardinality_state = checkAndGetState<DeserializeStateLowCardinality>(state);
+    KeysSerializationVersion::checkVersion(low_cardinality_state->key_version.value);
+
+    auto read_additional_keys = [this, indexes_stream]()
+    {
+        UInt64 num_keys;
+        readIntBinary(num_keys, *indexes_stream);
+        dict_inner_serialization->deserializeBinaryBulkSkip(*indexes_stream, num_keys);
+    };
+
+    auto read_indexes = [low_cardinality_state, indexes_stream](UInt64 num_rows)
+    {
+        auto indexes_type = low_cardinality_state->index_type.getDataType();
+        indexes_type->getDefaultSerialization()->deserializeBinaryBulkSkip(*indexes_stream, num_rows);
+    };
+
+    if (!settings.continuous_reading)
+    {
+        low_cardinality_state->num_pending_rows = 0;
+
+        /// Remember in state that some granules were skipped and we need to update dictionary.
+        low_cardinality_state->need_update_dictionary = true;
+    }
+
+    while (limit)
+    {
+        if (low_cardinality_state->num_pending_rows == 0)
+        {
+            if (indexes_stream->eof())
+                break;
+
+            auto & index_type = low_cardinality_state->index_type;
+            index_type.deserialize(*indexes_stream, settings);
+            assert(!index_type.need_global_dictionary);
+
+            if (index_type.has_additional_keys)
+                read_additional_keys();
+
+            readIntBinary(low_cardinality_state->num_pending_rows, *indexes_stream);
+        }
+
+        size_t num_rows_to_read = std::min<UInt64>(limit, low_cardinality_state->num_pending_rows);
+        read_indexes(num_rows_to_read);
+        limit -= num_rows_to_read;
+        low_cardinality_state->num_pending_rows -= num_rows_to_read;
+    }
+}
+/// proton: ends
+
 }

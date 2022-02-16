@@ -32,6 +32,10 @@ public:
 
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+
+    /// proton: starts
+    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    /// proton: ends
 };
 
 }

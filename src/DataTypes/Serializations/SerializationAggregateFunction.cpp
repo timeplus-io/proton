@@ -10,7 +10,6 @@
 
 #include <Formats/FormatSettings.h>
 #include <Formats/ProtobufReader.h>
-#include <Formats/ProtobufWriter.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 
@@ -213,5 +212,29 @@ void SerializationAggregateFunction::deserializeTextCSV(IColumn & column, ReadBu
     readCSV(s, istr, settings.csv);
     deserializeFromString(function, column, s, version);
 }
+
+/// proton: starts
+void SerializationAggregateFunction::deserializeBinaryBulkSkip(ReadBuffer & /*istr*/, size_t /*limit*/) const
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Skip deserialization is not implemented for aggregate function");
+
+    /*
+    for (size_t i = 0; i < limit; ++i)
+    {
+        if (istr.eof())
+            break;
+
+        try
+        {
+            function->deserializeSkip(istr);
+        }
+        catch (...)
+        {
+            throw;
+        }
+    }
+     */
+}
+/// proton: ends
 
 }

@@ -155,6 +155,15 @@ void SerializationNumber<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer 
     x.resize(initial_size + size / sizeof(typename ColumnVector<T>::ValueType));
 }
 
+
+/// proton: starts
+template <typename T>
+void SerializationNumber<T>::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+{
+    istr.ignore(sizeof(typename ColumnVector<T>::ValueType) * limit);
+}
+/// proton: ends
+
 template class SerializationNumber<UInt8>;
 template class SerializationNumber<UInt16>;
 template class SerializationNumber<UInt32>;

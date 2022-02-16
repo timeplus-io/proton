@@ -294,4 +294,19 @@ void SerializationString::deserializeTextCSV(IColumn & column, ReadBuffer & istr
 }
 
 
+/// proton: starts
+void SerializationString::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+{
+    for (size_t i = 0; i < limit; ++i)
+    {
+        if (istr.eof())
+            break;
+
+        UInt64 size;
+        readVarUInt(size, istr);
+        istr.ignore(size);
+    }
+}
+/// proton: ends
+
 }
