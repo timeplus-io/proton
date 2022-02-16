@@ -1043,6 +1043,7 @@ cluster_settings:
         name: __system_tasks
         replication_factor: 1
         data_retention: 24
+        max_cached_size_threshold: 100000
 
     # Node identity shall be unique in proton cluster
     # When leave it empty, the system will the nodes FQDN and tcp port to

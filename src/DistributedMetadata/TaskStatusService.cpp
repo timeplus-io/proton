@@ -118,6 +118,9 @@ TaskStatusService & TaskStatusService::instance(const ContextMutablePtr & global
 
 TaskStatusService::TaskStatusService(const ContextMutablePtr & global_context_) : MetadataService(global_context_, "TaskStatusService")
 {
+    const auto & config = global_context->getConfigRef();
+    const auto & conf = configSettings();
+    max_cached_size_threshold = config.getUInt64(conf.key_prefix + "max_cached_size_threshold", 100000);
 }
 
 MetadataService::ConfigSettings TaskStatusService::configSettings() const
@@ -134,22 +137,20 @@ MetadataService::ConfigSettings TaskStatusService::configSettings() const
 
 Int32 TaskStatusService::append(TaskStatusPtr task)
 {
-    /// FIXME, we shall translate to `INSERT INTO system.tasks`
-    /*const auto & result = appendRecord(buildRecord(task));
+    const auto & result = appendRecord(buildRecord(task));
     if (result.err != ErrorCodes::OK)
     {
         LOG_ERROR(log, "Failed to commit task {}", task->id);
         return result.err;
-    }*/
-
-    (void)task;
-    (void)buildRecord;
+    }
     return 0;
 }
 
 void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
 {
     /// Consume records and build in-memory indexes
+    std::vector<TaskStatusPtr> tasks;
+    tasks.reserve(records.size());
     for (const auto & record : records)
     {
         assert(!record->hasSchema());
@@ -157,15 +158,22 @@ void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
 
         auto task = buildTaskStatusFromRecord(record);
         if (task)
+        {
             updateTaskStatus(task);
+            tasks.emplace_back(std::move(task));
+        }
     }
 
     /// FIXME: Checkpointing
+    persistentTaskStatuses(std::move(tasks));
 }
 
 void TaskStatusService::updateTaskStatus(TaskStatusPtr & task_ptr)
 {
     std::unique_lock guard(indexes_lock);
+
+    if (task_ptr->status == TaskStatus::SUCCEEDED || task_ptr->status == TaskStatus::FAILED)
+        finished_tasks.push_back(task_ptr);
 
     auto id_map_iter = indexed_by_id.find(task_ptr->id);
     if (id_map_iter == indexed_by_id.end())
@@ -309,17 +317,6 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInMemory(const Strin
     {
         return task->second;
     }
-
-    for (auto task_list_iter = finished_tasks.begin(); task_list_iter != finished_tasks.end(); ++task_list_iter)
-    {
-        for (const auto & task : task_list_iter->second)
-        {
-            if (task->id == id)
-            {
-                return task;
-            }
-        }
-    }
     return nullptr;
 }
 
@@ -372,17 +369,6 @@ void TaskStatusService::findByUserInMemory(const String & user, std::vector<Task
     {
         res.push_back(it->second);
     }
-
-    for (auto it = finished_tasks.begin(); it != finished_tasks.end(); ++it)
-    {
-        for (const auto & task : it->second)
-        {
-            if (task->user == user)
-            {
-                res.push_back(task);
-            }
-        }
-    }
 }
 
 void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskStatusService::TaskStatusPtr> & res)
@@ -407,20 +393,20 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
     executeNonInsertQuery(query, query_context, [this, &res](Block && block) { this->buildTaskStatusFromBlock(block, res); });
 }
 
-void TaskStatusService::schedulePersistentTask()
+void TaskStatusService::scheduleCleanupTask()
 {
     if (!global_context->isDistributedEnv() || !hasCurrentRole())
         return;
 
-    persistent_task = global_context->getSchedulePool().createTask("PersistentTask", [this]() { this->persistentFinishedTask(); });
-    persistent_task->activate();
-    persistent_task->scheduleAfter(2000, false);
+    cleanup_task = global_context->getSchedulePool().createTask("CleanupTask", [this]() { this->cleanupCachedTask(); });
+    cleanup_task->activate();
+    cleanup_task->scheduleAfter(2000, false);
 }
 
 void TaskStatusService::preShutdown()
 {
-    if (persistent_task)
-        persistent_task->deactivate();
+    if (cleanup_task)
+        cleanup_task->deactivate();
 }
 
 void TaskStatusService::createTaskTableIfNotExists()
@@ -440,87 +426,64 @@ void TaskStatusService::createTaskTableIfNotExists()
     }
 }
 
-void TaskStatusService::persistentFinishedTask()
+void TaskStatusService::cleanupCachedTask()
 {
     try
     {
-        doPersistentFinishedTask();
+        doCleanupCachedTask();
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, "Persistent finished task failed: {}", e.message());
+        LOG_ERROR(log, "Clean up cached task failed: {}", e.message());
     }
     catch (...)
     {
-        LOG_ERROR(log, "Persistent finished task failed: ", getCurrentExceptionMessage(true, true));
+        LOG_ERROR(log, "Clean up cached task failed: ", getCurrentExceptionMessage(true, true));
     }
-    persistent_task->scheduleAfter(RESCHEDULE_TIME_MS);
+    cleanup_task->scheduleAfter(RESCHEDULE_TIME_MS);
 }
 
-void TaskStatusService::doPersistentFinishedTask()
+void TaskStatusService::doCleanupCachedTask()
 {
-    createTaskTableIfNotExists();
+    //// Remove over max size threshold tasks
+    std::unique_lock guard(indexes_lock);
+    if (indexed_by_id.size() <= max_cached_size_threshold)
+        return;
 
+    /// Remove finished task
+    for(const auto & task_ptr : finished_tasks)
+        cleanupTaskByIdUnlocked(task_ptr->id);
+
+    finished_tasks.clear();
+
+    /// In some case: non-finished tasks still are more than max_cached_size_threshold
+    /// We remove the part of tasks that overflows max_cached_size_threshold
+    while (indexed_by_id.size() > max_cached_size_threshold)
+        cleanupTaskByIdUnlocked(indexed_by_id.begin()->second->id);
+}
+
+void TaskStatusService::cleanupTaskByIdUnlocked(const String & id)
+{
+    auto id_map_iter = indexed_by_id.find(id);
+    assert(id_map_iter != indexed_by_id.end());
+    const auto & user = id_map_iter->second->user;
+
+    /// Remove task from indexed_by_user map
+    auto user_map_iter = indexed_by_user.find(user);
+    assert(user_map_iter != indexed_by_user.end());
+
+    auto task_iter = user_map_iter->second.find(id);
+    assert(task_iter != user_map_iter->second.end());
+    user_map_iter->second.erase(task_iter);
+    assert(user_map_iter->second.find(id) == user_map_iter->second.end());
+    if (user_map_iter->second.empty())
     {
-        std::unique_lock guard(indexes_lock);
-        for (auto it = indexed_by_id.begin(); it != indexed_by_id.end();)
-        {
-            if (it->second->status != TaskStatus::SUCCEEDED && it->second->status != TaskStatus::FAILED)
-            {
-                it++;
-                continue;
-            }
-
-            /// Remove task from indexed_by_user map
-            auto user_map_iter = indexed_by_user.find(it->second->user);
-            assert(user_map_iter != indexed_by_user.end());
-
-            auto task_iter = user_map_iter->second.find(it->second->id);
-            assert(task_iter != user_map_iter->second.end());
-
-            user_map_iter->second.erase(task_iter);
-            assert(user_map_iter->second.find(it->second->id) == user_map_iter->second.end());
-
-            if (user_map_iter->second.empty())
-            {
-                indexed_by_user.erase(user_map_iter);
-                assert(indexed_by_user.find(it->second->user) == indexed_by_user.end());
-            }
-
-            auto finished_task_iter = finished_tasks.find(it->second->last_modified);
-            if (finished_task_iter == finished_tasks.end())
-            {
-                finished_tasks[it->second->last_modified] = std::vector<TaskStatusPtr>{it->second};
-            }
-            else
-            {
-                finished_task_iter->second.push_back(it->second);
-            }
-
-            it = indexed_by_id.erase(it);
-        }
+        indexed_by_user.erase(user_map_iter);
+        assert(indexed_by_user.find(user) == indexed_by_user.end());
     }
 
-    /// FIXME: Add some error handling logic
-    std::vector<TaskStatusPtr> persistent_list;
-
-    for (auto finished_task_iter = finished_tasks.begin(); finished_task_iter != finished_tasks.end();)
-    {
-        if (MonotonicSeconds::now() - finished_task_iter->first < CACHE_FINISHED_TASK_MS)
-        {
-            ++finished_task_iter;
-            continue;
-        }
-        persistent_list.insert(persistent_list.end(), finished_task_iter->second.begin(), finished_task_iter->second.end());
-
-        finished_task_iter = finished_tasks.erase(finished_task_iter);
-    }
-
-    if (!persistent_list.empty())
-    {
-        persistentTaskStatuses(persistent_list);
-        LOG_DEBUG(log, "Persistent {} finished tasks", persistent_list.size());
-    }
+    /// Remove task from indexed_by_user map
+    indexed_by_id.erase(id_map_iter);
 }
 
 bool TaskStatusService::createTaskTable()
@@ -530,6 +493,7 @@ bool TaskStatusService::createTaskTable()
     const String replication_factor_key = conf.key_prefix + "replication_factor";
     const auto replicas = std::to_string(config.getInt(replication_factor_key, 1));
 
+    /// FIXME: Wait for support for synchronous DDL feature, add settings `synchronous_ddl=1`
     String query = fmt::format(
         "CREATE TABLE IF NOT EXISTS \
                     system.tasks \
@@ -552,57 +516,9 @@ bool TaskStatusService::createTaskTable()
                     SETTINGS index_granularity = 8192",
         replicas);
 
-    /// FIXME: Remove query_payload when the sql interface is implemented
-    String query_payload = R"d({
-        "name" : "tasks",
-        "shards": 1,
-        "replication_factor": 1,
-        "shard_by_expression": "rand()",
-        "columns" : [
-        {
-        "name" : "id",
-        "type" : "String"
-        },
-        {
-        "name" : "status",
-        "type" : "String"
-        },
-        {
-        "name" : "progress",
-        "type" : "String"
-        },
-        {
-        "name" : "reason",
-        "type" : "String"
-        },
-        {
-        "name" : "user",
-        "type" : "String"
-        },
-        {
-        "name" : "context",
-        "type" : "String"
-        },
-        {
-        "name" : "created",
-        "type" : "Int64"
-        },
-        {
-        "name" : "last_modified",
-        "type" : "Int64"
-        }],
-        "order_by_expression" : "(to_minute(_tp_time), user, id)",
-        "partition_by_granularity" : "D",
-        "order_by_granularity": "H",
-        "ttl_expression" : "to_datetime(_tp_time + to_interval_day(7)) DELETE",
-        "_time_column": "from_unix_timestamp64_milli(created, 'UTC')"
-        }
-    )d";
-
     auto query_context = Context::createCopy(global_context);
     query_context->makeQueryContext();
     query_context->setCurrentQueryId("");
-    query_context->setQueryParameter("_payload", query_payload);
     query_context->setUserByName("system");
     query_context->setDistributedDDLOperation(true);
     /// CurrentThread::QueryScope query_scope{query_context};
@@ -627,8 +543,10 @@ bool TaskStatusService::createTaskTable()
     return tableExists();
 }
 
-bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> & tasks)
+bool TaskStatusService::persistentTaskStatuses(std::vector<TaskStatusPtr> tasks)
 {
+    createTaskTableIfNotExists();
+
     assert(!tasks.empty());
     String query = "INSERT INTO system.tasks \
                     (id, status, progress, reason, user, context, created, last_modified) \
@@ -643,10 +561,8 @@ bool TaskStatusService::persistentTaskStatuses(const std::vector<TaskStatusPtr> 
 
     for (const auto & task : tasks)
     {
-        /// Only SUCCEEDED or FAILED task should be persisted into table
-        assert(task->status == TaskStatus::SUCCEEDED || task->status == TaskStatus::FAILED);
-        auto created = std::to_string(task->created);
-        auto last_modified = std::to_string(task->last_modified);
+        auto created = std::to_string(task->created == -1 ? (UTCMilliseconds::now()) : task->created);
+        auto last_modified = std::to_string(task->last_modified == -1 ? (UTCMilliseconds::now()) : task->last_modified);
         String value = fmt::format(
             value_template,
             delimiter,

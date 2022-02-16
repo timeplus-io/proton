@@ -11,8 +11,6 @@ namespace DB
 class TaskStatusService final : public MetadataService
 {
 public:
-    using SteadyClock = std::chrono::time_point<std::chrono::steady_clock>;
-
     struct TaskStatus
     {
         String id;
@@ -46,7 +44,7 @@ public:
     TaskStatusPtr findById(const String & id);
     std::vector<TaskStatusPtr> findByUser(const String & user);
 
-    void schedulePersistentTask();
+    void scheduleCleanupTask();
 
 private:
     void processRecords(const DWAL::RecordPtrs & records) override;
@@ -73,25 +71,24 @@ private:
     bool createTaskTable();
     void createTaskTableIfNotExists();
 
-    bool persistentTaskStatuses(const std::vector<TaskStatusPtr> & tasks);
-    void persistentFinishedTask();
-    void doPersistentFinishedTask();
+    bool persistentTaskStatuses(std::vector<TaskStatusPtr> tasks);
+    void cleanupCachedTask();
+    void doCleanupCachedTask();
+    void cleanupTaskByIdUnlocked(const String & id);
 
 private:
     mutable std::shared_mutex indexes_lock;
     std::unordered_map<String, TaskStatusPtr> indexed_by_id;
     std::unordered_map<String, std::unordered_map<String, TaskStatusPtr>> indexed_by_user;
+    std::vector<TaskStatusPtr> finished_tasks;
 
-    std::mutex tasks_lock;
-    std::deque<std::pair<SteadyClock, String>> timed_tasks;
-    std::unordered_map<Int64, std::vector<TaskStatusPtr>> finished_tasks;
-    BackgroundSchedulePoolTaskHolder persistent_task;
+    BackgroundSchedulePoolTaskHolder cleanup_task;
+    UInt64 max_cached_size_threshold = 0;
 
     bool table_exists = false;
 
     static constexpr size_t RESCHEDULE_TIME_MS = 120000;
     static constexpr Int32 RETRY_TIMES = 3;
     static constexpr size_t RETRY_INTERVAL_MS = 5000;
-    static constexpr Int64 CACHE_FINISHED_TASK_MS = 30000;
 };
 }

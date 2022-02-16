@@ -209,15 +209,6 @@ namespace
 
         return buf.str();
     }
-
-    String mapTopic(const StorageID & table_id)
-    {
-        if (table_id.getDatabaseName() == "system" && table_id.getTableName() == "tasks")
-            /// FIXME, fetch this from TaskStatusService
-            return "__system_tasks";
-
-        return DWAL::escapeDWALName(table_id.getDatabaseName(), table_id.getTableName());
-    }
 }
 
 StorageDistributedMergeTree::StorageDistributedMergeTree(
@@ -245,7 +236,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
-    , topic(mapTopic(table_id_))
+    , topic(DWAL::escapeDWALName(table_id_.getDatabaseName(), table_id_.getTableName()))
     , dwal_append_ctx(topic, shards_, replication_factor_)
     , dwal_consume_ctx(topic, shards_, replication_factor_)
     , ingesting_blocks(120)
