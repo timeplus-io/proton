@@ -179,6 +179,7 @@ void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
 
     /// FIXME: Checkpointing
     persistentTaskStatuses(std::move(tasks));
+    cleanupCachedTask();
 }
 
 void TaskStatusService::updateTaskStatus(TaskStatusPtr & task_ptr)
@@ -405,22 +406,6 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
     executeNonInsertQuery(query, query_context, [this, &res](Block && block) { this->buildTaskStatusFromBlock(block, res); });
 }
 
-void TaskStatusService::scheduleCleanupTask()
-{
-    if (!global_context->isDistributedEnv() || !hasCurrentRole())
-        return;
-
-    cleanup_task = global_context->getSchedulePool().createTask("CleanupTask", [this]() { this->cleanupCachedTask(); });
-    cleanup_task->activate();
-    cleanup_task->scheduleAfter(2000, false);
-}
-
-void TaskStatusService::preShutdown()
-{
-    if (cleanup_task)
-        cleanup_task->deactivate();
-}
-
 void TaskStatusService::createTaskTableIfNotExists()
 {
     if (!tableExists())
@@ -442,7 +427,6 @@ void TaskStatusService::cleanupCachedTask()
 {
     try
     {
-        createTaskTableIfNotExists();
         doCleanupCachedTask();
     }
     catch (const Exception & e)
@@ -453,7 +437,6 @@ void TaskStatusService::cleanupCachedTask()
     {
         LOG_ERROR(log, "Clean up cached task failed: ", getCurrentExceptionMessage(true, true));
     }
-    cleanup_task->scheduleAfter(RESCHEDULE_TIME_MS);
 }
 
 void TaskStatusService::doCleanupCachedTask()

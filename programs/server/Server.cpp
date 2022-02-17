@@ -1529,7 +1529,7 @@ if (ThreadFuzzer::instance().isEffective())
         /// proton: starts
         initDistributedMetadataServicesPost(global_context);
         auto & task_status_service = DB::TaskStatusService::instance(global_context);
-        task_status_service.scheduleCleanupTask();
+        task_status_service.createTaskTableIfNotExists();
         /// proton: ends
 
         SCOPE_EXIT_SAFE({

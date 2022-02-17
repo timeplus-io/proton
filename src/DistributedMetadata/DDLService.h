@@ -30,12 +30,14 @@ private:
     std::pair<Int32, Int32> batchSizeAndTimeout() const override { return std::make_pair(10, 200); }
 
 private:
+    using CallBack = std::function<void()>;
+
     Int32 doDDL(const String & payload, const Poco::URI & uri, const String & method, const String & query_id, const String & user) const;
     void doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const String & payload, const String & method,
-                      const String & query_id, const String & user) const;
+                      const String & query_id, const String & user, CallBack finished_callback = nullptr) const;
 
     void createTable(DWAL::RecordPtr record);
-    void mutateTable(DWAL::RecordPtr record, const String & method) const;
+    void mutateTable(DWAL::RecordPtr record, const String & method, CallBack finished_callback = nullptr) const;
     void mutateDatabase(DWAL::RecordPtr record, const String & method) const;
     void commit(Int64 last_sn);
     void

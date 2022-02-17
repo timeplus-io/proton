@@ -107,6 +107,13 @@ def rockets_env_var_get():
 
 
 def rockets_context(config_file=None, tests_file=None, docker_compose_file=None):
+    root_logger = logging.getLogger()
+    logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
+    if root_logger.level != None and root_logger.level==20:
+            logging_level = "INFO"
+    else:
+        logging_level = "DEBUG"
+
     config = rockets_env_var_get()
     if config == None:
         with open(config_file) as f:
@@ -138,7 +145,7 @@ def rockets_context(config_file=None, tests_file=None, docker_compose_file=None)
     alive = mp.Value('b', True)
     query_exe_client = mp.Process(
         target=query_execute,
-        args=(config, query_exe_child_conn, query_results_queue, alive),
+        args=(config, query_exe_child_conn, query_results_queue, alive, logging_level, ),
     )  # Create query_exe_client process
 
     rockets_context = {
@@ -195,7 +202,7 @@ def kill_query(proton_client, query_2_kill):
 
 
 def query_run_py(
-    statement_2_run, settings, query_results_queue=None, config=None, pyclient=None, telemetry_shared_list=None
+    statement_2_run, settings, query_results_queue=None, config=None, pyclient=None, telemetry_shared_list=None, logging_level="INFO"
 ):
     query_run_start = datetime.datetime.now()
     logger = logging.getLogger(__name__)
@@ -205,7 +212,11 @@ def query_run_py(
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
-    logger.setLevel(logging.INFO)
+    logger.debug(f"query_run_py starts, logging_level = {logging_level}")
+    if logging_level=="INFO":
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.DEBUG)
 
     try:
         if pyclient == None:
@@ -309,11 +320,13 @@ def query_run_py(
                     "query_run_py: query_results: {} collected from query_result_iter at {}".format(
                         query_results, datetime.datetime.now()
                     )
-                )
+                )  
                 message_2_send = json.dumps(query_results)
                 if query_results_queue != None:
                     query_results_queue.put(message_2_send)
-                    logger.info(f"query_run_py: query_results message_2_send = {message_2_send} was sent.")
+                    logger.info(f"query_run_py: query_results message_2_send = {message_2_send} was sent.")    
+            
+                
             else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -347,7 +360,7 @@ def query_run_py(
                 else:
                     print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
 
-                pyclient.disconnect()
+                pyclient.disconnect()    
 
         else:
             query_results = {
@@ -372,8 +385,8 @@ def query_run_py(
             if telemetry_shared_list != None:
                 telemetry_shared_list.append({"statement_2_run":statement_2_run, "time_spent": time_spent_ms})
             else:
-                print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.
-            pyclient.disconnect()
+                print() # todo: put the telemetry data into return, telemetry_shared_list=None means query_run_py is called by query_execute directly but not in child process.                        
+            pyclient.disconnect()  
 
     finally:
 
@@ -381,19 +394,25 @@ def query_run_py(
         return query_results
 
 
-def query_execute(config, child_conn, query_results_queue, alive):
+def query_execute(config, child_conn, query_results_queue, alive, logging_level = "INFO"):
     # query_result_list = query_result_list
+    mp_mgr = None # multiprocess manager, will be created when loading query_run_py process
     logger = logging.getLogger(__name__)
     #formatter = logging.Formatter(
-    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"
+    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"  
     #)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
-    logger.setLevel(logging.INFO)
+    
+    if logging_level == "INFO":
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.DEBUG)    
 
-    logger.debug(f"query_execute starts...")
+    logger.debug(f"query_execute starts, logging_level = {logging_level}")
     telemetry_shared_list = [] #telemetry list for query_run timing
+    
 
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
@@ -415,7 +434,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
         try:
 
             query_proc = None
-
+           
             logger.debug(
                 f"query_execute: tear_down = {tear_down}, query_run_count = {query_run_count}, wait for message from rockets_run......"
             )
@@ -499,7 +518,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
 
                 if run_mode == "process" or query_type == "stream":
                     mp_mgr = mp.Manager() # create a multiprocess.Manager object
-                    telemetry_shared_list = mp_mgr.list()
+                    telemetry_shared_list = mp_mgr.list()                     
 
                     query_run_args = (
                         statement_2_run,
@@ -507,13 +526,14 @@ def query_execute(config, child_conn, query_results_queue, alive):
                         query_results_queue,
                         config,
                         None,
-                        telemetry_shared_list
+                        telemetry_shared_list,
+                        logging_level
                     )
                     if wait != None:
                         wait = int(wait)
                         print(f"query_execute: wait for {wait} to start run query = {query}")
                         time.sleep(wait)
-
+                   
                     query_proc = mp.Process(target=query_run_py, args=query_run_args)
                     query_procs.append(
                         {
@@ -523,7 +543,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
                             "query_id": query_id,
                             "query": query,
                         }# have to put append before start, otherwise exception when append shared list.
-                )  # put every query_run process into array for case_done check
+                )  # put every query_run process into array for case_done check                    
                     query_proc.start()
 
                     logger.debug(
@@ -611,7 +631,10 @@ def query_execute(config, child_conn, query_results_queue, alive):
     for item in telemetry_shared_list:
         time_spent_query_run_ms += item.get("time_spent")
         count += 1
-    # avg_time_spent_query_run_ms = time_spent_query_run_ms / count
+    if count !=0: 
+        avg_time_spent_query_run_ms = time_spent_query_run_ms / count
+    else: 
+        avg_time_spent_query_run_ms = 0
     logger.info(f"query_run execute {count} times, total {time_spent_query_run_ms} ms spent, avg_time_spent_query_run_ms = {avg_time_spent_query_run_ms}")
     if mp_mgr != None: del mp_mgr
     client.disconnect()
@@ -722,14 +745,14 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
     depends_on = input_batch.get("depends_on")
     depends_on_exists = False
     if depends_on != None:
-
+        
         query_body = json.dumps({"query":"select query_id from system.processes"})
         res = requests.post(query_url, data=query_body)
         res_json = res.json()
         query_id_list = res_json.get("data")
         logger.debug(f"query_id_list: {query_id_list}")
         if query_id_list != None and len(query_id_list) > 0:
-            retry = 20
+            retry = 20 
             #depends_on_exists = False
             while retry >0 and depends_on_exists != True:
                 for element in query_id_list:
@@ -740,8 +763,8 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
                 res = requests.post(query_url, data=query_body)
                 res_json = res.json()
                 query_id_list = res_json.get("data")
-    logger.debug(f"depends_on = {depends_on}, depends_on_exists = {depends_on_exists}")
-
+    logger.debug(f"depends_on = {depends_on}, depends_on_exists = {depends_on_exists}")        
+        
     for element in table_schema.get("columns"):
         input_rest_columns.append(element.get("name"))
     logger.debug(f"input_batch_rest: input_rest_body = {input_rest_body}")
@@ -754,11 +777,11 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
     input_rest_body = json.dumps(input_rest_body)
     input_url = f"{input_url}/{table_name}"
     logger.debug(f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}")
-
+    
     res = requests.post(input_url, data=input_rest_body)
     logger.debug(f"input_batch_rest: response of input_batch_rest request res = {res}")
-
-
+    
+    
 
     assert res.status_code == 200
     input_batch_record["input_batch"] = input_rest_body_data
@@ -766,12 +789,12 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
 
     """
     if res.status_code != 200:
-        logger.debug(f"table input rest access failed, status code={res.status_code}")
+        logger.debug(f"table input rest access failed, status code={res.status_code}") 
         raise Exception(f"table input rest access failed, status code={res.status_code}")
     else:
         input_batch_record["input_batch"] =input_rest_body_data
         input_batch_record["timestamp"] = str(datetime.datetime.now())
-        #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data))
+        #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
     """
     return input_batch_record
 
@@ -825,17 +848,14 @@ def input_walk_through_rest(
     return inputs_record
 
 
-def drop_table_if_exist_rest(pyclient, table_ddl_url, table_name):
-    #res = requests.get(table_ddl_url)
-    table_list = pyclient.execute("show tables")
-    #if res.status_code == 200:
-    if table_list != None:
-        #res_json = res.json()
-        #table_list = res_json.get("data")
+def drop_table_if_exist_rest(table_ddl_url, table_name):
+    res = requests.get(table_ddl_url)
+    if res.status_code == 200:
+        res_json = res.json()
+        table_list = res_json.get("data")
         if table_list:
             for element in table_list:
-                if element[0] == table_name:
-                    logger.debug(f"table name = {table_name} = element: {element} in table_list of show tables")
+                if element.get("name") == table_name:
                     res = requests.delete(f"{table_ddl_url}/{table_name}")
                     drop_start_time = datetime.datetime.now()
                     if res.status_code != 200:
@@ -848,7 +868,7 @@ def drop_table_if_exist_rest(pyclient, table_ddl_url, table_name):
                             "drop stream {} is successfully called".format(table_name)
                         )
                         wait_times = 0
-                        while table_exist_py(pyclient, table_name):
+                        while table_exist(table_ddl_url, table_name):
                             time.sleep(0.01)
                             wait_times += 1
                         #wait_time = wait_times * 10
@@ -864,13 +884,6 @@ def drop_table_if_exist_rest(pyclient, table_ddl_url, table_name):
     else:
         raise Exception(f"table list rest acces failed, status code={res.status_code}")
 
-def table_exist_py(pyclient, table_name):
-    table_list = pyclient.execute("show tables")
-    for item in table_list:
-        if item[0] == table_name:
-            logger.debug(f"table_name = {table_name} = {item[0]} in table_list of show tables")
-            return True
-    return False
 
 def table_exist(table_ddl_url, table_name):
     logger.debug(f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}")
@@ -879,26 +892,21 @@ def table_exist(table_ddl_url, table_name):
     if res.status_code == 200:
         res_json = res.json()
         table_list = res_json.get("data")
-        if table_list != None:
-            logger.debug(f"len(table_list) = {len(table_list)}")
-        else:
-            table_list = []
-            logger.debug(f"table_list is None, set table_list = []")
         if len(table_list) > 0:
             for element in table_list:
                 element_name = element.get("name")
                 # logger.debug(f"table_exist: element_name = {element_name}, table_name = {table_name}")
                 if element_name == table_name:
-                    logger.debug(f"table_exist: table '{table_name}' exists.")
+                    logger.debug(f"table_exist: table_name = {table_name} exists.")
                     return True
-            logger.debug(f"table '{table_name}' does not exist")
+            logger.debug(f"table_name = {table_name} does not exist")
             return False
         else:
-            logger.debug(f"len(table_list) = {len(table_list)}, '{table_name}' does not exists")
+            logger.debug("table_list is [] table_name = {table_name} does not exist.")
             return False
 
 
-def create_table_rest(pyclient, table_ddl_url, table_schema):
+def create_table_rest(table_ddl_url, table_schema):
     logger.debug(f"create_table_rest: table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
     table_name = table_schema.get("name")
     type = table_schema.get("type")
@@ -909,21 +917,22 @@ def create_table_rest(pyclient, table_ddl_url, table_schema):
         table_schema_for_rest = {"name":table_name, "columns":columns, "event_time_column": event_time_column}
     else:
         table_schema_for_rest = {"name":table_name, "columns":columns}
+    
+   
     res = requests.post(
         table_ddl_url, data=json.dumps(table_schema_for_rest)
     )  # create the table w/ table schema
     create_start_time = datetime.datetime.now()
-
+    
     if res.status_code == 200:
         logger.info(f"table {table_name} create_rest is called successfully.")
     else:
         return res
-
+    
 
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
-        #if table_exist(table_ddl_url, table_name):
-        if table_exist_py(pyclient, table_name):
+        if table_exist(table_ddl_url, table_name):
             logger.info(f"table {table_name} is created successfully.")
             create_complete_time = datetime.datetime.now()
             time_spent = create_complete_time - create_start_time
@@ -964,31 +973,32 @@ def env_health_check(health_check_url):
         return False
 
 
-def systest_env_setup(
-    rest_setting, test_suite_config
-):  # create talbes according to test_suite_config
-    # check the test env, if table w/ table_name is found, drop it
-    # create table w/ table_name and table_schema to get the  table for query verification ready
-    table_ddl_url = rest_setting.get("table_ddl_url")
-    params = rest_setting.get("params")
-    table_schemas = test_suite_config.get("table_schemas")
-    for table_schema in table_schemas:
-        table_name = table_schema.get("name")
-        drop_table_if_exist_rest(table_ddl_url, table_name)
 
-    for table_schema in table_schemas:
-        create_table_rest(table_ddl_url, table_schema)
-    return
-
-
-def create_table_pyclient(client, table_schema):
+def create_view_if_not_exit_py(client, table_schema):
     table_type = table_schema.get("type")
     table_name = table_schema.get("name")
-    if table_type == "view":
-        sql_2_run = table_schema.get("sql_2_run")
-        logger.debug(f"create_table_pyclient: sql_2_run = {sql_2_run}")
-        client.execute(sql_2_run)
-        logger.debug(f"create_table_pyclient: done")
+    if not table_exist_py(client, table_name):
+        if table_type == "view":
+            sql_2_run = table_schema.get("create_sql")
+            if sql_2_run != None:
+                logger.debug(f"create_view_pyclient: sql_2_run = {sql_2_run}")
+            else: 
+                sql_2_run = f"drop view {table_name}"
+            res_drop = client.execute(sql_2_run)
+            logger.debug(f"create_view_pyclient: executed")
+            retry = 100
+            while retry < 100 and table_exist_py(client, table_name):
+                time.sleep(0.05)
+                retry -= 1
+            if not table_exist_py(client, table_name):
+                logger.debug(f"create view {table_name} failed.")
+                return False
+            else:
+                logger.debug(f"create view {table_name} success.")
+                return True
+    else:
+        logger.debug(f"{table_name} exist, bapass create view")
+        return None
 
 
 def drop_table_if_exist_pylient(client, table_schema):
@@ -1000,6 +1010,32 @@ def drop_table_if_exist_pylient(client, table_schema):
         client.execute(sql_2_run)
         logger.debug(f"drop_table_if_exist_pyclient: view {table_name} droped")
 
+def drop_view_if_exist_py(client, table_name):
+    if table_exist_py(client, table_name):
+        sql_2_run = f"drop view {table_name}"
+        res_drop = client.execute(sql_2_run)
+        logger.debug(f"drop view {table_name} is executed, res_drop = {res_drop}")
+        retry = 100
+        while retry < 100 and table_exist_py(client, table_name):
+            time.sleep(0.05)
+            count -= 1
+        if table_exist_py(client, table_name):
+            logger.debug(f"drop view {table_name} is failed, table_exist_py({table_name}) = True")
+            return False
+        else:
+            logger.debug(f"drop view {table_name} is succesfully, table_exist_py({table_name}) = False")
+            return True
+    else:
+        logger.debug(f"view {table_name} does not exist, bypass drop")
+        return None
+
+def table_exist_py(pyclient, table_name):
+    table_list = pyclient.execute("show tables")
+    for item in table_list:
+        if item[0] == table_name:
+            logger.debug(f"table_name = {table_name} = {item[0]} in table_list of show tables")
+            return True
+    return False
 
 def env_setup(
     client, rest_setting, test_suite_config, env_compose_file = None, proton_ci_mode = "local"
@@ -1009,6 +1045,7 @@ def env_setup(
     logger.debug(f"env_setup: rest_setting = {rest_setting}")
     health_url = rest_setting.get("health_check_url")
     logger.debug(f"env_setup: health_url = {health_url}")
+    tables_cleaned = []
     if ci_mode == "local":
         env_docker_compose_res = True
         logger.info(f"Bypass docker compose up.")
@@ -1048,10 +1085,12 @@ def env_setup(
             pass
         else:
             if table_type == "table":
-                drop_table_if_exist_rest(client, table_ddl_url, table_name)
+                drop_table_res = drop_table_if_exist_rest(table_ddl_url, table_name)
+                tables_cleaned.append(table_name)
             elif table_type == "view":
-                print()
-
+                drop_view_res = drop_view_if_exist_py(client, table_name)
+                tables_cleaned.append(table_name)
+    #time.sleep(1) # drop stream is not synced with topic drop, so sleep after drop stream, there is a issue:` #433
 
     for table_schema in table_schemas:
         table_type = table_schema.get("type")
@@ -1060,9 +1099,9 @@ def env_setup(
             pass
         else:
             if table_type == "table":
-                create_table_rest(client, table_ddl_url, table_schema)
+                create_table_rest(table_ddl_url, table_schema)
             elif table_type == "view":
-                create_table_pyclient(client, table_schema)
+                create_view_if_not_exit_py(client, table_schema)
 
     setup = test_suite_config.get("setup")
     logger.debug(f"env_setup: setup = {setup}")
@@ -1073,7 +1112,7 @@ def env_setup(
                 rest_setting, setup_inputs, table_schemas
             )
 
-    return
+    return({"env_docker_compose_res": env_docker_compose_res, "env_health_check_res": env_health_check_res, "tables_cleaned":tables_cleaned})
 
 def find_table_reset_in_table_schemas(table, table_schemas):
     for table_schema in table_schemas:
@@ -1100,19 +1139,19 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                 is_table_reset = None
                 logger.debug(
                     f"rockets_run: table of input in inputs = {table}"
-                )
+                )                        
                 is_table_reset = find_table_reset_in_table_schemas(table, table_schemas)
                 if (is_table_reset != None and is_table_reset == False) or table in tables_recreated:
                     pass
                 else:
-                    if table_exist_py(client, table):
+                    if table_exist(table_ddl_url, table):
                         res = client.execute(f"drop stream {table}")
                         drop_start_time = datetime.datetime.now()
                         logger.info(f"drop stream {table} is called successfully")
                         wait_count = 0
-                        time.sleep(1)
-                        while table_exist_py(client, table):
-                            time.sleep(0.2)
+                        #time.sleep(1) # sync ddl is not completed, topc drop is delayed so need to sleep 1s, have a issue: #433
+                        while table_exist(table_ddl_url, table):
+                            time.sleep(0.01)
                             wait_count += 1
                         #wait_time = wait_count * 10
                         drop_complete_time = datetime.datetime.now()
@@ -1124,35 +1163,41 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                     logger.debug(
                         f"rockets_run: drop stream {table} res = {res}"
                     )
-
+                
                     for table_schema in table_schemas:
                         name = table_schema.get("name")
-                        if name == table and table_exist_py(client, table):
-                            logger.debug(f"rockets_run, drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
-                            while table_exist_py(client, table):
+                        if name == table and table_exist(table_ddl_url, table):
+                            logger.debug(f"rockets_run, drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}") 
+                            while table_exist(table_ddl_url, table): 
                                 logger.debug(f"{name} not dropped succesfully yet, wait ...")
                                 time.sleep(0.2)
                             logger.debug(f"rockets_run: drop stream and re-create once case starts, table {table} is dropped")
-                            create_table_rest(client, table_ddl_url, table_schema)
-                            while not table_exist_py(client, table):
+                            create_table_rest(table_ddl_url, table_schema)
+                            while not table_exist(table_ddl_url, table):
                                 logger.debug(f"{name} not recreated successfully yet, wait ...")
                                 time.sleep(0.2)
-                            tables_recreated.append(name)
-                        elif name == table and not table_exist_py(client, table):
-                            create_table_rest(client, table_ddl_url, table_schema)
-                            while not table_exist_py(client, table):
+                            tables_recreated.append(name) 
+                        elif name == table and not table_exist(table_ddl_url, table): 
+                            create_table_rest(table_ddl_url, table_schema)
+                            while not table_exist(table_ddl_url, table):
                                 logger.debug(f"{name} not recreated successfully yet, wait ...")
                                 time.sleep(0.2)
-                            tables_recreated.append(name)
+                            tables_recreated.append(name) 
         if len(tables_recreated) > 0:
             logger.debug(f"tables: {tables_recreated} are dropted and recreated.")
-    return tables_recreated
+    return tables_recreated     
 
 
 # @pytest.fixture(scope="module")
 def rockets_run(test_context):
     #todo: split tests.json to test_suite_config.json and tests.json
-    logger.info("rockets_run starts......")
+    root_logger = logging.getLogger()
+    logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
+    if root_logger.level != None and root_logger.level==20:
+            logging_level = "INFO"
+    else:
+        logging_level = "DEBUG"
+    logger.info(f"current logger.level = {logger.level}, logging_level = {logging_level}")
     docker_compose_file = test_context.get("docker_compose_file")
     config = test_context.get("config")
     rest_setting = config.get("rest_setting")
@@ -1177,10 +1222,32 @@ def rockets_run(test_context):
     test_run_list = []
     test_run_id_list = []
     proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    test_ids_set = os.getenv("PROTON_TEST_IDS", None)
+    if test_ids_set != None:
+        test_ids_set_list = test_ids_set.split(",")
     #proton_ci_mode = "local" # for debug use.
 
-    if tests_2_run == None:  # if tests_2_run is not set, run all tests.
+    if test_ids_set==None and tests_2_run == None:  # if tests_2_run is not set, run all tests.
         test_run_list = tests
+    elif test_ids_set == "all" and tests_2_run == None:
+        test_run_list = tests
+    elif test_ids_set != None and test_ids_set != "all":
+        ids_2_run = []
+        for each in test_ids_set_list:
+            if each.isdigit():
+                ids_2_run.append(int(each))
+        for test in tests:
+            id = test.get("id")
+            if id in ids_2_run:
+                test_run_list.append(test)
+                test_run_id_list.append(id)
+
+        test_run_list_len = len(test_run_list)
+        assert test_run_list_len != 0
+        logger.info(
+            f"rockets_run: tests_run_id_list = {test_run_id_list}, {len(tests)} cases in total, {len(test_run_list)} cases to run in total"
+        )
+        
     else:  # if tests_2_run is set in test_suite_config, run the id list.
         logger.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
         ids_2_run = tests_2_run.get("ids_2_run")
@@ -1226,20 +1293,23 @@ def rockets_run(test_context):
         for test in test_run_list:
             test_run_id_list.append(test.get("id"))
 
-        assert len(test_run_list) != 0
+        test_run_list_len = len(test_run_list)
+
+        assert test_run_list_len != 0
+        
 
         logger.info(
             f"rockets_run: tests_run_id_list = {test_run_id_list}, {len(tests)} cases in total, {len(test_run_list)} cases to run in total"
         )
-
+    
     test_id_run = 0
     test_sets = []
     try:
         client = Client(host=proton_server, port=proton_server_native_port)
-        env_setup(
+        env_setup_res = env_setup(
             client, rest_setting, test_suite_config, docker_compose_file, proton_ci_mode
         )
-        logger.info("rockets_run env_etup done")
+        logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
 
         test_id_run = 0
         test_sets = []
@@ -1256,10 +1326,10 @@ def rockets_run(test_context):
             step_id = 0
             auto_terminate_queries = []
             # scan steps to find out tables used in inputs and truncate all the tables
-
+            
             tables_recreated = reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
             logger.info(f"tables: {tables_recreated} are dropted and recreated.")
-
+            
             for step in steps:
                 statements_id = 0
                 inputs_id = 0
@@ -1355,19 +1425,20 @@ def rockets_run(test_context):
         for item in TABLE_CREATE_RECORDS:
             time_spent_create = time_spent_create + item.get("time_spent")
             count += 1
-        if count != 0:
-            avg_time_spent_create = time_spent_create / count
-            logger.info(f'table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}')
+        avg_time_spent_create = time_spent_create / count
+        logger.info(f'table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}') 
         count = 0
         time_spent_drop = 0
         for item in TABLE_DROP_RECORDS:
             time_spent_drop = time_spent_drop + item.get("time_spent")
             count += 1
-        if count != 0:
+        if count !=0:
             avg_time_spent_drop = time_spent_drop / count
-            logger.info(f'table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}')
-
-        return test_sets
+        else:
+            avg_time_spent_drop = 0
+        logger.info(f'table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}')
+            
+        return (test_run_list_len, test_sets)
 
 
 if __name__ == "__main__":
@@ -1379,7 +1450,13 @@ if __name__ == "__main__":
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
+
     logger.setLevel(logging.DEBUG)
+
+    if logger.level == 20: #todo: get handling logger.leve gracefully
+        logging_level = "INFO"
+    else:
+        logging_level = "DEBUG"
 
 #    logging_config_file = f"{cur_file_path}/logger.conf"
 #    if os.path.exists(logging_config_file):

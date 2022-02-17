@@ -281,7 +281,7 @@ Int32 DDLService::doDDL(
 }
 
 void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const String & payload,
-                              const String & method, const String & query_id, const String & user) const
+                              const String & method, const String & query_id, const String & user, CallBack finished_callback) const
 {
     std::vector<String> failed_hosts;
     /// FIXME : Parallelize doDDL on the uris
@@ -294,6 +294,9 @@ void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const Strin
             failed_hosts.push_back(uri.getHost() + ":" + toString(uri.getPort()));
         }
     }
+
+    if (finished_callback)
+        finished_callback();
 
     if (failed_hosts.empty())
     {
@@ -414,7 +417,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
     }
 }
 
-void DDLService::mutateTable(DWAL::RecordPtr record, const String & method) const
+void DDLService::mutateTable(DWAL::RecordPtr record, const String & method, CallBack finished_callback) const
 {
     Block & block = record->block;
     assert(block.has("query_id"));
@@ -459,7 +462,7 @@ void DDLService::mutateTable(DWAL::RecordPtr record, const String & method) cons
         return;
     }
 
-    doDDLOnHosts(target_hosts, payload, method, query_id, user);
+    doDDLOnHosts(target_hosts, payload, method, query_id, user, std::move(finished_callback));
 }
 
 void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) const
@@ -572,13 +575,17 @@ void DDLService::processRecords(const DWAL::RecordPtrs & records)
             }
             case DWAL::OpCode::DELETE_TABLE:
             {
-                mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE);
-
-                /// Delete DWAL
-                String database = record->block.getByName("database").column->getDataAt(0).toString();
-                String table = record->block.getByName("table").column->getDataAt(0).toString();
-                DWAL::KafkaWALContext ctx{DWAL::escapeDWALName(database, table)};
-                doDeleteDWal(ctx);
+                /// We need delete table DWAL after done delete operation
+                if (record->block.has("database") && record->block.has("table"))
+                {
+                    String database = record->block.getByName("database").column->getDataAt(0).toString();
+                    String table = record->block.getByName("table").column->getDataAt(0).toString();
+                    auto finished_callback = [this, topic_ = DWAL::escapeDWALName(database, table)]() {
+                        DWAL::KafkaWALContext ctx{topic_};
+                        this->doDeleteDWal(ctx);
+                    };
+                    mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE, std::move(finished_callback));
+                }
                 break;
             }
             case DWAL::OpCode::TRUNCATE_TABLE:

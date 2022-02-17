@@ -106,12 +106,14 @@
                 {
                     "name": "test_v",
                     "type": "view",
-                    "sql_2_run": "create view if not exists test_v as select * from test"
+                    "create_sql": "create view if not exists test_v as select * from test",
+                    "drop_sql": "drop view test_v"
                 },
                 {
                     "name": "test_join_v",
                     "type": "view",
-                    "sql_2_run": "create view if not exists test_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time, _tp_index_time from test as a join table(test_d) as b on a.id =b.id"
+                    "create_sql": "create view if not exists test_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time, _tp_index_time from test as a join table(test_d) as b on a.id =b.id",
+                    "drop_sql": "drop view test_v"
                 }
 
         ],
@@ -140,8 +142,8 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 101, "run_mode":"process", "wait": 1, "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
-                    {"client":"python", "query_id": 102, "run_mode":"process", "wait": 1, "query_type": "stream", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
+                    {"client":"python", "query_id": 101, "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
+                    {"client":"python", "query_id": 102, "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 3, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
                 ]},
 
 
@@ -1455,7 +1457,7 @@
             "description": "global count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "terminate":"manuel", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1672,7 +1674,7 @@
 
         {
             "id": 51,
-            "tags": ["seek to", "bug"],
+            "tags": ["seek to", "to reproduce"],
             "name": "seek to ago interval",
             "description": "seek to ago interval",
             "steps":[
@@ -1728,7 +1730,7 @@
 
         {
             "id": 60,
-            "tags": ["materialized view", "global aggregation", "bug"],
+            "tags": ["materialized view", "global aggregation"],
             "name": "streaming tail from materialized view as global aggregation by sum and group by id w/by 5s periodic",
             "description": "create materialized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv",
             "steps":[
@@ -1765,7 +1767,7 @@
         },
         {
             "id": 61,
-            "tags": ["materialized view","global aggregation", "bug"],
+            "tags": ["materialized view","global aggregation"],
             "name": "table tail from materialized view as global aggregation by sum and group by id w/by 5s periodic",
             "description": "create materialized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv",
             "steps":[
@@ -1802,7 +1804,7 @@
         },
         {
             "id": 62,
-            "tags": ["materialized view","tumble window", "bug"],
+            "tags": ["materialized view","tumble window"],
             "name": "streaming tail from materialized view as 5s tumble window aggregation by sum and group by id",
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table ",
             "steps":[
@@ -1841,7 +1843,7 @@
 
         {
             "id": 63,
-            "tags": ["materialized view", "tumble window", "bug"],
+            "tags": ["materialized view", "tumble window"],
             "name": "streaming tail from materialized view as 5s tumble window aggregation by sum and group by id",
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, response should use utc time.",
             "steps":[
@@ -1880,7 +1882,7 @@
 
         {
             "id": 64,
-            "tags": ["materialized view","tumble window", "bug"],
+            "tags": ["materialized view","tumble window"],
             "name": "table tail from materialized view as 5s tumble window aggregation by sum and group by id, designate eventtime colume in tumble sql",
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from table(mv), designated timestamp as eventtime column in tumble sql",
             "steps":[

@@ -12,15 +12,22 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/configs/config.json"
 tests_file_path = f"{cur_dir}/tests.json"
 docker_compose_file_path = f"{cur_dir}/configs/docker-compose.yaml"
+logger = logging.getLogger(__name__)
 
 
 def pytest_generate_tests(metafunc):
+    if logger != None and logger.level == 20:
+        logging_level = "INFO"
+    else:
+        logging_level = "DEBUG"
     if "test_set" in metafunc.fixturenames:
         rockets_context = rockets.rockets_context(
             config_file_path, tests_file_path, docker_compose_file_path
         )
-        test_sets = rockets.rockets_run(rockets_context)
-        assert len(test_sets) != 0
+        res = rockets.rockets_run(rockets_context)
+        test_run_list_len = res[0]
+        test_sets = res[1]
+        assert len(test_sets) ==  test_run_list_len
         test_ids = [
             str(test["test_id"]) + "-" + test["test_name"] for test in test_sets
         ]

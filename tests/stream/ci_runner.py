@@ -3,6 +3,10 @@ from helpers.s3_helper import S3Helper
 from helpers.compress_files import compress_file_fast
 import pytest
 
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(
+        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)")
+
 proton_log_in_container = "proton-server:/var/log/proton-server/proton-server.log"
 proton_err_log_in_container = (
     "proton-server:/var/log/proton-server/proton-server.err.log"
@@ -61,13 +65,13 @@ def upload_results(
     return report_url
 
 
-def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", commit_sha="0"):
-
+def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", commit_sha="0", logging_level = "INFO"):
     timestamp = str(datetime.datetime.now())
     report_file_name = f"report_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
+    pytest_logging_level_set = f"--log-cli-level={logging_level}"
     retcode = pytest.main(
-        ["-s", "-v", "--log-cli-level=INFO", '--log-cli-format="%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
+        ["-s", "-v", pytest_logging_level_set, '--log-cli-format="%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
     )
 
     with open(".status", "w") as status_result:
@@ -108,12 +112,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run CI in local mode")
     run_mode = 'github'
     loop = 1
+    logging_level = "INFO"
+    os.environ["PROTON_TEST_IDS"] = "all"
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "loop="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "loop=", "id="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 ci_runner.py --local --loop=30")
+        print(f"usage: python3 ci_runner.py --local --debug --loop=30 --id=1,2,3")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -121,17 +127,29 @@ if __name__ == "__main__":
             os.environ["PROTON_CI_MODE"] = "local"
             run_mode = 'local'
         
+        if name in ("--debug"):
+            logging_level = "DEBUG"
+
         if name in ("--loop"):
             if value.isdigit() == False:
                 print(f"usage: python3 ci_runner.py --local --loop=30")
                 sys.exit(1)
             else:
                 loop = int(value)
-    print(f"ci_runner: run_mode = {run_mode}, loop = {loop}")
+        if name in ("--id"):
+            os.environ["PROTON_TEST_IDS"] = value
+    print(f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}")
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+    if logging_level == "INFO":
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.DEBUG)
 
     i = 0
     while i < loop:
-        ci_runner(cur_dir, run_mode)
+        ci_runner(cur_dir, run_mode, logging_level = logging_level)
         i += 1
 
 

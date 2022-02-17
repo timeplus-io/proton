@@ -44,12 +44,10 @@ public:
     TaskStatusPtr findById(const String & id);
     std::vector<TaskStatusPtr> findByUser(const String & user);
 
-    void scheduleCleanupTask();
+    void createTaskTableIfNotExists();
 
 private:
     void processRecords(const DWAL::RecordPtrs & records) override;
-
-    void preShutdown() override;
 
     String role() const override { return "task"; }
     ConfigSettings configSettings() const override;
@@ -69,7 +67,6 @@ private:
 
     bool tableExists();
     bool createTaskTable();
-    void createTaskTableIfNotExists();
 
     bool persistentTaskStatuses(std::vector<TaskStatusPtr> tasks);
     void cleanupCachedTask();
@@ -82,12 +79,10 @@ private:
     std::unordered_map<String, std::unordered_map<String, TaskStatusPtr>> indexed_by_user;
     std::vector<TaskStatusPtr> finished_tasks;
 
-    BackgroundSchedulePoolTaskHolder cleanup_task;
     UInt64 max_cached_size_threshold = 0;
 
     std::atomic_bool table_exists = false;
 
-    static constexpr size_t RESCHEDULE_TIME_MS = 120000;
     static constexpr Int32 RETRY_TIMES = 3;
     static constexpr size_t RETRY_INTERVAL_MS = 5000;
 };
