@@ -33,8 +33,10 @@ void registerFunctionsConversion(FunctionFactory & factory)
 
     factory.registerFunction<FunctionToDate>();
     /// MySQL compatibility alias.
-    factory.registerFunction<FunctionToDate>("DATE", FunctionFactory::CaseInsensitive);
+    /// proton: starts
     factory.registerFunction<FunctionToDate32>();
+    factory.registerFunction<FunctionToDate32>("DATE", FunctionFactory::CaseInsensitive);
+    /// proton: ends
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();
     factory.registerFunction<FunctionToDateTime64>();
@@ -110,6 +112,9 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionParseDateTime32BestEffortOrNull>();
     factory.registerFunction<FunctionParseDateTime64BestEffort>();
     factory.registerFunction<FunctionParseDateTime64BestEffortOrZero>();
+    /// proton: starts
+    factory.registerFunction<FunctionParseDateTime64BestEffortUSOrZero>();
+    /// proton: ends
     factory.registerFunction<FunctionParseDateTime64BestEffortOrNull>();
 
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalSecond, PositiveMonotonicity>>();

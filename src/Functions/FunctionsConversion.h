@@ -1237,9 +1237,20 @@ struct ConvertThroughParsing
                 }
                 else if constexpr (parsing_mode == ConvertFromStringParsingMode::BestEffortUS)
                 {
-                    time_t res;
-                    parsed = tryParseDateTimeBestEffortUS(res, read_buffer, *local_time_zone, *utc_time_zone);
-                    vec_to[i] = res;
+                    /// proton: starts
+                    if constexpr (to_datetime64)
+                    {
+                        DateTime64 res = 0;
+                        parsed = tryParseDateTime64BestEffortUS(res, col_to->getScale(), read_buffer, *local_time_zone, *utc_time_zone);
+                        vec_to[i] = res;
+                    }
+                    else
+                    {
+                        time_t res;
+                        parsed = tryParseDateTimeBestEffortUS(res, read_buffer, *local_time_zone, *utc_time_zone);
+                        vec_to[i] = res;
+                    }
+                    /// proton: ends
                 }
                 else
                 {
@@ -1425,8 +1436,10 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 
 
 /// Declared early because used below.
-struct NameToDate { static constexpr auto name = "to_date"; };
-struct NameToDate32 { static constexpr auto name = "to_date32"; };
+/// proton: starts
+struct NameToDate { static constexpr auto name = "to_date16"; };
+struct NameToDate32 { static constexpr auto name = "to_date"; };
+/// proton: ends
 struct NameToDateTime { static constexpr auto name = "to_datetime"; };
 struct NameToDateTime32 { static constexpr auto name = "to_datetime32"; };
 struct NameToDateTime64 { static constexpr auto name = "to_datetime64"; };
@@ -2385,7 +2398,8 @@ struct NameParseDateTimeBestEffort { static constexpr auto name = "parse_datetim
 struct NameParseDateTimeBestEffortOrZero { static constexpr auto name = "parse_datetime_best_effort_or_zero"; };
 struct NameParseDateTimeBestEffortOrNull { static constexpr auto name = "parse_datetime_best_effort_or_null"; };
 /// proton: starts
-struct NameParseDateTimeBestEffortUS { static constexpr auto name = "to_time"; };
+struct NameParseDateTimeBestEffortUS { static constexpr auto name = "parse_datetime_best_effort_us"; };
+struct NameParseDateTime64BestEffortUSOrZero { static constexpr auto name = "to_time"; };
 /// proton: ends
 struct NameParseDateTimeBestEffortUSOrZero { static constexpr auto name = "parse_datetime_best_effort_us_or_zero"; };
 struct NameParseDateTimeBestEffortUSOrNull { static constexpr auto name = "parse_datetime_best_effort_us_or_null"; };
@@ -2424,6 +2438,10 @@ using FunctionParseDateTime64BestEffortOrZero = FunctionConvertFromString<
     DataTypeDateTime64, NameParseDateTime64BestEffortOrZero, ConvertFromStringExceptionMode::Zero, ConvertFromStringParsingMode::BestEffort>;
 using FunctionParseDateTime64BestEffortOrNull = FunctionConvertFromString<
     DataTypeDateTime64, NameParseDateTime64BestEffortOrNull, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::BestEffort>;
+/// proton: starts. to_time function
+using FunctionParseDateTime64BestEffortUSOrZero = FunctionConvertFromString<
+    DataTypeDateTime64, NameParseDateTime64BestEffortUSOrZero, ConvertFromStringExceptionMode::Zero, ConvertFromStringParsingMode::BestEffortUS>;
+/// proton: ends
 
 class ExecutableFunctionCast : public IExecutableFunction
 {
