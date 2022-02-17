@@ -15,7 +15,7 @@ DECLARE_SETTINGS_TRAITS(memorySettingsTraits, MEMORY_SETTINGS)
 
 
 /** Settings for the Memory engine.
-  * Could be loaded from a CREATE TABLE query (SETTINGS clause).
+  * Could be loaded from a CREATE STREAM query (SETTINGS clause).
   */
 struct MemorySettings : public BaseSettings<memorySettingsTraits>
 {

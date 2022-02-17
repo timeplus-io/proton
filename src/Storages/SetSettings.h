@@ -21,7 +21,7 @@ DECLARE_SETTINGS_TRAITS(setSettingsTraits, LIST_OF_SET_SETTINGS)
 
 
 /** Settings for the Set engine.
-  * Could be loaded from a CREATE TABLE query (SETTINGS clause).
+  * Could be loaded from a CREATE STREAM query (SETTINGS clause).
   */
 struct SetSettings : public BaseSettings<setSettingsTraits>
 {

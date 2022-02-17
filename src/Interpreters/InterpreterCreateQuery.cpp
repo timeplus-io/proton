@@ -661,7 +661,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::getTableProperti
     {
         return {};
     }
-    /// We can have queries like "CREATE TABLE <table> ENGINE=<engine>" if <engine>
+    /// We can have queries like "CREATE STREAM <table> ENGINE=<engine>" if <engine>
     /// supports schema inference (will determine table structure in it's constructor).
     else if (!StorageFactory::instance().checkIfStorageSupportsSchemaInterface(create.storage->engine->name))
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
@@ -1101,10 +1101,10 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     else if (create.attach && !create.attach_short_syntax && getContext()->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY)
     {
         auto * log = &Poco::Logger::get("InterpreterCreateQuery");
-        LOG_WARNING(log, "ATTACH TABLE query with full table definition is not recommended: "
-                         "use either ATTACH TABLE {}; to attach existing table "
-                         "or CREATE TABLE {} <table definition>; to create new table "
-                         "or ATTACH TABLE {} FROM '/path/to/data/' <table definition>; to create new table and attach data.",
+        LOG_WARNING(log, "ATTACH STREAM query with full table definition is not recommended: "
+                         "use either ATTACH STREAM {}; to attach existing table "
+                         "or CREATE STREAM {} <table definition>; to create new table "
+                         "or ATTACH STREAM {} FROM '/path/to/data/' <table definition>; to create new table and attach data.",
                          create.getTable(), create.getTable(), create.getTable());
     }
 

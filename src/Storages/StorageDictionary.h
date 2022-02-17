@@ -64,7 +64,7 @@ public:
         SameDatabaseAndNameAsDictionary,
 
         /// Table was created explicitly by a statement like
-        /// CREATE TABLE ... ENGINE=Dictionary
+        /// CREATE STREAM ... ENGINE=Dictionary
         /// User chose the table's database and name and can drop that table.
         Custom,
     };

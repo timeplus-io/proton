@@ -408,7 +408,7 @@ private:
     ///
     /// Consider the following example:
     ///
-    ///     CREATE TABLE test(p DateTime, k int) ENGINE MergeTree PARTITION BY toDate(p) ORDER BY k;
+    ///     CREATE STREAM test(p DateTime, k int) ENGINE MergeTree PARTITION BY toDate(p) ORDER BY k;
     ///     INSERT INTO test VALUES ('2020-09-01 00:01:02', 1), ('2020-09-01 20:01:03', 2), ('2020-09-02 00:01:03', 3);
     ///
     /// - SELECT count() FROM test WHERE toDate(p) >= '2020-09-01' AND p <= '2020-09-01 00:00:00'

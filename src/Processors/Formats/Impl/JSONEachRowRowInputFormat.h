@@ -59,7 +59,7 @@ private:
     /// If processing Nested data, holds the length of the common prefix
     /// of the names of related nested columns. For example, for a table
     /// created as follows
-    ///        CREATE TABLE t (n Nested (i Int32, s String))
+    ///        CREATE STREAM t (n Nested (i Int32, s String))
     /// the nested column names are 'n.i' and 'n.s' and the nested prefix is 'n.'
     size_t nested_prefix_length = 0;
 

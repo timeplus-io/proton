@@ -55,11 +55,9 @@ void ASTDropQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
     else if (is_view)
         settings.ostr << "VIEW ";
     /// proton: starts
-    else if (is_stream)
+    else
         settings.ostr << "STREAM ";
     /// proton: ends
-    else
-        settings.ostr << "TABLE ";
 
     if (if_exists)
         settings.ostr << "IF EXISTS ";

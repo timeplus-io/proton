@@ -27,7 +27,7 @@ DECLARE_SETTINGS_TRAITS(FileLogSettingsTraits, LIST_OF_FILELOG_SETTINGS)
 
 
 /** Settings for the FileLog engine.
-  * Could be loaded from a CREATE TABLE query (SETTINGS clause).
+  * Could be loaded from a CREATE STREAM query (SETTINGS clause).
   */
 struct FileLogSettings : public BaseSettings<FileLogSettingsTraits>
 {

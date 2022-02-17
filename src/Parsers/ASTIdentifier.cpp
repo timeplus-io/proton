@@ -193,7 +193,7 @@ ASTPtr ASTTableIdentifier::clone() const
 void ASTTableIdentifier::formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     if (!streaming)
-        settings.ostr << "hist(";
+        settings.ostr << "table(";
 
     ASTIdentifier::formatImplWithoutAlias(settings, state, frame);
 

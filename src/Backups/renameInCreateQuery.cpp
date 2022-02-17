@@ -43,14 +43,14 @@ namespace
         }
 
     private:
-        /// Replaces names of tables and databases used in a CREATE query, which can be either CREATE TABLE or
-        /// CREATE DICTIONARY or CREATE VIEW or CREATE TEMPORARY TABLE or CREATE DATABASE query.
+        /// Replaces names of tables and databases used in a CREATE query, which can be either CREATE STREAM or
+        /// CREATE DICTIONARY or CREATE VIEW or CREATE TEMPORARY STREAM or CREATE DATABASE query.
         static void visitCreateQuery(ASTCreateQuery & create, const Data & data)
         {
             if (create.temporary)
             {
                 if (!create.table)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Table name specified in the CREATE TEMPORARY TABLE query must not be empty");
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Table name specified in the CREATE TEMPORARY STREAM query must not be empty");
                 create.setTable(data.renaming_config->getNewTemporaryTableName(create.getTable()));
             }
             else if (!create.table)
@@ -62,7 +62,7 @@ namespace
             else
             {
                 if (!create.database)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Database name specified in the CREATE TABLE query must not be empty");
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Database name specified in the CREATE STREAM query must not be empty");
                 auto table_and_database_name = data.renaming_config->getNewTableName({create.getDatabase(), create.getTable()});
                 create.setDatabase(table_and_database_name.first);
                 create.setTable(table_and_database_name.second);

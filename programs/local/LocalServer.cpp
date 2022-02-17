@@ -345,7 +345,7 @@ std::string LocalServer::getInitialCreateTableQuery()
     else
         table_structure = "(" + table_structure + ")";
 
-    return fmt::format("CREATE TABLE {} {} ENGINE = File({}, {});",
+    return fmt::format("CREATE STREAM {} {} ENGINE = File({}, {});",
                        table_name, table_structure, data_format, table_file);
 }
 
@@ -701,7 +701,7 @@ void LocalServer::processConfig()
 
         "There are two ways to define initial table keeping your data."
         " Either just in first query like this:\n"
-        "    CREATE TABLE <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
+        "    CREATE STREAM <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
         "Either through corresponding command line parameters --table --structure --input-format and --file.";
 }
 

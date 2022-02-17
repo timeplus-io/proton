@@ -70,8 +70,6 @@ public:
 
         NO_TYPE,
 
-        LIVE_VIEW_REFRESH,
-
         MODIFY_DATABASE_SETTING,
 
         MODIFY_COMMENT,
@@ -219,13 +217,11 @@ class ASTAlterQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCl
 public:
     enum class AlterObjectType
     {
-        TABLE,
         /// proton: starts
         STREAM,
-        /// proton: ends
         DATABASE,
-        LIVE_VIEW,
         UNKNOWN,
+        /// proton: ends
     };
 
     AlterObjectType alter_object = AlterObjectType::UNKNOWN;

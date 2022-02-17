@@ -18,7 +18,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 /// Currently works only 3 kind ways below
 
 /// For example:
-//    CREATE TABLE test_table
+//    CREATE STREAM test_table
 //    (
 //     `timestamp` DateTime,
 //     `value` UInt64,

@@ -29,7 +29,7 @@ namespace ErrorCodes
 }
 
 
-/// Description of a single table column (in CREATE TABLE for example).
+/// Description of a single table column (in CREATE STREAM for example).
 struct ColumnDescription
 {
     String name;
@@ -52,7 +52,7 @@ struct ColumnDescription
 };
 
 
-/// Description of multiple table columns (in CREATE TABLE for example).
+/// Description of multiple table columns (in CREATE STREAM for example).
 class ColumnsDescription
 {
 public:

@@ -269,12 +269,11 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         else if (replace_table)
             action = "REPLACE";
 
-        String what = "TABLE";
+        /// proton: starts.
+        String what = "STREAM";
+        /// proton: ends.
         if (is_ordinary_view)
             what = "VIEW";
-        /// proton: starts.
-        else if (is_stream)
-            what = "STREAM";
         else if (is_materialized_view)
             what = "MATERIALIZED VIEW";
         /// proton: ends.

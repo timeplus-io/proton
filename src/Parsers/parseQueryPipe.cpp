@@ -267,7 +267,9 @@ int parseInsert(
 {
     /// INSERT INTO [TABLE] database.table_name (c1, c2, ...)
     ParserKeyword s_insert_into("INSERT INTO");
-    ParserKeyword s_table("TABLE");
+    /// proton: starts
+    ParserKeyword s_stream("STREAM");
+    /// proton: ends
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -281,7 +283,9 @@ int parseInsert(
     if (!s_insert_into.ignore(pos, expected))
         return 0;
 
-    s_table.ignore(pos, expected);
+    /// proton: starts
+    s_stream.ignore(pos, expected);
+    /// proton: ends
 
     if (!name_p.parse(pos, table, expected))
         return handleErrors(pos.max(), last_pos, end, expected, nullptr, error_message, queries, PipeType::insert);
@@ -316,10 +320,12 @@ int parseCreate(
     String & error_message,
     std::vector<std::tuple<String, PipeType, ASTPtr>> & queries)
 {
-    /// CREATE TABLE IF NOT EXISTS database.table ON CLUSTER cluster ENGINE=MergeTree
+    /// CREATE STREAM IF NOT EXISTS database.table ON CLUSTER cluster ENGINE=MergeTree
     ParserKeyword s_create("CREATE");
     ParserKeyword s_temporary("TEMPORARY");
-    ParserKeyword s_table("TABLE");
+    /// proton: starts
+    ParserKeyword s_stream("STREAM");
+    /// proton: ends
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserKeyword s_on("ON");
     ParserCompoundIdentifier table_name_p(true);
@@ -333,7 +339,7 @@ int parseCreate(
 
     s_temporary.ignore(pos, expected);
 
-    if (!s_table.ignore(pos, expected))
+    if (!s_stream.ignore(pos, expected))
         return handleErrors(pos.max(), last_pos, end, expected, nullptr, error_message, queries, PipeType::create);
 
     s_if_not_exists.ignore(pos, expected);
@@ -348,7 +354,7 @@ int parseCreate(
             return handleErrors(pos.max(), last_pos, end, expected, nullptr, error_message, queries, PipeType::create);
     }
 
-    auto emsg = "Invalid syntax, only `CREATE TABLE IF NOT EXISTS <database>.<table> ON CLUSTER <cluster>` is allowed in the last pipe";
+    auto emsg = "Invalid syntax, only `CREATE STREAM IF NOT EXISTS <database>.<table> ON CLUSTER <cluster>` is allowed in the last pipe";
 
     int r = drainLastPipe(pos, last_pos, end, emsg, error_message, queries, PipeType::create);
     if (r != 1)
@@ -390,7 +396,7 @@ std::pair<String, ASTPtr> doRewriteQueryPipe(
             break;
 
         case PipeType::create:
-            /// CREATE TABLE IF NOT EXISTS <database>.<table> ON CLUSTER <cluster> AS SELECT ...
+            /// CREATE STREAM IF NOT EXISTS <database>.<table> ON CLUSTER <cluster> AS SELECT ...
             all_query = std::get<0>(query) + " AS " + all_query;
             break;
         }
@@ -416,7 +422,7 @@ std::pair<String, ASTPtr> doRewriteQueryPipeAndParse(
 {
     /// The rest of the queries in the pipe are can be an abitrary combinations
     /// of | WHERE ... | SELECT ...
-    /// INSERT INTO or CREATE TABLE can only appear at the very end of the pipe
+    /// INSERT INTO or CREATE STREAM can only appear at the very end of the pipe
 
     for (; pos != end;)
     {
@@ -493,7 +499,7 @@ std::pair<String, ASTPtr> rewriteQueryPipeAndParse(
         return std::make_pair("", nullptr);
 
     /// SELECT ... -> WHERE ... -> SELECT ... -> INSERT INTO table (col1, col2, ...)
-    /// SELECT ... -> WHERE ... -> SELECT ... -> CREATE TABLE table
+    /// SELECT ... -> WHERE ... -> SELECT ... -> CREATE STREAM table
 
     std::vector<std::tuple<String, PipeType, ASTPtr>> queries;
     auto r = handleErrors(token_iterator.max(), pos, end, expected, res, error_message, queries, PipeType::select);

@@ -45,7 +45,7 @@ DECLARE_SETTINGS_TRAITS(KafkaSettingsTraits, LIST_OF_KAFKA_SETTINGS)
 
 
 /** Settings for the Kafka engine.
-  * Could be loaded from a CREATE TABLE query (SETTINGS clause).
+  * Could be loaded from a CREATE STREAM query (SETTINGS clause).
   */
 struct KafkaSettings : public BaseSettings<KafkaSettingsTraits>
 {

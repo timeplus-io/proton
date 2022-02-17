@@ -120,7 +120,6 @@ const char * ASTAlterCommand::typeToString(ASTAlterCommand::Type type)
         case DELETE: return "DELETE";
         case UPDATE: return "UPDATE";
         case NO_TYPE: return "NO_TYPE";
-        case LIVE_VIEW_REFRESH: return "LIVE_VIEW_REFRESH";
         case MODIFY_DATABASE_SETTING: return "MODIFY_DATABASE_SETTING";
         case MODIFY_COMMENT: return "MODIFY_COMMENT";
     }
@@ -473,10 +472,6 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
                       << (settings.hilite ? hilite_none : "");
         select->formatImpl(settings, state, frame);
     }
-    else if (type == ASTAlterCommand::LIVE_VIEW_REFRESH)
-    {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "REFRESH " << (settings.hilite ? hilite_none : "");
-    }
     else if (type == ASTAlterCommand::RENAME_COLUMN)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "RENAME COLUMN " << (if_exists ? "IF EXISTS " : "")
@@ -560,20 +555,14 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
 
     switch (alter_object)
     {
-        case AlterObjectType::TABLE:
-            settings.ostr << "ALTER TABLE ";
-            break;
         /// proton: starts
         case AlterObjectType::STREAM:
             settings.ostr << "ALTER STREAM ";
             break;
-        /// proton: ends
         case AlterObjectType::DATABASE:
             settings.ostr << "ALTER DATABASE ";
             break;
-        case AlterObjectType::LIVE_VIEW:
-            settings.ostr << "ALTER LIVE VIEW ";
-            break;
+        /// proton: ends
         default:
             break;
     }

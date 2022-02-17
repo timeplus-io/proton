@@ -19,22 +19,22 @@ static void validateCreate(const String & query)
 
 TEST(DistributedMergeTreeColumnValidateVisitor, validCreate)
 {
-    EXPECT_NO_THROW(validateCreate("CREATE TABLE example_table(d DateTime64(3)) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
+    EXPECT_NO_THROW(validateCreate("CREATE STREAM example_table(d DateTime64(3)) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
     EXPECT_NO_THROW(validateCreate(
-        "CREATE TABLE example_table(d DateTime64(3), _time DateTime64) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
+        "CREATE STREAM example_table(d DateTime64(3), _time DateTime64) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
     EXPECT_NO_THROW(validateCreate(
-        "CREATE TABLE example_table(d DateTime64(3), _time DateTime64(3)) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
-    EXPECT_NO_THROW(validateCreate("CREATE TABLE example_table(d DateTime64(3), _time DateTime64(3) DEFAULT d) ENGINE = DistributedMergeTree "
+        "CREATE STREAM example_table(d DateTime64(3), _time DateTime64(3)) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
+    EXPECT_NO_THROW(validateCreate("CREATE STREAM example_table(d DateTime64(3), _time DateTime64(3) DEFAULT d) ENGINE = DistributedMergeTree "
                                    "PARTITION BY to_YYYYMM(d) ORDER BY d"));
     EXPECT_NO_THROW(
         validateCreate(
-            "CREATE TABLE example_table(d DateTime64(3), _time DateTime DEFAULT d) ENGINE = MergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
+            "CREATE STREAM example_table(d DateTime64(3), _time DateTime DEFAULT d) ENGINE = MergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
 }
 
 TEST(DistributedMergeTreeColumnValidateVisitor, invalidCreate)
 {
     EXPECT_THROW(
         validateCreate(
-            "CREATE TABLE example_table(d DateTime64(3), _tp_time String DEFAULT d) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"),
+            "CREATE STREAM example_table(d DateTime64(3), _tp_time String DEFAULT d) ENGINE = DistributedMergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"),
         DB::Exception);
 }

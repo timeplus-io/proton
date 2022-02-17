@@ -135,7 +135,7 @@ bool PostgreSQLHandler::startup()
     authentication_manager.authenticate(user_name, *session, *message_transport, socket().peerAddress());
 
     /// proton: starts. Check query mode: options=-c query_mode=hist
-    String query_mode = "hist";
+    String query_mode = "table";
     auto it = start_up_msg->parameters.find("options");
     if (it != start_up_msg->parameters.end())
         if (it->second.find("query_mode=streaming") != String::npos)

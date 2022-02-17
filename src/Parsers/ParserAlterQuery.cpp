@@ -130,16 +130,6 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     switch (alter_object)
     {
-        case ASTAlterQuery::AlterObjectType::LIVE_VIEW:
-        {
-            if (s_refresh.ignore(pos, expected))
-            {
-                command->type = ASTAlterCommand::LIVE_VIEW_REFRESH;
-            }
-            else
-                return false;
-            break;
-        }
         case ASTAlterQuery::AlterObjectType::DATABASE:
         {
             if (s_modify_setting.ignore(pos, expected))
@@ -157,7 +147,6 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         /// proton: starts
         case ASTAlterQuery::AlterObjectType::STREAM:
         /// proton: ends
-        case ASTAlterQuery::AlterObjectType::TABLE:
         {
             if (s_add_column.ignore(pos, expected))
             {
@@ -849,29 +838,18 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto query = std::make_shared<ASTAlterQuery>();
     node = query;
 
-    ParserKeyword s_alter_table("ALTER TABLE");
-    ParserKeyword s_alter_live_view("ALTER LIVE VIEW");
     /// proton: starts
     ParserKeyword s_alter_stream("ALTER STREAM");
     /// proton: ends
     ParserKeyword s_alter_database("ALTER DATABASE");
 
     ASTAlterQuery::AlterObjectType alter_object_type;
-    if (s_alter_table.ignore(pos, expected))
-    /// proton: ends
-    {
-        alter_object_type = ASTAlterQuery::AlterObjectType::TABLE;
-    }
     /// proton: starts
-    else if (s_alter_stream.ignore(pos, expected))
+    if (s_alter_stream.ignore(pos, expected))
     {
         alter_object_type = ASTAlterQuery::AlterObjectType::STREAM;
     }
     /// proton: ends
-    else if (s_alter_live_view.ignore(pos, expected))
-    {
-        alter_object_type = ASTAlterQuery::AlterObjectType::LIVE_VIEW;
-    }
     else if (s_alter_database.ignore(pos, expected))
     {
         alter_object_type = ASTAlterQuery::AlterObjectType::DATABASE;

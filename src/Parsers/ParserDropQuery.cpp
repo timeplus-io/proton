@@ -13,7 +13,6 @@ namespace
 bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, const ASTDropQuery::Kind kind)
 {
     ParserKeyword s_temporary("TEMPORARY");
-    ParserKeyword s_table("TABLE");
     /// proton: starts
     ParserKeyword s_stream("STREAM");
     /// proton: ends
@@ -33,9 +32,6 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     bool if_exists = false;
     bool temporary = false;
     bool is_dictionary = false;
-    /// proton: starts
-    bool is_stream = false;
-    /// proton: ends
     bool is_view = false;
     bool no_delay = false;
     bool permanently = false;
@@ -56,13 +52,11 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
             is_dictionary = true;
         else if (s_temporary.ignore(pos, expected))
             temporary = true;
-        else if (s_stream.ignore(pos, expected))
-            is_stream = true;
 
         /// for TRUNCATE queries TABLE keyword is assumed as default and can be skipped
         if (!is_view && !is_dictionary
             /// proton: starts
-            && (!s_table.ignore(pos, expected) && !is_stream && kind != ASTDropQuery::Kind::Truncate))
+            && (!s_stream.ignore(pos, expected) && kind != ASTDropQuery::Kind::Truncate))
             /// proton: ends
         {
             return false;
@@ -102,9 +96,6 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     query->kind = kind;
     query->if_exists = if_exists;
     query->temporary = temporary;
-    /// proton: starts
-    query->is_stream = is_stream;
-    /// proton: ends
     query->is_dictionary = is_dictionary;
     query->is_view = is_view;
     query->no_delay = no_delay;

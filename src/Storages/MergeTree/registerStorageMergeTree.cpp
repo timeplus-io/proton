@@ -68,7 +68,7 @@ static String getMergeTreeVerboseHelp(bool)
 
 Syntax for the MergeTree table engine:
 
-CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
+CREATE STREAM [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
 (
     name1 [type1] [DEFAULT|MATERIALIZED|ALIAS expr1] [TTL expr1],
     name2 [type2] [DEFAULT|MATERIALIZED|ALIAS expr2] [TTL expr2],

@@ -120,7 +120,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
 }
 
 
-/// returns CREATE TABLE query, but with removed:
+/// returns CREATE STREAM query, but with removed:
 /// - UUID
 /// - SETTINGS (for MergeTree)
 /// That way it can be used to compare with the SystemLog::getCreateTableQuery()

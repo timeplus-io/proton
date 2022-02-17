@@ -57,32 +57,32 @@ INSTANTIATE_TEST_SUITE_P(ApplyTableOverrides, TableOverrideTest,
     ::testing::ValuesIn(std::initializer_list<TableOverrideTestCase>{
     {
         "CREATE DATABASE db",
-        "CREATE TABLE db.t (id Int64) ENGINE=Log",
-        "CREATE TABLE db.t (`id` Int64) ENGINE = Log"
+        "CREATE STREAM db.t (id Int64) ENGINE=Log",
+        "CREATE STREAM db.t (`id` Int64) ENGINE = Log"
     },
     {
         "CREATE DATABASE db TABLE OVERRIDE t (PARTITION BY tuple())",
-        "CREATE TABLE db.t (id Int64) ENGINE=MergeTree",
-        "CREATE TABLE db.t (`id` Int64) ENGINE = MergeTree PARTITION BY tuple()"
+        "CREATE STREAM db.t (id Int64) ENGINE=MergeTree",
+        "CREATE STREAM db.t (`id` Int64) ENGINE = MergeTree PARTITION BY tuple()"
     },
     {
         "CREATE DATABASE db TABLE OVERRIDE t (COLUMNS (id UInt64 CODEC(Delta), shard UInt8 ALIAS modulo(id, 16)) PARTITION BY shard)",
-        "CREATE TABLE db.t (id Int64) ENGINE=MergeTree",
-        "CREATE TABLE db.t (`id` UInt64 CODEC(Delta), `shard` UInt8 ALIAS id % 16) ENGINE = MergeTree PARTITION BY shard"
+        "CREATE STREAM db.t (id Int64) ENGINE=MergeTree",
+        "CREATE STREAM db.t (`id` UInt64 CODEC(Delta), `shard` UInt8 ALIAS id % 16) ENGINE = MergeTree PARTITION BY shard"
     },
     {
         "CREATE DATABASE db TABLE OVERRIDE a (PARTITION BY modulo(id, 3)), TABLE OVERRIDE b (PARTITION BY modulo(id, 5))",
-        "CREATE TABLE db.a (id Int64) ENGINE=MergeTree",
-        "CREATE TABLE db.a (`id` Int64) ENGINE = MergeTree PARTITION BY id % 3"
+        "CREATE STREAM db.a (id Int64) ENGINE=MergeTree",
+        "CREATE STREAM db.a (`id` Int64) ENGINE = MergeTree PARTITION BY id % 3"
     },
     {
         "CREATE DATABASE db TABLE OVERRIDE a (PARTITION BY modulo(id, 3)), TABLE OVERRIDE b (PARTITION BY modulo(id, 5))",
-        "CREATE TABLE db.b (id Int64) ENGINE=MergeTree",
-        "CREATE TABLE db.b (`id` Int64) ENGINE = MergeTree PARTITION BY id % 5"
+        "CREATE STREAM db.b (id Int64) ENGINE=MergeTree",
+        "CREATE STREAM db.b (`id` Int64) ENGINE = MergeTree PARTITION BY id % 5"
     },
     {
         "CREATE DATABASE db TABLE OVERRIDE `tbl` (PARTITION BY to_YYYYMM(created))",
-        "CREATE TABLE db.tbl (id Int64, created DateTime) ENGINE=Foo",
-        "CREATE TABLE db.tbl (`id` Int64, `created` DateTime) ENGINE = Foo PARTITION BY to_YYYYMM(created)",
+        "CREATE STREAM db.tbl (id Int64, created DateTime) ENGINE=Foo",
+        "CREATE STREAM db.tbl (`id` Int64, `created` DateTime) ENGINE = Foo PARTITION BY to_YYYYMM(created)",
     }
 }));

@@ -91,7 +91,7 @@ StorageMergeTree::StorageMergeTree(
     loadDataParts(has_force_restore_data_flag);
 
     if (!attach && !getDataParts().empty())
-        throw Exception("Data directory for table already containing data parts - probably it was unclean DROP table or manual intervention. You must either clear directory by hand or use ATTACH TABLE instead of CREATE TABLE if you need to use that parts.", ErrorCodes::INCORRECT_DATA);
+        throw Exception("Data directory for table already containing data parts - probably it was unclean DROP table or manual intervention. You must either clear directory by hand or use ATTACH TABLE instead of CREATE STREAM if you need to use that parts.", ErrorCodes::INCORRECT_DATA);
 
     increment.set(getMaxBlockNumber());
 

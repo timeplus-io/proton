@@ -182,7 +182,9 @@ public:
         const StoragePtr & /*table*/,
         const ASTPtr & /*query*/)
     {
-        throw Exception("There is no CREATE TABLE query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: starts
+        throw Exception("There is no CREATE STREAM query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
     }
 
     /// Delete the table from the database, drop table and delete the metadata.
@@ -245,7 +247,7 @@ public:
         return static_cast<time_t>(0);
     }
 
-    /// Get the CREATE TABLE query for the table. It can also provide information for detached tables for which there is metadata.
+    /// Get the CREATE STREAM query for the table. It can also provide information for detached tables for which there is metadata.
     ASTPtr tryGetCreateTableQuery(const String & name, ContextPtr context) const noexcept
     {
         return getCreateTableQueryImpl(name, context, false);

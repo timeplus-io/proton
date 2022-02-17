@@ -49,7 +49,7 @@ protected:
 public:
     ASTAlterQuery::AlterObjectType alter_object;
 
-    ParserAlterCommandList(ASTAlterQuery::AlterObjectType alter_object_ = ASTAlterQuery::AlterObjectType::TABLE)
+    ParserAlterCommandList(ASTAlterQuery::AlterObjectType alter_object_ = ASTAlterQuery::AlterObjectType::STREAM)
         : alter_object(alter_object_) {}
 };
 
@@ -63,7 +63,7 @@ protected:
 public:
     ASTAlterQuery::AlterObjectType alter_object;
 
-    ParserAlterCommand(ASTAlterQuery::AlterObjectType alter_object_ = ASTAlterQuery::AlterObjectType::TABLE)
+    ParserAlterCommand(ASTAlterQuery::AlterObjectType alter_object_ = ASTAlterQuery::AlterObjectType::STREAM)
         : alter_object(alter_object_) {}
 };
 

@@ -382,7 +382,9 @@ protected:
 class ParserCreateTableQuery : public IParserBase
 {
 protected:
-    const char * getName() const override { return "CREATE TABLE or ATTACH TABLE query"; }
+    /// proton: starts
+    const char * getName() const override { return "CREATE STREAM or ATTACH STREAM query"; }
+    /// proton: ends
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
@@ -443,10 +445,10 @@ protected:
   * ) ENGINE = engine
   *
   * Or:
-  * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name AS [db2.]name2 [ENGINE = engine]
+  * CREATE|ATTACH STREAM [IF NOT EXISTS] [db.]name AS [db2.]name2 [ENGINE = engine]
   *
   * Or:
-  * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name AS ENGINE = engine SELECT ...
+  * CREATE|ATTACH STREAM [IF NOT EXISTS] [db.]name AS ENGINE = engine SELECT ...
   *
   * Or:
   * CREATE|ATTACH DATABASE db [ENGINE = engine]
@@ -457,7 +459,9 @@ protected:
 class ParserCreateQuery : public IParserBase
 {
 protected:
-    const char * getName() const override { return "CREATE TABLE or ATTACH TABLE query"; }
+    /// proton: starts
+    const char * getName() const override { return "CREATE STREAM or ATTACH STREAM query"; }
+    /// proton: ends
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 

@@ -35,7 +35,7 @@
   * For precision test.
   * Parse all existing Float32 numbers:
 
-CREATE TABLE test.floats ENGINE = Log AS SELECT reinterpretAsFloat32(reinterpretAsString(toUInt32(number))) AS x FROM numbers(0x100000000);
+CREATE STREAM test.floats ENGINE = Log AS SELECT reinterpretAsFloat32(reinterpretAsString(toUInt32(number))) AS x FROM numbers(0x100000000);
 
 WITH
     toFloat32(toString(x)) AS y,

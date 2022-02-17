@@ -108,7 +108,10 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         auto tables = catalog_service.findTableByName(database, query.getTable());
         if (tables.empty())
         {
-            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} does not exist.", query.getDatabase(), query.getTable());
+            if (query.if_exists)
+                return {};
+            else
+                throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} does not exist.", query.getDatabase(), query.getTable());
         }
         if (tables[0]->engine != "DistributedMergeTree")
         {
@@ -482,7 +485,7 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
                     database->waitDetachedTableNotInUse(table_uuid);
             }
 
-            /// Protects from concurrent CREATE TABLE queries
+            /// Protects from concurrent CREATE STREAM queries
             auto db_guard = DatabaseCatalog::instance().getExclusiveDDLGuardForDatabase(database_name);
 
             if (!drop)

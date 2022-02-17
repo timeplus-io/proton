@@ -59,15 +59,14 @@ public:
 };
 
 
-/// CREATE TABLE or ATTACH TABLE query
+/// CREATE STREAM or ATTACH STREAM query
 class ASTCreateQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCluster
 {
 public:
-    bool attach{false};    /// Query ATTACH TABLE, not CREATE TABLE.
+    bool attach{false};    /// Query ATTACH STREAM, not CREATE STREAM.
     bool if_not_exists{false};
     bool is_ordinary_view{false};
     /// proton: starts.
-    bool is_stream{false};
     bool is_materialized_view{false};
     /// proton: ends.
     bool replace_view{false}; /// CREATE OR REPLACE VIEW

@@ -22,7 +22,7 @@ namespace DWAL
  * as long as the operation can wrap in a `Block` and can be understood in the all partiticipants invovled.
  * 1. Insert a data block (data path)
  * 2. Mutate commands like `ALTER TABLE table UPDATE ...`
- * 3. DDL commands like `CREATE TABLE table ...`
+ * 3. DDL commands like `CREATE STREAM table ...`
  * 4. ...
  */
 

@@ -179,7 +179,7 @@ DECLARE_SETTINGS_TRAITS(MergeTreeSettingsTraits, LIST_OF_MERGE_TREE_SETTINGS)
 
 
 /** Settings for the MergeTree family of engines.
-  * Could be loaded from config or from a CREATE TABLE query (SETTINGS clause).
+  * Could be loaded from config or from a CREATE STREAM query (SETTINGS clause).
   */
 struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
 {
