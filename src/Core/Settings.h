@@ -568,6 +568,7 @@ class IColumn;
     M(Int64, record_consume_timeout, 100, "Timeout of consuming record", 0) \
     M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in steraming view", 0) \
     M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in steraming view", 0) \
+    M(Bool, synchronous_ddl, true, "If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.", 0)                                   \
     /* proton: ends. */ \
 
 // End of COMMON_SETTINGS
@@ -697,7 +698,7 @@ class IColumn;
     M(String, rawstore_time_extraction_rule, "", "_time extraction rule (string, json, regex)", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "latest", "Seeking to an offset of the streaming store to seek when a streaming query is initiated", 0) \
-    M(String, query_mode, "streaming", "Default query mode. hist or streaming", 0) \
+    M(String, query_mode, "streaming", "Default query mode. hist or streaming", 0)                                                                                    \
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

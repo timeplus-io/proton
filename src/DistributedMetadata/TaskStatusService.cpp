@@ -338,7 +338,7 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String
     /// FIXME: Remove DISTINCT when we resolve the checkpointing issue
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                                       "reason, user, context, created, last_modified "
-                                      "FROM hist(system.tasks) "
+                                      "FROM table(system.tasks) "
                                       "WHERE user <> '' AND id == '{}' "
                                       "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, id);
@@ -389,7 +389,7 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
     CurrentThread::detachQueryIfNotDetached();
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                                       "reason, user, context, created, last_modified "
-                                      "FROM hist(system.tasks) "
+                                      "FROM table(system.tasks) "
                                       "WHERE user == '{}' "
                                       "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, user);
@@ -502,7 +502,7 @@ bool TaskStatusService::createTaskTable()
 
     /// FIXME: Wait for support for synchronous DDL feature, add settings `synchronous_ddl=1`
     String query = fmt::format(
-        "CREATE TABLE IF NOT EXISTS \
+        "CREATE STREAM IF NOT EXISTS \
                     system.tasks \
                     ( \
                     `id` String, \
@@ -520,7 +520,7 @@ bool TaskStatusService::createTaskTable()
                     ORDER BY (to_minute(_tp_time), user, id) \
                     PARTITION BY to_date(_tp_time) \
                     TTL to_datetime(_tp_time + to_interval_day(7)) DELETE \
-                    SETTINGS index_granularity = 8192",
+                    SETTINGS index_granularity=8192",
         replicas);
 
     auto query_context = Context::createCopy(global_context);
@@ -528,6 +528,7 @@ bool TaskStatusService::createTaskTable()
     query_context->setCurrentQueryId("");
     query_context->setUserByName("system");
     query_context->setDistributedDDLOperation(true);
+    query_context->setSetting("synchronous_ddl", true);
     /// CurrentThread::QueryScope query_scope{query_context};
 
     try

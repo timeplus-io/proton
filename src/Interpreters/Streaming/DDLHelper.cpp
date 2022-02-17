@@ -1,5 +1,6 @@
 #include "DDLHelper.h"
 
+#include <DistributedMetadata/TaskStatusService.h>
 #include "ASTToJSONUtils.h"
 
 #include <DistributedMetadata/CatalogService.h>
@@ -11,7 +12,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
-#include <Common/ProtonCommon.h>
 
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -24,6 +24,8 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int ILLEGAL_COLUMN;
     extern const int INVALID_SETTING_VALUE;
+    extern const int UNKNOWN_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 namespace
@@ -342,7 +344,7 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
 
     if (create.storage && create.storage->ttl_table)
     {
-        payload.set("ttl", queryToString(*create.storage->ttl_table));
+        payload.set("ttl_expression", queryToString(*create.storage->ttl_table));
     }
     buildColumnsJSON(payload, create.columns_list);
 
@@ -402,5 +404,42 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
         payload = JSONToString(payload_json);
     }
     return payload;
+}
+
+void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout)
+{
+    UInt64 wait_time = 0;
+    if (!ctx->getSettingsRef().synchronous_ddl && !force_sync)
+        return;
+
+    /// FIXME: shall route to task service in a distributed env if task service is not local
+    auto & task_service = TaskStatusService::instance(ctx);
+    while (true)
+    {
+        /// Loop wait to finish, sleep interval too large?
+        /// Actually, the create delay is about '1s'
+        LOG_INFO(log, "Wait for DDL operation for query_id={} ...", ctx->getCurrentQueryId());
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        wait_time += 100;
+
+        auto task_status = task_service.findById(ctx->getCurrentQueryId());
+        if (task_status)
+        {
+            if (task_status->status == TaskStatusService::TaskStatus::SUCCEEDED)
+                break;
+            else if (task_status->status == TaskStatusService::TaskStatus::FAILED)
+                throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Fail to do DDL. reason: {}", task_status->reason);
+        }
+
+        if (wait_time > timeout)
+        {
+            throw Exception(
+                ErrorCodes::TIMEOUT_EXCEEDED,
+                "Wait {} milliseconds for DDL operation timeout. the timeout is {} milliseconds.",
+                wait_time,
+                timeout);
+        }
+    }
+
 }
 }

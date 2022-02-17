@@ -16,6 +16,9 @@ profiles:
         record_consume_batch_count: 1000
         record_consume_timeout: 100
 
+        # If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.
+        synchronous_ddl: true
+
         # Profile that allows only read queries.
     readonly:
         readonly: 1

@@ -2,7 +2,6 @@
 #include "ColumnDefinition.h"
 #include "SchemaValidator.h"
 
-#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
@@ -126,12 +125,22 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
     if (isDistributedDDL() && CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
-            jsonErrorResponse(fmt::format("Table {}.{} already exists.", database, table), ErrorCodes::TABLE_ALREADY_EXISTS),
+            jsonErrorResponse(fmt::format("Stream {}.{} already exists.", database, table), ErrorCodes::TABLE_ALREADY_EXISTS),
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     const auto & shard = getQueryParameter("shard");
+    const auto & synchronous_ddl = getQueryParameter("synchronous_ddl", "1");
     const auto & query = getCreationSQL(payload, shard);
+
+    if (synchronous_ddl == "1")
+    {
+        query_context->setSetting("synchronous_ddl", true);
+    }
+    else
+    {
+        query_context->setSetting("synchronous_ddl", false);
+    }
 
     if (query.empty())
     {
@@ -150,13 +159,13 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
     if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
-            jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
+            jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 
-    LOG_INFO(log, "Updating table {}.{}", database, table);
+    LOG_INFO(log, "Updating stream {}.{}", database, table);
     std::vector<String> create_segments;
-    create_segments.push_back("ALTER TABLE " + database + ".`" + table + "`");
+    create_segments.push_back("ALTER STREAM " + database + ".`" + table + "`");
     create_segments.push_back(" MODIFY TTL " + payload->get("ttl_expression").toString());
 
     const String & query = boost::algorithm::join(create_segments, " ");
@@ -170,7 +179,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
 {
     const String & table = getPathParameter("table");
 
-    String query = "DROP TABLE " + database + ".`" + table + "`";
+    String query = "DROP STREAM " + database + ".`" + table + "`";
     if (hasQueryParameter("mode"))
     {
         const auto & mode = getQueryParameter("mode");
@@ -179,13 +188,13 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
             return {
                 jsonErrorResponse("No support delete mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
         else if (delete_mode == DeleteMode::TRUNCATE)
-            query = "TRUNCATE TABLE " + database + ".`" + table + "`";
+            query = "TRUNCATE STREAM " + database + ".`" + table + "`";
     }
 
     if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
-            jsonErrorResponse(fmt::format("Table {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
+            jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 
@@ -198,10 +207,10 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
 {
     const auto & columns_ast = columns_list->columns;
     Poco::JSON::Array columns_mapping_json;
-    for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
+    for (auto & ast_it : columns_ast->children)
     {
         Poco::JSON::Object column_mapping_json;
-        const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
+        const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
 
         ColumnDeclarationToJSON(column_mapping_json, col_decl);
         columns_mapping_json.add(column_mapping_json);
@@ -215,7 +224,7 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
     const auto & table_nodes = catalog_service.findTableByName(database, table);
 
     std::multimap<int, String> nodes;
-    for (auto node : table_nodes)
+    for (const auto node : table_nodes)
     {
         nodes.emplace(node->shard, node->host);
     }
@@ -271,7 +280,7 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
     const auto & time_col = getStringValueFrom(payload, RESERVED_EVENT_TIME_API_NAME, RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
     String uuid = payload->has("uuid") ? " UUID '" + payload->get("uuid").toString() + "'" : "";
-    create_segments.push_back("CREATE TABLE " + database + ".`" + payload->get("name").toString() + "`" + uuid);
+    create_segments.push_back("CREATE STREAM " + database + ".`" + payload->get("name").toString() + "`" + uuid);
     create_segments.push_back("(");
     create_segments.push_back(getColumnsDefinition(payload));
     create_segments.push_back(")");

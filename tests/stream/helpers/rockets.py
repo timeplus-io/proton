@@ -15,7 +15,7 @@
 #   4. inputs (put datas into proton)
 #   5. Compare expect resutls with result of each statement by query_id for assert (skip means skip comparison)
 #   6. all the inputs are injected by rockets_run, all the statements are done by query_execute
-#   7. clean test environment, drop table, clean pipes and etc.
+#   7. clean test environment, drop stream, clean pipes and etc.
 #
 # command structure from rockets_run to query_execute
 # {
@@ -118,7 +118,6 @@ def rockets_context(config_file=None, tests_file=None, docker_compose_file=None)
     # proton_server = config.get("proton_server")
     # proton_server_native_port = config.get("proton_server_native_port")
 
-
     with open(tests_file) as f:
         test_suite = json.load(f)
 
@@ -139,7 +138,7 @@ def rockets_context(config_file=None, tests_file=None, docker_compose_file=None)
     alive = mp.Value('b', True)
     query_exe_client = mp.Process(
         target=query_execute,
-        args=(config, query_exe_child_conn, query_results_queue, alive, ),
+        args=(config, query_exe_child_conn, query_results_queue, alive),
     )  # Create query_exe_client process
 
     rockets_context = {
@@ -315,8 +314,6 @@ def query_run_py(
                 if query_results_queue != None:
                     query_results_queue.put(message_2_send)
                     logger.info(f"query_run_py: query_results message_2_send = {message_2_send} was sent.")
-
-
             else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -396,7 +393,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
     logger.setLevel(logging.INFO)
 
     logger.debug(f"query_execute starts...")
-    telemetry_shard_list = [] #telemetry list for query_run timing
+    telemetry_shared_list = [] #telemetry list for query_run timing
 
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
@@ -614,7 +611,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
     for item in telemetry_shared_list:
         time_spent_query_run_ms += item.get("time_spent")
         count += 1
-    avg_time_spent_query_run_ms = time_spent_query_run_ms / count
+    # avg_time_spent_query_run_ms = time_spent_query_run_ms / count
     logger.info(f"query_run execute {count} times, total {time_spent_query_run_ms} ms spent, avg_time_spent_query_run_ms = {avg_time_spent_query_run_ms}")
     if mp_mgr != None: del mp_mgr
     client.disconnect()
@@ -828,14 +825,17 @@ def input_walk_through_rest(
     return inputs_record
 
 
-def drop_table_if_exist_rest(table_ddl_url, table_name):
-    res = requests.get(table_ddl_url)
-    if res.status_code == 200:
-        res_json = res.json()
-        table_list = res_json.get("data")
+def drop_table_if_exist_rest(pyclient, table_ddl_url, table_name):
+    #res = requests.get(table_ddl_url)
+    table_list = pyclient.execute("show tables")
+    #if res.status_code == 200:
+    if table_list != None:
+        #res_json = res.json()
+        #table_list = res_json.get("data")
         if table_list:
             for element in table_list:
-                if element.get("name") == table_name:
+                if element[0] == table_name:
+                    logger.debug(f"table name = {table_name} = element: {element} in table_list of show tables")
                     res = requests.delete(f"{table_ddl_url}/{table_name}")
                     drop_start_time = datetime.datetime.now()
                     if res.status_code != 200:
@@ -845,17 +845,17 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
                     else:
                         #time.sleep(1)  # sleep to wait the table drop completed.
                         logger.info(
-                            "drop table {} is successfully called".format(table_name)
+                            "drop stream {} is successfully called".format(table_name)
                         )
                         wait_times = 0
-                        while table_exist(table_ddl_url, table_name):
+                        while table_exist_py(pyclient, table_name):
                             time.sleep(0.01)
                             wait_times += 1
                         #wait_time = wait_times * 10
                         drop_complete_time = datetime.datetime.now()
                         time_spent = drop_complete_time - drop_start_time
                         time_spent_ms = time_spent.total_seconds() * 1000
-                        logger.info(f"drop table {table_name} is successfully")
+                        logger.info(f"drop stream {table_name} is successfully")
                         logger.info(f"{time_spent_ms} ms spent on {table_name} drop")
                         global TABLE_DROP_RECORDS
                         TABLE_DROP_RECORDS.append({"table_name":{table_name}, "time_spent":time_spent_ms})
@@ -864,6 +864,13 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
     else:
         raise Exception(f"table list rest acces failed, status code={res.status_code}")
 
+def table_exist_py(pyclient, table_name):
+    table_list = pyclient.execute("show tables")
+    for item in table_list:
+        if item[0] == table_name:
+            logger.debug(f"table_name = {table_name} = {item[0]} in table_list of show tables")
+            return True
+    return False
 
 def table_exist(table_ddl_url, table_name):
     logger.debug(f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}")
@@ -872,6 +879,11 @@ def table_exist(table_ddl_url, table_name):
     if res.status_code == 200:
         res_json = res.json()
         table_list = res_json.get("data")
+        if table_list != None:
+            logger.debug(f"len(table_list) = {len(table_list)}")
+        else:
+            table_list = []
+            logger.debug(f"table_list is None, set table_list = []")
         if len(table_list) > 0:
             for element in table_list:
                 element_name = element.get("name")
@@ -879,14 +891,14 @@ def table_exist(table_ddl_url, table_name):
                 if element_name == table_name:
                     logger.debug(f"table_exist: table '{table_name}' exists.")
                     return True
-            logger.debug(f"table '{table_name} does not exist'")
+            logger.debug(f"table '{table_name}' does not exist")
             return False
         else:
-            logger.debug("table_list is [] '{table_name}' does not exist.")
+            logger.debug(f"len(table_list) = {len(table_list)}, '{table_name}' does not exists")
             return False
 
 
-def create_table_rest(table_ddl_url, table_schema):
+def create_table_rest(pyclient, table_ddl_url, table_schema):
     logger.debug(f"create_table_rest: table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
     table_name = table_schema.get("name")
     type = table_schema.get("type")
@@ -897,8 +909,6 @@ def create_table_rest(table_ddl_url, table_schema):
         table_schema_for_rest = {"name":table_name, "columns":columns, "event_time_column": event_time_column}
     else:
         table_schema_for_rest = {"name":table_name, "columns":columns}
-
-
     res = requests.post(
         table_ddl_url, data=json.dumps(table_schema_for_rest)
     )  # create the table w/ table schema
@@ -912,7 +922,8 @@ def create_table_rest(table_ddl_url, table_schema):
 
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
-        if table_exist(table_ddl_url, table_name):
+        #if table_exist(table_ddl_url, table_name):
+        if table_exist_py(pyclient, table_name):
             logger.info(f"table {table_name} is created successfully.")
             create_complete_time = datetime.datetime.now()
             time_spent = create_complete_time - create_start_time
@@ -1037,7 +1048,7 @@ def env_setup(
             pass
         else:
             if table_type == "table":
-                drop_table_if_exist_rest(table_ddl_url, table_name)
+                drop_table_if_exist_rest(client, table_ddl_url, table_name)
             elif table_type == "view":
                 print()
 
@@ -1045,11 +1056,11 @@ def env_setup(
     for table_schema in table_schemas:
         table_type = table_schema.get("type")
         table_name = table_schema.get("name")
-        if table_exist(table_ddl_url, table_name):
+        if table_exist_py(client, table_name):
             pass
         else:
             if table_type == "table":
-                create_table_rest(table_ddl_url, table_schema)
+                create_table_rest(client, table_ddl_url, table_schema)
             elif table_type == "view":
                 create_table_pyclient(client, table_schema)
 
@@ -1094,12 +1105,12 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                 if (is_table_reset != None and is_table_reset == False) or table in tables_recreated:
                     pass
                 else:
-                    if table_exist(table_ddl_url, table):
-                        res = client.execute(f"drop table {table}")
+                    if table_exist_py(client, table):
+                        res = client.execute(f"drop stream {table}")
                         drop_start_time = datetime.datetime.now()
-                        logger.info(f"drop table {table} is called successfully")
+                        logger.info(f"drop stream {table} is called successfully")
                         wait_count = 0
-                        while table_exist(table_ddl_url, table):
+                        while table_exist_py(client, table):
                             time.sleep(0.01)
                             wait_count += 1
                         #wait_time = wait_count * 10
@@ -1110,25 +1121,25 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                         TABLE_DROP_RECORDS.append({"table_name":{table}, "time_spent":time_spent_ms})
                         logger.info(f"table {table} is dropped, {time_spent_ms} spent.")
                     logger.debug(
-                        f"rockets_run: drop table {table} res = {res}"
+                        f"rockets_run: drop stream {table} res = {res}"
                     )
 
                     for table_schema in table_schemas:
                         name = table_schema.get("name")
-                        if name == table and table_exist(table_ddl_url, table):
-                            logger.debug(f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
-                            while table_exist(table_ddl_url, table):
+                        if name == table and table_exist_py(client, table):
+                            logger.debug(f"rockets_run, drop stream and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}")
+                            while table_exist_py(client, table):
                                 logger.debug(f"{name} not dropped succesfully yet, wait ...")
                                 time.sleep(0.2)
-                            logger.debug(f"rockets_run: drop table and re-create once case starts, table {table} is dropped")
-                            create_table_rest(table_ddl_url, table_schema)
-                            while not table_exist(table_ddl_url, table):
+                            logger.debug(f"rockets_run: drop stream and re-create once case starts, table {table} is dropped")
+                            create_table_rest(client, table_ddl_url, table_schema)
+                            while not table_exist_py(client, table):
                                 logger.debug(f"{name} not recreated successfully yet, wait ...")
                                 time.sleep(0.2)
                             tables_recreated.append(name)
-                        elif name == table and not table_exist(table_ddl_url, table):
-                            create_table_rest(table_ddl_url, table_schema)
-                            while not table_exist(table_ddl_url, table):
+                        elif name == table and not table_exist_py(client, table):
+                            create_table_rest(client, table_ddl_url, table_schema)
+                            while not table_exist_py(client, table):
                                 logger.debug(f"{name} not recreated successfully yet, wait ...")
                                 time.sleep(0.2)
                             tables_recreated.append(name)

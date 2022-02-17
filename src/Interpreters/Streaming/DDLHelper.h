@@ -5,6 +5,7 @@
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Common/ProtonCommon.h>
 
 #include <Poco/JSON/Parser.h>
 
@@ -25,4 +26,6 @@ DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
 
 String getJSONFromCreateQuery(const ASTCreateQuery & create);
 String getJSONFromAlterQuery(const ASTAlterQuery & alter);
+
+void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout = DEFAULT_DDL_TIMEOUT_MS);
 }

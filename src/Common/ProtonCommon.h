@@ -32,4 +32,7 @@ const UInt64 DEFAULT_REPLICAS = 1;
 const String DEFAULT_SHARDING_EXPR = "rand()";
 const String DEFAULT_STORAGE_TYPE = "hybrid";
 const String STORAGE_TYPE_STREAMING = "streaming";
+
+/// Default settings for DDL
+const UInt64 DEFAULT_DDL_TIMEOUT_MS = 2000;
 }

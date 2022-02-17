@@ -14,6 +14,7 @@
 /// proton: starts
 #include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/BlockUtils.h>
+#include <Interpreters/Streaming/DDLHelper.h>
 #include <base/ClockUtils.h>
 /// proton: ends
 
@@ -140,6 +141,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         LOG_INFO(
             log, "Request of dropping DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
+        waitForDDLOps(log, ctx, false);
         /// FIXME, project tasks status
         return true;
     }

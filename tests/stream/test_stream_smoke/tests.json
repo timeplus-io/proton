@@ -1261,8 +1261,8 @@
         {
             "id": 38,
             "tags": ["subquery"],
-            "name": "tumble avg based on table subquery",
-            "description": "tumble avg based on table subquery",
+            "name": "tumble avg based on hist subquery",
+            "description": "tumble avg based on hist subquery",
             "steps":[
                 {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
@@ -1455,7 +1455,7 @@
             "description": "global count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "terminate":"manuel", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1597,7 +1597,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101", "query_type": "table", "query_end_timer":1, "query":"select id, avg(value) from test group by id settings query_mode='hist'"}]}
+                    {"client":"python","wait": 4,"query_id":"101", "query_type": "table", "query_end_timer":1, "query":"select id, avg(value) from test group by id settings query_mode='table'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1631,7 +1631,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "table", "query_end_timer":1, "query":"select *  from test where id = 'dev1' settings query_mode = 'hist', asterisk_include_reserved_columns = false"}]}
+                    {"client":"python","query_id":"101", "query_type": "table", "query_end_timer":1, "query":"select *  from test where id = 'dev1' settings query_mode='table', asterisk_include_reserved_columns=false"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1672,7 +1672,7 @@
 
         {
             "id": 51,
-            "tags": ["seek to", "to reproduce"],
+            "tags": ["seek to", "bug"],
             "name": "seek to ago interval",
             "description": "seek to ago interval",
             "steps":[
@@ -2015,10 +2015,10 @@
                 ]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
-                    [["dev2", 66, "1", "2133-04-08", "a953-a-02", "127.001", "0", "[1, 1, 4, 0, -1, -4]", "['[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","1", "2021-11-02 20:00:05"],
-                    ["dev1", 59, "1", "2133-04-08", "a953-a-02", "0", "0", "[0, 1, 4, 0, -1, -4]", "['[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","0", "2021-11-02 20:00:05"],
-                    ["dev1", 60, "1", "2133-04-08", "a953-a-02", "127.001", "100", "[20, 1, 4, 0, -1, -4]", "['[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","20", "2021-11-02 20:00:05"],
-                    ["dev2", 58.3, "0", "2133-04-08", "a953-a-02", "127.001", "312", "[22, 1, 4, 0, -1, -4]", "['[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","22", "2021-11-02 20:00:05"]
+                    [["dev2", 66, "1", "1953-11-02", "a953-a-02", "127.001", "0", "[1, 1, 4, 0, -1, -4]", "['[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","1", "2021-11-02 20:00:05"],
+                    ["dev1", 59, "1", "1953-11-02", "a953-a-02", "0", "0", "[0, 1, 4, 0, -1, -4]", "['[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","0", "2021-11-02 20:00:05"],
+                    ["dev1", 60, "1", "1953-11-02", "a953-a-02", "127.001", "100", "[20, 1, 4, 0, -1, -4]", "['[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","20", "2021-11-02 20:00:05"],
+                    ["dev2", 58.3, "0", "1953-11-02", "a953-a-02", "127.001", "312", "[22, 1, 4, 0, -1, -4]", "['[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]']","22", "2021-11-02 20:00:05"]
                     ]}]
         },
 

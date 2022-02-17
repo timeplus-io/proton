@@ -962,32 +962,8 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     LOG_INFO(log, "Request of creating DistributedMergeTree query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
-    /// If is a internal create query, sync create task status
-    if (internal)
-    {
-        auto & task_service = TaskStatusService::instance(ctx);
-        int retries = 0;
-        while (retries < 3)
-        {
-            /// Loop wait to finish, sleep interval too large?
-            /// Actually, the create delay is about '1s'
-            LOG_INFO(log, "Wait for creating DistributedMergeTree to complete, query={} query_id={} ...", query, ctx->getCurrentQueryId());
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << retries)));
-
-            auto task_status = task_service.findById(ctx->getCurrentQueryId());
-            if (task_status)
-            {
-                if (task_status->status == TaskStatusService::TaskStatus::SUCCEEDED)
-                    break;
-                else if (task_status->status == TaskStatusService::TaskStatus::FAILED)
-                    throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Fail to create table {}.{}: {}", create.database, create.table, task_status->reason);
-            }
-            ++retries;
-        }
-
-        if (retries >= 3)
-            throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Timeout for create table {}.{}", create.database, create.table);
-    }
+    /// If is a internal create query or synchronous DDL is enabled, sync create task status
+    waitForDDLOps(log, ctx, internal);
 
     /// FIXME, project tasks status
     return true;

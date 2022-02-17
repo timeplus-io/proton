@@ -48,7 +48,7 @@ TEST(DDLHelper, getJSONFromCreateQuery)
     /// normal case
     EXPECT_EQ(
         ignoreEmptyChars(queryToJSON(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `device`         String,
     `location`       String,
@@ -91,7 +91,7 @@ CREATE TABLE default.tests
     /// ignore _tp_xxxx columns
     EXPECT_EQ(
         queryToJSON(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `_tp_time`      DateTime(3) DEFAULT now(UTC),
     `_tp_index_time`DateTime(3) DEFAULT now(UTC),
@@ -131,7 +131,7 @@ CREATE TABLE default.tests
     /// ignore 'order by' and 'partition by'
     EXPECT_EQ(
         ignoreEmptyChars(queryToJSON(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `ttl`            DateTime DEFAULT now()
 ) ENGINE = DistributedMergeTree(2, 1, rand())
@@ -153,7 +153,7 @@ TTL ttl + to_interval_day(1)
 	"replication_factor": 1,
 	"shard_by_expression": "rand()",
 	"shards": 2,
-    "ttl":"ttl + to_interval_day(1)"
+    "ttl_expression":"ttl + to_interval_day(1)"
 })###"));
 }
 
@@ -161,29 +161,29 @@ TEST(DDLHelper, getJSONFromAlterQuery)
 {
     /// modify ttl
     EXPECT_EQ(
-        ignoreEmptyChars(queryToJSON(R"###(ALTER TABLE tests MODIFY TTL ttl + INTERVAL 1 DAY)###")),
-        ignoreEmptyChars(R"###({"ttl_expression": "ttl + to_interval_day(1)"})###"));
+        ignoreEmptyChars(queryToJSON(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###")),
+        ignoreEmptyChars(R"###({"ttl_expression": "ttl + INTERVAL1DAY"})###"));
 
     /// add column
     EXPECT_EQ(
-        queryToJSON(R"###(ALTER TABLE tests ADD COLUMN id UInt32 DEFAULT 20)###"),
+        queryToJSON(R"###(ALTER STREAM tests ADD COLUMN id UInt32 DEFAULT 20)###"),
         ignoreEmptyChars(R"###({"default": "20", "name": "id", "nullable": false, "type": "UInt32"})###"));
 
     /// modify column
     EXPECT_EQ(
-        queryToJSON(R"###(ALTER TABLE tests MODIFY COLUMN id UInt64 DEFAULT 64)###"),
+        queryToJSON(R"###(ALTER STREAM tests MODIFY COLUMN id UInt64 DEFAULT 64)###"),
         ignoreEmptyChars(R"###({"default": "64", "name": "id", "nullable": false, "type": "UInt64"})###"));
 
     /// modify column add comment
     EXPECT_EQ(
-        queryToJSON(R"###(ALTER TABLE tests MODIFY COLUMN id UInt64 DEFAULT 64 COMMENT 'test')###"),
+        queryToJSON(R"###(ALTER STREAM tests MODIFY COLUMN id UInt64 DEFAULT 64 COMMENT 'test')###"),
         ignoreEmptyChars(R"###({"comment": "test", "default": "64", "name": "id", "nullable": false, "type": "UInt64"})###"));
 
     /// rename column
-    EXPECT_EQ(queryToJSON(R"###(ALTER TABLE tests RENAME COLUMN id to id1)###"), ignoreEmptyChars(R"###({"name":"id1"})###"));
+    EXPECT_EQ(queryToJSON(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), ignoreEmptyChars(R"###({"name":"id1"})###"));
 
     /// drop column
-    EXPECT_EQ(queryToJSON(R"###(ALTER TABLE tests DROP COLUMN id1)###"), ignoreEmptyChars(R"###({"name": "id1"})###"));
+    EXPECT_EQ(queryToJSON(R"###(ALTER STREAM tests DROP COLUMN id1)###"), ignoreEmptyChars(R"###({"name": "id1"})###"));
 }
 
 DWAL::OpCode getOpCodeFromSQL(const String & query)
@@ -198,19 +198,19 @@ DWAL::OpCode getOpCodeFromSQL(const String & query)
 TEST(DDLHelper, getOpCodeFromQuery)
 {
     /// modify ttl
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER TABLE tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), DWAL::OpCode::ALTER_TABLE);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), DWAL::OpCode::ALTER_TABLE);
 
     /// add column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER TABLE tests ADD COLUMN id UInt32 DEFAULT 20)###"), DWAL::OpCode::CREATE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id UInt32 DEFAULT 20)###"), DWAL::OpCode::CREATE_COLUMN);
 
     /// modify column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER TABLE tests MODIFY COLUMN id UInt64 DEFAULT 64)###"), DWAL::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id UInt64 DEFAULT 64)###"), DWAL::OpCode::ALTER_COLUMN);
 
     /// rename column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER TABLE tests RENAME COLUMN id to id1)###"), DWAL::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), DWAL::OpCode::ALTER_COLUMN);
 
     /// drop column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER TABLE tests DROP COLUMN id1)###"), DWAL::OpCode::DELETE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests DROP COLUMN id1)###"), DWAL::OpCode::DELETE_COLUMN);
 }
 
 TEST(DDLHelper, getAlterTableParamOpCode)
@@ -235,7 +235,7 @@ TEST(DDLHelper, prepareCreateQueryForDistributedMergeTree)
 {
     /// add _tp_time and _tp_index_time
     ASTPtr ast = queryToAST(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `device`         String,
     `location`       String,
@@ -256,7 +256,7 @@ CREATE TABLE default.tests
 
     /// throw exception if try to add _tp_xxx column
     ast = queryToAST(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `_tp_time`      DateTime(3) DEFAULT now(UTC),
     `_tp_index_time`DateTime(3) DEFAULT now(UTC),
@@ -268,7 +268,7 @@ CREATE TABLE default.tests
 
     /// ignore input 'order_by' and 'partition_by'
     ast = queryToAST(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `ttl`            DateTime DEFAULT now()
 ) ENGINE = DistributedMergeTree(2, 1, rand())
@@ -286,7 +286,7 @@ TTL ttl + to_interval_day(1)
 
     /// add event_time_column
     ast = queryToAST(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `timestamp`      DateTime64(3) DEFAULT now64(3),
     `ttl`            DateTime DEFAULT now()
@@ -297,7 +297,7 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 
     prepareCreateQueryForDistributedMergeTree(*create);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
-CREATE TABLE default.tests (
+CREATE STREAM default.tests (
   `timestamp` DateTime64(3) DEFAULT now64(3),
   `ttl` DateTime DEFAULT now(),
   `_tp_time` DateTime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
@@ -310,7 +310,7 @@ ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour
 TEST(DDLHelper, prepareEngine)
 {
     ASTPtr ast = queryToAST(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `ttl`            DateTime DEFAULT now()
 ))###");
@@ -320,7 +320,7 @@ CREATE TABLE default.tests
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = DistributedMergeTree(1, 1, rand()))###"));
 
     ast = queryToAST(R"###(
-CREATE TABLE default.tests
+CREATE STREAM default.tests
 (
     `ttl`            DateTime DEFAULT now()
 )

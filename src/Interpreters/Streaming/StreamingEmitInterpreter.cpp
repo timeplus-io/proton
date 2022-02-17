@@ -157,7 +157,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     /// Example:
     ///     table1, table2                  -> hop(table1, ...), hop(table2, ...)
     ///     subquery1, subquery2            -> hop(subquery1, ...), hop(subquery2, ...)
-    ///     hist(table1), hist(table2)      -> hop(hist(table1), ...), hop(hist(table2), ...)
+    ///     table(table1), table(table2)      -> hop(table(table1), ...), hop(table(table2), ...)
     auto table_expressions{getTableExpressions(select_query)};
     if (table_expressions.size() > 1)
         throw Exception("No support several tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
@@ -218,7 +218,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
         throw Exception("The table is empty", ErrorCodes::SYNTAX_ERROR);
 
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
-    /// The table_expression can be table, hist(table) and subquery.
+    /// The table_expression can be table, table(table) and subquery.
     auto table_expr = std::make_shared<ASTTableExpression>();
     table_expr->table_function = makeASTFunction("hop", table, makeASTFunction("now"), periodic_interval, last_interval);
 
