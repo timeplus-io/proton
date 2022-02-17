@@ -1110,8 +1110,9 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                         drop_start_time = datetime.datetime.now()
                         logger.info(f"drop stream {table} is called successfully")
                         wait_count = 0
+                        time.sleep(1)
                         while table_exist_py(client, table):
-                            time.sleep(0.01)
+                            time.sleep(0.2)
                             wait_count += 1
                         #wait_time = wait_count * 10
                         drop_complete_time = datetime.datetime.now()
@@ -1354,15 +1355,17 @@ def rockets_run(test_context):
         for item in TABLE_CREATE_RECORDS:
             time_spent_create = time_spent_create + item.get("time_spent")
             count += 1
-        avg_time_spent_create = time_spent_create / count
-        logger.info(f'table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}')
+        if count != 0:
+            avg_time_spent_create = time_spent_create / count
+            logger.info(f'table create {count} times, total time spent = {time_spent_create}ms, avg_time_spent_create = {avg_time_spent_create}')
         count = 0
         time_spent_drop = 0
         for item in TABLE_DROP_RECORDS:
             time_spent_drop = time_spent_drop + item.get("time_spent")
             count += 1
-        avg_time_spent_drop = time_spent_drop / count
-        logger.info(f'table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}')
+        if count != 0:
+            avg_time_spent_drop = time_spent_drop / count
+            logger.info(f'table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}')
 
         return test_sets
 

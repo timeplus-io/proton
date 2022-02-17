@@ -2848,7 +2848,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
 
 bool InterpreterSelectQuery::isStreaming() const
 {
-    if (context->getSettingsRef().query_mode.value == "hist")
+    if (context->getSettingsRef().query_mode.value == "table")
         return false;
 
     if (query_info.syntax_analyzer_result->streaming)

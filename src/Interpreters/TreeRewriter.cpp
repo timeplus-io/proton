@@ -1150,8 +1150,8 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             streaming = true;
     }
 
-    /// force hist mode
-    if (context->getSettingsRef().query_mode.value == "hist")
+    /// force table mode
+    if (context->getSettingsRef().query_mode.value == "table")
         streaming = false;
 
     /// proton: ends

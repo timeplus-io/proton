@@ -1719,6 +1719,27 @@ void Server::createServers(
 #endif
         });
 
+        /// proton: starts.
+        /// SnapshotTCPServer
+        port_name = "snapshot_server_tcp_port";
+        createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter
+        {
+             Poco::Net::ServerSocket socket;
+             auto address = socketBindListen(socket, listen_host, port);
+             socket.setReceiveTimeout(settings.receive_timeout);
+             socket.setSendTimeout(settings.send_timeout);
+             return ProtocolServerAdapter(
+                 listen_host,
+                 port_name,
+                 "snapshot server (tcp): " + address.toString(),
+                 std::make_unique<TCPServer>(
+                     new TCPHandlerFactory(*this, /* secure */ false, /* proxy protocol */ false, /* snapshot mode */ true),
+                     server_pool,
+                     socket,
+                     new Poco::Net::TCPServerParams));
+        });
+        /// proton: ends
+
         /// Interserver IO HTTP
         port_name = "interserver_http_port";
         createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter

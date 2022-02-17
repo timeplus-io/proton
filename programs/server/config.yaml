@@ -89,6 +89,9 @@ postgresql_port: 9005
 # See also 'interserver_https_port'.
 interserver_http_port: 9009
 
+# Port for Snapshot TCP server, which run all stream query in 'table' mode.
+snapshot_server_tcp_port: 9010
+
 # Port for communication between replicas with TLS.
 # You have to configure certificate to enable this interface.
 # See the openSSL section below.

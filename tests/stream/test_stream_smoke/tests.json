@@ -1579,8 +1579,8 @@
         {
             "id": 48,
             "tags": ["settings", "query_mode"],
-            "name": "query_mode='hist'",
-            "description": "query_mode='hist'",
+            "name": "query_mode='table'",
+            "description": "query_mode='table'",
             "steps":[
                 {"inputs": [
                     {"table_name":"test", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],

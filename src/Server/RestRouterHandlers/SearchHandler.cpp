@@ -80,7 +80,7 @@ String SearchHandler::getQuery(const Poco::JSON::Object::Ptr & payload) const
         query_context->setSetting("asterisk_include_materialized_columns", true);
         query_context->setSetting("asterisk_include_alias_columns", true);
     }
-    else if (mode == "hist")
+    else if (mode == "table")
         query_context->setSetting("query_mode", mode);
 
     const auto & start_time = payload->has("start_time") ? payload->get("start_time").toString() : "";

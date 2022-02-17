@@ -78,11 +78,12 @@ namespace ErrorCodes
     extern const int UNKNOWN_PROTOCOL;
 }
 
-TCPHandler::TCPHandler(IServer & server_, TCPServer & tcp_server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_)
+TCPHandler::TCPHandler(IServer & server_, TCPServer & tcp_server_, const Poco::Net::StreamSocket & socket_, bool parse_proxy_protocol_, std::string server_display_name_, bool snapshot_mode_)
     : Poco::Net::TCPServerConnection(socket_)
     , server(server_)
     , tcp_server(tcp_server_)
     , parse_proxy_protocol(parse_proxy_protocol_)
+    , snapshot_mode(snapshot_mode_)
     , log(&Poco::Logger::get("TCPHandler"))
     , server_display_name(std::move(server_display_name_))
 {
@@ -1490,6 +1491,12 @@ void TCPHandler::receiveQuery()
         query_context->clampToSettingsConstraints(settings_changes);
     }
     query_context->applySettingsChanges(settings_changes);
+
+    /// If TCP server runs in snapshot mode, all stream query will be executed in 'hist' mode mode
+    if (snapshot_mode)
+    {
+        query_context->setSetting("query_mode", Field{"table"});
+    }
 
     /// Use the received query id, or generate a random default. It is convenient
     /// to also generate the default OpenTelemetry trace id at the same time, and
