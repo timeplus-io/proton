@@ -9,7 +9,6 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
@@ -81,7 +80,7 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
         storage_id.table_name = sub->cte_name;
         return storage_id;
     }
-    else if (auto * table_func = arg->as<ASTFunction>())
+    else if (arg->as<ASTFunction>())
     {
         /// tumble(table(devices), ...)
         auto query_context = context->getQueryContext();
@@ -137,7 +136,7 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
     else
     {
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        if (auto * view = storage->as<StorageView>())
+        if (storage->as<StorageView>())
         {
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
             auto select = underlying_storage_metadata_snapshot->getSelectQuery().inner_query;
@@ -154,8 +153,12 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         }
         else
         {
-            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "StreamingView" && storage->getName() != "Kafka")
-                throw Exception("Storage engine is not DistributedMergeTree or StreamingView or Kafka", ErrorCodes::BAD_ARGUMENTS);
+            if (storage->isView())
+                throw Exception("tumble/hop functions can't be applied to views", ErrorCodes::BAD_ARGUMENTS);
+
+            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
+                throw Exception("tumble/hop functions can't be applied to this stream", ErrorCodes::BAD_ARGUMENTS);
+
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
             columns = underlying_storage_metadata_snapshot->getColumns();
         }

@@ -85,7 +85,7 @@ private:
     BackgroundSchedulePoolTaskHolder cleanup_task;
     UInt64 max_cached_size_threshold = 0;
 
-    bool table_exists = false;
+    std::atomic_bool table_exists = false;
 
     static constexpr size_t RESCHEDULE_TIME_MS = 120000;
     static constexpr Int32 RETRY_TIMES = 3;

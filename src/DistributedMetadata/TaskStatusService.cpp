@@ -171,6 +171,12 @@ void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
         }
     }
 
+    while (!table_exists)
+    {
+        /// Wait for system.tasks creation
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+
     /// FIXME: Checkpointing
     persistentTaskStatuses(std::move(tasks));
 }
@@ -236,9 +242,8 @@ bool TaskStatusService::validateSchema(const Block & block, const std::vector<St
 bool TaskStatusService::tableExists()
 {
     if (table_exists)
-    {
         return true;
-    }
+
     StorageID sid{"system", "tasks"};
     /// Try local catalog
     if (DatabaseCatalog::instance().isTableExist(sid, global_context))
@@ -437,6 +442,7 @@ void TaskStatusService::cleanupCachedTask()
 {
     try
     {
+        createTaskTableIfNotExists();
         doCleanupCachedTask();
     }
     catch (const Exception & e)
@@ -500,7 +506,6 @@ bool TaskStatusService::createTaskTable()
     const String replication_factor_key = conf.key_prefix + "replication_factor";
     const auto replicas = std::to_string(config.getInt(replication_factor_key, 1));
 
-    /// FIXME: Wait for support for synchronous DDL feature, add settings `synchronous_ddl=1`
     String query = fmt::format(
         "CREATE STREAM IF NOT EXISTS \
                     system.tasks \
@@ -547,14 +552,12 @@ bool TaskStatusService::createTaskTable()
         return false;
     }
 
-    /// Poll if table creation succeeds
+    /// Poll if table creation succeeds.
     return tableExists();
 }
 
 bool TaskStatusService::persistentTaskStatuses(std::vector<TaskStatusPtr> tasks)
 {
-    createTaskTableIfNotExists();
-
     assert(!tasks.empty());
 
     auto context = Context::createCopy(global_context);

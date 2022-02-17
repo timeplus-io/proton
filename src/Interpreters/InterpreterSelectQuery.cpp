@@ -619,6 +619,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         /// Calculate structure of the result.
         result_header = getSampleBlockImpl();
+        /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header
+        /// depending on the query stage
+        if (result_header.findByName(STREAMING_TIMESTAMP_ALIAS))
+            result_header.erase(STREAMING_TIMESTAMP_ALIAS);
     };
 
     analyze(shouldMoveToPrewhere());

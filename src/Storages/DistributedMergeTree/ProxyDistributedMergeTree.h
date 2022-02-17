@@ -19,7 +19,7 @@ class ProxyDistributedMergeTree final : public shared_ptr_helper<ProxyDistribute
 public:
     ~ProxyDistributedMergeTree() override = default;
 
-    String getName() const override { return "StreamingDistributedMergeTree"; }
+    String getName() const override { return "ProxyDistributedMergeTree"; }
 
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;

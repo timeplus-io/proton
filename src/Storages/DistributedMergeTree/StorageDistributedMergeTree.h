@@ -26,7 +26,7 @@ class StorageMergeTree;
   * The goals of this table engine are resolving the following major requirements
   *   1. Large scale perf data ingestion
   *   2. Streaming query
-  *   3. Simplified usabilities (from end users point of view)
+  *   3. Simplified usability (from end users point of view)
   */
 class StorageDistributedMergeTree final : public shared_ptr_helper<StorageDistributedMergeTree>, public MergeTreeData
 {

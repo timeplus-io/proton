@@ -100,14 +100,23 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     for (size_t i = wmax_pos + 1, num_columns = chunk_header.getNumColumns(); i < num_columns; ++i)
         result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i - delta]).column);
 
+    /// Result column
+    auto & col_with_type = expr_block.getByPosition(0);
+    assert(isTuple(col_with_type.type));
+
+    auto time_column = col_with_type.column->convertToFullColumnIfConst();
+    assert(time_column);
+    const auto * col_tuple = checkAndGetColumn<ColumnTuple>(*time_column);
+    assert(col_tuple);
+
     /// Insert window_begin and window_end
     if (func_name == "__tumble")
     {
-        assignTumbleWindow(result, expr_block);
+        assignTumbleWindow(result, col_tuple);
     }
     else if (func_name == "__hop")
     {
-        assignHopWindow(result, expr_block);
+        assignHopWindow(result, col_tuple);
     }
     else
     {
@@ -117,15 +126,8 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     chunk.setColumns(result.getColumns(), result.rows());
 }
 
-ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & result, Block & expr_block)
+ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & result, const ColumnTuple * col_tuple)
 {
-    /// Result column
-    auto & col_with_type = expr_block.getByPosition(0);
-
-    /// Flatten the tuple
-    assert(isTuple(col_with_type.type));
-    auto col_tuple = checkAndGetColumn<ColumnTuple>(col_with_type.column.get());
-
     if (wstart_pos < wend_pos)
     {
         setWindowColumnTumble(result, col_tuple, 0, wstart_pos);
@@ -138,13 +140,8 @@ ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block 
     }
 }
 
-void StreamingWindowAssignmentTransform::assignHopWindow(Block & result, Block & expr_block)
+void StreamingWindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTuple * col_tuple)
 {
-    auto & col_with_type = expr_block.getByPosition(0);
-
-    assert(isTuple(col_with_type.type));
-    auto col_tuple = checkAndGetColumn<ColumnTuple>(col_with_type.column.get());
-
     bool replicated = false;
     if (wstart_pos < wend_pos)
     {

@@ -200,7 +200,7 @@ Names ProxyDistributedMergeTree::getAdditionalRequiredColumns() const
     if (streaming_func_desc)
         for (const auto & name : streaming_func_desc->input_columns)
             if (name != STREAMING_TIMESTAMP_ALIAS)
-                /// We remove the internal dependent ____ts column
+                /// We remove the internal dependent __tp_ts column
                 required.push_back(name);
 
     return required;

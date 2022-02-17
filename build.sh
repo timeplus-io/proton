@@ -1,6 +1,7 @@
 #!/bin/bash
 
 cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_PROTON_ALL=OFF \
     -DENABLE_PROTON_SERVER=ON \
     -DENABLE_PROTON_CLIENT=ON \
