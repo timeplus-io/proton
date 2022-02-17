@@ -340,7 +340,9 @@ void StorageMergeTree::alter(
             /// We cannot place this check into settings sanityCheck because it depends on format_version.
             /// sanityCheck must work event without storage.
             if (new_storage_settings->non_replicated_deduplication_window != 0 && format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
-                throw Exception("Deduplication for non-replicated MergeTree in old syntax is not supported", ErrorCodes::BAD_ARGUMENTS);
+                /// proton: starts
+                throw Exception("Deduplication for the current engine in old syntax is not supported", ErrorCodes::BAD_ARGUMENTS);
+                /// proton: ends
 
             deduplication_log->setDeduplicationWindowSize(new_storage_settings->non_replicated_deduplication_window);
         }
@@ -658,7 +660,9 @@ void StorageMergeTree::loadDeduplicationLog()
 {
     auto settings = getSettings();
     if (settings->non_replicated_deduplication_window != 0 && format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
-        throw Exception("Deduplication for non-replicated MergeTree in old syntax is not supported", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: starts
+        throw Exception("Deduplication for the current engine in old syntax is not supported", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: ends
 
     std::string path = getDataPaths()[0] + "/deduplication_logs";
     deduplication_log = std::make_unique<MergeTreeDeduplicationLog>(path, settings->non_replicated_deduplication_window, format_version);
@@ -1506,8 +1510,10 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
 
     auto dest_table_storage = std::dynamic_pointer_cast<StorageMergeTree>(dest_table);
     if (!dest_table_storage)
-        throw Exception("Table " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for MergeTree family of table engines."
+        /// proton: starts
+        throw Exception("Table " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for the current engine family of table engines."
                         " Got " + dest_table->getName(), ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
     if (dest_table_storage->getStoragePolicy() != this->getStoragePolicy())
         throw Exception("Destination table " + dest_table_storage->getStorageID().getNameForLogs() +
                        " should have the same storage policy of source table " + getStorageID().getNameForLogs() + ". " +

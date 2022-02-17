@@ -230,7 +230,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         auto * log = &Poco::Logger::get("InterpreterAlterQuery");
 
         auto query_str = queryToString(query);
-        LOG_INFO(log, "Altering DistributedMergeTree query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        LOG_INFO(log, "Altering table query={} query_id={}", query_str, ctx->getCurrentQueryId());
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
@@ -257,7 +257,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
             std::move(block), ctx, {"table_type", "column", "query_method"}, op_code, log);
 
         LOG_INFO(
-            log, "Request of altering DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+            log, "Request of altering table query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
         /// FIXME, project tasks status
         return true;

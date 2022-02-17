@@ -877,7 +877,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
         if (create.storage->engine->name == "DistributedMergeTree")
         {
             throw Exception(
-                "Distributed environment is not setup. Unable to create table with DistributedMergeTree engine", ErrorCodes::CONFIG_ERROR);
+                "Distributed environment is not setup. Unable to create table with the current engine", ErrorCodes::CONFIG_ERROR);
         }
         return false;
     }
@@ -933,13 +933,13 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     auto *storage = static_cast<StorageDistributedMergeTree *>(res.get());
     if (storage->currentShard() >= 0)
     {
-        LOG_INFO(log, "Local DistributedMergeTree table creation with shard assigned");
+        LOG_INFO(log, "Local table creation with shard assigned");
 
         return false;
     }
 
     auto query = queryToString(create);
-    LOG_INFO(log, "Creating DistributedMergeTree query={} query_id={}", query, ctx->getCurrentQueryId());
+    LOG_INFO(log, "Creating table query={} query_id={}", query, ctx->getCurrentQueryId());
 
     std::vector<std::pair<String, String>> string_cols
         = {{"payload", payload},
@@ -960,7 +960,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, DWAL::OpCode::CREATE_TABLE, log);
 
-    LOG_INFO(log, "Request of creating DistributedMergeTree query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
+    LOG_INFO(log, "Request of creating table query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
     /// If is a internal create query or synchronous DDL is enabled, sync create task status
     waitForDDLOps(log, ctx, internal);

@@ -108,7 +108,7 @@ static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFac
 
     if (engine_args.size() != 3)
     {
-        throw Exception("Storage DistributedMergeTree requires 3 parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception("The current Storage requires 3 parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
     ASTLiteral * shards_ast = engine_args[0]->as<ASTLiteral>();
@@ -588,7 +588,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         ++arg_num;
 
         if (args.storage_def->ttl_table && !args.attach)
-            throw Exception("Table TTL is not allowed for MergeTree in old syntax", ErrorCodes::BAD_ARGUMENTS);
+            /// proton: starts
+            throw Exception("Table TTL is not allowed for the current engine in old syntax", ErrorCodes::BAD_ARGUMENTS);
+            /// proton: ends
     }
 
     DataTypes data_types = metadata.partition_key.data_types;

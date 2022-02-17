@@ -80,8 +80,10 @@ bool AsynchronousReadIndirectBufferFromRemoteFS::hasPendingDataToRead()
                             file_offset_of_buffer_end, *read_until_position);
     }
     else if (must_read_until_position)
+        /// proton: starts
         throw Exception(ErrorCodes::LOGICAL_ERROR,
-                        "Reading for MergeTree family tables must be done with last position boundary");
+                        "Reading for the current engine family tables must be done with last position boundary");
+        /// proton: ends
 
     return true;
 }

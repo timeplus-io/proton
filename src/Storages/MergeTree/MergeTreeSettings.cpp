@@ -34,7 +34,9 @@ void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::U
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::UNKNOWN_SETTING)
-            e.addMessage("in MergeTree config");
+            /// proton: starts
+            e.addMessage("in the current engine config");
+            /// proton: ends
         throw;
     }
 }

@@ -233,7 +233,9 @@ MergeTreeData::MergeTreeData(
         catch (Exception & e)
         {
             /// Better error message.
-            e.addMessage("(while initializing MergeTree partition key from date column " + backQuote(date_column_name) + ")");
+            /// proton: starts
+            e.addMessage("(while initializing the partition key from date column " + backQuote(date_column_name) + ")");
+            /// proton: ends
             throw;
         }
     }
@@ -678,16 +680,22 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
     const auto columns = metadata.getColumns().getAllPhysical();
 
     if (!sign_column.empty() && mode != MergingParams::Collapsing && mode != MergingParams::VersionedCollapsing)
-        throw Exception("Sign column for MergeTree cannot be specified in modes except Collapsing or VersionedCollapsing.",
+        /// proton: starts
+        throw Exception("Sign column for the current engine cannot be specified in modes except Collapsing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
-        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing.",
+        /// proton: starts
+        throw Exception("Version column for the current engine cannot be specified in modes except Replacing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     if (!columns_to_sum.empty() && mode != MergingParams::Summing)
-        throw Exception("List of columns to sum for MergeTree cannot be specified in all modes except Summing.",
+        /// proton: starts
+        throw Exception("List of columns to sum for the current engine cannot be specified in all modes except Summing.",
                         ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     /// Check that if the sign column is needed, it exists and is of type Int8.
     auto check_sign_column = [this, & columns](bool is_optional, const std::string & storage)
@@ -5050,9 +5058,11 @@ MergeTreeData & MergeTreeData::checkStructureAndGetMergeTreeData(IStorage & sour
 {
     MergeTreeData * src_data = dynamic_cast<MergeTreeData *>(&source_table);
     if (!src_data)
+        /// proton: starts
         throw Exception("Table " + source_table.getStorageID().getNameForLogs() +
-                        " supports attachPartitionFrom only for MergeTree family of table engines."
+                        " supports attachPartitionFrom only for the current engine family of table engines."
                         " Got " + source_table.getName(), ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
 
     if (my_snapshot->getColumns().getAllPhysical().sizeOfDifference(src_snapshot->getColumns().getAllPhysical()))
         throw Exception("Tables have different structure", ErrorCodes::INCOMPATIBLE_COLUMNS);

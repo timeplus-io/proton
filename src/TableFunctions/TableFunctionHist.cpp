@@ -20,7 +20,7 @@ TableFunctionHist::TableFunctionHist(const String & name_) : TableFunctionProxyB
 {
     help_message = fmt::format(
         "Table function '{}' requires only 1 parameter"
-        "<name of the table>, the table should be a DistributedMergeTree Table",
+        "<name of the table>, the table should be a stream Table",
         name);
 }
 
@@ -48,7 +48,7 @@ void TableFunctionHist::init(
     streaming = false;
     auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
     if (storage->getName() != "DistributedMergeTree" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
-        throw Exception("Storage engine is not DistributedMergeTree or MaterializedView or Kafka", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Storage engine is not stream or MaterializedView or Kafka", ErrorCodes::BAD_ARGUMENTS);
 
     underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
     columns = underlying_storage_metadata_snapshot->getColumns();

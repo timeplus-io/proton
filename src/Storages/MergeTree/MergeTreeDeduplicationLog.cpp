@@ -115,7 +115,7 @@ void MergeTreeDeduplicationLog::load()
             }
             catch (...)
             {
-                tryLogCurrentException(__PRETTY_FUNCTION__, "Error while loading MergeTree deduplication log on path " + desc.path);
+                tryLogCurrentException(__PRETTY_FUNCTION__, "Error while loading deduplication log on path " + desc.path);
             }
         }
 

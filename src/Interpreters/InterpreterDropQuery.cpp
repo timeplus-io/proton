@@ -122,7 +122,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         auto * log = &Poco::Logger::get("InterpreterDropQuery");
 
         auto query_str = queryToString(query);
-        LOG_INFO(log, "Drop DistributedMergeTree query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        LOG_INFO(log, "Drop table query={} query_id={}", query_str, ctx->getCurrentQueryId());
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
@@ -142,7 +142,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
 
         LOG_INFO(
-            log, "Request of dropping DistributedMergeTree query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+            log, "Request of dropping table query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
         waitForDDLOps(log, ctx, false);
         /// FIXME, project tasks status
