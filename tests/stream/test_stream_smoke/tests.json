@@ -1162,11 +1162,11 @@
         {
             "id": 35,
             "tags": ["subquery"],
-            "name": "tumble minK based on tumble subquery",
-            "description": "tumble minK based on tumble subquery",
+            "name": "tumble min_k based on tumble subquery",
+            "description": "tumble min_k based on tumble subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, minK(1)(value_avg), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, min_k(1)(value_avg), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
