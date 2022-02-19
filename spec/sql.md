@@ -565,7 +565,7 @@ A global aggregated subquery contains global aggregation. There are some limitat
 Examples
 
 ```sql
-SELECT device, maxK(5)(avg_usage) -- outer global aggregation query
+SELECT device, max_k(avg_usage, 5) -- outer global aggregation query
 FROM
 (
     SELECT device, avg(cpu_usage) AS avg_usage -- global aggregation subquery
@@ -680,7 +680,7 @@ DROP VIEW [IF EXISTS] <streaming_view_name>;
 Proton aims to provide common and easy of use streaming analytic functions out of box. The current list is:
 
 1. min/max/avg/count/sum
-2. topK/minK/maxK
+2. top_k/min_k/max_k
 3. unique / uniqueExact
 4. streamingNeighbor
 
@@ -696,13 +696,13 @@ Proton aims to provide common and easy of use streaming analytic functions out o
 
 **sum(\<column_name\>)**: sum of the columns. Only works for numerics.
 
-#### topK/minK/maxK Function Signatures
+#### top_k/min_k/max_k Function Signatures
 
-**topK(N)(\<column_name\>)**: Top frequent N items in column_name
+**top_k(\<column_name\>, N)**: Top frequent N items in column_name
 
-**minK(N)(\<column_name\>)**: The least N items in column_name
+**min_k(\<column_name\>, N[, context...])**: The least N items in column_name
 
-**maxK(N)(\<column_name\>)**: The greatest N items in column_name
+**max_k(\<column_name\>, N[, context...])**: The greatest N items in column_name
 
 #### unique / uniqueExact Function Signatures
 

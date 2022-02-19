@@ -676,7 +676,6 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr identifier;
     ASTPtr query;
     ASTPtr expr_list_args;
-    ASTPtr expr_list_params;
 
     if (is_table_function)
     {
@@ -836,51 +835,9 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             , ErrorCodes::SYNTAX_ERROR);
     }
 
-    /// The parametric aggregate function has two lists (parameters and arguments) in parentheses. Example: quantile(0.9)(x).
-    if (allow_function_parameters && pos->type == TokenType::OpeningRoundBracket)
-    {
-        ++pos;
-
-        /// Parametric aggregate functions cannot have DISTINCT in parameters list.
-        if (has_distinct)
-            return false;
-
-        expr_list_params = expr_list_args;
-        expr_list_args = nullptr;
-
-        pos_after_bracket = pos;
-        old_expected = expected;
-
-        if (all.ignore(pos, expected))
-            has_all = true;
-
-        if (distinct.ignore(pos, expected))
-            has_distinct = true;
-
-        if (!has_all && all.ignore(pos, expected))
-            has_all = true;
-
-        if (has_all && has_distinct)
-            return false;
-
-        if (has_all || has_distinct)
-        {
-            /// case f(ALL), f(ALL, x), f(DISTINCT), f(DISTINCT, x), ALL and DISTINCT should be treat as identifier
-            if (pos->type == TokenType::Comma || pos->type == TokenType::ClosingRoundBracket)
-            {
-                pos = pos_after_bracket;
-                expected = old_expected;
-                has_distinct = false;
-            }
-        }
-
-        if (!contents.parse(pos, expr_list_args, expected))
-            return false;
-
-        if (pos->type != TokenType::ClosingRoundBracket)
-            return false;
-        ++pos;
-    }
+    /// proton: starts.
+    /// proton: don't support parametric aggregation function any more.
+    /// proton: ends.
 
     auto function_node = std::make_shared<ASTFunction>();
     tryGetIdentifierNameInto(identifier, function_node->name);
@@ -891,12 +848,6 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     function_node->arguments = expr_list_args;
     function_node->children.push_back(function_node->arguments);
-
-    if (expr_list_params)
-    {
-        function_node->parameters = expr_list_params;
-        function_node->children.push_back(function_node->parameters);
-    }
 
     ParserKeyword filter("FILTER");
     ParserKeyword over("OVER");

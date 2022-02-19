@@ -4938,7 +4938,7 @@
               "query_id": "101",
               "query_type": "stream",
               "query_end_timer": 1,
-              "query": "with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, min_k(1)(value_avg), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"
+              "query": "with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, min_k(value_avg, 1), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"
             }
           ]
         },

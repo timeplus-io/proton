@@ -71,7 +71,9 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     else if (kind == ASTExplainQuery::ExplainKind::TableOverride)
     {
         ASTPtr table_function;
-        if (!ParserFunction(true, true).parse(pos, table_function, expected))
+        /// proton: starts.
+        if (!ParserFunction(true).parse(pos, table_function, expected))
+        /// proton: ends.
             return false;
         ASTPtr table_override;
         if (!ParserTableOverrideDeclaration(false).parse(pos, table_override, expected))

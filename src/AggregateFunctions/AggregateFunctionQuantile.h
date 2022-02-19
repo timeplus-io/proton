@@ -39,6 +39,11 @@ namespace ErrorCodes
 
 template <typename> class QuantileTiming;
 
+/// proton: starts.
+struct NameP90 { static constexpr auto name = "p90"; };
+struct NameP95 { static constexpr auto name = "p95"; };
+struct NameP99 { static constexpr auto name = "p99"; };
+/// proton: ends.
 
 /** Generic aggregate function for calculation of quantiles.
   * It depends on quantile calculation data structure. Look at Quantile*.h for various implementations.
@@ -84,6 +89,15 @@ public:
         : IAggregateFunctionDataHelper<Data, AggregateFunctionQuantile<Value, Data, Name, has_second_arg, FloatReturnType, returns_many>>(argument_types_, params)
         , levels(params, returns_many), level(levels.levels[0]), argument_type(this->argument_types[0])
     {
+        /// proton: starts. specialization of quantile alias functions: 'p90' 'p95' 'p99'
+        if constexpr (std::is_same_v<Name, NameP90> || std::is_same_v<Name, NameP95> || std::is_same_v<Name, NameP99>)
+        {
+            assert(this->levels.size() == 1);  /// default: 0.5
+            /// Make level: 'p90' -> 0.90  'p95' -> 0.95  'p99' -> 0.99
+            this->levels.levels[0] = std::stod(fmt::format("0.{}", this->getName().substr(1)));
+        }
+        /// proton: ends.
+
         if (!returns_many && levels.size() > 1)
             throw Exception("Aggregate function " + getName() + " require one parameter or less", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }

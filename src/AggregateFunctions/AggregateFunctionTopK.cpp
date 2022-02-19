@@ -123,8 +123,8 @@ void registerAggregateFunctionTopK(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = { .returns_default_when_only_null = false, .is_order_dependent = true };
 
-    factory.registerFunction("topK", { createAggregateFunctionTopK<false>, properties });
-    factory.registerFunction("topKWeighted", { createAggregateFunctionTopK<true>, properties });
+    factory.registerFunction("top_k", { createAggregateFunctionTopK<false>, properties });
+    factory.registerFunction("top_k_weighted", { createAggregateFunctionTopK<true>, properties });
 }
 
 }

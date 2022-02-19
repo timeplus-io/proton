@@ -18,6 +18,12 @@ namespace ErrorCodes
 namespace
 {
 
+/// proton: starts.
+template <typename Value, bool float_return> using FuncP90 = AggregateFunctionQuantile<Value, QuantileReservoirSampler<Value>, NameP90, false, std::conditional_t<float_return, Float64, void>, false>;
+template <typename Value, bool float_return> using FuncP95 = AggregateFunctionQuantile<Value, QuantileReservoirSampler<Value>, NameP95, false, std::conditional_t<float_return, Float64, void>, false>;
+template <typename Value, bool float_return> using FuncP99 = AggregateFunctionQuantile<Value, QuantileReservoirSampler<Value>, NameP99, false, std::conditional_t<float_return, Float64, void>, false>;
+/// proton: ends.
+
 template <typename Value, bool float_return> using FuncQuantile = AggregateFunctionQuantile<Value, QuantileReservoirSampler<Value>, NameQuantile, false, std::conditional_t<float_return, Float64, void>, false>;
 template <typename Value, bool float_return> using FuncQuantiles = AggregateFunctionQuantile<Value, QuantileReservoirSampler<Value>, NameQuantiles, false, std::conditional_t<float_return, Float64, void>, true>;
 
@@ -129,6 +135,12 @@ void registerAggregateFunctionsQuantile(AggregateFunctionFactory & factory)
 {
     /// For aggregate functions returning array we cannot return NULL on empty set.
     AggregateFunctionProperties properties = { .returns_default_when_only_null = true };
+
+    /// proton: starts.
+    factory.registerFunction(NameP90::name, createAggregateFunctionQuantile<FuncP90>);
+    factory.registerFunction(NameP95::name, createAggregateFunctionQuantile<FuncP95>);
+    factory.registerFunction(NameP99::name, createAggregateFunctionQuantile<FuncP99>);
+    /// proton: ends.
 
     factory.registerFunction(NameQuantile::name, createAggregateFunctionQuantile<FuncQuantile>);
     factory.registerFunction(NameQuantiles::name, { createAggregateFunctionQuantile<FuncQuantiles>, properties });

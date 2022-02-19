@@ -141,6 +141,7 @@ protected:
     ColumnTransformers allowed_transformers;
 };
 
+/// proton: starts. We don't support parametric style aggr function  like quntail(0.9)(x + y) any more
 /** A function, for example, f(x, y + 1, g(z)).
   * Or an aggregate function: sum(x + f(y)), corr(x, y). The syntax is the same as the usual function.
   * Or a parametric aggregate function: quantile(0.9)(x + y).
@@ -150,17 +151,17 @@ protected:
 class ParserFunction : public IParserBase
 {
 public:
-    explicit ParserFunction(bool allow_function_parameters_ = true, bool is_table_function_ = false)
-        : allow_function_parameters(allow_function_parameters_), is_table_function(is_table_function_)
+    explicit ParserFunction(bool is_table_function_ = false)
+        : is_table_function(is_table_function_)
     {
     }
 
 protected:
     const char * getName() const override { return "function"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-    bool allow_function_parameters;
     bool is_table_function;
 };
+/// proton: ends.
 
 // A special function parser for view table function.
 // It parses an SELECT query as its argument and doesn't support getColumnName().

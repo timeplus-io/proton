@@ -43,7 +43,7 @@ public:
         : IAggregateFunctionDataHelper<AggregateFunctionTopKData<T>, AggregateFunctionTopK<T, is_weighted>>(argument_types_, params)
         , threshold(threshold_), reserved(load_factor * threshold) {}
 
-    String getName() const override { return is_weighted ? "topKWeighted" : "topK"; }
+    String getName() const override { return is_weighted ? "top_k_weighted" : "top_k"; }
 
     DataTypePtr getReturnType() const override
     {
@@ -115,7 +115,7 @@ struct AggregateFunctionTopKGenericData
 };
 
 /** Template parameter with true value should be used for columns that store their elements in memory continuously.
- *  For such columns topK() can be implemented more efficiently (especially for small numeric arrays).
+ *  For such columns top_k() can be implemented more efficiently (especially for small numeric arrays).
  */
 template <bool is_plain_column, bool is_weighted>
 class AggregateFunctionTopKGeneric
@@ -136,7 +136,7 @@ public:
         : IAggregateFunctionDataHelper<AggregateFunctionTopKGenericData, AggregateFunctionTopKGeneric<is_plain_column, is_weighted>>(argument_types_, params)
         , threshold(threshold_), reserved(load_factor * threshold), input_data_type(this->argument_types[0]) {}
 
-    String getName() const override { return is_weighted ? "topKWeighted" : "topK"; }
+    String getName() const override { return is_weighted ? "top_k_weighted" : "top_k"; }
 
     DataTypePtr getReturnType() const override
     {

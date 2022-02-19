@@ -574,8 +574,10 @@ StorageDistributedMergeTree::write(const ASTPtr & /*query*/, const StorageMetada
 
 void StorageDistributedMergeTree::checkTableCanBeDropped() const
 {
-    assert(storage);
-    storage->checkTableCanBeDropped();
+    if (storage)
+    {
+        storage->checkTableCanBeDropped();
+    }
 }
 
 void StorageDistributedMergeTree::drop()

@@ -180,6 +180,46 @@ void replaceForPositionalArguments(ASTPtr & argument, const ASTSelectQuery * sel
         argument = argument_with_replacement;
 }
 
+/// proton: starts.
+void tryTranslateToParametricAggregateFunction(
+    const ASTFunction * node, DataTypes & types, AggregateDescription & aggregate, ContextPtr context)
+{
+    if (aggregate.parameters.size() != 0 || aggregate.argument_names.size() == 0)
+        return;
+
+    assert(node->arguments);
+    const ASTs & arguments = node->arguments->children;
+    const auto & lower_name = node->name;
+    if (lower_name == "min_k" || lower_name == "max_k" || lower_name == "top_k")
+    {
+        /// Translate `min_k(key, num[, context...])` to `min_k(num)(key[, context...])`
+        /// Make the second argument as a const parameter
+        if (arguments.size() < 2)
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least two arguments.", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.push_back(arguments[1]);
+        aggregate.parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        aggregate.argument_names.erase(aggregate.argument_names.begin() + 1);
+        types.erase(types.begin() + 1);
+    }
+    else if (lower_name == "quantile")
+    {
+        /// Translate `quantile(key, level)` to `quantile(level)(key)`
+        if (arguments.size() != 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires two arguments.", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.push_back(arguments[1]);
+        aggregate.parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        aggregate.argument_names = {aggregate.argument_names[0]};
+        types = {types[0]};
+    }
+}
+/// proton: ends.
 }
 
 bool sanitizeBlock(Block & block, bool throw_if_cannot_create_column)
@@ -578,7 +618,11 @@ void ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions, Aggr
         if (syntax->streaming && endsWith(Poco::toLower(node->name), "distinct"))
             aggregate.function = AggregateFunctionFactory::instance().get(node->name + "Streaming", types, aggregate.parameters, properties);
         else
+        {
+            /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`
+            tryTranslateToParametricAggregateFunction(node, types, aggregate, getContext());
             aggregate.function = AggregateFunctionFactory::instance().get(node->name, types, aggregate.parameters, properties);
+        }
         /// proton: ends.
 
         descriptions.push_back(aggregate);

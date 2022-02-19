@@ -56,8 +56,8 @@ struct AggregateFunctionMinMaxKData
     AggregateFunctionMinMaxKData()
     {
         /// We ignore the Nan or NULL, so
-        /// if is minK, `nan_direction_hint=1` are considered larger than all numbers
-        /// if is maxK, `nan_direction_hint=-1` are considered less than all numbers
+        /// if is min_k, `nan_direction_hint=1` are considered larger than all numbers
+        /// if is max_k, `nan_direction_hint=-1` are considered less than all numbers
         if constexpr (is_min)
             compare = std::bind(CompareHelper<T>::less, std::placeholders::_1, std::placeholders::_2, /* nan_direction_hint */ 1);
         else
