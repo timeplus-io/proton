@@ -294,9 +294,22 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     /// Since there may be dependent columns in columns' default value expressions. We will need manually figure out them first
     /// for example, `_tp_time DateTime64(3) DEFAULT to_timestamp(json_extract(json_column, 'timestamp'))`
 
+    /// required columns include columns users ingest and columns with default values / value expression
+    auto header{metadata_snapshot->getSampleBlockNonMaterialized()};
+    auto required_columns{query_sample_block.getNamesAndTypesList()};
+    for (const auto & column : metadata_snapshot->getColumns())
+    {
+        if (column.default_desc.expression && !query_sample_block.has(column.name))
+        {
+            const auto * col = header.findByName(column.name);
+            assert(col);
+            required_columns.emplace_back(col->name, col->type);
+        }
+    }
+
     auto adding_missing_defaults_dag = addMissingDefaultsWithDefaults(
         query_sample_block,
-        query_sample_block.getNamesAndTypesList(),
+        required_columns,
         metadata_snapshot->getColumns(),
         context_ptr,
         null_as_default);
@@ -306,7 +319,7 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     /// we need create a new metadata_snapshot which just contains final_header columns; otherwise keep metadata_snapshot
     /// as it is
     auto final_metadata_snapshot = metadata_snapshot;
-    if (final_header.columns() != metadata_snapshot->getSampleBlockNonMaterialized().columns())
+    if (final_header.columns() != header.columns())
     {
         auto light_metadata_snapshot = std::make_shared<StorageInMemoryMetadata>(*metadata_snapshot);
         for (const auto & column : metadata_snapshot->columns)
@@ -332,19 +345,9 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     /// It's important to squash blocks as early as possible (before other transforms),
     ///  because other transforms may work inefficient if block size is small.
 
+    /// proton: we simply disable squash for distributed merge tree since wal client has buffering already
     /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
     /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-    /// proton: we simply disable squash for distributed merge tree since wal client has buffering already
-    /// if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
-    /// {
-    ///    bool table_prefers_large_blocks = table->prefersLargeBlocks();
-
-    ///    out.addSource(std::make_shared<SquashingChunksTransform>(
-    ///        out.getInputHeader(),
-    ///        table_prefers_large_blocks ? settings.min_insert_block_size_rows : settings.max_block_size,
-    ///        table_prefers_large_blocks ? settings.min_insert_block_size_bytes : 0));
-    /// }
-
     /// auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status);
     /// counting->setProcessListElement(context_ptr->getProcessListElement());
     /// out.addSource(std::move(counting));

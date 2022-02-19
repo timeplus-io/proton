@@ -216,9 +216,11 @@ void prepareColumns(ASTCreateQuery & create)
         col_tp_time->name = RESERVED_INDEX_TIME;
         col_tp_time->type
             = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
-        col_tp_time->default_specifier = "DEFAULT";
-        col_tp_time->default_expression
-            = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+        /// index time is the timestamp indexed to historical store. Don't specify a default value expression here to save disk space in streaming store
+        /// since light ingest will ignore this column completely
+        /// col_tp_time->default_specifier = "DEFAULT";
+        /// col_tp_time->default_expression
+        ///    = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
         auto func_double_delta = std::make_shared<ASTFunction>();
         func_double_delta->name = "DoubleDelta";
