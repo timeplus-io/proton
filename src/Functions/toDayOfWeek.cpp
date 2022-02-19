@@ -15,6 +15,10 @@ void registerFunctionToDayOfWeek(FunctionFactory & factory)
 
     /// MysQL compatibility alias.
     factory.registerFunction<FunctionToDayOfWeek>("DAYOFWEEK", FunctionFactory::CaseInsensitive);
+
+    /// proton: starts.
+    factory.registerFunction<FunctionToDayOfWeek>("weekday", FunctionFactory::CaseSensitive);
+    /// proton: ends.
 }
 
 }

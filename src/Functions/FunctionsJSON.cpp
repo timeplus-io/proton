@@ -484,6 +484,9 @@ struct NameJSONExtractRaw { static constexpr auto name{"json_extract_raw"}; };
 struct NameJSONExtractArrayRaw { static constexpr auto name{"json_extract_array_raw"}; };
 struct NameJSONExtractKeysAndValuesRaw { static constexpr auto name{"json_extract_keys_and_values_raw"}; };
 struct NameJSONExtractKeys { static constexpr auto name{"json_extract_keys"}; };
+/// proton: starts.
+struct NameJSONExtractArray { static constexpr auto name{"json_extract_array"}; };
+/// proton: ends.
 
 
 template <typename JSONParser>
@@ -1453,6 +1456,9 @@ void registerFunctionsJSON(FunctionFactory & factory)
     factory.registerFunction<JSONOverloadResolver<NameJSONExtractArrayRaw, JSONExtractArrayRawImpl>>();
     factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeysAndValuesRaw, JSONExtractKeysAndValuesRawImpl>>();
     factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeys, JSONExtractKeysImpl>>();
+    /// proton: starts.
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractArray, JSONExtractArrayRawImpl>>();
+    /// proton: ends.
 }
 
 }

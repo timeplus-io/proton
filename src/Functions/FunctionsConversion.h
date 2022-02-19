@@ -1024,7 +1024,9 @@ inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer &
 
     // Currently there are no functions toIPv{4,6}Or{Null,Zero}
     if (isNativeNumber(to_type) && !(to_type.getName() == "IPv4" || to_type.getName() == "IPv6"))
-        message_buf << ". Note: there are to" << to_type.getName() << "OrZero and to" << to_type.getName() << "OrNull functions, which returns zero/NULL instead of throwing exception.";
+        /// proton: starts. renaming lower
+        message_buf << ". Note: there are to_" << Poco::toLower(to_type.getName()) << "_or_zero and to_" << Poco::toLower(to_type.getName()) << "_or_null functions, which returns zero/NULL instead of throwing exception.";
+        /// proton: ends.
 
     throw Exception(message_buf.str(), ErrorCodes::CANNOT_PARSE_TEXT);
 }
@@ -1439,6 +1441,7 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 /// proton: starts
 struct NameToDate { static constexpr auto name = "to_date16"; };
 struct NameToDate32 { static constexpr auto name = "to_date"; };
+struct NameToDecimal { static constexpr auto name = "to_decimal"; };
 /// proton: ends
 struct NameToDateTime { static constexpr auto name = "to_datetime"; };
 struct NameToDateTime32 { static constexpr auto name = "to_datetime32"; };
@@ -1493,9 +1496,13 @@ public:
     using Monotonic = MonotonicityImpl;
 
     static constexpr auto name = Name::name;
-    static constexpr bool to_decimal =
-        std::is_same_v<Name, NameToDecimal32> || std::is_same_v<Name, NameToDecimal64>
-         || std::is_same_v<Name, NameToDecimal128> || std::is_same_v<Name, NameToDecimal256>;
+    /// proton: starts. Add `NameToDecimal`
+    static constexpr bool to_decimal = std::is_same_v<Name, NameToDecimal> ||
+                                       std::is_same_v<Name, NameToDecimal32> ||
+                                       std::is_same_v<Name, NameToDecimal64> ||
+                                       std::is_same_v<Name, NameToDecimal128> ||
+                                       std::is_same_v<Name, NameToDecimal256>;
+    /// proton: ends.
 
     static constexpr bool to_datetime64 = std::is_same_v<ToDataType, DataTypeDateTime64>;
 
@@ -1592,7 +1599,9 @@ public:
         {
             UInt64 scale = extractToDecimalScale(arguments[1]);
 
-            if constexpr (std::is_same_v<Name, NameToDecimal32>)
+            /// proton: starts. Add 'NameToDecimal'
+            if constexpr (std::is_same_v<Name, NameToDecimal32> || std::is_same_v<Name, NameToDecimal>)
+            /// proton: ends.
                 return createDecimalMaxPrecision<Decimal32>(scale);
             else if constexpr (std::is_same_v<Name, NameToDecimal64>)
                 return createDecimalMaxPrecision<Decimal64>(scale);
@@ -1893,11 +1902,13 @@ public:
 
             if (!isStringOrFixedString(arguments[0].type))
             {
-                if (this->getName().find("OrZero") != std::string::npos ||
-                    this->getName().find("OrNull") != std::string::npos)
+                /// proton: starts. renaming lower
+                if (this->getName().find("_or_zero") != std::string::npos ||
+                    this->getName().find("_or_null") != std::string::npos)
                     throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
-                            ". Conversion functions with postfix 'OrZero' or 'OrNull'  should take String argument",
+                            ". Conversion functions with postfix '_or_zero' or '_or_null'  should take String argument",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                /// proton: ends.
                 else
                     throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1936,7 +1947,9 @@ public:
                 UInt64 scale = extractToDecimalScale(arguments[1]);
                 res = createDecimalMaxPrecision<typename ToDataType::FieldType>(scale);
                 if (!res)
-                    throw Exception("Something wrong with toDecimalNNOrZero() or toDecimalNNOrNull()", ErrorCodes::LOGICAL_ERROR);
+                    /// proton: starts. renaming lower
+                    throw Exception("Something wrong with to_decimalNN_or_zero() or to_decimalNN_or_null()", ErrorCodes::LOGICAL_ERROR);
+                    /// proton: ends.
             }
             else
                 res = std::make_shared<ToDataType>();
@@ -1995,11 +2008,13 @@ public:
             }
         }
 
+        /// proton: starts. renaming lower
         if (!result_column)
             throw Exception("Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
                 + ". Only String or FixedString argument is accepted for try-conversion function."
-                + " For other arguments, use function without 'orZero' or 'orNull'.",
+                + " For other arguments, use function without '_or_zero' or '_or_null'.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        /// proton: ends.
 
         return result_column;
     }
@@ -2220,7 +2235,10 @@ struct ToStringMonotonicity
     }
 };
 
-
+/// proton: starts
+struct NameToInt { static constexpr auto name = "to_int"; };
+struct NameToFloat { static constexpr auto name = "to_float"; };
+/// proton: ends
 struct NameToUInt8 { static constexpr auto name = "to_uint8"; };
 struct NameToUInt16 { static constexpr auto name = "to_uint16"; };
 struct NameToUInt32 { static constexpr auto name = "to_uint32"; };
@@ -2263,7 +2281,11 @@ using FunctionToDecimal32 = FunctionConvert<DataTypeDecimal<Decimal32>, NameToDe
 using FunctionToDecimal64 = FunctionConvert<DataTypeDecimal<Decimal64>, NameToDecimal64, UnknownMonotonicity>;
 using FunctionToDecimal128 = FunctionConvert<DataTypeDecimal<Decimal128>, NameToDecimal128, UnknownMonotonicity>;
 using FunctionToDecimal256 = FunctionConvert<DataTypeDecimal<Decimal256>, NameToDecimal256, UnknownMonotonicity>;
-
+/// proton: starts.
+using FunctionToInt = FunctionConvert<DataTypeInt32, NameToInt, ToNumberMonotonicity<Int32>>;
+using FunctionToFloat = FunctionConvert<DataTypeFloat32, NameToFloat, ToNumberMonotonicity<Float32>>;
+using FunctionToDecimal = FunctionConvert<DataTypeDecimal<Decimal32>, NameToDecimal, UnknownMonotonicity>;
+/// proton: ends.
 
 template <typename DataType> struct FunctionTo;
 

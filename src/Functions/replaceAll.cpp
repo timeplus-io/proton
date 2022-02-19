@@ -20,6 +20,9 @@ using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameR
 void registerFunctionReplaceAll(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionReplaceAll>();
+    /// proton: starts.
+    factory.registerFunction<FunctionReplaceAll>("replace", FunctionFactory::CaseSensitive);
+    /// proton: ends.
 }
 
 }

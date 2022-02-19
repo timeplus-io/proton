@@ -21,7 +21,8 @@ namespace ErrorCodes
 
 namespace
 {
-    static constexpr auto * STREAMING_NEIGHBOR = "neighbor";
+    struct NameToStreamingNeighbor { static constexpr auto * name = "neighbor"; };
+    struct NameToLag { static constexpr auto * name = "lag"; };
 
     /// Cache prev-columns + current-column
     class ColumnsCache final
@@ -69,30 +70,34 @@ namespace
         }
     };
 
+    template<typename Name>
     DataTypePtr checkAndGetReturnType(const DataTypes & arguments)
     {
         size_t number_of_arguments = arguments.size();
 
-        if (number_of_arguments < 2 || number_of_arguments > 3)
+        if (number_of_arguments < 1 || number_of_arguments > 3)
             throw Exception(
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Number of arguments for function '{}' doesn't match: passed {}, should be from 2 or 3",
-                STREAMING_NEIGHBOR,
+                "Number of arguments for function '{}' doesn't match: passed {}, should be from 1,2,3",
+                Name::name,
                 number_of_arguments);
 
         // second argument must be an integer
-        if (!isInteger(arguments[1]))
-            throw Exception(
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of second argument of function '{}' - should be an integer",
-                arguments[1]->getName(),
-                STREAMING_NEIGHBOR);
-        else if (arguments[1]->isNullable())
-            throw Exception(
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type  {} of second argument of function '{}' - can not be Nullable",
-                arguments[1]->getName(),
-                STREAMING_NEIGHBOR);
+        if (number_of_arguments >= 2)
+        {
+            if (!isInteger(arguments[1]))
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of second argument of function '{}' - should be an integer",
+                    arguments[1]->getName(),
+                    Name::name);
+            else if (arguments[1]->isNullable())
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type  {} of second argument of function '{}' - can not be Nullable",
+                    arguments[1]->getName(),
+                    Name::name);
+        }
 
         // check that default value column has supertype with first argument
         if (number_of_arguments == 3)
@@ -116,6 +121,7 @@ namespace
     /// | 30 |              | 30 | 20 |
     /// | 40 |              | 40 | 30 |
 
+    template<typename Name>
     class FunctionStreamingNeighbor : public IFunction
     {
     private:
@@ -136,7 +142,7 @@ namespace
         }
 
         /// Get the name of the function.
-        String getName() const override { return STREAMING_NEIGHBOR; }
+        String getName() const override { return Name::name; }
 
         size_t getNumberOfArguments() const override { return 0; }
 
@@ -158,7 +164,7 @@ namespace
         /// If used, optimization for LC may execute function only for dictionary, which gives wrong result.
         bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
-        DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return checkAndGetReturnType(arguments); }
+        DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return checkAndGetReturnType<Name>(arguments); }
 
         ColumnPtr
         executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
@@ -236,11 +242,10 @@ namespace
         }
     };
 
+    template<typename Name>
     class NeighborOverloadResolver : public IFunctionOverloadResolver
     {
     public:
-        static constexpr auto * name = "__streaming_neighbor";
-
         static FunctionOverloadResolverPtr create(ContextPtr context)
         {
             return std::make_unique<NeighborOverloadResolver>(context);
@@ -248,27 +253,32 @@ namespace
 
         explicit NeighborOverloadResolver(ContextPtr context_) : context(context_) { }
 
-        String getName() const override { return name; }
+        String getName() const override { return Name::name; }
         size_t getNumberOfArguments() const override { return 0; }
         bool isVariadic() const override { return true; }
 
         FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
         {
             /// Check ahead in `getReturnTypeImpl`
-            /// neighbor(column, offset[, default_value])
-            assert(arguments.size() >= 2);
-            const auto * offset_col = checkAndGetColumn<ColumnConst>(arguments[1].column.get());
-            if (!offset_col)
-                throw Exception(
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Invalid offset, only support constant offset in current query. '{}'", getName());
+            /// neighbor(column, [offset = -1, default_value])
+            assert(arguments.size() >= 1);
+            Int64 offset = -1;
+            if (arguments.size() > 1)
+            {
+                const auto * offset_col = checkAndGetColumn<ColumnConst>(arguments[1].column.get());
+                if (!offset_col)
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Invalid offset, only support constant offset in current query. '{}'", getName());
+                offset = offset_col->getInt(0);
+            }
 
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
-                std::make_shared<FunctionStreamingNeighbor>(offset_col->getInt(0)),
+                std::make_shared<FunctionStreamingNeighbor<Name>>(offset),
                 collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
                 return_type);
         }
 
-        DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return checkAndGetReturnType(arguments); }
+        DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return checkAndGetReturnType<Name>(arguments); }
 
     private:
         ContextPtr context;
@@ -277,7 +287,8 @@ namespace
 
 void registerFunctionStreamingNeighbor(FunctionFactory & factory)
 {
-    factory.registerFunction<NeighborOverloadResolver>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<NeighborOverloadResolver<NameToStreamingNeighbor>>("__streaming_neighbor", FunctionFactory::CaseSensitive);
+    factory.registerFunction<NeighborOverloadResolver<NameToLag>>("lag", FunctionFactory::CaseSensitive);
 }
 
 }

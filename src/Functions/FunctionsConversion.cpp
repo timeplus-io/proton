@@ -36,6 +36,9 @@ void registerFunctionsConversion(FunctionFactory & factory)
     /// proton: starts
     factory.registerFunction<FunctionToDate32>();
     factory.registerFunction<FunctionToDate32>("DATE", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionToInt>();
+    factory.registerFunction<FunctionToFloat>();
+    factory.registerFunction<FunctionToDecimal>();
     /// proton: ends
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();

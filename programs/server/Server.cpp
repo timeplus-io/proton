@@ -82,10 +82,11 @@
 #include "Common/config_version.h"
 
 /// proton: starts
-#include <DistributedMetadata/TaskStatusService.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
+#include <DistributedMetadata/TaskStatusService.h>
 #include <DistributedWALClient/KafkaWALPool.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
 /// proton: ends
@@ -1311,6 +1312,7 @@ if (ThreadFuzzer::instance().isEffective())
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
     /// proton: start. init Distributed metadata services for DistributedMergeTree table engine
+    DataTypeFactory::instance();   /// Fixed occasional crash errors during delayed initialization
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
     initDistributedMetadataServices(global_context);
