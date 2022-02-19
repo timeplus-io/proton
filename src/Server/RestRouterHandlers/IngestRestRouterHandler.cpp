@@ -16,7 +16,7 @@ namespace ErrorCodes
 
 std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) const
 {
-    const auto & table = getPathParameter("table", "");
+    const auto & table = getPathParameter("stream", "");
 
     if (table.empty())
     {

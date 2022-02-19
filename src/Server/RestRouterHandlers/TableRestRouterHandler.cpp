@@ -154,7 +154,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
 
 std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::Object::Ptr & payload) const
 {
-    const String & table = getPathParameter("table");
+    const String & table = getPathParameter("stream");
 
     if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
@@ -177,7 +177,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
 
 std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
 {
-    const String & table = getPathParameter("table");
+    const String & table = getPathParameter("stream");
 
     String query = "DROP STREAM " + database + ".`" + table + "`";
     if (hasQueryParameter("mode"))

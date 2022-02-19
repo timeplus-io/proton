@@ -89,7 +89,7 @@ namespace
         {
             return "rawstores";
         }
-        return "tables";
+        return "streams";
     }
 
     String getDeleteMode(const std::unordered_map<String, String> & headers)

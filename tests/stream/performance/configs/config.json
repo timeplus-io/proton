@@ -1,7 +1,7 @@
 {
     "rest_setting": {
-        "table_ddl_url": "http://localhost:8123/proton/v1/ddl/tables",
-        "ingest_url": "http://localhost:8123/proton/v1/ingest/tables",
+        "table_ddl_url": "http://localhost:8123/proton/v1/ddl/streams",
+        "ingest_url": "http://localhost:8123/proton/v1/ingest/streams",
         "query_url": "http://localhost:8123/proton/v1/search",
         "health_check_url": "http://localhost:8123/proton/ping",
         "info_url": "http://localhost:8123/proton/info",
@@ -16,8 +16,8 @@
     "setting_1": {
         "db_engine":"proton",
         "rest_setting": {
-            "table_ddl_url": "http://localhost:8123/proton/v1/ddl/tables",
-            "ingest_url": "http://localhost:8123/proton/v1/ingest/tables",
+            "table_ddl_url": "http://localhost:8123/proton/v1/ddl/streams",
+            "ingest_url": "http://localhost:8123/proton/v1/ingest/streams",
             "query_url": "http://localhost:8123/proton/v1/search",
             "health_check_url": "http://localhost:8123/proton/ping",
             "info_url": "http://localhost:8123/proton/info",

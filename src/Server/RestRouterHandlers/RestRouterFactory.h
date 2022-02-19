@@ -44,7 +44,7 @@ public:
     {
         auto & factory = RestRouterFactory::instance();
         factory.registerRouterHandler(
-            "/proton/v1/ingest/tables/(?P<table>[%\\w]+)(\\?mode=\\w+){0,1}",
+            "/proton/v1/ingest/streams/(?P<stream>[%\\w]+)(\\?mode=\\w+){0,1}",
             "POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRestRouterHandler>(query_context);
@@ -79,14 +79,14 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/tables(\\?[\\w\\-=&#]+){0,1}",
+            "/proton/v1/ddl/streams(\\?[\\w\\-=&#]+){0,1}",
             "GET/POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/tables/(?P<table>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+            "/proton/v1/ddl/streams/(?P<stream>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
             "PATCH/DELETE",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
