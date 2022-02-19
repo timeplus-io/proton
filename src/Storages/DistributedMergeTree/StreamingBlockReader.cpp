@@ -17,7 +17,7 @@ StreamingBlockReader::StreamingBlockReader(
     std::shared_ptr<IStorage> storage_,
     Int32 shard_,
     Int64 offset,
-    std::vector<size_t> column_positions,
+    std::vector<uint16_t> column_positions,
     const DWAL::KafkaWALSimpleConsumerPtr & consumer_,
     Poco::Logger * log_)
     : storage(std::move(storage_))

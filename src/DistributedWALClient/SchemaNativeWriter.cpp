@@ -2,15 +2,14 @@
 
 #include <Core/Block.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
-#include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
 
 namespace DWAL
 {
 namespace
 {
-    ALWAYS_INLINE void
-    writeData(const DB::ISerialization & serialization, const DB::ColumnPtr & column, DB::WriteBuffer & ostr, uint64_t offset, uint64_t limit)
+    ALWAYS_INLINE void writeData(
+        const DB::ISerialization & serialization, const DB::ColumnPtr & column, DB::WriteBuffer & ostr, uint64_t offset, uint64_t limit)
     {
         /// If there are columns-constants - then we materialize them.
         /// (Since the data type does not know how to serialize / deserialize constants.)
@@ -27,7 +26,8 @@ namespace
     }
 }
 
-SchemaNativeWriter::SchemaNativeWriter(DB::WriteBuffer & ostr_, uint16_t schema_version_) : ostr(ostr_), schema_version(schema_version_)
+SchemaNativeWriter::SchemaNativeWriter(DB::WriteBuffer & ostr_, uint16_t schema_version_, const std::vector<uint16_t> & column_positions_)
+    : ostr(ostr_), schema_version(schema_version_), column_positions(column_positions_)
 {
 }
 
@@ -39,7 +39,7 @@ void SchemaNativeWriter::flush()
 /// We assume columns in block is sorted according to schema metadata
 void SchemaNativeWriter::write(const DB::Block & block)
 {
-    block.checkNumberOfRows();
+    /// block.checkNumberOfRows();
 
     /// Dimensions
     /// We don't support these many columns and rows in one block
@@ -50,17 +50,21 @@ void SchemaNativeWriter::write(const DB::Block & block)
     uint32_t rows = block.rows();
 
     assert(columns > 0);
+    assert(column_positions.empty() || column_positions.size() == columns);
     assert(rows > 0);
 
     writeVarUInt(schema_version, ostr);
     writeVarUInt(columns, ostr);
     writeVarUInt(rows, ostr);
 
-    for (const auto & column : block)
+    for (size_t pos = 0; const auto & column : block)
     {
         /// Column index in the schema
-        /// writeVarUInt(i, ostr);
-        /// ++i;
+        if (!column_positions.empty())
+        {
+            writeVarUInt(column_positions[pos], ostr);
+            ++pos;
+        }
 
         /// Serialization. Dynamic, if client supports it.
         auto info = column.column->getSerializationInfo();

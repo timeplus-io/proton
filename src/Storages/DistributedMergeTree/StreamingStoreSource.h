@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <DistributedWALClient/KafkaWALSimpleConsumer.h>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Sources/SourceWithProgress.h>
@@ -30,7 +29,7 @@ public:
 
 private:
     void readAndProcess();
-    std::vector<size_t> calculateColumnPositions(const Block & header, const Block & schema);
+    std::vector<uint16_t> calculateColumnPositions(const Block & header, const Block & schema);
 
 private:
     std::shared_ptr<IStorage> storage;

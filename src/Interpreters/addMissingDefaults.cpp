@@ -91,8 +91,8 @@ ActionsDAGPtr addMissingDefaults(
     return actions;
 }
 
-/// Add missing columns which have default expressions
-ActionsDAGPtr addMissingDefaultsForDefaults(
+/// Add missing columns which have default value expressions
+ActionsDAGPtr addMissingDefaultsWithDefaults(
     const Block & header,
     const NamesAndTypesList & required_columns,
     const ColumnsDescription & columns,

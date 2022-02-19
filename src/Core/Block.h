@@ -150,10 +150,11 @@ public:
       */
     void updateHash(SipHash & hash) const;
 
+    void reserve(size_t count);
+
 private:
     void eraseImpl(size_t position);
     void initializeIndexByName();
-    void reserve(size_t count);
 
     /// This is needed to allow function execution over data.
     /// It is safe because functions does not change column names, so index is unaffected.

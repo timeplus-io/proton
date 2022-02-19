@@ -699,6 +699,7 @@ class IColumn;
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "latest", "Seeking to an offset of the streaming store to seek when a streaming query is initiated", 0) \
     M(String, query_mode, "streaming", "Default query mode. hist or streaming", 0)                                                                                    \
+    M(Bool, enable_light_ingest, true, "Light ingest is inserting partial columns of a table", 0)                                                                                    \
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

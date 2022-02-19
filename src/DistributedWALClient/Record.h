@@ -31,6 +31,7 @@ struct Record
     {
         NATIVE = 0x00,
         NATIVE_IN_SCHEMA = 0x01,
+        NATIVE_IN_SCHEMA_PARTIAL = 0x02,
 
         MAX_VERSION,
     };
@@ -43,6 +44,8 @@ struct Record
     DB::Block block;
     /// Schema version of the block. NO_SCHEMA means the block is self-contained
     uint16_t schema_version = NO_SCHEMA;
+    /// NATIVE_IN_SCHEMA_PARTIAL
+    std::vector<uint16_t> column_positions;
 
     /// Fields which are not on the wire
 
@@ -98,15 +101,15 @@ struct Record
 
     static std::shared_ptr<Record> read(const char * data, size_t size, const SchemaContext & schema_ctx);
 
-    Record(OpCode op_code_, DB::Block && block_, uint16_t schema_version_)
-        : op_code(op_code_), block(std::move(block_)), schema_version(schema_version_)
+    Record(OpCode op_code_, DB::Block && block_, uint16_t schema_version_, std::vector<uint16_t> column_positions_ = {})
+        : op_code(op_code_), block(std::move(block_)), schema_version(schema_version_), column_positions(std::move(column_positions_))
     {
     }
     explicit Record(RecordSN sn_) : sn(sn_) { }
 
 private:
     static ByteVector writeInSchema(const Record & record, DB::CompressionMethodByte codec);
-    static std::shared_ptr<Record> readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, const SchemaContext & schema_ctx);
+    static std::shared_ptr<Record> readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, bool partial, const SchemaContext & schema_ctx);
 };
 
 using Records = std::vector<Record>;

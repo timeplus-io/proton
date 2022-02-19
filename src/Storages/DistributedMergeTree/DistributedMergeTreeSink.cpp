@@ -18,14 +18,30 @@ namespace ErrorCodes
 
 DistributedMergeTreeSink::DistributedMergeTreeSink(
     StorageDistributedMergeTree & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
-    : SinkToStorage(metadata_snapshot_->getSampleBlock())
+    : SinkToStorage(metadata_snapshot_->getSampleBlockNonMaterialized())
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , query_context(query_context_)
 {
+    /// metadata_snapshot can contain only partial columns of the schema when light ingest feature is on
+    /// Check this case here
+    const auto & sink_block_header = getHeader();
+    auto full_metadata_snapshot = storage_.getInMemoryMetadataPtr(metadata_snapshot->version);
+    auto full_header = full_metadata_snapshot->getSampleBlockNonMaterialized();
+    if (full_header.columns() != sink_block_header.columns())
+    {
+        /// light ingest
+        assert(query_context->getSettingsRef().enable_light_ingest);
+
+        column_positions.reserve(sink_block_header.columns());
+
+        /// Figure out the column positions since we need encode them to file system
+        for (const auto & col : sink_block_header)
+            column_positions.push_back(full_header.getPositionByName(col.name));
+    }
 }
 
-BlocksWithShard DistributedMergeTreeSink::doShardBlock(const Block & block) const
+BlocksWithShard DistributedMergeTreeSink::doShardBlock(Block block) const
 {
     auto selector = storage.createSelector(block);
 
@@ -48,32 +64,27 @@ BlocksWithShard DistributedMergeTreeSink::doShardBlock(const Block & block) cons
     for (size_t shard_idx = 0; shard_idx < sharded_blocks.size(); ++shard_idx)
     {
         if (sharded_blocks[shard_idx].rows())
-        {
-            /// FIXME, further split sharded blocks by size to avoid big block
             blocks_with_shard.emplace_back(std::move(sharded_blocks[shard_idx]), shard_idx);
-        }
+
+        assert(sharded_blocks[shard_idx].rows() == 0);
     }
 
     return blocks_with_shard;
 }
 
-BlocksWithShard DistributedMergeTreeSink::shardBlock(const Block & block) const
+BlocksWithShard DistributedMergeTreeSink::shardBlock(Block block) const
 {
     size_t shard = 0;
     if (storage.shards > 1)
     {
         if (storage.sharding_key_expr && !storage.rand_sharding_key)
-        {
-            return doShardBlock(block);
-        }
+            return doShardBlock(std::move(block));
         else
-        {
             /// Randomly pick one shard to ingest this block
             shard = storage.getNextShardIndex();
-        }
     }
 
-    return {BlockWithShard{Block(block), shard}};
+    return {BlockWithShard{Block(std::move(block)), shard}};
 }
 
 inline IngestMode DistributedMergeTreeSink::getIngestMode() const
@@ -93,9 +104,11 @@ void DistributedMergeTreeSink::consume(Chunk chunk)
     if (chunk.getNumRows() == 0)
         return;
 
+    assert(column_positions.empty() || column_positions.size() == chunk.getNumColumns());
+
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     /// 1) Split block by sharding key
-    BlocksWithShard blocks{shardBlock(block)};
+    BlocksWithShard blocks{shardBlock(std::move(block))};
 
     auto ingest_mode = getIngestMode();
 
@@ -105,10 +118,15 @@ void DistributedMergeTreeSink::consume(Chunk chunk)
     UInt16 schema_version = 0;
     const auto & idem_key = query_context->getIdempotentKey();
     auto ingest_time = query_context->getIngestTime();
+
+    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, Block{}, schema_version};
+    record.column_positions = column_positions;
+
     for (auto & current_block : blocks)
     {
-        DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(current_block.block), schema_version};
+        record.block.swap(current_block.block);
         record.partition_key = current_block.shard;
+
         if (!idem_key.empty())
             record.setIdempotentKey(idem_key);
 

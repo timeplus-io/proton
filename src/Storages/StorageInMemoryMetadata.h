@@ -242,6 +242,10 @@ struct StorageInMemoryMetadata
     /// contains only the columns of the table, and all the columns are different.
     /// If |need_all| is set, then checks that all the columns of the table are in the block.
     void check(const Block & block, bool need_all = false) const;
+
+    /// proton: starts. Version of this metadata
+    UInt16 version = 0;
+    /// proton: ends
 };
 
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;

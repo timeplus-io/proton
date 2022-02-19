@@ -20,7 +20,7 @@
 #include <Processors/Transforms/CountingTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
-/// #include <Processors/Transforms/SquashingChunksTransform.h>
+#include <Processors/Transforms/SquashingChunksTransform.h>
 #include <Processors/Transforms/getSourceFromASTInsertQuery.h>
 #include <Storages/StorageDistributed.h>
 #include <TableFunctions/TableFunctionFactory.h>
@@ -184,11 +184,18 @@ Chain InterpreterInsertQuery::buildChainImpl(
     std::atomic_uint64_t * elapsed_counter_ms)
 {
     auto context_ptr = getContext();
+    const Settings & settings = context_ptr->getSettingsRef();
+    if (settings.enable_light_ingest)
+        return buildChainLightImpl(table, metadata_snapshot, query_sample_block, thread_status, elapsed_counter_ms);
+
+    /// The only case is system tables inserts. System tables are still merge tree
+    /// we don't support in-memory table
+    assert(table->getName() == "MergeTree");
+
     const ASTInsertQuery * query = nullptr;
     if (query_ptr)
         query = query_ptr->as<ASTInsertQuery>();
 
-    const Settings & settings = context_ptr->getSettingsRef();
     bool null_as_default = query && query->select && settings.insert_null_as_default;
 
     /// We create a pipeline of several streams, into which we will write data.
@@ -209,10 +216,6 @@ Chain InterpreterInsertQuery::buildChainImpl(
     ///    out.addSource(std::make_shared<CheckConstraintsTransform>(
     ///        table->getStorageID(), out.getInputHeader(), metadata_snapshot->getConstraints(), context_ptr));
 
-    /// proton: light insert. We don't like to insert missing columns which don't have defaults
-    /// to streaming store since it is inefficient and blow streaming storage.
-    /// Instead during query, we refill the missing columns.
-    /// With this change, the block i streaming store may contain partial columns of the table schema
     auto adding_missing_defaults_dag = addMissingDefaults(
         query_sample_block,
         out.getInputHeader().getNamesAndTypesList(),
@@ -220,6 +223,106 @@ Chain InterpreterInsertQuery::buildChainImpl(
         context_ptr,
         null_as_default);
 
+    auto adding_missing_defaults_actions = std::make_shared<ExpressionActions>(adding_missing_defaults_dag);
+
+    /// Actually we don't know structure of input blocks from query/table,
+    /// because some clients break insertion protocol (columns != header)
+    out.addSource(std::make_shared<ConvertingTransform>(query_sample_block, adding_missing_defaults_actions));
+
+    /// It's important to squash blocks as early as possible (before other transforms),
+    ///  because other transforms may work inefficient if block size is small.
+
+    /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
+    /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
+    if (!(settings.insert_distributed_sync && table->isRemote()) && !no_squash && !(query && query->watch))
+    {
+        bool table_prefers_large_blocks = table->prefersLargeBlocks();
+
+        out.addSource(std::make_shared<SquashingChunksTransform>(
+            out.getInputHeader(),
+            table_prefers_large_blocks ? settings.min_insert_block_size_rows : settings.max_block_size,
+            table_prefers_large_blocks ? settings.min_insert_block_size_bytes : 0));
+    }
+
+    auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status);
+    counting->setProcessListElement(context_ptr->getProcessListElement());
+    out.addSource(std::move(counting));
+
+    return out;
+}
+
+/// proton: light insert. We don't like to insert missing columns which don't have defaults
+/// to streaming store since it is inefficient and blow streaming storage.
+/// Instead during query, we refill the missing columns.
+/// With this change, the block i streaming store may contain partial columns of the table schema
+Chain InterpreterInsertQuery::buildChainLightImpl(
+    const StoragePtr & table,
+    const StorageMetadataPtr & metadata_snapshot,
+    const Block & query_sample_block,
+    ThreadStatus * thread_status,
+    std::atomic_uint64_t * elapsed_counter_ms)
+{
+    auto context_ptr = getContext();
+    const ASTInsertQuery * query = nullptr;
+    if (query_ptr)
+        query = query_ptr->as<ASTInsertQuery>();
+
+    assert(table->getName() == "DistributedMergeTree");
+
+    const Settings & settings = context_ptr->getSettingsRef();
+    bool null_as_default = query && query->select && settings.insert_null_as_default;
+
+    /// We create a pipeline of several streams, into which we will write data.
+    Chain out;
+
+    /// Keep a reference to the context to make sure it stays alive until the chain is executed and destroyed
+    out.addInterpreterContext(context_ptr);
+
+    /// First figure out the final (sink) block header
+    /// There are several cases
+    /// 1) Clients ingest full columns
+    /// 2) Client ingest partial columns and the other missing columns don't have a default value expr
+    /// 3) Client ingest partial columns and the other missing columns have a default value expr which don't depend on other column(s)
+    ///    For example, `Int cpu_usage DEFAULT 1`
+    /// 4) Client ingest partial columns and the other missing columns have a default value expr which depend on other column(s), but
+    ///    the dependent columns are all in `INSERT INTO`
+    ///    For example, `Int cpu_usage DEFAULT util`, INSERT INTO t(util) VALUES (2.0), (3.0)
+    /// 5) Client ingest partial columns and the other missing columns have a default value expr which depend on other column(s), but
+    ///    the dependent columns are not or partially in `INSERT INTO`
+    ///    For example, `Int cpu_usage DEFAULT util2`, INSERT INTO t(util) VALUES (2.0), (3.0)
+
+    /// Since there may be dependent columns in columns' default value expressions. We will need manually figure out them first
+    /// for example, `_tp_time DateTime64(3) DEFAULT to_timestamp(json_extract(json_column, 'timestamp'))`
+
+    auto adding_missing_defaults_dag = addMissingDefaultsWithDefaults(
+        query_sample_block,
+        query_sample_block.getNamesAndTypesList(),
+        metadata_snapshot->getColumns(),
+        context_ptr,
+        null_as_default);
+    auto final_header = ExpressionTransform::transformHeader(query_sample_block, *adding_missing_defaults_dag);
+
+    /// Compare final_header with metadata_snapshot. If final_header doesn't contain all columns in metadata_snapshot
+    /// we need create a new metadata_snapshot which just contains final_header columns; otherwise keep metadata_snapshot
+    /// as it is
+    auto final_metadata_snapshot = metadata_snapshot;
+    if (final_header.columns() != metadata_snapshot->getSampleBlockNonMaterialized().columns())
+    {
+        auto light_metadata_snapshot = std::make_shared<StorageInMemoryMetadata>(*metadata_snapshot);
+        for (const auto & column : metadata_snapshot->columns)
+            if (!final_header.has(column.name))
+                light_metadata_snapshot->columns.remove(column.name);
+
+        assert(light_metadata_snapshot->columns.size() == final_header.columns());
+        final_metadata_snapshot = light_metadata_snapshot;
+    }
+
+    /// After figure out the final structure / columns, use it in Sink
+    auto sink = table->write(query_ptr, final_metadata_snapshot, context_ptr);
+    sink->setRuntimeData(thread_status, elapsed_counter_ms);
+    out.addSource(std::move(sink));
+
+    /// Note that we wrap transforms one on top of another, so we write them in reverse of data processing order.
     auto adding_missing_defaults_actions = std::make_shared<ExpressionActions>(adding_missing_defaults_dag);
 
     /// Actually we don't know structure of input blocks from query/table,
@@ -242,9 +345,9 @@ Chain InterpreterInsertQuery::buildChainImpl(
     ///        table_prefers_large_blocks ? settings.min_insert_block_size_bytes : 0));
     /// }
 
-    auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status);
-    counting->setProcessListElement(context_ptr->getProcessListElement());
-    out.addSource(std::move(counting));
+    /// auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status);
+    /// counting->setProcessListElement(context_ptr->getProcessListElement());
+    /// out.addSource(std::move(counting));
 
     return out;
 }

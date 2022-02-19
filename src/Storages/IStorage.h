@@ -204,6 +204,12 @@ public:
     {
         create_query.set(std::make_unique<StorageInMemoryCreateQuery>(*create_query_));
     }
+
+    StorageMetadataPtr getInMemoryMetadataPtr(UInt16 /*version*/) const
+    {
+        /// proton: FIXME, introduce versioning schema physically in metastore
+        return metadata.get();
+    }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast

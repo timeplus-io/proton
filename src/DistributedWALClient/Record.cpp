@@ -56,8 +56,11 @@ RecordPtr Record::read(const char * data, size_t size, const SchemaContext & sch
     uint64_t wire_flags = 0;
     readIntBinary(wire_flags, rb);
 
-    if (likely(Record::version(wire_flags) == Version::NATIVE_IN_SCHEMA))
-        return readInSchema(rb, wire_flags, schema_ctx);
+    auto version = Record::version(wire_flags);
+    if (version == Version::NATIVE_IN_SCHEMA)
+        return readInSchema(rb, wire_flags, false, schema_ctx);
+    else if (version == Version::NATIVE_IN_SCHEMA_PARTIAL)
+        return readInSchema(rb, wire_flags, true, schema_ctx);
 
     auto method = codec(wire_flags);
     if (likely(method == DB::CompressionMethodByte::NONE))
@@ -80,22 +83,23 @@ ByteVector Record::writeInSchema(const Record & record, DB::CompressionMethodByt
     ByteVector data{static_cast<size_t>((record.block.bytes() + 2) * 1.5)};
     DB::WriteBufferFromVector wb{data};
 
-    uint64_t wire_flags = flags(Version::NATIVE_IN_SCHEMA, record.op_code,  codec);
+    auto version = record.column_positions.empty() ? Version::NATIVE_IN_SCHEMA : Version::NATIVE_IN_SCHEMA_PARTIAL;
+    uint64_t wire_flags = flags(version, record.op_code, codec);
     DB::writeIntBinary(wire_flags, wb);
 
     /// Data
     /// materializeBlockInplace(record.block);
     if (likely(codec == DB::CompressionMethodByte::NONE))
     {
-        SchemaNativeWriter writer(wb, record.schema());
+        SchemaNativeWriter writer(wb, record.schema(), record.column_positions);
         writer.write(record.block);
         writer.flush();
     }
     else
     {
-        DB::CompressedWriteBuffer compressed_out
-            = DB::CompressedWriteBuffer(wb, DB::CompressionCodecFactory::instance().get(static_cast<uint8_t>(codec)), DBMS_DEFAULT_BUFFER_SIZE);
-        SchemaNativeWriter writer(compressed_out, record.schema());
+        DB::CompressedWriteBuffer compressed_out = DB::CompressedWriteBuffer(
+            wb, DB::CompressionCodecFactory::instance().get(static_cast<uint8_t>(codec)), DBMS_DEFAULT_BUFFER_SIZE);
+        SchemaNativeWriter writer(compressed_out, record.schema(), record.column_positions);
         writer.write(record.block);
         writer.flush();
     }
@@ -105,20 +109,21 @@ ByteVector Record::writeInSchema(const Record & record, DB::CompressionMethodByt
     return data;
 }
 
-RecordPtr Record::readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, const SchemaContext & schema_ctx)
+RecordPtr Record::readInSchema(DB::ReadBufferFromMemory & rb, uint64_t flags, bool partial, const SchemaContext & schema_ctx)
 {
-    assert(version(flags) == Version::NATIVE_IN_SCHEMA);
+    assert(
+        (partial && (version(flags) == Version::NATIVE_IN_SCHEMA_PARTIAL)) || (!partial && (version(flags) == Version::NATIVE_IN_SCHEMA)));
 
     uint16_t schema_ver = 0;
     if (likely(codec(flags) == DB::CompressionMethodByte::NONE))
     {
-        SchemaNativeReader reader(rb, schema_ver, schema_ctx);
+        SchemaNativeReader reader(rb, schema_ver, partial, schema_ctx);
         return std::make_shared<Record>(Record::opcode(flags), reader.read(), schema_ver);
     }
     else
     {
         DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
-        SchemaNativeReader reader(compressed_in, schema_ver, schema_ctx);
+        SchemaNativeReader reader(compressed_in, schema_ver, partial, schema_ctx);
         return std::make_shared<Record>(Record::opcode(flags), reader.read(), schema_ver);
     }
 }

@@ -30,7 +30,7 @@ struct SchemaContext
     std::shared_ptr<EmptySchemaProvider> empty_schema_provider;
     const SchemaProvider * schema_provider;
     uint16_t read_schema_version = 0;
-    std::vector<size_t> column_positions;
+    std::vector<uint16_t> column_positions;
 };
 
 };

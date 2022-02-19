@@ -113,9 +113,9 @@ void StreamingStoreSource::readAndProcess()
     iter = result_chunks.begin();
 }
 
-std::vector<size_t> StreamingStoreSource::calculateColumnPositions(const Block & header, const Block & schema)
+std::vector<uint16_t> StreamingStoreSource::calculateColumnPositions(const Block & header, const Block & schema)
 {
-    std::vector<size_t> column_positions;
+    std::vector<uint16_t> column_positions;
     column_positions.reserve(column_names.size());
 
     for (Int32 pos = 0, size = column_names.size(); pos < size; ++pos)

@@ -375,6 +375,10 @@ void SystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, 
         auto insert_context = Context::createCopy(context);
         insert_context->makeQueryContext();
 
+        /// proton: starts. Disable light ingest for system log
+        insert_context->setSetting("enable_light_ingest", false);
+        /// proton: ends
+
         InterpreterInsertQuery interpreter(query_ptr, insert_context);
         BlockIO io = interpreter.execute();
 

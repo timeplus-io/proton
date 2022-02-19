@@ -1,6 +1,6 @@
 #pragma once
 
-#include <base/types.h>
+#include <vector>
 
 namespace DB
 {
@@ -14,7 +14,7 @@ namespace DWAL
 class SchemaNativeWriter final
 {
 public:
-    SchemaNativeWriter(DB::WriteBuffer & ostr_, uint16_t schema_version_);
+    SchemaNativeWriter(DB::WriteBuffer & ostr_, uint16_t schema_version_, const std::vector<uint16_t> & column_positions_);
 
     void write(const DB::Block & block);
     void flush();
@@ -22,6 +22,7 @@ public:
 private:
     DB::WriteBuffer & ostr;
     uint16_t schema_version;
+    const std::vector<uint16_t> & column_positions;
 };
 
 }

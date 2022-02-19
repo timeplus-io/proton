@@ -35,8 +35,8 @@ public:
     String getName() const override { return "DistributedMergeTreeSink"; }
 
 private:
-    BlocksWithShard shardBlock(const Block & block) const;
-    BlocksWithShard doShardBlock(const Block & block) const;
+    BlocksWithShard shardBlock(Block block) const;
+    BlocksWithShard doShardBlock(Block block) const;
     IngestMode getIngestMode() const;
 
 private:
@@ -48,6 +48,8 @@ private:
     StorageDistributedMergeTree & storage;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr query_context;
+
+    std::vector<UInt16> column_positions;
 
     /// For writeCallback
     std::atomic_uint32_t committed = 0;

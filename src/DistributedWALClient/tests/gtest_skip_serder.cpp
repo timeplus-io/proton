@@ -31,59 +31,59 @@
 
 namespace
 {
-template <typename ColumnType>
+template <typename ColumnType, typename IntegerType>
 void doInsertColumnNumber(DB::Block & block, size_t rows, DB::DataTypePtr data_type)
 {
     auto col = data_type->createColumn();
     auto * col_ptr = typeid_cast<ColumnType *>(col.get());
 
     for (size_t i = 0; i < rows; ++i)
-        col_ptr->insert(i + 100);
+        col_ptr->insert(IntegerType(i + 100));
 
     DB::ColumnWithTypeAndName col_with_name{std::move(col), data_type, typeid(*col_ptr).name()};
     block.insert(std::move(col_with_name));
 }
 
-template <typename NumberType, typename ColumnType>
+template <typename NumberType, typename ColumnType, typename IntegerType>
 void insertColumnNumber(DB::Block & block, size_t rows)
 {
-    doInsertColumnNumber<ColumnType>(block, rows, std::make_shared<NumberType>());
+    doInsertColumnNumber<ColumnType, IntegerType>(block, rows, std::make_shared<NumberType>());
 }
 
-template <typename DecimalType, typename ColumnType>
+template <typename DecimalType, typename ColumnType, typename IntegerType>
 void insertColumnDecimal(DB::Block & block, size_t rows, int32_t precision, int32_t scale)
 {
-    doInsertColumnNumber<ColumnType>(block, rows, std::make_shared<DecimalType>(precision, scale));
+    doInsertColumnNumber<ColumnType, IntegerType>(block, rows, std::make_shared<DecimalType>(precision, scale));
 }
 
 void insertColumnDateTime64(DB::Block & block, size_t rows)
 {
-    doInsertColumnNumber<DB::ColumnDecimal<DB::DateTime64>>(block, rows, std::make_shared<DB::DataTypeDateTime64>(3));
+    doInsertColumnNumber<DB::ColumnDecimal<DB::DateTime64>, DB::Decimal64>(block, rows, std::make_shared<DB::DataTypeDateTime64>(3));
 }
 
 [[maybe_unused]] void insertColumnNumber(DB::Block & block, size_t rows)
 {
-    insertColumnNumber<DB::DataTypeInt8, DB::ColumnInt8>(block, rows);
-    insertColumnNumber<DB::DataTypeInt16, DB::ColumnInt16>(block, rows);
-    insertColumnNumber<DB::DataTypeInt32, DB::ColumnInt32>(block, rows);
-    insertColumnNumber<DB::DataTypeInt64, DB::ColumnInt64>(block, rows);
-    insertColumnNumber<DB::DataTypeInt128, DB::ColumnInt128>(block, rows);
-    insertColumnNumber<DB::DataTypeInt256, DB::ColumnInt256>(block, rows);
+    insertColumnNumber<DB::DataTypeInt8, DB::ColumnInt8, Int8>(block, rows);
+    insertColumnNumber<DB::DataTypeInt16, DB::ColumnInt16, Int16>(block, rows);
+    insertColumnNumber<DB::DataTypeInt32, DB::ColumnInt32, Int32>(block, rows);
+    insertColumnNumber<DB::DataTypeInt64, DB::ColumnInt64, Int64>(block, rows);
+    insertColumnNumber<DB::DataTypeInt128, DB::ColumnInt128, Int128>(block, rows);
+    insertColumnNumber<DB::DataTypeInt256, DB::ColumnInt256, Int256>(block, rows);
 
-    insertColumnNumber<DB::DataTypeUInt8, DB::ColumnUInt8>(block, rows);
-    insertColumnNumber<DB::DataTypeUInt16, DB::ColumnUInt16>(block, rows);
-    insertColumnNumber<DB::DataTypeUInt32, DB::ColumnUInt32>(block, rows);
-    insertColumnNumber<DB::DataTypeUInt64, DB::ColumnUInt64>(block, rows);
-    insertColumnNumber<DB::DataTypeUInt128, DB::ColumnUInt128>(block, rows);
-    insertColumnNumber<DB::DataTypeUInt256, DB::ColumnUInt256>(block, rows);
+    insertColumnNumber<DB::DataTypeUInt8, DB::ColumnUInt8, UInt8>(block, rows);
+    insertColumnNumber<DB::DataTypeUInt16, DB::ColumnUInt16, UInt16>(block, rows);
+    insertColumnNumber<DB::DataTypeUInt32, DB::ColumnUInt32, UInt32>(block, rows);
+    insertColumnNumber<DB::DataTypeUInt64, DB::ColumnUInt64, UInt64>(block, rows);
+    insertColumnNumber<DB::DataTypeUInt128, DB::ColumnUInt128, UInt128>(block, rows);
+    insertColumnNumber<DB::DataTypeUInt256, DB::ColumnUInt256, UInt256>(block, rows);
 
-    insertColumnNumber<DB::DataTypeFloat32, DB::ColumnFloat32>(block, rows);
-    insertColumnNumber<DB::DataTypeFloat64, DB::ColumnFloat64>(block, rows);
+    insertColumnNumber<DB::DataTypeFloat32, DB::ColumnFloat32, float>(block, rows);
+    insertColumnNumber<DB::DataTypeFloat64, DB::ColumnFloat64, double>(block, rows);
 
-    insertColumnDecimal<DB::DataTypeDecimal32, DB::ColumnDecimal<DB::Decimal32>>(block, rows, 9, 3);
-    insertColumnDecimal<DB::DataTypeDecimal64, DB::ColumnDecimal<DB::Decimal64>>(block, rows, 10, 3);
-    insertColumnDecimal<DB::DataTypeDecimal128, DB::ColumnDecimal<DB::Decimal128>>(block, rows, 19, 3);
-    insertColumnDecimal<DB::DataTypeDecimal256, DB::ColumnDecimal<DB::Decimal256>>(block, rows, 39, 3);
+    insertColumnDecimal<DB::DataTypeDecimal32, DB::ColumnDecimal<DB::Decimal32>, DB::Decimal32>(block, rows, 9, 3);
+    insertColumnDecimal<DB::DataTypeDecimal64, DB::ColumnDecimal<DB::Decimal64>, DB::Decimal64>(block, rows, 10, 3);
+    insertColumnDecimal<DB::DataTypeDecimal128, DB::ColumnDecimal<DB::Decimal128>, DB::Decimal128>(block, rows, 19, 3);
+    insertColumnDecimal<DB::DataTypeDecimal256, DB::ColumnDecimal<DB::Decimal256>, DB::Decimal256>(block, rows, 39, 3);
 
     insertColumnDateTime64(block, rows);
 }
@@ -275,7 +275,7 @@ void doInsertColumnArrayMap(DB::Block & block, const String & col_name, std::fun
     });
 
     /// array of number-number map
-    doInsertColumnArrayMap<DB::DataTypeString, DB::DataTypeString>(block, "array-number-number-map", [&](auto * col_ptr) {
+    doInsertColumnArrayMap<DB::DataTypeUInt64, DB::DataTypeUInt64>(block, "array-number-number-map", [&](auto * col_ptr) {
         for (size_t i = 0; i < rows; ++i)
         {
             DB::Map m{DB::Tuple{DB::Field(i), DB::Field(i)}};
@@ -423,7 +423,7 @@ void doInsertColumnArrayArray(DB::Block & block, const String & col_name, std::f
         "map_uint64_uint64",
     };
 
-    ASSERT_EQ(types.size(), names.size());
+    EXPECT_EQ(types.size(), names.size());
 
     auto insert_func = [&](DB::DataTypePtr type, const String & col_name) {
         auto col = type->createColumn();
@@ -496,7 +496,7 @@ void insertColumnSparse(DB::Block & block, size_t rows)
     block.insert(DB::ColumnWithTypeAndName{std::move(sparse_string2), string_type, "sparse-string-all-default"});
 }
 
-void checkBlock(const DB::Block & origin, DB::Block actual, std::vector<size_t> positions)
+void checkBlock(const DB::Block & origin, DB::Block actual, const std::vector<uint16_t> & positions)
 {
     EXPECT_EQ(actual.columns(), positions.size());
     EXPECT_EQ(actual.rows(), origin.rows());
@@ -506,18 +506,18 @@ void checkBlock(const DB::Block & origin, DB::Block actual, std::vector<size_t> 
         if (std::find(positions.begin(), positions.end(), pos) == positions.end())
         {
             /// skipped column
-            ASSERT_TRUE(actual.findByName(origin.getByPosition(pos).name) == nullptr);
+            EXPECT_TRUE(actual.findByName(origin.getByPosition(pos).name) == nullptr);
         }
         else
         {
             /// Validate column values
             auto col_expected = origin.getByPosition(pos);
             auto * col_got = actual.findByName(col_expected.name);
-            ASSERT_TRUE(col_got != nullptr);
+            EXPECT_TRUE(col_got != nullptr);
 
             /// std::cout << "comparing " << col_expected.name << "\n";
             for (size_t row = 0; row < actual.rows(); ++row)
-                ASSERT_EQ(col_expected.column->compareAt(row, row, *col_got->column, -1), 0);
+                EXPECT_EQ(col_expected.column->compareAt(row, row, *col_got->column, -1), 0);
         }
     }
 }
@@ -581,7 +581,9 @@ TEST(Serder, Skip)
     /// Serialize everything
     DWAL::ByteVector data{static_cast<size_t>((block.bytes() + 2) * 1.5)};
     DB::WriteBufferFromVector wb{data};
-    DWAL::SchemaNativeWriter writer(wb, 0);
+    std::vector<uint16_t> posistions;
+    /// write all columns
+    DWAL::SchemaNativeWriter writer(wb, 0, posistions);
     writer.write(block);
     writer.flush();
     wb.finalize();
@@ -603,21 +605,20 @@ TEST(Serder, Skip)
     for (size_t pos = 0; pos < block.columns(); ++pos)
     {
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        DWAL::SchemaNativeReader reader{rb, schema_version, schema_ctx};
+        DWAL::SchemaNativeReader reader{rb, schema_version, false, schema_ctx};
 
-        std::vector<size_t> positions = {pos};
-        schema_ctx.column_positions = positions;
+        schema_ctx.column_positions = {static_cast<uint16_t>(pos)};
 
-        /// Skip others
-        checkBlock(block, reader.read(), positions);
+       /// Skip others
+        checkBlock(block, reader.read(), schema_ctx.column_positions);
     }
 
     for (size_t pos = 0; pos < block.columns(); ++pos)
     {
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        DWAL::SchemaNativeReader reader{rb, schema_version, schema_ctx};
+        DWAL::SchemaNativeReader reader{rb, schema_version, false, schema_ctx};
 
-        std::vector<size_t> positions;
+        std::vector<uint16_t> positions;
         positions.reserve(block.columns() - 1);
 
         for (size_t i = 0; i < block.columns(); ++i)

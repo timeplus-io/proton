@@ -35,7 +35,7 @@ ActionsDAGPtr addMissingDefaults(
   * Also can substitute NULL with DEFAULT value in case of INSERT SELECT query (null_as_default) if according setting is 1.
   * All three types of columns are materialized (not constants).
   */
-ActionsDAGPtr addMissingDefaultsForDefaults(
+ActionsDAGPtr addMissingDefaultsWithDefaults(
     const Block & header, const NamesAndTypesList & required_columns,
     const ColumnsDescription & columns, ContextPtr context, bool null_as_default = false);
 }
