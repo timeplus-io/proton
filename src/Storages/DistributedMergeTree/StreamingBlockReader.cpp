@@ -18,11 +18,11 @@ StreamingBlockReader::StreamingBlockReader(
     Int32 shard_,
     Int64 offset,
     std::vector<uint16_t> column_positions,
-    const DWAL::KafkaWALSimpleConsumerPtr & consumer_,
+    DWAL::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
     : storage(std::move(storage_))
     , header(storage->getInMemoryMetadataPtr()->getSampleBlock())
-    , consumer(consumer_)
+    , consumer(std::move(consumer_))
     , consume_ctx(
           DWAL::escapeDWALName(storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName()),
           shard_,
@@ -37,6 +37,7 @@ StreamingBlockReader::StreamingBlockReader(
     consume_ctx.offset = offset;
     consume_ctx.enforce_offset = true;
     consume_ctx.schema_ctx.schema_provider = this;
+    /// FIXME, schema version
     consume_ctx.schema_ctx.read_schema_version = 0;
     consume_ctx.schema_ctx.column_positions = std::move(column_positions);
     consumer->initTopicHandle(consume_ctx);

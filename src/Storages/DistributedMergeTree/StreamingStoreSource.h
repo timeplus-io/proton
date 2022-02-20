@@ -10,7 +10,7 @@ namespace DB
 class StreamingBlockReader;
 class IStorage;
 
-class StreamingStoreSource : public SourceWithProgress
+class StreamingStoreSource final : public SourceWithProgress
 {
 public:
     StreamingStoreSource(
@@ -60,4 +60,6 @@ private:
     UInt64 record_consume_batch_count = 1000;
     Int64 record_consume_timeout = 100;
 };
+
+using StreamingStoreSourcePtr = std::shared_ptr<StreamingStoreSource>;
 }

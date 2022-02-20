@@ -563,11 +563,11 @@ class IColumn;
     M(String, insert_deduplication_token, "", "If not empty, used for duplicate detection instead of data digest", 0) \
     /* proton: starts. */ \
     M(Bool, asterisk_include_reserved_columns, true, "Show reserved columns on SELECT query.", 0) \
-    M(UInt64, max_keep_windows, 1000, "Maximum number of streaming windows.", 0) \
+    M(UInt64, max_windows, 1000, "Maximum number of streaming windows in one streaming query.", 0) \
     M(UInt64, record_consume_batch_count, 1000, "Maximum number for consuming records at once", 0) \
     M(Int64, record_consume_timeout, 100, "Timeout of consuming record", 0) \
-    M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in steraming view", 0) \
-    M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in steraming view", 0) \
+    M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in streaming view", 0) \
+    M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in streaming view", 0) \
     M(Bool, synchronous_ddl, true, "If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.", 0)                                   \
     /* proton: ends. */ \
 
@@ -694,11 +694,13 @@ class IColumn;
     M(Bool, disable_distributed, false, "If setting is enabled and distributed mode will be disabled for debug and test only", 0) \
     M(UInt64, part_commit_pool_size, 8, "Total shared thread pool size for building and committing parts for DistributedMergeTree table engine", 0) \
     M(UInt64, max_idempotent_ids, 1000, "Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion", 0) \
-    M(String, rawstore_time_extraction_type, "", "_time extraction type (string, json, regex)", 0) \
-    M(String, rawstore_time_extraction_rule, "", "_time extraction rule (string, json, regex)", 0) \
+    M(String, rawstore_time_extraction_type, "", "_tp_time extraction type (string, json, regex)", 0) \
+    M(String, rawstore_time_extraction_rule, "", "_tp_time extraction rule (string, json, regex)", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "latest", "Seeking to an offset of the streaming store to seek when a streaming query is initiated", 0) \
-    M(String, query_mode, "streaming", "Default query mode. hist or streaming", 0)                                                                                    \
+    M(String, query_mode, "streaming", "Default query mode. table or streaming", 0)                                                                                    \
+    M(String, query_resource_group, "dedicated", "Default resource group. dedicated or shared", 1)                                                                                    \
+    M(UInt64, max_channels_per_resource_group, 20, "Max channels per shared resource group. One streaming query maps to one channel", 1)                                                                                    \
     M(Bool, enable_light_ingest, true, "Light ingest is inserting partial columns of a table", 0)                                                                                    \
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

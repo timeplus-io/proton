@@ -36,9 +36,7 @@ Chunk StreamingStoreSource::generate()
     assert(reader);
 
     if (isCancelled())
-    {
         return {};
-    }
 
     /// std::unique_lock lock(result_blocks_mutex);
     if (result_chunks.empty() || iter == result_chunks.end())
@@ -46,9 +44,7 @@ Chunk StreamingStoreSource::generate()
         readAndProcess();
 
         if (isCancelled())
-        {
             return {};
-        }
 
         /// After processing blocks, check again to see if there are new results
         if (result_chunks.empty() || iter == result_chunks.end())
@@ -102,7 +98,7 @@ void StreamingStoreSource::readAndProcess()
                 columns.push_back(time_column);
         }
 
-        result_chunks.emplace_back(columns, rows);
+        result_chunks.emplace_back(std::move(columns), rows);
         if (likely(record->block.info.append_time > 0))
         {
             auto chunk_info = std::make_shared<ChunkInfo>();

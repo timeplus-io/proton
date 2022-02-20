@@ -288,7 +288,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
 
 NamesAndTypesList StorageDistributedMergeTree::getVirtuals() const
 {
-    auto names_and_types = MergeTreeData::getVirtuals();
+    NamesAndTypesList names_and_types;
     names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
     names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
     names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
@@ -356,22 +356,37 @@ void StorageDistributedMergeTree::readStreaming(
     Pipes pipes;
     pipes.reserve(shards);
 
-    auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
-
-    /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
-    /// We will need add one
-    Block header;
-    if (!column_names.empty())
-        header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+    const auto & settings_ref = context_->getSettingsRef();
+    auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
+    if (share_resource_group)
+    {
+        for (Int32 i = 0; i < shards; ++i)
+        {
+            if (!column_names.empty())
+                pipes.emplace_back(source_multiplexers->createChannel(shard, column_names, metadata_snapshot, context_));
+            else
+                pipes.emplace_back(source_multiplexers->createChannel(shard, {RESERVED_EVENT_TIME}, metadata_snapshot, context_));
+        }
+    }
     else
-        header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
+    {
+        auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
 
-    auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
+        /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
+        /// We will need add one
+        Block header;
+        if (!column_names.empty())
+            header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+        else
+            header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
 
-    for (Int32 i = 0; i < shards; ++i)
-        pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, offsets[i], consumer, log));
+        auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
 
-    LOG_INFO(log, "Starting reading {} streams by seeking to {}", pipes.size(), context_->getSettingsRef().seek_to.value);
+        for (Int32 i = 0; i < shards; ++i)
+            pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, offsets[i], consumer, log));
+    }
+
+    LOG_INFO(log, "Starting reading {} streams by seeking to {} in {} resource group", pipes.size(), settings_ref.seek_to.value, share_resource_group ? "shared" : "dedicated");
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
 }
@@ -434,6 +449,8 @@ void StorageDistributedMergeTree::startup()
     {
         return;
     }
+
+    source_multiplexers.reset(new StreamingStoreSourceMultiplexers(shared_from_this(), getContext(), log));
 
     initWal();
 

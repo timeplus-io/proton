@@ -531,7 +531,7 @@ bool TaskStatusService::createTaskTable()
     }
     catch (...)
     {
-        LOG_ERROR(log, "Create task table failed. ", getCurrentExceptionMessage(true, true));
+        LOG_ERROR(log, "Create task table failed: {}", getCurrentExceptionMessage(true, true));
         return false;
     }
 

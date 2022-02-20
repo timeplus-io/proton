@@ -2,10 +2,11 @@
 
 #include "DistributedMergeTreeCallbackData.h"
 #include "IngestingBlocks.h"
+#include "StreamingStoreSourceMultiplexer.h"
 
-#include <pcg_random.hpp>
-#include <base/shared_ptr_helper.h>
 #include <base/ClockUtils.h>
+#include <base/shared_ptr_helper.h>
+#include <pcg_random.hpp>
 
 #include <DistributedWALClient/KafkaWAL.h>
 #include <DistributedWALClient/KafkaWALConsumerMultiplexer.h>
@@ -336,6 +337,8 @@ private:
     std::unordered_set<StringRef, StringRefHash> idempotent_keys_index;
 
     std::unique_ptr<DistributedMergeTreeCallbackData> callback_data;
+
+    std::unique_ptr<StreamingStoreSourceMultiplexers> source_multiplexers;
 
     // For random shard index generation
     mutable std::mutex rng_mutex;

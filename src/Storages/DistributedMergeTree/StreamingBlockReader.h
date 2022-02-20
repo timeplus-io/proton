@@ -21,7 +21,7 @@ public:
         Int32 shard_,
         Int64 offset,
         std::vector<uint16_t> column_positions,
-        const DWAL::KafkaWALSimpleConsumerPtr & consumer_,
+        DWAL::KafkaWALSimpleConsumerPtr consumer_,
         Poco::Logger * log_);
 
     ~StreamingBlockReader() override;

@@ -116,11 +116,11 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
     /// calculate settings keep_windows = ceil(last_interval / window_interval)
 //    UInt64 keep_windows
 //        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
-//    if (keep_windows == 0 || keep_windows > settings.max_keep_windows)
+//    if (keep_windows == 0 || keep_windows > settings.max_windows)
 //        throw Exception(
 //            "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
 //            "than or equal to "
-//                + std::to_string(settings.max_keep_windows),
+//                + std::to_string(settings.max_windows),
 //            ErrorCodes::SYNTAX_ERROR);
 
     const auto & old_settings = select_query.settings();
@@ -175,7 +175,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     last_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(last_interval->as<ASTFunction>()));
     if (new_emit_query->periodic_interval)
     {
-        /// check periodic_interval is appropriate value by settings.max_keep_windows
+        /// check periodic_interval is appropriate value by settings.max_windows
         periodic_interval = std::move(new_emit_query->periodic_interval);
         auto periodic_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(periodic_interval->as<ASTFunction>()));
         if (periodic_interval_bs.scale != last_interval_bs.scale)
@@ -187,10 +187,10 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
 
         UInt64 keep_windows
             = (std::abs(last_interval_bs.num_units) + std::abs(periodic_interval_bs.num_units) - 1) / std::abs(periodic_interval_bs.num_units);
-        if (keep_windows == 0 || keep_windows > settings.max_keep_windows)
+        if (keep_windows == 0 || keep_windows > settings.max_windows)
             throw Exception(
                 "Too big range or too small emit interval. Make sure 'range / emit_interval' is less or equal to "
-                    + std::to_string(settings.max_keep_windows),
+                    + std::to_string(settings.max_windows),
                 ErrorCodes::SYNTAX_ERROR);
 
         /// To keep same scale between last interval and periodic interval.
@@ -198,8 +198,8 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     }
     else
     {
-        /// if periodic_interval is omitted, we calculate a appropriate value by settings.max_keep_windows.
-        auto periodic_interval_bs = last_interval_bs / settings.max_keep_windows;
+        /// if periodic_interval is omitted, we calculate a appropriate value by settings.max_windows.
+        auto periodic_interval_bs = last_interval_bs / settings.max_windows;
         periodic_interval = makeASTInterval(periodic_interval_bs.num_units == 0 ? 1 : periodic_interval_bs.num_units, periodic_interval_bs.scale);
 
         /// To keep same scale between last interval and periodic interval.

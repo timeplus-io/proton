@@ -56,6 +56,9 @@ SchemaNativeReader::SchemaNativeReader(DB::ReadBuffer & istr_, uint16_t & schema
 {
 }
 
+/// read guarantee that the returned block has the same column order as request if `column_positions` is
+/// set in schema context. Then clients don't need sort the block any more. If `column_positions` is not set
+/// the returned block has the same column sequence as the schema
 DB::Block SchemaNativeReader::read()
 {
     if (istr.eof())
