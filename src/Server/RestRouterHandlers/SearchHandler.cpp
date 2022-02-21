@@ -116,9 +116,9 @@ bool SearchHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String
     if (payload->has("mode"))
     {
         const auto & mode = payload->getValue<String>("mode");
-        if (mode != "standard" && mode != "verbose" && mode != "hist")
+        if (mode != "standard" && mode != "verbose" && mode != "table")
         {
-            error_msg = fmt::format("Invalid 'mode': {}, only support 'standard', 'verbose', 'hist'", mode);
+            error_msg = fmt::format("Invalid 'mode': {}, only support 'standard', 'verbose', 'table'", mode);
             return false;
         }
     }
