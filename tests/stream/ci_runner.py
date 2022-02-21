@@ -5,7 +5,8 @@ import pytest
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)")
+        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)") 
+
 
 proton_log_in_container = "proton-server:/var/log/proton-server/proton-server.log"
 proton_err_log_in_container = (
@@ -71,7 +72,7 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     retcode = pytest.main(
-        ["-s", "-v", pytest_logging_level_set, '--log-cli-format="%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"', '--log-cli-date-format="%Y-%m-%d %H:%M:%S"', f"--html={report_file_path}", "--self-contained-html"]
+        ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]
     )
 
     with open(".status", "w") as status_result:
@@ -137,7 +138,7 @@ if __name__ == "__main__":
             else:
                 loop = int(value)
         if name in ("--id"):
-            os.environ["PROTON_TEST_IDS"] = value
+            os.environ["PROTON_TEST_IDS"] = value 
     print(f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}")
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter

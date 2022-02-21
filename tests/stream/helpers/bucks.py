@@ -24,7 +24,10 @@ from helpers.rockets import TABLE_CREATE_RECORDS
 from helpers.rockets import TABLE_DROP_RECORDS
 from helpers.rockets import VIEW_CREATE_RECORDS
 
-
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(
+    "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
+)
 
 # alive = mp.Value('b', False)
 # todo: refactoring, Class Test and abstraction of test run logic in Rockets and reuse in performance test scripts.
@@ -86,18 +89,18 @@ def kill_query(proton_client, query_2_kill):
 
     kill_sql = f"kill query where query_id = '{query_2_kill}'"
     # run the timer and then kill the query
-    logging.debug(
+    logger.debug(
         f"kill_query: datetime.now = {datetime.datetime.now()}, kill_sql = {kill_sql}."
     )
     kill_res = proton_client.execute(kill_sql)
-    logging.debug(
+    logger.debug(
         f"kill_query: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res}"
     )
     print(f"kill_query: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res}")
     while len(kill_res):
         time.sleep(0.2)
         kill_res = proton_client.execute(kill_sql)
-        logging.debug(f"kill_query: kill_res = {kill_res}")
+        logger.debug(f"kill_query: kill_res = {kill_res}")
 
 
 def row_reader(csv_file_path):
@@ -181,14 +184,14 @@ def systest_context(config_file=None, tests_file=None):
     if config == None:
         with open(config_file) as f:
             config = json.load(f)
-        # logging.debug(f"rockets_context: config reading from config files: {config}")
+        # logger.debug(f"rockets_context: config reading from config files: {config}")
 
     if config == None:
         raise Exception("No config env vars nor config file")
 
     with open(tests_file) as f:
         test_suite = json.load(f)
-        # logging.debug(f"rockets_systest_context: test_suite = {test_suite}")
+        # logger.debug(f"rockets_systest_context: test_suite = {test_suite}")
 
     rockets_context = {
         "config": config,
@@ -363,7 +366,7 @@ def query_run_py(
 
 
 def query_execute(config, child_conn, query_results_queue, alive):
-    # logging.basicConfig(level=logging.DEBUG, filename="rockets.log")
+    # logging.basicConfig(level=logger.debug, filename="rockets.log")
     # query_result_list = query_result_list
     logger = mp.log_to_stderr()
     logger.setLevel(logging.DEBUG)
@@ -538,7 +541,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
 
 
 def query_walk_through(statements, query_conn=None):
-    logging.debug(f"query_walk_through: start..., statements = {statements}.")
+    logger.debug(f"query_walk_through: start..., statements = {statements}.")
     statement_id_run = 0
     querys_results = []
     query_results_json_str = ""
@@ -564,20 +567,20 @@ def query_walk_through(statements, query_conn=None):
                 "terminate"
             ] = "auto"  # for stream query, by default auto-terminate
 
-        logging.debug(f"query_walk_through: statement = {statement}.")
+        logger.debug(f"query_walk_through: statement = {statement}.")
         if query_end_timer == None:
             query_end_timer = 0
 
         # query_exe_queue.put(statement)
         query_conn.send(statement)
-        logging.debug(
+        logger.debug(
             # f"query_walk_through: statement query_id = {query_id} was pushed into query_exe_queue."
             f"query_walk_through: statement query_id = {query_id} was send to query_execute."
         )
         message_recv = (
             query_conn.recv()
         )  # wait for the message from query_execute to indicate the query process is started.
-        logging.debug(
+        logger.debug(
             f"query_walk_through: message_recv = {message_recv} received after send statement to query_execute"
         )
 
@@ -589,7 +592,7 @@ def query_walk_through(statements, query_conn=None):
         statement_id_run += 1
         # time.sleep(1) # wait the query_execute execute the stream command
 
-    logging.debug(f"query_walk_through: end... stream_query_id = {stream_query_id}")
+    logger.debug(f"query_walk_through: end... stream_query_id = {stream_query_id}")
     return querys_results
 
 
@@ -604,9 +607,9 @@ def clear_case_env(client, test, table_schemas, table_ddl_url):
         if "inputs" in step:
             inputs = step.get("inputs")
             for input in inputs:  # clean table data before each inputs walk through
-                logging.debug(f"rockets_run: input in inputs = {input}")
+                logger.debug(f"rockets_run: input in inputs = {input}")
                 table = input.get("table_name")
-                logging.debug(f"rockets_run: table of input in inputs = {table}")
+                logger.debug(f"rockets_run: table of input in inputs = {table}")
 
                 is_table_reset = find_table_reset_in_table_schemas(table, table_schemas)
                 if is_table_reset != None and is_table_reset == False:
@@ -614,25 +617,25 @@ def clear_case_env(client, test, table_schemas, table_ddl_url):
                 else:
                     res = client.execute(f"drop table {table}")
                     tables.append(table)
-                    logging.debug(f"rockets_run: drop table {table} res = {res}")
+                    logger.debug(f"rockets_run: drop table {table} res = {res}")
 
                     for table_schema in table_schemas:
                         name = table_schema.get("name")
                         if name == table and table_exist(table_ddl_url, table):
-                            logging.debug(
+                            logger.debug(
                                 f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}"
                             )
                             while table_exist(table_ddl_url, table):
-                                logging.debug(
+                                logger.debug(
                                     f"{name} not dropped succesfully yet, wait ..."
                                 )
                                 time.sleep(0.2)
-                            logging.debug(
+                            logger.debug(
                                 f"rockets_run: drop table and re-create once case starts, table {table} is dropped"
                             )
                             res = create_table_rest(table_ddl_url, table_schema)
         if len(tables) > 0:
-            logging.debug(f"tables: {tables} are dropted and recreated.")
+            logger.debug(f"tables: {tables} are dropted and recreated.")
 
 
 def data_prep_csv_2_list(
@@ -647,7 +650,7 @@ def data_prep_csv_2_list(
     batch_size=1,
 ):
 
-    logging.debug(f"data_prep_csv_2_list: copies = {copies}")
+    logger.debug(f"data_prep_csv_2_list: copies = {copies}")
 
     data_set_seed = []  # list, read csv_file and put all lines in
     _list = []  # list created based on data_set seed, add row_id, perf_event_time
@@ -665,18 +668,18 @@ def data_prep_csv_2_list(
     with open(csv_file_path) as csv_file:
         for line in csv.reader(csv_file):
             data_set_seed.append(line)
-    # logging.debug(f"{sys._getframe().f_code.co_name}: data_set_seed = {data_set_seed}")
+    # logger.debug(f"{sys._getframe().f_code.co_name}: data_set_seed = {data_set_seed}")
     data_set_seed_rows = len(data_set_seed)
     seed_play_times = int(rows_2_play / int(data_set_seed_rows)) + 1
     seed_play_mod_rows = rows_2_play % data_set_seed_rows
-    logging.debug(
+    logger.debug(
         f"{sys._getframe().f_code.co_name}: data_set_seed_rows = {data_set_seed_rows}, rows_2_play = {rows_2_play}, seed_play_times = {seed_play_times}"
     )
 
     # now_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     # perf_row_id = int(now_time)
     perf_batch_id = 0
-    logging.debug(f"data_prep_2_list: perf_batch_id = {perf_batch_id} ")
+    logger.debug(f"data_prep_2_list: perf_batch_id = {perf_batch_id} ")
 
     row_count = 0
     j = 0
@@ -708,7 +711,7 @@ def data_prep_csv_2_list(
             perf_event_time = perf_event_time + datetime.timedelta(
                 seconds=time_incre_interval
             )
-            # logging.debug(f"{sys._getframe().f_code.co_name}: line in csv_file after process: {line}")
+            # logger.debug(f"{sys._getframe().f_code.co_name}: line in csv_file after process: {line}")
             i += 1
             if row_count >= rows_2_play:
                 break
@@ -744,7 +747,7 @@ def data_prep_csv_2_list(
 
 
 def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
-    logging.debug(f"input_sql_from_list: batch_size = {batch_size}")
+    logger.debug(f"input_sql_from_list: batch_size = {batch_size}")
     table_columns = ""
     input_sql_list = []
     i = 0  # row_index to identify the fist row as header
@@ -798,13 +801,13 @@ def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
         batch_str = batch_str.replace("'", "'")
         input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
         input_sql_list.append(input_sql)
-    # logging.debug(f"input_sql_from_list: input_sql_list = {input_sql_list}")
+    # logger.debug(f"input_sql_from_list: input_sql_list = {input_sql_list}")
     return input_sql_list
 
 
 """
 def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
-    logging.debug(f"input_sql_from_list: batch_size = {batch_size}")
+    logger.debug(f"input_sql_from_list: batch_size = {batch_size}")
     table_columns = ""
     input_sql_list = []
     i = 0  # row_index to identify the fist row as header
@@ -845,7 +848,7 @@ def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
         batch_str = batch_str[: len(batch_str) - 1]
         input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
         input_sql_list.append(input_sql)
-    # logging.debug(f"input_sql_from_list: input_sql_list = {input_sql_list}")
+    # logger.debug(f"input_sql_from_list: input_sql_list = {input_sql_list}")
     return input_sql_list
 """
 
@@ -865,6 +868,18 @@ def input_client(
     loop_times=0,
 ):
     # print(f"input_from_csv: csv_file_path = {csv_file_path}")
+
+    logger = mp.get_logger()
+
+    # formatter = logging.Formatter(
+    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
+    # )
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+
+    # logger.setLevel(logging.DEBUG)
+
     test_id = source.get("test_id")
     input_id = source.get("input_id")
     table_name = source.get("table_name")
@@ -936,7 +951,7 @@ def input_client(
 
                         batch_str = batch_str[: len(batch_str) - 1]
                         input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
-                        # print(f"input_client: input_sql = {input_sql}")
+                        logger.debug(f"input_client: input_sql = {input_sql}")
                         # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
                         client.execute(input_sql)
 
@@ -979,7 +994,7 @@ def input_walk_through(
     alive=None,
 ):
 
-    # logging.debug(f"input_walk_through: config = {config}, inputs = {inputs}, table_schemas = {table_schemas}, wait_before_inputs = {wait_before_inputs}, sleep_after_inputs = {sleep_after_inputs}, alive = {alive}")
+    # logger.debug(f"input_walk_through: config = {config}, inputs = {inputs}, table_schemas = {table_schemas}, wait_before_inputs = {wait_before_inputs}, sleep_after_inputs = {sleep_after_inputs}, alive = {alive}")
 
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
@@ -1006,12 +1021,12 @@ def input_walk_through(
             )
 
         data_set_file = source.get("data_set_file")
-        logging.debug(f"input_walk_through: data_set_file = {data_set_file}")
+        logger.debug(f"input_walk_through: data_set_file = {data_set_file}")
         if data_set_file != None:
             data_set_file_abspath = data_set_abspath + "/" + data_set_file
 
         assert os.path.exists(data_set_file_abspath)
-        logging.debug(
+        logger.debug(
             f"input_walk_through: data_set_file_abspath = {data_set_file_abspath} is found."
         )
 
@@ -1025,7 +1040,7 @@ def input_walk_through(
         if batch_size != None:
             batch_size = int(batch_size)
 
-        logging.debug(f"input_walk_through: workers = {workers}")
+        logger.debug(f"input_walk_through: workers = {workers}")
 
         data_sets_for_workers = data_prep_csv_2_list(
             data_set_file_abspath,
@@ -1038,7 +1053,7 @@ def input_walk_through(
             batch_size=batch_size,
         )
 
-        # logging.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")
+        # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")
 
         proc_workers = []
         for data_set_dict in data_sets_for_workers:
@@ -1047,8 +1062,8 @@ def input_walk_through(
             agent_id = data_set_dict.get("agent_id")
             input_done = mp.Value("b", False)
             input_tear_down = mp.Value("b", False)
-            # logging.debug(f"{sys._getframe().f_code.co_name}: agent_id = {agent_id}, data_set = {data_set}")
-            # logging.debug(f"worker for agend_id = {agent_id} to be started..., alive = {alive}, alive.value = {alive.value}")
+            # logger.debug(f"{sys._getframe().f_code.co_name}: agent_id = {agent_id}, data_set = {data_set}")
+            # logger.debug(f"worker for agend_id = {agent_id} to be started..., alive = {alive}, alive.value = {alive.value}")
 
             proc = mp.Process(
                 target=input_client,
@@ -1083,7 +1098,7 @@ def input_walk_through(
 def test_suite_run(test_context, proc_target_func=query_execute):
     # todo: split tests.json to test_suite_config.json and tests.json
     alive = mp.Value("b", False)
-    logging.info("rockets_run starts......")
+    logger.info("rockets_run starts......")
     docker_compose_file = test_context.get("docker_compose_file")
     config = test_context.get("config")
     rest_setting = config.get("rest_setting")
@@ -1109,7 +1124,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
 
     alive.value = True
     query_exe_client.start()  # start the query execute process
-    logging.debug(f"q_exec_client: {query_exe_client} started.")
+    logger.debug(f"q_exec_client: {query_exe_client} started.")
     test_suite = test_context.get("test_suite")
     test_suite_config = test_suite.get("test_suite_config")
     table_ddl_url = rest_setting.get("table_ddl_url")
@@ -1129,7 +1144,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
     if tests_2_run == None:  # if tests_2_run is not set, run all tests.
         test_run_list = tests
     else:  # if tests_2_run is set in test_suite_config, run the id list.
-        logging.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
+        logger.debug(f"rockets_run: tests_2_run is configured as {tests_2_run}")
         ids_2_run = tests_2_run.get("ids_2_run")
         tags_2_run = tests_2_run.get("tags_2_run")
         tags_2_skip = tests_2_run.get("tags_2_skip")
@@ -1175,11 +1190,11 @@ def test_suite_run(test_context, proc_target_func=query_execute):
 
         assert len(test_run_list) != 0
 
-        logging.debug(
+        logger.debug(
             f"rockets_run: tests_run_id_list = {test_run_id_list}, {len(tests)} cases in total, {len(test_run_list)} cases to run in total"
         )
 
-    logging.info("rockets_run env_etup done")
+    logger.info("rockets_run env_etup done")
 
     test_id_run = 0
     test_sets = []
@@ -1192,7 +1207,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
         env_setup(
             client, rest_setting, test_suite_config, docker_compose_file, proton_ci_mode
         )
-        logging.info("rockets_run env_etup done")
+        logger.info("rockets_run env_etup done")
 
         test_id_run = 0
         test_sets = []
@@ -1205,13 +1220,15 @@ def test_suite_run(test_context, proc_target_func=query_execute):
             test_name = test_case.get("name")
             input_info_table = test_case.get("input_info_table")
             steps = test_case.get("steps")
-            # logging.debug(f"rockets_run: test_id = {test_id}, test_case = {test_case}, steps = {steps}")
+            # logger.debug(f"rockets_run: test_id = {test_id}, test_case = {test_case}, steps = {steps}")
             expected_results = test_case.get("expected_results")
             step_id = 0
             auto_terminate_queries = []
             # scan steps to find out tables used in inputs and truncate all the tables
 
-            res_clear_case_env =reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test)
+            res_clear_case_env = reset_tables_of_test_inputs(
+                client, table_ddl_url, table_schemas, test
+            )
 
             for step in steps:
                 statements_id = 0
@@ -1223,7 +1240,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                         step_statements, query_conn
                     )
                     statement_result_from_query_execute = query_walk_through_res
-                    logging.debug(
+                    logger.debug(
                         f"rockets_run: query_walk_through_res = {query_walk_through_res}"
                     )
 
@@ -1234,17 +1251,17 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                         for element in statement_result_from_query_execute:
                             statements_results.append(element)
 
-                    logging.info(
+                    logger.debug(
                         f"rockets_run: {test_id_run}, test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
                     )
 
                     statements_id += 1
                 elif "inputs" in step:
                     inputs = step.get("inputs")
-                    logging.info(
+                    logger.info(
                         f"rockets_run: {test_id_run}, test_id = {test_id} inputs = {inputs}"
                     )
-                    logging.debug(f"test_suite_run: alive.value = {alive.value}")
+                    logger.debug(f"test_suite_run: alive.value = {alive.value}")
 
                     input_procs = input_walk_through(
                         config, test_id, inputs, table_schemas, alive=alive
@@ -1266,7 +1283,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                             all_inputs_done = all_inputs_done * flag
                         time.sleep(1)
 
-                    logging.info(
+                    logger.debug(
                         f"rockets_run: {test_id_run}, test_id = {test_id} input_walk_through done, input_record will be written after results_down to avoid impact to perf test"
                     )
                     # time.sleep(0.5) #wait for the data inputs done.
@@ -1279,7 +1296,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                 query_conn.recv()
             )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
 
-            logging.debug(
+            logger.debug(
                 f"rockets_run: mssage_recv from query_execute = {message_recv}"
             )
             assert message_recv == "case_result_done"
@@ -1294,12 +1311,12 @@ def test_suite_run(test_context, proc_target_func=query_execute):
 
         test_sets = result_collect()
     except (BaseException) as error:
-        logging.info("exception:", error)
+        logger.info("exception:", error)
     finally:
         TESTS_QUERY_RESULTS = test_sets
         query_conn.send("tear_down")
         message_recv = query_conn.recv()
-        logging.debug(
+        logger.debug(
             f"test_suite_run: message_recv got after tear down sent = {message_recv}"
         )
         query_results_queue.close()
@@ -1310,7 +1327,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
         alive.value = False
         # q_exec_client.terminate()
         # q_exec_client.join()
-        logging.debug(f"test_suite_run: input processes tear down ......")
+        logger.debug(f"test_suite_run: input processes tear down ......")
         for proc in all_input_procs:
             inpput_tear_down = proc.get("inoput_tear_down")
             input_done = proc.get("input_done")
@@ -1318,7 +1335,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
             del input_tear_down
             del input_done
 
-        logging.debug(f"test_suite_run: query processes tear down ......")
+        logger.debug(f"test_suite_run: query processes tear down ......")
         query_exe_client.join()
 
         return test_sets
@@ -1326,19 +1343,19 @@ def test_suite_run(test_context, proc_target_func=query_execute):
 
 def test_suite_context(config_file=None, tests_file=None, docker_compose_file=None):
     # global alive
-    # logging.debug(f"test_context: proc_target_func = {proc_target_func}, config_file = {config_file}, tests_file = {tests_file}, docker_compose_file = {docker_compose_file}")
+    # logger.debug(f"test_context: proc_target_func = {proc_target_func}, config_file = {config_file}, tests_file = {tests_file}, docker_compose_file = {docker_compose_file}")
     config = env_var_get()
     if config == None:
         with open(config_file) as f:
             config = json.load(f)
-        logging.debug(f"rockets_context: config reading from config files: {config}")
+        logger.debug(f"rockets_context: config reading from config files: {config}")
 
     if config == None:
         raise Exception("No config env vars nor config file")
     # proton_server = config.get("proton_server")
     # proton_server_native_port = config.get("proton_server_native_port")
 
-    logging.debug(f"test_context: tests_file = {tests_file}")
+    logger.debug(f"test_context: tests_file = {tests_file}")
     with open(tests_file) as f:
         test_suite = json.load(f)
 
@@ -1361,30 +1378,27 @@ if __name__ == "__main__":
     cur_file_path = os.path.dirname(os.path.abspath(__file__))
     cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
-    logging_config_file = f"{cur_file_path}/logging.conf"
-    if os.path.exists(logging_config_file):
-        logging.basicConfig(
-            format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
-        )  # todo: add log stuff
-        logging.config.fileConfig(logging_config_file)  # need logging.conf
-        logger = logging.getLogger("rockets")
-    else:
-        logging.info("no logging.conf exists under ../helper, no logging.")
 
-    logging.info("rockets_main starts......")
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+
+    logger.setLevel(logging.INFO)
+
+    logger.info("rockets_main starts......")
 
     argv = sys.argv[1:]  # get -d to specify the test_sutie path
     try:
         opts, args = getopt.getopt(argv, "d:")
     except:
-        logging.info("Error")
+        logger.info("Error")
         sys.exit(2)
 
     for opt, arg in opts:
         if opt in ["-d"]:
             test_suite_path = arg
     if test_suite_path == None:
-        logging.info("No test suite directory specificed by -d, exit.")
+        logger.info("No test suite directory specificed by -d, exit.")
         sys.exit(0)
     config_file = f"{test_suite_path}/configs/config.json"
     tests_file = f"{test_suite_path}/tests.json"
@@ -1396,9 +1410,9 @@ if __name__ == "__main__":
         )  # need to have config env vars/config.json and test.json when run rockets.py as a test debug tooling.
         test_sets = test_suite_run(test_context, query_execute)
         # output the test_sets one by one
-        logging.info("main: ouput test_sets......")
+        logger.info("main: ouput test_sets......")
         # for test_set in test_sets:
         #    test_set_json = json.dumps(test_set)
-        #    logging.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
+        #    logger.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
     else:
-        logging.info("No tests.json exists under test suite folder.")
+        logger.info("No tests.json exists under test suite folder.")

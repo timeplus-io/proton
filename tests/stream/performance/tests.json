@@ -31,20 +31,19 @@
                         "type": "String"
                     },
                     {
-                        "name": "_perf_row_id",
-                        "type": "String"
-                    },
-                    {
-                        "name": "_perf_ingest_time",
-                        "type": "String"
-                    },                     
-                    {
                         "name": "perf_event_time",
                         "type": "Datetime64(3)",
                         "default": "now64(3)"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "String"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "String"
                     }
-                ],
-                "event_time_column":"perf_event_time"
+                ]
             },
 
             {

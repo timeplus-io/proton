@@ -4,6 +4,10 @@ from logging import fatal
 import pytest
 import math
 
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(
+        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)" 
+    )
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from helpers import rockets
@@ -12,7 +16,6 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/configs/config.json"
 tests_file_path = f"{cur_dir}/tests.json"
 docker_compose_file_path = f"{cur_dir}/configs/docker-compose.yaml"
-logger = logging.getLogger(__name__)
 
 
 def pytest_generate_tests(metafunc):
@@ -41,7 +44,19 @@ def test_set(request):
 
 
 
-def query_result_check(test_set, order_check=False):
+def query_result_check(test_set, order_check=False, logging_level="INFO"):
+
+    #formatter = logging.Formatter(
+    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"  
+    #)
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
+    logger.debug(f"query_run_py starts, logging_level = {logging_level}")
+    if logging_level=="INFO":
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.DEBUG)       
     expected_results = test_set.get("expected_results")
     logging.info(f"\n test run: expected_results: {expected_results}")
     statements_results = test_set.get("statements_results")

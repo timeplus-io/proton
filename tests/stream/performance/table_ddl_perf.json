@@ -1,6 +1,5 @@
 {
-    "commments":
-        "'Tests covering the steam query smoke cases.'",
+    "commments": "'Tests covering the steam query smoke cases.'",
     "rest_setting": {
         "table_ddl_url": "'http://localhost:8123/proton/v1/ddl/streams'",
         "ingest_url": "'http://localhost:8123/proton/v1/ingest/streams'",
@@ -15,7 +14,7 @@
     },
     "proton_server": "'localhost'",
     "proton_server_native_port": "9000",
-    "table_schema":         {
+    "table_schema": {
         "name": "test",
         "type": "table",
         "columns": [
@@ -34,7 +33,6 @@
             {
                 "name": "json",
                 "type": "String"
-    
             },
             {
                 "name": "timestamp",
@@ -42,9 +40,9 @@
                 "default": "now64(3)"
             }
         ],
-        "event_time_column":"timestamp"
+        "event_time_column": "timestamp"
     },
-    "table_schemas":[
+    "table_schemas": [
         {
             "name": "test",
             "type": "table",
@@ -64,7 +62,6 @@
                 {
                     "name": "json",
                     "type": "String"
-        
                 },
                 {
                     "name": "timestamp",
@@ -72,10 +69,7 @@
                     "default": "now64(3)"
                 }
             ],
-            "event_time_column":"timestamp"
+            "event_time_column": "timestamp"
         }
-
-    ]             
+    ]
 }
-
-
