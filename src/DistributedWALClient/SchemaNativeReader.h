@@ -21,9 +21,11 @@ public:
     DB::Block read();
 
 private:
-    inline void readPartial(uint16_t columns, uint32_t rows, DB::Block & res);
-    inline void readPartialForRequestFull(uint16_t columns, uint32_t rows, DB::Block & res);
-    inline void readPartialForRequestPartial(uint16_t columns, uint32_t rows, DB::Block & res);
+    inline DB::Block readFullForRequestFull(uint32_t rows, DB::Block res);
+    inline DB::Block readFullForRequestPartial(uint32_t rows, const DB::Block & header);
+    inline DB::Block readPartialForRequestFull(uint16_t columns, uint32_t rows, DB::Block res);
+    inline DB::Block readPartialForRequestPartial(uint16_t columns, uint32_t rows, const DB::Block & header);
+    inline DB::Block sortColumnOrder(DB::Block res);
 
 private:
     DB::ReadBuffer & istr;

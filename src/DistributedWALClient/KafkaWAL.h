@@ -140,7 +140,7 @@ private:
     RdKafkaHandlePtr producer_handle;
     std::unique_ptr<KafkaWALSimpleConsumer> consumer;
 
-    ThreadPool poller;
+    std::unique_ptr<ThreadPool> poller;
 
     Poco::Logger * log;
 

@@ -205,7 +205,7 @@ KafkaWAL::KafkaWAL(std::unique_ptr<KafkaWALSettings> settings_)
     : settings(std::move(settings_))
     , producer_handle(nullptr, rd_kafka_destroy)
     , consumer(std::make_unique<KafkaWALSimpleConsumer>(settings->clone()))
-    , poller(1)
+    , poller(std::make_unique<ThreadPool>(1))
     , log(&Poco::Logger::get("KafkaWAL"))
     , stats{std::make_unique<KafkaWALStats>("producer", log)}
 {
@@ -214,6 +214,7 @@ KafkaWAL::KafkaWAL(std::unique_ptr<KafkaWALSettings> settings_)
 KafkaWAL::~KafkaWAL()
 {
     shutdown();
+    LOG_INFO(log, "dtored");
 }
 
 void KafkaWAL::startup()
@@ -228,7 +229,7 @@ void KafkaWAL::startup()
 
     initProducerHandle();
 
-    poller.scheduleOrThrowOnError([this] { backgroundPollProducer(); });
+    poller->scheduleOrThrowOnError([this] { backgroundPollProducer(); });
 
     consumer->startup();
 
@@ -238,14 +239,14 @@ void KafkaWAL::startup()
 void KafkaWAL::shutdown()
 {
     if (stopped.test_and_set())
-    {
         return;
-    }
 
     LOG_INFO(log, "Stopping");
 
     consumer->shutdown();
-    poller.wait();
+    poller->wait();
+    /// Force thread pool deletion
+    poller.reset();
 
     LOG_INFO(log, "Stopped");
 }
@@ -258,15 +259,12 @@ void KafkaWAL::backgroundPollProducer() const
     /// rd_kafka_poll is polling the delivery report of a message appended
     /// The associated callback will be invoked in this thread
     while (!stopped.test())
-    {
         rd_kafka_poll(producer_handle.get(), settings->message_delivery_async_poll_ms);
-    }
 
     rd_kafka_resp_err_t ret = rd_kafka_flush(producer_handle.get(), 10000);
     if (ret != RD_KAFKA_RESP_ERR_NO_ERROR)
-    {
         LOG_ERROR(log, "Failed to flush kafka, error={}", rd_kafka_err2str(ret));
-    }
+
     LOG_INFO(log, "Polling producer stopped");
 }
 

@@ -38,14 +38,13 @@ KafkaWALPool::KafkaWALPool(DB::ContextPtr global_context_)
 KafkaWALPool::~KafkaWALPool()
 {
     shutdown();
+    LOG_INFO(log, "dtored");
 }
 
 void KafkaWALPool::startup()
 {
     if (!global_context->isDistributedEnv())
-    {
         return;
-    }
 
     if (inited.test_and_set())
     {
@@ -61,14 +60,10 @@ void KafkaWALPool::startup()
     config.keys(SYSTEM_WALS_KEY, sys_WAL_keys);
 
     for (const auto & key : sys_WAL_keys)
-    {
         init(key);
-    }
 
     if (!wals.empty() && default_cluster.empty())
-    {
         throw DB::Exception("Default Kafka WAL cluster is not assigned", DB::ErrorCodes::BAD_ARGUMENTS);
-    }
 
     LOG_INFO(log, "Started");
 }
@@ -76,34 +71,33 @@ void KafkaWALPool::startup()
 void KafkaWALPool::shutdown()
 {
     if (stopped.test_and_set())
-    {
         return;
-    }
 
     LOG_INFO(log, "Stopping");
 
     for (auto & cluster_wals : wals)
-    {
         for (auto & wal : cluster_wals.second.second)
-        {
             wal->shutdown();
-        }
-    }
 
     if (meta_wal)
-    {
         meta_wal->shutdown();
-    }
 
     {
         std::lock_guard lock{streaming_lock};
         for (auto & cluster_consumers: streaming_consumers)
-        {
             for (auto & consumer : cluster_consumers.second.second)
-            {
                 consumer->shutdown();
-            }
-        }
+
+        streaming_consumers.clear();
+    }
+
+    {
+        std::lock_guard lock{multiplexer_mutex};
+        for (auto & cluster_multiplexers : multiplexers)
+            for (auto & multiplexer : cluster_multiplexers.second.second)
+                multiplexer->shutdown();
+
+        multiplexers.clear();
     }
 
     LOG_INFO(log, "Stopped");
@@ -311,17 +305,13 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreaming(const String & clus
 KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(const std::string & cluster_id)
 {
     if (cluster_id.empty() && !default_cluster.empty())
-    {
         return getOrCreateConsumerMultiplexer(default_cluster);
-    }
 
     std::lock_guard lock{multiplexer_mutex};
 
     auto iter = multiplexers.find(cluster_id);
     if (iter == multiplexers.end())
-    {
         throw DB::Exception("Unknown kafka cluster_id=" + cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
-    }
 
     auto & cluster_multiplexers = iter->second.second;
 
@@ -336,9 +326,7 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
     };
 
     if (cluster_multiplexers.empty())
-    {
         return create_multiplexer();
-    }
 
     KafkaWALConsumerMultiplexerPtr * best_multiplexer = nullptr;
 
@@ -353,9 +341,7 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
         }
 
         if (multiplexer.use_count() < best_multiplexer->use_count())
-        {
             best_multiplexer = &multiplexer;
-        }
     }
 
     if (best_multiplexer->use_count() >= 20)
@@ -363,9 +349,7 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
         /// If the best multiplexer's use count reaches 20 (FIXME: configurable), and if we didn't reach
         /// the maximum multiplexers in this Kafka cluster, create a new one to balance the load
         if (cluster_multiplexers.size() < iter->second.first)
-        {
             return create_multiplexer();
-        }
     }
 
     return *best_multiplexer;

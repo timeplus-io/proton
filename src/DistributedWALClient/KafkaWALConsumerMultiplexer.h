@@ -117,7 +117,7 @@ private:
 
     std::unique_ptr<KafkaWALConsumer> consumer;
 
-    ThreadPool poller;
+    std::unique_ptr<ThreadPool> poller;
 
     mutable std::mutex callbacks_mutex;
 

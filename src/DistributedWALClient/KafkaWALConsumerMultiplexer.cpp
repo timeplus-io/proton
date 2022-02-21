@@ -20,7 +20,7 @@ KafkaWALConsumerMultiplexer::KafkaWALConsumerMultiplexer(std::unique_ptr<KafkaWA
     , shared_subscription_flush_threshold_bytes(settings->shared_subscription_flush_threshold_bytes)
     , shared_subscription_flush_threshold_ms(settings->shared_subscription_flush_threshold_ms)
     , consumer(std::make_unique<KafkaWALConsumer>(std::move(settings)))
-    , poller(1)
+    , poller(std::make_unique<ThreadPool>(1))
     , log(&Poco::Logger::get("KafkaWALConsumerMultiplexer"))
 {
 }
@@ -28,6 +28,7 @@ KafkaWALConsumerMultiplexer::KafkaWALConsumerMultiplexer(std::unique_ptr<KafkaWA
 KafkaWALConsumerMultiplexer::~KafkaWALConsumerMultiplexer()
 {
     shutdown();
+    LOG_INFO(log, "dtored");
 }
 
 void KafkaWALConsumerMultiplexer::startup()
@@ -42,7 +43,7 @@ void KafkaWALConsumerMultiplexer::startup()
 
     consumer->startup();
 
-    poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
+    poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
 
     LOG_INFO(log, "Started");
 }
@@ -50,13 +51,13 @@ void KafkaWALConsumerMultiplexer::startup()
 void KafkaWALConsumerMultiplexer::shutdown()
 {
     if (stopped.test_and_set())
-    {
         return;
-    }
 
     LOG_INFO(log, "Stopping");
     consumer->shutdown();
-    poller.wait();
+    poller->wait();
+    /// Force thread pool deletion
+    poller.reset();
     LOG_INFO(log, "Stopped");
 }
 

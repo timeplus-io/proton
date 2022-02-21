@@ -270,9 +270,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
     }
 
     for (Int32 shardId = 0; shardId < shards; ++shardId)
-    {
         slot_to_shard.push_back(shardId);
-    }
 
     if (sharding_key_)
     {
@@ -499,9 +497,7 @@ StorageDistributedMergeTree::~StorageDistributedMergeTree()
 void StorageDistributedMergeTree::shutdown()
 {
     if (stopped.test_and_set())
-    {
         return;
-    }
 
     LOG_INFO(log, "Stopping");
     if (storage)
@@ -509,6 +505,8 @@ void StorageDistributedMergeTree::shutdown()
         if (poller)
         {
             poller->wait();
+            /// Force delete pool
+            poller.reset();
         }
         else
         {
@@ -516,6 +514,13 @@ void StorageDistributedMergeTree::shutdown()
         }
         storage->shutdown();
     }
+
+    if (dwal)
+    {
+        dwal->shutdown();
+        dwal.reset();
+    }
+
     LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
 }
 
@@ -1596,6 +1601,7 @@ void StorageDistributedMergeTree::removeSubscription()
     LOG_INFO(log, "Removed subscription for shard={}", shard);
 
     finalCommit();
+    multiplexer.reset();
 }
 
 String StorageDistributedMergeTree::streamingStorageClusterId() const

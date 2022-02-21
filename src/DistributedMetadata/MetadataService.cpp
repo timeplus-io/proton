@@ -51,24 +51,24 @@ MetadataService::MetadataService(const ContextMutablePtr & global_context_, cons
 MetadataService::~MetadataService()
 {
     shutdown();
+    LOG_INFO(log, "dtored");
 }
 
 void MetadataService::shutdown()
 {
     if (stopped.test_and_set())
-    {
         /// Already shutdown
         return;
-    }
 
     LOG_INFO(log, "Stopping");
 
     preShutdown();
 
     if (pool)
-    {
         pool->wait();
-    }
+
+    pool.reset();
+
     LOG_INFO(log, "Stopped");
 }
 
@@ -194,6 +194,7 @@ void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
 
 void MetadataService::tailingRecords()
 {
+    LOG_INFO(log, "Starting tailing records");
     try
     {
         doTailingRecords();
@@ -206,6 +207,7 @@ void MetadataService::tailingRecords()
             dwal_consume_ctx.topic,
             getCurrentExceptionMessage(true, true));
     }
+    LOG_INFO(log, "Finished tailing records");
 }
 
 void MetadataService::doTailingRecords()
@@ -217,8 +219,6 @@ void MetadataService::doTailingRecords()
     setThreadName(thr_name.c_str());
 
     auto [batch, timeout] = batchSizeAndTimeout();
-
-    LOG_INFO(log, "Starting tailing records");
 
     while (!stopped.test())
     {
@@ -251,9 +251,7 @@ void MetadataService::doTailingRecords()
 void MetadataService::startup()
 {
     if (!global_context->isDistributedEnv())
-    {
         return;
-    }
 
     assert(dwal);
 
@@ -343,5 +341,6 @@ void MetadataService::startup()
     dwal->initProducerTopicHandle(dwal_append_ctx);
 
     postStartup();
+    LOG_INFO(log, "Started up");
 }
 }

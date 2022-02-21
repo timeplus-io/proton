@@ -37,7 +37,7 @@ public:
     static TaskStatusService & instance(const ContextMutablePtr & global_context_);
 
     explicit TaskStatusService(const ContextMutablePtr & global_context_);
-    virtual ~TaskStatusService() override = default;
+    ~TaskStatusService() override = default;
 
     Int32 append(TaskStatusPtr task);
 
