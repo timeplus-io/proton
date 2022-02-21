@@ -15,7 +15,12 @@ namespace ErrorCodes
 
 StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
     UInt32 id_, Int32 shard_, std::shared_ptr<IStorage> storage_, ContextPtr global_context, Poco::Logger * log_)
-    : id(id_), shard(shard_), storage(std::move(storage_)), poller(1), last_metrics_log_time(MonotonicMilliseconds::now()), log(log_)
+    : id(id_)
+    , shard(shard_)
+    , storage(std::move(storage_))
+    , poller(std::make_unique<ThreadPool>(1))
+    , last_metrics_log_time(MonotonicMilliseconds::now())
+    , log(log_)
 {
     auto distributed = storage->as<StorageDistributedMergeTree>();
     assert(distributed);
@@ -23,14 +28,15 @@ StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
     auto consumer = DWAL::KafkaWALPool::instance(global_context).getOrCreateStreaming(distributed->streamingStorageClusterId());
     reader = std::make_shared<StreamingBlockReader>(storage, shard, -1 /*latest*/, std::vector<uint16_t>{}, std::move(consumer), log);
 
-    poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
+    poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
 }
 
 StreamingStoreSourceMultiplexer::~StreamingStoreSourceMultiplexer()
 {
     doShutdown();
 
-    poller.wait();
+    poller->wait();
+    poller.reset();
 
     LOG_INFO(
         log,
@@ -192,7 +198,7 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
     StreamingStoreSourceMultiplexerPtr best_multiplexer;
 
     auto it = iter->second.begin();
-    for (; it != iter->second.end(); )
+    for (; it != iter->second.end();)
     {
         if ((*it)->isShutdown())
         {

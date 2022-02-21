@@ -43,7 +43,7 @@ private:
     std::shared_ptr<IStorage> storage;
     std::shared_ptr<StreamingBlockReader> reader;
 
-    ThreadPool poller;
+    std::unique_ptr<ThreadPool> poller;
     std::atomic<bool> shutdown = false;
 
     mutable std::mutex channels_mutex;

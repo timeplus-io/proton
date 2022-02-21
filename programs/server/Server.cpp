@@ -310,6 +310,14 @@ void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
 }
 /// proton: ends
 
+
+/// Init global singletons to
+void initGlobalSingletons()
+{
+    DB::DataTypeFactory::instance();   /// Fixed occasional crash errors during delayed initialization
+    GlobalThreadPool::instance();
+}
+
 }
 
 namespace DB
@@ -1312,7 +1320,7 @@ if (ThreadFuzzer::instance().isEffective())
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
     /// proton: start. init Distributed metadata services for DistributedMergeTree table engine
-    DataTypeFactory::instance();   /// Fixed occasional crash errors during delayed initialization
+    initGlobalSingletons();
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
     initDistributedMetadataServices(global_context);
