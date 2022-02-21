@@ -75,12 +75,26 @@ namespace
     {
         size_t number_of_arguments = arguments.size();
 
-        if (number_of_arguments < 1 || number_of_arguments > 3)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Number of arguments for function '{}' doesn't match: passed {}, should be from 1,2,3",
-                Name::name,
-                number_of_arguments);
+        if constexpr (std::is_same_v<Name, NameToLag>)
+        {
+            /// lag(column[, offset = 1, default_value])
+            if (number_of_arguments < 1 || number_of_arguments > 3)
+                throw Exception(
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Number of arguments for function '{}' doesn't match: passed {}, should be from 1 or 2 or 3",
+                    Name::name,
+                    number_of_arguments);
+        }
+        else
+        {
+            /// neighbor(column, offset[, default_value])
+            if (number_of_arguments < 2 || number_of_arguments > 3)
+                throw Exception(
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Number of arguments for function '{}' doesn't match: passed {}, should be from 2 or 3",
+                    Name::name,
+                    number_of_arguments);
+        }
 
         // second argument must be an integer
         if (number_of_arguments >= 2)
@@ -132,13 +146,28 @@ namespace
         explicit FunctionStreamingNeighbor(Int64 offset_) : prev_offset(std::abs(offset_)), prev_offset_columns(prev_offset)
         {
             /// Protection from possible overflow.
-            if (offset_ >= 0 || offset_ < -(1 << 30))
-                throw Exception(
-                    ErrorCodes::ARGUMENT_OUT_OF_BOUND,
-                    "Invalid offset: {} in function {}, expected [{}, -1]",
-                    offset_,
-                    getName(),
-                    -(1 << 30));
+            if constexpr (std::is_same_v<Name, NameToLag>)
+            {
+                /// lag [1, 1073741824]
+                if (offset_ <= 0 || offset_ > (1 << 30))
+                    throw Exception(
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND,
+                        "Invalid offset: {} in function {}, expected [1, {}]",
+                        offset_,
+                        getName(),
+                        1 << 30);
+            }
+            else
+            {
+                /// neighbor [-1073741824, -1]
+                if (offset_ >= 0 || offset_ < -(1 << 30))
+                    throw Exception(
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND,
+                        "Invalid offset: {} in function {}, expected [{}, -1]",
+                        offset_,
+                        getName(),
+                        -(1 << 30));
+            }
         }
 
         /// Get the name of the function.
@@ -260,9 +289,8 @@ namespace
         FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
         {
             /// Check ahead in `getReturnTypeImpl`
-            /// neighbor(column, [offset = -1, default_value])
-            assert(arguments.size() >= 1);
-            Int64 offset = -1;
+            /// lag(column, [offset = 1, default_value])
+            Int64 offset = 1;
             if (arguments.size() > 1)
             {
                 const auto * offset_col = checkAndGetColumn<ColumnConst>(arguments[1].column.get());
