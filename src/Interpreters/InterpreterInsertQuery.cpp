@@ -295,17 +295,31 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     /// for example, `_tp_time DateTime64(3) DEFAULT to_timestamp(json_extract(json_column, 'timestamp'))`
 
     /// required columns include columns users ingest and columns with default values / value expression
-    auto header{metadata_snapshot->getSampleBlockNonMaterialized()};
-    auto required_columns{query_sample_block.getNamesAndTypesList()};
-    for (const auto & column : metadata_snapshot->getColumns())
+    auto header{metadata_snapshot->getSampleBlock()};
+
+    /// We would like sort required columns according to their positions in schema. We like the block serialized
+    /// in this order as well. The deserialization assume full column position order is in schema order
+    std::map<size_t, NameAndTypePair> sorted_required_columns;
+    for (size_t pos = 0; const auto & column : metadata_snapshot->getColumns())
     {
-        if (column.default_desc.expression && !query_sample_block.has(column.name))
+        const auto * col = query_sample_block.findByName(column.name);
+        if (col)
         {
-            const auto * col = header.findByName(column.name);
-            assert(col);
-            required_columns.emplace_back(col->name, col->type);
+            sorted_required_columns.emplace(pos, NameAndTypePair(col->name, col->type));
         }
+        else if (column.default_desc.expression)
+        {
+            /// We don't support materialized columns yet: column.default_desc.kind == ColumnDefaultKind::Materialized
+            col = header.findByName(column.name);
+            assert(col);
+            sorted_required_columns.emplace(pos, NameAndTypePair(col->name, col->type));
+        }
+        ++pos;
     }
+
+    NamesAndTypesList required_columns;
+    for (auto & pos_name_type : sorted_required_columns)
+        required_columns.push_back(std::move(pos_name_type.second));
 
     auto adding_missing_defaults_dag = addMissingDefaultsWithDefaults(
         query_sample_block,
