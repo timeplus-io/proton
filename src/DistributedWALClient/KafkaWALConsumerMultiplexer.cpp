@@ -220,9 +220,7 @@ void KafkaWALConsumerMultiplexer::handleResult(ConsumeResult result) const
     std::unordered_map<std::string, RecordPtrs> all_topic_records;
 
     for (auto & record : result.records)
-    {
         all_topic_records[record->topic].push_back(std::move(record));
-    }
 
     for (auto & topic_records : all_topic_records)
     {

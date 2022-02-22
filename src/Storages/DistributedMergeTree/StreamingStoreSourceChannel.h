@@ -31,7 +31,6 @@ public:
 
 private:
     void readAndProcess();
-    void handleCancel();
     void calculateColumnPositions(const Block & header, const Block & schema);
 
 private:

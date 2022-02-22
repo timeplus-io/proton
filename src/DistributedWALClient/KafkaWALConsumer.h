@@ -64,11 +64,12 @@ private:
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
     std::atomic_flag consume_stopped = ATOMIC_FLAG_INIT;
 
+    KafkaWALStatsPtr stats;
+
     RdKafkaHandlePtr consumer_handle;
 
     Poco::Logger * log;
 
-    KafkaWALStatsPtr stats;
 };
 
 using KafkaWALConsumerPtr = std::shared_ptr<KafkaWALConsumer>;

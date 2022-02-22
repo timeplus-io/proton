@@ -78,9 +78,6 @@ void StreamingStoreSourceChannel::readAndProcess()
         return;
     }
 
-    /// 1) Insert raw blocks to in-memory aggregation table
-    /// 2) Select the final result from the aggregated table
-    /// 3) Update result_blocks and iterator
     result_chunks.clear();
     result_chunks.reserve(records.size());
 

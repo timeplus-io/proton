@@ -123,9 +123,7 @@ initRdKafkaHandle(rd_kafka_type_t type, KConfParams & params, KafkaWALStats * st
     }
 
     if (cb_setup)
-    {
         cb_setup(kconf.get());
-    }
 
     rd_kafka_conf_set_opaque(kconf.get(), stats);
 

@@ -16,6 +16,7 @@ public:
     StreamingStoreSource(
         std::shared_ptr<IStorage> storage_,
         const Block & header,
+        const StorageMetadataPtr & metadata_snapshot_,
         ContextPtr context_,
         Int32 shard_,
         Int64 offset,
@@ -34,14 +35,14 @@ private:
 private:
     std::shared_ptr<IStorage> storage;
     ContextPtr context;
-    Names column_names;
-
-    std::vector<std::pair<Int32, std::function<Int64(const BlockInfo &)>>> virtual_time_columns_calc;
-
-    /// These virtual columns have the same Int64 type
-    DataTypePtr virtual_col_type;
 
     Chunk header_chunk;
+
+    std::vector<size_t> column_positions;
+    std::vector<std::function<Int64(const BlockInfo &)>> virtual_time_columns_calc;
+    size_t total_physical_columns_in_schema = 0;
+    /// These virtual columns have the same Int64 type
+    DataTypePtr virtual_col_type;
 
     Int32 shard;
     DWAL::KafkaWALSimpleConsumerPtr consumer;

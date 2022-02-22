@@ -28,13 +28,14 @@ KafkaWALConsumer::KafkaWALConsumer(std::unique_ptr<KafkaWALSettings> settings_)
     : settings(std::move(settings_))
     , consumer_handle(nullptr, rd_kafka_destroy)
     , log(&Poco::Logger::get("KafkaWALConsumer"))
-    , stats(std::make_unique<KafkaWALStats>("consumer", log))
 {
+    stats.reset(new KafkaWALStats("consumer", log));
 }
 
 KafkaWALConsumer::~KafkaWALConsumer()
 {
     shutdown();
+    LOG_INFO(log, "dtor");
 }
 
 void KafkaWALConsumer::startup()
@@ -55,12 +56,11 @@ void KafkaWALConsumer::startup()
 void KafkaWALConsumer::shutdown()
 {
     if (stopped.test_and_set())
-    {
         return;
-    }
 
     LOG_INFO(log, "Stopping");
     stopConsume();
+    consumer_handle.reset();
     LOG_INFO(log, "Stopped");
 }
 
@@ -116,8 +116,8 @@ void KafkaWALConsumer::initHandle()
     consumer_handle = initRdKafkaHandle(RD_KAFKA_CONSUMER, consumer_params, stats.get(), cb_setup);
 
     /// Forward all events from main queue to consumer queue
-    /// rd_kafka_poll shall not be invoked after this forwarding. After the fowarding,
-    /// invoking rd_kafka_consumer_poll perodically will trigger error_cb, stats_cb, throttle_ct
+    /// rd_kafka_poll shall not be invoked after this forwarding. After the forwarding,
+    /// invoking rd_kafka_consumer_poll periodically will trigger error_cb, stats_cb, throttle_ct
     /// etc callbacks ?
     /// https://github.com/edenhill/librdkafka/blob/master/INTRODUCTION.md#threads-and-callbacks
     rd_kafka_poll_set_consumer(consumer_handle.get());
@@ -174,13 +174,9 @@ ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms, std:
 {
     ConsumeResult result;
     if (count > 100)
-    {
         result.records.reserve(100);
-    }
     else
-    {
         result.records.reserve(count);
-    }
 
     auto abs_time = DB::MonotonicMilliseconds::now() + timeout_ms;
 

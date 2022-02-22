@@ -37,7 +37,6 @@
 #include <Columns/ColumnLowCardinality.h>
 
 /// proton: starts
-#include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/StreamingTwoLevelHashMap.h>
 

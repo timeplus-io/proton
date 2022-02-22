@@ -10,6 +10,7 @@ namespace DB
 StreamingStoreSource::StreamingStoreSource(
     std::shared_ptr<IStorage> storage_,
     const Block & header,
+    const StorageMetadataPtr & metadata_snapshot_,
     ContextPtr context_,
     Int32 shard_,
     Int64 offset,
@@ -17,16 +18,24 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : SourceWithProgress(header)
     , context(std::move(context_))
-    , column_names(header.getNames())
     , header_chunk(header.getColumns(), 0)
+    , column_positions(header.columns(), 0)
+    , virtual_time_columns_calc(header.columns(), nullptr)
     , shard(shard_)
     , consumer(std::move(consumer_))
     , log(log_)
 {
     /// FIXME, when we have multi-version of schema, the header and the schema may be mismatched
-    auto schema(storage_->getInMemoryMetadataPtr()->getSampleBlock());
-    reader = std::make_unique<StreamingBlockReader>(std::move(storage_), shard, offset, calculateColumnPositions(header, schema), consumer, log);
+    auto schema(metadata_snapshot_->getSampleBlock());
+    reader = std::make_unique<StreamingBlockReader>(
+        std::move(storage_), shard, offset, calculateColumnPositions(header, schema), consumer, log);
     iter = result_chunks.begin();
+
+    if (context->getSettingsRef().record_consume_batch_count != 0)
+        record_consume_batch_count = context->getSettingsRef().record_consume_batch_count;
+
+    if (context->getSettingsRef().record_consume_timeout != 0)
+        record_consume_timeout = context->getSettingsRef().record_consume_timeout;
 
     last_flush_ms = MonotonicMilliseconds::now();
 }
@@ -72,9 +81,6 @@ void StreamingStoreSource::readAndProcess()
     if (records.empty())
         return;
 
-    /// 1) Insert raw blocks to in-memory aggregation table
-    /// 2) Select the final result from the aggregated table
-    /// 3) Update result_blocks and iterator
     result_chunks.clear();
     result_chunks.reserve(records.size());
 
@@ -85,17 +91,20 @@ void StreamingStoreSource::readAndProcess()
         Block & block = record->block;
         auto rows = block.rows();
 
-        for (const auto & name : column_names)
-            columns.push_back(std::move(block.getByName(name).column));
+        assert (column_positions.size() >= block.columns());
 
-        for (const auto & item : virtual_time_columns_calc)
+        for (size_t index = 0; auto & column : block)
         {
-            auto ts = item.second(block.info);
-            auto time_column = virtual_col_type->createColumnConst(rows, ts);
-            if (static_cast<Int32>(columns.size()) > item.first)
-                columns.insert(columns.begin() + item.first, time_column);
-            else
-                columns.push_back(time_column);
+            if (column_positions[index] > total_physical_columns_in_schema)
+            {
+                /// The current column to return is a virtual column which needs be calculated lively
+                assert(virtual_time_columns_calc[column_positions[index] - total_physical_columns_in_schema]);
+                auto ts = virtual_time_columns_calc[column_positions[index] - total_physical_columns_in_schema](block.info);
+                auto time_column = virtual_col_type->createColumnConst(rows, ts);
+                columns.push_back(std::move(time_column));
+            }
+            columns.push_back(std::move(column.column));
+            ++index;
         }
 
         result_chunks.emplace_back(std::move(columns), rows);
@@ -111,43 +120,54 @@ void StreamingStoreSource::readAndProcess()
 
 std::vector<uint16_t> StreamingStoreSource::calculateColumnPositions(const Block & header, const Block & schema)
 {
-    std::vector<uint16_t> column_positions;
-    column_positions.reserve(column_names.size());
+    total_physical_columns_in_schema = schema.columns();
 
-    for (Int32 pos = 0, size = column_names.size(); pos < size; ++pos)
+    /// Column positions to read from file system
+    std::vector<uint16_t> column_positions_to_read;
+    column_positions_to_read.reserve(header.columns());
+
+    for (size_t pos = 0; const auto & column : header)
     {
-        if (column_names[pos] == RESERVED_APPEND_TIME)
-            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.append_time; });
-        else if (column_names[pos] == RESERVED_INGEST_TIME)
-            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.ingest_time; });
-        else if (column_names[pos] == RESERVED_CONSUME_TIME)
-            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo & bi) { return bi.consume_time; });
-        else if (column_names[pos] == RESERVED_PROCESS_TIME)
-            virtual_time_columns_calc.emplace_back(pos, [](const BlockInfo &) { return UTCMilliseconds::now(); });
+        if (column.name == RESERVED_APPEND_TIME)
+        {
+            virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.append_time; };
+            column_positions[pos] = pos + total_physical_columns_in_schema;
+        }
+        else if (column.name == RESERVED_INGEST_TIME)
+        {
+            virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.ingest_time; };
+            column_positions[pos] = pos + total_physical_columns_in_schema;
+        }
+        else if (column.name == RESERVED_CONSUME_TIME)
+        {
+            virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.consume_time; };
+            column_positions[pos] = pos + total_physical_columns_in_schema;
+        }
+        else if (column.name == RESERVED_PROCESS_TIME)
+        {
+            virtual_time_columns_calc[pos] = [](const BlockInfo &) { return UTCMilliseconds::now(); };
+            column_positions[pos] = pos + total_physical_columns_in_schema;
+        }
         else
         {
-            /// FIXME, schema version
-            column_positions.push_back(schema.getPositionByName(column_names[pos]));
+            /// FIXME, schema version. For non virtual
+            column_positions[pos] = schema.getPositionByName(column.name);
+            column_positions_to_read.push_back(column_positions[pos]);
+        }
+
+        ++pos;
+    }
+
+    for (size_t i = 0; i < virtual_time_columns_calc.size(); ++i)
+    {
+        if (virtual_time_columns_calc[i])
+        {
+            /// We are assuming all virtual timestamp columns have the same data type
+            virtual_col_type = header.getByPosition(i).type;
+            break;
         }
     }
 
-    std::sort(virtual_time_columns_calc.begin(), virtual_time_columns_calc.end(), [](const auto & lhs, const auto & rhs) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return lhs.first < rhs.first;
-    });
-
-    /// Remove the streaming virtual columns since we will handle it here specially
-    for (auto item = virtual_time_columns_calc.rbegin(); item != virtual_time_columns_calc.rend(); ++item)
-        column_names.erase(column_names.begin() + item->first);
-
-    if (!virtual_time_columns_calc.empty())
-        virtual_col_type = header.getByPosition(virtual_time_columns_calc[0].first).type;
-
-    if (context->getSettingsRef().record_consume_batch_count != 0)
-        record_consume_batch_count = context->getSettingsRef().record_consume_batch_count;
-
-    if (context->getSettingsRef().record_consume_timeout != 0)
-        record_consume_timeout = context->getSettingsRef().record_consume_timeout;
-
-    return column_positions;
+    return column_positions_to_read;
 }
 }

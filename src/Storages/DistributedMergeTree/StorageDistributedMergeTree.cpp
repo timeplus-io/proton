@@ -381,7 +381,7 @@ void StorageDistributedMergeTree::readStreaming(
         auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
 
         for (Int32 i = 0; i < shards; ++i)
-            pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, context_, i, offsets[i], consumer, log));
+            pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, i, offsets[i], consumer, log));
     }
 
     LOG_INFO(log, "Starting reading {} streams by seeking to {} in {} resource group", pipes.size(), settings_ref.seek_to.value, share_resource_group ? "shared" : "dedicated");
