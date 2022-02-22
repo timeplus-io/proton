@@ -305,7 +305,9 @@ namespace
     String getDataPathInBackup(const DatabaseAndTableName & table_name)
     {
         if (table_name.first.empty() || table_name.second.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Database name and table name must not be empty");
+            /// proton: starts
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Database name and stream name must not be empty");
+            /// proton: ends
         assert(!table_name.first.empty() && !table_name.second.empty());
         return String{"data/"} + escapeForFileName(table_name.first) + "/" + escapeForFileName(table_name.second) + "/";
     }
@@ -323,7 +325,9 @@ namespace
     String getMetadataPathInBackup(const DatabaseAndTableName & table_name)
     {
         if (table_name.first.empty() || table_name.second.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Database name and table name must not be empty");
+            /// proton: starts
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Database name and stream name must not be empty");
+            /// proton: ends
         return String{"metadata/"} + escapeForFileName(table_name.first) + "/" + escapeForFileName(table_name.second) + ".sql";
     }
 
@@ -486,10 +490,12 @@ namespace
                             }
                             else
                             {
+                                /// proton: starts
                                 String error_message = (new_table_name.first == DatabaseCatalog::TEMPORARY_DATABASE)
-                                    ? ("Temporary table " + backQuoteIfNeed(new_table_name.second) + " already exists")
-                                    : ("Table " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
+                                    ? ("Temporary stream " + backQuoteIfNeed(new_table_name.second) + " already exists")
+                                    : ("Stream " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
                                        + " already exists");
+                                /// proton: ends
                                 throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_TABLE);
                             }
                         }
@@ -512,10 +518,12 @@ namespace
 
             if (!storage)
             {
+                /// proton: starts
                 String error_message = (new_table_name.first == DatabaseCatalog::TEMPORARY_DATABASE)
-                    ? ("Could not create temporary table " + backQuoteIfNeed(new_table_name.second) + " for restoring")
-                    : ("Could not create table " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
+                    ? ("Could not create temporary stream " + backQuoteIfNeed(new_table_name.second) + " for restoring")
+                    : ("Could not create stream " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
                        + " for restoring");
+                /// proton: ends
                 throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_TABLE);
             }
 

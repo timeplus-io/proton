@@ -580,7 +580,9 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         res.flattenNested();
 
     if (res.getAllPhysical().empty())
-        throw Exception{"Cannot CREATE table without physical columns", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED};
+        /// proton: starts
+        throw Exception{"Cannot CREATE stream without physical columns", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED};
+        /// proton: ends
 
     return res;
 }
@@ -605,7 +607,9 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::getTableProperti
     if (create.columns_list)
     {
         if (create.as_table_function && (create.columns_list->indices || create.columns_list->constraints))
-            throw Exception("Indexes and constraints are not supported for table functions", ErrorCodes::INCORRECT_QUERY);
+            /// proton: starts
+            throw Exception("Indexes and constraints are not supported for the current engine", ErrorCodes::INCORRECT_QUERY);
+            /// proton: ends
 
         if (create.columns_list->columns)
         {
@@ -727,9 +731,11 @@ void InterpreterCreateQuery::validateTableStructure(const ASTCreateQuery & creat
             const auto & type = name_and_type_pair.type->getName();
             if (type == "MultiPolygon" || type == "Polygon" || type == "Ring" || type == "Point")
             {
-                String message = "Cannot create table with column '" + name_and_type_pair.name + "' which type is '"
+                /// proton: starts
+                String message = "Cannot create stream with column '" + name_and_type_pair.name + "' which type is '"
                                  + type + "' because experimental geo types are not allowed. "
                                  + "Set setting allow_experimental_geo_types = 1 in order to allow it.";
+                /// proton: ends
                 throw Exception(message, ErrorCodes::ILLEGAL_COLUMN);
             }
         }
@@ -772,14 +778,18 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
         const String qualified_name = backQuoteIfNeed(as_database_name) + "." + backQuoteIfNeed(as_table_name);
 
         if (as_create.is_ordinary_view)
+            /// proton: starts
             throw Exception(
-                "Cannot CREATE a table AS " + qualified_name + ", it is a View",
+                "Cannot CREATE a stream AS " + qualified_name + ", it is a View",
                 ErrorCodes::INCORRECT_QUERY);
+            /// proton: ends
 
         if (as_create.is_dictionary)
+            /// proton: starts
             throw Exception(
-                "Cannot CREATE a table AS " + qualified_name + ", it is a Dictionary",
+                "Cannot CREATE a stream AS " + qualified_name + ", it is a Dictionary",
                 ErrorCodes::INCORRECT_QUERY);
+            /// proton: ends
 
         if (as_create.storage)
             create.set(create.storage, as_create.storage->ptr());
@@ -814,7 +824,9 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
         && !internal)
     {
         if (create.uuid == UUIDHelpers::Nil)
-            throw Exception("Table UUID is not specified in DDL log", ErrorCodes::LOGICAL_ERROR);
+            /// proton: starts
+            throw Exception("Stream UUID is not specified in DDL log", ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
     }
 
     bool from_path = create.attach_from_path.has_value();
@@ -823,18 +835,20 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
     {
         if (create.attach && !from_path && create.uuid == UUIDHelpers::Nil)
         {
+            /// proton: starts
             throw Exception(ErrorCodes::INCORRECT_QUERY,
                             "Incorrect ATTACH {} query for Atomic database engine. "
                             "Use one of the following queries instead:\n"
                             "1. ATTACH {} {};\n"
-                            "2. CREATE {} {} <table definition>;\n"
-                            "3. ATTACH {} {} FROM '/path/to/data/' <table definition>;\n"
-                            "4. ATTACH {} {} UUID '<uuid>' <table definition>;",
+                            "2. CREATE {} {} <stream definition>;\n"
+                            "3. ATTACH {} {} FROM '/path/to/data/' <stream definition>;\n"
+                            "4. ATTACH {} {} UUID '<uuid>' <stream definition>;",
                             kind_upper,
                             kind_upper, create.table,
                             kind_upper, create.table,
                             kind_upper, create.table,
                             kind_upper, create.table);
+            /// proton: ends
         }
 
         generateUUIDForTable(create);
@@ -876,8 +890,10 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     {
         if (create.storage->engine->name == "DistributedMergeTree")
         {
+            /// proton: starts
             throw Exception(
-                "Distributed environment is not setup. Unable to create table with the current engine", ErrorCodes::CONFIG_ERROR);
+                "Distributed environment is not setup. Unable to create stream with the current engine", ErrorCodes::CONFIG_ERROR);
+            /// proton: ends
         }
         return false;
     }
@@ -921,11 +937,13 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
         if (create.if_not_exists)
             return true;
         else
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists", create.getDatabase(), create.getTable());
+            /// proton: starts
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists", create.getDatabase(), create.getTable());
+            /// proton: ends
     }
 
     /// More verification happened in storage engine creation
-    /// `relative_data_path = ""` means the table is virtual which doesn't
+    /// `relative_data_path = ""` means the stream is virtual which doesn't
     /// bind to any file system data / metadata
     auto res = StorageFactory::instance().get(
         create, "" /* virtual */, ctx, ctx->getGlobalContext(), properties.columns, properties.constraints, false);
@@ -933,13 +951,13 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     auto *storage = static_cast<StorageDistributedMergeTree *>(res.get());
     if (storage->currentShard() >= 0)
     {
-        LOG_INFO(log, "Local table creation with shard assigned");
+        LOG_INFO(log, "Local stream creation with shard assigned");
 
         return false;
     }
 
     auto query = queryToString(create);
-    LOG_INFO(log, "Creating table query={} query_id={}", query, ctx->getCurrentQueryId());
+    LOG_INFO(log, "Creating stream query={} query_id={}", query, ctx->getCurrentQueryId());
 
     std::vector<std::pair<String, String>> string_cols
         = {{"payload", payload},
@@ -960,7 +978,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, DWAL::OpCode::CREATE_TABLE, log);
 
-    LOG_INFO(log, "Request of creating table query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
+    LOG_INFO(log, "Request of creating stream query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
     /// If is a internal create query or synchronous DDL is enabled, sync create task status
     waitForDDLOps(log, ctx, internal);
@@ -1101,11 +1119,13 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     else if (create.attach && !create.attach_short_syntax && getContext()->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY)
     {
         auto * log = &Poco::Logger::get("InterpreterCreateQuery");
-        LOG_WARNING(log, "ATTACH STREAM query with full table definition is not recommended: "
-                         "use either ATTACH STREAM {}; to attach existing table "
-                         "or CREATE STREAM {} <table definition>; to create new table "
-                         "or ATTACH STREAM {} FROM '/path/to/data/' <table definition>; to create new table and attach data.",
+        /// proton: starts
+        LOG_WARNING(log, "ATTACH STREAM query with full stream definition is not recommended: "
+                         "use either ATTACH STREAM {}; to attach existing stream "
+                         "or CREATE STREAM {} <stream definition>; to create new stream "
+                         "or ATTACH STREAM {} FROM '/path/to/data/' <stream definition>; to create new stream and attach data.",
                          create.getTable(), create.getTable(), create.getTable());
+        /// proton: ends
     }
 
     if (!create.temporary && !create.database)
@@ -1265,9 +1285,11 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     }
 
     if (from_path && !res->storesDataOnDisk())
+        /// proton: starts
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "ATTACH ... FROM ... query is not supported for {} table engine, "
-                        "because such tables do not store any data on disk. Use CREATE instead.", res->getName());
+                        "ATTACH ... FROM ... query is not supported for {} engine, "
+                        "because such streams do not store any data on disk. Use CREATE instead.", res->getName());
+        /// proton: ends
 
     database->createTable(getContext(), create.getTable(), res, query_ptr);
 
@@ -1282,7 +1304,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     ///
     /// Method "startup" may create background tasks and method "shutdown" will wait for them.
     /// But if "shutdown" is called before "startup", it will exit early, because there are no background tasks to wait.
-    /// Then background task is created by "startup" method. And when destructor of a table object is called, background task is still active,
+    /// Then background task is created by "startup" method. And when destructor of a stream object is called, background task is still active,
     /// and the task will use references to freed data.
 
     /// Also note that "startup" method is exception-safe. If exception is thrown from "startup",

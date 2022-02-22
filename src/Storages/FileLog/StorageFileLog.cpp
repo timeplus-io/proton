@@ -101,7 +101,9 @@ void StorageFileLog::loadMetaFiles(bool attach)
         if (!std::filesystem::exists(root_meta_path))
         {
             /// Create root_meta_path directory when store meta data
-            LOG_ERROR(log, "Metadata files of table {} are lost.", getStorageID().getTableName());
+            /// proton: starts
+            LOG_ERROR(log, "Metadata files of stream {} are lost.", getStorageID().getTableName());
+            /// proton: ends
         }
         /// Load all meta info to file_infos;
         deserialize();
@@ -325,7 +327,9 @@ Pipe StorageFileLog::read(
     /// No files to parse
     if (file_infos.file_names.empty())
     {
-        LOG_WARNING(log, "There is a idle table named {}, no files need to parse.", getName());
+        /// proton: starts
+        LOG_WARNING(log, "There is a idle stream named {}, no files need to parse.", getName());
+        /// proton: ends
         return Pipe{};
     }
 
@@ -658,14 +662,18 @@ bool StorageFileLog::streamToViews()
     auto table_id = getStorageID();
     auto table = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (!table)
-        throw Exception("Engine table " + table_id.getNameForLogs() + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Engine " + table_id.getNameForLogs() + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
     auto max_streams_number = std::min<UInt64>(filelog_settings->max_threads.value, file_infos.file_names.size());
     /// No files to parse
     if (max_streams_number == 0)
     {
-        LOG_INFO(log, "There is a idle table named {}, no files need to parse.", getName());
+        /// proton: starts
+        LOG_INFO(log, "There is a idle stream named {}, no files need to parse.", getName());
+        /// proton: ends
         return updateFileInfos();
     }
 

@@ -113,8 +113,10 @@ Block InterpreterInsertQuery::getSampleBlock(
     {
         /// The table does not have a column with that name
         if (!table_sample.has(current_name))
-            throw Exception("No such column " + current_name + " in table " + table->getStorageID().getNameForLogs(),
+            /// proton: starts
+            throw Exception("No such column " + current_name + " in stream " + table->getStorageID().getNameForLogs(),
                 ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            /// proton: ends
 
         if (!allow_materialized && !table_sample_non_materialized.has(current_name))
             throw Exception("Cannot insert column " + current_name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);

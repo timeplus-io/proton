@@ -151,9 +151,11 @@ void StorageDictionary::checkTableCanBeDropped() const
             "Cannot drop/detach dictionary {} as table, use DROP DICTIONARY or DETACH DICTIONARY query instead",
             dictionary_name);
     if (location == Location::DictionaryDatabase)
+        /// proton: starts
         throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_TABLE,
-            "Cannot drop/detach table from a database with DICTIONARY engine, use DROP DICTIONARY or DETACH DICTIONARY query instead",
+            "Cannot drop/detach stream from a database with DICTIONARY engine, use DROP DICTIONARY or DETACH DICTIONARY query instead",
             dictionary_name);
+        /// proton: ends
 }
 
 void StorageDictionary::checkTableCanBeDetached() const

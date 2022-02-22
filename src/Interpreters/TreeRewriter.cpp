@@ -537,7 +537,9 @@ void getArrayJoinedColumns(ASTPtr & query, TreeRewriterResult & result, const AS
                 }
             }
             if (!found)
-                throw Exception("No columns in nested table " + source_name, ErrorCodes::EMPTY_NESTED_TABLE);
+                /// proton: starts
+                throw Exception("No columns in nested stream " + source_name, ErrorCodes::EMPTY_NESTED_TABLE);
+                /// proton: ends
         }
     }
 }

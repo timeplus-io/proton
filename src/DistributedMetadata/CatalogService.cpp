@@ -91,7 +91,7 @@ void CatalogService::broadcast()
     }
     catch (...)
     {
-        LOG_ERROR(log, "Failed to execute table query, error={}", getCurrentExceptionMessage(true, true));
+        LOG_ERROR(log, "Failed to execute query, error={}", getCurrentExceptionMessage(true, true));
     }
 }
 
@@ -135,7 +135,7 @@ void CatalogService::append(Block && block)
         return;
     }
 
-    LOG_INFO(log, "Appended {} table definitions in one block", record.block.rows());
+    LOG_INFO(log, "Appended {} stream definitions in one block", record.block.rows());
 }
 
 std::vector<String> CatalogService::databases() const
@@ -228,7 +228,7 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
 
     if (!ast)
     {
-        LOG_ERROR(log, "Failed to parse table creation query={} error={}", query, error_message);
+        LOG_ERROR(log, "Failed to parse stream creation query={} error={}", query, error_message);
         return nullptr;
     }
 
@@ -249,7 +249,7 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
     }
     else
     {
-        LOG_INFO(log, "Table was deleted during virtual table storage creation, database={} table={}", database, table);
+        LOG_INFO(log, "Stream was deleted during virtual stream storage creation, database={} table={}", database, table);
         return nullptr;
     }
 }
@@ -404,7 +404,7 @@ String CatalogService::getColumnType(const String & database, const String & tab
         }
     }
 
-    throw Exception("Could not found the column : " + column + " in table : " + table, ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+    throw Exception("Could not found the column : " + column + " in stream : " + table, ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
 }
 
 void CatalogService::deleteCatalogForNode(const NodePtr & node)

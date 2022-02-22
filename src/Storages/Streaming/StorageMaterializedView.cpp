@@ -279,7 +279,7 @@ void StorageMaterializedView::startup()
         /// It means that failed "startup" must not create any background tasks that we will have to wait.
         shutdown();
 
-        /// Note: after failed "startup", the table will be in a state that only allows to destroy the object.
+        /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
         /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
         if (!is_attach)
             throw;
@@ -371,7 +371,9 @@ void StorageMaterializedView::read(
         auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
             query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
 
-        adding_limits_and_quota->setStepDescription("Lock destination table for MaterializedView");
+        /// proton: starts
+        adding_limits_and_quota->setStepDescription("Lock destination stream for MaterializedView");
+        /// proton: ends
         query_plan.addStep(std::move(adding_limits_and_quota));
     }
     else
@@ -542,7 +544,9 @@ void StorageMaterializedView::buildBackgroundPipeline(
 
     auto target_table = getTargetTable();
     if (target_table->getName() != "DistributedMergeTree")
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming View doesn't support target table is {}", target_table->getName());
+        /// proton: starts
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming View doesn't support target storage is {}", target_table->getName());
+        /// proton: ends
 
     /// Sink to target table
     InterpreterInsertQuery interpreter(nullptr, local_context, false, true /* no_squash */);

@@ -48,8 +48,8 @@ namespace
 
     /// FIXME, add other un-retriable error codes
     const std::vector<String> UNRETRIABLE_ERROR_CODES = {
-        "57", /// Table already exists.
-        "60", /// Table does not exist.
+        "57", /// Stream already exists.
+        "60", /// Stream does not exist.
         "62", /// Syntax error.
         "81", /// Database does not exist.
         "82", /// Database already  exists.
@@ -345,7 +345,7 @@ void DDLService::createTable(DWAL::RecordPtr record)
         }
         catch (const Exception & e)
         {
-            LOG_ERROR(log, "Failed to create topic for table payload={} exception={}", payload, e.message());
+            LOG_ERROR(log, "Failed to create topic for stream payload={} exception={}", payload, e.message());
             failDDL(query_id, user, payload, e.message());
             return;
         }
@@ -381,13 +381,13 @@ void DDLService::createTable(DWAL::RecordPtr record)
         {
             LOG_ERROR(
                 log,
-                "Failed to create table because there are not enough hosts to place its total={} shard replicas, payload={} "
+                "Failed to create stream because there are not enough hosts to place its total={} shard replicas, payload={} "
                 "query_id={} user={}",
                 shards * replication_factor,
                 payload,
                 query_id,
                 user);
-            failDDL(query_id, user, payload, "There are not enough hosts to place the table shard replicas");
+            failDDL(query_id, user, payload, "There are not enough hosts to place the stream shard replicas");
             return;
         }
 
@@ -407,12 +407,12 @@ void DDLService::createTable(DWAL::RecordPtr record)
         auto result = append(*record.get());
         if (result != ErrorCodes::OK)
         {
-            LOG_ERROR(log, "Failed to commit placement decision for create table payload={}", payload);
+            LOG_ERROR(log, "Failed to commit placement decision for create stream payload={}", payload);
             failDDL(query_id, user, payload, "Internal server error");
             return;
         }
 
-        LOG_INFO(log, "Successfully find placement for create table payload={} placement={}", payload, hosts);
+        LOG_INFO(log, "Successfully find placement for create stream payload={} placement={}", payload, hosts);
         progressDDL(query_id, user, payload, "shard replicas placed");
     }
 }
@@ -437,8 +437,8 @@ void DDLService::mutateTable(DWAL::RecordPtr record, const String & method, Call
 
     if (target_hosts.empty())
     {
-        LOG_ERROR(log, "Table {} is not found, payload={} query_id={} user={}", table, payload, query_id, user);
-        failDDL(query_id, user, payload, "Table not found");
+        LOG_ERROR(log, "Stream {} is not found, payload={} query_id={} user={}", table, payload, query_id, user);
+        failDDL(query_id, user, payload, "Stream not found");
         return;
     }
 
@@ -450,7 +450,7 @@ void DDLService::mutateTable(DWAL::RecordPtr record, const String & method, Call
     {
         LOG_ERROR(
             log,
-            "The number of table {} definitions is inconsistent with the actual obtained, payload={} query_id={} user={} "
+            "The number of stream {} definitions is inconsistent with the actual obtained, payload={} query_id={} user={} "
             "total_replicas={} hosts_size={}",
             table,
             payload,
@@ -458,7 +458,7 @@ void DDLService::mutateTable(DWAL::RecordPtr record, const String & method, Call
             user,
             total_replicas,
             hosts_size);
-        failDDL(query_id, user, payload, "Table number obtained error");
+        failDDL(query_id, user, payload, "Stream number obtained error");
         return;
     }
 
@@ -490,7 +490,7 @@ void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) c
             payload,
             query_id,
             user);
-        failDDL(query_id, user, payload, "There are not enough hosts to place the table shard replicas");
+        failDDL(query_id, user, payload, "There are not enough hosts to place the stream shard replicas");
         return;
     }
 

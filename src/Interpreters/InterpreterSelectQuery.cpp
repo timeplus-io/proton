@@ -545,7 +545,9 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (!options.only_analyze)
         {
             if (query.sampleSize() && (input_pipe || !storage || !storage->supportsSampling()))
-                throw Exception("Illegal SAMPLE: table doesn't support sampling", ErrorCodes::SAMPLING_NOT_SUPPORTED);
+                /// proton: starts
+                throw Exception("Illegal SAMPLE: stream doesn't support sampling", ErrorCodes::SAMPLING_NOT_SUPPORTED);
+                /// proton: ends
 
             if (query.final() && (input_pipe || !storage || !storage->supportsFinal()))
                 throw Exception(
@@ -2172,7 +2174,9 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
     if (processing_stage == QueryProcessingStage::FetchColumns && alias_actions)
     {
         auto table_aliases = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), alias_actions);
-        table_aliases->setStepDescription("Add table aliases");
+        /// proton: starts
+        table_aliases->setStepDescription("Add stream aliases");
+        /// proton: ends
         query_plan.addStep(std::move(table_aliases));
     }
 }

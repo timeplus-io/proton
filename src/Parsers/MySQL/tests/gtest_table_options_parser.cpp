@@ -11,12 +11,13 @@ using namespace DB::MySQLParser;
 
 TEST(ParserTableOptions, AllSubpatitionOptions)
 {
+    /// proton: starts
     String input = "AUTO_INCREMENt = 1 AVG_ROW_LENGTh 3 CHARACTER SET utf8 CHECKSUM 1 COLLATE utf8_bin"
-                   " COMMENT 'table option comment' COMPRESSION 'LZ4' CONNECTION 'connect_string' DATA DIRECTORY 'data_directory'"
+                   " COMMENT 'option comment' COMPRESSION 'LZ4' CONNECTION 'connect_string' DATA DIRECTORY 'data_directory'"
                    " INDEX DIRECTORY 'index_directory' DELAY_KEY_WRITE 0 ENCRYPTION 'Y' ENGINE INNODB INSERT_METHOD NO KEY_BLOCK_SIZE 3"
                    " MAX_ROWS 1000 MIN_ROWS 0 PACK_KEYS DEFAULT PASSWORD 'password' ROW_FORMAT DYNAMIC STATS_AUTO_RECALC DEFAULT "
                    " STATS_PERSISTENT DEFAULT STATS_SAMPLE_PAGES 3 TABLESPACE tablespace_name STORAGE MEMORY UNION (table_01, table_02)";
-
+    /// proton: ends
     ParserDeclareTableOptions p_table_options;
     ASTPtr ast = parseQuery(p_table_options, input.data(), input.data() + input.size(), "", 0, 0);
 
@@ -26,7 +27,9 @@ TEST(ParserTableOptions, AllSubpatitionOptions)
     EXPECT_EQ(declare_options->changes["character_set"]->as<ASTIdentifier>()->name(), "utf8");
     EXPECT_EQ(declare_options->changes["checksum"]->as<ASTLiteral>()->value.safeGet<UInt64>(), 1);
     EXPECT_EQ(declare_options->changes["collate"]->as<ASTIdentifier>()->name(), "utf8_bin");
-    EXPECT_EQ(declare_options->changes["comment"]->as<ASTLiteral>()->value.safeGet<String>(), "table option comment");
+    /// proton: starts
+    EXPECT_EQ(declare_options->changes["comment"]->as<ASTLiteral>()->value.safeGet<String>(), "option comment");
+    /// proton: ends
     EXPECT_EQ(declare_options->changes["compression"]->as<ASTLiteral>()->value.safeGet<String>(), "LZ4");
     EXPECT_EQ(declare_options->changes["connection"]->as<ASTLiteral>()->value.safeGet<String>(), "connect_string");
     EXPECT_EQ(declare_options->changes["data_directory"]->as<ASTLiteral>()->value.safeGet<String>(), "data_directory");

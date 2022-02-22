@@ -341,7 +341,9 @@ SinkToStoragePtr StorageKafka::write(const ASTPtr &, const StorageMetadataPtr & 
     modified_context->applySettingsChanges(settings_adjustments);
 
     if (topics.size() > 1)
-        throw Exception("Can't write to Kafka table with multiple topics!", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: starts
+        throw Exception("Can't write to Kafka with multiple topics!", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
     return std::make_shared<KafkaSink>(*this, metadata_snapshot, modified_context);
 }
 
@@ -677,7 +679,9 @@ bool StorageKafka::streamToViews()
     auto table_id = getStorageID();
     auto table = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (!table)
-        throw Exception("Engine table " + table_id.getNameForLogs() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Engine " + table_id.getNameForLogs() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
     // Create an INSERT query for streaming data

@@ -21,11 +21,15 @@ void TableFunctionNull::parseArguments(const ASTPtr & ast_function, ContextPtr c
 {
     const auto * function = ast_function->as<ASTFunction>();
     if (!function || !function->arguments)
-        throw Exception("Table function '" + getName() + "' requires 'structure'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' requires 'structure'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: ends
 
     const auto & arguments = function->arguments->children;
     if (arguments.size() != 1)
-        throw Exception("Table function '" + getName() + "' requires 'structure'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' requires 'structure'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: ends
 
     structure = evaluateConstantExpressionOrIdentifierAsLiteral(arguments[0], context)->as<ASTLiteral>()->value.safeGet<String>();
 }

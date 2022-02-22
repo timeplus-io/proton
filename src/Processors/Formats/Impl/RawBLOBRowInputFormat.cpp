@@ -17,14 +17,18 @@ RawBLOBRowInputFormat::RawBLOBRowInputFormat(const Block & header_, ReadBuffer &
     : IRowInputFormat(header_, in_, std::move(params_))
 {
     if (header_.columns() > 1)
+        /// proton: starts
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "This input format is only suitable for tables with a single column of type String but the number of columns is {}",
+            "This input format is only suitable for streams with a single column of type String but the number of columns is {}",
             header_.columns());
+        /// proton: ends
 
     if (!isString(removeNullable(removeLowCardinality(header_.getByPosition(0).type))))
+        /// proton: starts
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "This input format is only suitable for tables with a single column of type String but the column type is {}",
+            "This input format is only suitable for streams with a single column of type String but the column type is {}",
             header_.getByPosition(0).type->getName());
+        /// proton: ends
 }
 
 bool RawBLOBRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &)

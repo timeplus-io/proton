@@ -76,8 +76,10 @@ void ArrowBlockOutputFormat::prepareWriter(const std::shared_ptr<arrow::Schema> 
         writer_status = arrow::ipc::MakeFileWriter(arrow_ostream.get(), schema);
 
     if (!writer_status.ok())
+        /// proton: starts
         throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
-            "Error while opening a table writer: {}", writer_status.status().ToString());
+            "Error while opening a stream writer: {}", writer_status.status().ToString());
+        /// proton: ends
 
     writer = *writer_status;
 }

@@ -58,8 +58,10 @@ void ConnectionEstablisher::run(ConnectionEstablisher::TryResult & result, std::
         auto table_status_it = status_response.table_states_by_id.find(*table_to_check);
         if (table_status_it == status_response.table_states_by_id.end())
         {
-            fail_message = fmt::format("There is no table {}.{} on server: {}",
+            /// proton: starts
+            fail_message = fmt::format("There is no stream {}.{} on server: {}",
                 backQuote(table_to_check->database), backQuote(table_to_check->table), result.entry->getDescription());
+            /// proton: ends
             LOG_WARNING(log, fmt::runtime(fail_message));
             ProfileEvents::increment(ProfileEvents::DistributedConnectionMissingTable);
             return;
@@ -83,7 +85,9 @@ void ConnectionEstablisher::run(ConnectionEstablisher::TryResult & result, std::
             result.is_up_to_date = false;
             result.staleness = delay;
 
-            LOG_TRACE(log, "Server {} has unacceptable replica delay for table {}.{}: {}", result.entry->getDescription(), table_to_check->database, table_to_check->table, delay);
+            /// proton: starts
+            LOG_TRACE(log, "Server {} has unacceptable replica delay for stream {}.{}: {}", result.entry->getDescription(), table_to_check->database, table_to_check->table, delay);
+            /// proton: ends
             ProfileEvents::increment(ProfileEvents::DistributedConnectionStaleReplica);
         }
     }

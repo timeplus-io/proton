@@ -74,7 +74,9 @@ void CreatingSetsTransform::finishSubquery()
         if (subquery.set)
             LOG_DEBUG(log, "Created Set with {} entries from {} rows in {} sec.", subquery.set->getTotalRowCount(), read_rows, seconds);
         if (subquery.table)
-            LOG_DEBUG(log, "Created Table with {} rows in {} sec.", read_rows, seconds);
+            /// proton: starts
+            LOG_DEBUG(log, "Created Stream with {} rows in {} sec.", read_rows, seconds);
+            /// proton: ends
     }
     else
     {

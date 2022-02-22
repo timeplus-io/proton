@@ -932,7 +932,9 @@ void Context::addExternalTable(const String & table_name, TemporaryTableHolder &
 
     auto lock = getLock();
     if (external_tables_mapping.end() != external_tables_mapping.find(table_name))
-        throw Exception("Temporary table " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        /// proton: starts
+        throw Exception("Temporary stream " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        /// proton: ends
     external_tables_mapping.emplace(table_name, std::make_shared<TemporaryTableHolder>(std::move(temporary_table)));
 }
 
@@ -2384,7 +2386,9 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
         catch (...)
         {
             /// User should recreate force file on each drop, it shouldn't be protected
-            tryLogCurrentException("Drop table check", "Can't remove force file to enable table or partition drop");
+            /// proton: starts
+            tryLogCurrentException("Drop stream check", "Can't remove force file to enable stream or partition drop");
+            /// proton: ends
         }
     }
 
@@ -2709,7 +2713,9 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     if (!storage_id)
     {
         if (exception)
-            exception->emplace("Both table name and UUID are empty", ErrorCodes::UNKNOWN_TABLE);
+            /// proton: starts
+            exception->emplace("Both stream name and UUID are empty", ErrorCodes::UNKNOWN_TABLE);
+            /// proton: ends
         return storage_id;
     }
 
@@ -2779,7 +2785,9 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     }
 
     if (exception)
-        exception->emplace("Cannot resolve database name for table " + storage_id.getNameForLogs(), ErrorCodes::UNKNOWN_TABLE);
+        /// proton: starts
+        exception->emplace("Cannot resolve database name for stream " + storage_id.getNameForLogs(), ErrorCodes::UNKNOWN_TABLE);
+        /// proton: ends
     return StorageID::createEmpty();
 }
 

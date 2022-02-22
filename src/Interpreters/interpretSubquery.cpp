@@ -50,7 +50,9 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     const auto * table = table_expression->as<ASTTableIdentifier>();
 
     if (!subquery && !table && !function)
-        throw Exception("Table expression is undefined, Method: ExpressionAnalyzer::interpretSubquery." , ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Stream expression is undefined, Method: ExpressionAnalyzer::interpretSubquery." , ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     /** The subquery in the IN / JOIN section does not have any restrictions on the maximum size of the result.
       * Because the result of this query is not the result of the entire query.

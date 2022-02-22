@@ -51,8 +51,10 @@ ContextMutablePtr StorageFactory::Arguments::getLocalContext() const
 void StorageFactory::registerStorage(const std::string & name, CreatorFn creator_fn, StorageFeatures features)
 {
     if (!storages.emplace(name, Creator{std::move(creator_fn), features}).second)
-        throw Exception("TableFunctionFactory: the table function name '" + name + "' is not unique",
+        /// proton: starts
+        throw Exception("TableFunctionFactory: the function name '" + name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 }
 
 
@@ -121,10 +123,12 @@ StoragePtr StorageFactory::get(
             if (it == storages.end())
             {
                 auto hints = getHints(name);
+                /// proton: starts
                 if (!hints.empty())
-                    throw Exception("Unknown table engine " + name + ". Maybe you meant: " + toString(hints), ErrorCodes::UNKNOWN_STORAGE);
+                    throw Exception("Unknown engine " + name + ". Maybe you meant: " + toString(hints), ErrorCodes::UNKNOWN_STORAGE);
                 else
-                    throw Exception("Unknown table engine " + name, ErrorCodes::UNKNOWN_STORAGE);
+                    throw Exception("Unknown engine " + name, ErrorCodes::UNKNOWN_STORAGE);
+                /// proton: ends
             }
 
             auto check_feature = [&](String feature_description, FeatureMatcherFn feature_matcher_fn)

@@ -67,13 +67,15 @@ void CheckConstraintsTransform::onConsume(Chunk chunk)
                 bool null_map_contains_null = !memoryIsZero(null_map_data.raw_data(), null_map_data.size() * sizeof(UInt8));
 
                 if (null_map_contains_null)
+                    /// proton: starts
                     throw Exception(
                         ErrorCodes::VIOLATED_CONSTRAINT,
-                        "Constraint {} for table {} is violated. Expression: ({})."\
+                        "Constraint {} for stream {} is violated. Expression: ({})."\
                         "Constraint expression returns nullable column that contains null value",
                         backQuote(constraint_ptr->name),
                         table_id.getNameForLogs(),
                         serializeAST(*(constraint_ptr->expr), true));
+                    /// proton: ends
 
                 result_column = nested_column;
             }
@@ -110,14 +112,16 @@ void CheckConstraintsTransform::onConsume(Chunk chunk)
                     first = false;
                 }
 
+                /// proton: starts
                 throw Exception(
                     ErrorCodes::VIOLATED_CONSTRAINT,
-                    "Constraint {} for table {} is violated at row {}. Expression: ({}). Column values: {}",
+                    "Constraint {} for stream {} is violated at row {}. Expression: ({}). Column values: {}",
                     backQuote(constraint_ptr->name),
                     table_id.getNameForLogs(),
                     rows_written + row_idx + 1,
                     serializeAST(*(constraint_ptr->expr), true),
                     column_values_msg);
+                /// proton: ends
             }
         }
     }

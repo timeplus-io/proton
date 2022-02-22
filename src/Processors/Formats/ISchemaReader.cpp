@@ -75,11 +75,13 @@ NamesAndTypesList IRowSchemaReader::readSchema()
         if (!data_types[i])
         {
             if (!default_type)
+                /// proton: starts
                 throw Exception(
                     ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
-                    "Cannot determine table structure by first {} rows of data, because some columns contain only Nulls. To increase the maximum "
+                    "Cannot determine stream structure by first {} rows of data, because some columns contain only Nulls. To increase the maximum "
                     "number of rows to read for structure determination, use setting input_format_max_rows_to_read_for_schema_inference",
                     max_rows_to_read);
+                /// proton: ends
 
             data_types[i] = default_type;
         }
@@ -143,11 +145,13 @@ NamesAndTypesList IRowWithNamesSchemaReader::readSchema()
         if (!type)
         {
             if (!default_type)
+                /// proton: starts
                 throw Exception(
                     ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
-                    "Cannot determine table structure by first {} rows of data, because some columns contain only Nulls. To increase the maximum "
+                    "Cannot determine stream structure by first {} rows of data, because some columns contain only Nulls. To increase the maximum "
                     "number of rows to read for structure determination, use setting input_format_max_rows_to_read_for_schema_inference",
                     max_rows_to_read);
+                /// proton: ends
 
             type = default_type;
         }

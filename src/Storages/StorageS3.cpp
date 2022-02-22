@@ -665,7 +665,9 @@ SinkToStoragePtr StorageS3::write(const ASTPtr & query, const StorageMetadataPtr
     else
     {
         if (is_key_with_globs)
-            throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "S3 key '{}' contains globs, so the table is in readonly mode", client_auth.uri.key);
+            /// proton: starts
+            throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "S3 key '{}' contains globs, so the stream is in readonly mode", client_auth.uri.key);
+            /// proton: ends
 
         bool truncate_in_insert = local_context->getSettingsRef().s3_truncate_on_insert;
 
@@ -713,7 +715,9 @@ void StorageS3::truncate(const ASTPtr & /* query */, const StorageMetadataPtr &,
     updateClientAndAuthSettings(local_context, client_auth);
 
     if (is_key_with_globs)
-        throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "S3 key '{}' contains globs, so the table is in readonly mode", client_auth.uri.key);
+        /// proton: starts
+        throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "S3 key '{}' contains globs, so the stream is in readonly mode", client_auth.uri.key);
+        /// proton: ends
 
     Aws::S3::Model::Delete delkeys;
 
@@ -861,11 +865,13 @@ ColumnsDescription StorageS3::getTableStructureFromDataImpl(
         auto file_iterator = createFileIterator(client_auth, keys, is_key_with_globs, distributed_processing, ctx);
         String current_key = (*file_iterator)();
         if (current_key.empty())
+            /// proton: starts
             throw Exception(
                 ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
-                "Cannot extract table structure from {} format file, because there are no files with provided path in S3. You must specify "
-                "table structure manually",
+                "Cannot extract stream structure from {} format file, because there are no files with provided path in S3. You must specify "
+                "stream structure manually",
                 format);
+            /// proton: ends
 
         return wrapReadBufferWithCompressionMethod(
             std::make_unique<ReadBufferFromS3>(client_auth.client, client_auth.uri.bucket, current_key, max_single_read_retries, ctx->getReadSettings()),

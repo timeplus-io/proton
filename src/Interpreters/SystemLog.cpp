@@ -315,7 +315,9 @@ void SystemLog<LogElement>::savingThreadFunction()
                 if (should_prepare_tables_anyway)
                 {
                     prepareTable();
-                    LOG_TRACE(log, "Table created (force)");
+                    /// proton: starts
+                    LOG_TRACE(log, "Stream created (force)");
+                    /// proton: ends
 
                     std::lock_guard lock(mutex);
                     is_force_prepare_tables = false;

@@ -22,7 +22,9 @@ void TableFunctionURL::parseArguments(const ASTPtr & ast_function, ContextPtr co
 {
     const auto & func_args = ast_function->as<ASTFunction &>();
     if (!func_args.arguments)
-        throw Exception("Table function 'URL' must have arguments.", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: starts
+        throw Exception("Function 'URL' must have arguments.", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: ends
 
     if (auto with_named_collection = getURLBasedDataSourceConfiguration(func_args.arguments->children, context))
     {
@@ -45,7 +47,9 @@ void TableFunctionURL::parseArguments(const ASTPtr & ast_function, ContextPtr co
                     illegal_args += ", ";
                 illegal_args += arg.first;
             }
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown argument `{}` for table function URL", illegal_args);
+            /// proton: starts
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown argument `{}` for function URL", illegal_args);
+            /// proton: ends
         }
 
         filename = configuration.url;

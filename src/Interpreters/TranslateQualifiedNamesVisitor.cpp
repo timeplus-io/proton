@@ -104,8 +104,10 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
             if (data.unknownColumn(table_pos, identifier))
             {
                 String table_name = data.tables[table_pos].table.getQualifiedNamePrefix(false);
-                throw Exception("There's no column '" + identifier.name() + "' in table '" + table_name + "'",
+                /// proton: starts
+                throw Exception("There's no column '" + identifier.name() + "' in stream '" + table_name + "'",
                                 ErrorCodes::UNKNOWN_IDENTIFIER);
+                /// proton: ends
             }
 
             IdentifierSemantic::setMembership(identifier, table_pos);

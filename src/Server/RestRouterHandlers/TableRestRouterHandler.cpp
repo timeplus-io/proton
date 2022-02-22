@@ -80,7 +80,7 @@ bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payloa
 
         if (shards != 1 || replication_factor != 1)
         {
-            error_msg = "Invalid shards / replication factor, local table shall have only 1 shard and 1 replica";
+            error_msg = "Invalid shards / replication factor, local stream shall have only 1 shard and 1 replica";
             return false;
         }
     }

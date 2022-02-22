@@ -24,7 +24,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     /// Read enrichment and pass the settings to context
     if (table.empty())
     {
-        return {jsonErrorResponse("Table is empty", ErrorCodes::INVALID_CONFIG_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+        return {jsonErrorResponse("Stream is empty", ErrorCodes::INVALID_CONFIG_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     if (hasQueryParameter("mode"))

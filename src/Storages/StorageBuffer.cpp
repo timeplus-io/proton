@@ -197,7 +197,9 @@ QueryProcessingStage::Enum StorageBuffer::getQueryProcessingStage(
         auto destination = DatabaseCatalog::instance().getTable(destination_id, local_context);
 
         if (destination.get() == this)
-            throw Exception("Destination table is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+            /// proton: starts
+            throw Exception("Destination stream is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+            /// proton: ends
 
         return destination->getQueryProcessingStage(local_context, to_stage, destination->getInMemoryMetadataPtr(), query_info);
     }
@@ -237,7 +239,9 @@ void StorageBuffer::read(
         auto destination = DatabaseCatalog::instance().getTable(destination_id, local_context);
 
         if (destination.get() == this)
-            throw Exception("Destination table is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+            /// proton: starts
+            throw Exception("Destination stream is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+            /// proton: ends
 
         auto destination_lock = destination->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
 
@@ -273,7 +277,9 @@ void StorageBuffer::read(
             {
                 if (!dest_columns.hasPhysical(column_name))
                 {
-                    LOG_WARNING(log, "Destination table {} doesn't have column {}. The default values are used.", destination_id.getNameForLogs(), backQuoteIfNeed(column_name));
+                    /// proton: starts
+                    LOG_WARNING(log, "Destination stream {} doesn't have column {}. The default values are used.", destination_id.getNameForLogs(), backQuoteIfNeed(column_name));
+                    /// proton: ends
                     boost::range::remove_erase(columns_intersection, column_name);
                     continue;
                 }
@@ -281,14 +287,18 @@ void StorageBuffer::read(
                 const auto & col = our_columns.getPhysical(column_name);
                 if (!dst_col.type->equals(*col.type))
                 {
-                    LOG_WARNING(log, "Destination table {} has different type of column {} ({} != {}). Data from destination table are converted.", destination_id.getNameForLogs(), backQuoteIfNeed(column_name), dst_col.type->getName(), col.type->getName());
+                    /// proton: starts
+                    LOG_WARNING(log, "Destination stream {} has different type of column {} ({} != {}). Data from destination stream are converted.", destination_id.getNameForLogs(), backQuoteIfNeed(column_name), dst_col.type->getName(), col.type->getName());
+                    /// proton: ends
                     header_after_adding_defaults.getByName(column_name) = ColumnWithTypeAndName(dst_col.type, column_name);
                 }
             }
 
             if (columns_intersection.empty())
             {
-                LOG_WARNING(log, "Destination table {} has no common columns with block in buffer. Block of data is skipped.", destination_id.getNameForLogs());
+                /// proton: starts
+                LOG_WARNING(log, "Destination stream {} has no common columns with block in buffer. Block of data is skipped.", destination_id.getNameForLogs());
+                /// proton: ends
             }
             else
             {
@@ -319,7 +329,9 @@ void StorageBuffer::read(
 
                     auto converting = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), actions_dag);
 
-                    converting->setStepDescription("Convert destination table columns to Buffer table structure");
+                    /// proton: starts
+                    converting->setStepDescription("Convert destination stream columns to Buffer structure");
+                    /// proton: ends
                     query_plan.addStep(std::move(converting));
                 }
             }
@@ -340,7 +352,9 @@ void StorageBuffer::read(
                     nullptr,
                     nullptr);
 
-            adding_limits_and_quota->setStepDescription("Lock destination table for Buffer");
+            /// proton: starts
+            adding_limits_and_quota->setStepDescription("Lock destination stream for Buffer");
+            /// proton: ends
             query_plan.addStep(std::move(adding_limits_and_quota));
         }
     }
@@ -545,7 +559,9 @@ public:
         {
             destination = DatabaseCatalog::instance().tryGetTable(storage.destination_id, storage.getContext());
             if (destination.get() == &storage)
-                throw Exception("Destination table is myself. Write will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+                /// proton: starts
+                throw Exception("Destination stream is myself. Write will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+                /// proton: ends
         }
 
         size_t bytes = block.bytes();
@@ -653,7 +669,9 @@ bool StorageBuffer::mayBenefitFromIndexForIn(
     auto destination = DatabaseCatalog::instance().getTable(destination_id, query_context);
 
     if (destination.get() == this)
-        throw Exception("Destination table is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+        /// proton: starts
+        throw Exception("Destination stream is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
+        /// proton: ends
 
     return destination->mayBenefitFromIndexForIn(left_in_operand, query_context, destination->getInMemoryMetadataPtr());
 }
@@ -708,13 +726,19 @@ bool StorageBuffer::optimize(
     ContextPtr /*context*/)
 {
     if (partition)
-        throw Exception("Partition cannot be specified when optimizing table of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: starts
+        throw Exception("Partition cannot be specified when optimizing storage of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
 
     if (final)
-        throw Exception("FINAL cannot be specified when optimizing table of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: starts
+        throw Exception("FINAL cannot be specified when optimizing storage of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
 
     if (deduplicate)
-        throw Exception("DEDUPLICATE cannot be specified when optimizing table of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: starts
+        throw Exception("DEDUPLICATE cannot be specified when optimizing storage of type Buffer", ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
 
     flushAllBuffers(false);
     return true;
@@ -889,7 +913,9 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (!table)
     {
-        LOG_ERROR(log, "Destination table {} doesn't exist. Block of data is discarded.", destination_id.getNameForLogs());
+        /// proton: starts
+        LOG_ERROR(log, "Destination stream {} doesn't exist. Block of data is discarded.", destination_id.getNameForLogs());
+        /// proton: ends
         return;
     }
     auto destination_metadata_snapshot = table->getInMemoryMetadataPtr();
@@ -913,7 +939,9 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
             auto column = block.getByName(dst_col.name);
             if (!column.type->equals(*dst_col.type))
             {
-                LOG_WARNING(log, "Destination table {} have different type of column {} ({} != {}). Block of data is converted.", destination_id.getNameForLogs(), backQuoteIfNeed(column.name), dst_col.type->getName(), column.type->getName());
+                /// proton: starts
+                LOG_WARNING(log, "Destination stream {} have different type of column {} ({} != {}). Block of data is converted.", destination_id.getNameForLogs(), backQuoteIfNeed(column.name), dst_col.type->getName(), column.type->getName());
+                /// proton: ends
                 column.column = castColumn(column, dst_col.type);
                 column.type = dst_col.type;
             }
@@ -924,12 +952,16 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (block_to_write.columns() == 0)
     {
-        LOG_ERROR(log, "Destination table {} have no common columns with block in buffer. Block of data is discarded.", destination_id.getNameForLogs());
+        /// proton: starts
+        LOG_ERROR(log, "Destination stream {} have no common columns with block in buffer. Block of data is discarded.", destination_id.getNameForLogs());
+        /// proton: ends
         return;
     }
 
     if (block_to_write.columns() != block.columns())
-        LOG_WARNING(log, "Not all columns from block in buffer exist in destination table {}. Some columns are discarded.", destination_id.getNameForLogs());
+        /// proton: starts
+        LOG_WARNING(log, "Not all columns from block in buffer exist in destination stream {}. Some columns are discarded.", destination_id.getNameForLogs());
+        /// proton: ends
 
     auto list_of_columns = std::make_shared<ASTExpressionList>();
     insert->columns = list_of_columns;

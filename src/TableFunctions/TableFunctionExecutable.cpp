@@ -29,16 +29,20 @@ void TableFunctionExecutable::parseArguments(const ASTPtr & ast_function, Contex
     const auto * function = ast_function->as<ASTFunction>();
 
     if (!function->arguments)
+        /// proton: starts
         throw Exception(ErrorCodes::LOGICAL_ERROR,
-            "Table function '{}' must have arguments",
+            "Function '{}' must have arguments",
             getName());
+        /// proton: ends
 
     auto args = function->arguments->children;
 
     if (args.size() < 3)
+        /// proton: starts
         throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-            "Table function '{}' requires minimum 3 arguments: script_name, format, structure, [input_query...]",
+            "Function '{}' requires minimum 3 arguments: script_name, format, structure, [input_query...]",
             getName());
+        /// proton: ends
 
     for (size_t i = 0; i <= 2; ++i)
         args[i] = evaluateConstantExpressionOrIdentifierAsLiteral(args[i], context);
@@ -58,10 +62,12 @@ void TableFunctionExecutable::parseArguments(const ASTPtr & ast_function, Contex
     {
         ASTPtr query = args[i]->children.at(0);
         if (!query->as<ASTSelectWithUnionQuery>())
+            /// proton: starts
             throw Exception(ErrorCodes::UNSUPPORTED_METHOD,
-                "Table function '{}' argument is invalid input query {}",
+                "Function '{}' argument is invalid input query {}",
                 getName(),
                 query->formatForErrorMessage());
+            /// proton: ends
 
         input_queries.emplace_back(std::move(query));
     }

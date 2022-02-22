@@ -140,8 +140,10 @@ private:
                 match == IdentifierSemantic::ColumnMatch::DBAndTable)
             {
                 if (rewritten)
-                    throw Exception("Failed to rewrite distributed table names. Ambiguous column '" + identifier.name() + "'",
+                    /// proton: starts
+                    throw Exception("Failed to rewrite distributed stream names. Ambiguous column '" + identifier.name() + "'",
                                     ErrorCodes::AMBIGUOUS_COLUMN_NAME);
+                    /// proton: ends
                 /// Table has an alias. So we set a new name qualified by table alias.
                 IdentifierSemantic::setColumnLongName(identifier, table);
                 rewritten = true;
@@ -244,9 +246,11 @@ bool JoinedTables::resolveTables()
             const auto & t = tables_with_columns[i];
             if (t.table.table.empty() && t.table.alias.empty())
             {
-                throw Exception("No alias for subquery or table function in JOIN (set joined_subquery_requires_alias=0 to disable restriction). While processing '"
+                /// proton: starts
+                throw Exception("No alias for subquery or function in JOIN (set joined_subquery_requires_alias=0 to disable restriction). While processing '"
                     + table_expressions[i]->formatForErrorMessage() + "'",
                     ErrorCodes::ALIAS_REQUIRED);
+                /// proton: ends
             }
         }
     }

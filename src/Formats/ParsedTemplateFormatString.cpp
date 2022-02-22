@@ -164,7 +164,9 @@ String ParsedTemplateFormatString::dump() const
         else
             res << column_names[i];
 
-        res << "\" (mapped to table column ";
+        /// proton: starts
+        res << "\" (mapped to stream column ";
+        /// proton: ends
         if (format_idx_to_column_idx.size() <= i)
             res << "<ERROR>";
         else if (!format_idx_to_column_idx[i])

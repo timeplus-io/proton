@@ -156,7 +156,9 @@ std::unique_ptr<ReadBuffer> createReadBuffer(
     {
         /// Check if file descriptor allows random reads (and reading it twice).
         if (0 != fstat(table_fd, &file_stat))
-            throwFromErrno("Cannot stat table file descriptor, inside " + storage_name, ErrorCodes::CANNOT_STAT);
+            /// proton: starts
+            throwFromErrno("Cannot stat stream file descriptor, inside " + storage_name, ErrorCodes::CANNOT_STAT);
+            /// proton: ends
 
         if (S_ISREG(file_stat.st_mode))
             nested_buffer = std::make_unique<ReadBufferFromFileDescriptorPRead>(table_fd);
@@ -257,8 +259,10 @@ ColumnsDescription StorageFile::getTableStructureFromFile(
     if (format == "Distributed")
     {
         if (paths.empty())
+            /// proton: starts
             throw Exception(
-                "Cannot get table structure from file, because no files match specified name", ErrorCodes::INCORRECT_FILE_NAME);
+                "Cannot get stream structure from file, because no files match specified name", ErrorCodes::INCORRECT_FILE_NAME);
+            /// proton: ends
 
         auto source = StorageDistributedDirectoryMonitor::createSourceFromFile(paths[0]);
         return ColumnsDescription(source->getOutputs().front().getHeader().getNamesAndTypesList());
@@ -269,11 +273,13 @@ ColumnsDescription StorageFile::getTableStructureFromFile(
         String path;
         auto it = std::find_if(paths.begin(), paths.end(), [](const String & p){ return std::filesystem::exists(p); });
         if (it == paths.end())
+            /// proton: starts
             throw Exception(
                 ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
-                "Cannot extract table structure from {} format file, because there are no files with provided path. You must specify "
-                "table structure manually",
+                "Cannot extract stream structure from {} format file, because there are no files with provided path. You must specify "
+                "stream structure manually",
                 format);
+            /// proton: ends
 
         path = *it;
         return createReadBuffer(path, false, "File", -1, compression_method, context);
@@ -356,7 +362,9 @@ void StorageFile::setStorageMetadata(CommonArguments args)
         {
             columns = getTableStructureFromFile(format_name, paths, compression_method, format_settings, args.getContext());
             if (!args.columns.empty() && args.columns != columns)
-                throw Exception("Table structure and file structure are different", ErrorCodes::INCOMPATIBLE_COLUMNS);
+                /// proton: starts
+                throw Exception("Stream structure and file structure are different", ErrorCodes::INCOMPATIBLE_COLUMNS);
+                /// proton: ends
         }
         storage_metadata.setColumns(columns);
     }
@@ -868,7 +876,9 @@ SinkToStoragePtr StorageFile::write(
         if (!paths.empty())
         {
             if (is_path_with_globs)
-                throw Exception("Table '" + getStorageID().getNameForLogs() + "' is in readonly mode because of globs in filepath", ErrorCodes::DATABASE_ACCESS_DENIED);
+                /// proton: starts
+                throw Exception("Stream '" + getStorageID().getNameForLogs() + "' is in readonly mode because of globs in filepath", ErrorCodes::DATABASE_ACCESS_DENIED);
+                /// proton: ends
 
             path = paths.back();
             fs::create_directories(fs::path(path).parent_path());
@@ -925,17 +935,23 @@ bool StorageFile::storesDataOnDisk() const
 Strings StorageFile::getDataPaths() const
 {
     if (paths.empty())
-        throw Exception("Table '" + getStorageID().getNameForLogs() + "' is in readonly mode", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: starts
+        throw Exception("Stream '" + getStorageID().getNameForLogs() + "' is in readonly mode", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: ends
     return paths;
 }
 
 void StorageFile::rename(const String & new_path_to_table_data, const StorageID & new_table_id)
 {
     if (!is_db_table)
-        throw Exception("Can't rename table " + getStorageID().getNameForLogs() + " bounded to user-defined file (or FD)", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: starts
+        throw Exception("Can't rename stream " + getStorageID().getNameForLogs() + " bounded to user-defined file (or FD)", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: ends
 
     if (paths.size() != 1)
-        throw Exception("Can't rename table " + getStorageID().getNameForLogs() + " in readonly mode", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: starts
+        throw Exception("Can't rename stream " + getStorageID().getNameForLogs() + " in readonly mode", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: ends
 
     std::string path_new = getTablePath(base_path + new_path_to_table_data, format_name);
     if (path_new == paths[0])
@@ -955,7 +971,9 @@ void StorageFile::truncate(
     TableExclusiveLockHolder &)
 {
     if (is_path_with_globs)
-        throw Exception("Can't truncate table '" + getStorageID().getNameForLogs() + "' in readonly mode", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: starts
+        throw Exception("Can't truncate stream '" + getStorageID().getNameForLogs() + "' in readonly mode", ErrorCodes::DATABASE_ACCESS_DENIED);
+        /// proton: ends
 
     if (use_table_fd)
     {

@@ -27,13 +27,17 @@ void TableFunctionInput::parseArguments(const ASTPtr & ast_function, ContextPtr 
     const auto * function = ast_function->as<ASTFunction>();
 
     if (!function->arguments)
-        throw Exception("Table function '" + getName() + "' must have arguments", ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' must have arguments", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     auto args = function->arguments->children;
 
     if (args.size() != 1)
-        throw Exception("Table function '" + getName() + "' requires exactly 1 argument: structure",
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' requires exactly 1 argument: structure",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: ends
 
     structure = evaluateConstantExpressionOrIdentifierAsLiteral(args[0], context)->as<ASTLiteral &>().value.safeGet<String>();
 }

@@ -1031,7 +1031,9 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
     /// Two JOINs are not supported with the same subquery, but different USINGs.
 
     if (joined_plan)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Table join was already created for query");
+        /// proton: starts
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream join was already created for query");
+        /// proton: ends
 
     ActionsDAGPtr right_convert_actions = nullptr;
 

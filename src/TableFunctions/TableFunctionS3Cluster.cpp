@@ -41,17 +41,21 @@ void TableFunctionS3Cluster::parseArguments(const ASTPtr & ast_function, Context
     ASTs & args_func = ast_function->children;
 
     if (args_func.size() != 1)
-        throw Exception("Table function '" + getName() + "' must have arguments.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' must have arguments.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
 
+    /// proton: starts
     const auto message = fmt::format(
-        "The signature of table function {} could be the following:\n" \
+        "The signature of function {} could be the following:\n" \
         " - cluster, url, format, structure\n" \
         " - cluster, url, format, structure, compression_method\n" \
         " - cluster, url, access_key_id, secret_access_key, format, structure\n" \
         " - cluster, url, access_key_id, secret_access_key, format, structure, compression_method",
         getName());
+    /// proton: ends
 
     if (args.size() < 4 || args.size() > 7)
         throw Exception(message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);

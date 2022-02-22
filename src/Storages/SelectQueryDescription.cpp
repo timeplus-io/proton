@@ -88,8 +88,10 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
         /// subquery
         auto * ast_select = table_expression->as<ASTSelectWithUnionQuery>();
         if (!ast_select)
-            throw Exception("Logical error while creating StorageMaterializedView. Could not retrieve table name from select query",
+            /// proton: starts
+            throw Exception("Logical error while creating StorageMaterializedView. Could not retrieve stream name from select query",
                             DB::ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
         if (ast_select->list_of_selects->children.size() != 1)
             throw Exception("UNION is not supported for MATERIALIZED VIEW",
                   ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);

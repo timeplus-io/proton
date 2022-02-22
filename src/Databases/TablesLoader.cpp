@@ -142,18 +142,23 @@ void TablesLoader::removeUnresolvableDependencies(bool remove_loaded)
             return true;
         }
 
-        /// Some tables depends on table "dependency_name", but there is no such table in DatabaseCatalog and we don't have its metadata.
+        /// Some tables depends on table "dependency_name", but there is no such stream in DatabaseCatalog and we don't have its metadata.
         /// We will ignore it and try to load dependent tables without "dependency_name"
         /// (but most likely dependent tables will fail to load).
         LOG_WARNING(log, "Tables {} depend on {}, but seems like the it does not exist. Will ignore it and try to load existing tables",
                     fmt::join(info.dependent_database_objects, ", "), dependency_name);
 
         if (!info.dependencies.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Table {} does not exist, but we have seen its AST and found {} dependencies."
+            /// proton: starts
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} does not exist, but we have seen its AST and found {} dependencies."
                                                        "It's a bug", dependency_name, info.dependencies.size());
+            ///proton: ends
+
         if (info.dependent_database_objects.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Table {} does not have dependencies and dependent tables as it expected to."
+            /// proton: starts
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} does not have dependencies and dependent streams as it expected to."
                                                        "It's a bug", dependency_name);
+            /// proton: ends
 
         return true;
     };
@@ -211,10 +216,14 @@ DependenciesInfosIter TablesLoader::removeResolvedDependency(const DependenciesI
     const QualifiedTableName & table_name = info_it->first;
     const DependenciesInfo & info = info_it->second;
     if (!info.dependencies.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Table {} is in list of independent tables, but dependencies count is {}."
+        /// proton: starts
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} is in list of independent streams, but dependencies count is {}."
                                                    "It's a bug", table_name, info.dependencies.size());
+        /// proton: ends
     if (info.dependent_database_objects.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Table {} does not have dependent tables. It's a bug", table_name);
+        /// proton: starts
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream {} does not have dependent tables. It's a bug", table_name);
+        /// proton: ends
 
     /// Decrement number of dependencies for each dependent table
     for (const auto & dependent_table : info.dependent_database_objects)
@@ -271,9 +280,11 @@ void TablesLoader::checkCyclicDependencies() const
 
     for (const auto & info : metadata.dependencies_info)
     {
-        LOG_WARNING(log, "Cannot resolve dependencies: Table {} have {} dependencies and {} dependent tables. List of dependent tables: {}",
+        /// proton: starts
+        LOG_WARNING(log, "Cannot resolve dependencies: Stream {} have {} dependencies and {} dependent streams. List of dependent streams: {}",
                     info.first, info.second.dependencies.size(),
                     info.second.dependent_database_objects.size(), fmt::join(info.second.dependent_database_objects, ", "));
+        /// proton: ends
         assert(info.second.dependencies.empty());
     }
 
@@ -288,12 +299,14 @@ void TablesLoader::logDependencyGraph() const
               fmt::join(metadata.independent_database_objects, ", "));
     for (const auto & dependencies : metadata.dependencies_info)
     {
+        /// proton: starts
         LOG_TEST(log,
-            "Table {} have {} dependencies and {} dependent tables. List of dependent tables: {}",
+            "Stream {} have {} dependencies and {} dependent streams. List of dependent tables: {}",
             dependencies.first,
             dependencies.second.dependencies.size(),
             dependencies.second.dependent_database_objects.size(),
             fmt::join(dependencies.second.dependent_database_objects, ", "));
+        /// proton: ends
     }
 }
 

@@ -456,7 +456,9 @@ void ASTSelectQuery::setFinal() // NOLINT method can be made const
     auto & tables_element = tables_in_select_query.children[0]->as<ASTTablesInSelectQueryElement &>();
 
     if (!tables_element.table_expression)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no table expression, it's a bug");
+        /// proton: starts
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no stream expression, it's a bug");
+        /// proton: ends
 
     tables_element.table_expression->as<ASTTableExpression &>().final = true;
 }

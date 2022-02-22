@@ -53,7 +53,9 @@ void TableFunctionRemote::parseArguments(const ASTPtr & ast_function, ContextPtr
     if (named_collection)
     {
         if (is_cluster_function)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Named collection cannot be used for table function cluster");
+            /// proton: starts
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Named collection cannot be used for function cluster");
+            /// proton: ends
 
         /**
          * Common arguments: database, table, username, password, addresses_expr.
@@ -252,7 +254,9 @@ void TableFunctionRemote::parseArguments(const ASTPtr & ast_function, ContextPtr
     }
 
     if (!remote_table_function_ptr && configuration.table.empty())
-        throw Exception("The name of remote table cannot be empty", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: starts
+        throw Exception("The name of remote stream cannot be empty", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: ends
 
     remote_table_id.database_name = configuration.database;
     remote_table_id.table_name = configuration.table;
@@ -310,12 +314,14 @@ TableFunctionRemote::TableFunctionRemote(const std::string & name_, bool secure_
     : name{name_}, secure{secure_}
 {
     is_cluster_function = (name == "cluster" || name == "clusterAllReplicas");
+    /// proton: starts
     help_message = fmt::format(
-        "Table function '{}' requires from 2 to {} parameters: "
+        "Function '{}' requires from 2 to {} parameters: "
         "<addresses pattern or cluster name>, <name of remote database>, <name of remote table>{}",
         name,
         is_cluster_function ? 4 : 6,
         is_cluster_function ? " [, sharding_key]" : " [, username[, password], sharding_key]");
+    /// proton: ends
 }
 
 

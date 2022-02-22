@@ -34,7 +34,7 @@ RemoteInserter::RemoteInserter(
             = CurrentThread::get().thread_trace_context;
     }
 
-    /** Send query and receive "header", that describes table structure.
+    /** Send query and receive "header", that describes stream structure.
       * Header is needed to know, what structure is required for blocks to be passed to 'write' method.
       */
     connection.sendQuery(timeouts, query, "", QueryProcessingStage::Complete, &settings_, &modified_client_info, false);

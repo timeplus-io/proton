@@ -20,13 +20,17 @@ namespace ErrorCodes
 void TableFunctionFactory::registerFunction(const std::string & name, Value creator, CaseSensitiveness case_sensitiveness)
 {
     if (!table_functions.emplace(name, creator).second)
-        throw Exception("TableFunctionFactory: the table function name '" + name + "' is not unique",
+        /// proton: starts
+        throw Exception("TableFunctionFactory: the function name '" + name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_table_functions.emplace(Poco::toLower(name), creator).second)
-        throw Exception("TableFunctionFactory: the case insensitive table function name '" + name + "' is not unique",
+        /// proton: starts
+        throw Exception("TableFunctionFactory: the case insensitive function name '" + name + "' is not unique",
                         ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 }
 
 TableFunctionPtr TableFunctionFactory::get(
@@ -39,10 +43,12 @@ TableFunctionPtr TableFunctionFactory::get(
     if (!res)
     {
         auto hints = getHints(table_function->name);
+        /// proton: starts
         if (!hints.empty())
-            throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown table function {}. Maybe you meant: {}", table_function->name , toString(hints));
+            throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown function {}. Maybe you meant: {}", table_function->name , toString(hints));
         else
-            throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown table function {}", table_function->name);
+            throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown function {}", table_function->name);
+        /// proton: ends
     }
 
     res->parseArguments(ast_function, context);

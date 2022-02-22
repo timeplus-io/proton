@@ -111,7 +111,9 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
     String column_name = get_string_from_columns(arguments[arg++]);
 
     if (table_name.empty())
-        throw Exception("Table name is empty", ErrorCodes::UNKNOWN_TABLE);
+        /// proton: starts
+        throw Exception("Stream name is empty", ErrorCodes::UNKNOWN_TABLE);
+        /// proton: ends
 
     bool has_column;
     if (host_name.empty())

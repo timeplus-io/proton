@@ -33,11 +33,15 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
     bool has_structure = ast_create_query.columns_list && ast_create_query.columns_list->columns;
 
     if (ast_create_query.as_table_function && !has_structure)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot alter table {} because it was created AS table function"
+        /// proton: starts
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot alter stream {} because it was created AS function"
                                                      " and doesn't have structure in metadata", backQuote(ast_create_query.getTable()));
+        /// proton: ends
 
     if (!has_structure && !ast_create_query.is_dictionary)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot alter table {} metadata doesn't have structure", backQuote(ast_create_query.getTable()));
+        /// proton: starts
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot alter stream {} metadata doesn't have structure", backQuote(ast_create_query.getTable()));
+        /// proton: ends
 
     if (!ast_create_query.is_dictionary)
     {
@@ -207,8 +211,10 @@ StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_n
 
     auto it = tables.find(table_name);
     if (it == tables.end())
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist",
+        /// proton: starts
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} doesn't exist",
                         backQuote(database_name), backQuote(table_name));
+        /// proton: ends
     res = it->second;
     tables.erase(it);
 
@@ -232,8 +238,10 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
 {
     auto table_id = table->getStorageID();
     if (table_id.database_name != database_name)
-        throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create table in `{}`",
+        /// proton: starts
+        throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create stream in `{}`",
                         database_name, table_id.database_name);
+        /// proton: ends
 
     if (table_id.hasUUID())
     {
@@ -245,7 +253,9 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
     {
         if (table_id.hasUUID())
             DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
-        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {} already exists.", table_id.getFullTableName());
+        /// proton: starts
+        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {} already exists.", table_id.getFullTableName());
+        /// proton: ends
     }
 }
 
@@ -297,8 +307,10 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
     auto it = tables.find(table_name);
     if (it != tables.end())
         return it->second;
-    throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist",
+    /// proton: starts
+    throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} doesn't exist",
                     backQuote(database_name), backQuote(table_name));
+    /// proton: ends
 }
 
 /// proton: starts.

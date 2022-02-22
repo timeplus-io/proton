@@ -307,7 +307,9 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
                 throw Exception("ASOF join needs at least one equi-join column", ErrorCodes::SYNTAX_ERROR);
 
             if (right_table_keys.getByName(key_names_right.back()).type->isNullable())
-                throw Exception("ASOF join over right table Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                /// proton: starts
+                throw Exception("ASOF join over right stream Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                /// proton: ends
 
             size_t asof_size;
             asof_type = AsofRowRefs::getTypeSize(*key_columns.back(), asof_size);
@@ -749,7 +751,9 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
     /// RowRef::SizeT is uint32_t (not size_t) for hash table Cell memory efficiency.
     /// It's possible to split bigger blocks and insert them by parts here. But it would be a dead code.
     if (unlikely(source_block.rows() > std::numeric_limits<RowRef::SizeT>::max()))
-        throw Exception("Too many rows in right table block for HashJoin: " + toString(source_block.rows()), ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: starts
+        throw Exception("Too many rows in right stream block for HashJoin: " + toString(source_block.rows()), ErrorCodes::NOT_IMPLEMENTED);
+        /// proton: ends
 
     /// There's no optimization for right side const columns. Remove constness if any.
     Block block = materializeBlock(source_block);
@@ -1469,7 +1473,7 @@ void HashJoin::joinBlockImpl(
     }
     size_t existing_columns = block.columns();
 
-    /** If you use FULL or RIGHT JOIN, then the columns from the "left" table must be materialized.
+    /** If you use FULL or RIGHT JOIN, then the columns from the "left" stream must be materialized.
       * Because if they are constants, then in the "not joined" rows, they may have different values
       *  - default values, which can differ from the values of these constants.
       */
@@ -1717,8 +1721,10 @@ ColumnWithTypeAndName HashJoin::joinGet(const Block & block, const Block & block
         keys.insert(std::move(key));
     }
 
+    /// proton: starts
     static_assert(!MapGetter<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any>::flagged,
-                  "joinGet are not protected from hash table changes between block processing");
+                  "joinGet are not protected from hash stream changes between block processing");
+    /// proton: ends
 
     std::vector<const MapsOne *> maps_vector;
     maps_vector.push_back(&std::get<MapsOne>(data->maps[0]));

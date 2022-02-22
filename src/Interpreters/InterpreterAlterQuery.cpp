@@ -108,7 +108,9 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     DatabasePtr database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (table->isStaticStorage())
-        throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Table is read-only");
+        /// proton: starts
+        throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Stream is read-only");
+        /// proton: ends
     auto table_lock = table->lockForShare(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
@@ -134,8 +136,10 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         else if (auto mut_command = MutationCommand::parse(command_ast))
         {
             if (mut_command->type == MutationCommand::MATERIALIZE_TTL && !metadata_snapshot->hasAnyTTL())
-                throw Exception("Cannot MATERIALIZE TTL as there is no TTL set for table "
+                /// proton: starts
+                throw Exception("Cannot MATERIALIZE TTL as there is no TTL for stream "
                     + table->getStorageID().getNameForLogs(), ErrorCodes::INCORRECT_QUERY);
+                /// proton: ends
 
             mutation_commands.emplace_back(std::move(*mut_command));
         }
@@ -217,7 +221,9 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
         auto tables = catalog_service.findTableByName(database, query.getTable());
         if (tables.empty())
-            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} does not exist.", query.getDatabase(), query.getTable());
+            /// proton: starts
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
+            /// proton: ends
 
         if (tables[0]->engine != "DistributedMergeTree")
         {
@@ -230,7 +236,9 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         auto * log = &Poco::Logger::get("InterpreterAlterQuery");
 
         auto query_str = queryToString(query);
-        LOG_INFO(log, "Altering table query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        /// proton: starts
+        LOG_INFO(log, "Altering stream query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        /// proton: ends
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
@@ -256,8 +264,10 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         appendDDLBlock(
             std::move(block), ctx, {"table_type", "column", "query_method"}, op_code, log);
 
+        /// proton: starts
         LOG_INFO(
-            log, "Request of altering table query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+            log, "Request of altering stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+        /// proton: ends
 
         /// FIXME, project tasks status
         return true;
@@ -524,8 +534,10 @@ void InterpreterAlterQuery::extendQueryLogElemImpl(QueryLogElement & elem, const
     if (alter.command_list != nullptr && alter.alter_object != ASTAlterQuery::AlterObjectType::DATABASE)
     {
         // Alter queries already have their target table inserted into `elem`.
+        /// proton: starts
         if (elem.query_tables.size() != 1)
-            throw Exception("Alter query should have target table recorded already", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Alter query should have target stream recorded already", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
         String prefix = *elem.query_tables.begin() + ".";
         for (const auto & child : alter.command_list->children)

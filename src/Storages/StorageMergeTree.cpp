@@ -91,7 +91,9 @@ StorageMergeTree::StorageMergeTree(
     loadDataParts(has_force_restore_data_flag);
 
     if (!attach && !getDataParts().empty())
-        throw Exception("Data directory for table already containing data parts - probably it was unclean DROP table or manual intervention. You must either clear directory by hand or use ATTACH TABLE instead of CREATE STREAM if you need to use that parts.", ErrorCodes::INCORRECT_DATA);
+        /// proton: starts
+        throw Exception("Data directory for stream already containing data parts - probably it was unclean DROP stream or manual intervention. You must either clear directory by hand or use ATTACH STREAM instead of CREATE STREAM if you need to use that parts.", ErrorCodes::INCORRECT_DATA);
+        /// proton: ends
 
     increment.set(getMaxBlockNumber());
 
@@ -142,7 +144,7 @@ void StorageMergeTree::startup()
             std::terminate();
         }
 
-        /// Note: after failed "startup", the table will be in a state that only allows to destroy the object.
+        /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
         throw;
     }
 }
@@ -1511,14 +1513,16 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
     auto dest_table_storage = std::dynamic_pointer_cast<StorageMergeTree>(dest_table);
     if (!dest_table_storage)
         /// proton: starts
-        throw Exception("Table " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for the current engine family of table engines."
+        throw Exception("Stream " + getStorageID().getNameForLogs() + " supports movePartitionToTable only for the current engine family."
                         " Got " + dest_table->getName(), ErrorCodes::NOT_IMPLEMENTED);
         /// proton: ends
     if (dest_table_storage->getStoragePolicy() != this->getStoragePolicy())
-        throw Exception("Destination table " + dest_table_storage->getStorageID().getNameForLogs() +
-                       " should have the same storage policy of source table " + getStorageID().getNameForLogs() + ". " +
+        /// proton: starts
+        throw Exception("Destination stream " + dest_table_storage->getStorageID().getNameForLogs() +
+                       " should have the same storage policy of source stream " + getStorageID().getNameForLogs() + ". " +
                        getStorageID().getNameForLogs() + ": " + this->getStoragePolicy()->getName() + ", " +
                        dest_table_storage->getStorageID().getNameForLogs() + ": " + dest_table_storage->getStoragePolicy()->getName(), ErrorCodes::UNKNOWN_POLICY);
+        /// proton: ends
 
     auto dest_metadata_snapshot = dest_table->getInMemoryMetadataPtr();
     auto metadata_snapshot = getInMemoryMetadataPtr();

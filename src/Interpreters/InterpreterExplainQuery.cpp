@@ -377,7 +377,9 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
         {
             if (auto * table_function = ast.getTableFunction()->as<ASTFunction>(); !table_function || table_function->name != "mysql")
             {
-                throw Exception(ErrorCodes::INCORRECT_QUERY, "EXPLAIN TABLE OVERRIDE is not supported for the {}() table function", table_function->name);
+                /// proton: starts
+                throw Exception(ErrorCodes::INCORRECT_QUERY, "EXPLAIN is not supported for the {}() function", table_function->name);
+                /// proton: ends
             }
             auto storage = getContext()->getQueryContext()->executeTableFunction(ast.getTableFunction());
             auto metadata_snapshot = storage->getInMemoryMetadata();

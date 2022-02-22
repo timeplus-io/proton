@@ -107,7 +107,9 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
                         "Database engine `{}` cannot have parameters, primary_key, order_by, sample_by, settings", engine_name);
 
     if (create.table_overrides && !engines_with_table_overrides.contains(engine_name))
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Database engine `{}` cannot have table overrides", engine_name);
+        /// proton: starts
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Database engine `{}` cannot have stream overrides", engine_name);
+        /// proton: ends
 
     if (engine_name == "Ordinary")
         return std::make_shared<DatabaseOrdinary>(database_name, metadata_path, context);

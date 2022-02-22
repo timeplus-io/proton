@@ -546,9 +546,13 @@ void StorageEmbeddedRocksDB::checkMutationIsPossible(const MutationCommands & co
     for (const auto & command : commands)
     {
         if (command.type != MutationCommand::UPDATE && command.type != MutationCommand::DELETE)
-            throw Exception("Table engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: starts
+            throw Exception("The engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: ends
         if (command.partition)
-            throw Exception("Table engine EmbeddedRocksDB mutations in partition is not supports", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: starts
+            throw Exception("The engine EmbeddedRocksDB mutations in partition is not supports", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: ends
     }
 }
 
@@ -638,7 +642,9 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
         wb_key.restart();
         /// get key
         if (!get_key(command, sample_block, &wb_key))
-            throw Exception("Table engine EmbeddedRocksDB DELETE mutations key is invalid", ErrorCodes::BAD_ARGUMENTS);
+            /// proton: starts
+            throw Exception("The engine EmbeddedRocksDB DELETE mutations key is invalid", ErrorCodes::BAD_ARGUMENTS);
+            /// proton: ends
 
         if (command.type == MutationCommand::DELETE)
         {
@@ -655,14 +661,18 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
                 throw Exception("RocksDB get error: " + get_status.ToString(), ErrorCodes::ROCKSDB_ERROR);
 
             if (!update_value(command, sample_block, old_value, &wb_value))
-                throw Exception("Table engine EmbeddedRocksDB UPDATE mutations values is invalid", ErrorCodes::BAD_ARGUMENTS);
+                /// proton: starts
+                throw Exception("The engine EmbeddedRocksDB UPDATE mutations values is invalid", ErrorCodes::BAD_ARGUMENTS);
+                /// proton: ends
 
             auto update_status = rocksdb_ptr->Put(rocksdb::WriteOptions(), wb_key.str(), wb_value.str());
             if (!update_status.ok())
                 throw Exception("RocksDB write error: " + update_status.ToString(), ErrorCodes::ROCKSDB_ERROR);
         }
         else
-            throw Exception("Table engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: starts
+            throw Exception("The engine EmbeddedRocksDB supports only UPDATE and DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: ends
     }
 }
 /// proton: ends.

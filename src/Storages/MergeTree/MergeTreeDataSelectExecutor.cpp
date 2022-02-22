@@ -480,8 +480,10 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
     /// Select all data from first replica and no data from other replicas.
     if (settings.parallel_replicas_count > 1 && !data.supportsSampling() && settings.parallel_replica_offset > 0)
     {
+        /// proton: starts
         LOG_DEBUG(log, "Will use no data on this replica because parallel replicas processing has been requested"
-            " (the setting 'max_parallel_replicas') but the table does not support sampling and this replica is not the first.");
+            " (the setting 'max_parallel_replicas') but the stream does not support sampling and this replica is not the first.");
+        /// proton: ends
         sampling.read_nothing = true;
         return sampling;
     }
@@ -1144,10 +1146,12 @@ static void selectColumnNames(
         {
             if (!typeid_cast<const DataTypeTuple *>(data.getPartitionValueType().get()))
             {
+                /// proton: starts
                 throw Exception(
                     ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
-                    "Missing column `_partition_value` because there is no partition column in table {}",
+                    "Missing column `_partition_value` because there is no partition column in stream {}",
                     data.getStorageID().getTableName());
+                /// proton: ends
             }
 
             virt_column_names.push_back(name);

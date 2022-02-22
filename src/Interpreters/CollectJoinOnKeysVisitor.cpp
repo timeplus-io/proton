@@ -64,9 +64,11 @@ void CollectJoinOnKeysMatcher::Data::addAsofJoinKeys(const ASTPtr & left_ast, co
     }
     else
     {
+        /// proton: starts
         throw Exception(ErrorCodes::INVALID_JOIN_ON_EXPRESSION,
-                        "Expressions {} and {} are from the same table but from different arguments of equal function in ASOF JOIN",
+                        "Expressions {} and {} are from the same stream but from different arguments of equal function in ASOF JOIN",
                         queryToString(left_ast), queryToString(right_ast));
+        /// proton: ends
     }
 }
 

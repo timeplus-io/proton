@@ -15,7 +15,9 @@ class ParserCreateDefine : public IParserBase
 {
 protected:
 
-    const char * getName() const override { return "table property (column, index, constraint)"; }
+    /// proton: starts
+    const char * getName() const override { return "stream property (column, index, constraint)"; }
+    /// proton: ends
 
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {

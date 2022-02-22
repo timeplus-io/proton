@@ -145,9 +145,11 @@ ColumnsDescription getStructureOfRemoteTable(
         }
     }
 
+    /// proton: starts
     throw NetException(
-        "All attempts to get table structure failed. Log: \n\n" + fail_messages + "\n",
+        "All attempts to get stream structure failed. Log: \n\n" + fail_messages + "\n",
         ErrorCodes::NO_REMOTE_SHARD_AVAILABLE);
+    /// proton: ends
 }
 
 }

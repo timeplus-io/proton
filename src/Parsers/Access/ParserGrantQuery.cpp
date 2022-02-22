@@ -170,7 +170,9 @@ namespace
             if (!element.any_column)
                 throw Exception(old_flags.toString() + " cannot be granted on the column level", ErrorCodes::INVALID_GRANT);
             else if (!element.any_table)
-                throw Exception(old_flags.toString() + " cannot be granted on the table level", ErrorCodes::INVALID_GRANT);
+                /// proton: starts
+                throw Exception(old_flags.toString() + " cannot be granted on the stream level", ErrorCodes::INVALID_GRANT);
+                /// proton: ends
             else if (!element.any_database)
                 throw Exception(old_flags.toString() + " cannot be granted on the database level", ErrorCodes::INVALID_GRANT);
             else

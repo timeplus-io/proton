@@ -18,10 +18,12 @@ namespace ErrorCodes
 
 TableFunctionHist::TableFunctionHist(const String & name_) : TableFunctionProxyBase(name_)
 {
+    /// proton: starts
     help_message = fmt::format(
-        "Table function '{}' requires only 1 parameter"
-        "<name of the table>, the table should be a stream Table",
+        "Function '{}' requires only 1 parameter"
+        "<name of the stream>, it should be a stream storage",
         name);
+    /// proton: ends
 }
 
 void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr context)

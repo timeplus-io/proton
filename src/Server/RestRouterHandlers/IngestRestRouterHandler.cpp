@@ -20,7 +20,7 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
 
     if (table.empty())
     {
-        return {jsonErrorResponse("Table is empty", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+        return {jsonErrorResponse("Stream is empty", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
     if (hasQueryParameter("mode"))

@@ -32,7 +32,9 @@ DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTPtr & node, const 
 {
     const auto * identifier = node->as<ASTTableIdentifier>();
     if (!identifier)
-        throw Exception("Logical error: table identifier expected", ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Logical error: stream identifier expected", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     *this = DatabaseAndTableWithAlias(*identifier, current_database);
 }

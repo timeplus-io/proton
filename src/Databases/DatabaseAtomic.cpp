@@ -56,7 +56,9 @@ String DatabaseAtomic::getTableDataPath(const String & table_name) const
     std::lock_guard lock(mutex);
     auto it = table_name_to_path.find(table_name);
     if (it == table_name_to_path.end())
-        throw Exception("Table " + table_name + " not found in database " + database_name, ErrorCodes::UNKNOWN_TABLE);
+        /// proton: starts
+        throw Exception("Stream " + table_name + " not found in database " + database_name, ErrorCodes::UNKNOWN_TABLE);
+        /// proton: ends
     assert(it->second != data_path && !it->second.empty());
     return it->second;
 }
@@ -283,8 +285,10 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
     {
         std::unique_lock lock{mutex};
         if (query.getDatabase() != database_name)
-            throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create table in `{}`",
+            /// proton: starts
+            throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create stream in `{}`",
                             database_name, query.getDatabase());
+            /// proton: ends
         /// Do some checks before renaming file from .tmp to .sql
         not_in_use = cleanupDetachedTables();
         assertDetachedTableNotInUse(query.uuid);
@@ -321,7 +325,9 @@ void DatabaseAtomic::commitAlterTable(const StorageID & table_id, const String &
     auto actual_table_id = getTableUnlocked(table_id.table_name, lock)->getStorageID();
 
     if (table_id.uuid != actual_table_id.uuid)
-        throw Exception("Cannot alter table because it was renamed", ErrorCodes::CANNOT_ASSIGN_ALTER);
+        /// proton: starts
+        throw Exception("Cannot alter stream because it was renamed", ErrorCodes::CANNOT_ASSIGN_ALTER);
+        /// proton: ends
 
     /// NOTE: replica will be lost if server crashes before the following rename
     /// TODO better detection and recovery
@@ -340,8 +346,10 @@ void DatabaseAtomic::assertDetachedTableNotInUse(const UUID & uuid)
     /// 4. INSERT INTO table ...; (both Storage instances writes data without any synchronization)
     /// To avoid it, we remember UUIDs of detached tables and does not allow ATTACH table with such UUID until detached instance still in use.
     if (detached_tables.count(uuid))
-        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Cannot attach table with UUID {}, "
+        /// proton: starts
+        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Cannot attach stream with UUID {}, "
                         "because it was detached but still used by some query. Retry later.", toString(uuid));
+        /// proton: ends
 }
 
 void DatabaseAtomic::setDetachedTableNotInUseForce(const UUID & uuid)

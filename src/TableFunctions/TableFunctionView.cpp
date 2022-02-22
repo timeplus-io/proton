@@ -26,7 +26,9 @@ void TableFunctionView::parseArguments(const ASTPtr & ast_function, ContextPtr /
             return;
         }
     }
-    throw Exception("Table function '" + getName() + "' requires a query argument.", ErrorCodes::BAD_ARGUMENTS);
+    /// proton: starts
+    throw Exception("Function '" + getName() + "' requires a query argument.", ErrorCodes::BAD_ARGUMENTS);
+    /// proton: ends
 }
 
 ColumnsDescription TableFunctionView::getActualTableStructure(ContextPtr context) const

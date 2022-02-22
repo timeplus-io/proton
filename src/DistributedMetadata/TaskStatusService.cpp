@@ -526,12 +526,12 @@ bool TaskStatusService::createTaskTable()
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(log, "Create task table failed: {}", e.message());
+        LOG_ERROR(log, "Create task stream failed: {}", e.message());
         return false;
     }
     catch (...)
     {
-        LOG_ERROR(log, "Create task table failed: {}", getCurrentExceptionMessage(true, true));
+        LOG_ERROR(log, "Create task stream failed: {}", getCurrentExceptionMessage(true, true));
         return false;
     }
 

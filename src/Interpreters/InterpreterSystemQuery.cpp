@@ -444,7 +444,9 @@ void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
     if (auto * storage_distributed = dynamic_cast<StorageDistributed *>(DatabaseCatalog::instance().getTable(table_id, getContext()).get()))
         storage_distributed->flushClusterNodesAllData(getContext());
     else
-        throw Exception("Table " + table_id.getNameForLogs() + " is not distributed", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: starts
+        throw Exception("Stream " + table_id.getNameForLogs() + " is not distributed", ErrorCodes::BAD_ARGUMENTS);
+        /// proton: ends
 }
 
 void InterpreterSystemQuery::restartDisk(String & name)

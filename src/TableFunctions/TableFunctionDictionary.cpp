@@ -25,12 +25,16 @@ void TableFunctionDictionary::parseArguments(const ASTPtr & ast_function, Contex
     ASTs & args_func = ast_function->children;
 
     if (args_func.size() != 1)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Table function ({}) must have arguments.", quoteString(getName()));
+        /// proton: starts
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Function ({}) must have arguments.", quoteString(getName()));
+        /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
 
     if (args.size() != 1)
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Table function ({}) requires 1 arguments", quoteString(getName()));
+        /// proton: starts
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function ({}) requires 1 arguments", quoteString(getName()));
+        /// proton: ends
 
     for (auto & arg : args)
         arg = evaluateConstantExpressionOrIdentifierAsLiteral(arg, context);

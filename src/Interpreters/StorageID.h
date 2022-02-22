@@ -78,7 +78,9 @@ struct StorageID
         if (empty())
             throw Exception("Both table name and UUID are empty", ErrorCodes::UNKNOWN_TABLE);
         if (table_name.empty() && !database_name.empty())
-            throw Exception("Table name is empty, but database name is not", ErrorCodes::UNKNOWN_TABLE);
+            /// proton: starts
+            throw Exception("Stream name is empty, but database name is not", ErrorCodes::UNKNOWN_TABLE);
+            /// proton: ends
     }
 
     /// Avoid implicit construction of empty StorageID. However, it's needed for deferred initialization.

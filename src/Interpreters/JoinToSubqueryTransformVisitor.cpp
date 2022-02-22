@@ -204,7 +204,9 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
     {
         const auto * table = tables->children[i]->as<ASTTablesInSelectQueryElement>();
         if (!table)
-            throw Exception("Table expected", ErrorCodes::LOGICAL_ERROR);
+            /// proton: starts
+            throw Exception("Stream expected", ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
 
         if (table->table_expression)
             if (const auto * expression = table->table_expression->as<ASTTableExpression>())
@@ -213,7 +215,9 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
             continue;
 
         if (!table->table_join && !table->array_join)
-            throw Exception("Joined table expected", ErrorCodes::LOGICAL_ERROR);
+            /// proton: starts
+            throw Exception("Joined stream expected", ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
 
         if (table->array_join)
         {
@@ -732,7 +736,9 @@ ASTPtr JoinToSubqueryTransformMatcher::replaceJoin(ASTPtr ast_left, ASTPtr ast_r
         throw Exception("Two TablesInSelectQueryElements expected", ErrorCodes::LOGICAL_ERROR);
 
     if (!right->table_join)
-        throw Exception("Table join expected", ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Stream join expected", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     /// replace '_t' with pair of joined tables
     RewriteVisitor::Data visitor_data{ast_left, ast_right};

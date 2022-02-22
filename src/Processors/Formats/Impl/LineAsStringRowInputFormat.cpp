@@ -16,7 +16,9 @@ LineAsStringRowInputFormat::LineAsStringRowInputFormat(const Block & header_, Re
 {
     if (header_.columns() > 1 || header_.getDataTypes()[0]->getTypeId() != TypeIndex::String)
     {
-        throw Exception("This input format is only suitable for tables with a single column of type String.", ErrorCodes::INCORRECT_QUERY);
+        /// proton: starts
+        throw Exception("This input format is only suitable for streams with a single column of type String.", ErrorCodes::INCORRECT_QUERY);
+        /// proton: ends
     }
 }
 

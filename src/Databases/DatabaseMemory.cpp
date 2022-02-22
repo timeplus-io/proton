@@ -97,7 +97,9 @@ ASTPtr DatabaseMemory::getCreateTableQueryImpl(const String & table_name, Contex
     if (it == create_queries.end() || !it->second)
     {
         if (throw_on_error)
-            throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no metadata of table {} in database {}", table_name, database_name);
+            /// proton: starts
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no metadata of stream {} in database {}", table_name, database_name);
+            /// proton: ends
         else
             return {};
     }
@@ -122,7 +124,9 @@ void DatabaseMemory::alterTable(ContextPtr local_context, const StorageID & tabl
     std::lock_guard lock{mutex};
     auto it = create_queries.find(table_id.table_name);
     if (it == create_queries.end() || !it->second)
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Cannot alter: There is no metadata of table {}", table_id.getNameForLogs());
+        /// proton: starts
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Cannot alter: There is no metadata of stream {}", table_id.getNameForLogs());
+        /// proton: ends
 
     applyMetadataChangesToCreateQuery(it->second, metadata);
     TableNamesSet new_dependencies = getDependenciesSetFromCreateQuery(local_context->getGlobalContext(), table_id.getQualifiedName(), it->second);

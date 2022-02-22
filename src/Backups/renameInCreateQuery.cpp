@@ -50,7 +50,9 @@ namespace
             if (create.temporary)
             {
                 if (!create.table)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Table name specified in the CREATE TEMPORARY STREAM query must not be empty");
+                    /// proton: starts
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream name specified in the CREATE TEMPORARY STREAM query must not be empty");
+                    /// proton: ends
                 create.setTable(data.renaming_config->getNewTemporaryTableName(create.getTable()));
             }
             else if (!create.table)

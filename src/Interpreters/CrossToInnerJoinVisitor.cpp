@@ -37,14 +37,20 @@ struct JoinedElement
     void checkTableName(const DatabaseAndTableWithAlias & table, const String & current_database) const
     {
         if (!element.table_expression)
-            throw Exception("Not a table expression in JOIN (ARRAY JOIN?)", ErrorCodes::LOGICAL_ERROR);
+            /// proton: starts
+            throw Exception("Not a stream expression in JOIN (ARRAY JOIN?)", ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
 
         ASTTableExpression * table_expression = element.table_expression->as<ASTTableExpression>();
         if (!table_expression)
-            throw Exception("Wrong table expression in JOIN", ErrorCodes::LOGICAL_ERROR);
+            /// proton: starts
+            throw Exception("Wrong stream expression in JOIN", ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
 
         if (!table.same(DatabaseAndTableWithAlias(*table_expression, current_database)))
-            throw Exception("Inconsistent table names", ErrorCodes::LOGICAL_ERROR);
+            /// proton: starts
+            throw Exception("Inconsistent stream names", ErrorCodes::LOGICAL_ERROR);
+            /// proton: ends
     }
 
     void rewriteCommaToCross()

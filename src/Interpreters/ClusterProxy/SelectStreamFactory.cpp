@@ -141,10 +141,12 @@ void SelectStreamFactory::createForShard(
             ProfileEvents::increment(ProfileEvents::DistributedConnectionMissingTable);
             if (shard_info.hasRemoteConnections())
             {
+                /// proton: starts
                 LOG_WARNING(&Poco::Logger::get("ClusterProxy::SelectStreamFactory"),
-                    "There is no table {} on local replica of shard {}, will try remote replicas.",
+                    "There is no stream {} on local replica of shard {}, will try remote replicas.",
                     main_table.getNameForLogs(), shard_info.shard_num);
                 emplace_remote_stream();
+                /// proton: ends
             }
             else
                 emplace_local_stream();  /// Let it fail the usual way.

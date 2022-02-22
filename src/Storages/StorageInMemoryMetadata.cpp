@@ -357,9 +357,11 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
             res.insert({type->createColumn(), type, name});
         }
         else
+            /// proton: starts
             throw Exception(
-                "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
+                "Column " + backQuote(name) + " not found in stream " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
                 ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+            /// proton: ends
     }
 
     return res;
@@ -549,9 +551,11 @@ void StorageInMemoryMetadata::check(const Names & column_names, const NamesAndTy
         if (!has_column)
         {
             auto list_of_columns = listOfColumns(getColumns().getAllPhysicalWithSubcolumns());
+            /// proton: starts
             throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
-                "There is no column with name {} in table {}. There are columns: {}",
+                "There is no column with name {} in stream {}. There are columns: {}",
                 backQuote(name), storage_id.getNameForLogs(), list_of_columns);
+            /// proton: ends
         }
 
         if (unique_names.end() != unique_names.find(name))

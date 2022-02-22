@@ -465,10 +465,12 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.storage_def->set(args.storage_def->order_by, args.storage_def->primary_key->clone());
 
         if (!args.storage_def->order_by)
+            /// proton: starts
             throw Exception(
-                "You must provide an ORDER BY or PRIMARY KEY expression in the table definition. "
-                "If you don't want this table to be sorted, use ORDER BY/PRIMARY KEY tuple()",
+                "You must provide an ORDER BY or PRIMARY KEY expression in the stream definition. "
+                "If you don't want this stream to be sorted, use ORDER BY/PRIMARY KEY tuple()",
                 ErrorCodes::BAD_ARGUMENTS);
+            /// proton: ends
 
         /// Get sorting key from engine arguments.
         ///
@@ -589,7 +591,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
         if (args.storage_def->ttl_table && !args.attach)
             /// proton: starts
-            throw Exception("Table TTL is not allowed for the current engine in old syntax", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("TTL is not allowed for the current engine in old syntax", ErrorCodes::BAD_ARGUMENTS);
             /// proton: ends
     }
 

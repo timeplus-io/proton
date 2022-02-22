@@ -27,17 +27,21 @@ void TableFunctionS3::parseArguments(const ASTPtr & ast_function, ContextPtr con
     /// Parse args
     ASTs & args_func = ast_function->children;
 
+    /// proton: starts
     const auto message = fmt::format(
-        "The signature of table function {} could be the following:\n" \
+        "The signature of function {} could be the following:\n" \
         " - url, format\n" \
         " - url, format, structure\n" \
         " - url, format, structure, compression_method\n" \
         " - url, access_key_id, secret_access_key, format, structure\n" \
         " - url, access_key_id, secret_access_key, format, structure, compression_method",
         getName());
+    /// proton: ends
 
     if (args_func.size() != 1)
-        throw Exception("Table function '" + getName() + "' must have arguments.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' must have arguments.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
     StorageS3Configuration configuration;

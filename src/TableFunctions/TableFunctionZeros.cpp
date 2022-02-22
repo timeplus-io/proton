@@ -34,7 +34,9 @@ StoragePtr TableFunctionZeros<multithreaded>::executeImpl(const ASTPtr & ast_fun
         auto arguments = function->arguments->children;
 
         if (arguments.size() != 1)
-            throw Exception("Table function '" + getName() + "' requires 'length'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            /// proton: starts
+            throw Exception("Function '" + getName() + "' requires 'length'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            /// proton: ends
 
 
         UInt64 length = evaluateArgument(context, arguments[0]);
@@ -43,7 +45,9 @@ StoragePtr TableFunctionZeros<multithreaded>::executeImpl(const ASTPtr & ast_fun
         res->startup();
         return res;
     }
-    throw Exception("Table function '" + getName() + "' requires 'limit'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    /// proton: starts
+    throw Exception("Function '" + getName() + "' requires 'limit'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    /// proton: ends
 }
 
 void registerTableFunctionZeros(TableFunctionFactory & factory)

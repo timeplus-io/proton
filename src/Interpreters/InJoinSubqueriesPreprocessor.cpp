@@ -80,8 +80,10 @@ private:
 
             String alias = database_and_table->tryGetAlias();
             if (alias.empty())
-                throw Exception("Distributed table should have an alias when distributed_product_mode set to local",
+                /// proton: starts
+                throw Exception("Distributed stream should have an alias when distributed_product_mode set to local",
                                 ErrorCodes::DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED);
+                /// proton: ends
 
             auto & identifier = database_and_table->as<ASTTableIdentifier &>();
             renamed_tables.emplace_back(identifier.clone());
@@ -111,9 +113,11 @@ private:
         }
         else if (distributed_product_mode == DistributedProductMode::DENY)
         {
+            /// proton: starts
             throw Exception("Double-distributed IN/JOIN subqueries is denied (distributed_product_mode = 'deny')."
-                " You may rewrite query to use local tables in subqueries, or use GLOBAL keyword, or set distributed_product_mode to suitable value.",
+                " You may rewrite query to use local streams in subqueries, or use GLOBAL keyword, or set distributed_product_mode to suitable value.",
                 ErrorCodes::DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED);
+            /// proton: ends
         }
         else
             throw Exception("InJoinSubqueriesPreprocessor: unexpected value of 'distributed_product_mode' setting",

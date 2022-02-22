@@ -165,7 +165,7 @@ Chain buildPushingToViewsChain(
       */
     result_chain.addTableLock(storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout));
 
-    /// If the "root" table deduplicates blocks, there are no need to make deduplication for children
+    /// If the "root" stream deduplicates blocks, there are no need to make deduplication for children
     /// Moreover, deduplication for AggregatingMergeTree children could produce false positives due to low size of inserting blocks
     bool disable_deduplication_for_children = false;
     if (!context->getSettingsRef().deduplicate_blocks_in_dependent_materialized_views)

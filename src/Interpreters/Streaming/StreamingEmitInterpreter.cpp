@@ -215,7 +215,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     else if (table_expression->subquery)
         table = table_expression->subquery;
     else
-        throw Exception("The table is empty", ErrorCodes::SYNTAX_ERROR);
+        throw Exception("The stream is empty", ErrorCodes::SYNTAX_ERROR);
 
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
     /// The table_expression can be table, table(table) and subquery.

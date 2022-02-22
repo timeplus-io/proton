@@ -78,7 +78,7 @@ SOFTWARE.
         */
         const __m128i first_len_tbl = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3);
 
-        /* Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4) */
+        /* Map "First Byte" to 8-th item of range stream (0xC2 ~ 0xF4) */
         const __m128i first_range_tbl = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8);
 
         /*

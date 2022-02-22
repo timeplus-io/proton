@@ -95,7 +95,7 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
     }
     else
     {
-        throw Exception("First argument must be table name", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("First argument must be stream name", ErrorCodes::BAD_ARGUMENTS);
     }
 
     if (storage_id.database_name.empty())

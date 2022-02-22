@@ -34,14 +34,18 @@ ColumnsDescription readSchemaFromFormat(
         }
         catch (const DB::Exception & e)
         {
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot extract table structure from {} format file. Error: {}", format_name, e.message());
+            /// proton: starts
+            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot extract stream structure from {} format file. Error: {}", format_name, e.message());
+            /// proton: ends
         }
     }
     else if (FormatFactory::instance().checkIfFormatHasSchemaReader(format_name))
     {
         buf_out = read_buffer_creator();
         if (buf_out->eof())
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot extract table structure from {} format file, file is empty", format_name);
+            /// proton: starts
+            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot extract stream structure from {} format file, file is empty", format_name);
+            /// proton: ends
 
         auto schema_reader = FormatFactory::instance().getSchemaReader(format_name, *buf_out, context, format_settings);
         try
@@ -50,7 +54,9 @@ ColumnsDescription readSchemaFromFormat(
         }
         catch (const DB::Exception & e)
         {
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot extract table structure from {} format file. Error: {}", format_name, e.message());
+            /// proton: starts
+            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot extract stream structure from {} format file. Error: {}", format_name, e.message());
+            /// proton: ends
         }
     }
     else

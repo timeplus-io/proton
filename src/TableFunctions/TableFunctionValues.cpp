@@ -50,8 +50,10 @@ static void parseAndInsertValues(MutableColumns & res_columns, const ASTs & args
 
             const DataTypeTuple * type_tuple = typeid_cast<const DataTypeTuple *>(value_type_ptr.get());
             if (!type_tuple)
+                /// proton: starts
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                    "Table function VALUES requires all but first argument (rows specification) to be either tuples or single values");
+                    "Function VALUES requires all but first argument (rows specification) to be either tuples or single values");
+                /// proton: ends
 
             const Tuple & value_tuple = value_field.safeGet<Tuple>();
 
@@ -73,21 +75,27 @@ void TableFunctionValues::parseArguments(const ASTPtr & ast_function, ContextPtr
     ASTs & args_func = ast_function->children;
 
     if (args_func.size() != 1)
-        throw Exception("Table function '" + getName() + "' must have arguments.", ErrorCodes::LOGICAL_ERROR);
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' must have arguments.", ErrorCodes::LOGICAL_ERROR);
+        /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
 
     if (args.size() < 2)
-        throw Exception("Table function '" + getName() + "' requires 2 or more arguments: structure and values.",
+        /// proton: starts
+        throw Exception("Function '" + getName() + "' requires 2 or more arguments: structure and values.",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        /// proton: ends
 
     /// Parsing first argument as table structure and creating a sample block
     if (!args[0]->as<const ASTLiteral>())
     {
+        /// proton: starts
         throw Exception(fmt::format(
-            "The first argument of table function '{}' must be a literal. "
+            "The first argument of function '{}' must be a literal. "
             "Got '{}' instead", getName(), args[0]->formatForErrorMessage()),
             ErrorCodes::BAD_ARGUMENTS);
+        /// proton: ends
     }
 
     structure = args[0]->as<ASTLiteral &>().value.safeGet<String>();

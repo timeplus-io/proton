@@ -183,8 +183,10 @@ void DatabaseOnDisk::createTable(
     /// But there is protection from it - see using DDLGuard in InterpreterCreateQuery.
 
     if (isTableExist(table_name, getContext()))
+        /// proton: starts
         throw Exception(
-            ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists", backQuote(getDatabaseName()), backQuote(table_name));
+            ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists", backQuote(getDatabaseName()), backQuote(table_name));
+        /// proton: ends
 
     String table_metadata_path = getObjectMetadataPath(table_name);
 
@@ -211,11 +213,13 @@ void DatabaseOnDisk::createTable(
 
         // either both should be Nil, either values should be equal
         if (create.uuid != create_detached.uuid)
+            /// proton: starts
             throw Exception(
                     ErrorCodes::TABLE_ALREADY_EXISTS,
-                    "Table {}.{} already exist (detached permanently). To attach it back "
+                    "Stream {}.{} already exist (detached permanently). To attach it back "
                     "you need to use short ATTACH syntax or a full statement with the same UUID",
                     backQuote(getDatabaseName()), backQuote(table_name));
+            /// proton: ends
     }
 
     String table_metadata_tmp_path = table_metadata_path + create_suffix;
@@ -256,7 +260,9 @@ void DatabaseOnDisk::removeDetachedPermanentlyFlag(ContextPtr, const String & ta
     }
     catch (Exception & e)
     {
-        e.addMessage("while trying to remove permanently detached flag. Table {}.{} may still be marked as permanently detached, and will not be reattached during server restart.", backQuote(getDatabaseName()), backQuote(table_name));
+        /// proton: starts
+        e.addMessage("while trying to remove permanently detached flag. Stream {}.{} may still be marked as permanently detached, and will not be reattached during server restart.", backQuote(getDatabaseName()), backQuote(table_name));
+        /// proton: ends
         throw;
     }
 }
@@ -292,7 +298,9 @@ void DatabaseOnDisk::detachTablePermanently(ContextPtr query_context, const Stri
     }
     catch (Exception & e)
     {
-        e.addMessage("while trying to set permanently detached flag. Table {}.{} may be reattached during server restart.", backQuote(getDatabaseName()), backQuote(table_name));
+        /// proton: starts
+        e.addMessage("while trying to set permanently detached flag. Stream {}.{} may be reattached during server restart.", backQuote(getDatabaseName()), backQuote(table_name));
+        /// proton: ends
         throw;
     }
 }
@@ -349,10 +357,12 @@ void DatabaseOnDisk::checkMetadataFilenameAvailabilityUnlocked(const String & to
     {
         fs::path detached_permanently_flag(table_metadata_path + detached_suffix);
 
+        /// proton: starts
         if (fs::exists(detached_permanently_flag))
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists (detached permanently)", backQuote(database_name), backQuote(to_table_name));
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists (detached permanently)", backQuote(database_name), backQuote(to_table_name));
         else
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists (detached)", backQuote(database_name), backQuote(to_table_name));
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists (detached)", backQuote(database_name), backQuote(to_table_name));
+        /// proton: ends
     }
 }
 
@@ -462,8 +472,10 @@ ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, Contex
     catch (const Exception & e)
     {
         if (!has_table && e.code() == ErrorCodes::FILE_DOESNT_EXIST && throw_on_error)
-            throw Exception{"Table " + backQuote(table_name) + " doesn't exist",
+            /// proton: starts
+            throw Exception{"Stream " + backQuote(table_name) + " doesn't exist",
                             ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY};
+            /// proton: ends
         else if (is_system_storage)
             ast = getCreateQueryFromStorage(table_name, storage, throw_on_error);
         else if (throw_on_error)
@@ -672,12 +684,14 @@ ASTPtr DatabaseOnDisk::parseQueryFromMetadata(
         String table_name = unescapeForFileName(fs::path(metadata_file_path).stem());
 
         if (create.getTable() != TABLE_WITH_UUID_NAME_PLACEHOLDER && logger)
+            /// proton: starts
             LOG_WARNING(
                 logger,
-                "File {} contains both UUID and table name. Will use name `{}` instead of `{}`",
+                "File {} contains both UUID and stream name. Will use name `{}` instead of `{}`",
                 metadata_file_path,
                 table_name,
                 create.getTable());
+            /// proton: ends
         create.setTable(table_name);
     }
 

@@ -61,7 +61,9 @@ StorageJoin::StorageJoin(
     auto metadata_snapshot = getInMemoryMetadataPtr();
     for (const auto & key : key_names)
         if (!metadata_snapshot->getColumns().hasPhysical(key))
-            throw Exception{"Key column (" + key + ") does not exist in table declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE};
+            /// proton: starts
+            throw Exception{"Key column (" + key + ") does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE};
+            /// proton: ends
 
     table_join = std::make_shared<TableJoin>(limits, use_nulls, kind, strictness, key_names);
     join = std::make_shared<HashJoin>(table_join, metadata_snapshot->getSampleBlock().sortColumns(), overwrite);
@@ -99,7 +101,9 @@ void StorageJoin::checkMutationIsPossible(const MutationCommands & commands, con
 {
     for (const auto & command : commands)
         if (command.type != MutationCommand::DELETE)
-            throw Exception("Table engine Join supports only DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: starts
+            throw Exception("The engine Join supports only DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            /// proton: ends
 }
 
 void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
@@ -163,12 +167,16 @@ HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join,
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     if (!analyzed_join->sameStrictnessAndKind(strictness, kind))
-        throw Exception("Table " + getStorageID().getNameForLogs() + " has incompatible type of JOIN.", ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
+        /// proton: starts
+        throw Exception("Stream " + getStorageID().getNameForLogs() + " has incompatible type of JOIN.", ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
+        /// proton: ends
 
     if ((analyzed_join->forceNullableRight() && !use_nulls) ||
         (!analyzed_join->forceNullableRight() && isLeftOrFull(analyzed_join->kind()) && use_nulls))
-        throw Exception("Table " + getStorageID().getNameForLogs() + " needs the same join_use_nulls setting as present in LEFT or FULL JOIN.",
+        /// proton: starts
+        throw Exception("Stream " + getStorageID().getNameForLogs() + " needs the same join_use_nulls setting as present in LEFT or FULL JOIN.",
                         ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
+        /// proton: ends
 
     /// TODO: check key columns
 

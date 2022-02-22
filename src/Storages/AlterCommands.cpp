@@ -1156,7 +1156,9 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
         else if (command.type == AlterCommand::MODIFY_SETTING || command.type == AlterCommand::RESET_SETTING)
         {
             if (metadata.settings_changes == nullptr)
-                throw Exception{"Cannot alter settings, because table engine doesn't support settings changes", ErrorCodes::BAD_ARGUMENTS};
+                /// proton: starts
+                throw Exception{"Cannot alter settings, because the engine doesn't support settings changes", ErrorCodes::BAD_ARGUMENTS};
+                /// proton: ends
         }
         else if (command.type == AlterCommand::RENAME_COLUMN)
         {
@@ -1221,11 +1223,15 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
         }
         else if (command.type == AlterCommand::REMOVE_TTL && !metadata.hasAnyTableTTL())
         {
-            throw Exception{"Table doesn't have any table TTL expression, cannot remove", ErrorCodes::BAD_ARGUMENTS};
+            /// proton: starts
+            throw Exception{"Stream doesn't have any TTL expression, cannot remove", ErrorCodes::BAD_ARGUMENTS};
+            /// proton: ends
         }
         else if (command.type == AlterCommand::REMOVE_SAMPLE_BY && !metadata.hasSamplingKey())
         {
-            throw Exception{"Table doesn't have SAMPLE BY, cannot remove", ErrorCodes::BAD_ARGUMENTS};
+            /// proton: starts
+            throw Exception{"Stream doesn't have SAMPLE BY, cannot remove", ErrorCodes::BAD_ARGUMENTS};
+            /// proton: ends
         }
 
         /// Collect default expressions for MODIFY and ADD comands

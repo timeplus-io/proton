@@ -59,9 +59,11 @@ namespace
         }
         catch (Exception & e)
         {
+            /// proton: starts
             e.addMessage(
-                "Cannot attach table " + backQuote(database_name) + "." + backQuote(query.getTable()) + " from metadata file " + metadata_path
+                "Cannot attach stream " + backQuote(database_name) + "." + backQuote(query.getTable()) + " from metadata file " + metadata_path
                 + " from query " + serializeAST(query));
+            /// proton: ends
             throw;
         }
     }
@@ -182,7 +184,9 @@ void DatabaseOrdinary::loadTablesMetadata(ContextPtr local_context, ParsedTables
                     ///     DatabaseCatalog::instance().addUUIDMapping(create_query->uuid);
 
                     const std::string table_name = unescapeForFileName(file_name.substr(0, file_name.size() - 4));
-                    LOG_DEBUG(log, "Skipping permanently detached table {}.", backQuote(table_name));
+                    /// proton: starts
+                    LOG_DEBUG(log, "Skipping permanently detached stream {}.", backQuote(table_name));
+                    /// proton: ends
                     return;
                 }
 
@@ -310,7 +314,7 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
     /// proton: starts.
     StoragePtr table = tryGetTable(table_name, local_context);
     if (!table)
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist",
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} doesn't exist",
                     backQuote(database_name), backQuote(table_name));
     const auto & new_create_query = parseCreateQueryFromAST(ast, database_name, table_id.table_name);
     table->setInMemoryCreateQuery(new_create_query);

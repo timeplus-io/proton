@@ -368,8 +368,10 @@ StorageDistributed::StorageDistributed(
         storage_policy = getContext()->getStoragePolicy(storage_policy_name_);
         data_volume = storage_policy->getVolume(0);
         if (storage_policy->getVolumes().size() > 1)
-            LOG_WARNING(log, "Storage policy for Distributed table has multiple volumes. "
+            /// proton: starts
+            LOG_WARNING(log, "Storage policy for Distributed stream has multiple volumes. "
                              "Only {} volume will be used to store data. Other will be ignored.", data_volume->getName());
+            /// proton: ends
     }
 
     /// Sanity check. Skip check if the table is already created to allow the server to start.
@@ -380,7 +382,9 @@ StorageDistributed::StorageDistributed(
 
         size_t num_local_shards = getCluster()->getLocalShardCount();
         if (num_local_shards && (remote_database.empty() || remote_database == id_.database_name) && remote_table == id_.table_name)
-            throw Exception("Distributed table " + id_.table_name + " looks at itself", ErrorCodes::INFINITE_LOOP);
+            /// proton: starts
+            throw Exception("Distributed stream " + id_.table_name + " looks at itself", ErrorCodes::INFINITE_LOOP);
+            /// proton: ends
     }
 }
 

@@ -40,7 +40,9 @@ protected:
 struct ParserTablespaceName : public IParserBase
 {
 protected:
-    const char * getName() const override { return "table space name"; }
+    /// proton: starts
+    const char * getName() const override { return "stream space name"; }
+    /// proton: ends
 
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {

@@ -9,9 +9,9 @@ namespace DB
 {
 class ASTFunction;
 
-const String TUMBLE_HELP_MESSAGE = "Table function 'tumble' requires from 2 to 4 parameters: "
+const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 parameters: "
                                    "<name of the table>, [timestamp column], <tumble window size>, [time zone]";
-const String HOP_HELP_MESSAGE = "Table function 'hop' requires from 3 to 5 parameters: "
+const String HOP_HELP_MESSAGE = "Function 'hop' requires from 3 to 5 parameters: "
                                 "<name of the table>, [timestamp column], <hop interval size>, <hop window size>, [time zone]";
 
 bool isTableFunctionTumble(const ASTFunction * ast);

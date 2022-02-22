@@ -111,7 +111,9 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
             if (query.if_exists)
                 return {};
             else
-                throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} does not exist.", query.getDatabase(), query.getTable());
+                /// proton: starts
+                throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
+                /// proton: ends
         }
         if (tables[0]->engine != "DistributedMergeTree")
         {
@@ -122,7 +124,9 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         auto * log = &Poco::Logger::get("InterpreterDropQuery");
 
         auto query_str = queryToString(query);
-        LOG_INFO(log, "Drop table query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        /// proton: starts
+        LOG_INFO(log, "Drop stream query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        /// proton: ends
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
@@ -141,8 +145,10 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         DWAL::OpCode op_code = query.kind == ASTDropQuery::Kind::Truncate ? DWAL::OpCode::TRUNCATE_TABLE : DWAL::OpCode::DELETE_TABLE;
         appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
 
+        /// proton: starts
         LOG_INFO(
-            log, "Request of dropping table query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+            log, "Request of dropping stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+        /// proton: ends
 
         waitForDDLOps(log, ctx, false);
         /// FIXME, project tasks status
@@ -239,8 +245,10 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
     {
         if (query.if_exists)
             return {};
-        throw Exception("Temporary table " + backQuoteIfNeed(table_id.table_name) + " doesn't exist",
+        /// proton: starts
+        throw Exception("Temporary stream " + backQuoteIfNeed(table_id.table_name) + " doesn't exist",
                         ErrorCodes::UNKNOWN_TABLE);
+        /// proton: ends
     }
 
     auto ddl_guard = (!query.no_ddl_lock ? DatabaseCatalog::instance().getDDLGuard(table_id.database_name, table_id.table_name) : nullptr);
@@ -254,14 +262,18 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
         auto & ast_drop_query = query.as<ASTDropQuery &>();
 
         if (ast_drop_query.is_view && !table->isView())
+            /// proton: starts
             throw Exception(ErrorCodes::INCORRECT_QUERY,
-                "Table {} is not a View",
+                "It {} is not a View",
                 table_id.getNameForLogs());
+            /// proton: ends
 
         if (ast_drop_query.is_dictionary && !table->isDictionary())
+            /// proton: starts
             throw Exception(ErrorCodes::INCORRECT_QUERY,
-                "Table {} is not a Dictionary",
+                "It {} is not a Dictionary",
                 table_id.getNameForLogs());
+            /// proton: ends
 
         /// Now get UUID, so we can wait for table data to be finally dropped
         table_id.uuid = database->tryGetTableUUID(table_id.table_name);
@@ -318,7 +330,9 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
 
             context_->checkAccess(AccessType::TRUNCATE, table_id);
             if (table->isStaticStorage())
-                throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Table is read-only");
+                /// proton: starts
+                throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Stream is read-only");
+                /// proton: ends
 
             table->checkTableCanBeDropped();
 
