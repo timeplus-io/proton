@@ -71,6 +71,16 @@ TEST(IntervalAliasTest, IntervalAliasError)
     EXPECT_THROW(checkIntervalParser("1W", ""), DB::Exception);
     EXPECT_THROW(checkIntervalParser("1Q", ""), DB::Exception);
     EXPECT_THROW(checkIntervalParser("1Y", ""), DB::Exception);
+
+    /// Error empty number
+    EXPECT_THROW(checkIntervalParser("s", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("m", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("h", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("d", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("w", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("M", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("q", ""), DB::Exception);
+    EXPECT_THROW(checkIntervalParser("y", ""), DB::Exception);
 }
 
 TEST(IntervalAliasTest, IntervalAliasInEmit)

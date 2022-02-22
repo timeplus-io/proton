@@ -30,7 +30,7 @@ bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected
     /// Parse number
     Int64 x = 0;
     ReadBufferFromMemory in(pos->begin, pos->size());
-    if (!tryReadIntText(x, in) || in.count() == pos->size())
+    if (!tryReadIntText(x, in) || in.count() == 0 || in.count() == pos->size())
         return elem_parser ? elem_parser->parse(pos = pos_begin, node, expected) : false;
 
     /// Parse interval kind
