@@ -18,7 +18,6 @@
 #include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Common/CurrentThread.h>
 #include <Common/JSONBuilder.h>
-#include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/assert_cast.h>
 #include <Common/formatReadable.h>
