@@ -27,6 +27,9 @@
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Core/ProtocolDefines.h>
 
+/// proton: starts
+#include <Interpreters/CompiledAggregateFunctionsHolder.h>
+/// proton: ends
 
 namespace ProfileEvents
 {
@@ -210,32 +213,6 @@ void Aggregator::Params::explain(JSONBuilder::JSONMap & map) const
         map.add("Aggregates", std::move(aggregates_array));
     }
 }
-
-#if USE_EMBEDDED_COMPILER
-
-static CHJIT & getJITInstance()
-{
-    static CHJIT jit;
-    return jit;
-}
-
-class CompiledAggregateFunctionsHolder final : public CompiledExpressionCacheEntry
-{
-public:
-    explicit CompiledAggregateFunctionsHolder(CompiledAggregateFunctions compiled_function_)
-        : CompiledExpressionCacheEntry(compiled_function_.compiled_module.size)
-        , compiled_aggregate_functions(compiled_function_)
-    {}
-
-    ~CompiledAggregateFunctionsHolder() override
-    {
-        getJITInstance().deleteCompiledModule(compiled_aggregate_functions.compiled_module);
-    }
-
-    CompiledAggregateFunctions compiled_aggregate_functions;
-};
-
-#endif
 
 Aggregator::Aggregator(const Params & params_)
     : params(params_)

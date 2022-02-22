@@ -291,6 +291,44 @@ void initDistributedMetadataServicesPost(DB::ContextMutablePtr global_context)
     ddl_service.startup();
 }
 
+/// The shutdown sequence is like
+/// 1) Stop TCP/HTTP etc servers to close all outstanding external TCP/HTTP connections
+/// 2) Kill all unfinished queries
+/// 3) Shutdown distributed metadata service:
+///    - DDLService -> PlacementService -> CatalogService -> TaskService
+/// 4) Shutdown Context
+///    - Disable periodic reload for Access Control
+///    - Disable periodic updates for external dictionaries
+///    - Disable periodic updates for external user defined functions
+///    - Shutdown named sessions
+///    - Shutdown system logs
+///    - DatabaseCatalog::shutdown which shutdown all table engines -> DMT depends on DWAL
+///    - Wait for merge mutate executor to finish
+///    - Wait for fetch executor to finish
+///    - Wait for moves executor to finish
+///    - Wait for common executor to finish
+///    - Clean CompiledExpressionCache
+///    - Reset dictionaries XMLs
+///    - Reset user defined executable function XMLs
+///    - Reset embedded dictionaries
+///    - Reset external dictionaries loader
+///    - Reset model repository
+///    - Reset buffer flush schedule pool
+///    - Reset schedule pool
+///    - Reset distributed schedule pool
+///    - Reset message broker schedule pool
+///    - Reset part commit pool
+///    - Reset access control pool
+///    - Reset trace control pool
+///    - Reset zookeeper
+///    - Shutdown system logs
+/// 5) Static singletons in function scope dtor
+///    - These singletons are dtored in the reverse order of their construction
+///    - They construction order can be manually ordered
+/// 6) Global singletons / variables dtor
+///    - These global variables are dtored in the reverse order of their construction
+///    - C++ basically can't guarantee the construction order hence we can't guarantee their dtor order.
+///      We need avoid these kind of global variables as much as possible
 void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
 {
     auto & ddl_service = DB::DDLService::instance(global_context);
@@ -305,8 +343,10 @@ void deinitDistributedMetadataServices(DB::ContextMutablePtr global_context)
     auto & task_status_service = DB::TaskStatusService::instance(global_context);
     task_status_service.shutdown();
 
-    auto & pool = DWAL::KafkaWALPool::instance(global_context);
-    pool.shutdown();
+    /// We can't shutdown WAL pool too early since storage shutdown will be after this
+    /// which depends on WAL pool.
+    /// auto & pool = DWAL::KafkaWALPool::instance(global_context);
+    /// pool.shutdown();
 }
 /// proton: ends
 
