@@ -1809,7 +1809,7 @@
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table ",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table", "query":"create materialized view test_stream_tumble_v as select id, sum(value) as sum_value, window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"},
+                    {"client":"python", "query_type": "table", "query":"create materialized view test_stream_tumble_v as select id, sum(value) as sum_value, window_start as win_start, window_end as win_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"},
                     {"client":"python", "query_id":"101", "query_type": "stream", "terminate":"manual", "query":"select * from test_stream_tumble_v"}]},
                 {"inputs": [
                     {"table_name":"test", "wait":3, "depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -1848,7 +1848,7 @@
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, response should use utc time.",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table", "query":"create materialized view test_stream_tumble_v as select id, sum(value) as sum_value, window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"},
+                    {"client":"python", "query_type": "table", "query":"create materialized view test_stream_tumble_v as select id, sum(value) as sum_value, window_start as win_start, window_end as win_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"},
                     {"client":"python", "query_id":"101", "query_type": "stream", "terminate":"manual", "query":"select * from test_stream_tumble_v"}]},
                 {"inputs": [
                     {"table_name":"test", "wait":3, "depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -1887,7 +1887,7 @@
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from table(mv), designated timestamp as eventtime column in tumble sql",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"100", "query_type": "table", "query":"create materialized view if not exists test_stream_tumble_v as select id, sum(value) as sum_value, window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"}
+                    {"client":"python","query_id":"100", "query_type": "table", "query":"create materialized view if not exists test_stream_tumble_v as select id, sum(value) as sum_value, window_start as win_start, window_end as win_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"}
                 ]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"100", "wait":3, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -1927,7 +1927,7 @@
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, response should use utc time.",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table", "query":"create materialized view test_stream_tumble_v as select id, sum(value) as sum_value, window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"},
+                    {"client":"python", "query_type": "table", "query":"create materialized view test_stream_tumble_v as select id, sum(value) as sum_value, window_start as win_start, window_end as win_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end"},
                     {"client":"python", "query_id":"101", "query_type": "stream", "terminate":"manual", "query":"select * from test_stream_tumble_v"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],

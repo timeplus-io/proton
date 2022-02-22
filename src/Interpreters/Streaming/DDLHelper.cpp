@@ -162,7 +162,9 @@ void prepareColumns(ASTCreateQuery & create)
         const auto & column = column_ast->as<ASTColumnDeclaration &>();
 
         /// Skip reserved internal columns
-        if (column.name.starts_with("_tp_"))
+        if (column.name.starts_with("_tp_")
+            || std::find(STREAMING_WINDOW_COLUMN_NAMES.begin(), STREAMING_WINDOW_COLUMN_NAMES.end(), column.name)
+                != STREAMING_WINDOW_COLUMN_NAMES.end())
         {
             if (RESERVED_EVENT_TIME == column.name)
             {
@@ -442,6 +444,5 @@ void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force
                 timeout);
         }
     }
-
 }
 }
