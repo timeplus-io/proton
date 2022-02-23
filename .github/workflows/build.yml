@@ -22,6 +22,10 @@ jobs:
         tar -zxf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache.tar.gz
 
+        # update version
+        cd $GITHUB_WORKSPACE  
+        ./release --version patch
+
         # compiling
         ./docker/packager/packager --package-type binary --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
@@ -34,10 +38,6 @@ jobs:
         # push docker image
         docker push timeplus/proton:$GITHUB_SHA
         docker push timeplus/proton:prestage
-
-        # update version
-        cd $GITHUB_WORKSPACE  
-        ./release --version minor
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
