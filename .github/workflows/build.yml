@@ -36,6 +36,7 @@ jobs:
         docker push timeplus/proton:prestage
 
         # update version
+        cd $GITHUB_WORKSPACE  
         ./release --version minor
 
         # upload build cache
