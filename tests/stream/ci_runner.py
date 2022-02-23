@@ -138,12 +138,13 @@ if __name__ == "__main__":
     loop = 1
     logging_level = "INFO"
     os.environ["PROTON_TEST_IDS"] = "all"
+    test_suites = "all"
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "loop=", "id="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "test_suites=", "loop=", "id="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 ci_runner.py --local --debug --loop=30 --id=1,2,3")
+        print(f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -153,6 +154,9 @@ if __name__ == "__main__":
         
         if name in ("--debug"):
             logging_level = "DEBUG"
+        
+        if name in ("--test_suites"):
+            os.environ["PROTON_TEST_SUITES"] = value
 
         if name in ("--loop"):
             if value.isdigit() == False:

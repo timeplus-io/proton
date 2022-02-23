@@ -12,6 +12,7 @@ services:
       - "9000:9000" # TCP
       - "9005:9005" # Postgres
       - "9004:9004" # MySQL
+      - "9010:9010" # table mode
     deploy:
       replicas: 1
       restart_policy:

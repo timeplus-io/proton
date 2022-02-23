@@ -1,0 +1,82 @@
+{
+    "test_suite_name": "ingest",
+    "test_suite_config":{
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
+    },
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "tests": [
+
+        {
+            "id": 0,
+            "tags": ["ingest"],
+            "name": "ingest column sequence",
+            "description": "create a table test_ingest, ingest columns same/difference as sequence of show create",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists test_ingest"},
+                    {"client":"python", "query_type": "table", "query":"create stream test_ingest (id String, location String, value Float, timestamp DateTime64(3) default now64(3))"},
+                    {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11')"},
+                    {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, value, location, timestamp) values ('dev2', 100, 'ca', '2020-01-01 11:11:11')"},
+                    {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, value, timestamp) values ('dev3', 100, '2020-01-01 11:11:11')"},
+                    {"client":"python","query_id":"101", "query_end_timer":2, "query_type": "stream", "query":"select id, location, value, timestamp from test_ingest settings seek_to = 'earliest'"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"101", "expected_results":[
+                ["dev1", "ca", 100, "2020-01-01 11:11:11"],
+                ["dev2", "ca", 100, "2020-01-01 11:11:11"],
+                ["dev3", "", 100, "2020-01-01 11:11:11"]]}
+            ]
+        },
+        {
+            "id": 1,
+            "tags": ["ingest"],
+            "name": "ingest column sequence",
+            "description": "create a table test_ingest, ingest columns same/difference as sequence of show create",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists test_ingest"},
+                    {"client":"python", "query_type": "table", "query":"create stream test_ingest (id String, location String, value Float, timestamp DateTime64(3) default now64(3))"},
+                    {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11')"},
+                    {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, value, location, timestamp) values ('dev2', 100, 'ca', '2020-01-01 11:11:11')"},
+                    {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, value, timestamp) values ('dev3', 100, '2020-01-01 11:11:11')"},
+                    {"client":"python", "query_id":"101", "wait":3, "query_type": "table", "query":"select id, location, value, timestamp from table(test_ingest)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"101", "expected_results":[
+                ["dev1", "ca", 100, "2020-01-01 11:11:11"],
+                ["dev2", "ca", 100, "2020-01-01 11:11:11"],
+                ["dev3", "", 100, "2020-01-01 11:11:11"]]}
+            ]
+        },
+        {
+            "id": 2,
+            "tags": ["ingest"],
+            "name": "ingest column sequence",
+            "description": "create a table test_ingest, ingest columns same/difference as sequence of show create",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists test_ingest"},
+                    {"client":"python", "query_type": "table", "query":"create stream test_ingest (id String, location String, value Float, content String, timestamp DateTime64(3) default now64(3))"}
+                ]},
+                {"inputs": [
+                    {"table_name":"test_ingest","columns":["id", "location", "value", "content", "timestamp"], 
+                        "data": [["dev1", "ca", 100, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-01-01 11:11:11"],
+                        ["dev2", "ca", 100, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-01-01 11:11:11"],
+                        ["dev3", "ca", 100, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-01-01 11:11:11"]]}
+                ]},              
+                {"statements": [
+                    {"client":"python","query_id":"101", "wait":0, "query_type": "stream", "query_end_timer":1, "query":"select id, location, value, timestamp from test_ingest settings seek_to = 'earliest'"}
+                ]}                  
+            ],
+
+            "expected_results": [{"query_id":"101", "expected_results":[
+                ["dev1", "ca", 100, "2020-01-01 11:11:11"],
+                ["dev2", "ca", 100, "2020-01-01 11:11:11"],
+                ["dev3", "ca", 100, "2020-01-01 11:11:11"]]}
+            ]
+        }                                                
+    ]
+}

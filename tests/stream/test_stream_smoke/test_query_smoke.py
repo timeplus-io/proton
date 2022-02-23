@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 import logging
 from logging import fatal
 import pytest
@@ -14,11 +14,13 @@ from helpers import rockets
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 config_file_path = f"{cur_dir}/configs/config.json"
-tests_file_path = f"{cur_dir}/tests.json"
+#tests_file_path = f"{cur_dir}/tests.json"
+tests_file_path = f"{cur_dir}"
 docker_compose_file_path = f"{cur_dir}/configs/docker-compose.yaml"
 
 
 def pytest_generate_tests(metafunc):
+    logger.debug(f"metafunc.fixturenames = {metafunc.fixturenames}")
     if logger != None and logger.level == 20:
         logging_level = "INFO"
     else:
@@ -32,7 +34,8 @@ def pytest_generate_tests(metafunc):
         test_sets = res[1]
         assert len(test_sets) ==  test_run_list_len
         test_ids = [
-            str(test["test_id"]) + "-" + test["test_name"] for test in test_sets
+            #str(test["test_id"]) + "-" + test["test_name"] for test in test_sets
+            test["test_suite_name"]+ "-" + str(test["test_id"]) + "-" + test["test_name"] for test in test_sets
         ]
         metafunc.parametrize("test_set", test_sets, ids=test_ids, indirect=True)
 

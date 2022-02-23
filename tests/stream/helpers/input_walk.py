@@ -19,11 +19,13 @@ from requests.api import request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from helpers.rockets import env_setup
 from helpers.rockets import reset_tables_of_test_inputs
+from helpers.rockets import scan_tests_file_path
+from helpers.rockets import input_walk_through_rest, input_batch_rest, find_schema
 
 
 logger = logging.getLogger(__name__)
 
-
+'''
 def input_batch_rest(input_url, input_batch, table_schema):
     # todo: complete the input by rest
     logger.debug(f"input_batch_rest: input_batch = {input_batch}")
@@ -93,15 +95,15 @@ def input_walk_through_rest(
         # time.sleep(0.5)
     time.sleep(sleep_after_inputs)
     return inputs_record
+'''
 
-
-def input_walk(test_id_run, config_file, tests_file, setup = False):
+def input_walk(test_id_run, config_file, test_suite, setup = False):
     input_results = []
     with open(config_file) as f:
         config = json.load(f)
 
-    with open(tests_file) as f:
-        test_suite = json.load(f)
+    #with open(tests_file) as f:
+    #    test_suite = json.load(f)
 
     rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
@@ -142,6 +144,7 @@ if __name__ == "__main__":
     cur_file_path = os.path.dirname(os.path.abspath(__file__))
     cur_file_path_parent = os.path.dirname(cur_file_path)
     test_suite_path = None
+    test_suite_name_list = None
 
     formatter = logging.Formatter(
         "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"  
@@ -149,7 +152,7 @@ if __name__ == "__main__":
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     logger.info("input_walk starts......")
 
@@ -157,7 +160,7 @@ if __name__ == "__main__":
     setup = False
     argv = sys.argv[1:]
     try:
-        opts, args = getopt.getopt(argv, 'i:d:', ["setup"])
+        opts, args = getopt.getopt(argv, 'i:d:', ["setup", "test_suites="])
         for name, value in opts:
             if name in ["-i"]:
                 test_id_run = int(value)
@@ -165,10 +168,18 @@ if __name__ == "__main__":
                 test_suite_path = value
             if name in ["--setup"]:
                 setup = True
+            if name in ("--test_suites"):
+                test_suite_name_list = value.split(',')
+                os.environ["PROTON_TEST_SUITES"] = value            
     except:
         print("Error")
 
     config_file = f"{test_suite_path}/configs/config.json"
-    tests_file = f"{test_suite_path}/tests.json"
+    #tests_file = f"{test_suite_path}/tests.json"
+    res_scan_tests_file_path = scan_tests_file_path(test_suite_path)
+    test_suite_names_selected = res_scan_tests_file_path.get("test_suite_names_selected")
+    test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
+    if test_suites_selected != None and len(test_suites_selected) != 0:
+        test_suite = test_suites_selected[0]
 
-    input_walk(test_id_run, config_file, tests_file, setup)
+    input_walk(test_id_run, config_file, test_suite, setup)
