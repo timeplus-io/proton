@@ -6,6 +6,7 @@ services:
     container_name: proton-server
     volumes:
       - ./data:/data
+      - ./proton:/var/log/proton-server
     ports:
       - "8123:8123" # HTTP
       - "9000:9000" # TCP
@@ -52,26 +53,3 @@ services:
       - --check=false
     container_name: redpanda-1
 
-  zookeeper:
-    image: 'bitnami/zookeeper:latest'
-    profiles: ["kafka","test"]
-    ports:
-      - '2181:2181'
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-  kafka:
-    image: 'bitnami/kafka:latest'
-    profiles: ["kafka","test"]
-    container_name: kafka
-    ports:
-      - '9092:9092'
-    environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CFG_LISTENERS=INTERNAL://:29092,EXTERNAL://:9092
-      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:29092,EXTERNAL://host.docker.internal:9092
-      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
-    depends_on:
-      - zookeeper

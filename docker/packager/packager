@@ -63,7 +63,7 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
 
     subprocess.check_call(cmd, shell=True)
 
-def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, distcc_hosts, split_binary, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries):
+def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, split_binary, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build):
     DARWIN_SUFFIX = "-darwin"
     DARWIN_ARM_SUFFIX = "-darwin-aarch64"
     ARM_SUFFIX = "-aarch64"
@@ -73,18 +73,12 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     result = []
     cmake_flags = ['$CMAKE_FLAGS']
 
-    is_clang = compiler.startswith(CLANG_PREFIX)
     is_cross_darwin = compiler.endswith(DARWIN_SUFFIX)
     is_cross_darwin_arm = compiler.endswith(DARWIN_ARM_SUFFIX)
     is_cross_arm = compiler.endswith(ARM_SUFFIX)
     is_cross_ppc = compiler.endswith(PPC_SUFFIX)
     is_cross_freebsd = compiler.endswith(FREEBSD_SUFFIX)
     is_cross_compile = is_cross_darwin or is_cross_darwin_arm or is_cross_arm or is_cross_freebsd or is_cross_ppc
-
-    # Explicitly use LLD with Clang by default.
-    # Don't force linker for cross-compilation.
-    if is_clang and not is_cross_compile:
-        cmake_flags.append("-DLINKER_NAME=ld.lld")
 
     if is_cross_darwin:
         cc = compiler[:-len(DARWIN_SUFFIX)]
@@ -116,6 +110,10 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
 
     cxx = cc.replace('gcc', 'g++').replace('clang', 'clang++')
 
+    # proton: starts.
+    cmake_flags.append("-DLINKER_NAME=ld.lld")
+    # proton: ends.
+
     if image_type == "deb":
         result.append("DEB_CC={}".format(cc))
         result.append("DEB_CXX={}".format(cxx))
@@ -137,25 +135,24 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
 
     if sanitizer:
         result.append("SANITIZER={}".format(sanitizer))
+        # proton: starts.
+        cmake_flags.append('-DENABLE_JEMALLOC=OFF')
+    else:
+        cmake_flags.append('-DENABLE_JEMALLOC=ON')
+        # proton: ends.
     if build_type:
         result.append("BUILD_TYPE={}".format(build_type))
-
-    if cache == 'distcc':
-        result.append("CCACHE_PREFIX={}".format(cache))
 
     if cache:
         result.append("CCACHE_DIR=/ccache")
         result.append("CCACHE_BASEDIR=/build")
         result.append("CCACHE_NOHASHDIR=true")
         result.append("CCACHE_COMPILERCHECK=content")
-        result.append("CCACHE_MAXSIZE=15G")
+        # proton: start.
+        result.append("CCACHE_MAXSIZE=50G")
+        # proton: ends.
         # result.append("CCACHE_UMASK=777")
 
-    if distcc_hosts:
-        hosts_with_params = ["{}/24,lzo".format(host) for host in distcc_hosts] + ["localhost/`nproc`"]
-        result.append('DISTCC_HOSTS="{}"'.format(" ".join(hosts_with_params)))
-    elif cache == "distcc":
-        result.append('DISTCC_HOSTS="{}"'.format("localhost/`nproc`"))
 
     if alien_pkgs:
         result.append("ALIEN_PKGS='" + ' '.join(['--' + pkg for pkg in alien_pkgs]) + "'")
@@ -194,6 +191,38 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     if official:
         cmake_flags.append('-DYANDEX_OFFICIAL_BUILD=1')
 
+    # proton: starts.
+    if proton_build:
+        cmake_flags.append('-DENABLE_PROTON_ALL=OFF')
+        cmake_flags.append('-DENABLE_PROTON_SERVER=ON')
+        cmake_flags.append('-DENABLE_PROTON_CLIENT=ON')
+        cmake_flags.append('-DENABLE_PROTON_DWAL_BENCHMARK=ON')
+        cmake_flags.append('-DENABLE_PROTON_INSTALL=ON')
+        cmake_flags.append('-DENABLE_PROTON_METASTORE=ON')
+        cmake_flags.append('-DUSE_STATIC_LIBRARIES=ON')
+        cmake_flags.append('-DUSE_UNWIND=ON')
+        cmake_flags.append('-DUSE_DEBUG_HELPERS=ON')
+        cmake_flags.append('-DENABLE_LIBRARIES=OFF')
+        cmake_flags.append('-DENABLE_KAFKA=ON')
+        cmake_flags.append('-DENABLE_NURAFT=ON')
+        cmake_flags.append('-DENABLE_RAPIDJSON=ON')
+        cmake_flags.append('-DENABLE_YAML_CPP=ON')
+        cmake_flags.append('-DENABLE_NURAFT=ON')
+        cmake_flags.append('-DENABLE_SIMDJSON=ON')
+        cmake_flags.append('-DENABLE_ROCKSDB=ON')
+        cmake_flags.append('-DENABLE_REPLXX=ON')
+        cmake_flags.append('-DENABLE_SSL=ON')
+        cmake_flags.append('-DENABLE_BZIP2=OFF')
+        cmake_flags.append('-DENABLE_PROTOBUF=ON')
+        cmake_flags.append('-DENABLE_URING=ON')
+        cmake_flags.append('-DENABLE_UTILS=OFF')
+        cmake_flags.append('-DENABLE_THINLTO=OFF')
+        cmake_flags.append('-DENABLE_CLANG_TIDY=OFF')
+        cmake_flags.append('-DENABLE_TESTS=ON')
+        cmake_flags.append('-DSTRIP_DEBUG_SYMBOLS_FUNCTIONS=ON')
+        cmake_flags.append('-DCMAKE_EXPORT_COMPILE_COMMANDS=ON')
+    # proton: ends.
+
     cmake_flags.append('-DENABLE_NURAFT=1')
 
     result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')
@@ -202,12 +231,15 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
-    parser = argparse.ArgumentParser(description="ClickHouse building script using prebuilt Docker image")
+    # proton: starts.
+    parser = argparse.ArgumentParser(description="Proton building script using prebuilt Docker image")
+    parser.add_argument("--proton-repo-path", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
+    parser.add_argument("--build-type", choices=("debug", "release", ""), default="")
+    parser.add_argument("--proton-build", action="store_true")
+    # proton: ends.
     # 'performance' creates a combined .tgz with server and configs to be used for performance test.
     parser.add_argument("--package-type", choices=['deb', 'binary', 'performance'], required=True)
-    parser.add_argument("--clickhouse-repo-path", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--build-type", choices=("debug", ""), default="")
     parser.add_argument("--compiler", choices=("clang-11", "clang-11-darwin", "clang-11-darwin-aarch64", "clang-11-aarch64",
                                                "clang-12", "clang-12-darwin", "clang-12-darwin-aarch64", "clang-12-aarch64",
                                                "clang-13", "clang-13-darwin", "clang-13-darwin-aarch64", "clang-13-aarch64", "clang-13-ppc64le",
@@ -217,7 +249,6 @@ if __name__ == "__main__":
     parser.add_argument("--clang-tidy", action="store_true")
     parser.add_argument("--cache", choices=("", "ccache", "distcc"), default="")
     parser.add_argument("--ccache_dir", default= os.getenv("HOME", "") + '/.ccache')
-    parser.add_argument("--distcc-hosts", nargs="+")
     parser.add_argument("--force-build-image", action="store_true")
     parser.add_argument("--version")
     # proton: starts.
@@ -236,10 +267,12 @@ if __name__ == "__main__":
     image_type = 'binary' if args.package_type == 'performance' else args.package_type
     image_name = IMAGE_MAP[image_type]
 
-    if not os.path.isabs(args.clickhouse_repo_path):
-        ch_root = os.path.abspath(os.path.join(os.getcwd(), args.clickhouse_repo_path))
+    # proton: starts.
+    if not os.path.isabs(args.proton_repo_path):
+        ch_root = os.path.abspath(os.path.join(os.getcwd(), args.proton_repo_path))
     else:
-        ch_root = args.clickhouse_repo_path
+        ch_root = args.proton_repo_path
+    # proton: ends.
 
     if args.alien_pkgs and not image_type == "deb":
         raise Exception("Can add alien packages only in deb build")
@@ -255,10 +288,12 @@ if __name__ == "__main__":
     if image_type != "freebsd" and not check_image_exists_locally(image_name) or args.force_build_image:
         if not pull_image(image_with_version) or args.force_build_image:
             build_image(image_with_version, dockerfile)
+    # proton: starts.
     env_prepared = parse_env_variables(
         args.build_type, args.compiler, args.sanitizer, args.package_type, image_type,
-        args.cache, args.distcc_hosts, args.split_binary, args.clang_tidy,
-        args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries)
+        args.cache, args.split_binary, args.clang_tidy,
+        args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries, args.proton_build)
+    # proton: ends.
 
     run_docker_image_with_env(image_name, args.output_dir, env_prepared, ch_root, args.ccache_dir, args.docker_image_version)
     logging.info("Output placed into {}".format(args.output_dir))

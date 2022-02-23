@@ -160,3 +160,4 @@ website/package-lock.json
 /src/snapshots1/
 /tests/stream/.status
 .gdb_history
+report_*.html

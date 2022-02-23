@@ -23,19 +23,20 @@ jobs:
         rm cache.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --sanitizer address --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
-        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:develop
-        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:latest
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage
 
         # push docker image
         docker push timeplus/proton:$GITHUB_SHA
-        docker push timeplus/proton:develop
-        docker push timeplus/proton:latest
+        docker push timeplus/proton:prestage
+
+        # update version
+        ./release --version minor
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .

@@ -66,10 +66,25 @@ def upload_results(
     return report_url
 
 
+def upload_proton_logs(
+    s3_client,
+    proton_log_folder,
+    pr_number=0,
+    commit_sha=""
+):
+    s3_proton_log_folder = f"reports/proton/tests/CI/{pr_number}/{commit_sha}/proton_logs"
+    proton_log_url = s3_client.upload_test_folder_to_s3(
+        proton_log_folder, s3_proton_log_folder
+    )
+    logging.info("Search result in url %s", proton_log_url)
+    return proton_log_url
+
+
 def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", commit_sha="0", logging_level = "INFO"):
     timestamp = str(datetime.datetime.now())
     report_file_name = f"report_{timestamp}.html"
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
+    proton_log_folder = f"{local_all_results_folder_path}/proton"
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
     retcode = pytest.main(
         ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]
@@ -103,6 +118,14 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
             *downloaded_log_files_paths,
         )
         print(f"::notice ::Report url: {report_url}")
+
+        proton_log_folder_url = upload_proton_logs(
+            s3_helper,
+            proton_log_folder,
+            pr_number,
+            commit_sha,
+        )
+        print(f"::notice ::Proton server log url: {proton_log_folder_url}")
     else:
         print("ci_runner: local mode, no report uploaded.")
 

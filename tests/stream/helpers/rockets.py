@@ -983,41 +983,47 @@ def table_exist(table_ddl_url, table_name):
             return False
 
 
-def create_table_rest(table_ddl_url, table_schema):
-    try:
-        logger.debug(f"create_table_rest starts...")
-        table_name = table_schema.get("name")
-        type = table_schema.get("type")
-        if type != None:
-            table_schema.pop("type")  # type is not legal key/value for rest api
-        event_time_column = table_schema.get("event_time_column")
-        columns = table_schema.get("columns")
-        if event_time_column != None:
-            table_schema_for_rest = {
-                "name": table_name,
-                "columns": columns,
-                "event_time_column": event_time_column,
-            }
-        else:
-            table_schema_for_rest = {"name": table_name, "columns": columns}
-        post_data = json.dumps(table_schema_for_rest)
-        logger.debug(f"table_ddl = {table_ddl_url}, data = {post_data} to be posted.")
+def create_table_rest(table_ddl_url, table_schema, retry=3):
+    while retry > 0:
         res = None
-        res = requests.post(
-            table_ddl_url, data=post_data
-        )  # create the table w/ table schema
-        create_start_time = datetime.datetime.now()
+        try:
+            logger.debug(f"create_table_rest starts...")
+            table_name = table_schema.get("name")
+            type = table_schema.get("type")
+            if type != None:
+                table_schema.pop("type")  # type is not legal key/value for rest api
+            event_time_column = table_schema.get("event_time_column")
+            columns = table_schema.get("columns")
+            if event_time_column != None:
+                table_schema_for_rest = {
+                    "name": table_name,
+                    "columns": columns,
+                    "event_time_column": event_time_column,
+                }
+            else:
+                table_schema_for_rest = {"name": table_name, "columns": columns}
+            post_data = json.dumps(table_schema_for_rest)
+            logger.debug(f"table_ddl = {table_ddl_url}, data = {post_data} to be posted.")
+            res = requests.post(
+                table_ddl_url, data=post_data
+            )  # create the table w/ table schema
+            create_start_time = datetime.datetime.now()
 
-        if res.status_code == 200:
-            logger.info(f"table {table_name} create_rest is called successfully.")
-        else:
-            logger.info(
-                f"table {table_name} create_rest fails, res.status_code = {res.status_code}"
-            )
-            return res
-    except (BaseException) as error:
-        logging.debug(f"exception: error = {error}")
-        return res
+            if res.status_code == 200:
+                logger.info(f"table {table_name} create_rest is called successfully.")
+                break
+            else:
+                logger.info(
+                    f"table {table_name} create_rest fails, res.status_code = {res.status_code}"
+                )
+                retry -= 1
+                if retry <= 0:
+                    return res
+                time.sleep(1)
+                continue
+        except (BaseException) as error:
+            logging.debug(f"exception: error = {error}")
+
 
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
