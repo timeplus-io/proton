@@ -9,13 +9,14 @@
 #include "IngestStatusHandler.h"
 #include "MetaStoreHandler.h"
 #include "PingHandler.h"
+#include "PipelineMetricHandler.h"
 #include "RawstoreTableRestRouterHandler.h"
 #include "RestRouterHandler.h"
 #include "SQLAnalyzerRestRouterHandler.h"
+#include "SQLFormatHandler.h"
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
-#include "PipelineMetricHandler.h"
 
 #include <re2/re2.h>
 #include <Common/escapeForFileName.h>
@@ -142,6 +143,13 @@ public:
             });
 
         factory.registerRouterHandler(
+            "/proton/v1/sqlformat",
+            "POST",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<SQLFormatHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
             "/proton/v1/tasks(/?$|/(?P<task_id>[-\\w]+))",
             "GET",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
@@ -250,7 +258,8 @@ private:
         CompiledRegexPtr regex;
         std::function<RestRouterHandlerPtr(ContextMutablePtr)> handler;
 
-        RouterHandler(const String & method_, const CompiledRegexPtr & regex_, std::function<RestRouterHandlerPtr(ContextMutablePtr)> handler_)
+        RouterHandler(
+            const String & method_, const CompiledRegexPtr & regex_, std::function<RestRouterHandlerPtr(ContextMutablePtr)> handler_)
             : method(method_), regex(regex_), handler(handler_)
         {
         }
