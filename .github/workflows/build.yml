@@ -16,15 +16,18 @@ jobs:
       command: |
         cd $GITHUB_WORKSPACE
 
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+        
+        # update version
+        ./release --version patch
+        
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache.tar.gz
-
-        # update version
-        cd $GITHUB_WORKSPACE  
-        ./release --version patch
 
         # compiling
         ./docker/packager/packager --package-type binary --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output

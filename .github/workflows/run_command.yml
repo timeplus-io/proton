@@ -90,6 +90,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v2
         with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: ${{ inputs.submodules }}
       - name: Prepare directory
         run: mkdir /test_output /artifacts
