@@ -1,5 +1,5 @@
-proton (1.0.0+asan) unstable; urgency=low
+proton (1.0.11) unstable; urgency=low
 
   * Modified source code
 
- --  <root@timeplus.io>  Wed, 05 Jan 2022 06:21:13 +0000
+ -- proton-robot <root@timeplus.io>  Thu, 24 Feb 2022 08:46:58 +0000
