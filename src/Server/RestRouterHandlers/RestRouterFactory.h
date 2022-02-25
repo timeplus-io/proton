@@ -88,7 +88,7 @@ public:
 
         factory.registerRouterHandler(
             "/proton/v1/ddl/streams/(?P<stream>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
-            "PATCH/DELETE",
+            "DELETE" /* So far, not support PATCH */,
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
             });
@@ -102,24 +102,25 @@ public:
 
         factory.registerRouterHandler(
             "/proton/v1/ddl/rawstores/(?P<table>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
-            "PATCH/DELETE",
+            "DELETE" /* So far, not support PATCH */,
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<RawstoreTableRestRouterHandler>(query_context);
             });
 
-        factory.registerRouterHandler(
-            "/proton/v1/ddl/(?P<table>[%\\w]+)/columns(\\?[\\w\\-=&#]+){0,1}",
-            "GET/POST",
-            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<ColumnRestRouterHandler>(query_context);
-            });
+        /// So far, we do not support ALTER TABLE ADD/UPDATE/DELETE COLUMN ...
+        // factory.registerRouterHandler(
+        //     "/proton/v1/ddl/(?P<table>[%\\w]+)/columns(\\?[\\w\\-=&#]+){0,1}",
+        //     "GET/POST",
+        //     [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        //         return std::make_shared<ColumnRestRouterHandler>(query_context);
+        //     });
 
-        factory.registerRouterHandler(
-            "/proton/v1/ddl/(?P<table>[%\\w]+)/columns/(?P<column>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
-            "PATCH/DELETE",
-            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<ColumnRestRouterHandler>(query_context);
-            });
+        // factory.registerRouterHandler(
+        //     "/proton/v1/ddl/(?P<table>[%\\w]+)/columns/(?P<column>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+        //     "PATCH/DELETE",
+        //     [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        //         return std::make_shared<ColumnRestRouterHandler>(query_context);
+        //     });
 
         factory.registerRouterHandler(
             "/proton/v1/ddl/databases(\\?[\\w\\-=&#]+){0,1}",
