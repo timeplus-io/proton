@@ -157,7 +157,7 @@ void ProxyDistributedMergeTree::read(
 
     if (streaming && context_->getSettingsRef().query_mode.value != "table")
         distributed->readStreaming(
-            query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_, max_block_size, num_streams);
+            query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_);
     else
         distributed->readHistory(
             query_plan,

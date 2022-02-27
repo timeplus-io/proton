@@ -72,9 +72,7 @@ public:
         SelectQueryInfo & query_info,
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot,
-        ContextPtr context_,
-        size_t /* max_block_size */,
-        unsigned /* num_streams */);
+        ContextPtr context_);
 
     void readHistory(
         QueryPlan & query_plan,
@@ -85,6 +83,15 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams);
+
+    void readConcat(
+        QueryPlan & query_plan,
+        SelectQueryInfo & query_info,
+        Names column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size);
 
     NamesAndTypesList getVirtuals() const override;
 

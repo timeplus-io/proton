@@ -655,14 +655,13 @@ SequenceInfoPtr MergeTask::MergeProjectionsStage::mergeSequenceInfo() const
 
     for (const auto & part : global_ctx->future_part->parts)
     {
-        if (part->seq_info)
-        {
-            if (!part->seq_info->sequence_ranges.empty() || (part->seq_info->idempotent_keys && !part->seq_info->idempotent_keys->empty()))
-            {
-                sequences.push_back(part->seq_info);
-            }
-        }
+        if (!part->seq_info)
+            continue;
+
+        if (!part->seq_info->sequence_ranges.empty() || (part->seq_info->idempotent_keys && !part->seq_info->idempotent_keys->empty()))
+            sequences.push_back(part->seq_info);
     }
+
     return DB::mergeSequenceInfo(sequences, global_ctx->data->committedSN(), global_ctx->context->getSettingsRef().max_idempotent_ids, nullptr);
 }
 /// proton: ends

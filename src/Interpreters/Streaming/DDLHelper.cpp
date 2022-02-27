@@ -157,6 +157,7 @@ void prepareColumns(ASTCreateQuery & create)
 
     bool has_event_time = false;
     bool has_index_time = false;
+    bool has_sequence_id = false;
     for (const ASTPtr & column_ast : column_asts)
     {
         const auto & column = column_ast->as<ASTColumnDeclaration &>();
@@ -186,6 +187,17 @@ void prepareColumns(ASTCreateQuery & create)
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
                         RESERVED_INDEX_TIME,
+                        column.type->getID());
+            }
+            else if (RESERVED_EVENT_SEQUENCE_ID == column.name)
+            {
+                has_sequence_id = true;
+                auto type_name = tryGetFunctionName(column.type);
+                if (!type_name || *type_name != "Int64")
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_COLUMN,
+                        "Column {} is reserved, expected type 'Int64 ' but actual type '{}'.",
+                        RESERVED_EVENT_SEQUENCE_ID,
                         column.type->getID());
             }
             else
@@ -231,6 +243,23 @@ void prepareColumns(ASTCreateQuery & create)
         col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
         new_columns->children.emplace_back(col_tp_time);
     }
+
+    (void)has_sequence_id;
+#if 0
+    if (!has_sequence_id)
+    {
+        auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
+        col_tp_time->name = RESERVED_EVENT_SEQUENCE_ID;
+        col_tp_time->type = makeASTFunction("Int64");
+        /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
+        auto func_delta = std::make_shared<ASTFunction>();
+        func_delta->name = "Delta";
+        auto func_lz4 = std::make_shared<ASTFunction>();
+        func_lz4->name = "LZ4";
+        col_tp_time->codec = makeASTFunction("CODEC", std::move(func_delta), std::move(func_lz4));
+        new_columns->children.emplace_back(col_tp_time);
+    }
+#endif
 
     auto new_columns_list = std::make_shared<ASTColumns>();
     new_columns_list->set(new_columns_list->columns, new_columns);
@@ -347,9 +376,8 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
         payload.set("uuid", toString(create.uuid));
 
     if (create.storage && create.storage->ttl_table)
-    {
         payload.set("ttl_expression", queryToString(*create.storage->ttl_table));
-    }
+
     buildColumnsJSON(payload, create.columns_list);
 
     return JSONToString(payload);

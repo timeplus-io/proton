@@ -234,6 +234,30 @@ Pipe StorageMergeTree::read(
         BuildQueryPipelineSettings::fromContext(local_context));
 }
 
+/// proton: starts. Concat historical and streaming data
+void StorageMergeTree::readConcat(
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr local_context,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source)
+{
+    /// If true, then we will ask initiator if we can read chosen ranges
+    bool enable_parallel_reading = local_context->getClientInfo().collaborate_with_initiator;
+
+    if (enable_parallel_reading)
+        LOG_TRACE(log, "Parallel reading from replicas enabled {}", enable_parallel_reading);
+
+    if (auto plan = reader.readConcat(
+            column_names, metadata_snapshot, query_info, std::move(local_context), max_block_size,
+            processed_stage, nullptr, enable_parallel_reading, std::move(create_streaming_source)))
+        query_plan = std::move(*plan);
+}
+/// proton: ends
+
 std::optional<UInt64> StorageMergeTree::totalRows(const Settings &) const
 {
     return getTotalActiveSizeInRows();
@@ -1765,27 +1789,17 @@ void StorageMergeTree::populateCommittedSNFromParts()
     for (const auto & part : data_parts)
     {
         if (!part->seq_info)
-        {
             continue;
-        }
 
         for (const auto & seq_range : part->seq_info->sequence_ranges)
-        {
             if (seq_range.end_sn > committed)
-            {
                 sequence_ranges.push_back(seq_range);
-            }
-        }
 
         if (part->seq_info->idempotent_keys)
         {
             for (const auto & key : *part->seq_info->idempotent_keys)
-            {
                 if (!idempotent_keys.contains(key.first))
-                {
                     idempotent_keys[key.first] = std::make_shared<String>(key.second);
-                }
-            }
         }
     }
 
@@ -1806,9 +1820,7 @@ void StorageMergeTree::populateCommittedSNFromParts()
     auto keys_iter = idempotent_keys.begin();
 
     if (idempotent_keys.size() > max_keys)
-    {
         std::advance(keys_iter, idempotent_keys.size() - max_keys);
-    }
 
     for (; keys_iter != idempotent_keys.end(); ++keys_iter)
     {

@@ -702,6 +702,7 @@ class IColumn;
     M(String, query_resource_group, "dedicated", "Default resource group. dedicated or shared", 1)                                                                                    \
     M(UInt64, max_channels_per_resource_group, 20, "Max channels per shared resource group. One streaming query maps to one channel", 1)                                                                                    \
     M(Bool, enable_light_ingest, true, "Light ingest is inserting partial columns of a table", 0)                                                                                    \
+    M(Bool, enable_backfill_from_historical_store, false, "Enable backfill data from historical data store", 0)                                                                                    \
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

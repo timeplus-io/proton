@@ -27,14 +27,10 @@ inline SequenceRange parseSequenceRange(const String & s, String::size_type lpos
     {
         auto comma_pos = s.find(',', lpos);
         if (comma_pos == String::npos)
-        {
             throw Exception("Invalid sequences " + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
 
         if (comma_pos > rpos)
-        {
             throw Exception("Invalid sequences " + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
 
         switch (i)
         {
@@ -98,14 +94,10 @@ inline IdempotentKey parseIdempotentKey(const String & s, String::size_type lpos
 
     auto comma_pos = s.find(',', lpos);
     if (comma_pos == String::npos)
-    {
         throw Exception("Invalid idempotent key" + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
 
     if (comma_pos >= rpos)
-    {
         throw Exception("Invalid idempotent key" + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
 
     key.first = parseIntStrict<Int64>(s, lpos, comma_pos);
     key.second = String{s, comma_pos + 1, rpos - comma_pos - 1};
@@ -121,9 +113,7 @@ std::shared_ptr<IdempotentKeys> readIdempotentKeys(ReadBuffer & in)
     DB::readText(data, in);
 
     if (data.empty())
-    {
         return {};
-    }
 
     auto idempotent_keys = std::make_shared<IdempotentKeys>();
 
@@ -150,36 +140,23 @@ std::shared_ptr<IdempotentKeys> readIdempotentKeys(ReadBuffer & in)
 
 SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, Poco::Logger * log)
 {
+    if (sequence_ranges.empty())
+        return {};
+
     std::sort(sequence_ranges.begin(), sequence_ranges.end());
 
     SequenceRanges merged;
-    SequenceRange last_seq_range;
 
-    Int64 min_sn = -1;
-    Int64 max_sn = -1;
-
-    for (const auto & next_seq_range : sequence_ranges)
+    for (size_t pos = 0; const auto & next_seq_range : sequence_ranges)
     {
         /// Merge ranges
         assert(next_seq_range.valid());
 
-        if (min_sn == -1)
+        /// There shall be no cases where there is sequence overlapping in a partition
+        if (pos != 0)
         {
-            min_sn = next_seq_range.start_sn;
-        }
+            const auto & last_seq_range = sequence_ranges[pos - 1];
 
-        if (next_seq_range.end_sn > max_sn)
-        {
-            max_sn = next_seq_range.end_sn;
-        }
-
-        if (!last_seq_range.valid())
-        {
-            last_seq_range = next_seq_range;
-        }
-        else
-        {
-            /// There shall be no cases where there is sequence overlapping in a partition
             assert(last_seq_range.end_sn < next_seq_range.start_sn);
             if (last_seq_range.end_sn >= next_seq_range.start_sn)
             {
@@ -191,7 +168,6 @@ SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 commi
                     next_seq_range.start_sn,
                     next_seq_range.end_sn);
             }
-            last_seq_range = next_seq_range;
         }
 
         /// We don't check sequence gap here. There are 3 possible cases
@@ -201,10 +177,12 @@ SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 commi
         /// Only for sequence ranges which are beyond the `committed_sn`, we need merge them and
         /// keep them around
         if (next_seq_range.end_sn > committed_sn)
-        {
             merged.push_back(next_seq_range);
-        }
     }
+
+    /// We keep around the max sn after merge for fused query
+    if (merged.empty())
+        merged.push_back(sequence_ranges.back());
 
     if (log)
     {
@@ -214,8 +192,8 @@ SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 commi
             sequence_ranges.size(),
             merged.size(),
             committed_sn,
-            min_sn,
-            max_sn);
+            sequence_ranges[0].start_sn,
+            merged.back().end_sn);
     }
 
     return merged;
@@ -225,9 +203,7 @@ inline std::shared_ptr<IdempotentKeys>
 mergeIdempotentKeys(const std::set<IdempotentKey> & idempotent_keys, UInt64 max_idempotent_keys, Poco::Logger * log)
 {
     if (idempotent_keys.empty())
-    {
         return nullptr;
-    }
 
     auto result = std::make_shared<IdempotentKeys>();
 
@@ -243,9 +219,7 @@ mergeIdempotentKeys(const std::set<IdempotentKey> & idempotent_keys, UInt64 max_
     }
 
     for (; keys_iter != idempotent_keys.end(); ++keys_iter)
-    {
         result->push_back(*keys_iter);
-    }
 
     if (log)
     {
@@ -264,9 +238,7 @@ inline void collectMissingSequenceRangeBefore(
     const SequenceRange & prev, size_t prev_index, Int64 next_expecting_sn, Poco::Logger * log, SequenceRanges & missing_ranges)
 {
     if (prev_index != 0)
-    {
         return;
-    }
 
     if (prev.start_sn != next_expecting_sn)
     {
@@ -275,9 +247,7 @@ inline void collectMissingSequenceRangeBefore(
         assert(next_expecting_sn <= prev.start_sn - 1);
 
         if (log)
-        {
             LOG_INFO(log, "Missing sn range=({}, {})", next_expecting_sn, prev.start_sn - 1);
-        }
     }
 }
 
@@ -287,9 +257,7 @@ inline void collectMissingSequenceRangeBetween(
     if (prev.start_sn != cur.start_sn && prev.end_sn + 1 != cur.start_sn)
     {
         if (log)
-        {
             LOG_INFO(log, "Missing sn range({}, {})", prev.end_sn + 1, cur.start_sn - 1);
-        }
 
         assert(prev.end_sn + 1 <= cur.start_sn - 1);
         missing_ranges.emplace_back(prev.end_sn + 1, cur.start_sn - 1);
@@ -354,9 +322,8 @@ inline void collectMissingSequenceRanges(
     const auto & prev_range = sequence_ranges[prev_index];
     auto index = cur_index;
     if (cur_index == sequence_ranges.size())
-    {
         index = cur_index - 1;
-    }
+
     const auto & cur_range = sequence_ranges[index];
 
     /// Meet a new start_sn, calculate if the parts in prev_range
@@ -420,17 +387,11 @@ bool operator==(const SequenceRange & lhs, const SequenceRange & rhs)
 bool operator<(const SequenceRange & lhs, const SequenceRange & rhs)
 {
     if (lhs.start_sn < rhs.start_sn)
-    {
         return true;
-    }
     else if (lhs.start_sn == rhs.start_sn)
-    {
         return lhs.part_index < rhs.part_index;
-    }
     else
-    {
         return false;
-    }
 }
 
 void SequenceRange::write(WriteBuffer & out) const
@@ -447,17 +408,11 @@ void SequenceRange::write(WriteBuffer & out) const
 bool SequenceInfo::valid() const
 {
     if (sequence_ranges.empty() && (!idempotent_keys || idempotent_keys->empty()))
-    {
         return false;
-    }
 
     for (const auto & seq_range: sequence_ranges)
-    {
         if (!seq_range.valid())
-        {
             return false;
-        }
-    }
 
     return true;
 }
@@ -465,9 +420,7 @@ bool SequenceInfo::valid() const
 void SequenceInfo::write(WriteBuffer & out) const
 {
     if (!valid())
-    {
         return;
-    }
 
     /// Format:
     /// version
@@ -483,9 +436,7 @@ void SequenceInfo::write(WriteBuffer & out) const
     {
         sequence_ranges[index].write(out);
         if (++index < siz)
-        {
             DB::writeText(";", out);
-        }
     }
 
     if (!idempotent_keys)
@@ -504,9 +455,7 @@ void SequenceInfo::write(WriteBuffer & out) const
         DB::writeText(",", out);
         DB::writeText(idempotent_keys->at(index).second, out);
         if (++index < siz)
-        {
             DB::writeText(";", out);
-        }
     }
     out.finalize();
 }
@@ -527,6 +476,16 @@ std::shared_ptr<SequenceInfo> SequenceInfo::read(ReadBuffer & in)
     return std::make_shared<SequenceInfo>(std::move(sequence_ranges), idempotent_keys);
 }
 
+Int64 SequenceInfo::maxSequenceID() const
+{
+    Int64 max_sn = -1;
+    for (const auto & sequence_range : sequence_ranges)
+        if (sequence_range.end_sn > max_sn)
+            max_sn = sequence_range.end_sn;
+
+    return max_sn;
+}
+
 String sequenceRangesToString(const SequenceRanges & sequence_ranges)
 {
     WriteBufferFromOwnString out;
@@ -543,9 +502,7 @@ SequenceInfoPtr
 mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, Poco::Logger * log)
 {
     if (sequences.empty())
-    {
         return nullptr;
-    }
 
     SequenceRanges sequence_ranges;
     std::set<IdempotentKey> idempotent_keys;
@@ -553,19 +510,13 @@ mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, 
     for (const auto & seq_info : sequences)
     {
         for (const auto & seq_range : seq_info->sequence_ranges)
-        {
             /// We don't filter out sequence range according to `committed_sn` here
             /// because we like to do validation
             sequence_ranges.push_back(seq_range);
-        }
 
         if (seq_info->idempotent_keys)
-        {
-            for (const auto & key : *seq_info->idempotent_keys)
-            {
-                idempotent_keys.insert(key);
-            }
-        }
+            for (auto & key : *seq_info->idempotent_keys)
+                idempotent_keys.insert(std::move(key));
     }
 
     auto merged_ranges = mergeSequenceRanges(sequence_ranges, committed_sn, log);
@@ -578,9 +529,7 @@ mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, 
 std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed, Poco::Logger * log)
 {
     if (sequence_ranges.empty())
-    {
         return {{}, committed + 1, committed + 1};
-    }
 
     std::sort(sequence_ranges.begin(), sequence_ranges.end());
 

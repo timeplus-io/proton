@@ -5,6 +5,8 @@
 #include "StreamingStoreSource.h"
 
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnDecimal.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedWALClient/KafkaWALCommon.h>
 #include <DistributedWALClient/KafkaWALPool.h>
@@ -209,6 +211,43 @@ namespace
 
         return buf.str();
     }
+
+    inline void assignSequenceID(DWAL::RecordPtr & record)
+    {
+        auto * col = record->block.findByName(RESERVED_EVENT_SEQUENCE_ID);
+        if (!col)
+            return;
+
+        auto * seq_id_col = typeid_cast<ColumnInt64 *>(col->column->assumeMutable().get());
+        if (seq_id_col)
+        {
+            auto & data = seq_id_col->getData();
+            for (auto & item : data)
+                item = record->sn;
+        }
+    }
+
+    inline void assignIndexTime(ColumnWithTypeAndName * index_time_col)
+    {
+        if (!index_time_col)
+            return;
+
+        /// index_time_col->column
+        ///    = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
+
+        const auto * type = typeid_cast<const DataTypeDateTime64 *>(index_time_col->type.get());
+        if (type)
+        {
+            auto scale = type->getScale();
+            auto * col = typeid_cast<ColumnDecimal<DateTime64> *>(index_time_col->column->assumeMutable().get());
+            assert(col);
+
+            auto now = nowSubsecond(scale).get<DateTime64>();
+            auto & data = col->getData();
+            for (auto & item : data)
+                item = now;
+        }
+    }
 }
 
 StorageDistributedMergeTree::StorageDistributedMergeTree(
@@ -342,14 +381,64 @@ void StorageDistributedMergeTree::readRemote(
         query_info.cluster);
 }
 
-void StorageDistributedMergeTree::readStreaming(
+void StorageDistributedMergeTree::readConcat(
     QueryPlan & query_plan,
-    SelectQueryInfo & /* query_info */,
-    const Names & column_names,
+    SelectQueryInfo & query_info,
+    Names column_names,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_,
-    size_t /* max_block_size */,
-    unsigned /* num_streams */)
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size)
+{
+    /// FIXME, we only support one shard processing for now. For multiple shards, we will need dispatch query to remote shard server
+    assert(!requireDistributedQuery(context_));
+
+    /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
+    /// We will need add one
+    Block header;
+    if (!column_names.empty())
+        header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+    else
+        header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
+
+    auto create_streaming_source = [this, header, metadata_snapshot, context_](Int64 & max_sn_in_parts) {
+        auto committed = storage->committedSN();
+        auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
+        if (max_sn_in_parts < 0)
+        {
+            /// Fallback to seek streaming store
+            auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
+            LOG_INFO(log, "Fused read fallbacks to seek stream. shard={}", currentShard());
+            return std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], consumer, log);
+        }
+        else if (committed < max_sn_in_parts)
+        {
+            /// This happens if there are sequence ID gaps in the parts and system is bootstrapping to fill the gap
+            /// Please refer to SequenceInfo.h for more details
+            /// Fallback to seek streaming store
+            auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
+            LOG_INFO(log, "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, current_committed_sn={}", currentShard(), max_sn_in_parts, committed);
+
+            /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
+            max_sn_in_parts = -1;
+            return std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], consumer, log);
+        }
+        else
+        {
+            LOG_INFO(log, "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}", currentShard(), max_sn_in_parts, committed);
+            return std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, currentShard(), max_sn_in_parts + 1, consumer, log);
+        }
+    };
+
+    storage->readConcat(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, std::move(create_streaming_source));
+}
+
+void StorageDistributedMergeTree::readStreaming(
+    QueryPlan & query_plan,
+    SelectQueryInfo & /*query_info*/,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    ContextPtr context_)
 {
     Pipes pipes;
     pipes.reserve(shards);
@@ -400,10 +489,18 @@ void StorageDistributedMergeTree::read(
     unsigned num_streams)
 {
     /// Non streaming window function: tail or global streaming aggr
+    const auto & settings_ref = context_->getSettingsRef();
+
     if (query_info.syntax_analyzer_result->streaming)
-        readStreaming(query_plan, query_info, column_names, metadata_snapshot, context_, max_block_size, num_streams);
+    {
+        /// FIXME, to support seek_to='-1h'
+        if (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value && !requireDistributedQuery(context_))
+            readConcat(query_plan, query_info, column_names, metadata_snapshot, std::move(context_), processed_stage, max_block_size);
+        else
+            readStreaming(query_plan, query_info, column_names, metadata_snapshot, std::move(context_));
+    }
     else
-        readHistory(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+        readHistory(query_plan, column_names, metadata_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
 }
 
 void StorageDistributedMergeTree::readHistory(
@@ -1060,30 +1157,32 @@ void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & resul
 }
 
 /// Merge `rhs` block to `lhs`
-/// FIXME : revisit SquashingTransform::append
 void StorageDistributedMergeTree::mergeBlocks(Block & lhs, Block & rhs)
 {
-    auto lhs_rows = lhs.rows();
+    /// FIXME, we are assuming schema is not changed
+    assert(blocksHaveEqualStructure(lhs, rhs));
 
-    for (auto & rhs_col : rhs)
+    /// auto lhs_rows = lhs.rows();
+
+    for (size_t pos = 0; auto & rhs_col : rhs)
     {
-        ColumnWithTypeAndName * lhs_col = lhs.findByName(rhs_col.name);
-        /// FIXME: check datatype, schema changes
+        auto & lhs_col = lhs.getByPosition(pos);
+//        if (unlikely(lhs_col == nullptr))
+//        {
+//            /// lhs doesn't have this column
+//            ColumnWithTypeAndName new_col{rhs_col.cloneEmpty()};
+//
+//            /// what about column with default expression
+//            new_col.column->assumeMutable()->insertManyDefaults(lhs_rows);
+//            lhs.insert(std::move(new_col));
+//            lhs_col = lhs.findByName(rhs_col.name);
+//        }
 
-        if (unlikely(lhs_col == nullptr))
-        {
-            /// lhs doesn't have this column
-            ColumnWithTypeAndName new_col{rhs_col.cloneEmpty()};
-
-            /// what about column with default expression
-            new_col.column->assumeMutable()->insertManyDefaults(lhs_rows);
-            lhs.insert(std::move(new_col));
-            lhs_col = lhs.findByName(rhs_col.name);
-        }
-        lhs_col->column->assumeMutable()->insertRangeFrom(*rhs_col.column.get(), 0, rhs_col.column->size());
+        lhs_col.column->assumeMutable()->insertRangeFrom(*rhs_col.column.get(), 0, rhs_col.column->size());
+        ++pos;
     }
 
-    lhs.checkNumberOfRows();
+    /// lhs.checkNumberOfRows();
 }
 
 Int64 StorageDistributedMergeTree::maxCommittedSN() const
@@ -1276,9 +1375,7 @@ void StorageDistributedMergeTree::doCommit(
                 merge_tree_sink->onStart();
 
                 /// Reset index time here
-                auto * index_time_col = const_cast<ColumnWithTypeAndName *>(moved_block.findByName(RESERVED_INDEX_TIME));
-                index_time_col->column
-                    = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
+                assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(RESERVED_INDEX_TIME)));
 
                 merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                 break;
@@ -1366,9 +1463,7 @@ bool StorageDistributedMergeTree::dedupBlock(const DWAL::RecordPtr & record)
 void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges)
 {
     if (records.empty())
-    {
         return;
-    }
 
     Block block;
     auto keys = std::make_shared<IdempotentKeys>();
@@ -1378,13 +1473,14 @@ void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRange
         if (likely(rec->op_code == DWAL::OpCode::ADD_DATA_BLOCK))
         {
             if (dedupBlock(rec))
-            {
                 continue;
-            }
+
+            assignSequenceID(rec);
 
             if (likely(block))
             {
                 /// Merge next block
+                /// assign event sequence ID to block events
                 mergeBlocks(block, rec->block);
             }
             else
@@ -1395,14 +1491,12 @@ void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRange
             }
 
             if (rec->hasIdempotentKey())
-            {
                 keys->emplace_back(rec->sn, std::move(rec->idempotentKey()));
-            }
         }
         else if (rec->op_code == DWAL::OpCode::ALTER_DATA_BLOCK)
         {
             /// FIXME: execute the later before doing any ingestion
-            throw Exception("Not impelemented", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
         }
     }
 
@@ -1468,9 +1562,7 @@ void StorageDistributedMergeTree::backgroundPoll()
             /// Check if we have something to commit
             /// Every 10 seconds, flush the local file system checkpoint
             if (MonotonicSeconds::now() - last_commit_ts >= 10)
-            {
                 periodicallyCommit();
-            }
         }
         catch (...)
         {
@@ -1495,15 +1587,11 @@ inline void StorageDistributedMergeTree::finalCommit()
     {
         std::lock_guard lock(sns_mutex);
         if (last_sn != local_sn)
-        {
             commit_sn = last_sn;
-        }
     }
 
     if (commit_sn >= 0)
-    {
         commitSNLocal(commit_sn);
-    }
 }
 
 inline void StorageDistributedMergeTree::periodicallyCommit()
@@ -1513,9 +1601,7 @@ inline void StorageDistributedMergeTree::periodicallyCommit()
     {
         std::lock_guard lock(sns_mutex);
         if (last_sn != local_sn)
-        {
             commit_sn = last_sn;
-        }
 
         if (prev_sn != last_sn)
         {
@@ -1525,14 +1611,11 @@ inline void StorageDistributedMergeTree::periodicallyCommit()
     }
 
     if (commit_sn >= 0)
-    {
         commitSNLocal(commit_sn);
-    }
 
     if (remote_commit_sn >= 0)
-    {
         commitSNRemote(remote_commit_sn);
-    }
+
     last_commit_ts = MonotonicSeconds::now();
 }
 
@@ -1560,9 +1643,7 @@ void StorageDistributedMergeTree::addSubscription()
     DWAL::TopicPartitionOffset tpo{topic, shard, snLoaded()};
     auto res = multiplexer->addSubscription(tpo, &StorageDistributedMergeTree::consumeCallback, callback_data.get());
     if (res.err != ErrorCodes::OK)
-    {
         throw Exception("Failed to add subscription for shard=" + std::to_string(shard), res.err);
-    }
 
     shared_subscription_ctx = res.ctx;
 
@@ -1587,9 +1668,7 @@ void StorageDistributedMergeTree::removeSubscription()
     DWAL::TopicPartitionOffset tpo{topic, shard, snLoaded()};
     auto res = multiplexer->removeSubscription(tpo);
     if (res != ErrorCodes::OK)
-    {
         throw Exception("Failed to remove subscription for shard=" + std::to_string(shard), res);
-    }
 
     callback_data->wait();
 
@@ -1614,31 +1693,23 @@ void StorageDistributedMergeTree::initWal()
     auto ssettings = storage_settings.get();
     const auto & offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
     if (offset_reset != "earliest" && offset_reset != "latest")
-    {
         throw Exception(
             "Invalid streaming_storage_auto_offset_reset, only 'earliest' and 'latest' are supported",
             ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
 
     Int32 dwal_request_required_acks = 1;
     auto acks = ssettings->streaming_storage_request_required_acks.value;
     if (acks >= -1 && acks <= replication_factor)
-    {
         dwal_request_required_acks = acks;
-    }
     else
-    {
         throw Exception(
             "Invalid streaming_storage_request_required_acks, shall be in [-1, " + std::to_string(replication_factor) + "] range",
             ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
 
     Int32 dwal_request_timeout_ms = 30000;
     auto timeout = ssettings->streaming_storage_request_timeout_ms.value;
     if (timeout > 0)
-    {
         dwal_request_timeout_ms = timeout;
-    }
 
     shard = ssettings->shard.value;
 
@@ -1722,9 +1793,7 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
         {
             auto relative_time = parseIntStrict<Int32>(seek_to, 0, seek_to.size() - 1);
             if (relative_time > 0)
-            {
                 throw Exception("Relative seek time shall be negative", ErrorCodes::BAD_ARGUMENTS);
-            }
 
             if (is_month)
             {

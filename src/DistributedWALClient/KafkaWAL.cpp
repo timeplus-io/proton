@@ -238,6 +238,11 @@ void KafkaWAL::startup()
 
 void KafkaWAL::shutdown()
 {
+    /// Flush first
+    rd_kafka_resp_err_t ret = rd_kafka_flush(producer_handle.get(), 10000);
+    if (ret != RD_KAFKA_RESP_ERR_NO_ERROR)
+        LOG_ERROR(log, "Failed to flush kafka, error={}", rd_kafka_err2str(ret));
+
     if (stopped.test_and_set())
         return;
 

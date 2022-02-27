@@ -20,7 +20,6 @@
 #include <Disks/StoragePolicy.h>
 #include <Common/SimpleIncrement.h>
 
-
 namespace DB
 {
 
@@ -59,6 +58,18 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
+
+    /// proton: starts. Concat historical and streaming data
+    void readConcat(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & /*metadata_snapshot*/,
+        SelectQueryInfo & query_info,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        std::function<std::shared_ptr<ISource>(Int64&)> create_streaming_source);
+    /// proton: ends
 
     std::optional<UInt64> totalRows(const Settings &) const override;
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;

@@ -59,6 +59,22 @@ namespace ErrorCodes
     extern const int PROJECTION_NOT_USED;
 }
 
+/// proton: starts
+namespace
+{
+QueryPlanPtr streamingQueryPlan(std::function<std::shared_ptr<ISource>(Int64 &)> & create_streaming_source)
+{
+    auto query_plan = std::make_unique<QueryPlan>();
+    if (!create_streaming_source)
+        return query_plan;
+
+    Int64 sn = -1;
+    auto read_step = std::make_unique<ReadFromStorageStep>(Pipe(create_streaming_source(sn)), "StorageDistributedMergeTree");
+    query_plan->addStep(std::move(read_step));
+    return query_plan;
+}
+}
+/// proton: ends
 
 MergeTreeDataSelectExecutor::MergeTreeDataSelectExecutor(const MergeTreeData & data_)
     : data(data_), log(&Poco::Logger::get(data.getLogName() + " (SelectExecutor)"))
@@ -114,7 +130,6 @@ static RelativeSize convertAbsoluteSampleSizeToRelative(const ASTPtr & node, siz
     return std::min(RelativeSize(1), RelativeSize(absolute_sample_size) / RelativeSize(approx_total_rows));
 }
 
-
 QueryPlanPtr MergeTreeDataSelectExecutor::read(
     const Names & column_names_to_return,
     const StorageMetadataPtr & metadata_snapshot,
@@ -126,8 +141,24 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
     bool enable_parallel_reading) const
 {
+    return doRead(column_names_to_return, metadata_snapshot, query_info, context, max_block_size, num_streams, processed_stage, max_block_numbers_to_read, enable_parallel_reading);
+}
+
+QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
+    const Names & column_names_to_return,
+    const StorageMetadataPtr & metadata_snapshot,
+    const SelectQueryInfo & query_info,
+    ContextPtr context,
+    const UInt64 max_block_size,
+    const unsigned num_streams,
+    QueryProcessingStage::Enum processed_stage,
+    std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
+    bool enable_parallel_reading,
+    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source) const
+{
+    /// proton: starts
     if (query_info.merge_tree_empty_result)
-        return std::make_unique<QueryPlan>();
+        return streamingQueryPlan(create_streaming_source);
 
     const auto & settings = context->getSettingsRef();
     if (!query_info.projection)
@@ -143,7 +174,9 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
             num_streams,
             max_block_numbers_to_read,
             query_info.merge_tree_select_result_ptr,
-            enable_parallel_reading);
+            enable_parallel_reading,
+            std::move(create_streaming_source));
+        /// proton: ends
 
         if (plan->isInitialized() && settings.allow_experimental_projection_optimization && settings.force_optimize_projection
             && !metadata_snapshot->projections.empty())
@@ -1216,16 +1249,19 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     const unsigned num_streams,
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
     MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr,
-    bool enable_parallel_reading) const
+    bool enable_parallel_reading,
+    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source) const
 {
+    /// proton: starts
     /// If merge_tree_select_result_ptr != nullptr, we use analyzed result so parts will always be empty.
     if (merge_tree_select_result_ptr)
     {
         if (merge_tree_select_result_ptr->marks() == 0)
-            return std::make_unique<QueryPlan>();
+            return streamingQueryPlan(create_streaming_source);
     }
     else if (parts.empty())
-        return std::make_unique<QueryPlan>();
+        return streamingQueryPlan(create_streaming_source);
+    /// proton: ends
 
     Names real_column_names;
     Names virt_column_names;
@@ -1250,7 +1286,8 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         max_block_numbers_to_read,
         log,
         merge_tree_select_result_ptr,
-        enable_parallel_reading
+        enable_parallel_reading,
+        std::move(create_streaming_source)
     );
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();
@@ -1856,4 +1893,21 @@ void MergeTreeDataSelectExecutor::selectPartsToReadWithUUIDFilter(
     }
 }
 
+/// proton: starts
+QueryPlanPtr MergeTreeDataSelectExecutor::readConcat(
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    const SelectQueryInfo & query_info,
+    ContextPtr context,
+    UInt64 max_block_size,
+    QueryProcessingStage::Enum processed_stage,
+    std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read,
+    bool enable_parallel_reading,
+    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source) const
+{
+    /// For concat read, we don't want more than 1 thread concurrency for historical data read
+    return doRead(column_names, metadata_snapshot, query_info, std::move(context), max_block_size,
+                  1, processed_stage, max_block_numbers_to_read, enable_parallel_reading, std::move(create_streaming_source));
+}
+/// proton: ends
 }

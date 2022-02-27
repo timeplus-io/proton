@@ -95,18 +95,14 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
 bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
     if (!validateSchema(create_schema, payload, error_msg))
-    {
         return false;
-    }
 
     Poco::JSON::Array::Ptr columns = payload->getArray("columns");
     for (const auto & col : *columns)
     {
         const auto col_ptr = col.extract<Poco::JSON::Object::Ptr>();
         if (!validateSchema(column_schema, col_ptr, error_msg))
-        {
             return false;
-        }
 
         /// skip checking reserved columns for local mode
         if (!isDistributedDDL())
@@ -155,9 +151,7 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
 
     std::vector<String> columns_definition;
     for (const auto & col : *columns)
-    {
         columns_definition.push_back(getCreateColumnDefination(col.extract<Poco::JSON::Object::Ptr>()));
-    }
 
     if (isDistributedDDL())
     {
@@ -173,6 +167,8 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
         }
         /// RESERVED_INDEX_TIME will need recalculate when the block gets indexed to historical store
         columns_definition.push_back("`" + RESERVED_INDEX_TIME + "` DateTime64(3, 'UTC') CODEC (DoubleDelta, LZ4)");
+        /// RESERVED_EVENT_SEQUENCE_ID will be recalculate when the block gets indexed to historical store
+        /// columns_definition.push_back("`" + RESERVED_EVENT_SEQUENCE_ID + "` Int64 CODEC (Delta, LZ4)");
     }
 
     return boost::algorithm::join(columns_definition, ",");

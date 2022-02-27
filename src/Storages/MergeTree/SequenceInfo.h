@@ -47,7 +47,7 @@ namespace DB
 ///      has to be exactly the same as missed in step 1, otherwise we may have missing data or duplicate data
 ///   f. Block with sequence numbers in [201, 299] will go through the same process (step b, c above) which will backfill
 ///      the missing data. There are sub-cases here as [201, 299] can be split into several partitions (although in
-///      normal circumenstances, they will be in one partition) and hence resulting several blocks and some blocks may
+///      normal scenarios, they will be in one partition) and hence resulting several blocks and some blocks may
 ///      be committed in local file system and some doesn't. The code needs honor these sub-cases as well.
 ///   g. The code also notices sequence [300, 600] is already committed, the tailing process just discard this data
 ///
@@ -63,7 +63,7 @@ namespace DB
 ///      sequence number 99 to any replica node.
 ///   e. Once a replica node receives the query and detects that a sequence number is sent along as well. It will scan the parts
 ///      whose associated sequence number less equal to 99. Please note this indeed requires the code to associate a correct sequence
-///      number during part merging and the merging behavior is exactly the same among replicas. The merging machenism is documented
+///      number during part merging and the merging behavior is exactly the same among replicas. The merging mechanism is documented
 ///      elsewhere
 
 class ReadBuffer;
@@ -106,7 +106,7 @@ struct SequenceInfo
 {
     SequenceRanges sequence_ranges;
 
-    /// Associated idempotenent keys
+    /// Associated idempotent keys
     std::shared_ptr<IdempotentKeys> idempotent_keys;
 
     std::shared_ptr<SequenceInfo> shallowClone(Int32 part_index, Int32 parts) const
@@ -132,6 +132,8 @@ struct SequenceInfo
     }
 
     bool valid() const;
+
+    Int64 maxSequenceID() const;
 
     void write(WriteBuffer & out) const;
 

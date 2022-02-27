@@ -77,7 +77,8 @@ ReadFromMergeTree::ReadFromMergeTree(
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
     Poco::Logger * log_,
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_,
-    bool enable_parallel_reading)
+    bool enable_parallel_reading,
+    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source_)
     : ISourceStep(DataStream{.header = MergeTreeBaseSelectProcessor::transformHeader(
         metadata_snapshot_->getSampleBlockForColumns(real_column_names_, data_.getVirtuals(), data_.getStorageID()),
         getPrewhereInfo(query_info_),
@@ -102,6 +103,7 @@ ReadFromMergeTree::ReadFromMergeTree(
     , max_block_numbers_to_read(std::move(max_block_numbers_to_read_))
     , log(log_)
     , analyzed_result_ptr(analyzed_result_ptr_)
+    , create_streaming_source(std::move(create_streaming_source_))
 {
     if (sample_factor_column_queried)
     {
@@ -222,14 +224,41 @@ Pipe ReadFromMergeTree::readInOrder(
     /// one range per task to reduce number of read rows.
     bool has_limit_below_one_block = read_type != ReadType::Default && limit && limit < max_block_size;
 
+    /// proton: starts
+    Int64 max_sn = -1;
+
     for (const auto & part : parts_with_range)
     {
-        auto source = read_type == ReadType::InReverseOrder
+        auto source = (read_type == ReadType::InReverseOrder || create_streaming_source) /// proton: we like reverse read according to event timestamp
                     ? createSource<MergeTreeReverseSelectProcessor>(part, required_columns, use_uncompressed_cache, has_limit_below_one_block)
                     : createSource<MergeTreeInOrderSelectProcessor>(part, required_columns, use_uncompressed_cache, has_limit_below_one_block);
 
         pipes.emplace_back(std::move(source));
+
+        if (part.data_part->seq_info)
+        {
+            auto sn = part.data_part->seq_info->maxSequenceID();
+            if (sn > max_sn)
+                max_sn = sn;
+        }
     }
+
+    /// proton: starts. Add streaming source after historical source
+    if (create_streaming_source)
+    {
+        auto streaming_source = create_streaming_source(max_sn);
+        if (max_sn >= 0)
+        {
+            pipes.emplace_back(std::move(streaming_source));
+        }
+        else
+        {
+            /// We can't do fused query
+            pipes.clear();
+            return Pipe(std::move(streaming_source));
+        }
+    }
+    /// proton: ends
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
 
@@ -248,6 +277,11 @@ Pipe ReadFromMergeTree::read(
     RangesInDataParts parts_with_range, Names required_columns, ReadType read_type,
     size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache)
 {
+    /// proton: starts
+    /// For concat historical data and streaming data, max stream is always 1 and read type shall be PK ordered (default)
+    assert((max_streams == 1 && read_type == ReadType::Default && create_streaming_source) || !create_streaming_source);
+    /// proton: ends
+
     if (read_type == ReadType::Default && max_streams > 1)
         return readFromPool(parts_with_range, required_columns, max_streams,
                             min_marks_for_concurrent_read, use_uncompressed_cache);
@@ -341,8 +375,18 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
 
     PartRangesReadInfo info(parts_with_ranges, settings, *data_settings);
 
+    /// proton: starts
     if (0 == info.sum_marks)
-        return {};
+    {
+        if (create_streaming_source)
+        {
+            Int64 sn = -1;
+            return Pipe(create_streaming_source(sn));
+        }
+        else
+            return {};
+    }
+    /// proton: ends
 
     size_t num_streams = requested_num_streams;
     if (num_streams > 1)
@@ -507,7 +551,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                                         info.use_uncompressed_cache, input_order_info->limit));
     }
 
-    if (need_preliminary_merge)
+    if (need_preliminary_merge && !create_streaming_source) /// proton: disable merge for streaming query
     {
         SortDescription sort_description;
         for (size_t j = 0; j < input_order_info->order_key_prefix_descr.size(); ++j)
@@ -977,7 +1021,7 @@ ReadFromMergeTree::AnalysisResult ReadFromMergeTree::getAnalysisResult() const
 void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
     auto result = getAnalysisResult();
-    LOG_DEBUG(
+    LOG_INFO(
         log,
         "Selected {}/{} parts by partition key, {} parts by primary key, {}/{} marks by primary key, {} marks to read from {} ranges",
         result.parts_before_pk,
@@ -994,11 +1038,24 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
 
     auto query_id_holder = MergeTreeDataSelectExecutor::checkLimits(data, result, context);
 
+    /// proton: starts
+    auto init_default_pipeline = [&]()
+    {
+        if (create_streaming_source)
+        {
+            Int64 sn = -1;
+            pipeline.init(Pipe(create_streaming_source(sn)));
+        }
+        else
+            pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
+    };
+
     if (result.parts_with_ranges.empty())
     {
-        pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
+        init_default_pipeline();
         return;
     }
+    /// proton: ends
 
     selected_marks = result.selected_marks;
     selected_rows = result.selected_rows;
@@ -1031,6 +1088,11 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
 
     if (select.final())
     {
+        /// proton: starts
+        if (create_streaming_source)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Final select for fused query is not supported");
+        /// proton: ends
+
         /// Add columns needed to calculate the sorting expression and the sign.
         std::vector<String> add_columns = metadata_snapshot->getColumnsRequiredForSortingKey();
         column_names_to_read.insert(column_names_to_read.end(), add_columns.begin(), add_columns.end());
@@ -1071,11 +1133,13 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
             column_names_to_read);
     }
 
+    /// proton: starts
     if (pipe.empty())
     {
-        pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
+        init_default_pipeline();
         return;
     }
+    /// proton: ends
 
     if (result.sampling.use_sampling)
     {
@@ -1328,5 +1392,4 @@ size_t MergeTreeDataSelectAnalysisResult::marks() const
         return 0;
     return index_stats.back().num_granules_after;
 }
-
 }

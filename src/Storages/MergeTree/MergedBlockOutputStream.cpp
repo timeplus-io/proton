@@ -213,7 +213,7 @@ void MergedBlockOutputStream::finalizePartOnDisk(
     /// proton: starts
     if (new_part->seq_info && new_part->seq_info->valid())
     {
-        auto out = volume->getDisk()->writeFile(part_path + "sn.txt", 4096);
+        auto out = volume->getDisk()->writeFile(fs::path(part_path) / "sn.txt", 4096);
         new_part->seq_info->write(*out);
         if (sync)
             out->sync();
