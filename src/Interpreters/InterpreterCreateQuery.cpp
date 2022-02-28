@@ -73,6 +73,7 @@
 #include <DistributedMetadata/TaskStatusService.h>
 #include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
+#include <Storages/DistributedMergeTree/StorageDistributedMergeTreeProperties.h>
 /// proton: ends.
 
 
@@ -877,7 +878,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
 
     if (!create.storage || !create.storage->engine)
     {
-        prepareEngine(create);
+        prepareEngine(create, ctx);
     }
 
     if (create.storage->engine->name != "DistributedMergeTree")
@@ -942,17 +943,11 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
             /// proton: ends
     }
 
-    /// More verification happened in storage engine creation
-    /// `relative_data_path = ""` means the stream is virtual which doesn't
-    /// bind to any file system data / metadata
-    auto res = StorageFactory::instance().get(
-        create, "" /* virtual */, ctx, ctx->getGlobalContext(), properties.columns, properties.constraints, false);
-
-    auto *storage = static_cast<StorageDistributedMergeTree *>(res.get());
-    if (storage->currentShard() >= 0)
+    assert(create.storage);
+    auto stream_properties = StorageDistributedMergeTreeProperties::create(*create.storage, properties.columns, ctx);
+    if (stream_properties->storage_settings->shard.value >= 0)
     {
         LOG_INFO(log, "Local stream creation with shard assigned");
-
         return false;
     }
 
@@ -966,9 +961,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
            {"query_id", ctx->getCurrentQueryId()},
            {"user", ctx->getUserName()}};
 
-    Int32 shards = storage->getShards();
-    Int32 replication_factor = storage->getReplicationFactor();
-    std::vector<std::pair<String, Int32>> int32_cols = {{"shards", shards}, {"replication_factor", replication_factor}};
+    std::vector<std::pair<String, Int32>> int32_cols = {{"shards", stream_properties->shards}, {"replication_factor", stream_properties->replication_factor}};
 
     /// Milliseconds since epoch
     std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};

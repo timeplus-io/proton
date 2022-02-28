@@ -12,6 +12,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -94,11 +95,11 @@ ASTPtr functionToAST(const String & query)
     return parseQuery(parser, start, end, "", 0, 0);
 }
 
-void prepareEngine(ASTCreateQuery & create)
+void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
 {
-    Field shards = DEFAULT_SHARDS;
-    Field replicas = DEFAULT_REPLICAS;
-    Field sharding_expr_field = DEFAULT_SHARDING_EXPR;
+    Field shards = ctx->getStreamSettings().default_shards.value;
+    Field replicas = ctx->getStreamSettings().default_replicas.value;
+    Field sharding_expr_field = ctx->getStreamSettings().default_sharding_expr.value;
     String expr;
 
     if (!create.storage)

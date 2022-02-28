@@ -1,5 +1,5 @@
+#include <Interpreters/Context.h>
 #include <Interpreters/Streaming/DDLHelper.h>
-
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ParserQuery.h>
@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <Poco/Net/HTTPRequest.h>
+#include <Poco/Util/XMLConfiguration.h>
 
 using namespace DB;
 
@@ -301,7 +302,7 @@ CREATE STREAM default.tests (
   `timestamp` DateTime64(3) DEFAULT now64(3),
   `ttl` DateTime DEFAULT now(),
   `_tp_time` DateTime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
-  `_tp_index_time` DateTime64(3,'UTC') DEFAULT now64(3, 'UTC') CODEC(DoubleDelta(), LZ4())
+  `_tp_index_time` DateTime64(3,'UTC') CODEC(DoubleDelta(), LZ4())
 ) ENGINE = DistributedMergeTree(1, 1, rand())
 PARTITION BY to_YYYYMMDD(_tp_time)
 ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
@@ -309,6 +310,13 @@ ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour
 
 TEST(DDLHelper, prepareEngine)
 {
+    auto shared_context = Context::createShared();
+    auto global_context = Context::createGlobal(shared_context.get());
+    global_context->makeGlobalContext();
+
+    Poco::AutoPtr<Poco::Util::AbstractConfiguration> config(new Poco::Util::XMLConfiguration());
+    global_context->setConfig(config);
+
     ASTPtr ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
@@ -316,7 +324,7 @@ CREATE STREAM default.tests
 ))###");
     auto * create = ast->as<ASTCreateQuery>();
 
-    prepareEngine(*create);
+    prepareEngine(*create, global_context);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = DistributedMergeTree(1, 1, rand()))###"));
 
     ast = queryToAST(R"###(
@@ -327,6 +335,8 @@ CREATE STREAM default.tests
 SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
 )###");
     create = ast->as<ASTCreateQuery>();
-    prepareEngine(*create);
-    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE=DistributedMergeTree(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));
+    prepareEngine(*create, global_context);
+    EXPECT_EQ(
+        ignoreEmptyChars(queryToString(*create->storage)),
+        ignoreEmptyChars(R"###(ENGINE=DistributedMergeTree(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));
 }

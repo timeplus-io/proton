@@ -974,6 +974,25 @@ send_crash_reports:
 #            column_family_options:
 #                num_levels: 2
 
+max_concurrent_queries: 100
+max_concurrent_insert_queries: 100
+max_concurrent_select_queries: 100
+
+settings:
+    global:
+        query_mode: streaming               # Default query mode. table or streaming
+        query_resource_group: "dedicated"   # Default resource group. dedicated or shared
+        enable_light_ingest: true           # Light ingest is inserting partial columns of a table
+        synchronous_ddl: true               # If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.
+        asterisk_include_reserved_columns: true # Show reserved columns on SELECT query.
+
+    stream:
+        default_shards: 1
+        default_replicas: 1
+        default_sharding_expr: "rand()"
+        distributed_ingest_mode: "async"    # Data ingestion mode for Stream
+
+    view:
 
 cluster_settings:
     streaming_storage:
@@ -1040,6 +1059,7 @@ cluster_settings:
         replication_factor: 1
         log_roll_size: 100
         log_roll_period: 7200
+        schedule_intervals: 5000
 
     # Internal Kafka topic for system tasks status
     system_tasks:
@@ -1063,9 +1083,6 @@ cluster_settings:
             - catalog
             - ddl
             - task
-
-    schedule_intervals:
-        node_metrics: 5000
 
 # Metastore server config
 metastore_server:

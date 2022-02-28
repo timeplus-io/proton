@@ -32,7 +32,9 @@
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
 #include <Storages/System/StorageSystemSettings.h>
-#include <Storages/System/StorageSystemMergeTreeSettings.h>
+/// proton: starts.
+#include <Storages/Streaming/StorageSystemStreamSettings.h>
+/// proton: ends.
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
 #include <Storages/System/StorageSystemTables.h>
@@ -86,8 +88,9 @@ void attachSystemTablesLocal(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemFunctions>(context, system_database, "functions");
     attach<StorageSystemEvents>(context, system_database, "events");
     attach<StorageSystemSettings>(context, system_database, "settings");
-    attach<SystemMergeTreeSettings<false>>(context, system_database, "merge_tree_settings");
-    attach<SystemMergeTreeSettings<true>>(context, system_database, "replicated_merge_tree_settings");
+    /// proton: starts. remove `merge tree` `replicated` and add `stream`
+    attach<SystemStreamSettings>(context, system_database, "stream_settings");
+    /// proton: ends
     attach<StorageSystemBuildOptions>(context, system_database, "build_options");
     attach<StorageSystemFormats>(context, system_database, "formats");
     attach<StorageSystemTableFunctions>(context, system_database, "table_functions");

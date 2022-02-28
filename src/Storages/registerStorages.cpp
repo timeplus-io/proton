@@ -19,6 +19,7 @@ void registerStorageSet(StorageFactory & factory);
 void registerStorageJoin(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
 /// proton: starts.
+void registerStorageDistributedMergeTree(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
 /// proton: ends.
 void registerStorageGenerateRandom(StorageFactory & factory);
@@ -57,6 +58,7 @@ void registerStorages()
     registerStorageJoin(factory);
     registerStorageView(factory);
     /// proton: starts.
+    registerStorageDistributedMergeTree(factory);
     registerStorageMaterializedView(factory);
     /// proton: ends.
     registerStorageGenerateRandom(factory);

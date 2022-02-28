@@ -18,6 +18,9 @@ namespace ErrorCodes
 }
 
 IMPLEMENT_SETTINGS_TRAITS(SettingsTraits, LIST_OF_SETTINGS)
+/// proton: starts.
+IMPLEMENT_SETTINGS_TRAITS(ConfigurableSettingsTraits, CONFIGURABLE_GLOBAL_SETTINGS)
+/// proton: ends.
 
 /** Set the settings from the profile (in the server configuration, many settings can be listed in one profile).
     * The profile can also be set using the `set` functions, like the `profile` setting.

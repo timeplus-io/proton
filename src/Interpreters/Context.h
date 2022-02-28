@@ -83,7 +83,6 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class ZooKeeperLog;
 class SessionLog;
-struct MergeTreeSettings;
 class StorageS3Settings;
 class IDatabase;
 class DDLWorker;
@@ -127,6 +126,8 @@ class IInputFormat;
 /// proton: starts.
 class MetaStoreDispatcher;
 class PipelineMetricLog;
+struct StreamSettings;
+using MergeTreeSettings = StreamSettings;
 /// proton: ends.
 
 class IOutputFormat;
@@ -840,8 +841,10 @@ public:
     std::shared_ptr<PartLog> getPartLog(const String & part_database) const;
 
     const MergeTreeSettings & getMergeTreeSettings() const;
-    const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
-    const MergeTreeSettings & getDistributedMergeTreeSettings() const;
+    /// proton: starts. add `stream`
+    const StreamSettings & getStreamSettings() const;
+    void applyGlobalSettingsFromConfig();
+    /// proton: ends.
     const StorageS3Settings & getStorageS3Settings() const;
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)

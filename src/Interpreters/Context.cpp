@@ -78,8 +78,9 @@
 #include <filesystem>
 
 /// proton: starts
-#include <base/getFQDNOrHostName.h>
 #include <Coordination/MetaStoreDispatcher.h>
+#include <Core/SettingsUtil.h>
+#include <base/getFQDNOrHostName.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -233,9 +234,10 @@ struct ContextSharedPart
     /// Storage policy chooser for MergeTree engines
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
 
-    std::optional<MergeTreeSettings> merge_tree_settings;   /// Settings of MergeTree* engines.
-    std::optional<MergeTreeSettings> replicated_merge_tree_settings;   /// Settings of ReplicatedMergeTree* engines.
-    std::optional<MergeTreeSettings> distributed_merge_tree_settings;   /// Settings of DistributedMergeTree* engines.
+    /// proton: starts. remove `replicated` and add `stream`
+    std::optional<StreamSettings> stream_settings;       /// Settings of DistributedMergeTree* engines.
+    /// proton: ends.
+
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
@@ -2307,53 +2309,33 @@ void Context::updateStorageConfiguration(const Poco::Util::AbstractConfiguration
     }
 }
 
-
+/// proton: starts. remove `merge tree` and add `stream`
+/// Priority: Declared < Configured < Specified
 const MergeTreeSettings & Context::getMergeTreeSettings() const
 {
-    auto lock = getLock();
-
-    if (!shared->merge_tree_settings)
-    {
-        const auto & config = getConfigRef();
-        MergeTreeSettings mt_settings;
-        mt_settings.loadFromConfig("merge_tree", config);
-        shared->merge_tree_settings.emplace(mt_settings);
-    }
-
-    return *shared->merge_tree_settings;
+    return getStreamSettings();
 }
 
-const MergeTreeSettings & Context::getReplicatedMergeTreeSettings() const
+const StreamSettings & Context::getStreamSettings() const
 {
     auto lock = getLock();
 
-    if (!shared->replicated_merge_tree_settings)
+    if (!shared->stream_settings)
     {
-        const auto & config = getConfigRef();
-        MergeTreeSettings mt_settings;
-        mt_settings.loadFromConfig("merge_tree", config);
-        mt_settings.loadFromConfig("replicated_merge_tree", config);
-        shared->replicated_merge_tree_settings.emplace(mt_settings);
+        StreamSettings settings;
+        /// Apply configured stream settings.
+        settings.applyChanges(loadSettingChangesFromConfig<ConfigurableStreamSettingsTraits>("settings.stream", getConfigRef()));
+        shared->stream_settings.emplace(settings);
     }
 
-    return *shared->replicated_merge_tree_settings;
+    return *shared->stream_settings;
 }
 
-const MergeTreeSettings & Context::getDistributedMergeTreeSettings() const
+void Context::applyGlobalSettingsFromConfig()
 {
-    auto lock = getLock();
-
-    if (!shared->distributed_merge_tree_settings)
-    {
-        const auto & config = getConfigRef();
-        MergeTreeSettings mt_settings;
-        mt_settings.loadFromConfig("merge_tree", config);
-        mt_settings.loadFromConfig("distributed_merge_tree", config);
-        shared->distributed_merge_tree_settings.emplace(mt_settings);
-    }
-
-    return *shared->distributed_merge_tree_settings;
+    settings.applyChanges(loadSettingChangesFromConfig<ConfigurableSettingsTraits>("settings.global", getConfigRef()));
 }
+/// proton: ends.
 
 const StorageS3Settings & Context::getStorageS3Settings() const
 {

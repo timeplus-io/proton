@@ -41,7 +41,7 @@ PlacementService::PlacementService(const ContextMutablePtr & global_context_, Pl
     : MetadataService(global_context_, "PlacementService"), catalog(CatalogService::instance(global_context_)), strategy(strategy_)
 {
     const auto & config = global_context->getConfigRef();
-    reschedule_interval = config.getUInt("cluster_settings.schedule_intervals.node_metrics", RESCHEDULE_INTERVAL_MS);
+    reschedule_interval = config.getUInt(PLACEMENT_KEY_PREFIX + "schedule_intervals", RESCHEDULE_INTERVAL_MS);
 }
 
 MetadataService::ConfigSettings PlacementService::configSettings() const

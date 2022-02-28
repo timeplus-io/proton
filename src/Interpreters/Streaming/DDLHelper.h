@@ -14,7 +14,7 @@ namespace DB
 {
 void getAndValidateStorageSetting(
     std::function<String(const String &)> get_setting, std::function<void(const String &, const String &)> handle_setting);
-void prepareEngine(ASTCreateQuery & create);
+void prepareEngine(ASTCreateQuery & create, ContextPtr ctx);
 /// prepare engine settings for REST API call
 void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx);
 void prepareColumns(ASTCreateQuery & create);

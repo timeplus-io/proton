@@ -16,10 +16,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 #include <Interpreters/evaluateConstantExpression.h>
-/// proton: starts
-#include <Interpreters/TreeRewriter.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-/// proton: ends
 
 
 namespace DB
@@ -91,73 +87,6 @@ If you use the Replicated version of engines, see https://clickhouse.com/docs/en
     return help;
 }
 
-/// proton: starts
-static ExpressionActionsPtr buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns, bool project)
-{
-    ASTPtr query = sharding_key;
-    auto syntax_result = TreeRewriter(context).analyze(query, columns);
-    return ExpressionAnalyzer(query, syntax_result, context).getActions(project);
-}
-
-static std::tuple<UInt64, UInt64, ASTPtr> distributedParameters(const StorageFactory::Arguments & args)
-{
-    /// DistributedMergeTree(shards, replicas, sharding_expr)
-    UInt64 shards = 0;
-    UInt64 replication_factor = 0;
-    ASTs & engine_args = args.engine_args;
-
-    if (engine_args.size() != 3)
-    {
-        throw Exception("The current Storage requires 3 parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    }
-
-    ASTLiteral * shards_ast = engine_args[0]->as<ASTLiteral>();
-    if (shards_ast && shards_ast->value.getType() == Field::Types::UInt64)
-    {
-        shards = safeGet<UInt64>(shards_ast->value);
-    }
-    else
-    {
-        throw Exception("Shards must be an unsigned integer" + getMergeTreeVerboseHelp(true),
-                        ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    ASTLiteral * replication_factor_ast = engine_args[1]->as<ASTLiteral>();
-    if (replication_factor_ast && replication_factor_ast->value.getType() == Field::Types::UInt64)
-    {
-        replication_factor = safeGet<UInt64>(replication_factor_ast->value);
-    }
-    else
-    {
-        throw Exception("Replication factor must be an unsigned integer" + getMergeTreeVerboseHelp(true),
-                ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    const auto & sharding_key = engine_args[2];
-    if (sharding_key)
-    {
-        auto sharding_expr = buildShardingKeyExpression(sharding_key, args.getLocalContext(), args.columns.getAllPhysical(), true);
-        const Block & block = sharding_expr->getSampleBlock();
-
-        if (block.columns() != 1)
-            throw Exception("Sharding expression must return exactly one column", ErrorCodes::INCORRECT_NUMBER_OF_COLUMNS);
-
-        auto type = block.getByPosition(0).type;
-
-        if (!type->isValueRepresentedByInteger())
-            throw Exception("Sharding expression has type " + type->getName() +
-                ", but should be one of integer type", ErrorCodes::TYPE_MISMATCH);
-    }
-    else
-    {
-        throw Exception("Sharding key expression is required " + getMergeTreeVerboseHelp(true),
-                ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    return {shards, replication_factor, engine_args[2]};
-}
-/// proton: ends
-
 static StoragePtr create(const StorageFactory::Arguments & args)
 {
     /** [Replicated][|Summing|VersionedCollapsing|Collapsing|Aggregating|Replacing|Graphite]MergeTree (2 * 7 combinations) engines
@@ -191,29 +120,11 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         *  - Additional MergeTreeSettings in the SETTINGS clause;
         */
 
-    /** * DistributedMergeTree engine arguments : DistributedMergeTree(replication_factor, shards, shard_by_expr)
-        * - replication_factor
-        * - shards
-        * - shard_by_expr
-
-        * DistributedMergeTree engine settings :
-        * - streaming_storage=kafka
-        * - streaming_storage_cluster_id=<my_cluster>
-        * - streaming_storage_partition=<partition>
-        * - streaming_storage_request_required_acks=1
-        * - streaming_storage_request_timeout_ms=30000
-        * - streaming_storage_auto_offset_reset=earliest
-        */
-
     bool is_extended_storage_def = args.storage_def->partition_by || args.storage_def->primary_key || args.storage_def->order_by
         || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
         || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings;
 
     String name_part = args.engine_name.substr(0, args.engine_name.size() - strlen("MergeTree"));
-
-    bool distributed = startsWith(name_part, "Distributed");
-    if (distributed)
-        name_part = name_part.substr(strlen("Distributed"));
 
     MergeTreeData::MergingParams merging_params;
     merging_params.mode = MergeTreeData::MergingParams::Ordinary;
@@ -254,13 +165,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         needed_params += desc;
         needed_params += "]";
     };
-
-    if (distributed)
-    {
-        add_mandatory_param("replication factor");
-        add_mandatory_param("shards");
-        add_mandatory_param("sharding key expression");
-    }
 
     if (!is_extended_storage_def)
     {
@@ -321,7 +225,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def && !distributed) /// proton: exclude DistributedMergeTree
+    if (is_extended_storage_def)
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.
@@ -348,17 +252,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot evaluate engine argument {}: {} {}",
                             arg_idx, e.message(), getMergeTreeVerboseHelp(is_extended_storage_def));
         }
-    }
-
-    /// For Distributed
-    UInt64 replication_factor = 0;
-    UInt64 shards = 0;
-    ASTPtr sharding_key = nullptr;
-
-    if (distributed)
-    {
-        std::tie(shards, replication_factor, sharding_key) = distributedParameters(args);
-        arg_num += 3;
     }
 
     /// This merging param maybe used as part of sorting key
@@ -444,10 +337,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     std::unique_ptr<MergeTreeSettings> storage_settings;
 
-    if (distributed)
-        storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getDistributedMergeTreeSettings());
-    else
-        storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings());
+    storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings());
 
     if (is_extended_storage_def)
     {
@@ -607,31 +497,16 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (arg_num != arg_cnt)
         throw Exception("Wrong number of engine arguments.", ErrorCodes::BAD_ARGUMENTS);
 
-    if (distributed)
-        return StorageDistributedMergeTree::create(
-            replication_factor,
-            shards,
-            sharding_key,
-            args.table_id,
-            args.relative_data_path,
-            metadata,
-            args.attach,
-            args.getContext(),
-            date_column_name,
-            merging_params,
-            std::move(storage_settings),
-            args.has_force_restore_data_flag);
-    else
-        return StorageMergeTree::create(
-            args.table_id,
-            args.relative_data_path,
-            metadata,
-            args.attach,
-            args.getContext(),
-            date_column_name,
-            merging_params,
-            std::move(storage_settings),
-            args.has_force_restore_data_flag);
+    return StorageMergeTree::create(
+        args.table_id,
+        args.relative_data_path,
+        metadata,
+        args.attach,
+        args.getContext(),
+        date_column_name,
+        merging_params,
+        std::move(storage_settings),
+        args.has_force_restore_data_flag);
 }
 
 
@@ -653,12 +528,6 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("SummingMergeTree", create, features);
     factory.registerStorage("GraphiteMergeTree", create, features);
     factory.registerStorage("VersionedCollapsingMergeTree", create, features);
-
-    features.supports_replication = true;
-    features.supports_deduplication = true;
-    features.supports_schema_inference = true;
-
-    factory.registerStorage("DistributedMergeTree", create, features);
 }
 
 }

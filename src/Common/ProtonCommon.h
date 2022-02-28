@@ -28,9 +28,6 @@ const String RESERVED_EVENT_SEQUENCE_ID = "_tp_sn";
 const String RESERVED_EVENT_TIME_API_NAME = "event_time_column";
 const std::vector<String> RESERVED_COLUMN_NAMES = {RESERVED_EVENT_TIME, RESERVED_INDEX_TIME};
 const String DEFAULT_EVENT_TIME = "now64(3, 'UTC')";
-const UInt64 DEFAULT_SHARDS = 1;
-const UInt64 DEFAULT_REPLICAS = 1;
-const String DEFAULT_SHARDING_EXPR = "rand()";
 const String DEFAULT_STORAGE_TYPE = "hybrid";
 const String STORAGE_TYPE_STREAMING = "streaming";
 

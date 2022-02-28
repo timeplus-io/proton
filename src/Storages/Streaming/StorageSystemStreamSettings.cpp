@@ -1,14 +1,14 @@
+#include "StorageSystemStreamSettings.h"
+
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
-#include <Storages/System/StorageSystemMergeTreeSettings.h>
 
 
 namespace DB
 {
 
-template <bool replicated>
-NamesAndTypesList SystemMergeTreeSettings<replicated>::getNamesAndTypes()
+NamesAndTypesList SystemStreamSettings::getNamesAndTypes()
 {
     return {
         {"name",        std::make_shared<DataTypeString>()},
@@ -19,10 +19,9 @@ NamesAndTypesList SystemMergeTreeSettings<replicated>::getNamesAndTypes()
     };
 }
 
-template <bool replicated>
-void SystemMergeTreeSettings<replicated>::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
+void SystemStreamSettings::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    const auto & settings = replicated ? context->getReplicatedMergeTreeSettings().all() : context->getMergeTreeSettings().all();
+    const auto & settings = context->getStreamSettings().all();
     for (const auto & setting : settings)
     {
         res_columns[0]->insert(setting.getName());
@@ -32,7 +31,4 @@ void SystemMergeTreeSettings<replicated>::fillData(MutableColumns & res_columns,
         res_columns[4]->insert(setting.getTypeName());
     }
 }
-
-template class SystemMergeTreeSettings<false>;
-template class SystemMergeTreeSettings<true>;
 }

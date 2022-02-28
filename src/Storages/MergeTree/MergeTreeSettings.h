@@ -149,14 +149,19 @@ struct Settings;
     M(UInt64, replicated_max_parallel_fetches, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, replicated_max_parallel_fetches_for_table, 0, "Obsolete setting, does nothing.", 0) \
     M(Bool, write_final_mark, true, "Obsolete setting, does nothing.", 0) \
-    /** Settings for DistributedMergeTree */                                                                                                                                                                                                                         \
-    M(UInt64, shards, 1, "Shards number for DistributedMergeTree table", 0)                                                                                                                                                           \
-    M(UInt64, replicas, 1, "Replicas number for DistributedMergeTree table", 0) \
-    M(String, sharding_expr, "rand()", "Sharding method of DistributedMergeTree table. Default is 'rand()'.", 0)                                                                                               \
-    M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of DistributedMergeTree table. Default is '_tp_time'.", 0)                                     \
+    /// Settings that should not change after the creation of a table.
+#define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
+    M(index_granularity)
+
+#define STREAM_SETTINGS(M) \
+    /** Settings for Stream */ \
+    M(UInt64, shards, 1, "Shards number for Stream", 0) \
+    M(UInt64, replicas, 1, "Replicas number for Stream", 0) \
+    M(String, sharding_expr, "rand()", "Sharding method of Stream. Default is 'rand()'.", 0) \
+    M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
     M(Int64, shard, -1, "Current shard number", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
-    M(String, storage_type, "hybrid", "DistributedMergeTree can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
+    M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
     M(String, streaming_storage, "kafka", "Backend streaming storage for write ahead log implementation", 0) \
     M(String, streaming_storage_cluster_id, "", "Backend streaming storage cluster id", 0) \
     M(String, streaming_storage_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \
@@ -167,21 +172,30 @@ struct Settings;
     M(Int64, streaming_storage_retention_ms, -1, "when this threshold reaches, streaming storage delete old data", 0) \
     M(Int64, streaming_storage_flush_messages, -1, "Tell streaming storage to call fsync per flush messages", 0) \
     M(Int64, streaming_storage_flush_ms, -1, "Tell streaming storage to call fsync every flush_ms interval", 0) \
-    M(Int64, distributed_flush_threshold_ms, 1000, "Time threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
-    M(Int64, distributed_flush_threshold_count, 1000000, "Row count threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
-    M(Int64, distributed_flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for DistributedMergeTree to flush consumed data from write-ahead log", 0) \
-    M(String, distributed_ingest_mode, "async", "Data ingestion mode for DistributedMergeTree", 0) \
-    /// Settings that should not change after the creation of a table.
-#define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
-    M(index_granularity)
+    M(Int64, distributed_flush_threshold_ms, 1000, "Time threshold for streaming storage to flush consumed data from write-ahead log", 0) \
+    M(Int64, distributed_flush_threshold_count, 1000000, "Row count threshold for streaming storage to flush consumed data from write-ahead log", 0) \
+    M(Int64, distributed_flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for streaming storage to flush consumed data from write-ahead log", 0) \
+// End of STREAM_SETTINGS
 
-DECLARE_SETTINGS_TRAITS(MergeTreeSettingsTraits, LIST_OF_MERGE_TREE_SETTINGS)
+#define CONFIGURABLE_STREAM_SETTINGS(M) \
+    M(UInt64, default_shards, 1, "Default shards number for Stream", 0) \
+    M(UInt64, default_replicas, 1, "Default replicas number for Stream", 0) \
+    M(String, default_sharding_expr, "rand()", "Default sharding method of Stream", 0) \
+    M(String, distributed_ingest_mode, "async", "Data ingestion mode for Stream", 0) \
+// End of CONFIGURABLE_STREAM_SETTINGS
 
+#define LIST_STREAM_SETTINGS(M) \
+    LIST_OF_MERGE_TREE_SETTINGS(M)  \
+    STREAM_SETTINGS(M)              \
+    CONFIGURABLE_STREAM_SETTINGS(M) \
+
+DECLARE_SETTINGS_TRAITS(StreamSettingsTraits, LIST_STREAM_SETTINGS)
+DECLARE_SETTINGS_TRAITS(ConfigurableStreamSettingsTraits, CONFIGURABLE_STREAM_SETTINGS)
 
 /** Settings for the MergeTree family of engines.
   * Could be loaded from config or from a CREATE STREAM query (SETTINGS clause).
   */
-struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
+struct StreamSettings : public BaseSettings<StreamSettingsTraits>
 {
     void loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config);
 
@@ -205,6 +219,6 @@ struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
     void sanityCheck(const Settings & query_settings) const;
 };
 
+using MergeTreeSettings = StreamSettings;
 using MergeTreeSettingsPtr = std::shared_ptr<const MergeTreeSettings>;
-
 }

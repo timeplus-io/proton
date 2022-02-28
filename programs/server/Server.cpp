@@ -82,6 +82,7 @@
 #include "Common/config_version.h"
 
 /// proton: starts
+#include <Core/SettingsUtil.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
@@ -662,6 +663,9 @@ if (ThreadFuzzer::instance().isEffective())
     global_context->addWarningMessage("Server was built with sanitizer. It will work slowly.");
 #endif
 
+    /// proton: starts. load configured global settings.
+    global_context->applyGlobalSettingsFromConfig();
+    /// proton: ends.
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
@@ -1276,8 +1280,9 @@ if (ThreadFuzzer::instance().isEffective())
     fs::create_directories(format_schema_path);
 
     /// Check sanity of MergeTreeSettings on server startup
-    global_context->getMergeTreeSettings().sanityCheck(settings);
-    global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
+    /// proton: starts. replace 'merge tree' to stream settings
+    global_context->getStreamSettings().sanityCheck(settings);
+    /// proton: ends.
 
     /// try set up encryption. There are some errors in config, error will be printed and server wouldn't start.
     CompressionCodecEncrypted::Configuration::instance().load(config(), "encryption_codecs");

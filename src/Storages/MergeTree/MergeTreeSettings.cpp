@@ -16,7 +16,10 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
-IMPLEMENT_SETTINGS_TRAITS(MergeTreeSettingsTraits, LIST_OF_MERGE_TREE_SETTINGS)
+/// proton: starts.
+IMPLEMENT_SETTINGS_TRAITS(StreamSettingsTraits, LIST_STREAM_SETTINGS)
+IMPLEMENT_SETTINGS_TRAITS(ConfigurableStreamSettingsTraits, CONFIGURABLE_STREAM_SETTINGS)
+/// proton: ends.
 
 void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config)
 {

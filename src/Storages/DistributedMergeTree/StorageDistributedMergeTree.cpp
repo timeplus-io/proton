@@ -261,7 +261,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
     ContextMutablePtr context_,
     const String & date_column_name_,
     const MergingParams & merging_params_,
-    std::unique_ptr<MergeTreeSettings> settings_,
+    std::unique_ptr<StreamSettings> settings_,
     bool has_force_restore_data_flag_)
     : MergeTreeData(
         table_id_,
@@ -470,10 +470,16 @@ void StorageDistributedMergeTree::readStreaming(
         auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
 
         for (Int32 i = 0; i < shards; ++i)
-            pipes.emplace_back(std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, i, offsets[i], consumer, log));
+            pipes.emplace_back(std::make_shared<StreamingStoreSource>(
+                shared_from_this(), header, metadata_snapshot, context_, i, offsets[i], consumer, log));
     }
 
-    LOG_INFO(log, "Starting reading {} streams by seeking to {} in {} resource group", pipes.size(), settings_ref.seek_to.value, share_resource_group ? "shared" : "dedicated");
+    LOG_INFO(
+        log,
+        "Starting reading {} streams by seeking to {} in {} resource group",
+        pipes.size(),
+        settings_ref.seek_to.value,
+        share_resource_group ? "shared" : "dedicated");
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
 }
@@ -861,9 +867,9 @@ void StorageDistributedMergeTree::startBackgroundMovesIfNeeded()
     return storage->startBackgroundMovesIfNeeded();
 }
 
-std::unique_ptr<MergeTreeSettings> StorageDistributedMergeTree::getDefaultSettings() const
+std::unique_ptr<StreamSettings> StorageDistributedMergeTree::getDefaultSettings() const
 {
-    return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+    return std::make_unique<StreamSettings>(getContext()->getStreamSettings());
 }
 
 /// Distributed query related functions
@@ -1835,4 +1841,5 @@ std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_t
         return dwal->offsetsForTimestamps(topic, utc_ms, shards);
     }
 }
+
 }
