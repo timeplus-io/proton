@@ -13,12 +13,6 @@ profiles:
         # first_or_random - if first replica one has higher number of errors, pick a random one from replicas with minimum number of errors.
         load_balancing: random
 
-        record_consume_batch_count: 1000
-        record_consume_timeout: 100
-
-        # If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.
-        synchronous_ddl: true
-
         # Profile that allows only read queries.
     readonly:
         readonly: 1
@@ -89,7 +83,7 @@ users:
         # All results of DNS requests are cached till server restart.
 
         networks:
-            ip: '::/0'
+            - ip: '::/0'
 
         # Settings profile for user.
         profile: default
@@ -131,6 +125,15 @@ users:
         password: 'neutron@t+'
         networks:
             ip: '::/0'
+
+    proton:
+        default_database: default
+
+        password: 'proton@t+'
+        networks:
+            - ip: '::1'
+            - ip: 127.0.0.1
+        access_management: 1
 
 # Quotas.
 quotas:
