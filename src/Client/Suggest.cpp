@@ -62,7 +62,7 @@ static String getLoadSuggestionQuery(Int32 suggestion_limit, bool basic_suggesti
         " UNION ALL "
         "SELECT name FROM system.data_type_families"
         " UNION ALL "
-        "SELECT name FROM system.merge_tree_settings"
+        "SELECT name FROM system.stream_settings"
         " UNION ALL "
         "SELECT name FROM system.settings"
         " UNION ALL ";
