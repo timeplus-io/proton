@@ -113,25 +113,31 @@ def scan_tests_file_path(tests_file_path):
     all_test_suites_json = []
     test_suites_set_list = []
     test_suites_set_env = os.getenv("PROTON_TEST_SUITES", None)
-    if test_suites_set_env != None: 
-        test_suites_set_list =test_suites_set_env.split(",")
-        
-    logger.info(f"tests_file_path = {tests_file_path}, test_suites_env = {test_suites_set_env}, test_suite_set_list = {test_suites_set_list}")
+    if test_suites_set_env != None:
+        test_suites_set_list = test_suites_set_env.split(",")
+
+    logger.info(
+        f"tests_file_path = {tests_file_path}, test_suites_env = {test_suites_set_env}, test_suite_set_list = {test_suites_set_list}"
+    )
     files = os.listdir(tests_file_path)
-    logger.debug(f"files = {files}") 
+    logger.debug(f"files = {files}")
     for file_name in files:
-        if file_name.endswith(".json"): 
+        if file_name.endswith(".json"):
             file_abs_path = f"{tests_file_path}/{file_name}"
             logger.debug(f"file_abs_path = {file_abs_path}")
             with open(file_abs_path) as test_suite_file:
                 test_suite = json.load(test_suite_file)
-                logger.debug(f"test_suite_file = {test_suite_file}, was loaded successfully.")
+                logger.debug(
+                    f"test_suite_file = {test_suite_file}, was loaded successfully."
+                )
                 test_suite_name = test_suite.get("test_suite_name")
                 if test_suite_name == None:
                     logger.debug(f"test_suite_name is vacant and ignore this json file")
                     pass
                 else:
-                    logger.debug(f"check if test_sute_name = {test_suite_name} in test_suites_set_list = {test_suites_set_list}")
+                    logger.debug(
+                        f"check if test_sute_name = {test_suite_name} in test_suites_set_list = {test_suites_set_list}"
+                    )
                     if test_suites_set_list == None:
                         test_suites_selected.append(test_suite)
                         test_suite_names_selected.append(test_suite_name)
@@ -145,7 +151,10 @@ def scan_tests_file_path(tests_file_path):
                         pass
     logger.info(f"test_suite_names_selected = {test_suite_names_selected}")
 
-    return {"test_suite_names_selected":test_suite_names_selected, "test_suites_selected":test_suites_selected}
+    return {
+        "test_suite_names_selected": test_suite_names_selected,
+        "test_suites_selected": test_suites_selected,
+    }
 
 
 def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=None):
@@ -168,11 +177,12 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     # proton_server = config.get("proton_server")
     # proton_server_native_port = config.get("proton_server_native_port")
     res_scan_tests_file_path = scan_tests_file_path(tests_file_path)
-    #logger.debug(f"res_scan_tests_file_path = {res_scan_tests_file_path}")
-    test_suite_names_selected = res_scan_tests_file_path.get("test_suite_names_selected")
+    # logger.debug(f"res_scan_tests_file_path = {res_scan_tests_file_path}")
+    test_suite_names_selected = res_scan_tests_file_path.get(
+        "test_suite_names_selected"
+    )
     test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
     logger.debug(f"test_suite_names_selected = {test_suite_names_selected}")
-
 
     # tests = test_suite.get("tests")
     (
@@ -203,7 +213,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     rockets_context = {
         "config": config,
         "test_suite_names_selected": test_suite_names_selected,
-        "test_suites_selected":test_suites_selected,
+        "test_suites_selected": test_suites_selected,
         "query_exe_client": query_exe_client,
         "docker_compose_file": docker_compose_file,
         "query_exe_parent_conn": query_exe_parent_conn,
@@ -236,6 +246,28 @@ def tuple_2_list(tuple):
     return _list
 
 
+def query_id_exist_py(py_client, query_id, query_exist_check_sql=None):
+    logger = mp.get_logger()
+
+    if query_exist_check_sql == None:
+        query_exist_check_sql = "select query_id from system.processes"
+    try:
+        # logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to be called.")
+        res_check_query_id = py_client.execute(query_exist_check_sql)
+        logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to was called.")
+        logger.debug(f"res_check_query_id = {res_check_query_id}")
+        if res_check_query_id != None and isinstance(res_check_query_id, list):
+            for element in res_check_query_id:
+                if query_id in element:
+                    return True
+            return False
+        else:
+            return False
+    except (BaseException) as error:
+        logger.debug(f"exception, error = {error}")
+    return False
+
+
 def kill_query(proton_client, query_2_kill, logging_level="INFO"):
     # currently only stream query kill logic is done, query_2_kill is the query_id, get the id and kill the query and recv the stream query results from query_execute
 
@@ -248,11 +280,12 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
     #    logger.setLevel(logging.INFO)
     # else:
     #    logger.setLevel(logging.DEBUG)
-    print(
+    logger.debug(
         f"kill_query starts, logger={logger}, logger.handler = {logger.handlers}, logger.level = {logger.level}"
     )
     kill_sql = f"kill query where query_id = '{query_2_kill}'"
     # run the timer and then kill the query
+
     logger.debug(
         f"kill_query: datetime.now = {datetime.datetime.now()}, kill_sql = {kill_sql} to be called."
     )
@@ -303,7 +336,7 @@ def query_run_py(
             else:
                 logger.setLevel(logging.DEBUG)
             logger.debug(
-                f"processing running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+                f"process started: handler of logger = {logger.handlers}, logger.level = {logger.level}"
             )
             proton_server = config.get("proton_server")
             proton_server_native_port = config.get("proton_server_native_port")
@@ -322,6 +355,7 @@ def query_run_py(
         query_id = str(statement_2_run.get("query_id"))
         query_type = statement_2_run.get("query_type")
         run_mode = statement_2_run.get("run_mode")
+        depends_on_table = statement_2_run.get("depends_on_table")
         query_start_time_str = str(datetime.datetime.now())
         query_end_time_str = str(datetime.datetime.now())
         element_json_str = ""
@@ -335,6 +369,21 @@ def query_run_py(
 
         streams = pyclient.execute("show streams")
         logger.debug(f"show streams = {streams}")
+
+        if depends_on_table != None and isinstance(depends_on_table, str):
+            retry = 500
+            while not table_exist_py(pyclient, depends_on_table) and retry > 0:
+                time.sleep(0.02)
+                retry -= 1
+            logger.debug(f"retry remains after retry -=1 {retry}")
+            if retry <= 0:
+                logger.debug(
+                    f"check depends_on_table 500 times and depends_on_table={depends_on_table} does not exist"
+                )
+            else:
+                logger.debug(
+                    f"check depends_on_table, depends_on_table={depends_on_table} found."
+                )
 
         query_result_iter = pyclient.execute_iter(
             query, with_column_types=True, query_id=query_id, settings=settings
@@ -520,7 +569,9 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     else:
         logger.setLevel(logging.DEBUG)
 
-    logger.debug(f"query_execute starts, logging_level = {logging_level}")
+    logger.debug(
+        f"query_execute starts, logging_level = {logging_level}, logger.handlers = {logger.handlers}"
+    )
     telemetry_shared_list = []  # telemetry list for query_run timing
 
     proton_server = config.get("proton_server")
@@ -569,13 +620,34 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         exitcode = process.exitcode
                         terminate = proc.get("terminate")
                         query_end_timer = proc.get("query_end_timer")
-
                         if process.exitcode != None:
                             i += 1
                         # else:
                         elif terminate == "auto":
+                            logger.debug(
+                                f"query_id = {query_id}, process = {process}, process.exitcode = {process.exitcode}"
+                            )
+                            retry = 500
+                            while (
+                                not query_id_exist_py(client, query_id)
+                                and process.exitcode == None
+                                and retry > 0
+                            ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
+                                time.sleep(0.05)
+                                retry -= 1
+                            if retry > 0:
+                                logger.debug(
+                                    f"check and wait for query exist to kill, query_2_kill = {query_id} is found, continue"
+                                )
+                            else:
+                                logger.debug(
+                                    f"check and wait for query exist to kill, query_2_kill = {query_id} after 500 times with 0.05s sleep retring check still not found, continue."
+                                )
+
                             if query_end_timer != None:
-                                logger.debug(f"query_end_timer = {query_end_timer}, sleep {query_end_timer} secons.")
+                                logger.debug(
+                                    f"query_end_timer = {query_end_timer}, sleep {query_end_timer} secons."
+                                )
                                 time.sleep(int(query_end_timer))
                             kill_query(client, query_id)
                             logger.debug(
@@ -663,10 +735,14 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                     )
 
                 else:
-                    logger.debug(f"query_execute: query_run_py run local...")
+                    logger.debug(
+                        f"query_execute: query_run_py run local for query_id = {query_id}..."
+                    )
                     if wait != None:
                         wait = int(wait)
                         time.sleep(wait)
+                        logger.debug(f"query_id = {query_id}, wait for {wait}s")
+                    logger.debug(f"query_id = {query_id}, to call query_run_py")
                     query_results = query_run_py(
                         statement_2_run,
                         settings,
@@ -674,7 +750,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         config=None,
                         pyclient=client,
                     )
-
+                    logger.debug(f"query_id = {query_id}, query_run_py is called")
                     message_2_send = json.dumps(query_results)
                     query_results_queue.put(message_2_send)
                     logger.debug(
@@ -850,95 +926,156 @@ def input_walk_through_pyclient(proton_client, inputs, table_schema):
     return input_results
 
 
-def input_batch_rest(rest_setting, input_batch, table_schema):
-    # todo: complete the input by rest
-    logger.debug(f"input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}")
-    input_url = rest_setting.get("ingest_url")
-    query_url = rest_setting.get("query_url")
-    table_ddl_url = rest_setting.get("table_ddl_url")
-    input_batch_record = {}
-    #table_name = table_schema.get("name")
-    table_name = input_batch.get("table_name")
-    if table_name == None:
-        raise Exception ('table_name of input_batch is None')
-    columns = input_batch.get("columns")
-    if columns == None and table_schema == None:
-        return []
-
-    retry = 500
-    while not table_exist(table_ddl_url, table_name):
-        time.sleep(0.01)
-        retry -= 1
-
-    input_rest_columns = []
-    input_rest_body_data = []
-    input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
-    depends_on = input_batch.get("depends_on")
-    depends_on_exists = False
-    if depends_on != None:
-
+def query_id_exists_rest(query_url, query_id, query_body=None):
+    try:
         query_body = json.dumps({"query": "select query_id from system.processes"})
         res = requests.post(query_url, data=query_body)
+        logger.debug(f"table_exist: res.status_code = {res.status_code}")
+        if res.status_code != 200:
+            return False
         res_json = res.json()
+        query_id_list = []
         query_id_list = res_json.get("data")
         logger.debug(f"query_id_list: {query_id_list}")
-        if query_id_list != None and len(query_id_list) > 0:
-            retry = 20
-            # depends_on_exists = False
-            while retry > 0 and depends_on_exists != True:
-                for element in query_id_list:
-                    if depends_on in element:
-                        depends_on_exists = True
-                time.sleep(0.05)
-                retry -= 1
-                query_body = json.dumps(
-                    {"query": "select query_id from system.processes"}
-                )
-                res = requests.post(query_url, data=query_body)
-                res_json = res.json()
-                query_id_list = res_json.get("data")
-                logger.debug(f"query_id_list: {query_id_list}")
-    logger.debug(f"depends_on = {depends_on}, depends_on_exists = {depends_on_exists}")
+        if query_id_list == None or not isinstance(query_id_list, list):
+            return False
+        else:
+            for element in query_id_list:
+                if query_id in element:
+                    return True
+            return False
+    except (BaseException) as error:
+        logger.info(f"exception, error = {error}")
+        return False
 
-    if columns != None:
-        for each in columns:
-            input_rest_columns.append(each)
+
+def input_batch_rest(rest_setting, input_batch, table_schema):
+    # todo: complete the input by rest
+    input_batch_record = {}
+    try:
         logger.debug(
-            f"columns in input_batch != None: columns = {columns}, input_rest_columns = {input_rest_columns}, input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}"
+            f"input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}"
+        )
+        input_url = rest_setting.get("ingest_url")
+        query_url = rest_setting.get("query_url")
+        table_ddl_url = rest_setting.get("table_ddl_url")
+        wait = input_batch.get("wait")
+        # table_name = table_schema.get("name")
+        table_name = input_batch.get("table_name")
+        if table_name == None:
+            raise Exception("table_name of input_batch is None")
+        columns = input_batch.get("columns")
+        if columns == None and table_schema == None:
+            return []
+
+        retry = 500
+        while not table_exist(table_ddl_url, table_name):
+            time.sleep(0.01)
+            retry -= 1
+
+        input_rest_columns = []
+        input_rest_body_data = []
+        input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
+        depends_on = input_batch.get("depends_on")
+        depends_on_exists = False
+
+        if depends_on != None:
+            query_body = json.dumps({"query": "select query_id from system.processes"})
+            res = requests.post(query_url, data=query_body)
+            res_json = res.json()
+            query_id_list = res_json.get("data")
+            logger.debug(f"query_id_list: {query_id_list}")
+            if query_id_list != None and len(query_id_list) > 0:
+                retry = 20
+                # depends_on_exists = False
+                while retry > 0 and depends_on_exists != True:
+                    for element in query_id_list:
+                        if depends_on in element:
+                            depends_on_exists = True
+                            logger.debug(
+                                f"depends_on = {depends_on}, element in query_id_list = {element}, matched, depends_on found in query_id_list."
+                            )
+                    time.sleep(0.05)
+                    retry -= 1
+                    query_body = json.dumps(
+                        {"query": "select query_id from system.processes"}
+                    )
+                    res = requests.post(query_url, data=query_body)
+                    res_json = res.json()
+                    query_id_list = res_json.get("data")
+                    logger.debug(f"query_id_list: {query_id_list}")
+
+        if wait != None:
+            logger.debug(f"wait for {wait}s to start inputs.")
+            wait = int(wait)
+            logger.info(f"sleep {wait} before input")
+            time.sleep(wait)
+
+        logger.debug(
+            f"depends_on = {depends_on}, depends_on_exists = {depends_on_exists}"
         )
 
-    elif table_schema != None:
-        for element in table_schema.get("columns"):
-            input_rest_columns.append(element.get("name"))
-    input_batch_data = input_batch.get("data")
-    for row in input_batch_data:
-        logger.debug(f"input_batch_rest: row_data = {row}")
-        input_rest_body_data.append(
-            row
-        )  # get data from inputs batch dict as rest ingest body.
-    input_rest_body = json.dumps(input_rest_body)
-    input_url = f"{input_url}/{table_name}"
-    logger.debug(
-        f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}"
-    )
+        if columns != None:
+            for each in columns:
+                input_rest_columns.append(each)
+            logger.debug(
+                f"columns in input_batch != None: columns = {columns}, input_rest_columns = {input_rest_columns}, input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}"
+            )
 
-    res = requests.post(input_url, data=input_rest_body)
-    logger.debug(f"input_batch_rest: response of input_batch_rest request res = {res}")
+        elif table_schema != None:
+            for element in table_schema.get("columns"):
+                input_rest_columns.append(element.get("name"))
+        input_batch_data = input_batch.get("data")
+        for row in input_batch_data:
+            logger.debug(f"input_batch_rest: row_data = {row}")
+            input_rest_body_data.append(
+                row
+            )  # get data from inputs batch dict as rest ingest body.
+        input_rest_body = json.dumps(input_rest_body)
+        input_url = f"{input_url}/{table_name}"
+        logger.debug(
+            f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}"
+        )
 
-    assert res.status_code == 200
-    input_batch_record["input_batch"] = input_rest_body_data
-    input_batch_record["timestamp"] = str(datetime.datetime.now())
+        retry = 500
+        while not table_exist(table_ddl_url, table_name):
+            time.sleep(0.05)
+            logger.debug(
+                f"table_name = {table_name} for input does not exit, wait for 0.05s"
+            )
+            retry -= 1
+        if retry > 0:
+            logger.debug(
+                f"table_name = {table_name} for input found, continue to call res = requests.post(input_url, data=input_rest_body)"
+            )
+        else:
+            logger.debug(
+                f"table_name = {table_name} for input not found after multiple retry, raise exception"
+            )
+            raise Exception(f"table_name = {table_name} for input not found")
 
-    """
-    if res.status_code != 200:
-        logger.debug(f"table input rest access failed, status code={res.status_code}") 
-        raise Exception(f"table input rest access failed, status code={res.status_code}")
-    else:
-        input_batch_record["input_batch"] =input_rest_body_data
+        res = requests.post(input_url, data=input_rest_body)
+        logger.debug(
+            f"input_batch_rest: response of requests.post of input_url = {input_url}, data = {input_rest_body} request res = {res}"
+        )
+
+        assert res.status_code == 200
+        input_batch_record["input_batch"] = input_rest_body_data
         input_batch_record["timestamp"] = str(datetime.datetime.now())
-        #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
-    """
-    return input_batch_record
+
+        """
+        if res.status_code != 200:
+            logger.debug(f"table input rest access failed, status code={res.status_code}") 
+            raise Exception(f"table input rest access failed, status code={res.status_code}")
+        else:
+            input_batch_record["input_batch"] =input_rest_body_data
+            input_batch_record["timestamp"] = str(datetime.datetime.now())
+            #logger.debug("input_rest: input_batch {} is inserted".format(input_rest_body_data)) 
+        """
+        return input_batch_record
+    except (BaseException) as error:
+        logger.debug(f"exception, error = {error}")
+        return input_batch_record
 
 
 def find_schema(table_name, table_schemas):
@@ -954,8 +1091,8 @@ def input_walk_through_rest(
     rest_setting,
     inputs,
     table_schemas,
-    wait_before_inputs=1, #todo: remove all the sleep
-    sleep_after_inputs=1.5,  #todo: remove all the sleep (current stable set wait_before_inputs=1, sleep_after_inputs=1.5)
+    wait_before_inputs=1,  # todo: remove all the sleep
+    sleep_after_inputs=1.5,  # todo: remove all the sleep (current stable set wait_before_inputs=1, sleep_after_inputs=1.5)
 ):
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
@@ -965,7 +1102,6 @@ def input_walk_through_rest(
     try:
         for batch in inputs:
             table_name = batch.get("table_name")
-            wait = batch.get("wait")
             depends_on = batch.get("depends_on")
             table_schema = find_schema(table_name, table_schemas)
 
@@ -974,43 +1110,13 @@ def input_walk_through_rest(
             if batch_sleep_before_input != None:
                 logger.info(f"sleep {batch_sleep_before_input} before input")
                 time.sleep(int(batch_sleep_before_input))
-            if wait != None:
-                logger.debug(
-                    f"input_walk_through_rest: wait for {wait} s to start inputs."
-                )
-                wait = int(wait)
-                logger.info(f"sleep {wait} before input")
-                time.sleep(wait)
 
             input_batch_record = input_batch_rest(rest_setting, batch, table_schema)
             inputs_record.append(input_batch_record)
 
-            '''
-            if table_schema != None:
-                # table_schema.pop("type")
-                logger.debug(f"input_walk_through_rest: table_schema = {table_schema}")
-                batch_sleep_before_input = batch.get("sleep")
-                if batch_sleep_before_input != None:
-                    logger.info(f"sleep {batch_sleep_before_input} before input")
-                    time.sleep(int(batch_sleep_before_input))
-                if wait != None:
-                    logger.debug(
-                        f"input_walk_through_rest: wait for {wait} s to start inputs."
-                    )
-                    wait = int(wait)
-                    logger.info(f"sleep {wait} before input")
-                    time.sleep(wait)
-
-                input_batch_record = input_batch_rest(rest_setting, batch, table_schema)
-                inputs_record.append(input_batch_record)
-            else:
-                logger.debug(
-                    f"input_walk_through_rest: table_schema of table name {table_schema} not founded in table schemas {table_schemas}"
-                )
-            # time.sleep(0.5)
-            '''
-        time.sleep(sleep_after_inputs)
-    except(BaseException) as error:
+        if isinstance(sleep_after_inputs, int):
+            time.sleep(sleep_after_inputs)
+    except (BaseException) as error:
         logger.info(f"exception: error = {error}")
     return inputs_record
 
@@ -1056,6 +1162,19 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
         raise Exception(f"table list rest acces failed, status code={res.status_code}")
 
 
+def table_exist_py(pyclient, table_name):
+    sql_2_run = "show streams"
+    try:
+        res = pyclient.execute(sql_2_run)
+        for element in res:
+            if table_name in element:
+                return True
+        return False
+    except (BaseException) as error:
+        logger.info(f"exception, error = {error}")
+        return False
+
+
 def table_exist(table_ddl_url, table_name):
     logger.debug(
         f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}"
@@ -1065,6 +1184,7 @@ def table_exist(table_ddl_url, table_name):
     if res.status_code == 200:
         res_json = res.json()
         table_list = res_json.get("data")
+        # logger.debug(f"table_list = {table_list}")
         if len(table_list) > 0:
             for element in table_list:
                 element_name = element.get("name")
@@ -1099,7 +1219,9 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             else:
                 table_schema_for_rest = {"name": table_name, "columns": columns}
             post_data = json.dumps(table_schema_for_rest)
-            logger.debug(f"table_ddl = {table_ddl_url}, data = {post_data} to be posted.")
+            logger.debug(
+                f"table_ddl = {table_ddl_url}, data = {post_data} to be posted."
+            )
             res = requests.post(
                 table_ddl_url, data=post_data
             )  # create the table w/ table schema
@@ -1119,7 +1241,6 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
                 continue
         except (BaseException) as error:
             logging.debug(f"exception: error = {error}")
-
 
     create_table_time_out = 1000  # set how many times wait and list table to check if table creation completed.
     while create_table_time_out > 0:
@@ -1239,7 +1360,7 @@ def table_exist_py(pyclient, table_name):
 
 
 def test_suite_env_setup(client, rest_setting, test_suite_config):
-    if test_suite_config  == None:
+    if test_suite_config == None:
         return []
     tables_setup = []
     table_ddl_url = rest_setting.get("table_ddl_url")
@@ -1325,7 +1446,7 @@ def env_setup(
 
     return {
         "env_docker_compose_res": env_docker_compose_res,
-        "env_health_check_res": env_health_check_res
+        "env_health_check_res": env_health_check_res,
     }
 
 
@@ -1363,7 +1484,9 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                         res = client.execute(f"drop stream if exists {table}")
                         logger.debug(f"drop stream if exists {table} res = {res}")
                         drop_start_time = datetime.datetime.now()
-                        logger.info(f"drop stream if exists {table} is called successfully")
+                        logger.info(
+                            f"drop stream if exists {table} is called successfully"
+                        )
                         wait_count = 0
                         while table_exist(table_ddl_url, table):
                             time.sleep(0.01)
@@ -1400,7 +1523,9 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                                     )
                                     time.sleep(0.2)
                                 tables_recreated.append(name)
-                            elif name == table and not table_exist(table_ddl_url, table):
+                            elif name == table and not table_exist(
+                                table_ddl_url, table
+                            ):
                                 create_table_rest(table_ddl_url, table_schema)
                                 while not table_exist(table_ddl_url, table):
                                     logger.debug(
@@ -1419,8 +1544,11 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set):
     tests_ids = []
     for test in tests:
         test_id = test.get("id")
-        if test_id != None: tests_ids.append(test_id)
-    logger.debug(f"test_suite_name = {test_suite_name}, len(tests) = {len(tests)}, tests_2_run = {tests_2_run}, test_ids_set={test_ids_set}")
+        if test_id != None:
+            tests_ids.append(test_id)
+    logger.debug(
+        f"test_suite_name = {test_suite_name}, len(tests) = {len(tests)}, tests_2_run = {tests_2_run}, test_ids_set={test_ids_set}"
+    )
     test_run_list = []
     test_run_id_list = []
     if test_ids_set != None:
@@ -1436,7 +1564,7 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set):
     elif test_ids_set != None and test_ids_set != "all":
         ids_2_run = []
         for each in test_ids_set_list:
-            if each.isdigit() and int(each)in tests_ids:
+            if each.isdigit() and int(each) in tests_ids:
                 ids_2_run.append(int(each))
         for test in tests:
             id = test.get("id")
@@ -1495,12 +1623,13 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set):
 
             test_run_list_len = len(test_run_list)
 
-            #assert test_run_list_len != 0
+            # assert test_run_list_len != 0
 
             logger.info(
                 f"test_suite_name = {test_suite_name}, tests_run_id_list = {test_run_id_list}, {len(tests)} cases in total, {test_run_list_len} cases to run in total"
-            )                
+            )
     return test_run_list
+
 
 # @pytest.fixture(scope="module")
 def rockets_run(test_context):
@@ -1529,20 +1658,18 @@ def rockets_run(test_context):
     logger.debug(f"q_exec_client: {q_exec_client} started.")
     proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
     test_ids_set = os.getenv("PROTON_TEST_IDS", None)
-    
+
     table_ddl_url = rest_setting.get("table_ddl_url")
     test_suites_selected = None
     test_suites_selected = test_context.get("test_suites_selected")
     test_run_list_len_total = 0
-    test_sets = []#test_set for collecting testing results of all test_suites
-    if test_suites_selected != None and len( test_suites_selected) != 0:
-        env_setup_res = env_setup(
-            rest_setting, docker_compose_file, proton_ci_mode
-        )
+    test_sets = []  # test_set for collecting testing results of all test_suites
+    if test_suites_selected != None and len(test_suites_selected) != 0:
+        env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
         logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
         test_id_run = 0
         for test_suite in test_suites_selected:
-            #test_suite = test_context.get("test_suite")
+            # test_suite = test_context.get("test_suite")
             test_suite_name = test_suite.get("test_suite_name")
             logger.info(f"test_suite: {test_suite_name} running starts......")
             test_suite_config = test_suite.get("test_suite_config")
@@ -1558,17 +1685,27 @@ def rockets_run(test_context):
             test_run_list_len = len(test_run_list)
             test_run_list_len_total += test_run_list_len
             if test_run_list_len == 0:
-                logger.debug(f"test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass.")
+                logger.debug(
+                    f"test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
+                )
                 pass
             else:
                 try:
                     client = Client(host=proton_server, port=proton_server_native_port)
                     if test_suite_config != None:
-                        tables_setup = test_suite_env_setup(client, rest_setting, test_suite_config)
-                        logger.info(f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done.")
-                        logger.info(f"test_suite_name = {test_suite_name}, len(test_run_list) = {len(test_run_list)} case collected.")
+                        tables_setup = test_suite_env_setup(
+                            client, rest_setting, test_suite_config
+                        )
+                        logger.info(
+                            f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done."
+                        )
+                        logger.info(
+                            f"test_suite_name = {test_suite_name}, len(test_run_list) = {len(test_run_list)} case collected."
+                        )
                     else:
-                        logger.info(f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup")
+                        logger.info(
+                            f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup"
+                        )
                     i = 0
                     while i < len(test_run_list):
                         test_case = test_run_list[i]
@@ -1589,7 +1726,9 @@ def rockets_run(test_context):
                         logger.info(
                             f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
                         )
-                        logger.info(f"tables: {tables_recreated} are dropted and recreated.")
+                        logger.info(
+                            f"tables: {tables_recreated} are dropted and recreated."
+                        )
 
                         for step in steps:
                             statements_id = 0
@@ -1600,7 +1739,9 @@ def rockets_run(test_context):
                                 query_walk_through_res = query_walk_through(
                                     step_statements, query_conn
                                 )
-                                statement_result_from_query_execute = query_walk_through_res
+                                statement_result_from_query_execute = (
+                                    query_walk_through_res
+                                )
                                 logger.debug(
                                     f"rockets_run: query_walk_through_res = {query_walk_through_res}"
                                 )
@@ -1672,7 +1813,9 @@ def rockets_run(test_context):
                 except (BaseException) as error:
                     logger.info(f"exception: {error}")
 
-            logger.info(f"test_suite_name = {test_suite_name} running ends, test_sets = {test_sets}......")
+            logger.info(
+                f"test_suite_name = {test_suite_name} running ends, test_sets = {test_sets}......"
+            )
     TESTS_QUERY_RESULTS = test_sets
     query_conn.send("tear_down")
     message_recv = query_conn.recv()

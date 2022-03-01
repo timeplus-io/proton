@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-k-release}
+    image: timeplus/proton:${PROTON_VERSION:-prestage}
     pull_policy: always
     container_name: proton-server
     volumes:
@@ -53,4 +53,3 @@ services:
       - "redpanda.enable_idempotence=true"
       - --check=false
     container_name: redpanda-1
-

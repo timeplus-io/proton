@@ -2,6 +2,7 @@
 *.diff
 *.error
 *.dump
+*.log
 test_data
 
 /queries/0_stateless/*.gen.sql
