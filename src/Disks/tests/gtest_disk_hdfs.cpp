@@ -10,7 +10,7 @@
 #include <Disks/HDFS/DiskHDFS.h>
 #include <Poco/Util/XMLConfiguration.h>
 
-const String hdfs_uri = "hdfs://172.20.0.2:9000/disk_test/";
+const String hdfs_uri = "hdfs://172.20.0.2:8463/disk_test/";
 const String metadata_path = "/path/to/metadata/";
 const String config_path = "/path/to/config.xml";
 const String file_name = "test.txt";

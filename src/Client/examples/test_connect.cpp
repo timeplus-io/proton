@@ -25,7 +25,7 @@ try
     size_t num_iterations = 1;
     size_t num_threads = 1;
     std::string host = "localhost";
-    uint16_t port = 9000;
+    uint16_t port = 8463;
 
     if (argc >= 2)
         num_iterations = parse<size_t>(argv[1]);

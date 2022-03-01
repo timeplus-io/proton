@@ -48,7 +48,7 @@ logger:
 # Port for HTTP API. See also 'https_port' for secure connections.
 # This interface is also used by ODBC and JDBC drivers (DataGrip, Dbeaver, ...)
 # and by most of web interfaces (embedded UI, Grafana, Redash, ...).
-http_port: 8123
+http_port: 3218
 
 # Port for interaction by native protocol with:
 # - proton-client and other native proton tools (proton-benchmark, proton-copier);
@@ -56,15 +56,18 @@ http_port: 8123
 # - proton drivers and applications supporting native protocol
 # (this protocol is also informally called as "the TCP protocol");
 # See also 'tcp_port_secure' for secure connections.
-tcp_port: 9000
+tcp_port: 8463
+
+# Port for Snapshot TCP server, which run all stream query in 'table' mode.
+snapshot_server_tcp_port: 7587
+
+# Compatibility with PostgreSQL protocol.
+# proton will pretend to be PostgreSQL for applications connecting to this port.
+postgresql_port: 5432
 
 # Compatibility with MySQL protocol.
 # proton will pretend to be MySQL for applications connecting to this port.
 mysql_port: 9004
-
-# Compatibility with PostgreSQL protocol.
-# proton will pretend to be PostgreSQL for applications connecting to this port.
-postgresql_port: 9005
 
 # HTTP API with TLS (HTTPS).
 # You have to configure certificate to enable this interface.
@@ -88,9 +91,6 @@ postgresql_port: 9005
 # Data transferred over connections to this port should not go through untrusted networks.
 # See also 'interserver_https_port'.
 interserver_http_port: 9009
-
-# Port for Snapshot TCP server, which run all stream query in 'table' mode.
-snapshot_server_tcp_port: 9010
 
 # Port for communication between replicas with TLS.
 # You have to configure certificate to enable this interface.
@@ -509,82 +509,6 @@ remap_executable: false
 # jdbc_bridge:
 #     host: 127.0.0.1
 #     port: 9019
-
-# Configuration of clusters that could be used in Distributed tables.
-# https://proton.tech/docs/en/operations/table_engines/distributed/
-remote_servers:
-    # Test only shard config for testing distributed storage
-    test_shard_localhost:
-        # Inter-server per-cluster secret for Distributed queries
-        # default: no secret (no authentication will be performed)
-
-        # If set, then Distributed queries will be validated on shards, so at least:
-        # - such cluster should exist on the shard,
-        # - such cluster should have the same secret.
-
-        # And also (and which is more important), the initial_user will
-        # be used as current user for the query.
-
-        # Right now the protocol is pretty simple and it only takes into account:
-        # - cluster name
-        # - query
-
-        # Also it will be nice if the following will be implemented:
-        # - source hostname (see interserver_http_host), but then it will depends from DNS,
-        # it can use IP address instead, but then the you need to get correct on the initiator node.
-        # - target hostname / ip address (same notes as for source hostname)
-        # - time-based security tokens
-        # secret: ''
-        shard:
-            # Optional. Whether to write data to just one of the replicas. Default: false (write data to all replicas).
-            # internal_replication: false
-            # Optional. Shard weight when writing data. Default: 1.
-            # weight: 1
-            replica:
-                host: localhost
-                port: 9000
-                # Optional. Priority of the replica for load_balancing. Default: 1 (less value has more priority).
-                # priority: 1
-    test_cluster_two_shards_localhost:
-        shard:
-            - replica:
-                  host: localhost
-                  port: 9000
-            - replica:
-                  host: localhost
-                  port: 9000
-    test_cluster_two_shards:
-        shard:
-            - replica:
-                  host: 127.0.0.1
-                  port: 9000
-            - replica:
-                  host: 127.0.0.2
-                  port: 9000
-    test_cluster_two_shards_internal_replication:
-        shard:
-            - internal_replication: true
-              replica:
-                  host: 127.0.0.1
-                  port: 9000
-            - internal_replication: true
-              replica:
-                  host: 127.0.0.2
-                  port: 9000
-    test_shard_localhost_secure:
-        shard:
-            replica:
-                host: localhost
-                port: 9440
-                secure: 1
-    test_unavailable_shard:
-        shard:
-            - replica:
-                  host: localhost
-                  port: 9000
-            - replica:
-                  host: localhost
-                  port: 1
 
 # The list of hosts allowed to use in URL-related storage engines and table functions.
 # If this section is not present in configuration, all hosts are allowed.

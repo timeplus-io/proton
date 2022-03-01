@@ -8,11 +8,11 @@ services:
       - ./data:/data
       - ./proton:/var/log/proton-server
     ports:
-      - "8123:8123" # HTTP
-      - "9000:9000" # TCP
-      - "9005:9005" # Postgres
+      - "3218:3218" # HTTP
+      - "8463:8463" # TCP
+      - "5432:5432" # Postgres
       - "9004:9004" # MySQL
-      - "9010:9010" # table mode
+      - "7587:7587" # table mode
     deploy:
       replicas: 1
       restart_policy:

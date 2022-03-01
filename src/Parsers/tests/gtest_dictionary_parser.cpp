@@ -36,7 +36,7 @@ TEST(ParserDictionaryDDL, SimpleDictionary)
                    "    third_column UInt8 DEFAULT 2"
                    " )"
                    " PRIMARY KEY key_column"
-                   " SOURCE(CLICKHOUSE(HOST 'localhost' PORT 9000 USER 'default' PASSWORD '' DB 'test' TABLE 'table_for_dict'))"
+                   " SOURCE(CLICKHOUSE(HOST 'localhost' PORT 8463 USER 'default' PASSWORD '' DB 'test' TABLE 'table_for_dict'))"
                    " LAYOUT(FLAT())"
                    " LIFETIME(MIN 1 MAX 10)"
                    " RANGE(MIN second_column MAX third_column)";
@@ -61,7 +61,7 @@ TEST(ParserDictionaryDDL, SimpleDictionary)
     EXPECT_EQ(children[0]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<String>(), "localhost");
 
     EXPECT_EQ(children[1]->as<ASTPair>()->first, "port");
-    EXPECT_EQ(children[1]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<UInt64>(), 9000);
+    EXPECT_EQ(children[1]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<UInt64>(), 8463);
 
     EXPECT_EQ(children[2]->as<ASTPair>()->first, "user");
     EXPECT_EQ(children[2]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<String>(), "default");
@@ -234,7 +234,7 @@ TEST(ParserDictionaryDDL, NestedSource)
                    "    third_column UInt8"
                    " )"
                    " PRIMARY KEY key_column"
-                   " SOURCE(MYSQL(HOST 'localhost' PORT 9000 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
+                   " SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
                    " LAYOUT(CACHE(size_in_cells 50))"
                    " LIFETIME(MIN 1 MAX 10)"
                    " RANGE(MIN second_column MAX third_column)";
@@ -253,7 +253,7 @@ TEST(ParserDictionaryDDL, NestedSource)
     EXPECT_EQ(children[0]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<String>(), "localhost");
 
     EXPECT_EQ(children[1]->as<ASTPair>()->first, "port");
-    EXPECT_EQ(children[1]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<UInt64>(), 9000);
+    EXPECT_EQ(children[1]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<UInt64>(), 8463);
 
     EXPECT_EQ(children[2]->as<ASTPair>()->first, "user");
     EXPECT_EQ(children[2]->as<ASTPair>()->second->as<ASTLiteral>()->value.get<String>(), "default");
@@ -282,7 +282,7 @@ TEST(ParserDictionaryDDL, Formatting)
                    "    third_column UInt8"
                    " )"
                    " PRIMARY KEY key_column1, key_column2"
-                   " SOURCE(MYSQL(HOST 'localhost' PORT 9000 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
+                   " SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
                    " LAYOUT(CACHE(size_in_cells 50))"
                    " LIFETIME(MIN 1 MAX 10)"
                    " RANGE(MIN second_column MAX third_column)";
@@ -291,7 +291,7 @@ TEST(ParserDictionaryDDL, Formatting)
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateQuery * create = ast->as<ASTCreateQuery>();
     auto str = serializeAST(*create, true);
-    EXPECT_EQ(str, "CREATE DICTIONARY test.dict5 (`key_column1` UInt64 DEFAULT 1 HIERARCHICAL INJECTIVE, `key_column2` String DEFAULT '', `second_column` UInt8 EXPRESSION intDiv(50, rand() % 1000), `third_column` UInt8) PRIMARY KEY key_column1, key_column2 SOURCE(MYSQL(HOST 'localhost' PORT 9000 USER 'default' REPLICA (HOST '127.0.0.1' PRIORITY 1) PASSWORD '')) LIFETIME(MIN 1 MAX 10) LAYOUT(CACHE(SIZE_IN_CELLS 50)) RANGE(MIN second_column MAX third_column)");
+    EXPECT_EQ(str, "CREATE DICTIONARY test.dict5 (`key_column1` UInt64 DEFAULT 1 HIERARCHICAL INJECTIVE, `key_column2` String DEFAULT '', `second_column` UInt8 EXPRESSION intDiv(50, rand() % 1000), `third_column` UInt8) PRIMARY KEY key_column1, key_column2 SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA (HOST '127.0.0.1' PRIORITY 1) PASSWORD '')) LIFETIME(MIN 1 MAX 10) LAYOUT(CACHE(SIZE_IN_CELLS 50)) RANGE(MIN second_column MAX third_column)");
 }
 
 TEST(ParserDictionaryDDL, ParseDropQuery)

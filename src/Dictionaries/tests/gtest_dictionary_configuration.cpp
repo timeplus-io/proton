@@ -41,7 +41,7 @@ TEST(ConvertDictionaryAST, SimpleDictConfiguration)
                    "    third_column UInt8 DEFAULT 2"
                    " )"
                    " PRIMARY KEY key_column"
-                   " SOURCE(CLICKHOUSE(HOST 'localhost' PORT 9000 USER 'default' PASSWORD '' DB 'test' TABLE 'table_for_dict'))"
+                   " SOURCE(CLICKHOUSE(HOST 'localhost' PORT 8463 USER 'default' PASSWORD '' DB 'test' TABLE 'table_for_dict'))"
                    " LAYOUT(FLAT())"
                    " LIFETIME(MIN 1 MAX 10)"
                    " RANGE(MIN second_column MAX third_column)"
@@ -69,7 +69,7 @@ TEST(ConvertDictionaryAST, SimpleDictConfiguration)
 
     /// source
     EXPECT_EQ(config->getString("dictionary.source.clickhouse.host"), "localhost");
-    EXPECT_EQ(config->getInt("dictionary.source.clickhouse.port"), 9000);
+    EXPECT_EQ(config->getInt("dictionary.source.clickhouse.port"), 8463);
     EXPECT_EQ(config->getString("dictionary.source.clickhouse.user"), "default");
     EXPECT_EQ(config->getString("dictionary.source.clickhouse.password"), "");
     EXPECT_EQ(config->getString("dictionary.source.clickhouse.db"), "test");
@@ -209,7 +209,7 @@ TEST(ConvertDictionaryAST, ComplexSource)
                    "    third_column UInt8"
                    " )"
                    " PRIMARY KEY key_column"
-                   " SOURCE(MYSQL(HOST 'localhost' PORT 9000 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
+                   " SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
                    " LAYOUT(CACHE(size_in_cells 50))"
                    " LIFETIME(MIN 1 MAX 10)"
                    " RANGE(MIN second_column MAX third_column)";
@@ -220,7 +220,7 @@ TEST(ConvertDictionaryAST, ComplexSource)
     DictionaryConfigurationPtr config = getDictionaryConfigurationFromAST(*create, getContext().context);
     /// source
     EXPECT_EQ(config->getString("dictionary.source.mysql.host"), "localhost");
-    EXPECT_EQ(config->getInt("dictionary.source.mysql.port"), 9000);
+    EXPECT_EQ(config->getInt("dictionary.source.mysql.port"), 8463);
     EXPECT_EQ(config->getString("dictionary.source.mysql.user"), "default");
     EXPECT_EQ(config->getString("dictionary.source.mysql.password"), "");
     EXPECT_EQ(config->getString("dictionary.source.mysql.replica.host"), "127.0.0.1");

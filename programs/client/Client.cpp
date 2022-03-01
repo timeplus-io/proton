@@ -967,7 +967,7 @@ void Client::addOptions(OptionsDescription & options_description)
     options_description.main_description->add_options()
         ("config,c", po::value<std::string>(), "config-file path (another shorthand)")
         ("host,h", po::value<std::string>()->default_value("localhost"), "server host")
-        ("port", po::value<int>()->default_value(9000), "server port")
+        ("port", po::value<int>()->default_value(8463), "server port")
         ("secure,s", "Use TLS connection")
         ("user,u", po::value<std::string>()->default_value("default"), "user")
         /** If "--password [value]" is used but the value is omitted, the bad argument exception will be thrown.

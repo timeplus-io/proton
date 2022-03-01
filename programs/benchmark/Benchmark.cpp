@@ -84,7 +84,7 @@ public:
 
         for (size_t i = 0; i < connections_cnt; ++i)
         {
-            UInt16 cur_port = i >= ports_.size() ? 9000 : ports_[i];
+            UInt16 cur_port = i >= ports_.size() ? 8463 : ports_[i];
             std::string cur_host = i >= hosts_.size() ? "localhost" : hosts_[i];
 
             connections.emplace_back(std::make_unique<ConnectionPool>(
