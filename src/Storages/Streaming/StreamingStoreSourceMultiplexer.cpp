@@ -1,5 +1,5 @@
 #include "StreamingStoreSourceMultiplexer.h"
-#include "StorageDistributedMergeTree.h"
+#include "StorageStream.h"
 
 #include <DistributedWALClient/KafkaWALPool.h>
 #include <Storages/IStorage.h>
@@ -22,7 +22,7 @@ StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
     , last_metrics_log_time(MonotonicMilliseconds::now())
     , log(log_)
 {
-    auto distributed = storage->as<StorageDistributedMergeTree>();
+    auto distributed = storage->as<StorageStream>();
     assert(distributed);
 
     auto consumer = DWAL::KafkaWALPool::instance(global_context).getOrCreateStreaming(distributed->streamingStorageClusterId());

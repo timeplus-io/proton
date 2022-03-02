@@ -1,5 +1,5 @@
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTreeProperties.h>
+#include <Storages/Streaming/StorageStream.h>
+#include <Storages/Streaming/StorageStreamProperties.h>
 #include <Storages/StorageFactory.h>
 
 namespace DB
@@ -10,7 +10,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-void registerStorageDistributedMergeTree(StorageFactory & factory)
+void registerStorageStream(StorageFactory & factory)
 {
     StorageFactory::StorageFeatures features{
         .supports_settings = true,
@@ -24,14 +24,14 @@ void registerStorageDistributedMergeTree(StorageFactory & factory)
         .supports_schema_inference = true};
 
     factory.registerStorage(
-        "DistributedMergeTree",
+        "Stream",
         [](const StorageFactory::Arguments & args) {
-            /** * DistributedMergeTree engine arguments : DistributedMergeTree(replication_factor, shards, shard_by_expr)
+            /** * Stream engine arguments : Stream(replication_factor, shards, shard_by_expr)
             * - replication_factor
             * - shards
             * - shard_by_expr
 
-            * DistributedMergeTree engine settings :
+            * Stream engine settings :
             * - streaming_storage=kafka
             * - streaming_storage_cluster_id=<my_cluster>
             * - streaming_storage_partition=<partition>
@@ -78,7 +78,7 @@ void registerStorageDistributedMergeTree(StorageFactory & factory)
                 else
                     msg += "no parameters";
 
-                msg += StorageDistributedMergeTreeProperties::getVerboseHelp();
+                msg += StorageStreamProperties::getVerboseHelp();
 
                 throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
             }
@@ -178,7 +178,7 @@ void registerStorageDistributedMergeTree(StorageFactory & factory)
                 metadata.column_ttls_by_name[name] = new_ttl_entry;
             }
 
-            auto properties = StorageDistributedMergeTreeProperties::create(*args.storage_def, args.columns, args.getLocalContext());
+            auto properties = StorageStreamProperties::create(*args.storage_def, args.columns, args.getLocalContext());
 
             // updates the default storage_settings with settings specified via SETTINGS arg in a query
             if (args.storage_def->settings)
@@ -195,7 +195,7 @@ void registerStorageDistributedMergeTree(StorageFactory & factory)
                             metadata.partition_key.column_names[i]);
             }
 
-            return StorageDistributedMergeTree::create(
+            return StorageStream::create(
                 properties->replication_factor,
                 properties->shards,
                 properties->sharding_expr,

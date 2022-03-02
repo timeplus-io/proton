@@ -35,8 +35,8 @@ struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 
 /// proton: starts
-class ProxyDistributedMergeTree;
-class StorageDistributedMergeTree;
+class ProxyStream;
+class StorageStream;
 class BaseScaleInterval;
 /// proton: ends
 
@@ -173,7 +173,7 @@ private:
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
-    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyDistributedMergeTree * distributed) const;
+    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyStream * proxy_stream) const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     /// proton: ends
 

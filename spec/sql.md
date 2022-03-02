@@ -115,10 +115,10 @@ support fine tune these parameters directly, so it will use the default values f
 7. streaming_storage_retention_ms: When this threshold reaches, streaming storage delete old data. By default, it is `-1` meaning no data retention.
 8. streaming_storage_flush_messages: Tell streaming storage to call fsync per flush messages. By default, it is `1000`.
 9. streaming_storage_flush_ms: Tell streaming storage to call fsync every flush_ms interval. By default, it is `-1` meaning time based fsync is disabled.
-10. distributed_ingest_mode: Data ingestion mode for DistributedMergeTree. By default, it is `async` and supports `sync`, `fire_and_forget`.
-11. distributed_flush_threshold_ms: Time threshold for DistributedMergeTree to flush consumed data from write-ahead log. By default, it is every `1` second.
-12. distributed_flush_threshold_count: Row count threshold for DistributedMergeTree to flush consumed data from write-ahead log. By default, it is every `1000000`.
-13. distributed_flush_threshold_bytes: Data size threshold for DistributedMergeTree to flush consumed data from write-ahead log. By default, it is every `10` MB.
+10. distributed_ingest_mode: Data ingestion mode for Stream. By default, it is `async` and supports `sync`, `fire_and_forget`.
+11. distributed_flush_threshold_ms: Time threshold for Stream to flush consumed data from write-ahead log. By default, it is every `1` second.
+12. distributed_flush_threshold_count: Row count threshold for Stream to flush consumed data from write-ahead log. By default, it is every `1000000`.
+13. distributed_flush_threshold_bytes: Data size threshold for Stream to flush consumed data from write-ahead log. By default, it is every `10` MB.
 
 **Note** table provisioning is an async process. In a single instance, it usually happens really quickly. In a cluster env (via REST API for now), Proton sequentially
 sends the table provision request to each Proton instance, so it may take a while depending on how big `shards * replicas` is.

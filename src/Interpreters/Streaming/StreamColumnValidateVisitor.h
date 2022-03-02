@@ -7,15 +7,15 @@
 namespace DB
 {
 
-class DistributedMergeTreeColumnValidateMatcher
+class StreamColumnValidateMatcher
 {
 public:
-    using Visitor = InDepthNodeVisitor<DistributedMergeTreeColumnValidateMatcher, true, true>;
+    using Visitor = InDepthNodeVisitor<StreamColumnValidateMatcher, true, true>;
 
     struct Data
     {
         bool found_time = false;
-        bool is_distributed_merge_tree = false;
+        bool is_stream = false;
     };
 
     static void visit(ASTPtr & ast, Data & data);
@@ -26,6 +26,6 @@ private:
     static void visit(ASTColumnDeclaration & column, Data & data);
 };
 
-using DistributedMergeTreeColumnValidateVisitor = DistributedMergeTreeColumnValidateMatcher::Visitor;
+using StreamColumnValidateVisitor = StreamColumnValidateMatcher::Visitor;
 
 }

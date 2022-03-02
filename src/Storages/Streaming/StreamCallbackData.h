@@ -8,13 +8,13 @@
 
 namespace DB
 {
-class StorageDistributedMergeTree;
+class StorageStream;
 
 using RecordsSequenceRangesPair = std::pair<DWAL::RecordPtrs, SequenceRanges>;
 
-struct DistributedMergeTreeCallbackData : public DWAL::ConsumeCallbackData
+struct StreamCallbackData : public DWAL::ConsumeCallbackData
 {
-    DistributedMergeTreeCallbackData(StorageDistributedMergeTree * storage_, const SequenceRanges & missing_sequence_ranges_);
+    StreamCallbackData(StorageStream * storage_, const SequenceRanges & missing_sequence_ranges_);
 
     const Block & getSchema(UInt16 schema_version) const override
     {
@@ -37,10 +37,10 @@ private:
 
     void doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges = {});
 
-    friend StorageDistributedMergeTree;
+    friend StorageStream;
 
 private:
-    StorageDistributedMergeTree * storage;
+    StorageStream * storage;
     Block header;
 
     std::atomic_uint16_t outstanding_commits = 0;

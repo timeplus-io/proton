@@ -28,7 +28,7 @@
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/Streaming/StorageStream.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
@@ -71,9 +71,9 @@
 /// proton: starts.
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/TaskStatusService.h>
-#include <Interpreters/DistributedMergeTreeColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTreeProperties.h>
+#include <Interpreters/Streaming/StreamColumnValidateVisitor.h>
+#include <Storages/Streaming/StorageStreamProperties.h>
 /// proton: ends.
 
 
@@ -881,15 +881,15 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
         prepareEngine(create, ctx);
     }
 
-    if (create.storage->engine->name != "DistributedMergeTree")
+    if (create.storage->engine->name != "Stream")
     {
-        /// We only support `DistributedMergeTree` table engine for now
+        /// We only support `Stream` table engine for now
         return false;
     }
 
     if (!ctx->isDistributedEnv())
     {
-        if (create.storage->engine->name == "DistributedMergeTree")
+        if (create.storage->engine->name == "Stream")
         {
             /// proton: starts
             throw Exception(
@@ -907,7 +907,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     if (ctx->isLocalQueryFromTCP())
     {
         /// it comes from TCPHandler, therefore update column definitions if required
-        prepareCreateQueryForDistributedMergeTree(create);
+        prepareCreateQueryForStream(create);
         prepareEngineSettings(create, ctx);
 
         /// Build json payload here from SQL statement
@@ -944,7 +944,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
     }
 
     assert(create.storage);
-    auto stream_properties = StorageDistributedMergeTreeProperties::create(*create.storage, properties.columns, ctx);
+    auto stream_properties = StorageStreamProperties::create(*create.storage, properties.columns, ctx);
     if (stream_properties->storage_settings->shard.value >= 0)
     {
         LOG_INFO(log, "Local stream creation with shard assigned");
@@ -1485,8 +1485,8 @@ BlockIO InterpreterCreateQuery::execute()
     FunctionNameNormalizer().visit(query_ptr.get());
 
     /// proton: starts.
-    DistributedMergeTreeColumnValidateMatcher::Data column_validate_data;
-    DistributedMergeTreeColumnValidateVisitor column_validate_visitor(column_validate_data);
+    StreamColumnValidateMatcher::Data column_validate_data;
+    StreamColumnValidateVisitor column_validate_visitor(column_validate_data);
     column_validate_visitor.visit(query_ptr);
     /// proton: ends.
 

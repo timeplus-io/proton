@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DistributedMergeTreeCallbackData.h"
+#include "StreamCallbackData.h"
 #include "IngestingBlocks.h"
 #include "StreamingStoreSourceMultiplexer.h"
 
@@ -21,7 +21,7 @@ namespace DB
 {
 class StorageMergeTree;
 
-/** A StorageDistributedMergeTree is an table engine that uses merge tree and replicated via
+/** A StorageStream is an table engine that uses merge tree and replicated via
   * distributed write ahead log which is now implemented by using Kafka. Users can issue
   * distributed data ingestion and distributed queries against this single table engine directly.
   * The goals of this table engine are resolving the following major requirements
@@ -29,14 +29,14 @@ class StorageMergeTree;
   *   2. Streaming query
   *   3. Simplified usability (from end users point of view)
   */
-class StorageDistributedMergeTree final : public shared_ptr_helper<StorageDistributedMergeTree>, public MergeTreeData
+class StorageStream final : public shared_ptr_helper<StorageStream>, public MergeTreeData
 {
-    friend struct shared_ptr_helper<StorageDistributedMergeTree>;
+    friend struct shared_ptr_helper<StorageStream>;
 
 public:
     void startup() override;
     void shutdown() override;
-    ~StorageDistributedMergeTree() override;
+    ~StorageStream() override;
 
     String getName() const override;
 
@@ -217,12 +217,12 @@ public:
 
     String streamingStorageClusterId() const;
 
-    friend struct DistributedMergeTreeCallbackData;
-    friend class DistributedMergeTreeSink;
+    friend struct StreamCallbackData;
+    friend class StreamSink;
     friend class MergeTreeData;
 
 protected:
-    StorageDistributedMergeTree(
+    StorageStream(
         Int32 replication_factor_,
         Int32 shards_,
         const ASTPtr & sharding_key_,
@@ -247,9 +247,9 @@ private:
         String query_status_poll_id;
         UInt16 block_id;
 
-        StorageDistributedMergeTree * storage;
+        StorageStream * storage;
 
-        WriteCallbackData(const String & query_status_poll_id_, UInt16 block_id_, StorageDistributedMergeTree * storage_)
+        WriteCallbackData(const String & query_status_poll_id_, UInt16 block_id_, StorageStream * storage_)
             : query_status_poll_id(query_status_poll_id_), block_id(block_id_), storage(storage_)
         {
             ++storage_->outstanding_blocks;
@@ -343,7 +343,7 @@ private:
     std::deque<std::shared_ptr<String>> idempotent_keys;
     std::unordered_set<StringRef, StringRefHash> idempotent_keys_index;
 
-    std::unique_ptr<DistributedMergeTreeCallbackData> callback_data;
+    std::unique_ptr<StreamCallbackData> callback_data;
 
     std::unique_ptr<StreamingStoreSourceMultiplexers> source_multiplexers;
 

@@ -35,7 +35,7 @@ CREATE TABLE default.test2
 (
     `i` Int32
 )
-ENGINE = DistributedMergeTree(1, 1, rand())
+ENGINE = Stream(1, 1, rand())
 ORDER BY i
 SETTINGS index_granularity = 8192, shard = 0
     """

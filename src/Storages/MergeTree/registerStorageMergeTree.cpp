@@ -2,7 +2,7 @@
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/Streaming/StorageStream.h>
 
 #include <Common/Macros.h>
 #include <Common/OptimizedRegularExpression.h>

@@ -1,4 +1,4 @@
-#include "StorageDistributedMergeTreeProperties.h"
+#include "StorageStreamProperties.h"
 
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -30,13 +30,13 @@ namespace
     }
 }
 
-String StorageDistributedMergeTreeProperties::getVerboseHelp()
+String StorageStreamProperties::getVerboseHelp()
 {
     using namespace std::string_literals;
 
     String help = R"(
 
-Syntax for the DistributedMergeTree table engine:
+Syntax for the Stream table engine:
 
 CREATE STREAM [IF NOT EXISTS] [db.]table_name
 (
@@ -45,7 +45,7 @@ CREATE STREAM [IF NOT EXISTS] [db.]table_name
     ...
     INDEX index_name1 expr1 TYPE type1(...) GRANULARITY value1,
     INDEX index_name2 expr2 TYPE type2(...) GRANULARITY value2
-) ENGINE = DistributedMergeTree(replication_factor, shards, shard_by_expr)
+) ENGINE = Stream(replication_factor, shards, shard_by_expr)
 ORDER BY expr
 [PARTITION BY expr]
 [PRIMARY KEY expr]
@@ -53,17 +53,17 @@ ORDER BY expr
 [TTL expr [DELETE|TO DISK 'xxx'|TO VOLUME 'xxx'], ...]
 [SETTINGS name=value, ...]
 
-See details in documentation: (https://timeplus.io/...).
+See details in documentation: (https://docs.timeplus.io/docs/query-syntax).
 )";
 
     return help;
 }
 
-StorageDistributedMergeTreePropertiesPtr
-StorageDistributedMergeTreeProperties::create(ASTStorage & storage_def, const ColumnsDescription & columns, ContextPtr local_context)
+StorageStreamPropertiesPtr
+StorageStreamProperties::create(ASTStorage & storage_def, const ColumnsDescription & columns, ContextPtr local_context)
 {
-    StorageDistributedMergeTreePropertiesPtr properties = std::make_shared<StorageDistributedMergeTreeProperties>();
-    /// DistributedMergeTree(shards, replicas, sharding_expr)
+    StorageStreamPropertiesPtr properties = std::make_shared<StorageStreamProperties>();
+    /// Stream(shards, replicas, sharding_expr)
 
     assert(storage_def.engine);
     ASTs empty_engine_args;
@@ -74,7 +74,7 @@ StorageDistributedMergeTreeProperties::create(ASTStorage & storage_def, const Co
         throw Exception(
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
             "The current Storage requires 3 parameters {}",
-            StorageDistributedMergeTreeProperties::getVerboseHelp());
+            StorageStreamProperties::getVerboseHelp());
     }
 
     ASTLiteral * shards_ast = engine_args[0]->as<ASTLiteral>();

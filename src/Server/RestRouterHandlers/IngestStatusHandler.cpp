@@ -3,7 +3,7 @@
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/sendRequest.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/Streaming/StorageStream.h>
 
 #include <Poco/Path.h>
 
@@ -45,14 +45,14 @@ getTableStorage(const String & database_name, const String & table_name, Context
 
     if (!storage)
     {
-        error = "table: " + database_name + "." + table_name + " does not exist";
+        error = "Stream: " + database_name + "." + table_name + " does not exist";
         error_code = ErrorCodes::UNKNOWN_TABLE;
         return nullptr;
     }
 
-    if (storage->getName() != "DistributedMergeTree")
+    if (storage->getName() != "Stream")
     {
-        error = "table: " + database_name + "." + table_name + " is not a DistributedMergeTreeTable";
+        error = database_name + "." + table_name + " is not a Stream";
         error_code = ErrorCodes::TYPE_MISMATCH;
         return nullptr;
     }
@@ -181,7 +181,7 @@ std::pair<String, Int32> IngestStatusHandler::getIngestStatusLocally(const Poco:
             continue;
         }
 
-        StorageDistributedMergeTree * dstorage = static_cast<StorageDistributedMergeTree *>(storage.get());
+        StorageStream * dstorage = static_cast<StorageStream *>(storage.get());
         dstorage->getIngestionStatuses(table_polls.second, statuses);
     }
 

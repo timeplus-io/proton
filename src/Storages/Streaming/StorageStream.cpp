@@ -1,6 +1,6 @@
-#include "StorageDistributedMergeTree.h"
-#include "DistributedMergeTreeCallbackData.h"
-#include "DistributedMergeTreeSink.h"
+#include "StorageStream.h"
+#include "StreamCallbackData.h"
+#include "StreamSink.h"
 #include "StreamingBlockReader.h"
 #include "StreamingStoreSource.h"
 
@@ -250,7 +250,7 @@ namespace
     }
 }
 
-StorageDistributedMergeTree::StorageDistributedMergeTree(
+StorageStream::StorageStream(
     Int32 replication_factor_,
     Int32 shards_,
     const ASTPtr & sharding_key_,
@@ -323,7 +323,7 @@ StorageDistributedMergeTree::StorageDistributedMergeTree(
     }
 }
 
-NamesAndTypesList StorageDistributedMergeTree::getVirtuals() const
+NamesAndTypesList StorageStream::getVirtuals() const
 {
     NamesAndTypesList names_and_types;
     names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
@@ -333,12 +333,12 @@ NamesAndTypesList StorageDistributedMergeTree::getVirtuals() const
     return names_and_types;
 }
 
-NamesAndTypesList StorageDistributedMergeTree::getVirtualsHistory() const
+NamesAndTypesList StorageStream::getVirtualsHistory() const
 {
     return MergeTreeData::getVirtuals();
 }
 
-void StorageDistributedMergeTree::readRemote(
+void StorageStream::readRemote(
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
@@ -381,7 +381,7 @@ void StorageDistributedMergeTree::readRemote(
         query_info.cluster);
 }
 
-void StorageDistributedMergeTree::readConcat(
+void StorageStream::readConcat(
     QueryPlan & query_plan,
     SelectQueryInfo & query_info,
     Names column_names,
@@ -433,7 +433,7 @@ void StorageDistributedMergeTree::readConcat(
     storage->readConcat(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, std::move(create_streaming_source));
 }
 
-void StorageDistributedMergeTree::readStreaming(
+void StorageStream::readStreaming(
     QueryPlan & query_plan,
     SelectQueryInfo & /*query_info*/,
     const Names & column_names,
@@ -484,7 +484,7 @@ void StorageDistributedMergeTree::readStreaming(
     query_plan.addStep(std::move(read_step));
 }
 
-void StorageDistributedMergeTree::read(
+void StorageStream::read(
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
@@ -509,7 +509,7 @@ void StorageDistributedMergeTree::read(
         readHistory(query_plan, column_names, metadata_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
 }
 
-void StorageDistributedMergeTree::readHistory(
+void StorageStream::readHistory(
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
@@ -530,7 +530,7 @@ void StorageDistributedMergeTree::readHistory(
     }
 }
 
-Pipe StorageDistributedMergeTree::read(
+Pipe StorageStream::read(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
@@ -544,7 +544,7 @@ Pipe StorageDistributedMergeTree::read(
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
 }
 
-void StorageDistributedMergeTree::startup()
+void StorageStream::startup()
 {
     if (inited.test_and_set())
     {
@@ -583,7 +583,7 @@ void StorageDistributedMergeTree::startup()
     }
 }
 
-StorageDistributedMergeTree::~StorageDistributedMergeTree()
+StorageStream::~StorageStream()
 {
     shutdown();
 
@@ -597,7 +597,7 @@ StorageDistributedMergeTree::~StorageDistributedMergeTree()
     LOG_INFO(log, "Completely dtored");
 }
 
-void StorageDistributedMergeTree::shutdown()
+void StorageStream::shutdown()
 {
     if (stopped.test_and_set())
         return;
@@ -627,17 +627,17 @@ void StorageDistributedMergeTree::shutdown()
     LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
 }
 
-String StorageDistributedMergeTree::getName() const
+String StorageStream::getName() const
 {
-    return "DistributedMergeTree";
+    return "Stream";
 }
 
-bool StorageDistributedMergeTree::isRemote() const
+bool StorageStream::isRemote() const
 {
     return !storage;
 }
 
-bool StorageDistributedMergeTree::requireDistributedQuery(ContextPtr context_) const
+bool StorageStream::requireDistributedQuery(ContextPtr context_) const
 {
     if (!storage)
     {
@@ -662,42 +662,42 @@ bool StorageDistributedMergeTree::requireDistributedQuery(ContextPtr context_) c
     return true;
 }
 
-bool StorageDistributedMergeTree::supportsParallelInsert() const
+bool StorageStream::supportsParallelInsert() const
 {
     return true;
 }
 
-bool StorageDistributedMergeTree::supportsIndexForIn() const
+bool StorageStream::supportsIndexForIn() const
 {
     return true;
 }
 
-std::optional<UInt64> StorageDistributedMergeTree::totalRows(const Settings & settings) const
+std::optional<UInt64> StorageStream::totalRows(const Settings & settings) const
 {
     assert(storage);
     return storage->totalRows(settings);
 }
 
 std::optional<UInt64>
-StorageDistributedMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
+StorageStream::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
 {
     assert(storage);
     return storage->totalRowsByPartitionPredicate(query_info, context_);
 }
 
-std::optional<UInt64> StorageDistributedMergeTree::totalBytes(const Settings & settings) const
+std::optional<UInt64> StorageStream::totalBytes(const Settings & settings) const
 {
     assert(storage);
     return storage->totalBytes(settings);
 }
 
 SinkToStoragePtr
-StorageDistributedMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
+StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
-    return std::make_shared<DistributedMergeTreeSink>(*this, metadata_snapshot, context_);
+    return std::make_shared<StreamSink>(*this, metadata_snapshot, context_);
 }
 
-void StorageDistributedMergeTree::checkTableCanBeDropped() const
+void StorageStream::checkTableCanBeDropped() const
 {
     if (storage)
     {
@@ -705,7 +705,7 @@ void StorageDistributedMergeTree::checkTableCanBeDropped() const
     }
 }
 
-void StorageDistributedMergeTree::drop()
+void StorageStream::drop()
 {
     shutdown();
     if (storage)
@@ -714,21 +714,21 @@ void StorageDistributedMergeTree::drop()
     }
 }
 
-void StorageDistributedMergeTree::truncate(
+void StorageStream::truncate(
     const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
 {
     assert(storage);
     storage->truncate(query, metadata_snapshot, context_, holder);
 }
 
-void StorageDistributedMergeTree::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
+void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
 {
     assert(storage);
     storage->alter(commands, context_, alter_lock_holder);
     setInMemoryMetadata(storage->getInMemoryMetadata());
 }
 
-bool StorageDistributedMergeTree::optimize(
+bool StorageStream::optimize(
     const ASTPtr & query,
     const StorageMetadataPtr & metadata_snapshot,
     const ASTPtr & partition,
@@ -741,50 +741,50 @@ bool StorageDistributedMergeTree::optimize(
     return storage->optimize(query, metadata_snapshot, partition, finall, deduplicate, deduplicate_by_columns, context_);
 }
 
-void StorageDistributedMergeTree::mutate(const MutationCommands & commands, ContextPtr context_)
+void StorageStream::mutate(const MutationCommands & commands, ContextPtr context_)
 {
     assert(storage);
     storage->mutate(commands, context_);
 }
 
 /// Return introspection information about currently processing or recently processed mutations.
-std::vector<MergeTreeMutationStatus> StorageDistributedMergeTree::getMutationsStatus() const
+std::vector<MergeTreeMutationStatus> StorageStream::getMutationsStatus() const
 {
     assert(storage);
     return storage->getMutationsStatus();
 }
 
-CancellationCode StorageDistributedMergeTree::killMutation(const String & mutation_id)
+CancellationCode StorageStream::killMutation(const String & mutation_id)
 {
     assert(storage);
     return storage->killMutation(mutation_id);
 }
 
-ActionLock StorageDistributedMergeTree::getActionLock(StorageActionBlockType action_type)
+ActionLock StorageStream::getActionLock(StorageActionBlockType action_type)
 {
     assert(storage);
     return storage->getActionLock(action_type);
 }
 
-void StorageDistributedMergeTree::onActionLockRemove(StorageActionBlockType action_type)
+void StorageStream::onActionLockRemove(StorageActionBlockType action_type)
 {
     assert(storage);
     storage->onActionLockRemove(action_type);
 }
 
-CheckResults StorageDistributedMergeTree::checkData(const ASTPtr & query, ContextPtr context_)
+CheckResults StorageStream::checkData(const ASTPtr & query, ContextPtr context_)
 {
     assert(storage);
     return storage->checkData(query, context_);
 }
 
-bool StorageDistributedMergeTree::scheduleDataProcessingJob(BackgroundJobsAssignee & assignee)
+bool StorageStream::scheduleDataProcessingJob(BackgroundJobsAssignee & assignee)
 {
     assert(storage);
     return storage->scheduleDataProcessingJob(assignee);
 }
 
-QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
+QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
     const StorageMetadataPtr & metadata_snapshot,
@@ -804,39 +804,39 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStage(
     }
 }
 
-void StorageDistributedMergeTree::dropPartNoWaitNoThrow(const String & part_name)
+void StorageStream::dropPartNoWaitNoThrow(const String & part_name)
 {
     assert(storage);
     storage->dropPartNoWaitNoThrow(part_name);
 }
 
-void StorageDistributedMergeTree::dropPart(const String & part_name, bool detach, ContextPtr context_)
+void StorageStream::dropPart(const String & part_name, bool detach, ContextPtr context_)
 {
     assert(storage);
     storage->dropPart(part_name, detach, context_);
 }
 
-void StorageDistributedMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr context_)
+void StorageStream::dropPartition(const ASTPtr & partition, bool detach, ContextPtr context_)
 {
     assert(storage);
     storage->dropPartition(partition, detach, context_);
 }
 
-PartitionCommandsResultInfo StorageDistributedMergeTree::attachPartition(
+PartitionCommandsResultInfo StorageStream::attachPartition(
     const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context_)
 {
     assert(storage);
     return storage->attachPartition(partition, metadata_snapshot, part, context_);
 }
 
-void StorageDistributedMergeTree::replacePartitionFrom(
+void StorageStream::replacePartitionFrom(
     const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
 {
     assert(storage);
     storage->replacePartitionFrom(source_table, partition, replace, context_);
 }
 
-void StorageDistributedMergeTree::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context_)
+void StorageStream::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context_)
 {
     assert(storage);
     storage->movePartitionToTable(dest_table, partition, context_);
@@ -845,7 +845,7 @@ void StorageDistributedMergeTree::movePartitionToTable(const StoragePtr & dest_t
 /// If part is assigned to merge or mutation (possibly replicated)
 /// Should be overridden by children, because they can have different
 /// mechanisms for parts locking
-bool StorageDistributedMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & part) const
+bool StorageStream::partIsAssignedToBackgroundOperation(const DataPartPtr & part) const
 {
     assert(storage);
     return storage->partIsAssignedToBackgroundOperation(part);
@@ -855,25 +855,25 @@ bool StorageDistributedMergeTree::partIsAssignedToBackgroundOperation(const Data
 /// Used to receive AlterConversions for part and apply them on fly. This
 /// method has different implementations for replicated and non replicated
 /// MergeTree because they store mutations in different way.
-MutationCommands StorageDistributedMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const
+MutationCommands StorageStream::getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const
 {
     assert(storage);
     return storage->getFirstAlterMutationCommandsForPart(part);
 }
 
-void StorageDistributedMergeTree::startBackgroundMovesIfNeeded()
+void StorageStream::startBackgroundMovesIfNeeded()
 {
     assert(storage);
     return storage->startBackgroundMovesIfNeeded();
 }
 
-std::unique_ptr<StreamSettings> StorageDistributedMergeTree::getDefaultSettings() const
+std::unique_ptr<StreamSettings> StorageStream::getDefaultSettings() const
 {
     return std::make_unique<StreamSettings>(getContext()->getStreamSettings());
 }
 
 /// Distributed query related functions
-ClusterPtr StorageDistributedMergeTree::getCluster() const
+ClusterPtr StorageStream::getCluster() const
 {
     auto sid = getStorageID();
     return CatalogService::instance(getContext()).tableCluster(sid.database_name, sid.table_name, replication_factor, shards);
@@ -881,7 +881,7 @@ ClusterPtr StorageDistributedMergeTree::getCluster() const
 
 /// Returns a new cluster with fewer shards if constant folding for `sharding_key_expr` is possible
 /// using constraints from "PREWHERE" and "WHERE" conditions, otherwise returns `nullptr`
-ClusterPtr StorageDistributedMergeTree::skipUnusedShards(
+ClusterPtr StorageStream::skipUnusedShards(
     ClusterPtr cluster, const ASTPtr & query_ptr, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_) const
 {
     const auto & select = query_ptr->as<ASTSelectQuery &>();
@@ -945,7 +945,7 @@ ClusterPtr StorageDistributedMergeTree::skipUnusedShards(
     return cluster->getClusterWithMultipleShards({shard_ids.begin(), shard_ids.end()});
 }
 
-ClusterPtr StorageDistributedMergeTree::getOptimizedCluster(
+ClusterPtr StorageStream::getOptimizedCluster(
     ContextPtr context_, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const
 {
     ClusterPtr cluster = getCluster();
@@ -993,7 +993,7 @@ ClusterPtr StorageDistributedMergeTree::getOptimizedCluster(
     return {};
 }
 
-QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageRemote(
+QueryProcessingStage::Enum StorageStream::getQueryProcessingStageRemote(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
     const StorageMetadataPtr & metadata_snapshot,
@@ -1061,7 +1061,7 @@ QueryProcessingStage::Enum StorageDistributedMergeTree::getQueryProcessingStageR
 }
 
 /// New functions
-IColumn::Selector StorageDistributedMergeTree::createSelector(const ColumnWithTypeAndName & result) const
+IColumn::Selector StorageStream::createSelector(const ColumnWithTypeAndName & result) const
 {
 /// If result.type is DataTypeLowCardinality, do shard according to its dictionaryType
 #define CREATE_FOR_TYPE(TYPE) \
@@ -1086,7 +1086,7 @@ IColumn::Selector StorageDistributedMergeTree::createSelector(const ColumnWithTy
 }
 
 
-IColumn::Selector StorageDistributedMergeTree::createSelector(const Block & block) const
+IColumn::Selector StorageStream::createSelector(const Block & block) const
 {
     Block current_block_with_sharding_key_expr = block;
     sharding_key_expr->execute(current_block_with_sharding_key_expr);
@@ -1107,30 +1107,30 @@ IColumn::Selector StorageDistributedMergeTree::createSelector(const Block & bloc
 #endif
 }
 
-const ExpressionActionsPtr & StorageDistributedMergeTree::getShardingKeyExpr() const
+const ExpressionActionsPtr & StorageStream::getShardingKeyExpr() const
 {
     return sharding_key_expr;
 }
 
-size_t StorageDistributedMergeTree::getRandomShardIndex()
+size_t StorageStream::getRandomShardIndex()
 {
     std::lock_guard lock(rng_mutex);
     return std::uniform_int_distribution<size_t>(0, shards - 1)(rng);
 }
 
-size_t StorageDistributedMergeTree::getNextShardIndex() const
+size_t StorageStream::getNextShardIndex() const
 {
     return next_shard++ % shards;
 }
 
-DWAL::RecordSN StorageDistributedMergeTree::lastSN() const
+DWAL::RecordSN StorageStream::lastSN() const
 {
     std::lock_guard lock(sns_mutex);
     return last_sn;
 }
 
-std::unique_ptr<StorageDistributedMergeTree::WriteCallbackData>
-StorageDistributedMergeTree::writeCallbackData(const String & query_status_poll_id, UInt16 block_id)
+std::unique_ptr<StorageStream::WriteCallbackData>
+StorageStream::writeCallbackData(const String & query_status_poll_id, UInt16 block_id)
 {
     assert(!query_status_poll_id.empty());
 
@@ -1141,7 +1141,7 @@ StorageDistributedMergeTree::writeCallbackData(const String & query_status_poll_
     return std::make_unique<WriteCallbackData>(query_status_poll_id, block_id, this);
 }
 
-void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
+void StorageStream::writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
 {
     if (result.err)
     {
@@ -1155,15 +1155,15 @@ void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & resul
     }
 }
 
-void StorageDistributedMergeTree::writeCallback(const DWAL::AppendResult & result, void * data)
+void StorageStream::writeCallback(const DWAL::AppendResult & result, void * data)
 {
-    std::unique_ptr<StorageDistributedMergeTree::WriteCallbackData> pdata(static_cast<WriteCallbackData *>(data));
+    std::unique_ptr<StorageStream::WriteCallbackData> pdata(static_cast<WriteCallbackData *>(data));
 
     pdata->storage->writeCallback(result, pdata->query_status_poll_id, pdata->block_id);
 }
 
 /// Merge `rhs` block to `lhs`
-void StorageDistributedMergeTree::mergeBlocks(Block & lhs, Block & rhs)
+void StorageStream::mergeBlocks(Block & lhs, Block & rhs)
 {
     /// FIXME, we are assuming schema is not changed
     assert(blocksHaveEqualStructure(lhs, rhs));
@@ -1191,13 +1191,13 @@ void StorageDistributedMergeTree::mergeBlocks(Block & lhs, Block & rhs)
     /// lhs.checkNumberOfRows();
 }
 
-Int64 StorageDistributedMergeTree::maxCommittedSN() const
+Int64 StorageStream::maxCommittedSN() const
 {
     assert(storage);
     return storage->maxCommittedSN();
 }
 
-void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSN commit_sn)
+void StorageStream::commitSNLocal(DWAL::RecordSN commit_sn)
 {
     try
     {
@@ -1221,7 +1221,7 @@ void StorageDistributedMergeTree::commitSNLocal(DWAL::RecordSN commit_sn)
     }
 }
 
-void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSN commit_sn)
+void StorageStream::commitSNRemote(DWAL::RecordSN commit_sn)
 {
     /// Commit sequence number to dwal
     try
@@ -1254,7 +1254,7 @@ void StorageDistributedMergeTree::commitSNRemote(DWAL::RecordSN commit_sn)
     }
 }
 
-void StorageDistributedMergeTree::commitSN()
+void StorageStream::commitSN()
 {
     size_t outstanding_sns_size = 0;
     size_t local_committed_sns_size = 0;
@@ -1294,7 +1294,7 @@ void StorageDistributedMergeTree::commitSN()
     commitSNRemote(commit_sn);
 }
 
-inline void StorageDistributedMergeTree::progressSequencesWithoutLock(const SequencePair & seq)
+inline void StorageStream::progressSequencesWithoutLock(const SequencePair & seq)
 {
     assert(!outstanding_sns.empty());
 
@@ -1333,13 +1333,13 @@ inline void StorageDistributedMergeTree::progressSequencesWithoutLock(const Sequ
     assert(last_sn >= prev_sn);
 }
 
-inline void StorageDistributedMergeTree::progressSequences(const SequencePair & seq)
+inline void StorageStream::progressSequences(const SequencePair & seq)
 {
     std::lock_guard lock(sns_mutex);
     progressSequencesWithoutLock(seq);
 }
 
-void StorageDistributedMergeTree::doCommit(
+void StorageStream::doCommit(
     Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges)
 {
     {
@@ -1408,7 +1408,7 @@ void StorageDistributedMergeTree::doCommit(
     commitSN();
 }
 
-void StorageDistributedMergeTree::buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_)
+void StorageStream::buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_)
 {
     idempotent_keys = idempotent_keys_;
     for (const auto & key : idempotent_keys)
@@ -1418,7 +1418,7 @@ void StorageDistributedMergeTree::buildIdempotentKeysIndex(const std::deque<std:
 }
 
 /// Add with lock held
-inline void StorageDistributedMergeTree::addIdempotentKey(const String & key)
+inline void StorageStream::addIdempotentKey(const String & key)
 {
     if (idempotent_keys.size() >= getContext()->getSettingsRef().max_idempotent_ids)
     {
@@ -1440,7 +1440,7 @@ inline void StorageDistributedMergeTree::addIdempotentKey(const String & key)
     assert(idempotent_keys.size() == idempotent_keys_index.size());
 }
 
-bool StorageDistributedMergeTree::dedupBlock(const DWAL::RecordPtr & record)
+bool StorageStream::dedupBlock(const DWAL::RecordPtr & record)
 {
     if (!record->hasIdempotentKey())
     {
@@ -1466,7 +1466,7 @@ bool StorageDistributedMergeTree::dedupBlock(const DWAL::RecordPtr & record)
     return false;
 }
 
-void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges)
+void StorageStream::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges)
 {
     if (records.empty())
         return;
@@ -1516,7 +1516,7 @@ void StorageDistributedMergeTree::commit(DWAL::RecordPtrs records, SequenceRange
     assert(missing_sequence_ranges.empty());
 }
 
-DWAL::RecordSN StorageDistributedMergeTree::snLoaded() const
+DWAL::RecordSN StorageStream::snLoaded() const
 {
     std::lock_guard lock(sns_mutex);
     if (local_sn >= 0)
@@ -1530,7 +1530,7 @@ DWAL::RecordSN StorageDistributedMergeTree::snLoaded() const
     return -1000;
 }
 
-void StorageDistributedMergeTree::backgroundPoll()
+void StorageStream::backgroundPoll()
 {
     /// Sleep a while to let librdkafka to populate topic / partition metadata
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
@@ -1551,13 +1551,13 @@ void StorageDistributedMergeTree::backgroundPoll()
         dwal_consume_ctx.consume_callback_max_bytes,
         sequenceRangesToString(missing_sequence_ranges));
 
-    callback_data = std::make_unique<DistributedMergeTreeCallbackData>(this, missing_sequence_ranges);
+    callback_data = std::make_unique<StreamCallbackData>(this, missing_sequence_ranges);
 
     while (!stopped.test())
     {
         try
         {
-            auto err = dwal->consume(&StorageDistributedMergeTree::consumeCallback, callback_data.get(), dwal_consume_ctx);
+            auto err = dwal->consume(&StorageStream::consumeCallback, callback_data.get(), dwal_consume_ctx);
             if (err != ErrorCodes::OK)
             {
                 LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, err);
@@ -1585,7 +1585,7 @@ void StorageDistributedMergeTree::backgroundPoll()
     finalCommit();
 }
 
-inline void StorageDistributedMergeTree::finalCommit()
+inline void StorageStream::finalCommit()
 {
     commitSN();
 
@@ -1600,7 +1600,7 @@ inline void StorageDistributedMergeTree::finalCommit()
         commitSNLocal(commit_sn);
 }
 
-inline void StorageDistributedMergeTree::periodicallyCommit()
+inline void StorageStream::periodicallyCommit()
 {
     DWAL::RecordSN remote_commit_sn = -1;
     DWAL::RecordSN commit_sn = -1;
@@ -1625,9 +1625,9 @@ inline void StorageDistributedMergeTree::periodicallyCommit()
     last_commit_ts = MonotonicSeconds::now();
 }
 
-void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data)
+void StorageStream::consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data)
 {
-    auto * cdata = dynamic_cast<DistributedMergeTreeCallbackData *>(data);
+    auto * cdata = dynamic_cast<StreamCallbackData *>(data);
 
     if (records.empty())
     {
@@ -1638,16 +1638,16 @@ void StorageDistributedMergeTree::consumeCallback(DWAL::RecordPtrs records, DWAL
     cdata->commit(std::move(records));
 }
 
-void StorageDistributedMergeTree::addSubscription()
+void StorageStream::addSubscription()
 {
     const auto & missing_sequence_ranges = storage->missingSequenceRanges();
-    callback_data = std::make_unique<DistributedMergeTreeCallbackData>(this, missing_sequence_ranges);
+    callback_data = std::make_unique<StreamCallbackData>(this, missing_sequence_ranges);
 
     const auto & cluster_id = storage_settings.get()->streaming_storage_cluster_id.value;
     multiplexer = DWAL::KafkaWALPool::instance(getContext()).getOrCreateConsumerMultiplexer(cluster_id);
 
     DWAL::TopicPartitionOffset tpo{topic, shard, snLoaded()};
-    auto res = multiplexer->addSubscription(tpo, &StorageDistributedMergeTree::consumeCallback, callback_data.get());
+    auto res = multiplexer->addSubscription(tpo, &StorageStream::consumeCallback, callback_data.get());
     if (res.err != ErrorCodes::OK)
         throw Exception("Failed to add subscription for shard=" + std::to_string(shard), res.err);
 
@@ -1662,7 +1662,7 @@ void StorageDistributedMergeTree::addSubscription()
         sequenceRangesToString(missing_sequence_ranges));
 }
 
-void StorageDistributedMergeTree::removeSubscription()
+void StorageStream::removeSubscription()
 {
     if (!multiplexer)
     {
@@ -1689,12 +1689,12 @@ void StorageDistributedMergeTree::removeSubscription()
     multiplexer.reset();
 }
 
-String StorageDistributedMergeTree::streamingStorageClusterId() const
+String StorageStream::streamingStorageClusterId() const
 {
     return storage_settings.get()->streaming_storage_cluster_id.value;
 }
 
-void StorageDistributedMergeTree::initWal()
+void StorageStream::initWal()
 {
     auto ssettings = storage_settings.get();
     const auto & offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
@@ -1743,7 +1743,7 @@ void StorageDistributedMergeTree::initWal()
     dwal->initProducerTopicHandle(dwal_append_ctx);
 }
 
-std::vector<Int64> StorageDistributedMergeTree::getOffsets(const String & seek_to) const
+std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
 {
     /// -1 latest, -2 earliest
     if (seek_to == "latest")

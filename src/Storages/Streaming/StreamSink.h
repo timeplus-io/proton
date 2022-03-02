@@ -11,7 +11,7 @@ namespace DB
 {
 class Context;
 class Block;
-class StorageDistributedMergeTree;
+class StorageStream;
 
 struct BlockWithShard
 {
@@ -23,16 +23,16 @@ struct BlockWithShard
 
 using BlocksWithShard = std::vector<BlockWithShard>;
 
-class DistributedMergeTreeSink final : public SinkToStorage
+class StreamSink final : public SinkToStorage
 {
 public:
-    DistributedMergeTreeSink(
-        StorageDistributedMergeTree & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_);
-    ~DistributedMergeTreeSink() override = default;
+    StreamSink(
+        StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_);
+    ~StreamSink() override = default;
 
     void consume(Chunk chunk) override;
     void onFinish() override;
-    String getName() const override { return "DistributedMergeTreeSink"; }
+    String getName() const override { return "StreamSink"; }
 
 private:
     BlocksWithShard shardBlock(Block block) const;
@@ -45,7 +45,7 @@ private:
     static void writeCallback(const DWAL::AppendResult & result, void * data);
 
 private:
-    StorageDistributedMergeTree & storage;
+    StorageStream & storage;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr query_context;
 

@@ -8,17 +8,17 @@ namespace DB
 struct StreamSettings;
 class ColumnsDescription;
 
-struct StorageDistributedMergeTreeProperties;
-using StorageDistributedMergeTreePropertiesPtr = std::shared_ptr<StorageDistributedMergeTreeProperties>;
+struct StorageStreamProperties;
+using StorageStreamPropertiesPtr = std::shared_ptr<StorageStreamProperties>;
 
-struct StorageDistributedMergeTreeProperties
+struct StorageStreamProperties
 {
     Int32 replication_factor = 1;
     Int32 shards = 1;
     ASTPtr sharding_expr;
     std::unique_ptr<StreamSettings> storage_settings;
 
-    static StorageDistributedMergeTreePropertiesPtr
+    static StorageStreamPropertiesPtr
     create(ASTStorage & storage_def, const ColumnsDescription & columns, ContextPtr local_context);
 
     static String getVerboseHelp();

@@ -40,8 +40,8 @@ namespace
     const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 
     std::regex PARSE_SHARD_REGEX{"shard\\s*=\\s*(\\d+)"};
-    std::regex PARSE_SHARDS_REGEX{"DistributedMergeTree\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
-    std::regex PARSE_REPLICATION_REGEX{"DistributedMergeTree\\(\\s*(\\d+),\\s*\\d+\\s*,"};
+    std::regex PARSE_SHARDS_REGEX{"Stream\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
+    std::regex PARSE_REPLICATION_REGEX{"Stream\\(\\s*(\\d+),\\s*\\d+\\s*,"};
 
     Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
     {
@@ -200,8 +200,8 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
             return nullptr;
         }
 
-        /// Only support create virtual table storage for `DistributedMergeTree`
-        if (iter->second.begin()->second->engine != "DistributedMergeTree")
+        /// Only support create virtual table storage for `Stream`
+        if (iter->second.begin()->second->engine != "Stream")
         {
             return nullptr;
         }
@@ -627,7 +627,7 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
             }
         }
 
-        if (table->engine == "DistributedMergeTree")
+        if (table->engine == "Stream")
         {
             table->shard = searchIntValueByRegex(PARSE_SHARD_REGEX, table->engine_full);
         }

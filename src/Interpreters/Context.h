@@ -28,7 +28,7 @@
 #include <exception>
 
 /// proton: starts
-#include <Storages/DistributedMergeTree/IngestMode.h>
+#include <Storages/Streaming/IngestMode.h>
 /// proton: ends
 
 

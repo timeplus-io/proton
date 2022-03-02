@@ -432,7 +432,7 @@ def test_miscellaneous_engines():
 
     node.query("DROP ROW POLICY pC ON mydb.other_table")
 
-    # DistributedMergeTree
+    # Stream
     node.query("DROP TABLE IF EXISTS mydb.other_table")
     node.query("CREATE TABLE mydb.other_table (a UInt8, b UInt8) ENGINE Distributed('test_local_cluster', mydb, local)")
     assert node.query("SELECT * FROM mydb.other_table", user="another") == TSV([[1, 0], [1, 1], [1, 0], [1, 1]])

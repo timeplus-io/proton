@@ -11,7 +11,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
+#include <Storages/Streaming/ProxyStream.h>
 #include <Storages/StorageView.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
@@ -85,7 +85,7 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
         /// tumble(table(devices), ...)
         auto query_context = context->getQueryContext();
         const auto & function_storage = query_context->executeTableFunction(arg);
-        if (auto * streaming_storage = function_storage->as<ProxyDistributedMergeTree>())
+        if (auto * streaming_storage = function_storage->as<ProxyStream>())
             streaming = streaming_storage->isStreaming();
         return function_storage->getStorageID();
     }
@@ -112,7 +112,7 @@ TableFunctionProxyBase::TableFunctionProxyBase(const String & name_) : name(name
 StoragePtr TableFunctionProxyBase::executeImpl(
     const ASTPtr & /* func_ast */, ContextPtr context, const String & /* table_name */, ColumnsDescription /* cached_columns_ = {} */) const
 {
-    return ProxyDistributedMergeTree::create(
+    return ProxyStream::create(
         storage_id, columns, underlying_storage_metadata_snapshot, context, streaming_func_desc, timestamp_func_desc, subquery, streaming);
 }
 
@@ -156,7 +156,7 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
             if (storage->isView())
                 throw Exception("tumble/hop functions can't be applied to views", ErrorCodes::BAD_ARGUMENTS);
 
-            if (storage->getName() != "DistributedMergeTree" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
+            if (storage->getName() != "Stream" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
                 throw Exception("tumble/hop functions can't be applied to this stream", ErrorCodes::BAD_ARGUMENTS);
 
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();

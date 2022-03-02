@@ -259,9 +259,9 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 
 /// proton: starts
 /// Service dependencies :
-/// All meta services and StorageDistributedMergeTree depend on DWAL
+/// All meta services and StorageStream depend on DWAL
 /// Placement -> Catalog
-/// Task -> StorageDistributedMergeTree
+/// Task -> StorageStream
 /// DDL -> REST API Server
 ///     -> Catalog
 ///     -> Placement
@@ -1364,7 +1364,7 @@ if (ThreadFuzzer::instance().isEffective())
 
     LOG_INFO(log, "Loading metadata from {}", path_str);
 
-    /// proton: start. init Distributed metadata services for DistributedMergeTree table engine
+    /// proton: start. init Distributed metadata services for Stream table engine
     initGlobalSingletons();
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);

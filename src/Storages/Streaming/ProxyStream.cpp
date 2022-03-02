@@ -1,5 +1,5 @@
-#include "ProxyDistributedMergeTree.h"
-#include "StorageDistributedMergeTree.h"
+#include "ProxyStream.h"
+#include "StorageStream.h"
 
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/TreeRewriter.h>
@@ -17,7 +17,7 @@
 
 namespace DB
 {
-ProxyDistributedMergeTree::ProxyDistributedMergeTree(
+ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
     StorageMetadataPtr underlying_storage_metadata_snapshot_,
@@ -57,7 +57,7 @@ ProxyDistributedMergeTree::ProxyDistributedMergeTree(
     setInMemoryMetadata(storage_metadata);
 }
 
-QueryProcessingStage::Enum ProxyDistributedMergeTree::getQueryProcessingStage(
+QueryProcessingStage::Enum ProxyStream::getQueryProcessingStage(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
     const StorageMetadataPtr & metadata_snapshot,
@@ -70,7 +70,7 @@ QueryProcessingStage::Enum ProxyDistributedMergeTree::getQueryProcessingStage(
         return QueryProcessingStage::FetchColumns;
 }
 
-Pipe ProxyDistributedMergeTree::read(
+Pipe ProxyStream::read(
     const Names & column_names,
     const StorageMetadataPtr & /* metadata_snapshot */,
     SelectQueryInfo & query_info,
@@ -84,7 +84,7 @@ Pipe ProxyDistributedMergeTree::read(
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
 }
 
-void ProxyDistributedMergeTree::read(
+void ProxyStream::read(
     QueryPlan & query_plan,
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
@@ -152,7 +152,7 @@ void ProxyDistributedMergeTree::read(
             max_block_size,
             num_streams);
 
-    auto * distributed = storage->as<StorageDistributedMergeTree>();
+    auto * distributed = storage->as<StorageStream>();
     assert(distributed);
 
     if (streaming && context_->getSettingsRef().query_mode.value != "table")
@@ -170,7 +170,7 @@ void ProxyDistributedMergeTree::read(
             num_streams);
 }
 
-NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
+NamesAndTypesList ProxyStream::getVirtuals() const
 {
     if (!storage)
         return {};
@@ -179,7 +179,7 @@ NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
     if (materialized_view)
         return materialized_view->getVirtuals();
 
-    auto * distributed = storage->as<StorageDistributedMergeTree>();
+    auto * distributed = storage->as<StorageStream>();
     if (!distributed)
         return {};
 
@@ -189,7 +189,7 @@ NamesAndTypesList ProxyDistributedMergeTree::getVirtuals() const
     return distributed->getVirtualsHistory();
 }
 
-Names ProxyDistributedMergeTree::getAdditionalRequiredColumns() const
+Names ProxyStream::getAdditionalRequiredColumns() const
 {
     Names required;
 

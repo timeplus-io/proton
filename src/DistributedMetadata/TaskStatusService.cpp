@@ -504,7 +504,7 @@ bool TaskStatusService::createTaskTable()
                     `_tp_time` DateTime64(3, 'UTC') DEFAULT from_unix_timestamp64_milli(created, 'UTC'), \
                     `_tp_index_time` DateTime64(3, 'UTC') \
                      ) \
-                    ENGINE = DistributedMergeTree(1,{},rand()) \
+                    ENGINE = Stream(1,{},rand()) \
                     ORDER BY (to_minute(_tp_time), user, id) \
                     PARTITION BY to_date(_tp_time) \
                     TTL to_datetime(_tp_time + to_interval_day(7)) DELETE \

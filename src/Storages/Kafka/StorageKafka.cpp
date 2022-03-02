@@ -39,7 +39,7 @@
 #include <base/logger_useful.h>
 
 /// proton: starts.
-#include <Storages/DistributedMergeTree/StreamingKafkaSource.h>
+#include <Storages/Streaming/StreamingKafkaSource.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>

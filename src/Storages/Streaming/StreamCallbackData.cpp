@@ -1,5 +1,5 @@
-#include "DistributedMergeTreeCallbackData.h"
-#include "StorageDistributedMergeTree.h"
+#include "StreamCallbackData.h"
+#include "StorageStream.h"
 
 #include <base/logger_useful.h>
 
@@ -7,12 +7,12 @@
 
 namespace DB
 {
-DistributedMergeTreeCallbackData::DistributedMergeTreeCallbackData(StorageDistributedMergeTree * storage_, const SequenceRanges & missing_sequence_ranges_)
+StreamCallbackData::StreamCallbackData(StorageStream * storage_, const SequenceRanges & missing_sequence_ranges_)
     : storage(storage_), header(storage->getInMemoryMetadataPtr()->getSampleBlock()), missing_sequence_ranges(missing_sequence_ranges_)
 {
 }
 
-void DistributedMergeTreeCallbackData::wait() const
+void StreamCallbackData::wait() const
 {
     while (outstanding_commits != 0)
     {
@@ -21,7 +21,7 @@ void DistributedMergeTreeCallbackData::wait() const
     }
 }
 
-void DistributedMergeTreeCallbackData::commit(DWAL::RecordPtrs records)
+void StreamCallbackData::commit(DWAL::RecordPtrs records)
 {
     ++outstanding_commits;
 
@@ -71,7 +71,7 @@ void DistributedMergeTreeCallbackData::commit(DWAL::RecordPtrs records)
     --outstanding_commits;
 }
 
-inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges)
+inline void StreamCallbackData::doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges)
 {
     try
     {
@@ -84,7 +84,7 @@ inline void DistributedMergeTreeCallbackData::doCommit(DWAL::RecordPtrs records,
     }
 }
 
-std::vector<RecordsSequenceRangesPair> DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(
+std::vector<RecordsSequenceRangesPair> StreamCallbackData::categorizeRecordsAccordingToSequenceRanges(
     const DWAL::RecordPtrs & records, const SequenceRanges & sequence_ranges, DWAL::RecordSN max_committed_sn)
 {
     std::vector<RecordsSequenceRangesPair> range_buckets(sequence_ranges.size() + 1);

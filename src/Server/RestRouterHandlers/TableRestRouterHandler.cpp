@@ -257,7 +257,7 @@ String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & pay
             const auto & replication_factor = getStringValueFrom(payload, "replication_factor", "1");
             const auto & shard_by_expression = getStringValueFrom(payload, "shard_by_expression", "rand()");
 
-            return fmt::format("DistributedMergeTree({}, {}, {})", shards, replication_factor, shard_by_expression);
+            return fmt::format("Stream({}, {}, {})", shards, replication_factor, shard_by_expression);
         }
     }
 

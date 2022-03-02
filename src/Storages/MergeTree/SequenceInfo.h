@@ -17,7 +17,7 @@ namespace DB
 /// for consumer of Distributed Write Ahead Log.
 ///
 /// The `sn.txt` file services 2 main purposes
-/// 1. Avoid duplicate data. the sequence of data ingestion for DistributedMergeTree is
+/// 1. Avoid duplicate data. the sequence of data ingestion for Stream is
 ///    a. Tailing the distributed write ahead log
 ///    b. Commit the data into parts in local file system
 ///    c. Commit the sequence numbers of consume data back to distributed write ahead log
@@ -37,7 +37,7 @@ namespace DB
 ///
 /// Here is one example. Please note that we are assuming `partition by` expression didn't get
 /// changed during the this cause. If it does, nothing holds. One solution to prevent this situation from happening is
-/// don't support changing partition by expression for DistributedMergeTree. The other way is stop all data ingestion
+/// don't support changing partition by expression for Stream. The other way is stop all data ingestion
 /// wait for all data committed, update the partition by expression and re-enable data ingestion which is troublesome.
 ///   a. Local file system committed sequence numbers : [100, 200], [300, 400], [401, 600] and system crashes or stops
 ///   b. System reboots and scan the sequence number checkpoint files and produces low watermark sequence number 201

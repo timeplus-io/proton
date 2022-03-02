@@ -360,7 +360,7 @@ int parseCreate(
     if (r != 1)
         return r;
 
-    /// FIXME, DistributedMergeTree
+    /// FIXME, Stream
     auto & query = queries.back();
     std::get<0>(query) += " ENGINE=MergeTree() ORDER BY tuple() ";
     return r;

@@ -44,8 +44,8 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
-#include <Storages/DistributedMergeTree/ProxyDistributedMergeTree.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/Streaming/ProxyStream.h>
+#include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends.
@@ -1139,12 +1139,12 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     streaming = false;
     if (storage && !required_source_columns.empty())
     {
-        if (const auto * stream = storage->as<ProxyDistributedMergeTree>())
+        if (const auto * proxy = storage->as<ProxyStream>())
         {
-            if (stream->isStreaming())
+            if (proxy->isStreaming())
                 streaming = true;
         }
-        else if (const auto * distributed = storage->as<StorageDistributedMergeTree>())
+        else if (const auto * stream = storage->as<StorageStream>())
             streaming = true;
         else if (const auto * materialized_view = storage->as<StorageMaterializedView>())
             streaming = true;

@@ -86,13 +86,13 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
     String payload = "{}";
     if (ctx->isLocalQueryFromTCP())
     {
-        /// We assume it is a `DistributedMergeTree`, so either `on local` or `not exists but is virtual`，
+        /// We assume it is a `Stream`, so either `on local` or `not exists but is virtual`，
         /// and try do distributed ddl operation.
         /// NOTE: we can not check it from `CatalogService`, there are some reasons:
         /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
         /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
         auto table = DatabaseCatalog::instance().tryGetTable({database, query.getTable()}, ctx);
-        if (!table || table->getName() == "DistributedMergeTree")
+        if (!table || table->getName() == "Stream")
             ctx->setDistributedDDLOperation(true);
         else
             return false;
@@ -115,9 +115,9 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
                 throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
                 /// proton: ends
         }
-        if (tables[0]->engine != "DistributedMergeTree")
+        if (tables[0]->engine != "Stream")
         {
-            /// FIXME:  We only support `DistributedMergeTree` table engine for now
+            /// FIXME:  We only support `Stream` table engine for now
             return false;
         }
 

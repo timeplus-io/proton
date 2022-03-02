@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <DistributedWALClient/Record.h>
-#include <Storages/DistributedMergeTree/DistributedMergeTreeCallbackData.h>
+#include <Storages/Streaming/StreamCallbackData.h>
 #include <Storages/MergeTree/SequenceInfo.h>
 
 
@@ -25,7 +25,7 @@ TEST(CategorizeRecords, SequenceRanges)
         records.push_back(std::make_shared<DWAL::Record>(i));
     }
 
-    auto range_buckets = DB::DistributedMergeTreeCallbackData::categorizeRecordsAccordingToSequenceRanges(records, sequence_ranges, 47);
+    auto range_buckets = DB::StreamCallbackData::categorizeRecordsAccordingToSequenceRanges(records, sequence_ranges, 47);
     EXPECT_EQ(range_buckets.size(), 5);
     EXPECT_EQ(range_buckets[0].first.size(), 2);
     EXPECT_EQ(range_buckets[0].first[0]->sn, 2);

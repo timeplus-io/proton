@@ -254,7 +254,7 @@ private:
     friend class MutatePlainMergeTreeTask;
 
     /// proton: starts
-    friend class StorageDistributedMergeTree;
+    friend class StorageStream;
     void commitSN(Int64 sn);
     Int64 loadSN() const;
     const SequenceRanges & missingSequenceRanges() const { return missing_sequence_ranges; }

@@ -19,7 +19,7 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx);
 void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx);
 void prepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
-void prepareCreateQueryForDistributedMergeTree(ASTCreateQuery & create);
+void prepareCreateQueryForStream(ASTCreateQuery & create);
 void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list);
 DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);
 DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);

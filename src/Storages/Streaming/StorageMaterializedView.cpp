@@ -466,7 +466,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
     if (!is_attach)
     {
         /// Create inner target table query
-        ///   create table <inner_target_table_id> (view_properties[, RESERVED_VIEW_VERSION]) engine = DistributedMergeTree(1, 1, rand());
+        ///   create table <inner_target_table_id> (view_properties[, RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
         /// FIXME: In future, add order clause or remove engine ?
         auto manual_create_query = std::make_shared<ASTCreateQuery>();
         manual_create_query->setDatabase(target_table_id.getDatabaseName());
@@ -482,7 +482,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
 
         auto new_storage = std::make_shared<ASTStorage>();
         auto engine = makeASTFunction(
-            "DistributedMergeTree",
+            "Stream",
             std::make_shared<ASTLiteral>(UInt64(1)),
             std::make_shared<ASTLiteral>(UInt64(1)),
             makeASTFunction("rand"));
@@ -543,7 +543,7 @@ void StorageMaterializedView::buildBackgroundPipeline(
     });
 
     auto target_table = getTargetTable();
-    if (target_table->getName() != "DistributedMergeTree")
+    if (target_table->getName() != "Stream")
         /// proton: starts
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming View doesn't support target storage is {}", target_table->getName());
         /// proton: ends

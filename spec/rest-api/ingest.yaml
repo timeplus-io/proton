@@ -73,7 +73,7 @@ paths:
             type: string
           in: query
           name: mode
-          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： proton inserts data asynchronously but does not track the insert status.''async'' the default insert mode, proton inserts data asynchronously but track the status and retry if insert fails. ''ordered'' proton inserts data synchronously. '
+          description: 'ingest mode, only works for Stream engine. ''''sync"： proton inserts data asynchronously but does not track the insert status.''async'' the default insert mode, proton inserts data asynchronously but track the status and retry if insert fails. ''ordered'' proton inserts data synchronously. '
         - name: x-proton-request-id
           in: header
           required: false
@@ -328,7 +328,7 @@ paths:
             type: string
           in: query
           name: mode
-          description: 'ingest mode, only works for DistributedMergeTree engine. ''''sync"： proton inserts data asynchronously but does not track the insert status.''async'' the default insert mode, proton inserts data asynchronously but track the status and retry if insert fails. ''ordered'' proton inserts data synchronously. '
+          description: 'ingest mode, only works for Stream engine. ''''sync"： proton inserts data asynchronously but does not track the insert status.''async'' the default insert mode, proton inserts data asynchronously but track the status and retry if insert fails. ''ordered'' proton inserts data synchronously. '
         - name: x-proton-request-id
           in: header
           required: false
@@ -567,7 +567,7 @@ components:
               poll_id:
                 type: string
                 minLength: 1
-                description: 'use to query the insert status of this request in async mode, only valid for DistributedMergeTree engine'
+                description: 'use to query the insert status of this request in async mode, only valid for Stream engine'
               channel:
                 type: string
                 minLength: 1

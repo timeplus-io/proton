@@ -56,7 +56,7 @@ CREATE STREAM default.tests
     `cpu_usage`      Float32,
     `timestamp`      DateTime64(3) DEFAULT now64(3),
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(1, 1, rand()))###")),
+) ENGINE = Stream(1, 1, rand()))###")),
         ignoreEmptyChars(R"###({
 "columns": [{
     "name": "device",
@@ -98,7 +98,7 @@ CREATE STREAM default.tests
     `_tp_index_time`DateTime(3) DEFAULT now(UTC),
     `_tp_xxxx`      UInt64,
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(2, 1, rand()))###"),
+) ENGINE = Stream(2, 1, rand()))###"),
         ignoreEmptyChars(R"###(
 {
 	"columns": [{
@@ -135,7 +135,7 @@ CREATE STREAM default.tests
 CREATE STREAM default.tests
 (
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(2, 1, rand())
+) ENGINE = Stream(2, 1, rand())
 PARTITION BY ttl
 ORDER BY ttl
 TTL ttl + to_interval_day(1)
@@ -232,7 +232,7 @@ TEST(DDLHelper, getAlterTableParamOpCode)
         getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), DWAL::OpCode::DELETE_COLUMN);
 }
 
-TEST(DDLHelper, prepareCreateQueryForDistributedMergeTree)
+TEST(DDLHelper, prepareCreateQueryForStream)
 {
     /// add _tp_time and _tp_index_time
     ASTPtr ast = queryToAST(R"###(
@@ -243,10 +243,10 @@ CREATE STREAM default.tests
     `cpu_usage`      Float32,
     `timestamp`      DateTime64(3) DEFAULT now64(3),
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(1, 1, rand())
+) ENGINE = Stream(1, 1, rand())
 )###");
     auto * create = ast->as<ASTCreateQuery>();
-    prepareCreateQueryForDistributedMergeTree(*create);
+    prepareCreateQueryForStream(*create);
     EXPECT_EQ(create->columns_list->columns->children.size(), 7);
 
     ASTFunction * order_by = create->storage->order_by->as<ASTFunction>();
@@ -263,22 +263,22 @@ CREATE STREAM default.tests
     `_tp_index_time`DateTime(3) DEFAULT now(UTC),
     `_tp_xxxx`      UInt64,
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(2, 1, rand()))###");
+) ENGINE = Stream(2, 1, rand()))###");
     create = ast->as<ASTCreateQuery>();
-    EXPECT_THROW(prepareCreateQueryForDistributedMergeTree(*create), DB::Exception);
+    EXPECT_THROW(prepareCreateQueryForStream(*create), DB::Exception);
 
     /// ignore input 'order_by' and 'partition_by'
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(2, 1, rand())
+) ENGINE = Stream(2, 1, rand())
 PARTITION BY ttl
 ORDER BY ttl
 TTL ttl + to_interval_day(1)
 )###");
     create = ast->as<ASTCreateQuery>();
-    prepareCreateQueryForDistributedMergeTree(*create);
+    prepareCreateQueryForStream(*create);
     order_by = create->storage->order_by->as<ASTFunction>();
     EXPECT_EQ(order_by->name, "to_start_of_hour");
 
@@ -291,19 +291,19 @@ CREATE STREAM default.tests
 (
     `timestamp`      DateTime64(3) DEFAULT now64(3),
     `ttl`            DateTime DEFAULT now()
-) ENGINE = DistributedMergeTree(1, 1, rand())
+) ENGINE = Stream(1, 1, rand())
 SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
     create = ast->as<ASTCreateQuery>();
 
-    prepareCreateQueryForDistributedMergeTree(*create);
+    prepareCreateQueryForStream(*create);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
 CREATE STREAM default.tests (
   `timestamp` DateTime64(3) DEFAULT now64(3),
   `ttl` DateTime DEFAULT now(),
   `_tp_time` DateTime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
   `_tp_index_time` DateTime64(3,'UTC') CODEC(DoubleDelta(), LZ4())
-) ENGINE = DistributedMergeTree(1, 1, rand())
+) ENGINE = Stream(1, 1, rand())
 PARTITION BY to_YYYYMMDD(_tp_time)
 ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
 }
@@ -325,7 +325,7 @@ CREATE STREAM default.tests
     auto * create = ast->as<ASTCreateQuery>();
 
     prepareEngine(*create, global_context);
-    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = DistributedMergeTree(1, 1, rand()))###"));
+    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = Stream(1, 1, rand()))###"));
 
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
@@ -338,5 +338,5 @@ SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
     prepareEngine(*create, global_context);
     EXPECT_EQ(
         ignoreEmptyChars(queryToString(*create->storage)),
-        ignoreEmptyChars(R"###(ENGINE=DistributedMergeTree(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));
+        ignoreEmptyChars(R"###(ENGINE=Stream(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));
 }

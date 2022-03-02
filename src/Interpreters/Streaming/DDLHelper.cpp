@@ -116,7 +116,7 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
     ASTPtr sharding_expr = functionToAST(expr);
 
     auto engine = makeASTFunction(
-        "DistributedMergeTree", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
+        "Stream", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
     create.storage->set(create.storage->engine, engine);
 }
 
@@ -280,7 +280,7 @@ void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
     create.storage->set(create.storage->partition_by, new_partition_by);
 }
 
-void prepareCreateQueryForDistributedMergeTree(ASTCreateQuery & create)
+void prepareCreateQueryForStream(ASTCreateQuery & create)
 {
     prepareColumns(create);
     prepareOrderByAndPartitionBy(create);

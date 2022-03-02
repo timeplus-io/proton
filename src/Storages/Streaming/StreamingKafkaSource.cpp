@@ -1,4 +1,4 @@
-#include <Storages/DistributedMergeTree/StreamingKafkaSource.h>
+#include <Storages/Streaming/StreamingKafkaSource.h>
 
 #include <Formats/FormatFactory.h>
 #include <Interpreters/Context.h>

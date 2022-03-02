@@ -10,16 +10,16 @@ namespace DB
 class ColumnsDescription;
 struct StorageID;
 
-/// StreamingDistributedMergeTree is pure in-memory representation
+/// StreamingStream is pure in-memory representation
 /// when a stream query is executed. It is for read-query only
-class ProxyDistributedMergeTree final : public shared_ptr_helper<ProxyDistributedMergeTree>, public IStorage, WithContext
+class ProxyStream final : public shared_ptr_helper<ProxyStream>, public IStorage, WithContext
 {
-    friend struct shared_ptr_helper<ProxyDistributedMergeTree>;
+    friend struct shared_ptr_helper<ProxyStream>;
 
 public:
-    ~ProxyDistributedMergeTree() override = default;
+    ~ProxyStream() override = default;
 
-    String getName() const override { return "ProxyDistributedMergeTree"; }
+    String getName() const override { return "ProxyStream"; }
 
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
@@ -72,7 +72,7 @@ public:
     bool supportsSubcolumns() const override { return storage && storage->supportsSubcolumns(); }
 
 private:
-    ProxyDistributedMergeTree(
+    ProxyStream(
         const StorageID & id_,
         const ColumnsDescription & columns_,
         StorageMetadataPtr underlying_storage_metadata_snapshot_,

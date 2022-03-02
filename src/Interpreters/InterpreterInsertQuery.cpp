@@ -269,7 +269,7 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     if (query_ptr)
         query = query_ptr->as<ASTInsertQuery>();
 
-    assert(table->getName() == "DistributedMergeTree");
+    assert(table->getName() == "Stream");
 
     const Settings & settings = context_ptr->getSettingsRef();
     bool null_as_default = query && query->select && settings.insert_null_as_default;

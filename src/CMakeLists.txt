@@ -235,7 +235,6 @@ add_object_library(clickhouse_processors_formats_impl Processors/Formats/Impl)
 add_object_library(clickhouse_processors_transforms Processors/Transforms)
 
 # proton: starts
-add_object_library(clickhouse_storages_distributed_mergetree Storages/DistributedMergeTree)
 add_object_library(clickhouse_server_rest_handlers Server/RestRouterHandlers)
 add_object_library(clickhouse_interpreters_streaming Interpreters/Streaming)
 add_object_library(clickhouse_processors_transforms_streaming Processors/Transforms/Streaming)

@@ -220,7 +220,7 @@ struct ContextSharedPart
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
 
-    mutable std::optional<ThreadPool> part_commit_pool; /// proton: A thread pool that can build part and commit in background (used for DistributedMergeTree table engine)
+    mutable std::optional<ThreadPool> part_commit_pool; /// proton: A thread pool that can build part and commit in background (used for Stream table engine)
     mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
     mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
@@ -235,7 +235,7 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
 
     /// proton: starts. remove `replicated` and add `stream`
-    std::optional<StreamSettings> stream_settings;       /// Settings of DistributedMergeTree* engines.
+    std::optional<StreamSettings> stream_settings;       /// Settings of Stream* engines.
     /// proton: ends.
 
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)

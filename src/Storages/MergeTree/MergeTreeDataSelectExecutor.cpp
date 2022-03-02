@@ -69,7 +69,7 @@ QueryPlanPtr streamingQueryPlan(std::function<std::shared_ptr<ISource>(Int64 &)>
         return query_plan;
 
     Int64 sn = -1;
-    auto read_step = std::make_unique<ReadFromStorageStep>(Pipe(create_streaming_source(sn)), "StorageDistributedMergeTree");
+    auto read_step = std::make_unique<ReadFromStorageStep>(Pipe(create_streaming_source(sn)), "StorageStream");
     query_plan->addStep(std::move(read_step));
     return query_plan;
 }

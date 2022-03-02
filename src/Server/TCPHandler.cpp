@@ -31,7 +31,7 @@
 #include <Interpreters/Session.h>
 #include <Interpreters/ProfileEventsExt.h>
 #include <Server/TCPServer.h>
-#include <Storages/DistributedMergeTree/StorageDistributedMergeTree.h>
+#include <Storages/Streaming/StorageStream.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
 #include <Access/Credentials.h>
@@ -747,7 +747,7 @@ void TCPHandler::processTablesStatusRequest()
             continue;
 
         TableStatus status;
-        if (auto * distributed_merge_tree = dynamic_cast<StorageDistributedMergeTree *>(table.get())) /// proton: starts
+        if (auto * distributed_merge_tree = dynamic_cast<StorageStream *>(table.get())) /// proton: starts
         {
             /// If it is just a virtual table, no table status
             if (distributed_merge_tree->isRemote())
@@ -755,7 +755,7 @@ void TCPHandler::processTablesStatusRequest()
                 continue;
             }
 
-            /// Please note for DistributedMergeTree, the absolute delay means the last 32 bits
+            /// Please note for Stream, the absolute delay means the last 32 bits
             /// of the last sequence number it commits
             status.is_replicated = true;
             status.absolute_delay = distributed_merge_tree->lastSN() & 0XFFFFFFFF;
