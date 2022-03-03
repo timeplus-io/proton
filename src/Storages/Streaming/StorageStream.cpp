@@ -619,10 +619,7 @@ void StorageStream::shutdown()
     }
 
     if (dwal)
-    {
-        dwal->shutdown();
         dwal.reset();
-    }
 
     LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
 }
