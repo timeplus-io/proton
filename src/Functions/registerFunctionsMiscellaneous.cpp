@@ -32,10 +32,8 @@ void registerFunctionIsInfinite(FunctionFactory &);
 void registerFunctionIsNaN(FunctionFactory &);
 void registerFunctionIfNotFinite(FunctionFactory &);
 void registerFunctionThrowIf(FunctionFactory &);
-void registerFunctionVersion(FunctionFactory &);
 void registerFunctionBuildId(FunctionFactory &);
 void registerFunctionUptime(FunctionFactory &);
-void registerFunctionTimezone(FunctionFactory &);
 void registerFunctionTimezoneOf(FunctionFactory &);
 void registerFunctionRunningAccumulate(FunctionFactory &);
 void registerFunctionRunningDifference(FunctionFactory &);
@@ -73,6 +71,9 @@ void registerFunctionConvertCharset(FunctionFactory &);
 #endif
 
 #endif
+
+void registerFunctionTimezone(FunctionFactory &);
+void registerFunctionVersion(FunctionFactory &);
 
 void registerFunctionToTypeName(FunctionFactory &);
 void registerFunctionMaterialize(FunctionFactory &);
@@ -125,10 +126,8 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionIsNaN(factory);
     registerFunctionIfNotFinite(factory);
     registerFunctionThrowIf(factory);
-    registerFunctionVersion(factory);
     registerFunctionBuildId(factory);
     registerFunctionUptime(factory);
-    registerFunctionTimezone(factory);
     registerFunctionTimezoneOf(factory);
     registerFunctionRunningAccumulate(factory);
     registerFunctionRunningDifference(factory);
@@ -166,6 +165,9 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionConvertCharset(factory);
 #endif
 #endif
+
+    registerFunctionTimezone(factory);
+    registerFunctionVersion(factory);
 
 #ifdef FUZZING_MODE
     registerFunctionGetFuzzerData(factory);

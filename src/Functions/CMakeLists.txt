@@ -70,7 +70,6 @@ if (NOT ENABLE_MISC_FUNCS)
             currentUser.cpp
             currentProfiles.cpp
             currentRoles.cpp
-            serverConstants.cpp
             FunctionFQDN.cpp
             visibleWidth.cpp
             getSizeOfEnumType.cpp
