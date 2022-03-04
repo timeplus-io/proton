@@ -1878,18 +1878,91 @@ public:
 
         if (isDateTime64<Name, ToDataType>(arguments))
         {
-            validateFunctionArgumentTypes(*this, arguments,
-                FunctionArgumentDescriptors{{"string", &isStringOrFixedString<IDataType>, nullptr, "String or FixedString"}},
-                // optional
-                FunctionArgumentDescriptors{
-                    {"precision", &isUInt8<IDataType>, isColumnConst, "const UInt8"},
-                    {"timezone", &isStringOrFixedString<IDataType>, isColumnConst, "const String or FixedString"},
-                });
+            /// proton: starts.
+            size_t scale_arg_num = 1;
+            size_t time_zone_arg_num = 2;
+
+            if (this->getName() == "to_time")
+            {
+                if (arguments.size() > 3)
+                {
+                    throw Exception(
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                        "Number of arguments for function {} doesn't match: passed {} , should be 1, 2 or 3, should be 1 or 2. Second "
+                        "argument only make sense for timezone (String) or scale (Decimal).",
+                        getName(),
+                        arguments.size());
+                }
+
+                if (!isStringOrFixedString(arguments[0].type))
+                {
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of first argument of function {} should take String argument.",
+                        arguments[0].type->getName(),
+                        getName());
+                }
+
+                scale_arg_num = 0;
+                if (arguments.size() == 2)
+                {
+                    if (isInteger(arguments[1].type))
+                    {
+                        scale_arg_num = 1;
+                    }
+                    else if (isStringOrFixedString(arguments[1].type))
+                    {
+                        time_zone_arg_num = 1;
+                    }
+                    else
+                    {
+                        throw Exception(
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                            "Illegal type {} of 2nd argument of function {} should be String or Integer.",
+                            arguments[1].type->getName(),
+                            getName());
+                    }
+                }
+                else if (arguments.size() == 3)
+                {
+                    if (!isInteger(arguments[1].type))
+                        throw Exception(
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                            "Illegal type {} of 2nd argument of function {} should be Integer.",
+                            arguments[1].type->getName(),
+                            getName());
+                    scale_arg_num = 1;
+
+                    if (!isStringOrFixedString(arguments[2].type))
+                        throw Exception(
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                            "Illegal type {} of 2nd argument of function {} should be String or FixedString.",
+                            arguments[2].type->getName(),
+                            getName());
+                    time_zone_arg_num = 2;
+                }
+            }
+            else
+            {
+                validateFunctionArgumentTypes(
+                    *this,
+                    arguments,
+                    FunctionArgumentDescriptors{{"string", &isStringOrFixedString<IDataType>, nullptr, "String or FixedString"}},
+                    // optional
+                    FunctionArgumentDescriptors{
+                        {"precision", &isUInt8<IDataType>, isColumnConst, "const UInt8"},
+                        {"timezone", &isStringOrFixedString<IDataType>, isColumnConst, "const String or FixedString"},
+                    });
+            }
+            /// proton: ends
 
             UInt64 scale = to_datetime64 ? DataTypeDateTime64::default_scale : 0;
-            if (arguments.size() > 1)
+            /// proton: starts
+            if (arguments.size()>1 && scale_arg_num)
                 scale = extractToDecimalScale(arguments[1]);
-            const auto timezone = extractTimeZoneNameFromFunctionArguments(arguments, 2, 0);
+
+            const auto timezone = extractTimeZoneNameFromFunctionArguments(arguments, time_zone_arg_num, 0);
+            /// proton: ends
 
             res = scale == 0 ? res = std::make_shared<DataTypeDateTime>(timezone) : std::make_shared<DataTypeDateTime64>(scale, timezone);
         }
@@ -1905,9 +1978,12 @@ public:
                 /// proton: starts. renaming lower
                 if (this->getName().find("_or_zero") != std::string::npos ||
                     this->getName().find("_or_null") != std::string::npos)
-                    throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
-                            ". Conversion functions with postfix '_or_zero' or '_or_null'  should take String argument",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of first argument of function {}. Conversion functions with postfix '_or_zero' or '_or_null' "
+                        "should take String argument",
+                        arguments[0].type->getName(),
+                        getName());
                 /// proton: ends.
                 else
                     throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName(),
@@ -1992,8 +2068,10 @@ public:
             if (isDateTime64<Name, ToDataType>(arguments))
             {
                 UInt64 scale = to_datetime64 ? DataTypeDateTime64::default_scale : 0;
-                if (arguments.size() > 1)
+                /// proton: starts
+                if (arguments.size() > 1 && isInteger(arguments[1].type))
                     scale = extractToDecimalScale(arguments[1]);
+                /// proton: ends
 
                 if (scale == 0)
                     result_column = executeInternal<DataTypeDateTime>(arguments, result_type, input_rows_count);
