@@ -139,8 +139,13 @@ class DynamicQueryHandler : public HTTPHandler
 {
 private:
     std::string param_name;
+    /// proton: starts
+    bool snapshot_mode = false;
+    /// proton: ends
 public:
-    explicit DynamicQueryHandler(IServer & server_, const std::string & param_name_ = "query");
+    /// proton: starts
+    explicit DynamicQueryHandler(IServer & server_, const std::string & param_name_ = "query", bool snapshot_mode_ = false);
+    /// proton: ends
 
     std::string getQuery(HTTPServerRequest & request, HTMLForm & params, ContextMutablePtr context) override;
 

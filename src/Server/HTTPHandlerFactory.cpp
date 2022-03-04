@@ -27,7 +27,9 @@ namespace ErrorCodes
 }
 
 static void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server);
-static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics);
+/// proton: starts
+static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false);
+/// proton: ends
 
 HTTPRequestHandlerFactoryMain::HTTPRequestHandlerFactoryMain(const std::string & name_)
     : log(&Poco::Logger::get(name_)), name(name_)
@@ -58,8 +60,10 @@ std::unique_ptr<HTTPRequestHandler> HTTPRequestHandlerFactoryMain::createRequest
     return nullptr;
 }
 
+/// proton: starts
 static inline auto createHandlersFactoryFromConfig(
-    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics)
+    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false)
+/// proton: ends
 {
     auto main_handler_factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
 
@@ -70,7 +74,9 @@ static inline auto createHandlersFactoryFromConfig(
     {
         if (key == "defaults")
         {
-            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics);
+            /// proton: starts
+            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics, snapshot_mode_);
+            /// proton: ends
         }
         else if (startsWith(key, "rule"))
         {
@@ -101,16 +107,22 @@ static inline auto createHandlersFactoryFromConfig(
 }
 
 static inline HTTPRequestHandlerFactoryPtr
-createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics)
+/// proton: starts
+createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false)
+/// proton: ends
 {
     if (server.config().has("http_handlers"))
     {
-        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics);
+        /// proton: starts
+        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics, snapshot_mode_);
+        /// proton: ends
     }
     else
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
-        addDefaultHandlersFactory(*factory, server, async_metrics);
+        /// proton: starts
+        addDefaultHandlersFactory(*factory, server, async_metrics, snapshot_mode_);
+        /// proton: ends
         return factory;
     }
 }
@@ -131,6 +143,10 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, Asynchronous
 {
     if (name == "HTTPHandler-factory" || name == "HTTPSHandler-factory")
         return createHTTPHandlerFactory(server, name, async_metrics);
+    /// proton: starts. turn on snapshot_mode
+    else if (name == "SnapshotHTTPHandler-factory")
+        return createHTTPHandlerFactory(server, name, async_metrics, true);
+    /// proton: ends
     else if (name == "InterserverIOHTTPHandler-factory" || name == "InterserverIOHTTPSHandler-factory")
         return createInterserverHTTPHandlerFactory(server, name);
     else if (name == "PrometheusHandler-factory")
@@ -179,7 +195,9 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     factory.addHandler(web_ui_handler);
 }
 
-void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics)
+/// proton: starts
+void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_)
+/// proton: ends
 {
     addCommonDefaultHandlersFactory(factory, server);
 
@@ -189,7 +207,9 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     factory.addHandler(rest_handler);
     /// proton: end.
 
-    auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, "query");
+    /// proton: starts
+    auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, "query", std::move(snapshot_mode_));
+    /// proton: ends
     query_handler->allowPostAndGetParamsAndOptionsRequest();
     factory.addHandler(query_handler);
 

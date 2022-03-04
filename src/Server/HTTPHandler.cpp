@@ -949,10 +949,12 @@ void HTTPHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse 
     used_output.finalize();
 }
 
-DynamicQueryHandler::DynamicQueryHandler(IServer & server_, const std::string & param_name_)
-    : HTTPHandler(server_, "DynamicQueryHandler"), param_name(param_name_)
+/// proton: starts
+DynamicQueryHandler::DynamicQueryHandler(IServer & server_, const std::string & param_name_, bool snapshot_mode_)
+    : HTTPHandler(server_, "DynamicQueryHandler"), param_name(param_name_), snapshot_mode(snapshot_mode_)
 {
 }
+/// proton: ends
 
 bool DynamicQueryHandler::customizeQueryParam(ContextMutablePtr context, const std::string & key, const std::string & value)
 {
@@ -987,6 +989,12 @@ bool DynamicQueryHandler::customizeQueryParam(ContextMutablePtr context, const s
 
 std::string DynamicQueryHandler::getQuery(HTTPServerRequest & request, HTMLForm & params, ContextMutablePtr context)
 {
+    /// proton: starts
+    /// set query_mode to 'table' if snapshot_mode is on
+    if (snapshot_mode)
+        context->setSetting("query_mode", Field("table"));
+    /// proton: ends
+
     if (likely(!startsWith(request.getContentType(), "multipart/form-data")))
     {
         /// Part of the query can be passed in the 'query' parameter and the rest in the request body

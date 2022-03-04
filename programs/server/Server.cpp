@@ -1689,6 +1689,28 @@ void Server::createServers(
                     context(), createHandlerFactory(*this, async_metrics, "HTTPHandler-factory"), server_pool, socket, http_params));
         });
 
+        /// proton: starts. snapshot http server
+        port_name = "snapshot_server_http_port";
+        createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter
+        {
+            Poco::Net::ServerSocket socket;
+            auto address = socketBindListen(socket, listen_host, port);
+            socket.setReceiveTimeout(settings.http_receive_timeout);
+            socket.setSendTimeout(settings.http_send_timeout);
+
+            return ProtocolServerAdapter(
+                listen_host,
+                port_name,
+                "http://" + address.toString(),
+                std::make_unique<HTTPServer>(
+                    context(),
+                    createHandlerFactory(*this, async_metrics, "SnapshotHTTPHandler-factory"),
+                    server_pool,
+                    socket,
+                    http_params));
+        });
+        /// proton: ends
+
         /// HTTPS
         port_name = "https_port";
         createServer(config, listen_host, port_name, listen_try, start_servers, servers, [&](UInt16 port) -> ProtocolServerAdapter

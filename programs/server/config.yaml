@@ -50,6 +50,9 @@ logger:
 # and by most of web interfaces (embedded UI, Grafana, Redash, ...).
 http_port: 3218
 
+# Port for Snapshot HTTP server, which run all stream query in 'table' mode.
+snapshot_server_http_port: 8123
+
 # Port for interaction by native protocol with:
 # - proton-client and other native proton tools (proton-benchmark, proton-copier);
 # - proton-server with other proton-servers for distributed query processing;
