@@ -17,7 +17,7 @@ namespace
 class AggregateFunctionCombinatorForEach final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "ForEach"; }
+    String getName() const override { return "_for_each"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

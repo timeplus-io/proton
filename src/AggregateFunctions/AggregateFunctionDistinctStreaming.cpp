@@ -21,7 +21,7 @@ namespace
     class AggregateFunctionCombinatorDistinctStreaming final : public IAggregateFunctionCombinator
     {
     public:
-        String getName() const override { return "DistinctStreaming"; }
+        String getName() const override { return "_distinct_streaming"; }
 
         DataTypes transformArguments(const DataTypes & arguments) const override
         {

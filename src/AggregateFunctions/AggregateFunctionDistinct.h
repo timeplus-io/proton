@@ -146,7 +146,7 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
 };
 
 /** Adaptor for aggregate functions.
-  * Adding -Distinct suffix to aggregate function
+  * Adding '_distinct' suffix to aggregate function
 **/
 template <typename Data>
 class AggregateFunctionDistinct : public IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct<Data>>
@@ -223,7 +223,7 @@ public:
 
     String getName() const override
     {
-        return nested_func->getName() + "Distinct";
+        return nested_func->getName() + "_distinct";
     }
 
     DataTypePtr getReturnType() const override

@@ -614,9 +614,9 @@ void ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions, Aggr
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters, "", getContext()) : Array();
 
         /// proton: starts.
-        /// We shall replace '<aggr>Distinct' to '<aggr>DistinctStreaming' in streaming query.
-        if (syntax->streaming && endsWith(Poco::toLower(node->name), "distinct"))
-            aggregate.function = AggregateFunctionFactory::instance().get(node->name + "Streaming", types, aggregate.parameters, properties);
+        /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_treaming' in streaming query.
+        if (syntax->streaming && endsWith(node->name, "_distinct"))
+            aggregate.function = AggregateFunctionFactory::instance().get(node->name + "_streaming", types, aggregate.parameters, properties);
         else
         {
             /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`

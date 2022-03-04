@@ -20,7 +20,7 @@ namespace
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Null"; }
+    String getName() const override { return "_null"; }
 
     bool isForInternalUsageOnly() const override { return true; }
 

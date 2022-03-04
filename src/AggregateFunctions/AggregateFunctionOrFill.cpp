@@ -28,7 +28,7 @@ public:
 
     String getName() const override
     {
-        return kind == Kind::OrNull ? "OrNull" : "OrDefault";
+        return kind == Kind::OrNull ? "_or_null" : "_or_default";
     }
 
     AggregateFunctionPtr transformAggregateFunction(

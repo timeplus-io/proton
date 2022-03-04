@@ -9,7 +9,7 @@ namespace
     class AggregateFunctionCombinatorSimpleState final : public IAggregateFunctionCombinator
     {
     public:
-        String getName() const override { return "SimpleState"; }
+        String getName() const override { return "_simple_state"; }
 
         DataTypes transformArguments(const DataTypes & arguments) const override { return arguments; }
 

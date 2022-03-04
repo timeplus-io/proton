@@ -13,7 +13,7 @@ namespace ErrorCodes
 class AggregateFunctionCombinatorMap final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Map"; }
+    String getName() const override { return "_map"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

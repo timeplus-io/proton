@@ -20,7 +20,7 @@ class AggregateFunctionCombinatorResample final : public IAggregateFunctionCombi
 public:
     String getName() const override
     {
-        return "Resample";
+        return "_resample";
     }
 
     DataTypes transformArguments(const DataTypes & arguments) const override

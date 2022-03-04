@@ -19,7 +19,7 @@ namespace
 class AggregateFunctionCombinatorArray final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Array"; }
+    String getName() const override { return "_array"; }
 
     bool supportsNesting() const override { return true; }
 

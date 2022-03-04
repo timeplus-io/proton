@@ -842,9 +842,9 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto function_node = std::make_shared<ASTFunction>();
     tryGetIdentifierNameInto(identifier, function_node->name);
 
-    /// func(DISTINCT ...) is equivalent to funcDistinct(...)
+    /// func(DISTINCT ...) is equivalent to func_distinct(...)
     if (has_distinct)
-        function_node->name += "Distinct";
+        function_node->name += "_distinct";
 
     function_node->arguments = expr_list_args;
     function_node->children.push_back(function_node->arguments);

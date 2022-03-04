@@ -13,7 +13,7 @@ namespace
 class AggregateFunctionCombinatorState final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "State"; }
+    String getName() const override { return "_state"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

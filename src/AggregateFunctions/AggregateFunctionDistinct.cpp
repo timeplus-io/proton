@@ -19,7 +19,7 @@ namespace
 class AggregateFunctionCombinatorDistinct final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Distinct"; }
+    String getName() const override { return "_distinct"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

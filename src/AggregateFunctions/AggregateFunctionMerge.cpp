@@ -18,7 +18,7 @@ namespace
 class AggregateFunctionCombinatorMerge final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Merge"; }
+    String getName() const override { return "_merge"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {
