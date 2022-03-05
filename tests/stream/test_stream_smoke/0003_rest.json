@@ -1,0 +1,37 @@
+{
+    "test_suite_name": "rest",
+    "test_suite_config":{
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
+    },
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "tests": [
+
+        {
+            "id": 0,
+            "tags": ["sqlformat"],
+            "name": "sqlformat",
+            "description": "send a sqlformat request",
+            "steps":[
+                {"statements": [
+                    {
+                    "client":"rest", 
+                    "query_type": "table",
+                    "query_id":"101", 
+                    "url":"/proton/v1/sqlformat", 
+                    "http_method":"post",
+                    "body":{"query": "select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop( test, timestamp, interval 3 second, interval 5 second ) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"}
+                    }
+                ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"101", "expected_results":
+                    {
+                    "query": "SELECT\n    a.id,\n    b.type,\n    max(a.value),\n    window_start AS joined_w_start,\n    window_end AS joined_w_end\nFROM hop(test, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_d) AS b ON a.id = b.id\nWHERE (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n    a.id,\n    b.type,\n    window_start,\n    window_end", 
+                    "request_id": "any_value"}
+                }                
+            ]
+        }
+    ]
+}

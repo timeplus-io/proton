@@ -586,16 +586,17 @@
                 {"inputs": [
                     {"table_name":"test_no_default_tp_time", "wait":3, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
-                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
-                    {"table_name":"test_no_default_tp_time", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
+                    ["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
-                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]},
-                    {"table_name":"test_no_default_tp_time", "data": [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"],
+                    ["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
-                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
-                    {"table_name":"test_no_default_tp_time", "data": [["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
+                    ["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
-                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]
+                    ]}
                 ]},
                 {"statements": [
                     {"client":"python","query_id":"101", "wait":1, "query_type": "stream", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 emit last 5s"}]}                
@@ -1105,16 +1106,17 @@
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
-                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"]]},
-                    {"table_name":"test", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:02"],
+                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2020-02-02 20:01:03"],
+                    ["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2020-02-02 20:01:02"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2020-02-02 20:01:04"],
-                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2020-02-02 20:01:07"]]},
-                    {"table_name":"test", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
+                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2020-02-02 20:01:07"],
+                    ["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:11"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2020-02-02 20:01:10"],
-                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"]]},
-                    {"table_name":"test", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
+                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"],
+                    ["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:12"],
-                    ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]]}
+                    ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]                    
+                    ]}
                 ]}
             ],
 
@@ -1739,24 +1741,24 @@
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_stream_sum_view"},
                     {"client":"python", "query_type": "table", "wait": 1, "query":"create materialized view test_stream_sum_view as select id, sum(value) as sum_value from test group by id emit periodic 5s"},
-                    {"client":"python", "query_id":"101", "wait":1, "query_type": "stream", "terminate":"manual", "query":"select id, sum_value from test_stream_sum_view"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "terminate":"manual", "query":"select id, sum_value from test_stream_sum_view"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
-                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
-                    {"table_name":"test", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
+                    ["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
-                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]},
-                    {"table_name":"test", "data": [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"],
+                    ["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
-                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
-                    {"table_name":"test", "data": [["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
-                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]                    
+                    ]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "run_mode":"process", "depends":{"query_id":101}, "query_type": "batch", "query":"kill query where query_id = '101'"},
-                    {"client":"python", "wait": 6, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_sum_view"}
+                    {"client":"python", "wait": 5, "depends":{"query_id":101}, "query_type": "batch", "query":"kill query where query_id = '101'"},
+                    {"client":"python", "wait": 1, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_sum_view"}
                 ]
                 }
             ],

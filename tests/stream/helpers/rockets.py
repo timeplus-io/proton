@@ -107,6 +107,7 @@ def rockets_env_var_get():
         return None
 
 
+
 def scan_tests_file_path(tests_file_path):
     test_suites_selected = []
     test_suite_names_selected = []
@@ -297,6 +298,95 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
         time.sleep(0.2)
         kill_res = proton_client.execute(kill_sql)
         logger.debug(f"kill_query: kill_res = {kill_res} was called")
+
+def request_rest(url,http_method, params=None, args=None, data=None, body=None):
+    logger = mp.get_logger()
+    logger.debug(f"url={url}, http_method={http_method}, params={params}, args={args}, data={data}, body={body}")
+    
+    try:
+        if http_method == "get":
+            res = requests.get(url, params, args)
+            return res
+        elif http_method == "delete":
+            res = requests.delete(url, args)
+            return res
+        elif http_method == "post":
+            body = json.dumps(body)
+            res = requests.post(url, body, args)           
+            return res
+        elif http_method == "put":
+            res = requests.put(url, data, args)
+    except(BaseException) as error:
+        logger.debug(f"exception, error= {error}")
+        return None
+
+def query_run_rest(rest_setting, statement_2_run):
+    logger = mp.get_logger()
+    logger.debug(
+        f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+    )
+    query_results = {}
+    query_id = str(statement_2_run.get("query_id"))
+    query_type = statement_2_run.get("query_type")
+    query = statement_2_run.get("query")
+    depends_on_table = statement_2_run.get("depends_on_table")
+    query_start_time_str = str(datetime.datetime.now())
+    query_end_time_str = str(datetime.datetime.now())
+    query_result_str = ""
+    query_result_column_types = []
+    query_result_json = {}
+    query_result_list = []
+    query_results = {}
+    rest_request = ""
+    try:
+        host_url = rest_setting.get("host_url")
+        url = host_url + statement_2_run.get("url")
+        http_method = statement_2_run.get("http_method")
+        data = statement_2_run.get("data")
+        args = statement_2_run.get("args")
+        body = statement_2_run.get("body")
+        params = statement_2_run.get("params")
+        if params == None: params = rest_setting.get("params")
+        rest_request = f"url={url},http_method={http_method},params={params},args={args},data={data},body={body}"
+        logger.debug(f"rest_request({rest_request}) to be called.")
+        res = request_rest(url, http_method, params, args, data, body)
+        logger.debug(f"rest_request({rest_request}) called.")
+        query_result_json = res.json()
+        query_results = {
+            "query_id": query_id,
+            "query": query,
+            "rest_request": rest_request,
+            "query_type": query_type,
+            "query_state": "run",
+            "query_start": query_start_time_str,
+            "query_end": query_end_time_str,
+            "query_result_column_types": query_result_column_types,
+            "query_result": query_result_json,
+        }        
+
+    except(BaseException) as error:
+        logger.debug(f"exception, error = {error}")
+        query_end_time_str = str(datetime.datetime.now())
+        query_results = {
+            "query_id": query_id,
+            "query": query,
+            "rest_request": rest_request,
+            "query_type": query_type,
+            "query_state": "exception",
+            "query_start": query_start_time_str,
+            "query_end": query_end_time_str,
+            "query_result": f"error_code:{error.code}",
+        }
+        logger.debug(
+            "query_run_py: db exception, none-cancel query_results: {}".format(
+                query_results
+            )
+        )
+    finally:
+        logger.debug(f"query_results = {query_results}")
+        return query_results
+
+
 
 
 def query_run_py(
@@ -573,7 +663,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
         f"query_execute starts, logging_level = {logging_level}, logger.handlers = {logger.handlers}"
     )
     telemetry_shared_list = []  # telemetry list for query_run timing
-
+    rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
     settings = {"max_block_size": 100000}
@@ -735,22 +825,28 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                     )
 
                 else:
-                    logger.debug(
-                        f"query_execute: query_run_py run local for query_id = {query_id}..."
-                    )
-                    if wait != None:
-                        wait = int(wait)
-                        time.sleep(wait)
-                        logger.debug(f"query_id = {query_id}, wait for {wait}s")
-                    logger.debug(f"query_id = {query_id}, to call query_run_py")
-                    query_results = query_run_py(
-                        statement_2_run,
-                        settings,
-                        query_results_queue=None,
-                        config=None,
-                        pyclient=client,
-                    )
-                    logger.debug(f"query_id = {query_id}, query_run_py is called")
+                    if query_client != None and query_client == "rest":
+                        logger.debug(f"query_run_rest run local for query_id = {query_id}...")
+                        query_results = query_run_rest(rest_setting, statement_2_run)
+                        logger.debug(f"query_id = {query_id}, query_run_rest is called")
+                    else:
+                        logger.debug(
+                            f"query_execute: query_run_py run local for query_id = {query_id}..."
+                        )
+                        if wait != None:
+                            wait = int(wait)
+                            logger.debug(f"query_id = {query_id}, start wait for {wait}s")
+                            time.sleep(wait)
+                            logger.debug(f"query_id = {query_id}, end wait for {wait}s continue")
+                        logger.debug(f"query_id = {query_id}, to call query_run_py")
+                        query_results = query_run_py(
+                            statement_2_run,
+                            settings,
+                            query_results_queue=None,
+                            config=None,
+                            pyclient=client,
+                        )
+                        logger.debug(f"query_id = {query_id}, query_run_py is called")
                     message_2_send = json.dumps(query_results)
                     query_results_queue.put(message_2_send)
                     logger.debug(
@@ -762,7 +858,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
 
                 query_run_count = query_run_count - 1
         except (BaseException, errors.ServerException) as error:
-            logger.debug(f"query_execute: error = {error}")
+            logger.debug(f"exception: error = {error}")
             if isinstance(error, errors.ServerException):
                 query_end_time_str = str(datetime.datetime.now())
                 query_results = {
@@ -1222,9 +1318,14 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             logger.debug(
                 f"table_ddl = {table_ddl_url}, data = {post_data} to be posted."
             )
+            #res = requests.post(
+            #    table_ddl_url + "?distributed_ingest_mode=sync", data=post_data
+            #)  # create the table w/ table schema
+
             res = requests.post(
                 table_ddl_url, data=post_data
             )  # create the table w/ table schema
+
             create_start_time = datetime.datetime.now()
 
             if res.status_code == 200:
@@ -1349,11 +1450,11 @@ def drop_view_if_exist_py(client, table_name):
 
 
 def table_exist_py(pyclient, table_name):
-    table_list = pyclient.execute("show tables")
+    table_list = pyclient.execute("show streams")
     for item in table_list:
         if item[0] == table_name:
             logger.debug(
-                f"table_name = {table_name} = {item[0]} in table_list of show tables"
+                f"table_name = {table_name} = {item[0]} in table_list of show streams"
             )
             return True
     return False

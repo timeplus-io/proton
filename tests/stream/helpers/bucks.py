@@ -13,13 +13,15 @@ import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from helpers import rockets
-from helpers.rockets import env_setup
+
 from helpers.rockets import table_exist
 from helpers.rockets import create_table_rest
 from helpers.rockets import find_schema
 from helpers.rockets import drop_table_if_exist_rest
 from helpers.rockets import find_table_reset_in_table_schemas
 from helpers.rockets import reset_tables_of_test_inputs
+from helpers.rockets import env_health_check
+from helpers.rockets import input_walk_through_rest
 from helpers.rockets import TABLE_CREATE_RECORDS
 from helpers.rockets import TABLE_DROP_RECORDS
 from helpers.rockets import VIEW_CREATE_RECORDS
@@ -1093,6 +1095,79 @@ def input_walk_through(
 
     time.sleep(sleep_after_inputs)
     return proc_workers
+
+
+def env_setup(
+    client, rest_setting, test_suite_config, env_compose_file, proton_ci_mode
+):
+    ci_mode = proton_ci_mode
+    logging.info(f"env_setup: ci_mode = {ci_mode}")
+    logging.debug(f"env_setup: rest_setting = {rest_setting}")
+    health_url = rest_setting.get("health_check_url")
+    logging.debug(f"env_setup: health_url = {health_url}")
+    if ci_mode == "local":
+        env_docker_compose_res = True
+        logging.info(f"Bypass docker compose up.")
+    else:
+        env_docker_compose_res = compose_up(env_compose_file)
+        logging.info(f"env_setup: docker compose up...")
+    logging.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
+    env_health_check_res = env_health_check(health_url)
+    logging.info(f"env_setup: env_health_check_res: {env_health_check_res}")
+    if env_docker_compose_res:
+        retry = 5
+        while env_health_check_res == False and retry > 0:
+            time.sleep(2)
+            env_health_check_res = env_health_check(health_url)
+            logging.debug(f"env_setup: retry = {retry}")
+            retry -= 1
+
+        if env_health_check_res == False:
+            raise Exception("Env health check failure.")
+    else:
+        raise Exception("Env docker compose up failure.")
+    if ci_mode == "github":
+        time.sleep(
+            10
+        )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
+
+    table_ddl_url = rest_setting.get("table_ddl_url")
+    params = rest_setting.get("params")
+    table_schemas = test_suite_config.get("table_schemas")
+    for table_schema in table_schemas:
+        table_name = table_schema.get("name")
+        reset = table_schema.get("reset")
+        logging.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
+
+        table_type = table_schema.get("type")
+        if reset != None and reset == "False":
+            pass
+        else:
+            if table_type == "table":
+                drop_table_if_exist_rest(table_ddl_url, table_name)
+
+
+    for table_schema in table_schemas:
+        table_type = table_schema.get("type")
+        table_name = table_schema.get("name")
+        if table_exist(table_ddl_url, table_name):
+            pass
+        else:
+            if table_type == "table":
+                create_table_rest(table_ddl_url, table_schema)
+            elif table_type == "view":
+                create_table_pyclient(client, table_schema)
+
+    setup = test_suite_config.get("setup")
+    logging.debug(f"env_setup: setup = {setup}")
+    if setup != None:
+        setup_inputs = setup.get("inputs")
+        if setup_inputs != None:
+            setup_input_res = input_walk_through_rest(
+                rest_setting, setup_inputs, table_schemas
+            )
+
+    return
 
 
 def test_suite_run(test_context, proc_target_func=query_execute):

@@ -90,6 +90,12 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                 continue
             else:
                 assert expected_result == query_result
+        elif isinstance(expected_result, dict):
+            for key in expected_result:
+                if expected_result[key] == "any_value":
+                    pass
+                else:
+                    assert expected_result[key] == query_result[key]
         else:
             if len(expected_result) == 0:
                 assert len(query_result) == 0
