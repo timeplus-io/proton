@@ -64,7 +64,9 @@ void ASTShowTablesQuery::formatQueryImpl(const FormatSettings & settings, Format
     else
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW " << (temporary ? "TEMPORARY " : "") <<
-             (dictionaries ? "DICTIONARIES" : "TABLES") << (settings.hilite ? hilite_none : "");
+        /// proton: starts
+             (dictionaries ? "DICTIONARIES" : "STREAMS") << (settings.hilite ? hilite_none : "");
+        /// proton: ends
 
         if (!from.empty())
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " FROM " << (settings.hilite ? hilite_none : "")
