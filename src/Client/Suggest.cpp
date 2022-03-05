@@ -68,9 +68,7 @@ static String getLoadSuggestionQuery(Int32 suggestion_limit, bool basic_suggesti
         " UNION ALL ";
     if (!basic_suggestion)
     {
-        query << "SELECT macro FROM system.macros"
-                 " UNION ALL "
-                 "SELECT policy_name FROM system.storage_policies"
+        query << "SELECT policy_name FROM system.storage_policies"
                  " UNION ALL ";
     }
     query << "SELECT concat(func.name, comb.name) FROM system.functions AS func CROSS JOIN system.aggregate_function_combinators AS comb WHERE is_aggregate";

@@ -24,7 +24,6 @@ namespace Poco
 
 namespace DB
 {
-class AsynchronousMetrics;
 class ProtocolServerAdapter;
 
 class Server : public BaseDaemon, public IServer
@@ -84,14 +83,12 @@ private:
         const std::vector<std::string> & listen_hosts,
         bool listen_try,
         Poco::ThreadPool & server_pool,
-        AsynchronousMetrics & async_metrics,
         std::vector<ProtocolServerAdapter> & servers,
         bool start_servers = false);
 
     void updateServers(
         Poco::Util::AbstractConfiguration & config,
         Poco::ThreadPool & server_pool,
-        AsynchronousMetrics & async_metrics,
         std::vector<ProtocolServerAdapter> & servers);
 };
 

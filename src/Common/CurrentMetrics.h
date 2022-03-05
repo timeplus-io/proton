@@ -15,7 +15,6 @@
   *  or just current value of some metric - for example, replica delay in seconds.
   *
   * CurrentMetrics are updated instantly and are correct for any point in time.
-  * For periodically (asynchronously) updated metrics, see AsynchronousMetrics.h
   */
 
 namespace CurrentMetrics

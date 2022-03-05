@@ -13,7 +13,6 @@
 #include <Common/ThreadPool.h>
 
 #define SYSTEM_LOG_ELEMENTS(M) \
-    M(AsynchronousMetricLogElement) \
     M(CrashLogElement) \
     M(MetricLogElement) \
     M(OpenTelemetrySpanLogElement) \

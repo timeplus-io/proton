@@ -79,7 +79,6 @@ class PartLog;
 class TextLog;
 class TraceLog;
 class MetricLog;
-class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class ZooKeeperLog;
 class SessionLog;
@@ -826,7 +825,6 @@ public:
     std::shared_ptr<TraceLog> getTraceLog() const;
     std::shared_ptr<TextLog> getTextLog() const;
     std::shared_ptr<MetricLog> getMetricLog() const;
-    std::shared_ptr<AsynchronousMetricLog> getAsynchronousMetricLog() const;
 
     /// proton: starts.
     std::shared_ptr<PipelineMetricLog> getPipelineMetricLog() const;

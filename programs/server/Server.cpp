@@ -38,7 +38,6 @@
 #include <Core/ServerUUID.h>
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
-#include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DNSCacheUpdater.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
@@ -695,22 +694,6 @@ if (ThreadFuzzer::instance().isEffective())
     std::mutex servers_lock;
     std::vector<ProtocolServerAdapter> servers;
     std::vector<ProtocolServerAdapter> servers_to_start_before_tables;
-    /// This object will periodically calculate some metrics.
-    AsynchronousMetrics async_metrics(
-        global_context, config().getUInt("asynchronous_metrics_update_period_s", 1),
-        [&]() -> std::vector<ProtocolServerMetrics>
-        {
-            std::vector<ProtocolServerMetrics> metrics;
-            metrics.reserve(servers_to_start_before_tables.size());
-            for (const auto & server : servers_to_start_before_tables)
-                metrics.emplace_back(ProtocolServerMetrics{server.getPortName(), server.currentThreads()});
-
-            std::lock_guard lock(servers_lock);
-            for (const auto & server : servers)
-                metrics.emplace_back(ProtocolServerMetrics{server.getPortName(), server.currentThreads()});
-            return metrics;
-        }
-    );
 
     ConnectionCollector::init(global_context, config().getUInt("max_threads_for_connection_collector", 10));
 
@@ -1055,7 +1038,7 @@ if (ThreadFuzzer::instance().isEffective())
             if (!initial_loading)
             {
                 std::lock_guard lock(servers_lock);
-                updateServers(*config, server_pool, async_metrics, servers);
+                updateServers(*config, server_pool, servers);
             }
 
             global_context->updateStorageConfiguration(*config);
@@ -1292,8 +1275,6 @@ if (ThreadFuzzer::instance().isEffective())
         /// otherwise the reloading may pass a changed config to some destroyed parts of ContextSharedPart.
         main_config_reloader.reset();
 
-        async_metrics.stop();
-
         /** Ask to cancel background jobs all table engines,
           *  and also query_log.
           * It is important to do early, not in destructor of Context, because
@@ -1494,18 +1475,14 @@ if (ThreadFuzzer::instance().isEffective())
 #endif
 
     {
-        attachSystemTablesAsync(global_context, *DatabaseCatalog::instance().getSystemDatabase(), async_metrics);
-
         {
             std::lock_guard lock(servers_lock);
-            createServers(config(), listen_hosts, listen_try, server_pool, async_metrics, servers);
+            createServers(config(), listen_hosts, listen_try, server_pool, servers);
             if (servers.empty())
                 throw Exception(
                     "No servers started (add valid listen_host and 'tcp_port' or 'http_port' to configuration file.)",
                     ErrorCodes::NO_ELEMENTS_IN_CONFIG);
         }
-
-        async_metrics.start();
 
         {
             String level_str = config().getString("text_log.level", "");
@@ -1645,7 +1622,7 @@ if (ThreadFuzzer::instance().isEffective())
         for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
         {
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(
-                global_context->getConfigRef(), graphite_key, async_metrics));
+                global_context->getConfigRef(), graphite_key));
         }
 
         waitForTerminationRequest();
@@ -1659,7 +1636,6 @@ void Server::createServers(
     const std::vector<std::string> & listen_hosts,
     bool listen_try,
     Poco::ThreadPool & server_pool,
-    AsynchronousMetrics & async_metrics,
     std::vector<ProtocolServerAdapter> & servers,
     bool start_servers)
 {
@@ -1686,7 +1662,7 @@ void Server::createServers(
                 port_name,
                 "http://" + address.toString(),
                 std::make_unique<HTTPServer>(
-                    context(), createHandlerFactory(*this, async_metrics, "HTTPHandler-factory"), server_pool, socket, http_params));
+                    context(), createHandlerFactory(*this, "HTTPHandler-factory"), server_pool, socket, http_params));
         });
 
         /// proton: starts. snapshot http server
@@ -1704,7 +1680,7 @@ void Server::createServers(
                 "http://" + address.toString(),
                 std::make_unique<HTTPServer>(
                     context(),
-                    createHandlerFactory(*this, async_metrics, "SnapshotHTTPHandler-factory"),
+                    createHandlerFactory(*this, "SnapshotHTTPHandler-factory"),
                     server_pool,
                     socket,
                     http_params));
@@ -1725,7 +1701,7 @@ void Server::createServers(
                 port_name,
                 "https://" + address.toString(),
                 std::make_unique<HTTPServer>(
-                    context(), createHandlerFactory(*this, async_metrics, "HTTPSHandler-factory"), server_pool, socket, http_params));
+                    context(), createHandlerFactory(*this, "HTTPSHandler-factory"), server_pool, socket, http_params));
 #else
             UNUSED(port);
             throw Exception{"HTTPS protocol is disabled because Poco library was built without NetSSL support.",
@@ -1831,7 +1807,7 @@ void Server::createServers(
                 "replica communication (interserver): http://" + address.toString(),
                 std::make_unique<HTTPServer>(
                     context(),
-                    createHandlerFactory(*this, async_metrics, "InterserverIOHTTPHandler-factory"),
+                    createHandlerFactory(*this, "InterserverIOHTTPHandler-factory"),
                     server_pool,
                     socket,
                     http_params));
@@ -1851,7 +1827,7 @@ void Server::createServers(
                 "secure replica communication (interserver): https://" + address.toString(),
                 std::make_unique<HTTPServer>(
                     context(),
-                    createHandlerFactory(*this, async_metrics, "InterserverIOHTTPSHandler-factory"),
+                    createHandlerFactory(*this, "InterserverIOHTTPSHandler-factory"),
                     server_pool,
                     socket,
                     http_params));
@@ -1902,7 +1878,7 @@ void Server::createServers(
                 port_name,
                 "Prometheus: http://" + address.toString(),
                 std::make_unique<HTTPServer>(
-                    context(), createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"), server_pool, socket, http_params));
+                    context(), createHandlerFactory(*this, "PrometheusHandler-factory"), server_pool, socket, http_params));
         });
     }
 
@@ -1911,7 +1887,6 @@ void Server::createServers(
 void Server::updateServers(
     Poco::Util::AbstractConfiguration & config,
     Poco::ThreadPool & server_pool,
-    AsynchronousMetrics & async_metrics,
     std::vector<ProtocolServerAdapter> & servers)
 {
     Poco::Logger * log = &logger();
@@ -1931,7 +1906,7 @@ void Server::updateServers(
             }
         }
 
-    createServers(config, listen_hosts, listen_try, server_pool, async_metrics, servers, /* start_servers: */ true);
+    createServers(config, listen_hosts, listen_try, server_pool, servers, /* start_servers: */ true);
 
     /// Remove servers once all their connections are closed
     while (std::any_of(servers.begin(), servers.end(), [](const auto & server) { return server.isStopping(); }))

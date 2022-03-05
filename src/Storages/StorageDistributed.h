@@ -40,7 +40,6 @@ class StorageDistributed final : public shared_ptr_helper<StorageDistributed>, p
     friend struct shared_ptr_helper<StorageDistributed>;
     friend class DistributedSink;
     friend class StorageDistributedDirectoryMonitor;
-    friend class StorageSystemDistributionQueue;
 
 public:
     ~StorageDistributed() override;

@@ -5,7 +5,6 @@
 #include <Storages/System/attachSystemTablesImpl.h>
 
 #include <Storages/System/StorageSystemAggregateFunctionCombinators.h>
-#include <Storages/System/StorageSystemAsynchronousMetrics.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
 #include <Storages/System/StorageSystemCollations.h>
 #include <Storages/System/StorageSystemColumns.h>
@@ -17,8 +16,6 @@
 #include <Storages/System/StorageSystemEvents.h>
 #include <Storages/System/StorageSystemFormats.h>
 #include <Storages/System/StorageSystemFunctions.h>
-#include <Storages/System/StorageSystemGraphite.h>
-#include <Storages/System/StorageSystemMacros.h>
 #include <Storages/System/StorageSystemMerges.h>
 #include <Storages/System/StorageSystemMetrics.h>
 #include <Storages/System/StorageSystemModels.h>
@@ -26,11 +23,8 @@
 #include <Storages/System/StorageSystemNumbers.h>
 #include <Storages/System/StorageSystemOne.h>
 #include <Storages/System/StorageSystemParts.h>
-#include <Storages/System/StorageSystemProjectionParts.h>
 #include <Storages/System/StorageSystemPartsColumns.h>
-#include <Storages/System/StorageSystemProjectionPartsColumns.h>
 #include <Storages/System/StorageSystemProcesses.h>
-#include <Storages/System/StorageSystemDistributionQueue.h>
 #include <Storages/System/StorageSystemSettings.h>
 /// proton: starts.
 #include <Storages/Streaming/StorageSystemStreamSettings.h>
@@ -61,7 +55,6 @@
 #include <Storages/System/StorageSystemQuotasUsage.h>
 #include <Storages/System/StorageSystemUserDirectories.h>
 #include <Storages/System/StorageSystemPrivileges.h>
-#include <Storages/System/StorageSystemAsynchronousInserts.h>
 
 #ifdef OS_LINUX
 #include <Storages/System/StorageSystemStackTrace.h>
@@ -132,27 +125,16 @@ void attachSystemTablesServer(ContextPtr context, IDatabase & system_database)
     attachSystemTablesLocal(context, system_database);
 
     attach<StorageSystemParts>(context, system_database, "parts");
-    attach<StorageSystemProjectionParts>(context, system_database, "projection_parts");
     attach<StorageSystemDetachedParts>(context, system_database, "detached_parts");
     attach<StorageSystemPartsColumns>(context, system_database, "parts_columns");
-    attach<StorageSystemProjectionPartsColumns>(context, system_database, "projection_parts_columns");
     attach<StorageSystemDisks>(context, system_database, "disks");
     attach<StorageSystemStoragePolicies>(context, system_database, "storage_policies");
     attach<StorageSystemProcesses>(context, system_database, "processes");
     attach<StorageSystemMetrics>(context, system_database, "metrics");
     attach<StorageSystemMerges>(context, system_database, "merges");
     attach<StorageSystemMutations>(context, system_database, "mutations");
-    attach<StorageSystemDistributionQueue>(context, system_database, "distribution_queue");
     attach<StorageSystemDictionaries>(context, system_database, "dictionaries");
     attach<StorageSystemModels>(context, system_database, "models");
-    attach<StorageSystemGraphite>(context, system_database, "graphite_retentions");
-    attach<StorageSystemMacros>(context, system_database, "macros");
-    attach<StorageSystemAsynchronousInserts>(context, system_database, "asynchronous_inserts");
-}
-
-void attachSystemTablesAsync(ContextPtr context, IDatabase & system_database, AsynchronousMetrics & async_metrics)
-{
-    attach<StorageSystemAsynchronousMetrics>(context, system_database, "asynchronous_metrics", async_metrics);
 }
 
 }

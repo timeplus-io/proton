@@ -1,4 +1,3 @@
-#include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/CrashLog.h>
 #include <Interpreters/MetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>

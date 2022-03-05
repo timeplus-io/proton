@@ -1,4 +1,3 @@
-#include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/CrashLog.h>
 #include <Interpreters/MetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -153,9 +152,6 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log");
     text_log = createSystemLog<TextLog>(global_context, "system", "text_log", config, "text_log");
     metric_log = createSystemLog<MetricLog>(global_context, "system", "metric_log", config, "metric_log");
-    asynchronous_metric_log = createSystemLog<AsynchronousMetricLog>(
-        global_context, "system", "asynchronous_metric_log", config,
-        "asynchronous_metric_log");
     opentelemetry_span_log = createSystemLog<OpenTelemetrySpanLog>(
         global_context, "system", "opentelemetry_span_log", config,
         "opentelemetry_span_log");
@@ -180,8 +176,6 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(text_log.get());
     if (metric_log)
         logs.emplace_back(metric_log.get());
-    if (asynchronous_metric_log)
-        logs.emplace_back(asynchronous_metric_log.get());
     if (opentelemetry_span_log)
         logs.emplace_back(opentelemetry_span_log.get());
     /// proton: starts

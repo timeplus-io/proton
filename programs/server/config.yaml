@@ -269,7 +269,6 @@ mark_cache_size: 5368709120
 # the cache of mapped files is maintained. Its size is the number of mapped regions (usually equal to the number of mapped files).
 # The amount of data in mapped files can be monitored
 # in system.metrics, system.metric_log by the MMappedFiles, MMappedFileBytes metrics
-# and in system.asynchronous_metrics, system.asynchronous_metrics_log by the MMapCacheCells metric,
 # and also in system.events, system.processes, system.query_log, system.query_thread_log, system.query_views_log by the
 # CreatedReadBufferMMap, CreatedReadBufferMMapFailed, MMappedFileCacheHits, MMappedFileCacheMisses events.
 # Note that the amount of data in mapped files does not consume memory directly and is not accounted
@@ -567,7 +566,6 @@ default_session_timeout: 60
 # hostname_in_path - append hostname to root_path (default = true)
 # metrics - send data from table system.metrics
 # events - send data from table system.events
-# asynchronous_metrics - send data from table system.asynchronous_metrics
 
 # graphite:
 #     host: localhost
@@ -580,7 +578,6 @@ default_session_timeout: 60
 #     metrics: true
 #     events: true
 #     events_cumulative: false
-#     asynchronous_metrics: true
 
 # graphite:
 #     host: localhost
@@ -592,14 +589,12 @@ default_session_timeout: 60
 #     metrics: true
 #     events: true
 #     events_cumulative: false
-#     asynchronous_metrics: false
 
 # Serve endpoint for Prometheus monitoring.
 # endpoint - mertics path (relative to root, statring with "/")
 # port - port to setup server. If not defined or 0 than http_port used
 # metrics - send data from table system.metrics
 # events - send data from table system.events
-# asynchronous_metrics - send data from table system.asynchronous_metrics
 # status_info - send data from different component from CH, ex: Dictionaries status
 
 # prometheus:
@@ -608,7 +603,6 @@ default_session_timeout: 60
 
 #     metrics: true
 #     events: true
-#     asynchronous_metrics: true
 #     status_info: true
 
 # Query log. Used only for queries with setting log_queries = 1.
@@ -688,16 +682,6 @@ metric_log:
     table: metric_log
     flush_interval_milliseconds: 7500
     collect_interval_milliseconds: 1000
-
-# Asynchronous metric log contains values of metrics from
-# system.asynchronous_metrics.
-asynchronous_metric_log:
-    database: system
-    table: asynchronous_metric_log
-
-    # Asynchronous metrics are updated once a minute, so there is
-    # no need to flush more often.
-    flush_interval_milliseconds: 60000
 
 # OpenTelemetry log contains OpenTelemetry trace spans.
 opentelemetry_span_log:
