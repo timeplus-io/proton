@@ -133,16 +133,16 @@ void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
         {createAggregateFunctionUniq<AggregateFunctionUniqUniquesHashSetData, AggregateFunctionUniqUniquesHashSetDataForVariadic>, properties});
     /// proton: ends
 
-    factory.registerFunction("uniqHLL12",
+    factory.registerFunction("uniq_HLL12",
         {createAggregateFunctionUniq<false, AggregateFunctionUniqHLL12Data, AggregateFunctionUniqHLL12DataForVariadic>, properties});
 
     /// proton: starts
-    factory.registerFunction("uniqueExact",
+    factory.registerFunction("unique_exact",
         {createAggregateFunctionUniq<true, AggregateFunctionUniqExactData, AggregateFunctionUniqExactData<String>>, properties});
     /// proton: ends
 
 #if USE_DATASKETCHES
-    factory.registerFunction("uniqTheta",
+    factory.registerFunction("uniq_theta",
         {createAggregateFunctionUniq<AggregateFunctionUniqThetaData, AggregateFunctionUniqThetaData>, properties});
 #endif
 

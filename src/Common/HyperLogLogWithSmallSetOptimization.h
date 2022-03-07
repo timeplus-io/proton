@@ -57,7 +57,7 @@ public:
             delete large;
     }
 
-    /// ALWAYS_INLINE is required to have better code layout for uniqHLL12 function
+    /// ALWAYS_INLINE is required to have better code layout for uniq_HLL12 function
     void ALWAYS_INLINE insert(Key value)
     {
         if (!isLarge())

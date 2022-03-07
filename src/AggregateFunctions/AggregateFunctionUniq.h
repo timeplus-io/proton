@@ -50,7 +50,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic
 };
 
 
-/// uniqHLL12
+/// uniq_HLL12
 
 template <typename T>
 struct AggregateFunctionUniqHLL12Data
@@ -58,7 +58,7 @@ struct AggregateFunctionUniqHLL12Data
     using Set = HyperLogLogWithSmallSetOptimization<T, 16, 12>;
     Set set;
 
-    static String getName() { return "uniqHLL12"; }
+    static String getName() { return "uniq_HLL12"; }
 };
 
 template <>
@@ -67,7 +67,7 @@ struct AggregateFunctionUniqHLL12Data<String>
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
-    static String getName() { return "uniqHLL12"; }
+    static String getName() { return "uniq_HLL12"; }
 };
 
 template <>
@@ -76,7 +76,7 @@ struct AggregateFunctionUniqHLL12Data<UUID>
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
-    static String getName() { return "uniqHLL12"; }
+    static String getName() { return "uniq_HLL12"; }
 };
 
 struct AggregateFunctionUniqHLL12DataForVariadic
@@ -84,11 +84,11 @@ struct AggregateFunctionUniqHLL12DataForVariadic
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12, TrivialHash>;
     Set set;
 
-    static String getName() { return "uniqHLL12"; }
+    static String getName() { return "uniq_HLL12"; }
 };
 
 
-/// uniqExact
+/// uniq_exact
 
 template <typename T>
 struct AggregateFunctionUniqExactData
@@ -104,7 +104,7 @@ struct AggregateFunctionUniqExactData
 
     Set set;
 
-    static String getName() { return "uniqExact"; }
+    static String getName() { return "uniq_exact"; }
 };
 
 /// For rows, we put the SipHash values (128 bits) into the hash table.
@@ -122,11 +122,11 @@ struct AggregateFunctionUniqExactData<String>
 
     Set set;
 
-    static String getName() { return "uniqExact"; }
+    static String getName() { return "uniq_exact"; }
 };
 
 
-/// uniqTheta
+/// uniq_theta
 #if USE_DATASKETCHES
 
 struct AggregateFunctionUniqThetaData
@@ -134,7 +134,7 @@ struct AggregateFunctionUniqThetaData
     using Set = ThetaSketchData<UInt64>;
     Set set;
 
-    static String getName() { return "uniqTheta"; }
+    static String getName() { return "uniq_theta"; }
 };
 
 #endif
@@ -231,7 +231,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    /// ALWAYS_INLINE is required to have better code layout for uniqHLL12 function
+    /// ALWAYS_INLINE is required to have better code layout for uniq_HLL12 function
     void ALWAYS_INLINE add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         detail::OneAdder<T, Data>::add(this->data(place), *columns[0], row_num);
