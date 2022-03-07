@@ -193,6 +193,33 @@ if [ -n "$STREAM_STORAGE_FETCH_WAIT_MAX_MS" ]; then
     fi
 fi
 
+if [ -n "$MAX_CONCURRENT_QUERIES" ]; then
+    # Replace `max_concurrent_queries: 100` in config.yaml with customized one
+    sed -i"" "s/max_concurrent_queries: 100/max_concurrent_queries: $MAX_CONCURRENT_QUERIES/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup max_concurrent_queries for stream storage.'
+        exit 1
+    fi
+fi
+
+if [ -n "$MAX_CONCURRENT_SELECT_QUERIES" ]; then
+    # Replace `max_concurrent_select_queries: 100` in config.yaml with customized one
+    sed -i"" "s/max_concurrent_select_queries: 100/max_concurrent_select_queries: $MAX_CONCURRENT_SELECT_QUERIES/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup max_concurrent_select_queries for stream storage.'
+        exit 1
+    fi
+fi
+
+if [ -n "$MAX_CONCURRENT_INSERT_QUERIES" ]; then
+    # Replace `max_concurrent_insert_queries: 100` in config.yaml with customized one
+    sed -i"" "s/max_concurrent_insert_queries: 100/max_concurrent_insert_queries: $MAX_CONCURRENT_INSERT_QUERIES/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup max_concurrent_insert_queries for stream storage.'
+        exit 1
+    fi
+fi
+
 # if no args passed to `docker run` or first argument start with `--`, then the user is passing proton-server arguments
 if [[ $# -lt 1 ]] || [[ "$1" == "--"* ]]; then
     # Watchdog is launched by default, but does not send SIGINT to the main process,
