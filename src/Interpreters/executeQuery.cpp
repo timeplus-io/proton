@@ -26,9 +26,6 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/parseQuery.h>
-/// proton: starts
-#include <Parsers/parseQueryPipe.h>
-/// proton: ends
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryNormalization.h>
 #include <Parsers/queryToString.h>
@@ -70,6 +67,10 @@
 
 #include <DistributedMetadata/CatalogService.h>
 
+/// proton: starts
+#include <Parsers/parseQueryPipe.h>
+#include <Storages/Streaming/StorageStream.h>
+/// proton: ends
 
 namespace ProfileEvents
 {
@@ -724,33 +725,20 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 auto table_id = insert_interpreter->getDatabaseTable();
                 if (!table_id.empty())
                 {
-                    context->setInsertionTable(std::move(table_id));
                     /// proton: starts
-                    /// Setup poll ID for ingestion status querying
-                    if (context->getIngestMode() == IngestMode::ASYNC)
+                    auto storage = DatabaseCatalog::instance().getTable(table_id, context);
+
+                    context->setInsertionTable(std::move(table_id));
+
+                    if (auto * stream = storage->as<StorageStream>())
                     {
-                        context->getQueryContext()->setupQueryStatusPollId();
+                        /// Setup poll ID for ingestion status querying
+                        auto ingest_mode = context->getIngestMode();
+                        if (ingest_mode == IngestMode::ASYNC || ingest_mode == IngestMode::None)
+                            context->getQueryContext()->setupQueryStatusPollId(stream->nextBlockId());
                     }
                     /// proton: ends
                 }
-            }
-        }
-
-        if (const auto * insert_interpreter = typeid_cast<const InterpreterInsertQuery *>(interpreter.get()))
-        {
-            /// Save insertion table (not table function). TODO: support remote() table function.
-            auto table_id = insert_interpreter->getDatabaseTable();
-            if (!table_id.empty())
-            {
-                context->setInsertionTable(std::move(table_id));
-
-                /// proton: starts
-                /// Setup poll ID for ingestion status querying
-                if (context->getIngestMode() == IngestMode::ASYNC || context->getIngestMode() == IngestMode::None)
-                {
-                    context->getQueryContext()->setupQueryStatusPollId();
-                }
-                /// proton: ends
             }
         }
 

@@ -2986,24 +2986,22 @@ void Context::setupNodeIdentity()
     channel_id = std::to_string(CityHash_v1_0_2::CityHash64WithSeed(node_identity.data(), node_identity.size(), 123));
 }
 
-void Context::setupQueryStatusPollId()
+void Context::setupQueryStatusPollId(UInt64 block_base_id_)
 {
     if (!query_status_poll_id.empty())
-    {
         return;
-    }
 
-    /// Poll ID is composed by : (query_id, database.table (fullName), user, host, timestamp)
-    String sep = "!`$";
+    /// Poll ID is composed by : (query_id, database.table (fullName), user, host, block_base_id, timestamp)
+    const String sep = "!`$";
     std::vector<String> components;
+    components.reserve(6);
+
     components.push_back(getCurrentQueryId());
     components.push_back(getInsertionTable().getFullNameNotQuoted());
     components.push_back(getUserName());
     components.push_back(getNodeIdentity());
-
-    auto now = std::chrono::system_clock::now().time_since_epoch();
-    auto milli_now = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-    components.push_back(std::to_string(milli_now));
+    components.push_back(std::to_string(block_base_id_));
+    components.push_back(std::to_string(MonotonicMicroseconds::now()));
 
     /// FIXME, encrypt it
     std::ostringstream ostr; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
@@ -3013,14 +3011,14 @@ void Context::setupQueryStatusPollId()
     encoder.close();
 
     query_status_poll_id = ostr.str();
+    block_base_id = block_base_id_;
 }
 
+/// (query_id, database, table, user_name, node_identity, block_base_id, timestamp)
 std::vector<String> Context::parseQueryStatusPollId(const String & poll_id) const
 {
     if (poll_id.size() > 512)
-    {
         throw Exception("Invalid poll ID", ErrorCodes::BAD_ARGUMENTS);
-    }
 
     std::istringstream istr(poll_id); /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     Poco::Base64Decoder decoder(istr);
@@ -3029,31 +3027,30 @@ std::vector<String> Context::parseQueryStatusPollId(const String & poll_id) cons
 
     String decoded{buf, static_cast<size_t>(decoder.gcount())};
 
-    String sep = "!`\\$";
+    static boost::regex rx("!`\\$");
     std::vector<String> components;
-    boost::algorithm::split_regex(components, decoded, boost::regex(sep));
+    components.reserve(6);
+
+    boost::algorithm::split_regex(components, decoded, rx);
 
     /// FIXME, more check for future extension
-    if (components.size() != 5)
-    {
+    if (components.size() != 6)
         throw Exception("Invalid poll ID", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    std::vector<String> names;
-    boost::algorithm::split(names, components[1], boost::is_any_of("."));
-    if (names.size() != 2)
-    {
-        throw Exception("Invalid poll ID: " + poll_id, ErrorCodes::INVALID_POLL_ID);
-    }
-    const String database_name = names[0];
-    const String table_name = names[1];
-
-    std::vector<String> result = { components[0], names[0], names[1], components[2], components[3], components[4]};
 
     if (getUserName() != components[2])
-    {
         throw Exception("User doesn't own this poll ID", ErrorCodes::ACCESS_DENIED);
-    }
+
+    std::vector<String> names;
+    names.reserve(2);
+    boost::algorithm::split(names, components[1], boost::is_any_of("."));
+    if (names.size() != 2)
+        throw Exception("Invalid poll ID: " + poll_id, ErrorCodes::INVALID_POLL_ID);
+
+    std::vector<String> result = {
+        std::move(components[0]), std::move(names[0]), std::move(names[1]),
+        std::move(components[2]), std::move(components[3]), std::move(components[4]),
+        std::move(components[5])
+    };
 
     /// FIXME, check timestamp etc
     return result;

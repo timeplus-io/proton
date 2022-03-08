@@ -163,22 +163,17 @@ void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rk
     }
 
     if (rkmessage->_private == nullptr)
-    {
         return;
-    }
 
     DeliveryReport * report = static_cast<DeliveryReport *>(rkmessage->_private);
     if (!failed)
-    {
         /// Usually for retried message and idempotent is enabled.
         /// In this case, the message is actually persisted in Kafka broker
         /// the `offset` in delivery report may be -1
         report->err = DB::ErrorCodes::OK;
-    }
     else
-    {
         report->err = mapErrorCode(rkmessage->err);
-    }
+
     report->partition = rkmessage->partition;
     report->offset = rkmessage->offset;
 
@@ -189,6 +184,7 @@ void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rk
             .sn = rkmessage->offset,
             .partition = rkmessage->partition,
         };
+
         /// Since deliveryReport is invoked in the poller thread
         /// we will need be extremely careful the `callback` and
         /// `data`'s lifetime are still valid here.
@@ -196,9 +192,7 @@ void KafkaWAL::deliveryReport(struct rd_kafka_s *, const rd_kafka_message_s * rk
     }
 
     if (report->delete_self)
-    {
         delete report;
-    }
 }
 
 KafkaWAL::KafkaWAL(std::unique_ptr<KafkaWALSettings> settings_)
@@ -299,9 +293,7 @@ void KafkaWAL::initProducerHandle()
     };
 
     if (!settings->debug.empty())
-    {
         producer_params.emplace_back("debug", settings->debug);
-    }
 
     auto cb_setup = [](rd_kafka_conf_t * kconf)
     {
@@ -325,9 +317,7 @@ AppendResult KafkaWAL::append(const Record & record, const KafkaWALContext & ctx
 
     int32_t err = doAppend(record, dr.get(), ctx);
     if (err != static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR))
-    {
         return handleError(err, record, ctx);
-    }
 
     /// Indefinitely wait for the delivery report
     while (true)
@@ -335,13 +325,9 @@ AppendResult KafkaWAL::append(const Record & record, const KafkaWALContext & ctx
         /// instead of busy loop, do a timed poll
         rd_kafka_poll(producer_handle.get(), settings->message_delivery_sync_poll_ms);
         if (dr->err != static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR))
-        {
             return handleError(dr->err.load(), record, ctx);
-        }
         else if (dr->offset.load() != -1)
-        {
             return {.sn = dr->offset.load(), .partition = dr->partition.load()};
-        }
     }
     __builtin_unreachable();
 }
@@ -353,20 +339,15 @@ int32_t KafkaWAL::append(const Record & record, AppendCallback callback, void * 
 
     std::unique_ptr<DeliveryReport> dr;
     if (callback)
-    {
         dr.reset(new DeliveryReport{callback, data, true});
-    }
 
     int32_t err = doAppend(record, dr.get(), ctx);
     if (likely(err == static_cast<int32_t>(RD_KAFKA_RESP_ERR_NO_ERROR)))
-    {
         /// Move the ownership to `delivery_report`
         dr.release();
-    }
     else
-    {
         handleError(err, record, ctx);
-    }
+
     return mapErrorCode(static_cast<rd_kafka_resp_err_t>(err));
 }
 
@@ -424,7 +405,7 @@ int32_t KafkaWAL::doAppend(const Record & record, DeliveryReport * dr, const Kaf
         RD_KAFKA_V_VALUE(data.data(), data.size()),
         /// For compaction
         RD_KAFKA_V_KEY(key_data, key_size),
-        /// Partioner
+        /// Partitioner
         RD_KAFKA_V_PARTITION(record.partition_key),
         /// Headers, the memory ownership will be moved to librdkafka
         /// unless producev fails

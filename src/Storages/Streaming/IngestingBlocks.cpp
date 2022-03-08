@@ -5,75 +5,56 @@
 
 namespace DB
 {
-IngestingBlocks & IngestingBlocks::instance(Int32 timeout_sec)
-{
-    static IngestingBlocks blocks{timeout_sec};
-    return blocks;
-}
-
-IngestingBlocks::IngestingBlocks(Int32 timeout_sec_) : timeout_sec(timeout_sec_), log(&Poco::Logger::get("IngestingBlocks"))
+IngestingBlocks::IngestingBlocks(Poco::Logger * log_, Int32 timeout_sec_) : timeout_ms(timeout_sec_ * 1000), log(log_)
 {
 }
 
-bool IngestingBlocks::add(const String & id, UInt16 block_id)
+bool IngestingBlocks::add(UInt64 block_id, UInt64 sub_block_id)
 {
     bool added = false;
-    bool hasId = false;
+    UInt64 ingested = 0;
+    UInt64 outstanding = 0;
+    UInt64 committed_block_id = 0;
+    std::vector<std::tuple<UInt64, UInt64, UInt64>> expired;
     {
-        std::unique_lock guard(rwlock);
+        std::unique_lock guard(block_ids_mutex);
 
-        hasId = blockIds.find(id) != blockIds.end();
-
-        auto & blockIdInfo = blockIds[id];
-        const auto & res = blockIdInfo.ids.insert(block_id);
-        if (res.second)
+        auto iter = block_ids.find(block_id);
+        if (iter == block_ids.end())
         {
-            blockIdInfo.total++;
+            block_ids.emplace(block_id, sub_block_id);
             added = true;
         }
-    }
-
-    if (!hasId)
-    {
-        auto now = std::chrono::steady_clock::now();
-        /// If there are multiple blocks for an `id`
-        /// only stamp the first block
-        std::lock_guard guard(lock);
-        timedBlockIds.emplace_back(now, id);
-    }
-
-    removeExpiredBlockIds();
-
-    return added;
-}
-
-inline void IngestingBlocks::removeExpiredBlockIds()
-{
-    /// Remove expired block ids
-    std::vector<std::pair<String, size_t>> expired;
-    {
-        auto now = std::chrono::steady_clock::now();
-        std::lock_guard guard(lock);
-
-        while (!timedBlockIds.empty())
+        else
         {
-            const auto & p = timedBlockIds.front();
+            /// There may be several sub-batches one ID
+            added = iter->second.add(sub_block_id);
+        }
 
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - p.first).count() >= timeout_sec)
+        total_ingested += added;
+        if (total_ingested % 1000 == 0)
+        {
+            ingested = total_ingested;
+            committed_block_id = low_watermark_block_id;
+            outstanding = block_ids.size();
+        }
+
+        /// Remove expired block ids
+        /// (block_id, total, remaining)
+        auto now = MonotonicMilliseconds::now();
+
+        /// Here we assume the ingest timestamp of a block with bigger block ID is approximately bigger than
+        /// the one with smaller block ID. This is not always true, but it is OK if it is not.
+        for (iter = block_ids.begin(); iter != block_ids.end();)
+        {
+            /// After removing a timed out block, we may end up with lots of committed blocks,
+            /// remove them as well to progress low watermark
+            if (now - iter->second.ingest_timestamp_ms >= timeout_ms || iter->second.done())
             {
-                expired.push_back({});
-                expired.back().first = p.second;
-
-                /// Remove from blockIds
-                std::unique_lock rwguard(rwlock);
-                auto iter = blockIds.find(p.second);
-                assert(iter != blockIds.end());
-
-                expired.back().second = iter->second.ids.size();
-                blockIds.erase(iter);
-
-                /// Remove from timedBlockIds
-                timedBlockIds.pop_front();
+                expired.emplace_back(iter->first, iter->second.total, iter->second.remaining());
+                /// Progress the low watermark
+                low_watermark_block_id = iter->first;
+                iter = block_ids.erase(iter);
             }
             else
             {
@@ -83,97 +64,113 @@ inline void IngestingBlocks::removeExpiredBlockIds()
     }
 
     for (const auto & p : expired)
-    {
-        if (p.second > 0)
-        {
-            LOG_WARNING(log, "Timed out and there are {} pending data blocks waiting to be committed for query_id={}", p.second, p.first);
-        }
-        else
-        {
-            LOG_TRACE(log, "Timed out and the data blocks associated with query_id={} have been successfully ingested", p.first);
-        }
-    }
+        /// FIXME, introduce an expired map
+        LOG_WARNING(
+            log,
+            "Timed out and removed. There were {} / {} pending data blocks waiting to be committed for block_id={}",
+            std::get<2>(p),
+            std::get<1>(p),
+            std::get<0>(p));
+
+
+    if (ingested)
+        LOG_INFO(log, "IngestingBlocks accepted={}, outstanding={}, committed_block_id={}", ingested, outstanding, committed_block_id);
+
+    return added;
 }
 
-bool IngestingBlocks::remove(const String & id, UInt16 block_id)
+bool IngestingBlocks::remove(UInt64 block_id, UInt64 sub_block_id)
 {
-    LOG_TRACE(log, "Removing query_id={} block_id={}", id, block_id);
+    bool removed = false;
+    UInt64 committed_block_id = 0;
+    UInt64 outstanding = 0;
 
-    std::unique_lock guard(rwlock);
-    auto iter = blockIds.find(id);
-    if (iter != blockIds.end())
     {
-        auto iterId = iter->second.ids.find(block_id);
-        if (iterId != iter->second.ids.end())
+        std::unique_lock guard(block_ids_mutex);
+        auto iter = block_ids.find(block_id);
+        if (iter != block_ids.end())
         {
-            iter->second.ids.erase(iterId);
-            return true;
+            removed = iter->second.remove(sub_block_id);
+            if (iter->second.done() && iter == block_ids.begin())
+            {
+                /// If all of the subblocks in a block is done and if it is the first block in the ingesting blocks,
+                /// remove it from block_ids map to progress the low watermark of the committed block ID. Otherwise
+                /// we keep the block in the block_ids map to serve query status
+                low_watermark_block_id = block_id;
+                iter = block_ids.erase(iter);
+
+                /// We need further loop the map to see if the next block is done as well since remove can be out of order
+                for (; iter != block_ids.end();)
+                {
+                    if (iter->second.done())
+                        iter = block_ids.erase(iter);
+                    else
+                        break;
+                }
+            }
         }
+
+        committed_block_id = low_watermark_block_id;
+        outstanding = block_ids.size();
     }
-    return false;
+
+    if (outstanding == 0)
+        LOG_INFO(
+            log,
+            "Removed={} block_id={} sub_block_id={} outstanding={} committed_block_id={}",
+            removed,
+            block_id,
+            sub_block_id,
+            outstanding,
+            committed_block_id);
+
+    return removed;
 }
 
-std::pair<String, Int32> IngestingBlocks::status(const String & id) const
+std::pair<String, Int32> IngestingBlocks::status(UInt64 block_id) const
 {
-    std::shared_lock guard(rwlock);
-    auto iter = blockIds.find(id);
-    if (iter != blockIds.end())
-    {
-        Int32 progress = (iter->second.total - iter->second.ids.size()) * 100 / iter->second.total;
+    std::shared_lock guard(block_ids_mutex);
 
+    /// FIXME, we actually need lookup expired map to see if it is there
+    if (block_id <= low_watermark_block_id)
+        return {"Succeeded", 100};
+
+    auto iter = block_ids.find(block_id);
+    if (iter != block_ids.end())
+    {
         if (iter->second.err != 0)
-            return std::make_pair("Failed", progress);
+            return {"Failed", ((iter->second.total - iter->second.remaining()) * 100) / iter->second.total};
 
-        if (progress < 100)
-            return std::make_pair("Processing", progress);
+        if (iter->second.done())
+            return {"Succeeded", 100};
         else
-            return std::make_pair("Succeeded", progress);
+            return {"Processing", ((iter->second.total - iter->second.remaining()) * 100) / iter->second.total};
     }
-    return std::make_pair("Unknown", -1);
+
+    return {"Unknown", -1};
 }
 
-void IngestingBlocks::getStatuses(const std::vector<String> & poll_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
+void IngestingBlocks::getStatuses(const std::vector<UInt64> & block_ids_, std::vector<IngestingBlocks::IngestStatus> & statuses) const
 {
-    std::shared_lock guard(rwlock);
-    for (const auto & id : poll_ids)
+    for (auto block_id : block_ids_)
     {
-        auto iter = blockIds.find(id);
-        if (iter == blockIds.end())
-        {
-            statuses.push_back({id, "Unknown", -1});
-            continue;
-        }
-
-        Int32 progress = (iter->second.total - iter->second.ids.size()) * 100 / iter->second.total;
-
-        if (iter->second.err != 0)
-            statuses.push_back({id, "Failed", progress});
-
-        if (progress < 100)
-            statuses.push_back({id, "Processing", progress});
-        else
-            statuses.push_back({id, "Succeeded", progress});
+        auto block_status = status(block_id);
+        statuses.emplace_back(block_id, std::move(block_status.first), block_status.second);
     }
 }
 
-size_t IngestingBlocks::outstandingBlocks() const
+void IngestingBlocks::fail(UInt64 block_id, Int32 err)
 {
-    size_t total = 0;
-    std::shared_lock guard(rwlock);
-    for (const auto & p : blockIds)
-    {
-        total += p.second.ids.size();
-    }
-    return total;
-}
-
-void IngestingBlocks::fail(const String & id, UInt16 err)
-{
-    std::unique_lock guard(rwlock);
-    auto iter = blockIds.find(id);
-    if (iter != blockIds.end())
-    {
+    std::unique_lock guard(block_ids_mutex);
+    auto iter = block_ids.find(block_id);
+    if (iter != block_ids.end())
         iter->second.err = err;
-    }
+}
+
+std::atomic<uint64_t> IngestingBlocks::block_id_counter = 0;
+
+uint64_t IngestingBlocks::nextId()
+{
+    return block_id_counter++;
 }
 }

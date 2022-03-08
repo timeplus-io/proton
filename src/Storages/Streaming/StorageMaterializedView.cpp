@@ -1,4 +1,5 @@
 #include "StorageMaterializedView.h"
+#include "StorageStream.h"
 
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
@@ -6,8 +7,8 @@
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
-#include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
+#include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
@@ -457,9 +458,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
 {
     /// Init in memory table
     const auto & settings = local_context->getSettingsRef();
-    memory_table.reset(new InMemoryTable(
-        1 /* only cache current block result */,
-        settings.max_streaming_view_cached_block_bytes));
+    memory_table.reset(new InMemoryTable(1 /* only cache current block result */, settings.max_streaming_view_cached_block_bytes));
 
     /// If there is a Create request, then we need create the target inner table.
     assert(target_table_id);
@@ -482,10 +481,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
 
         auto new_storage = std::make_shared<ASTStorage>();
         auto engine = makeASTFunction(
-            "Stream",
-            std::make_shared<ASTLiteral>(UInt64(1)),
-            std::make_shared<ASTLiteral>(UInt64(1)),
-            makeASTFunction("rand"));
+            "Stream", std::make_shared<ASTLiteral>(UInt64(1)), std::make_shared<ASTLiteral>(UInt64(1)), makeASTFunction("rand"));
         engine->no_empty_args = true;
         new_storage->set(new_storage->engine, engine);
 
@@ -543,10 +539,9 @@ void StorageMaterializedView::buildBackgroundPipeline(
     });
 
     auto target_table = getTargetTable();
-    if (target_table->getName() != "Stream")
-        /// proton: starts
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming View doesn't support target storage is {}", target_table->getName());
-        /// proton: ends
+    auto * stream = target_table->as<StorageStream>();
+    if (stream == nullptr)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
 
     /// Sink to target table
     InterpreterInsertQuery interpreter(nullptr, local_context, false, true /* no_squash */);
@@ -560,7 +555,7 @@ void StorageMaterializedView::buildBackgroundPipeline(
     });
 
     local_context->setInsertionTable(target_table->getStorageID());
-    local_context->setupQueryStatusPollId();
+    local_context->setupQueryStatusPollId(stream->nextBlockId());
 }
 
 void StorageMaterializedView::executeBackgroundPipeline()

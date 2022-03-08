@@ -112,10 +112,9 @@ protected:
     String jsonErrorResponseFrom(const String & response, int error_code = ErrorCodes::UNKNOWN_EXCEPTION) const
     {
         if (response.find("request_id") != String::npos && response.find("error_msg") != String::npos)
-        {
             /// It is already a well-formed response in JSON from remote
             return response;
-        }
+
         return jsonErrorResponse("Internal server error", error_code);
     }
 

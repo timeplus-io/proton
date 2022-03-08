@@ -137,69 +137,54 @@ void StreamSink::consume(Chunk chunk)
         {
             case IngestMode::ASYNC:
             {
-                LOG_TRACE(
-                    storage.log,
-                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
-                    outstanding,
-                    record.block.rows(),
-                    current_block.shard,
-                    query_context->getQueryStatusPollId());
-                auto callback_data = storage.writeCallbackData(query_context->getQueryStatusPollId(), outstanding);
-                auto ret = storage.dwal->append(
-                    record, &StorageStream::writeCallback, callback_data.get(), storage.dwal_append_ctx);
-                if (ret == ErrorCodes::OK)
-                {
-                    /// The writeCallback takes over the ownership of callback data
-                    callback_data.release();
-                }
-                else
-                {
-                    throw Exception("Failed to insert data async", ret);
-                }
+//                LOG_TRACE(
+//                    storage.log,
+//                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
+//                    outstanding,
+//                    record.block.rows(),
+//                    current_block.shard,
+//                    query_context->getQueryStatusPollId());
+
+                storage.appendAsync(record, query_context->getBlockBaseId(), outstanding);
                 break;
             }
             case IngestMode::SYNC:
             {
-                LOG_TRACE(
-                    storage.log,
-                    "[sync] write a block={} rows={} shard={} committed={} ...",
-                    outstanding,
-                    record.block.rows(),
-                    current_block.shard,
-                    committed);
+//                LOG_TRACE(
+//                    storage.log,
+//                    "[sync] write a block={} rows={} shard={} committed={} ...",
+//                    outstanding,
+//                    record.block.rows(),
+//                    current_block.shard,
+//                    committed);
+
                 auto ret = storage.dwal->append(record, &StreamSink::writeCallback, this, storage.dwal_append_ctx);
                 if (ret != 0)
-                {
                     throw Exception("Failed to insert data sync", ret);
-                }
+
                 break;
             }
             case IngestMode::FIRE_AND_FORGET:
             {
-                LOG_TRACE(
-                    storage.log,
-                    "[fire_and_forget] write a block={} rows={} shard={} ...",
-                    outstanding,
-                    record.block.rows(),
-                    current_block.shard);
+//                LOG_TRACE(
+//                    storage.log,
+//                    "[fire_and_forget] write a block={} rows={} shard={} ...",
+//                    outstanding,
+//                    record.block.rows(),
+//                    current_block.shard);
+
                 auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
                 if (ret != 0)
-                {
                     throw Exception("Failed to insert data fire_and_forget", ret);
-                }
+
                 break;
             }
             case IngestMode::ORDERED:
             {
-                LOG_TRACE(
-                    storage.log, "[ordered] write a block={} rows={} shard={} ...", outstanding, record.block.rows(), current_block.shard);
                 auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
                 if (ret.err != ErrorCodes::OK)
-                {
                     throw Exception("Failed to insert data ordered", ret.err);
-                }
-                LOG_TRACE(
-                    storage.log, "[ordered] write a block={} rows={} shard={} done", outstanding, record.block.rows(), current_block.shard);
+
                 break;
             }
             case IngestMode::None:
@@ -215,15 +200,14 @@ void StreamSink::writeCallback(const DWAL::AppendResult & result)
 {
     ++committed;
     if (result.err != ErrorCodes::OK)
-    {
         errcode = result.err;
-    }
-    LOG_TRACE(storage.log, "[sync] write a block done, and current committed={}, error={}", committed, errcode);
+
+    /// LOG_TRACE(storage.log, "[sync] written a block, and current committed={}, error={}", committed, errcode);
 }
 
 void StreamSink::writeCallback(const DWAL::AppendResult & result, void * data_)
 {
-    auto stream = static_cast<StreamSink *>(data_);
+    auto * stream = static_cast<StreamSink *>(data_);
     stream->writeCallback(result);
 }
 
@@ -233,9 +217,7 @@ void StreamSink::onFinish()
     /// before dtor itself. Otherwise the if the registered callback is invoked
     /// after dtor, crash will happen
     if (query_context->getIngestMode() != IngestMode::SYNC)
-    {
         return;
-    }
 
     /// 3) Inplace poll append result until either all of records have been committed
     auto start = MonotonicSeconds::now();
@@ -243,11 +225,10 @@ void StreamSink::onFinish()
     {
         if (committed == outstanding)
         {
-            LOG_DEBUG(storage.log, "[sync] write a block done, writed blocks={}, committed={}, error={}", outstanding, committed, errcode);
+            /// LOG_DEBUG(storage.log, "[sync] write a block done, written blocks={}, committed={}, error={}", outstanding, committed, errcode);
             if (errcode != ErrorCodes::OK)
-            {
                 throw Exception("Failed to insert data", errcode);
-            }
+
             return;
         }
         else

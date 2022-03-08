@@ -249,7 +249,7 @@ int32_t KafkaWALConsumer::commit(const TopicPartitionOffsets & tpos)
         /// to keep the same semantic as rd_kafka_offset_store
         partition_offset->offset = tpo.offset + 1;
 
-        LOG_INFO(log, "Stores commit offset={} for topic={} partition={}", tpo.offset, tpo.topic, tpo.partition);
+        /// LOG_INFO(log, "Stores commit offset={} for topic={} partition={}", tpo.offset, tpo.topic, tpo.partition);
     }
 
     auto err = rd_kafka_offsets_store(consumer_handle.get(), topic_partition_list.get());

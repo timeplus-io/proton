@@ -278,7 +278,7 @@ StorageStream::StorageStream(
     , topic(DWAL::escapeDWALName(table_id_.getDatabaseName(), table_id_.getTableName()))
     , dwal_append_ctx(topic, shards_, replication_factor_)
     , dwal_consume_ctx(topic, shards_, replication_factor_)
-    , ingesting_blocks(120)
+    , ingesting_blocks(log, 120)
     , part_commit_pool(context_->getPartCommitPool())
     , rng(randomSeed())
 {
@@ -1126,29 +1126,33 @@ DWAL::RecordSN StorageStream::lastSN() const
     return last_sn;
 }
 
-std::unique_ptr<StorageStream::WriteCallbackData>
-StorageStream::writeCallbackData(const String & query_status_poll_id, UInt16 block_id)
+void StorageStream::appendAsync(const DWAL::Record & record, UInt64 block_id, UInt64 sub_block_id)
 {
-    assert(!query_status_poll_id.empty());
+    assert(dwal);
 
-    auto added = ingesting_blocks.add(query_status_poll_id, block_id);
+    [[maybe_unused]] auto added = ingesting_blocks.add(block_id, sub_block_id);
     assert(added);
-    (void)added;
 
-    return std::make_unique<WriteCallbackData>(query_status_poll_id, block_id, this);
+    auto data = std::make_unique<WriteCallbackData>(block_id, sub_block_id, this);
+    auto ret = dwal->append(record, &StorageStream::writeCallback, data.get(), dwal_append_ctx);
+    if (ret == ErrorCodes::OK)
+        /// The writeCallback takes over the ownership of callback data
+        data.release();
+    else
+        throw Exception("Failed to insert data async", ret);
 }
 
-void StorageStream::writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id)
+void StorageStream::writeCallback(const DWAL::AppendResult & result, UInt64 block_id, UInt64 sub_block_id)
 {
     if (result.err)
     {
-        ingesting_blocks.fail(query_status_poll_id, result.err);
-        LOG_ERROR(log, "[async] Failed to write block={} for query_status_poll_id={} error={}", block_id, query_status_poll_id, result.err);
+        ingesting_blocks.fail(block_id, result.err);
+        LOG_ERROR(log, "[async] Failed to write sub_block_id={} in block_id={} error={}", sub_block_id, block_id, result.err);
     }
     else
     {
-        ingesting_blocks.remove(query_status_poll_id, block_id);
-        LOG_TRACE(log, "[async] Writed block={} for query_status_poll_id={}", block_id, query_status_poll_id);
+        ingesting_blocks.remove(block_id, sub_block_id);
+        LOG_TRACE(log, "[async] Written sub_block_id={} in block_id={}", sub_block_id, block_id);
     }
 }
 
@@ -1156,7 +1160,7 @@ void StorageStream::writeCallback(const DWAL::AppendResult & result, void * data
 {
     std::unique_ptr<StorageStream::WriteCallbackData> pdata(static_cast<WriteCallbackData *>(data));
 
-    pdata->storage->writeCallback(result, pdata->query_status_poll_id, pdata->block_id);
+    pdata->storage->writeCallback(result, pdata->block_id, pdata->sub_block_id);
 }
 
 /// Merge `rhs` block to `lhs`

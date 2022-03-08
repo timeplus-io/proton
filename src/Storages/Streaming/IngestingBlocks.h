@@ -1,5 +1,6 @@
 #pragma once
 
+#include <base/ClockUtils.h>
 #include <Core/Types.h>
 #include <Poco/Logger.h>
 
@@ -9,7 +10,6 @@
 #include <deque>
 #include <shared_mutex>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 
@@ -18,56 +18,94 @@ namespace DB
 class IngestingBlocks final : public boost::noncopyable
 {
 public:
-    static IngestingBlocks & instance(Int32 timeout_sec = 120);
-
-    explicit IngestingBlocks(Int32 timeout_sec = 120);
+    explicit IngestingBlocks(Poco::Logger * log_, Int32 timeout_sec = 120);
     ~IngestingBlocks() = default;
 
-    /// add `block_id` of query `id`. One query `id` can have several `blocks`
+    /// One block id can have several blocks, hence sub id
     /// return true if add successfully; otherwise return false;
-    bool add(const String & id, UInt16 block_id);
+    // sub_block_id is calculated internally and for internal track only
+    bool add(UInt64 block_id, UInt64 sub_block_id);
 
     /// remove `block_id` of query `id`. One query `id` can have several `blocks`
     /// return true if remove successfully; otherwise return false;
-    bool remove(const String & id, UInt16 block_id);
+    bool remove(UInt64 block_id, UInt64 sub_block_id);
 
     /// Ingest status calculation
-    std::pair<String, Int32> status(const String & id) const;
+    std::pair<String, Int32> status(UInt64 block_id) const;
+
     struct IngestStatus
     {
-        String poll_id;
+        UInt64 block_id;
         String status;
         Int32 progress;
-    };
-    void getStatuses(const std::vector<String> & poll_ids, std::vector<IngestStatus> & statuses) const;
 
-    /// number of outstanding blocks
-    size_t outstandingBlocks() const;
+        IngestStatus(UInt64 block_id_, String status_, Int32 progress_)
+            : block_id(block_id_), status(std::move(status_)), progress(progress_)
+        {
+        }
+    };
+    void getStatuses(const std::vector<UInt64> & block_ids_, std::vector<IngestStatus> & statuses) const;
 
     /// set failure code for query `id`
-    void fail(const String & id, UInt16 err);
+    void fail(UInt64 block_id, Int32 err);
+
+    static UInt64 nextId();
 
 private:
-    void removeExpiredBlockIds();
-
-private:
-    using SteadyClock = std::chrono::time_point<std::chrono::steady_clock>;
-
     struct BlockIdInfo
     {
-        UInt16 total = 0;
-        UInt16 err = 0;
-        std::unordered_set<UInt16> ids;
+        UInt64 total = 0;
+        Int32 err = 0;
+        /// For most of the time, we have only one ID. Use vector is faster
+        /// and more memory efficient
+        std::vector<UInt64> sub_ids;
+
+        /// timestamp when this block get ingested
+        Int64 ingest_timestamp_ms;
+
+        bool add(UInt64 sub_block_id)
+        {
+            auto id_iter = std::find(sub_ids.begin(), sub_ids.end(), sub_block_id);
+            if (id_iter == sub_ids.end())
+            {
+                sub_ids.push_back(sub_block_id);
+                ++total;
+                return true;
+            }
+
+            return false;
+        }
+
+        bool remove(UInt64 sub_block_id)
+        {
+            auto id_iter = std::find(sub_ids.begin(), sub_ids.end(), sub_block_id);
+            if (id_iter != sub_ids.end())
+            {
+                sub_ids.erase(id_iter);
+                return true;
+            }
+
+            return false;
+        }
+
+        bool done() const { return sub_ids.empty(); }
+
+        UInt64 remaining() const { return sub_ids.size(); }
+
+        BlockIdInfo(UInt64 sub_block_id) : total(1), sub_ids(1, sub_block_id), ingest_timestamp_ms(MonotonicMilliseconds::now()) { }
     };
 
 private:
-    mutable std::shared_mutex rwlock;
-    std::unordered_map<String, BlockIdInfo> blockIds;
+    static std::atomic<uint64_t> block_id_counter;
 
-    std::mutex lock;
-    std::deque<std::pair<SteadyClock, String>> timedBlockIds;
+private:
 
-    Int32 timeout_sec = 120;
+    mutable std::shared_mutex block_ids_mutex;
+    std::map<UInt64, BlockIdInfo> block_ids;
+    UInt64 low_watermark_block_id;
+    UInt64 total_ingested = 0;
+
+    Int32 timeout_ms = 120 * 1000;
 
     Poco::Logger * log;
 };

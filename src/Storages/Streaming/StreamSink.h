@@ -52,8 +52,8 @@ private:
     std::vector<UInt16> column_positions;
 
     /// For writeCallback
-    std::atomic_uint32_t committed = 0;
-    std::atomic_uint32_t outstanding = 0;
+    std::atomic_uint64_t committed = 0;
+    std::atomic_uint64_t outstanding = 0;
     std::atomic_int32_t errcode = 0;
 };
 

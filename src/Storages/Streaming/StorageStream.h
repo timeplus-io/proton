@@ -208,10 +208,12 @@ public:
     size_t getNextShardIndex() const;
 
     Int32 currentShard() const { return shard; }
-    void getIngestionStatuses(const std::vector<String> & poll_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
+    void getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
     {
-        ingesting_blocks.getStatuses(poll_ids, statuses);
+        ingesting_blocks.getStatuses(block_ids, statuses);
     }
+
+    UInt64 nextBlockId() const { return ingesting_blocks.nextId(); }
 
     DWAL::RecordSN lastSN() const;
 
@@ -244,13 +246,13 @@ private:
 private:
     struct WriteCallbackData
     {
-        String query_status_poll_id;
-        UInt16 block_id;
+        UInt64 block_id;
+        UInt64 sub_block_id;
 
         StorageStream * storage;
 
-        WriteCallbackData(const String & query_status_poll_id_, UInt16 block_id_, StorageStream * storage_)
-            : query_status_poll_id(query_status_poll_id_), block_id(block_id_), storage(storage_)
+        WriteCallbackData(UInt64 block_id_, UInt64 sub_block_id_, StorageStream * storage_)
+            : block_id(block_id_), sub_block_id(sub_block_id_), storage(storage_)
         {
             ++storage_->outstanding_blocks;
         }
@@ -258,9 +260,9 @@ private:
         ~WriteCallbackData() { --storage->outstanding_blocks; }
     };
 
-    std::unique_ptr<WriteCallbackData> writeCallbackData(const String & query_status_poll_id, UInt16 block_id);
+    void appendAsync(const DWAL::Record & record, UInt64 block_id, UInt64 sub_block_id);
 
-    void writeCallback(const DWAL::AppendResult & result, const String & query_status_poll_id, UInt16 block_id);
+    void writeCallback(const DWAL::AppendResult & result, UInt64 block_id, UInt64 sub_block_id);
 
     static void writeCallback(const DWAL::AppendResult & result, void * data);
 

@@ -244,8 +244,9 @@ private:
     String query_status_poll_id;
     String idempotent_key;
     String config_path;
-    IngestMode ingest_mode = IngestMode::None;
+    UInt64 block_base_id = 0;
     Int64 ingest_time = 0;
+    IngestMode ingest_mode = IngestMode::None;
     bool distributed_ddl_operation = false;
     /// proton: ends
 
@@ -565,6 +566,7 @@ public:
     String getCurrentQueryId() const { return client_info.current_query_id; }
     /// proton: starts
     String getQueryStatusPollId() const { return query_status_poll_id; }
+    UInt64 getBlockBaseId() const { return block_base_id; }
     /// Parse poll id and return `host` in ID, throws if poll_id is invalid or validations didn't pass
     std::vector<String> parseQueryStatusPollId(const String & poll_id) const;
     String getNodeIdentity() const { return node_identity; }
@@ -591,7 +593,7 @@ public:
 
     /// proton: starts
     void setupNodeIdentity();
-    void setupQueryStatusPollId();
+    void setupQueryStatusPollId(UInt64 block_base_id_);
     void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
     void setIngestMode(IngestMode ingest_mode_) { ingest_mode = ingest_mode_; }
     void setIngestTime(Int64 ingest_time_) { ingest_time = ingest_time_; }
