@@ -40,6 +40,7 @@ void StreamingStoreSource::readAndProcess()
     result_chunks.clear();
     result_chunks.reserve(records.size());
 
+    auto pos_size = column_positions.size();
     for (auto & record : records)
     {
         Columns columns;
@@ -47,11 +48,17 @@ void StreamingStoreSource::readAndProcess()
         Block & block = record->block;
         auto rows = block.rows();
 
-        assert (column_positions.size() >= block.columns());
+        assert (pos_size >= block.columns());
 
-        for (size_t index = 0; auto & column : block)
+        for (size_t index = 0, physical_col_index = 0; index < pos_size; ++index)
         {
-            if (column_positions[index] > total_physical_columns_in_schema)
+            if (column_positions[index] < total_physical_columns_in_schema)
+            {
+                /// At current result column index, it is expecting a physical column
+                columns.push_back(std::move(block.getByPosition(physical_col_index).column));
+                ++physical_col_index;
+            }
+            else
             {
                 /// The current column to return is a virtual column which needs be calculated lively
                 assert(virtual_time_columns_calc[column_positions[index] - total_physical_columns_in_schema]);
@@ -59,8 +66,6 @@ void StreamingStoreSource::readAndProcess()
                 auto time_column = virtual_col_type->createColumnConst(rows, ts);
                 columns.push_back(std::move(time_column));
             }
-            columns.push_back(std::move(column.column));
-            ++index;
         }
 
         result_chunks.emplace_back(std::move(columns), rows);

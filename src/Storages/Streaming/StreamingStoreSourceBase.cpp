@@ -74,7 +74,6 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
     /// [lambda1, nullptr, nullptr, lambda2, nullptr, nullptr, lambda3]
     /// We calculate these column positions and lambda vector for simplify the logic and
     /// fast processing in readAndProcess since we don't need index by column name any more
-    /// FIXME, replicate this logic to StreamingStoreSource or share the log
     for (size_t pos = 0; const auto & column : header)
     {
         if (column.name == RESERVED_APPEND_TIME)
@@ -106,6 +105,10 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
 
         ++pos;
     }
+
+    /// Clients like to read virtual columns only, add `_tp_time`, then we know how many rows
+    if (physical_column_positions_to_read.empty())
+        physical_column_positions_to_read.push_back(schema.getPositionByName(RESERVED_EVENT_TIME));
 
     for (size_t i = 0; i < virtual_time_columns_calc.size(); ++i)
     {

@@ -1,7 +1,10 @@
 #!/bin/bash
 
+build_type="$1"
+build_type="${build_type:=Release}"
+
 cmake .. \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=${build_type} \
     -DENABLE_PROTON_ALL=OFF \
     -DENABLE_PROTON_SERVER=ON \
     -DENABLE_PROTON_CLIENT=ON \
