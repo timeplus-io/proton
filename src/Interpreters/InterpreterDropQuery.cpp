@@ -121,6 +121,13 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
             return false;
         }
 
+        /// Check Access
+        StorageID table_id{tables[0]->database, tables[0]->name, tables[0]->uuid};
+        if (query.kind == ASTDropQuery::Kind::Truncate)
+            ctx->checkAccess(AccessType::TRUNCATE, table_id);
+        else if (query.kind == ASTDropQuery::Kind::Detach || query.kind == ASTDropQuery::Kind::Drop)
+            ctx->checkAccess(AccessType::DROP_TABLE, table_id);
+
         auto * log = &Poco::Logger::get("InterpreterDropQuery");
 
         auto query_str = queryToString(query);
@@ -180,6 +187,12 @@ bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
         {
             throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Databases {} does not exist.", query.getDatabase());
         }
+
+        /// Check Access
+        if (query.kind == ASTDropQuery::Kind::Truncate)
+            throw Exception(ErrorCodes::SYNTAX_ERROR, "Unable to truncate database");
+        else if (query.kind == ASTDropQuery::Kind::Detach || query.kind == ASTDropQuery::Kind::Drop)
+            ctx->checkAccess(AccessType::DROP_DATABASE, query.getDatabase());
 
         auto * log = &Poco::Logger::get("InterpreterDropQuery");
 
