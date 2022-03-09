@@ -48,12 +48,17 @@ bool IngestingBlocks::add(UInt64 block_id, UInt64 sub_block_id)
         /// the one with smaller block ID. This is not always true, but it is OK if it is not.
         for (iter = block_ids.begin(); iter != block_ids.end();)
         {
-            /// After removing a timed out block, we may end up with lots of committed blocks,
-            /// remove them as well to progress low watermark
-            if (now - iter->second.ingest_timestamp_ms >= timeout_ms || iter->second.done())
+            if (now - iter->second.ingest_timestamp_ms >= timeout_ms)
             {
                 expired.emplace_back(iter->first, iter->second.total, iter->second.remaining());
                 /// Progress the low watermark
+                low_watermark_block_id = iter->first;
+                iter = block_ids.erase(iter);
+            }
+            else if (iter->second.done())
+            {
+                /// After removing a timed out block, we may end up with lots of committed blocks,
+                /// remove them as well to progress low watermark
                 low_watermark_block_id = iter->first;
                 iter = block_ids.erase(iter);
             }
@@ -64,15 +69,24 @@ bool IngestingBlocks::add(UInt64 block_id, UInt64 sub_block_id)
         }
     }
 
+    {
+        std::unique_lock guard(expired_block_ids_mutex);
+        for (const auto & p : expired)
+            expired_block_ids.insert(std::get<0>(p));
+
+        /// We assumed expired block id set shall be small as time goes, there may accumulate more expired block IDs
+        /// Remove small block IDs from the set to constraint the set size
+        for(auto iter = expired_block_ids.begin(); expired_block_ids.size() >= 1000 && iter != expired_block_ids.end(); )
+            iter = expired_block_ids.erase(iter);
+    }
+
     for (const auto & p : expired)
-        /// FIXME, introduce an expired map
         LOG_WARNING(
             log,
             "Timed out and removed. There were {} / {} pending data blocks waiting to be committed for block_id={}",
             std::get<2>(p),
             std::get<1>(p),
             std::get<0>(p));
-
 
     if (ingested)
         LOG_INFO(log, "IngestingBlocks accepted={}, outstanding={}, committed_block_id={}", ingested, outstanding, committed_block_id);
@@ -130,6 +144,13 @@ bool IngestingBlocks::remove(UInt64 block_id, UInt64 sub_block_id)
 
 std::pair<String, Int32> IngestingBlocks::status(UInt64 block_id) const
 {
+    {
+        std::shared_lock guard(expired_block_ids_mutex);
+        auto iter = expired_block_ids.find(block_id);
+        if (iter != expired_block_ids.end())
+            return {"Expired", -1};
+    }
+
     std::shared_lock guard(block_ids_mutex);
 
     /// FIXME, we actually need lookup expired map to see if it is there

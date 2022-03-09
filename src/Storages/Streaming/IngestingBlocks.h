@@ -1,13 +1,14 @@
 #pragma once
 
-#include <base/ClockUtils.h>
 #include <Core/Types.h>
+#include <base/ClockUtils.h>
 #include <Poco/Logger.h>
 
 #include <boost/core/noncopyable.hpp>
 
 #include <chrono>
 #include <deque>
+#include <set>
 #include <shared_mutex>
 #include <unordered_map>
 #include <utility>
@@ -99,9 +100,12 @@ private:
     static std::atomic<uint64_t> block_id_counter;
 
 private:
-
     mutable std::shared_mutex block_ids_mutex;
     std::map<UInt64, BlockIdInfo> block_ids;
+
+    mutable std::shared_mutex expired_block_ids_mutex;
+    std::set<UInt64> expired_block_ids;
+
     UInt64 low_watermark_block_id;
     UInt64 total_ingested = 0;
 
