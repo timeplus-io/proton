@@ -1141,7 +1141,7 @@ void MergeTreeData::loadDataPartsFromDisk(
     if (has_non_adaptive_parts && has_adaptive_parts && !settings->enable_mixed_granularity_parts)
         /// proton: starts
         throw Exception(
-            "Stream contains parts with adaptive and non adaptive marks, but <settings.stream> `enable_mixed_granularity_parts` is disabled",
+            "Stream contains parts with adaptive and non adaptive marks, but `setting enable_mixed_granularity_parts` is disabled",
             ErrorCodes::LOGICAL_ERROR);
         /// proton: ends
 
@@ -1151,7 +1151,7 @@ void MergeTreeData::loadDataPartsFromDisk(
         /// proton: starts
         throw Exception(ErrorCodes::TOO_MANY_UNEXPECTED_DATA_PARTS,
             "Suspiciously many ({} parts, {} in total) broken parts to remove while maximum allowed broken parts count is {}. You can change the maximum value "
-                        "with merge tree setting 'max_suspicious_broken_parts' in <settings.stream> configuration section or in stream settings in .sql file "
+                        "with merge tree setting 'max_suspicious_broken_parts' in <merge_tree> configuration section or in stream settings in .sql file "
                         "(don't forget to return setting back to default value)",
             suspicious_broken_parts, formatReadableSizeWithBinarySuffix(suspicious_broken_parts_bytes), settings->max_suspicious_broken_parts);
         /// proton: ends
@@ -1160,7 +1160,7 @@ void MergeTreeData::loadDataPartsFromDisk(
         /// proton: starts
         throw Exception(ErrorCodes::TOO_MANY_UNEXPECTED_DATA_PARTS,
             "Suspiciously big size ({} parts, {} in total) of all broken parts to remove while maximum allowed broken parts size is {}. "
-            "You can change the maximum value with merge tree setting 'max_suspicious_broken_parts_bytes' in <settings.stream> configuration "
+            "You can change the maximum value with merge tree setting 'max_suspicious_broken_parts_bytes' in <merge_tree> configuration "
             "section or in stream settings in .sql file (don't forget to return setting back to default value)",
             suspicious_broken_parts, formatReadableSizeWithBinarySuffix(suspicious_broken_parts_bytes),
             formatReadableSizeWithBinarySuffix(settings->max_suspicious_broken_parts_bytes));
@@ -3049,7 +3049,7 @@ void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until) const
     {
         ProfileEvents::increment(ProfileEvents::RejectedInserts);
         /// proton: starts
-        throw Exception("Too many parts (" + toString(parts_count_in_total) + ") in all partitions in total. This indicates wrong choice of partition key. The threshold can be modified with 'max_parts_in_total' setting in <settings.stream> element in config.xml or with per-stream setting.", ErrorCodes::TOO_MANY_PARTS);
+        throw Exception("Too many parts (" + toString(parts_count_in_total) + ") in all partitions in total. This indicates wrong choice of partition key. The threshold can be modified with 'max_parts_in_total' setting in <merge_tree> element in config.xml or with per-stream setting.", ErrorCodes::TOO_MANY_PARTS);
         /// proton: ends
     }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/AsynchronousMetrics.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
 #include <Server/HTTPHandlerRequestFilter.h>
@@ -132,9 +133,9 @@ HTTPRequestHandlerFactoryPtr createDynamicHandlerFactory(IServer & server, const
 HTTPRequestHandlerFactoryPtr createPredefinedHandlerFactory(IServer & server, const std::string & config_prefix);
 
 HTTPRequestHandlerFactoryPtr
-createPrometheusHandlerFactory(IServer & server, const std::string & config_prefix);
+createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix);
 
-HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, const std::string & name);
+HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name);
 HTTPRequestHandlerFactoryPtr createSQLAnalyzeHandlerFactory(IServer & server, const std::string & config_prefix);
 
 /// proton: starts.

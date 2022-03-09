@@ -28,7 +28,7 @@ namespace ErrorCodes
 
 static void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server);
 /// proton: starts
-static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, bool snapshot_mode_ = false);
+static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false);
 /// proton: ends
 
 HTTPRequestHandlerFactoryMain::HTTPRequestHandlerFactoryMain(const std::string & name_)
@@ -62,7 +62,7 @@ std::unique_ptr<HTTPRequestHandler> HTTPRequestHandlerFactoryMain::createRequest
 
 /// proton: starts
 static inline auto createHandlersFactoryFromConfig(
-    IServer & server, const std::string & name, const String & prefix, bool snapshot_mode_ = false)
+    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false)
 /// proton: ends
 {
     auto main_handler_factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
@@ -75,7 +75,7 @@ static inline auto createHandlersFactoryFromConfig(
         if (key == "defaults")
         {
             /// proton: starts
-            addDefaultHandlersFactory(*main_handler_factory, server, snapshot_mode_);
+            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics, snapshot_mode_);
             /// proton: ends
         }
         else if (startsWith(key, "rule"))
@@ -93,7 +93,7 @@ static inline auto createHandlersFactoryFromConfig(
             else if (handler_type == "predefined_query_handler")
                 main_handler_factory->addHandler(createPredefinedHandlerFactory(server, prefix + "." + key));
             else if (handler_type == "prometheus")
-                main_handler_factory->addHandler(createPrometheusHandlerFactory(server, prefix + "." + key));
+                main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key));
             else
                 throw Exception("Unknown handler type '" + handler_type + "' in config here: " + prefix + "." + key + ".handler.type",
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
@@ -108,20 +108,20 @@ static inline auto createHandlersFactoryFromConfig(
 
 static inline HTTPRequestHandlerFactoryPtr
 /// proton: starts
-createHTTPHandlerFactory(IServer & server, const std::string & name, bool snapshot_mode_ = false)
+createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false)
 /// proton: ends
 {
     if (server.config().has("http_handlers"))
     {
         /// proton: starts
-        return createHandlersFactoryFromConfig(server, name, "http_handlers", snapshot_mode_);
+        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics, snapshot_mode_);
         /// proton: ends
     }
     else
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
         /// proton: starts
-        addDefaultHandlersFactory(*factory, server, snapshot_mode_);
+        addDefaultHandlersFactory(*factory, server, async_metrics, snapshot_mode_);
         /// proton: ends
         return factory;
     }
@@ -139,13 +139,13 @@ static inline HTTPRequestHandlerFactoryPtr createInterserverHTTPHandlerFactory(I
     return factory;
 }
 
-HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, const std::string & name)
+HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name)
 {
     if (name == "HTTPHandler-factory" || name == "HTTPSHandler-factory")
-        return createHTTPHandlerFactory(server, name);
+        return createHTTPHandlerFactory(server, name, async_metrics);
     /// proton: starts. turn on snapshot_mode
     else if (name == "SnapshotHTTPHandler-factory")
-        return createHTTPHandlerFactory(server, name, true);
+        return createHTTPHandlerFactory(server, name, async_metrics, true);
     /// proton: ends
     else if (name == "InterserverIOHTTPHandler-factory" || name == "InterserverIOHTTPSHandler-factory")
         return createInterserverHTTPHandlerFactory(server, name);
@@ -153,7 +153,7 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, const std::s
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
         auto handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-            server, PrometheusMetricsWriter(server.config(), "prometheus"));
+            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics));
         handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         handler->allowGetAndHeadRequest();
         factory->addHandler(handler);
@@ -196,7 +196,7 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
 }
 
 /// proton: starts
-void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, bool snapshot_mode_)
+void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_)
 /// proton: ends
 {
     addCommonDefaultHandlersFactory(factory, server);
@@ -218,7 +218,7 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     if (server.config().has("prometheus") && server.config().getInt("prometheus.port", 0) == 0)
     {
         auto prometheus_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-            server, PrometheusMetricsWriter(server.config(), "prometheus"));
+            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics));
         prometheus_handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         prometheus_handler->allowGetAndHeadRequest();
         factory.addHandler(prometheus_handler);

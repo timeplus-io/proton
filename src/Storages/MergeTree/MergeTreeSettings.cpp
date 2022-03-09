@@ -85,7 +85,7 @@ void MergeTreeSettings::sanityCheck(const Settings & query_settings) const
     {
         /// proton: starts
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "The value of 'number_of_free_entries_in_pool_to_execute_mutation' setting"
-            " ({}) (default values are defined in <settings.stream> section of config.yaml"
+            " ({}) (default values are defined in <merge_tree> section of config.xml"
             " or the value can be specified per stream in SETTINGS section of CREATE STREAM query)"
             " is greater than the value of 'background_pool_size'*'background_merges_mutations_concurrency_ratio'"
             " ({}) (the value is defined in users.xml for default profile)."
@@ -100,7 +100,7 @@ void MergeTreeSettings::sanityCheck(const Settings & query_settings) const
     {
         /// proton: starts
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "The value of 'number_of_free_entries_in_pool_to_lower_max_size_of_merge' setting"
-            " ({}) (default values are defined in <settings.stream> section of config.yaml"
+            " ({}) (default values are defined in <merge_tree> section of config.xml"
             " or the value can be specified per stream in SETTINGS section of CREATE STREAM query)"
             " is greater than the value of 'background_pool_size'*'background_merges_mutations_concurrency_ratio'"
             " ({}) (the value is defined in users.xml for default profile)."
