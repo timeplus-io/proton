@@ -5,7 +5,8 @@
 
 namespace DB
 {
-IngestingBlocks::IngestingBlocks(Poco::Logger * log_, Int32 timeout_sec_) : timeout_ms(timeout_sec_ * 1000), log(log_)
+IngestingBlocks::IngestingBlocks(Int64 timeout_ms_, Poco::Logger * log_)
+    : timeout_ms(timeout_ms_), log(log_)
 {
 }
 
@@ -115,7 +116,7 @@ bool IngestingBlocks::remove(UInt64 block_id, UInt64 sub_block_id)
     }
 
     if (outstanding == 0)
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "Removed={} block_id={} sub_block_id={} outstanding={} committed_block_id={}",
             removed,

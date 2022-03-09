@@ -50,6 +50,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_ROWS;
     extern const int ARGUMENT_OUT_OF_BOUND;
     extern const int BAD_ARGUMENTS;
+    extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
 }
 
 namespace
@@ -278,9 +279,10 @@ StorageStream::StorageStream(
     , topic(DWAL::escapeDWALName(table_id_.getDatabaseName(), table_id_.getTableName()))
     , dwal_append_ctx(topic, shards_, replication_factor_)
     , dwal_consume_ctx(topic, shards_, replication_factor_)
-    , ingesting_blocks(log, 120)
+    , ingesting_blocks(context_->getSettingsRef().async_ingest_block_timeout_ms, log)
     , part_commit_pool(context_->getPartCommitPool())
     , rng(randomSeed())
+    , max_outstanding_blocks(context_->getSettingsRef().aysnc_ingest_max_outstanding_blocks)
 {
     if (!relative_data_path_.empty())
     {
@@ -1129,6 +1131,9 @@ DWAL::RecordSN StorageStream::lastSN() const
 void StorageStream::appendAsync(const DWAL::Record & record, UInt64 block_id, UInt64 sub_block_id)
 {
     assert(dwal);
+
+    if (outstanding_blocks > max_outstanding_blocks)
+        throw Exception("Too many request", ErrorCodes::RECEIVED_ERROR_TOO_MANY_REQUESTS);
 
     [[maybe_unused]] auto added = ingesting_blocks.add(block_id, sub_block_id);
     assert(added);

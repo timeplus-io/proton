@@ -356,6 +356,7 @@ private:
     mutable std::atomic_uint_fast64_t next_shard = 0;
 
     /// Outstanding async ingest records
+    UInt64 max_outstanding_blocks;
     std::atomic_uint_fast64_t outstanding_blocks = 0;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;

@@ -164,7 +164,7 @@ void Watermark::assignWatermark(Block & block)
                 block.info.watermark = max_event_ts;
                 last_projected_watermark_ts = max_event_ts;
                 watermark_ts = now;
-                LOG_INFO(log, "Periodic time={}, rows={}", block.info.watermark, block.rows());
+                LOG_DEBUG(log, "Periodic time={}, rows={}", block.info.watermark, block.rows());
             }
             break;
         }

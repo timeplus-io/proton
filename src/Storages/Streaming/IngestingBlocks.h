@@ -18,7 +18,7 @@ namespace DB
 class IngestingBlocks final : public boost::noncopyable
 {
 public:
-    explicit IngestingBlocks(Poco::Logger * log_, Int32 timeout_sec = 120);
+    IngestingBlocks(Int64 timeout_ms_, Poco::Logger * log_);
     ~IngestingBlocks() = default;
 
     /// One block id can have several blocks, hence sub id
@@ -105,7 +105,7 @@ private:
     UInt64 low_watermark_block_id;
     UInt64 total_ingested = 0;
 
-    Int32 timeout_ms = 120 * 1000;
+    Int64 timeout_ms;
 
     Poco::Logger * log;
 };

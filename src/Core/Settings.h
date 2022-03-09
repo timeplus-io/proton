@@ -698,20 +698,22 @@ class IColumn;
     M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in streaming view", 0) \
     M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in streaming view", 0) \
     M(Bool, disable_distributed, false, "If setting is enabled and distributed mode will be disabled for debug and test only", 0) \
-    M(UInt64, part_commit_pool_size, 8, "Total shared thread pool size for building and committing parts for Stream", 0) \
-    M(UInt64, max_idempotent_ids, 1000, "Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "latest", "Seeking to an offset of the streaming store to seek when a streaming query is initiated", 0) \
-    M(UInt64, max_channels_per_resource_group, 20, "Max channels per shared resource group. One streaming query maps to one channel", 1) \
     M(Bool, enable_backfill_from_historical_store, false, "Enable backfill data from historical data store", 0) \
 // End of GLOBAL_SETTINGS
 
 #define CONFIGURABLE_GLOBAL_SETTINGS(M) \
     M(Bool, asterisk_include_reserved_columns, true, "Show reserved columns on SELECT query.", 0) \
+    M(UInt64, part_commit_pool_size, 8, "Total shared thread pool size for building and committing parts for Stream", 0) \
+    M(UInt64, max_idempotent_ids, 1000, "Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion", 0) \
     M(Bool, synchronous_ddl, true, "If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.", 0) \
     M(String, query_mode, "streaming", "Default query mode. table or streaming", 0) \
     M(String, query_resource_group, "dedicated", "Default resource group. dedicated or shared", 1) \
+    M(UInt64, max_channels_per_resource_group, 20, "Max channels per shared resource group. One streaming query maps to one channel", 1) \
     M(Bool, enable_light_ingest, true, "Light ingest is inserting partial columns of a table", 0) \
+    M(Int64, async_ingest_block_timeout_ms, 120000, "Max duration for a block to commit before it is considered expired during async ingestion", 0) \
+    M(UInt64, aysnc_ingest_max_outstanding_blocks, 10000, "Max outstanding blocks to be committed during async ingestion", 0) \
 // End of CONFIGURABLE_GLOBAL_SETTINGS
 
 #define LIST_OF_SETTINGS(M)    \
