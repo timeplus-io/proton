@@ -124,6 +124,11 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     else
         rewritten_query << "database = " << DB::quote << database;
 
+    /// proton: starts. Hide inner table names starts with '.inner.', e.g. `.inner.target...`
+    if (!getContext()->getSettingsRef().include_internal_streams.value)
+        rewritten_query << " AND NOT starts_with(name, '.inner.')";
+    /// proton: ends.
+
     if (!query.like.empty())
         rewritten_query
             << " AND name "

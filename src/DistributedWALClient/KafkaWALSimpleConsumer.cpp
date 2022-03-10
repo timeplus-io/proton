@@ -191,13 +191,13 @@ void KafkaWALSimpleConsumer::checkLastError(const KafkaWALContext & ctx) const
         case RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART:
         case RD_KAFKA_RESP_ERR__UNKNOWN_TOPIC:
             LOG_ERROR(log, "topic={} partition={} doesn't exist", ctx.topic, ctx.partition);
-            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Underlying streaming topic doesn't exist");
+            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Underlying streaming store '{}[{}]' doesn't exist", ctx.topic, ctx.partition);
         case RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN:
             LOG_ERROR(log, "Streaming store are gone");
-            throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store is gone");
+            throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store '{}' is gone", ctx.topic);
         case RD_KAFKA_RESP_ERR__FATAL:
             LOG_ERROR(log, "Streaming store has fatal error");
-            throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store has fatal error");
+            throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store '{}' has fatal error", ctx.topic);
     }
 }
 

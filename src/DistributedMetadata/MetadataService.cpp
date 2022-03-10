@@ -169,18 +169,18 @@ void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
         }
         else if (err == ErrorCodes::DWAL_FATAL_ERROR)
         {
-            throw Exception("Topic " + ctx.topic + " create failed due to fatal error.", ErrorCodes::DWAL_FATAL_ERROR);
+            throw Exception("Underlying streaming store " + ctx.topic + " create failed due to fatal error.", ErrorCodes::DWAL_FATAL_ERROR);
         }
         else if (err == ErrorCodes::INVALID_REPLICATION_FACTOR)
         {
             throw Exception(
-                "Topic " + ctx.topic + " create failed due to invalid replication factor.", ErrorCodes::INVALID_REPLICATION_FACTOR);
+                "Underlying streaming store " + ctx.topic + " create failed due to invalid replication factor.", ErrorCodes::INVALID_REPLICATION_FACTOR);
         }
         else
         {
             if (retries >= DWAL_MAX_RETRIES)
             {
-                throw Exception("Topic " + ctx.topic + " create failed", ErrorCodes::UNKNOWN_EXCEPTION);
+                throw Exception("Underlying streaming store " + ctx.topic + " create failed", ErrorCodes::UNKNOWN_EXCEPTION);
             }
 
             retries++;

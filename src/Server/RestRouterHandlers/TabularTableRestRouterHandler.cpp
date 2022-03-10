@@ -58,8 +58,13 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
     Poco::JSON::Array tables_mapping_json;
     std::unordered_set<String> table_names;
 
+    bool include_internal_streams = getQueryParameterBool("include_internal_streams", query_context->getSettingsRef().include_internal_streams.value);
     for (const auto & table : tables)
     {
+        /// If include_internal_streams = false, ignore internal streams
+        if (table->name.starts_with(".inner.") && !include_internal_streams)
+            continue;
+
         if (table_names.contains(table->name))
             continue;
 

@@ -145,7 +145,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
     if (!tconf)
     {
         LOG_ERROR(stats->log, "Failed to create kafka topic conf, error={}", rd_kafka_err2str(rd_kafka_last_error()));
-        throw DB::Exception("Failed to created kafka topic conf", mapErrorCode(rd_kafka_last_error()));
+        throw DB::Exception("Failed to created underlying streaming store conf", mapErrorCode(rd_kafka_last_error()));
     }
 
     char errstr[512] = {'\0'};
@@ -161,7 +161,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
                 param.first,
                 param.second,
                 errstr);
-            throw DB::Exception("Failed to set kafka topic param", DB::ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw DB::Exception("Failed to set underlying streaming store param", DB::ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
 
@@ -171,7 +171,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
     if (!topic_handle)
     {
         LOG_ERROR(stats->log, "Failed to create kafka topic handle, topic={} error={}", topic, rd_kafka_err2str(rd_kafka_last_error()));
-        throw DB::Exception("Failed to create kafka topic handle", mapErrorCode(rd_kafka_last_error()));
+        throw DB::Exception("Failed to create underlying streaming store handle", mapErrorCode(rd_kafka_last_error()));
     }
 
     return topic_handle;
