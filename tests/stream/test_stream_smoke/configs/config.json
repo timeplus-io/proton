@@ -14,6 +14,7 @@
     },
     "proton_server": "localhost",
     "proton_server_native_port": "8463",
+    "proton_admin": {"name":"proton", "password":"proton@t+"},
     "table_schema": {
         "name": "test",
         "columns": [
