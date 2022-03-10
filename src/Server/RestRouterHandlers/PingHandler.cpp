@@ -1,7 +1,10 @@
 #include "PingHandler.h"
 
 #include <Core/Block.h>
+#include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
+#include <DistributedMetadata/PlacementService.h>
+#include <DistributedMetadata/TaskStatusService.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
 
@@ -35,7 +38,10 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
     else if (status == "ping")
     {
         /// FIXME : introduce more sophisticated health calculation in future.
-        if (DDLService::instance(query_context).ready())
+        if (CatalogService::instance(query_context).ready() &&
+            PlacementService::instance(query_context).ready() &&
+            TaskStatusService::instance(query_context).ready() &&
+            DDLService::instance(query_context).ready())
             return {"{\"status\":\"UP\"}", HTTPResponse::HTTP_OK};
         else
             return {"{\"status\":\"Initializing\"}", HTTPResponse::HTTP_NOT_FOUND};

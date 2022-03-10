@@ -20,7 +20,7 @@ public:
     void startup();
     void shutdown();
 
-    bool ready() const { return started.test(); }
+    virtual bool ready() const { return started.test(); }
 
     const String & nodeRoles() const { return node_roles; }
     bool hasCurrentRole() const { return node_roles.find(role()) != String::npos; }

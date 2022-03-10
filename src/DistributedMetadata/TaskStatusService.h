@@ -45,6 +45,7 @@ public:
     std::vector<TaskStatusPtr> findByUser(const String & user);
 
     void createTaskTableIfNotExists();
+    bool ready() const override { return started.test() && table_exists; }
 
 private:
     void processRecords(const DWAL::RecordPtrs & records) override;

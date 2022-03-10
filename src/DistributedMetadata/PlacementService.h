@@ -25,6 +25,8 @@ public:
     String getNodeIdentityByChannel(const String & channel) const;
     std::vector<NodeMetricsPtr> nodes() const;
 
+    bool ready() const override { return started.test() && nodes().size(); }
+
 private:
     void preShutdown() override;
     void processRecords(const DWAL::RecordPtrs & records) override;
