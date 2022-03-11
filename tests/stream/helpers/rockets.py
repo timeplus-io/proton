@@ -107,7 +107,6 @@ def rockets_env_var_get():
         return None
 
 
-
 def scan_tests_file_path(tests_file_path):
     test_suites_selected = []
     test_suite_names_selected = []
@@ -299,96 +298,64 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
         kill_res = proton_client.execute(kill_sql)
         logger.debug(f"kill_query: kill_res = {kill_res} was called")
 
-def request_rest(url,http_method, params=None, args=None, data=None, body=None):
+
+def request_rest(
+    http_method,
+    url,
+    rest_type="raw",
+    params=None,
+    data=None,
+    headers=None,
+    cookies=None,
+    files=None,
+    auth=None,
+    timeout=None,
+    allow_redirects=True,
+    proxies=None,
+    hooks=None,
+    stream=None,
+    verify=None,
+    cert=None,
+    json_obj=None,
+):
     logger = mp.get_logger()
-    logger.debug(f"url={url}, http_method={http_method}, params={params}, args={args}, data={data}, body={body}")
-    
+    logger.debug(
+        f"rest_type={rest_type}, url={url}, http_method={http_method}, params={params}, data={data}"
+    )
     try:
-        if http_method == "get":
-            res = requests.get(url, params, args)
-            return res
-        elif http_method == "delete":
-            res = requests.delete(url, args)
-            return res
-        elif http_method == "post":
-            body = json.dumps(body)
-            res = requests.post(url, body, args)           
-            return res
-        elif http_method == "put":
-            res = requests.put(url, data, args)
-    except(BaseException) as error:
+        if rest_type == "raw":
+            if data != None:
+                data = json.dumps(data)
+        res = requests.request(
+            http_method,
+            url,
+            params=params,
+            data=data,
+            cookies=cookies,
+            files=files,
+            auth=auth,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+            proxies=proxies,
+            hooks=hooks,
+            stream=stream,
+            verify=verify,
+            cert=cert,
+            json=json_obj,
+        )
+        logger.debug(f"res.status_code = {res.status_code}")
+        return res
+    except (BaseException) as error:
         logger.debug(f"exception, error= {error}")
         return None
 
 
-def exec_command(command):
-    logger = mp.get_logger()
-    ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=1)
-    logger.debug(f"ret of subprocess.run({command}) = {ret}")
-
-    return ret.returncode
-
-def query_run_exec(statement_2_run, config):
-    logger = mp.get_logger()
-    logger.debug(
-        f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
-    )
-    query_results = {}
-    query_id = str(statement_2_run.get("query_id"))
-    query_type = statement_2_run.get("query_type")
-    query = statement_2_run.get("query")
-    query_client = statement_2_run.get("client")
-    depends_on_table = statement_2_run.get("depends_on_table")
-    query_start_time_str = str(datetime.datetime.now())
-    query_end_time_str = str(datetime.datetime.now())
-    user = statement_2_run.get("user")
-    password = statement_2_run.get("password")
-    query_result_str = ""
-    query_result_column_types = []
-    query_result_json = {}
-    query_result_list = []
-    query_results = {}
-    rest_request = ""
-    command = f'docker exec -it proton-server proton-client -u {user} --password {password} --query="{query}"'
-    logger.debug(f"command = {command}")
-    try: 
-        query_result_str = exec_command(command)
-        query_end_time_str = str(datetime.datetime.now())
-        query_results = {
-            "query_id": query_id,
-            "query_client":query_client,
-            "query": query,
-            "rest_request": rest_request,
-            "query_type": query_type,
-            "query_state": "run",
-            "query_start": query_start_time_str,
-            "query_end": query_end_time_str,
-            "query_result_column_types": query_result_column_types,
-            "query_result": query_result_str,
-        }        
-    except(BaseException) as error:
-        logger.debug(f"exception, error = {error}")
-        query_end_time_str = str(datetime.datetime.now())
-        query_results = {
-            "query_id": query_id,
-            "query_client":query_client,
-            "query": query,
-            "rest_request": rest_request,
-            "query_type": query_type,
-            "query_state": "exception",
-            "query_start": query_start_time_str,
-            "query_end": query_end_time_str,
-            "query_result": f"error_code:{error.code}",
-        }
-        logger.debug(
-            "query_run_py: db exception, none-cancel query_results: {}".format(
-                query_results
-            )
-        )
-    finally:
-        logger.debug(f"query_results = {query_results}")
-        return query_results
-
+def is_json(string):
+    try:
+        json_obj = json.loads(string)
+        return True
+    except (ValueError) as error:
+        return False
 
 
 def query_run_rest(rest_setting, statement_2_run):
@@ -407,41 +374,69 @@ def query_run_rest(rest_setting, statement_2_run):
     query_result_column_types = []
     query_result_json = {}
     query_result_list = []
+    query_result = ""
     query_results = {}
     rest_request = ""
     try:
         host_url = rest_setting.get("host_url")
-        url = host_url + statement_2_run.get("url")
+        http_snapshot_url = rest_setting.get("http_snapshot_url")
+        rest_type = statement_2_run.get("rest_type")
+        query_url = statement_2_run.get("query_url")
+        wait = statement_2_run.get("wait")
         http_method = statement_2_run.get("http_method")
         data = statement_2_run.get("data")
         args = statement_2_run.get("args")
         body = statement_2_run.get("body")
         params = statement_2_run.get("params")
-        if params == None: params = rest_setting.get("params")
-        rest_request = f"url={url},http_method={http_method},params={params},args={args},data={data},body={body}"
-        query_end_time_str = str(datetime.datetime.now())
+        # if params == None: params = rest_setting.get("params")
+        if rest_type == "raw":
+            url = host_url + query_url
+        else:
+            url = http_snapshot_url + query_url
+        rest_request = f"url={url},http_method={http_method}, rest_type = {rest_type}, params={params},data={data}"
+
+        if wait != None:
+            wait = int(wait)
+            print(f"wait for {wait} to start run query = {query}")
+            time.sleep(wait)
+
         logger.debug(f"rest_request({rest_request}) to be called.")
-        res = request_rest(url, http_method, params, args, data, body)
-        logger.debug(f"rest_request({rest_request}) called.")
-        query_result_json = res.json()
+        res = request_rest(http_method, url, rest_type, params, data)
+        query_end_time_str = str(datetime.datetime.now())
+        logger.debug(
+            f"rest_request({rest_request}) called, res.status_code = {res.status_code}."
+        )
+
+        if is_json(res.text):
+            query_result = res.json()
+            logger.debug(
+                f"res.status_code={res.status_code}, query_result=res.jon()={query_result}"
+            )
+        else:
+            query_result = res.text
+            logger.debug(
+                f"res.status_code={res.status_code}, query_result=res.text={query_result}"
+            )
         query_results = {
             "query_id": query_id,
             "query": query,
+            "rest_type": rest_type,
             "rest_request": rest_request,
             "query_type": query_type,
             "query_state": "run",
             "query_start": query_start_time_str,
             "query_end": query_end_time_str,
             "query_result_column_types": query_result_column_types,
-            "query_result": query_result_json,
-        }        
+            "query_result": query_result,
+        }
 
-    except(BaseException) as error:
+    except (BaseException) as error:
         logger.debug(f"exception, error = {error}")
         query_end_time_str = str(datetime.datetime.now())
         query_results = {
             "query_id": query_id,
             "query": query,
+            "rest_type": rest_type,
             "rest_request": rest_request,
             "query_type": query_type,
             "query_state": "exception",
@@ -450,15 +445,13 @@ def query_run_rest(rest_setting, statement_2_run):
             "query_result": f"error_code:{error.code}",
         }
         logger.debug(
-            "db exception, none-cancel query_results: {}".format(
+            "query_run_py: db exception, none-cancel query_results: {}".format(
                 query_results
             )
         )
     finally:
         logger.debug(f"query_results = {query_results}")
         return query_results
-
-
 
 
 def query_run_py(
@@ -503,17 +496,9 @@ def query_run_py(
             proton_server = config.get("proton_server")
             proton_server_native_port = config.get("proton_server_native_port")
             settings = {"max_block_size": 100000}
-            user_name = statement_2_run.get("user")
-            password = statement_2_run.get("password")
-            if user_name != None and password != None:
-                pyclient = Client(host=proton_server, port=proton_server_native_port, user = user_name, password = password)
-                logger.debug(f"pyclient=Client(host={proton_server}, port={proton_server_native_port}, user={user_name}, password={password})")
-            else:
-                pyclient = Client(
-                    host=proton_server, port=proton_server_native_port
-                )  # create python client                
-                logger.debug(f"pyclient=Client(host={proton_server}, port={proton_server_native_port})")
-
+            pyclient = Client(
+                host=proton_server, port=proton_server_native_port
+            )  # create python client
             CLEAN_CLIENT = True
         else:
             logger = mp.get_logger()
@@ -746,9 +731,6 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
-    proton_admin = config.get("proton_admin")
-    proton_admin_name = proton_admin.get("name")
-    proton_admin_password = proton_admin.get("password")
     settings = {"max_block_size": 100000}
     query_result_str = None
     tear_down = False
@@ -862,8 +844,6 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                 query_client = statement_2_run.get("client")
                 query_type = statement_2_run.get("query_type")
                 terminate = statement_2_run.get("terminate")
-                user_name = statement_2_run.get("user")
-                password = statement_2_run.get("password")
                 if terminate == "auto":
                     auto_terminate_queries.append(statement_2_run)
                 run_mode = statement_2_run.get("run_mode")
@@ -911,37 +891,31 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
 
                 else:
                     if query_client != None and query_client == "rest":
-                        logger.debug(f"query_run_rest run local for query_id = {query_id}...")
+                        logger.debug(
+                            f"query_run_rest run local for query_id = {query_id}..."
+                        )
                         query_results = query_run_rest(rest_setting, statement_2_run)
                         logger.debug(f"query_id = {query_id}, query_run_rest is called")
-                    elif query_client != None and query_client == "exec":
-                        logger.debug(f"query_run_exec run local for query_id = {query_id}...")
-                        query_results = query_run_exec(statement_2_run, config)
-                        logger.debug(f"query_id = {query_id}, query_run_exec is called")
                     else:
                         logger.debug(
                             f"query_execute: query_run_py run local for query_id = {query_id}..."
                         )
                         if wait != None:
                             wait = int(wait)
-                            logger.debug(f"query_id = {query_id}, start wait for {wait}s")
+                            logger.debug(
+                                f"query_id = {query_id}, start wait for {wait}s"
+                            )
                             time.sleep(wait)
-                            logger.debug(f"query_id = {query_id}, end wait for {wait}s continue")
+                            logger.debug(
+                                f"query_id = {query_id}, end wait for {wait}s continue"
+                            )
                         logger.debug(f"query_id = {query_id}, to call query_run_py")
-                        
-                        if user_name != None and password != None:
-                            statement_client = Client(host=proton_server, port=proton_server_native_port, user = user_name, password = password)
-                            logger.debug(f"statement_client=Client(host={proton_server}, port={proton_server_native_port}, user={user_name}, password={password})")
-                        else:
-                            statement_client = client
-                            logger.debug(f"statement_client=client")
-
                         query_results = query_run_py(
                             statement_2_run,
                             settings,
                             query_results_queue=None,
                             config=None,
-                            pyclient=statement_client,
+                            pyclient=client,
                         )
                         logger.debug(f"query_id = {query_id}, query_run_py is called")
                     message_2_send = json.dumps(query_results)
@@ -1415,9 +1389,9 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             logger.debug(
                 f"table_ddl = {table_ddl_url}, data = {post_data} to be posted."
             )
-            #res = requests.post(
+            # res = requests.post(
             #    table_ddl_url + "?distributed_ingest_mode=sync", data=post_data
-            #)  # create the table w/ table schema
+            # )  # create the table w/ table schema
 
             res = requests.post(
                 table_ddl_url, data=post_data

@@ -1,6 +1,7 @@
 {
     "rest_setting": {
         "host_url":"http://localhost:3218",
+        "http_snapshot_url":"http://localhost:8123",
         "table_ddl_url": "http://localhost:3218/proton/v1/ddl/streams",
         "ingest_url": "http://localhost:3218/proton/v1/ingest/streams",
         "query_url": "http://localhost:3218/proton/v1/search",
