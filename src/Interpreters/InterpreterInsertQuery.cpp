@@ -33,7 +33,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int ILLEGAL_COLUMN;
     extern const int DUPLICATE_COLUMN;
 }
@@ -115,7 +115,7 @@ Block InterpreterInsertQuery::getSampleBlock(
         if (!table_sample.has(current_name))
             /// proton: starts
             throw Exception("No such column " + current_name + " in stream " + table->getStorageID().getNameForLogs(),
-                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
             /// proton: ends
 
         if (!allow_materialized && !table_sample_non_materialized.has(current_name))

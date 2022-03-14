@@ -82,7 +82,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int DICTIONARY_ALREADY_EXISTS;
     extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
     extern const int INCORRECT_QUERY;
@@ -90,7 +90,7 @@ namespace ErrorCodes
     extern const int DUPLICATE_COLUMN;
     extern const int DATABASE_ALREADY_EXISTS;
     extern const int BAD_ARGUMENTS;
-    extern const int BAD_DATABASE_FOR_TEMPORARY_TABLE;
+    extern const int BAD_DATABASE_FOR_TEMPORARY_STREAM;
     extern const int SUSPICIOUS_TYPE_FOR_LOW_CARDINALITY;
     extern const int ILLEGAL_SYNTAX_FOR_DATA_TYPE;
     extern const int ILLEGAL_COLUMN;
@@ -99,7 +99,7 @@ namespace ErrorCodes
     extern const int PATH_ACCESS_DENIED;
     extern const int NOT_IMPLEMENTED;
     /// proton: starts
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int CONFIG_ERROR;
     extern const int UNKNOWN_EXCEPTION;
     /// proton: ends
@@ -939,7 +939,7 @@ bool InterpreterCreateQuery::createTableDistributed(const String & current_datab
             return true;
         else
             /// proton: starts
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists", create.getDatabase(), create.getTable());
+            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists", create.getDatabase(), create.getTable());
             /// proton: ends
     }
 
@@ -1041,8 +1041,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
     /// Temporary tables are created out of databases.
     if (create.temporary && create.database)
-        throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
-            ErrorCodes::BAD_DATABASE_FOR_TEMPORARY_TABLE);
+        throw Exception("Temporary streams cannot be inside a database. You should not specify a database for a temporary table.",
+            ErrorCodes::BAD_DATABASE_FOR_TEMPORARY_STREAM);
 
     String current_database = getContext()->getCurrentDatabase();
     auto database_name = create.database ? create.getDatabase() : current_database;
@@ -1186,7 +1186,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
         assertOrSetUUID(create, database);
 
         String storage_name = create.is_dictionary ? "Dictionary" : "Table";
-        auto storage_already_exists_error_code = create.is_dictionary ? ErrorCodes::DICTIONARY_ALREADY_EXISTS : ErrorCodes::TABLE_ALREADY_EXISTS;
+        auto storage_already_exists_error_code = create.is_dictionary ? ErrorCodes::DICTIONARY_ALREADY_EXISTS : ErrorCodes::STREAM_ALREADY_EXISTS;
 
         /// Table can be created before or it can be created concurrently in another thread, while we were waiting in DDLGuard.
         if (database->isTableExist(create.getTable(), getContext()))

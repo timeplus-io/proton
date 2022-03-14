@@ -18,12 +18,12 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int UNKNOWN_TABLE;
+    extern const int STREAM_ALREADY_EXISTS;
+    extern const int UNKNOWN_STREAM;
     extern const int UNKNOWN_DATABASE;
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+    extern const int CANNOT_GET_CREATE_STREAM_QUERY;
 }
 
 void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemoryMetadata & metadata)
@@ -106,7 +106,7 @@ ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_
     if (metadata_ptr == nullptr)
     {
         if (throw_on_error)
-            throw Exception(ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY, "Cannot get metadata of {}.{}", backQuote(table_id.database_name), backQuote(table_id.table_name));
+            throw Exception(ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY, "Cannot get metadata of {}.{}", backQuote(table_id.database_name), backQuote(table_id.table_name));
         else
             return nullptr;
     }
@@ -212,7 +212,7 @@ StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_n
     auto it = tables.find(table_name);
     if (it == tables.end())
         /// proton: starts
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} doesn't exist",
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist",
                         backQuote(database_name), backQuote(table_name));
         /// proton: ends
     res = it->second;
@@ -254,7 +254,7 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
         if (table_id.hasUUID())
             DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
         /// proton: starts
-        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {} already exists.", table_id.getFullTableName());
+        throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {} already exists.", table_id.getFullTableName());
         /// proton: ends
     }
 }
@@ -308,7 +308,7 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
     if (it != tables.end())
         return it->second;
     /// proton: starts
-    throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} doesn't exist",
+    throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist",
                     backQuote(database_name), backQuote(table_name));
     /// proton: ends
 }

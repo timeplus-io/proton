@@ -11,9 +11,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int ILLEGAL_COLUMN;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
 }
 
 namespace
@@ -139,12 +139,12 @@ std::pair<bool, String> ColumnRestRouterHandler::assertColumnExists(const String
 
     if (!table_exist)
     {
-        return {false, jsonErrorResponse(fmt::format("TABLE {} does not exist.", table), ErrorCodes::UNKNOWN_TABLE)};
+        return {false, jsonErrorResponse(fmt::format("TABLE {} does not exist.", table), ErrorCodes::UNKNOWN_STREAM)};
     }
 
     if (!column_exist)
     {
-        return {false, jsonErrorResponse(fmt::format("Column {} does not exist.", column), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE)};
+        return {false, jsonErrorResponse(fmt::format("Column {} does not exist.", column), ErrorCodes::NO_SUCH_COLUMN_IN_STREAM)};
     }
 
     return {true, ""};
@@ -157,7 +157,7 @@ std::pair<bool, String> ColumnRestRouterHandler::assertColumnNotExists(const Str
 
     if (!table_exist)
     {
-        return {false, jsonErrorResponse(fmt::format("TABLE {} does not exist.", table), ErrorCodes::UNKNOWN_TABLE)};
+        return {false, jsonErrorResponse(fmt::format("TABLE {} does not exist.", table), ErrorCodes::UNKNOWN_STREAM)};
     }
 
     if (column_exist)

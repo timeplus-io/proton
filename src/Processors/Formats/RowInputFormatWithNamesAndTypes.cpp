@@ -11,7 +11,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_DATA;
-    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
+    extern const int CANNOT_EXTRACT_STREAM_STRUCTURE;
 }
 
 RowInputFormatWithNamesAndTypes::RowInputFormatWithNamesAndTypes(
@@ -321,7 +321,7 @@ NamesAndTypesList FormatWithNamesAndTypesSchemaReader::readSchema()
         std::vector<String> data_type_names = format_reader->readTypes();
         if (data_type_names.size() != names.size())
             throw Exception(
-                ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                 "The number of column names {} differs with the number of types {}", names.size(), data_type_names.size());
 
         NamesAndTypesList result;

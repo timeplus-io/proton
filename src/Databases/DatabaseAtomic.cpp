@@ -15,9 +15,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int UNKNOWN_DATABASE;
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int CANNOT_ASSIGN_ALTER;
     extern const int DATABASE_NOT_EMPTY;
     extern const int NOT_IMPLEMENTED;
@@ -57,7 +57,7 @@ String DatabaseAtomic::getTableDataPath(const String & table_name) const
     auto it = table_name_to_path.find(table_name);
     if (it == table_name_to_path.end())
         /// proton: starts
-        throw Exception("Stream " + table_name + " not found in database " + database_name, ErrorCodes::UNKNOWN_TABLE);
+        throw Exception("Stream " + table_name + " not found in database " + database_name, ErrorCodes::UNKNOWN_STREAM);
         /// proton: ends
     assert(it->second != data_path && !it->second.empty());
     return it->second;
@@ -347,7 +347,7 @@ void DatabaseAtomic::assertDetachedTableNotInUse(const UUID & uuid)
     /// To avoid it, we remember UUIDs of detached tables and does not allow ATTACH table with such UUID until detached instance still in use.
     if (detached_tables.count(uuid))
         /// proton: starts
-        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Cannot attach stream with UUID {}, "
+        throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Cannot attach stream with UUID {}, "
                         "because it was detached but still used by some query. Retry later.", toString(uuid));
         /// proton: ends
 }

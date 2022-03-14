@@ -22,7 +22,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TABLE_IS_DROPPED;
+    extern const int STREAM_IS_DROPPED;
 }
 
 StorageSystemColumns::StorageSystemColumns(const StorageID & table_id_)
@@ -124,7 +124,7 @@ protected:
                     * Then table will throw exception at attempt to lock it.
                     * Just skip the table.
                     */
-                    if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                    if (e.code() == ErrorCodes::STREAM_IS_DROPPED)
                         continue;
                     else
                         throw;

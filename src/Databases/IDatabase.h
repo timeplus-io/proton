@@ -34,7 +34,7 @@ struct QualifiedTableName;
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+    extern const int CANNOT_GET_CREATE_STREAM_QUERY;
     extern const int LOGICAL_ERROR;
 }
 
@@ -338,7 +338,7 @@ protected:
     virtual ASTPtr getCreateTableQueryImpl(const String & /*name*/, ContextPtr /*context*/, bool throw_on_error) const
     {
         if (throw_on_error)
-            throw Exception("There is no SHOW CREATE TABLE query for Database" + getEngineName(), ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
+            throw Exception("There is no SHOW CREATE STREAM query for Database" + getEngineName(), ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY);
         return nullptr;
     }
 

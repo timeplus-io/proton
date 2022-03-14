@@ -34,8 +34,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_TABLE;
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int UNKNOWN_STREAM;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int DATABASE_ALREADY_EXISTS;
     extern const int DATABASE_NOT_EMPTY;
     extern const int DATABASE_ACCESS_DENIED;
@@ -249,7 +249,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     if (!table_id)
     {
         if (exception)
-            exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Cannot find table: StorageID is empty");
+            exception->emplace(ErrorCodes::UNKNOWN_STREAM, "Cannot find table: StorageID is empty");
         return {};
     }
 
@@ -262,7 +262,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
             assert(!db_and_table.first && !db_and_table.second);
             if (exception)
                 /// proton: starts
-                exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Stream {} doesn't exist", table_id.getNameForLogs());
+                exception->emplace(ErrorCodes::UNKNOWN_STREAM, "Stream {} doesn't exist", table_id.getNameForLogs());
                 /// proton: ends
             return {};
         }
@@ -297,7 +297,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     auto table = database->tryGetTable(table_id.table_name, context_);
     if (!table && exception)
             /// proton: starts
-            exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Stream {} doesn't exist", table_id.getNameForLogs());
+            exception->emplace(ErrorCodes::UNKNOWN_STREAM, "Stream {} doesn't exist", table_id.getNameForLogs());
             /// proton: ends
     if (!table)
         database = nullptr;
@@ -484,7 +484,7 @@ void DatabaseCatalog::assertTableDoesntExist(const StorageID & table_id, Context
 {
     if (isTableExist(table_id, context_))
         /// proton: starts
-        throw Exception("Stream " + table_id.getNameForLogs() + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception("Stream " + table_id.getNameForLogs() + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
         /// proton: ends
 }
 
@@ -533,7 +533,7 @@ void DatabaseCatalog::addUUIDMapping(const UUID & uuid, const DatabasePtr & data
     /// Normally this should never happen, but it's possible when the same UUIDs are explicitly specified in different CREATE queries,
     /// so it's not LOGICAL_ERROR
     /// proton: starts
-    throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Mapping for stream with UUID={} already exists. It happened due to UUID collision, "
+    throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Mapping for stream with UUID={} already exists. It happened due to UUID collision, "
                     "most likely because some not random UUIDs were manually specified in CREATE queries.", toString(uuid));
     /// proton: ends
 }

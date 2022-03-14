@@ -30,7 +30,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int UNSUPPORTED_JOIN_KEYS;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int INCOMPATIBLE_TYPE_OF_JOIN;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int BAD_ARGUMENTS;
@@ -62,7 +62,7 @@ StorageJoin::StorageJoin(
     for (const auto & key : key_names)
         if (!metadata_snapshot->getColumns().hasPhysical(key))
             /// proton: starts
-            throw Exception{"Key column (" + key + ") does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE};
+            throw Exception{"Key column (" + key + ") does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM};
             /// proton: ends
 
     table_join = std::make_shared<TableJoin>(limits, use_nulls, kind, strictness, key_names);

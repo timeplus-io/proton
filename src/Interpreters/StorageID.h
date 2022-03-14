@@ -19,7 +19,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
 }
 
 static constexpr char const * TABLE_WITH_UUID_NAME_PLACEHOLDER = "_";
@@ -76,10 +76,10 @@ struct StorageID
     {
         // Can be triggered by user input, e.g. SELECT joinGetOrNull('', 'num', 500)
         if (empty())
-            throw Exception("Both table name and UUID are empty", ErrorCodes::UNKNOWN_TABLE);
+            throw Exception("Both table name and UUID are empty", ErrorCodes::UNKNOWN_STREAM);
         if (table_name.empty() && !database_name.empty())
             /// proton: starts
-            throw Exception("Stream name is empty, but database name is not", ErrorCodes::UNKNOWN_TABLE);
+            throw Exception("Stream name is empty, but database name is not", ErrorCodes::UNKNOWN_STREAM);
             /// proton: ends
     }
 

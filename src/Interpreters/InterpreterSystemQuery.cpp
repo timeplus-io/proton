@@ -48,7 +48,7 @@ namespace ErrorCodes
     extern const int CANNOT_KILL;
     extern const int NOT_IMPLEMENTED;
     extern const int TIMEOUT_EXCEEDED;
-    extern const int TABLE_WAS_NOT_DROPPED;
+    extern const int STREAM_WAS_NOT_DROPPED;
 }
 
 

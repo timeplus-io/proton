@@ -29,8 +29,8 @@ namespace ErrorCodes
     extern const int BACKUP_ELEMENT_DUPLICATE;
     extern const int BACKUP_IS_EMPTY;
     extern const int LOGICAL_ERROR;
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int CANNOT_RESTORE_TABLE;
+    extern const int STREAM_ALREADY_EXISTS;
+    extern const int CANNOT_RESTORE_STREAM;
 }
 
 namespace
@@ -496,7 +496,7 @@ namespace
                                     : ("Stream " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
                                        + " already exists");
                                 /// proton: ends
-                                throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_TABLE);
+                                throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_STREAM);
                             }
                         }
                     }
@@ -511,7 +511,7 @@ namespace
                 }
                 catch (Exception & e)
                 {
-                    if (e.code() != ErrorCodes::TABLE_ALREADY_EXISTS)
+                    if (e.code() != ErrorCodes::STREAM_ALREADY_EXISTS)
                         throw;
                 }
             }
@@ -524,7 +524,7 @@ namespace
                     : ("Could not create stream " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
                        + " for restoring");
                 /// proton: ends
-                throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_TABLE);
+                throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_STREAM);
             }
 
             String data_path_in_backup = getDataPathInBackup(table_name);

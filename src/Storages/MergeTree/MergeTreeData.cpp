@@ -113,7 +113,7 @@ namespace ErrorCodes
     extern const int DIRECTORY_ALREADY_EXISTS;
     extern const int TOO_MANY_UNEXPECTED_DATA_PARTS;
     extern const int DUPLICATE_DATA_PART;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int LOGICAL_ERROR;
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
@@ -722,7 +722,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
         }
         if (miss_column)
             /// proton: starts
-            throw Exception("Sign column " + sign_column + " does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception("Sign column " + sign_column + " does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
             /// proton: ends
     };
 
@@ -753,7 +753,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
         }
         if (miss_column)
             /// proton: starts
-            throw Exception("Version column " + version_column + " does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception("Version column " + version_column + " does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
             /// proton: ends
     };
 
@@ -772,7 +772,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
             if (columns.end() == std::find_if(columns.begin(), columns.end(), check_column_to_sum_exists))
                 /// proton: starts
                 throw Exception(
-                        "Column " + column_to_sum + " listed in columns to sum does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+                        "Column " + column_to_sum + " listed in columns to sum does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
                 /// proton: ends
         }
 

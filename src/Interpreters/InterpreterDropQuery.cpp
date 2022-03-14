@@ -27,11 +27,11 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int SYNTAX_ERROR;
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int UNKNOWN_DATABASE;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
-    extern const int TABLE_IS_READ_ONLY;
+    extern const int STREAM_IS_READ_ONLY;
 }
 
 
@@ -112,7 +112,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
                 return {};
             else
                 /// proton: starts
-                throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
+                throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
                 /// proton: ends
         }
         if (tables[0]->engine != "Stream")
@@ -260,7 +260,7 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             return {};
         /// proton: starts
         throw Exception("Temporary stream " + backQuoteIfNeed(table_id.table_name) + " doesn't exist",
-                        ErrorCodes::UNKNOWN_TABLE);
+                        ErrorCodes::UNKNOWN_STREAM);
         /// proton: ends
     }
 
@@ -344,7 +344,7 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             context_->checkAccess(AccessType::TRUNCATE, table_id);
             if (table->isStaticStorage())
                 /// proton: starts
-                throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Stream is read-only");
+                throw Exception(ErrorCodes::STREAM_IS_READ_ONLY, "Stream is read-only");
                 /// proton: ends
 
             table->checkTableCanBeDropped();

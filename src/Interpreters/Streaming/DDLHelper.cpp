@@ -21,7 +21,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int BAD_ARGUMENTS;
     extern const int ILLEGAL_COLUMN;
     extern const int INVALID_SETTING_VALUE;

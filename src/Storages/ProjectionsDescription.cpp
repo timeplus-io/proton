@@ -25,7 +25,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
-    extern const int NO_SUCH_PROJECTION_IN_TABLE;
+    extern const int NO_SUCH_PROJECTION_IN_STREAM;
     extern const int ILLEGAL_PROJECTION;
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
@@ -328,7 +328,7 @@ const ProjectionDescription & ProjectionsDescription::get(const String & project
 {
     auto it = map.find(projection_name);
     if (it == map.end())
-        throw Exception("There is no projection " + projection_name + " in table", ErrorCodes::NO_SUCH_PROJECTION_IN_TABLE);
+        throw Exception("There is no projection " + projection_name + " in stream", ErrorCodes::NO_SUCH_PROJECTION_IN_STREAM);
 
     return *(it->second);
 }
@@ -369,7 +369,7 @@ void ProjectionsDescription::remove(const String & projection_name, bool if_exis
     {
         if (if_exists)
             return;
-        throw Exception("There is no projection " + projection_name + " in table.", ErrorCodes::NO_SUCH_PROJECTION_IN_TABLE);
+        throw Exception("There is no projection " + projection_name + " in stream.", ErrorCodes::NO_SUCH_PROJECTION_IN_STREAM);
     }
 
     projections.erase(it->second);

@@ -19,7 +19,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int TABLE_IS_DROPPED;
+    extern const int STREAM_IS_DROPPED;
 }
 
 bool StorageSystemPartsBase::hasStateColumn(const Names & column_names, const StorageMetadataPtr & metadata_snapshot) const
@@ -204,7 +204,7 @@ StoragesInfo StoragesInfoStream::next()
               * Then table will throw exception at attempt to lock it.
               * Just skip the table.
               */
-            if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+            if (e.code() == ErrorCodes::STREAM_IS_DROPPED)
                 continue;
 
             throw;

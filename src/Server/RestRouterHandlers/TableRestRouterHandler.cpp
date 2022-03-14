@@ -18,9 +18,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
 }
 
 namespace
@@ -125,7 +125,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
     if (isDistributedDDL() && CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
-            jsonErrorResponse(fmt::format("Stream {}.{} already exists.", database, table), ErrorCodes::TABLE_ALREADY_EXISTS),
+            jsonErrorResponse(fmt::format("Stream {}.{} already exists.", database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 
@@ -159,7 +159,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
     if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
-            jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
+            jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_STREAM),
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 
@@ -194,7 +194,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
     if (isDistributedDDL() && !CatalogService::instance(query_context).tableExists(database, table))
     {
         return {
-            jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_TABLE),
+            jsonErrorResponse(fmt::format("Stream {}.{} doesn't exist", database, table), ErrorCodes::UNKNOWN_STREAM),
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 

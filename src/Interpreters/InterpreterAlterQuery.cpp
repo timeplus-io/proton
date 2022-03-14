@@ -35,9 +35,9 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INCORRECT_QUERY;
     extern const int NOT_IMPLEMENTED;
-    extern const int TABLE_IS_READ_ONLY;
+    extern const int STREAM_IS_READ_ONLY;
     /// proton: start
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     /// proton: end
 }
 
@@ -109,7 +109,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
     if (table->isStaticStorage())
         /// proton: starts
-        throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Stream is read-only");
+        throw Exception(ErrorCodes::STREAM_IS_READ_ONLY, "Stream is read-only");
         /// proton: ends
     auto table_lock = table->lockForShare(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
@@ -222,7 +222,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         auto tables = catalog_service.findTableByName(database, query.getTable());
         if (tables.empty())
             /// proton: starts
-            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
+            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
             /// proton: ends
 
         if (tables[0]->engine != "Stream")

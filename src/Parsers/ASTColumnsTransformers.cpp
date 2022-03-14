@@ -15,7 +15,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int CANNOT_COMPILE_REGEXP;
 }
 
@@ -175,7 +175,7 @@ void ASTColumnsExceptTransformer::transform(ASTs & nodes) const
 
         throw Exception(
             "Columns transformer EXCEPT expects following column(s) :" + expected_columns_str,
-            ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
     }
 }
 
@@ -286,7 +286,7 @@ void ASTColumnsReplaceTransformer::transform(ASTs & nodes) const
         }
         throw Exception(
             "Columns transformer REPLACE expects following column(s) : " + expected_columns,
-            ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
     }
 
 }

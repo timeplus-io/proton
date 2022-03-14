@@ -26,7 +26,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TABLE_IS_DROPPED;
+    extern const int STREAM_IS_DROPPED;
 }
 
 
@@ -289,7 +289,7 @@ protected:
                     }
                     catch (const Exception & e)
                     {
-                        if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                        if (e.code() == ErrorCodes::STREAM_IS_DROPPED)
                             continue;
                         throw;
                     }

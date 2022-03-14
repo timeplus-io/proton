@@ -23,8 +23,8 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int UNKNOWN_TABLE;
+    extern const int STREAM_ALREADY_EXISTS;
+    extern const int UNKNOWN_STREAM;
     extern const int UNSUPPORTED_METHOD;
     extern const int LOGICAL_ERROR;
 }
@@ -105,7 +105,7 @@ time_t DatabaseLazy::getObjectMetadataModificationTime(const String & table_name
     if (it != tables_cache.end())
         return it->second.metadata_modification_time;
     /// proton: starts
-    throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+    throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_STREAM);
     /// proton: ends
 }
 
@@ -178,7 +178,7 @@ void DatabaseLazy::attachTable(ContextPtr /* context_ */, const String & table_n
                               std::forward_as_tuple(table, current_time, DatabaseOnDisk::getObjectMetadataModificationTime(table_name)));
     if (!inserted)
         /// proton: starts
-        throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
         /// proton: ends
 
     it->second.expiration_iterator = cache_expiration_queue.emplace(cache_expiration_queue.end(), current_time, table_name);
@@ -195,7 +195,7 @@ StoragePtr DatabaseLazy::detachTable(ContextPtr /* context */, const String & ta
         auto it = tables_cache.find(table_name);
         if (it == tables_cache.end())
             /// proton: starts
-            throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+            throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_STREAM);
             /// proton: ends
         res = it->second.table;
         if (it->second.expiration_iterator != cache_expiration_queue.end())
@@ -267,7 +267,7 @@ StoragePtr DatabaseLazy::loadTable(const String & table_name) const
             auto it = tables_cache.find(table_name);
             if (it == tables_cache.end())
                 /// proton: starts
-                throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+                throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_STREAM);
                 /// proton: ends
 
             if (it->second.expiration_iterator != cache_expiration_queue.end())

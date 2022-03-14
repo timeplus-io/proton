@@ -19,7 +19,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INVALID_TABLE_OVERRIDE;
+    extern const int INVALID_STREAM_OVERRIDE;
 }
 
 namespace
@@ -59,7 +59,7 @@ static void checkRequiredColumns(const IAST * ast, const NameToTypeMap & existin
     {
         auto type = existing_types.find(column);
         if (type == existing_types.end())
-            throw Exception(ErrorCodes::INVALID_TABLE_OVERRIDE, "{} override refers to unknown column {}", what, backQuote(column));
+            throw Exception(ErrorCodes::INVALID_STREAM_OVERRIDE, "{} override refers to unknown column {}", what, backQuote(column));
     }
     if (!allow_nulls)
     {
@@ -69,7 +69,7 @@ static void checkRequiredColumns(const IAST * ast, const NameToTypeMap & existin
         {
             if (existing_types.find(column)->second->isNullable())
                 throw Exception(
-                    ErrorCodes::INVALID_TABLE_OVERRIDE,
+                    ErrorCodes::INVALID_STREAM_OVERRIDE,
                     "{} override refers to nullable column {} (use assumeNotNull() if the column does not in fact contain NULL values)",
                     what,
                     backQuote(column));
@@ -106,7 +106,7 @@ void TableOverrideAnalyzer::analyze(const StorageInMemoryMetadata & metadata, Re
                 if (auto col_default = metadata.columns.getDefault(found->name))
                     existing_default_kind = col_default->kind;
                 if (existing_default_kind != override_default_kind)
-                    throw Exception(ErrorCodes::INVALID_TABLE_OVERRIDE, "column {}: modifying default specifier is not allowed", backQuote(override_column->name));
+                    throw Exception(ErrorCodes::INVALID_STREAM_OVERRIDE, "column {}: modifying default specifier is not allowed", backQuote(override_column->name));
                 result.modified_columns.push_back({found->name, override_type});
                 /// TODO: validate that the original type can be converted to the overridden type
             }
@@ -115,7 +115,7 @@ void TableOverrideAnalyzer::analyze(const StorageInMemoryMetadata & metadata, Re
                 if (override_default_kind && *override_default_kind == ColumnDefaultKind::Alias)
                     result.added_columns.push_back({override_column->name, override_type});
                 else
-                    throw Exception(ErrorCodes::INVALID_TABLE_OVERRIDE, "column {}: can only add ALIAS columns", backQuote(override_column->name));
+                    throw Exception(ErrorCodes::INVALID_STREAM_OVERRIDE, "column {}: can only add ALIAS columns", backQuote(override_column->name));
             }
             /// TODO: validate default and materialized expressions (use checkRequiredColumns, allowing nulls)
         }

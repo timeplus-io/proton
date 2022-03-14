@@ -72,7 +72,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
     extern const int TYPE_MISMATCH;
 
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int UNKNOWN_FUNCTION;
     extern const int UNKNOWN_IDENTIFIER;
     extern const int UNKNOWN_TYPE;
@@ -191,7 +191,7 @@ static Poco::Net::HTTPResponse::HTTPStatus exceptionCodeToHTTPStatus(int excepti
     {
         return HTTPResponse::HTTP_BAD_REQUEST;
     }
-    else if (exception_code == ErrorCodes::UNKNOWN_TABLE ||
+    else if (exception_code == ErrorCodes::UNKNOWN_STREAM ||
              exception_code == ErrorCodes::UNKNOWN_FUNCTION ||
              exception_code == ErrorCodes::UNKNOWN_IDENTIFIER ||
              exception_code == ErrorCodes::UNKNOWN_TYPE ||

@@ -19,7 +19,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TABLE_IS_DROPPED;
+    extern const int STREAM_IS_DROPPED;
     extern const int NOT_IMPLEMENTED;
     extern const int DEADLOCK_AVOIDED;
 }
@@ -55,7 +55,7 @@ TableLockHolder IStorage::lockForShare(const String & query_id, const std::chron
     {
         auto table_id = getStorageID();
         /// proton: starts
-        throw Exception(ErrorCodes::TABLE_IS_DROPPED, "Stream {}.{} is dropped", table_id.database_name, table_id.table_name);
+        throw Exception(ErrorCodes::STREAM_IS_DROPPED, "Stream {}.{} is dropped", table_id.database_name, table_id.table_name);
         /// proton: ends
     }
 
@@ -74,7 +74,7 @@ IStorage::AlterLockHolder IStorage::lockForAlter(const std::chrono::milliseconds
 
     if (is_dropped)
         /// proton: starts
-        throw Exception("Stream is dropped", ErrorCodes::TABLE_IS_DROPPED);
+        throw Exception("Stream is dropped", ErrorCodes::STREAM_IS_DROPPED);
         /// proton: ends
 
     return lock;
@@ -88,7 +88,7 @@ TableExclusiveLockHolder IStorage::lockExclusively(const String & query_id, cons
 
     if (is_dropped)
         /// proton: starts
-        throw Exception("Stream is dropped", ErrorCodes::TABLE_IS_DROPPED);
+        throw Exception("Stream is dropped", ErrorCodes::STREAM_IS_DROPPED);
         /// proton: ends
 
     return result;

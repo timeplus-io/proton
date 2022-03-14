@@ -37,7 +37,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int ILLEGAL_COLUMN;
     extern const int CANNOT_PARSE_TEXT;
     extern const int THERE_IS_NO_DEFAULT_VALUE;
@@ -217,7 +217,7 @@ void ColumnsDescription::add(ColumnDescription column, const String & after_colu
         auto range = getNameRange(columns, after_column);
         if (range.first == range.second)
             throw Exception("Wrong column name. Cannot find column " + after_column + " to insert after",
-                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
         insert_it = range.second;
     }
@@ -230,8 +230,8 @@ void ColumnsDescription::remove(const String & column_name)
 {
     auto range = getNameRange(columns, column_name);
     if (range.first == range.second)
-        throw Exception("There is no column " + column_name + " in table.",
-            ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+        throw Exception("There is no column " + column_name + " in stream.",
+            ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
     for (auto list_it = range.first; list_it != range.second;)
     {
@@ -259,7 +259,7 @@ void ColumnsDescription::modifyColumnOrder(const String & column_name, const Str
         auto column_range = getNameRange(columns, column_name);
 
         if (column_range.first == column_range.second)
-            throw Exception("There is no column " + column_name + " in table.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception("There is no column " + column_name + " in stream.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
         std::vector<ColumnDescription> moving_columns;
         for (auto list_it = column_range.first; list_it != column_range.second;)
@@ -279,7 +279,7 @@ void ColumnsDescription::modifyColumnOrder(const String & column_name, const Str
         auto range = getNameRange(columns, after_column);
         if (range.first == range.second)
             throw Exception("Wrong column name. Cannot find column " + after_column + " to insert after",
-                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
         reorder_column([&]() { return getNameRange(columns, after_column).second; });
     }
@@ -386,8 +386,8 @@ const ColumnDescription & ColumnsDescription::get(const String & column_name) co
 {
     auto it = columns.get<1>().find(column_name);
     if (it == columns.get<1>().end())
-        throw Exception("There is no column " + column_name + " in table.",
-            ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+        throw Exception("There is no column " + column_name + " in stream.",
+            ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
     return *it;
 }
@@ -430,7 +430,7 @@ NamesAndTypesList ColumnsDescription::getByNames(GetFlags flags, const Names & n
             }
         }
 
-        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE, "There is no column {} in table", name);
+        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM, "There is no column {} in stream", name);
     }
 
     return res;
@@ -472,8 +472,8 @@ NameAndTypePair ColumnsDescription::getColumnOrSubcolumn(GetFlags flags, const S
 {
     auto column = tryGetColumnOrSubcolumn(flags, column_name);
     if (!column)
-        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
-            "There is no column or subcolumn {} in table.", column_name);
+        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
+            "There is no column or subcolumn {} in stream.", column_name);
 
     return *column;
 }
@@ -491,8 +491,8 @@ NameAndTypePair ColumnsDescription::getPhysical(const String & column_name) cons
 {
     auto column = tryGetPhysical(column_name);
     if (!column)
-        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
-            "There is no physical column {} in table.", column_name);
+        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
+            "There is no physical column {} in stream.", column_name);
 
     return *column;
 }

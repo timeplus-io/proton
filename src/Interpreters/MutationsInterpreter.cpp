@@ -39,7 +39,7 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_MUTATION_COMMAND;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int CANNOT_UPDATE_COLUMN;
 }
 
@@ -357,7 +357,7 @@ static void validateUpdateColumns(
                     throw Exception("Cannot UPDATE materialized column " + backQuote(column_name), ErrorCodes::CANNOT_UPDATE_COLUMN);
             }
 
-            throw Exception("There is no column " + backQuote(column_name) + " in table", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception("There is no column " + backQuote(column_name) + " in stream", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
         }
 
         if (key_columns.count(column_name))

@@ -7,7 +7,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
+    extern const int CANNOT_EXTRACT_STREAM_STRUCTURE;
 }
 
 IRowSchemaReader::IRowSchemaReader(ReadBuffer & in_, size_t max_rows_to_read_, DataTypePtr default_type_)
@@ -26,7 +26,7 @@ NamesAndTypesList IRowSchemaReader::readSchema()
             break;
 
         if (new_data_types.size() != data_types.size())
-            throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Rows have different amount of values");
+            throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Rows have different amount of values");
 
         for (size_t i = 0; i != data_types.size(); ++i)
         {
@@ -45,7 +45,7 @@ NamesAndTypesList IRowSchemaReader::readSchema()
                     data_types[i] = default_type;
                 else
                     throw Exception(
-                        ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                        ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                         "Automatically defined type {} for column {} in row {} differs from type defined by previous rows: {}", new_data_types[i]->getName(), i + 1, row, data_types[i]->getName());
             }
         }
@@ -53,7 +53,7 @@ NamesAndTypesList IRowSchemaReader::readSchema()
 
     /// Check that we read at list one column.
     if (data_types.empty())
-        throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot read rows from the data");
+        throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot read rows from the data");
 
     /// If column names weren't set, use default names 'c1', 'c2', ...
     if (column_names.empty())
@@ -65,7 +65,7 @@ NamesAndTypesList IRowSchemaReader::readSchema()
     /// If column names were set, check that the number of names match the number of types.
     else if (column_names.size() != data_types.size())
         throw Exception(
-            ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+            ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
             "The number of column names {} differs with the number of types {}", column_names.size(), data_types.size());
 
     NamesAndTypesList result;
@@ -77,7 +77,7 @@ NamesAndTypesList IRowSchemaReader::readSchema()
             if (!default_type)
                 /// proton: starts
                 throw Exception(
-                    ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                    ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                     "Cannot determine stream structure by first {} rows of data, because some columns contain only Nulls. To increase the maximum "
                     "number of rows to read for structure determination, use setting input_format_max_rows_to_read_for_schema_inference",
                     max_rows_to_read);
@@ -128,7 +128,7 @@ NamesAndTypesList IRowWithNamesSchemaReader::readSchema()
                     type = default_type;
                 else
                     throw Exception(
-                        ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                        ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                         "Automatically defined type {} for column {} in row {} differs from type defined by previous rows: {}", type->getName(), name, row, new_type->getName());
             }
         }
@@ -136,7 +136,7 @@ NamesAndTypesList IRowWithNamesSchemaReader::readSchema()
 
     /// Check that we read at list one column.
     if (names_and_types.empty())
-        throw Exception(ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot read rows from the data");
+        throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Cannot read rows from the data");
 
     NamesAndTypesList result;
     for (auto & [name, type] : names_and_types)
@@ -147,7 +147,7 @@ NamesAndTypesList IRowWithNamesSchemaReader::readSchema()
             if (!default_type)
                 /// proton: starts
                 throw Exception(
-                    ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                    ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                     "Cannot determine stream structure by first {} rows of data, because some columns contain only Nulls. To increase the maximum "
                     "number of rows to read for structure determination, use setting input_format_max_rows_to_read_for_schema_inference",
                     max_rows_to_read);

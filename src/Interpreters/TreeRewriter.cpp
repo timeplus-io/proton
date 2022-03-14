@@ -60,7 +60,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int EMPTY_LIST_OF_COLUMNS_QUERIED;
-    extern const int EMPTY_NESTED_TABLE;
+    extern const int EMPTY_NESTED_STREAM;
     extern const int EXPECTED_ALL_OR_ANY;
     extern const int INVALID_JOIN_ON_EXPRESSION;
     extern const int LOGICAL_ERROR;
@@ -538,7 +538,7 @@ void getArrayJoinedColumns(ASTPtr & query, TreeRewriterResult & result, const AS
             }
             if (!found)
                 /// proton: starts
-                throw Exception("No columns in nested stream " + source_name, ErrorCodes::EMPTY_NESTED_TABLE);
+                throw Exception("No columns in nested stream " + source_name, ErrorCodes::EMPTY_NESTED_STREAM);
                 /// proton: ends
         }
     }

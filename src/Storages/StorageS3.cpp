@@ -69,7 +69,7 @@ namespace ErrorCodes
     extern const int S3_ERROR;
     extern const int UNEXPECTED_EXPRESSION;
     extern const int DATABASE_ACCESS_DENIED;
-    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
+    extern const int CANNOT_EXTRACT_STREAM_STRUCTURE;
 }
 
 class IOutputFormat;
@@ -867,7 +867,7 @@ ColumnsDescription StorageS3::getTableStructureFromDataImpl(
         if (current_key.empty())
             /// proton: starts
             throw Exception(
-                ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE,
                 "Cannot extract stream structure from {} format file, because there are no files with provided path in S3. You must specify "
                 "stream structure manually",
                 format);

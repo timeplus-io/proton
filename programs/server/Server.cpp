@@ -1034,8 +1034,8 @@ if (ThreadFuzzer::instance().isEffective())
             global_context->loadOrReloadUserDefinedExecutableFunctions(*config);
 
             /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
-            if (config->has("max_table_size_to_drop"))
-                global_context->setMaxTableSizeToDrop(config->getUInt64("max_table_size_to_drop"));
+            if (config->has("max_stream_size_to_drop"))
+                global_context->setMaxTableSizeToDrop(config->getUInt64("max_stream_size_to_drop"));
 
             if (config->has("max_partition_size_to_drop"))
                 global_context->setMaxPartitionSizeToDrop(config->getUInt64("max_partition_size_to_drop"));

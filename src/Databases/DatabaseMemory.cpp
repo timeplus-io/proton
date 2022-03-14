@@ -16,7 +16,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
 }
 
 DatabaseMemory::DatabaseMemory(const String & name_, ContextPtr context_)
@@ -98,7 +98,7 @@ ASTPtr DatabaseMemory::getCreateTableQueryImpl(const String & table_name, Contex
     {
         if (throw_on_error)
             /// proton: starts
-            throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no metadata of stream {} in database {}", table_name, database_name);
+            throw Exception(ErrorCodes::UNKNOWN_STREAM, "There is no metadata of stream {} in database {}", table_name, database_name);
             /// proton: ends
         else
             return {};
@@ -125,7 +125,7 @@ void DatabaseMemory::alterTable(ContextPtr local_context, const StorageID & tabl
     auto it = create_queries.find(table_id.table_name);
     if (it == create_queries.end() || !it->second)
         /// proton: starts
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Cannot alter: There is no metadata of stream {}", table_id.getNameForLogs());
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Cannot alter: There is no metadata of stream {}", table_id.getNameForLogs());
         /// proton: ends
 
     applyMetadataChangesToCreateQuery(it->second, metadata);

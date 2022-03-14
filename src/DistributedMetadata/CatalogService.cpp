@@ -30,7 +30,7 @@ std::pair<String, StoragePtr> createTableFromAST(
 namespace ErrorCodes
 {
     extern const int OK;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
 }
 
 namespace
@@ -404,7 +404,7 @@ String CatalogService::getColumnType(const String & database, const String & tab
         }
     }
 
-    throw Exception("Could not found the column : " + column + " in stream : " + table, ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+    throw Exception("Could not found the column : " + column + " in stream : " + table, ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 }
 
 void CatalogService::deleteCatalogForNode(const NodePtr & node)

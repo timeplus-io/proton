@@ -18,7 +18,7 @@ namespace ErrorCodes
     extern const int COLUMN_QUERIED_MORE_THAN_ONCE;
     extern const int DUPLICATE_COLUMN;
     extern const int EMPTY_LIST_OF_COLUMNS_QUERIED;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int NOT_FOUND_COLUMN_IN_BLOCK;
     extern const int TYPE_MISMATCH;
     extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
@@ -552,7 +552,7 @@ void StorageInMemoryMetadata::check(const Names & column_names, const NamesAndTy
         {
             auto list_of_columns = listOfColumns(getColumns().getAllPhysicalWithSubcolumns());
             /// proton: starts
-            throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
+            throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                 "There is no column with name {} in stream {}. There are columns: {}",
                 backQuote(name), storage_id.getNameForLogs(), list_of_columns);
             /// proton: ends
@@ -577,7 +577,7 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns) 
         const auto * it = columns_map.find(column.name);
         if (columns_map.end() == it)
             throw Exception(
-                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
+                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                 "There is no column with name {}. There are columns: {}",
                 column.name,
                 listOfColumns(available_columns));
@@ -622,7 +622,7 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
         const auto * jt = available_columns_map.find(name);
         if (available_columns_map.end() == jt)
             throw Exception(
-                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
+                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                 "There is no column with name {}. There are columns: {}",
                 name,
                 listOfColumns(available_columns));
@@ -666,7 +666,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
         const auto * it = columns_map.find(column.name);
         if (columns_map.end() == it)
             throw Exception(
-                ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
+                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                 "There is no column with name {}. There are columns: {}",
                 column.name,
                 listOfColumns(available_columns));

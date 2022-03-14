@@ -24,7 +24,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int TOO_MANY_COLUMNS;
     extern const int SUPPORT_IS_DISABLED;
 }
@@ -48,7 +48,7 @@ QueryPipelineBuilder InterpreterWatchQuery::buildQueryPipeline()
     if (!storage)
         /// proton: starts
         throw Exception("Stream " + table_id.getNameForLogs() + " doesn't exist.",
-        ErrorCodes::UNKNOWN_TABLE);
+        ErrorCodes::UNKNOWN_STREAM);
         /// proton: ends
 
     auto storage_name = storage->getName();

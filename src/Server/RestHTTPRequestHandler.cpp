@@ -43,7 +43,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
     extern const int TYPE_MISMATCH;
 
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int UNKNOWN_FUNCTION;
     extern const int UNKNOWN_IDENTIFIER;
     extern const int UNKNOWN_TYPE;
@@ -113,7 +113,7 @@ namespace
             return HTTPResponse::HTTP_BAD_REQUEST;
         }
         else if (
-            exception_code == ErrorCodes::UNKNOWN_TABLE || exception_code == ErrorCodes::UNKNOWN_FUNCTION
+            exception_code == ErrorCodes::UNKNOWN_STREAM || exception_code == ErrorCodes::UNKNOWN_FUNCTION
             || exception_code == ErrorCodes::UNKNOWN_IDENTIFIER || exception_code == ErrorCodes::UNKNOWN_TYPE
             || exception_code == ErrorCodes::UNKNOWN_STORAGE || exception_code == ErrorCodes::UNKNOWN_DATABASE
             || exception_code == ErrorCodes::UNKNOWN_SETTING || exception_code == ErrorCodes::UNKNOWN_DIRECTION_OF_SORTING

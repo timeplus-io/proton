@@ -20,7 +20,7 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int THERE_IS_NO_COLUMN;
-    extern const int CANNOT_DETACH_DICTIONARY_AS_TABLE;
+    extern const int CANNOT_DETACH_DICTIONARY_AS_STREAM;
     extern const int DICTIONARY_ALREADY_EXISTS;
     extern const int NOT_IMPLEMENTED;
 }
@@ -147,12 +147,12 @@ StorageDictionary::~StorageDictionary()
 void StorageDictionary::checkTableCanBeDropped() const
 {
     if (location == Location::SameDatabaseAndNameAsDictionary)
-        throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_TABLE,
-            "Cannot drop/detach dictionary {} as table, use DROP DICTIONARY or DETACH DICTIONARY query instead",
+        throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_STREAM,
+            "Cannot drop/detach dictionary {} as stream, use DROP DICTIONARY or DETACH DICTIONARY query instead",
             dictionary_name);
     if (location == Location::DictionaryDatabase)
         /// proton: starts
-        throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_TABLE,
+        throw Exception(ErrorCodes::CANNOT_DETACH_DICTIONARY_AS_STREAM,
             "Cannot drop/detach stream from a database with DICTIONARY engine, use DROP DICTIONARY or DETACH DICTIONARY query instead",
             dictionary_name);
         /// proton: ends

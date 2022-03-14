@@ -34,7 +34,7 @@ namespace ErrorCodes
     extern const int BAD_FILE_TYPE;
     extern const int CANNOT_READ_ALL_DATA;
     extern const int LOGICAL_ERROR;
-    extern const int TABLE_METADATA_ALREADY_EXISTS;
+    extern const int STREAM_METADATA_ALREADY_EXISTS;
     extern const int CANNOT_SELECT;
     extern const int QUERY_NOT_ALLOWED;
 }
@@ -114,7 +114,7 @@ void StorageFileLog::loadMetaFiles(bool attach)
         if (std::filesystem::exists(root_meta_path))
         {
             throw Exception(
-                ErrorCodes::TABLE_METADATA_ALREADY_EXISTS,
+                ErrorCodes::STREAM_METADATA_ALREADY_EXISTS,
                 "Metadata files already exist by path: {}, remove them manually if it is intended",
                 root_meta_path);
         }

@@ -14,7 +14,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int OK;
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
     extern const int TYPE_MISMATCH;
     extern const int INVALID_POLL_ID;
     extern const int INCORRECT_DATA;
@@ -46,7 +46,7 @@ getTableStorage(const String & database_name, const String & table_name, Context
     if (!storage)
     {
         error = "Stream: " + database_name + "." + table_name + " does not exist";
-        error_code = ErrorCodes::UNKNOWN_TABLE;
+        error_code = ErrorCodes::UNKNOWN_STREAM;
         return nullptr;
     }
 

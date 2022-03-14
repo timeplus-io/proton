@@ -16,7 +16,7 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
 }
 
 namespace
@@ -112,7 +112,7 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
 
     if (table_name.empty())
         /// proton: starts
-        throw Exception("Stream name is empty", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception("Stream name is empty", ErrorCodes::UNKNOWN_STREAM);
         /// proton: ends
 
     bool has_column;

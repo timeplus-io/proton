@@ -55,7 +55,7 @@ namespace ErrorCodes
     extern const int CANNOT_PARSE_TEXT;
     extern const int TOO_MANY_PARTITIONS;
     extern const int DUPLICATED_PART_UUIDS;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int PROJECTION_NOT_USED;
 }
 
@@ -1181,7 +1181,7 @@ static void selectColumnNames(
             {
                 /// proton: starts
                 throw Exception(
-                    ErrorCodes::NO_SUCH_COLUMN_IN_TABLE,
+                    ErrorCodes::NO_SUCH_COLUMN_IN_STREAM,
                     "Missing column `_partition_value` because there is no partition column in stream {}",
                     data.getStorageID().getTableName());
                 /// proton: ends

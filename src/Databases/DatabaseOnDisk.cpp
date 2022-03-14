@@ -31,14 +31,14 @@ static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+    extern const int CANNOT_GET_CREATE_STREAM_QUERY;
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int FILE_DOESNT_EXIST;
     extern const int CANNOT_OPEN_FILE;
     extern const int INCORRECT_FILE_NAME;
     extern const int SYNTAX_ERROR;
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
     extern const int DATABASE_NOT_EMPTY;
     extern const int INCORRECT_QUERY;
@@ -185,7 +185,7 @@ void DatabaseOnDisk::createTable(
     if (isTableExist(table_name, getContext()))
         /// proton: starts
         throw Exception(
-            ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists", backQuote(getDatabaseName()), backQuote(table_name));
+            ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists", backQuote(getDatabaseName()), backQuote(table_name));
         /// proton: ends
 
     String table_metadata_path = getObjectMetadataPath(table_name);
@@ -215,7 +215,7 @@ void DatabaseOnDisk::createTable(
         if (create.uuid != create_detached.uuid)
             /// proton: starts
             throw Exception(
-                    ErrorCodes::TABLE_ALREADY_EXISTS,
+                    ErrorCodes::STREAM_ALREADY_EXISTS,
                     "Stream {}.{} already exist (detached permanently). To attach it back "
                     "you need to use short ATTACH syntax or a full statement with the same UUID",
                     backQuote(getDatabaseName()), backQuote(table_name));
@@ -359,9 +359,9 @@ void DatabaseOnDisk::checkMetadataFilenameAvailabilityUnlocked(const String & to
 
         /// proton: starts
         if (fs::exists(detached_permanently_flag))
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists (detached permanently)", backQuote(database_name), backQuote(to_table_name));
+            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists (detached permanently)", backQuote(database_name), backQuote(to_table_name));
         else
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Stream {}.{} already exists (detached)", backQuote(database_name), backQuote(to_table_name));
+            throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists (detached)", backQuote(database_name), backQuote(to_table_name));
         /// proton: ends
     }
 }
@@ -474,7 +474,7 @@ ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, Contex
         if (!has_table && e.code() == ErrorCodes::FILE_DOESNT_EXIST && throw_on_error)
             /// proton: starts
             throw Exception{"Stream " + backQuote(table_name) + " doesn't exist",
-                            ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY};
+                            ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY};
             /// proton: ends
         else if (is_system_storage)
             ast = getCreateQueryFromStorage(table_name, storage, throw_on_error);
@@ -718,7 +718,7 @@ ASTPtr DatabaseOnDisk::getCreateQueryFromStorage(const String & table_name, cons
     if (metadata_ptr == nullptr)
     {
         if (throw_on_error)
-            throw Exception(ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY, "Cannot get metadata of {}.{}", backQuote(getDatabaseName()), backQuote(table_name));
+            throw Exception(ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY, "Cannot get metadata of {}.{}", backQuote(getDatabaseName()), backQuote(table_name));
         else
             return nullptr;
     }

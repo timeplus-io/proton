@@ -314,7 +314,7 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
     /// proton: starts.
     StoragePtr table = tryGetTable(table_name, local_context);
     if (!table)
-        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Stream {}.{} doesn't exist",
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist",
                     backQuote(database_name), backQuote(table_name));
     const auto & new_create_query = parseCreateQueryFromAST(ast, database_name, table_id.table_name);
     table->setInMemoryCreateQuery(new_create_query);

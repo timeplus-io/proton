@@ -12,7 +12,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
 }
 
 namespace
@@ -94,7 +94,7 @@ NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetada
     {
         /// We are going to fetch only physical columns
         if (!storage_columns.hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, columns[i]))
-            throw Exception("There is no physical column or subcolumn " + columns[i] + " in table.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception("There is no physical column or subcolumn " + columns[i] + " in stream.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
         have_at_least_one_physical_column |= injectRequiredColumnsRecursively(
             columns[i], storage_columns, alter_conversions,

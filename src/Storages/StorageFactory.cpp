@@ -18,7 +18,7 @@ namespace ErrorCodes
     extern const int ENGINE_REQUIRED;
     extern const int FUNCTION_CANNOT_HAVE_PARAMETERS;
     extern const int BAD_ARGUMENTS;
-    extern const int DATA_TYPE_CANNOT_BE_USED_IN_TABLES;
+    extern const int DATA_TYPE_CANNOT_BE_USED_IN_STREAMS;
 }
 
 
@@ -27,7 +27,7 @@ static void checkAllTypesAreAllowedInTable(const NamesAndTypesList & names_and_t
 {
     for (const auto & elem : names_and_types)
         if (elem.type->cannotBeStoredInTables())
-            throw Exception("Data type " + elem.type->getName() + " cannot be used in tables", ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_TABLES);
+            throw Exception("Data type " + elem.type->getName() + " cannot be used in tables", ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_STREAMS);
 }
 
 

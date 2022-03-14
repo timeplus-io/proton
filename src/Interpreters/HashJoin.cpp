@@ -34,7 +34,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int NO_SUCH_COLUMN_IN_STREAM;
     extern const int INCOMPATIBLE_TYPE_OF_JOIN;
     extern const int UNSUPPORTED_JOIN_KEYS;
     extern const int LOGICAL_ERROR;
@@ -1694,7 +1694,7 @@ DataTypePtr HashJoin::joinGetCheckAndGetReturnType(const DataTypes & data_types,
     }
 
     if (!sample_block_with_columns_to_add.has(column_name))
-        throw Exception("StorageJoin doesn't contain column " + column_name, ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+        throw Exception("StorageJoin doesn't contain column " + column_name, ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
 
     auto elem = sample_block_with_columns_to_add.getByName(column_name);
     if (or_null)

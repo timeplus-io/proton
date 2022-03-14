@@ -116,12 +116,12 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int BAD_GET;
     extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_TABLE;
-    extern const int TABLE_ALREADY_EXISTS;
+    extern const int UNKNOWN_STREAM;
+    extern const int STREAM_ALREADY_EXISTS;
     extern const int THERE_IS_NO_SESSION;
     extern const int THERE_IS_NO_QUERY;
     extern const int NO_ELEMENTS_IN_CONFIG;
-    extern const int TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT;
+    extern const int STREAM_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT;
     extern const int LOGICAL_ERROR;
     extern const int INVALID_SETTING_VALUE;
     extern const int UNKNOWN_READ_METHOD;
@@ -238,7 +238,7 @@ struct ContextSharedPart
     std::optional<StreamSettings> stream_settings;       /// Settings of Stream* engines.
     /// proton: ends.
 
-    std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
+    std::atomic_size_t max_stream_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
@@ -935,7 +935,7 @@ void Context::addExternalTable(const String & table_name, TemporaryTableHolder &
     auto lock = getLock();
     if (external_tables_mapping.end() != external_tables_mapping.find(table_name))
         /// proton: starts
-        throw Exception("Temporary stream " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception("Temporary stream " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
         /// proton: ends
     external_tables_mapping.emplace(table_name, std::make_shared<TemporaryTableHolder>(std::move(temporary_table)));
 }
@@ -1080,7 +1080,7 @@ void Context::addViewSource(const StoragePtr & storage)
 {
     if (view_source)
         throw Exception(
-            "Temporary view source storage " + backQuoteIfNeed(view_source->getName()) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+            "Temporary view source storage " + backQuoteIfNeed(view_source->getName()) + " already exists.", ErrorCodes::STREAM_ALREADY_EXISTS);
     view_source = storage;
 }
 
@@ -2376,12 +2376,12 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
 
     String size_str = formatReadableSizeWithDecimalSuffix(size);
     String max_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_size_to_drop);
-    throw Exception(ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT,
-                    "Table or Partition in {}.{} was not dropped.\nReason:\n"
+    throw Exception(ErrorCodes::STREAM_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT,
+                    "Stream or Partition in {}.{} was not dropped.\nReason:\n"
                     "1. Size ({}) is greater than max_[table/partition]_size_to_drop ({})\n"
                     "2. File '{}' intended to force DROP {}\n"
                     "How to fix this:\n"
-                    "1. Either increase (or set to zero) max_[table/partition]_size_to_drop in server config\n"
+                    "1. Either increase (or set to zero) max_[stream/partition]_size_to_drop in server config\n"
                     "2. Either create forcing file {} and make sure that proton has write permission for it.\n"
                     "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
                     backQuoteIfNeed(database), backQuoteIfNeed(table),
@@ -2395,15 +2395,15 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
 void Context::setMaxTableSizeToDrop(size_t max_size)
 {
     // Is initialized at server startup and updated at config reload
-    shared->max_table_size_to_drop.store(max_size, std::memory_order_relaxed);
+    shared->max_stream_size_to_drop.store(max_size, std::memory_order_relaxed);
 }
 
 
 void Context::checkTableCanBeDropped(const String & database, const String & table, const size_t & table_size) const
 {
-    size_t max_table_size_to_drop = shared->max_table_size_to_drop.load(std::memory_order_relaxed);
+    size_t max_stream_size_to_drop = shared->max_stream_size_to_drop.load(std::memory_order_relaxed);
 
-    checkCanBeDropped(database, table, table_size, max_table_size_to_drop);
+    checkCanBeDropped(database, table, table_size, max_stream_size_to_drop);
 }
 
 
@@ -2696,7 +2696,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     {
         if (exception)
             /// proton: starts
-            exception->emplace("Both stream name and UUID are empty", ErrorCodes::UNKNOWN_TABLE);
+            exception->emplace("Both stream name and UUID are empty", ErrorCodes::UNKNOWN_STREAM);
             /// proton: ends
         return storage_id;
     }
@@ -2715,7 +2715,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
             return storage_id;     /// NOTE There is no guarantees that table actually exists in database.
         if (exception)
             exception->emplace("External and temporary tables have no database, but " +
-                        storage_id.database_name + " is specified", ErrorCodes::UNKNOWN_TABLE);
+                        storage_id.database_name + " is specified", ErrorCodes::UNKNOWN_STREAM);
         return StorageID::createEmpty();
     }
 
@@ -2768,7 +2768,7 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
 
     if (exception)
         /// proton: starts
-        exception->emplace("Cannot resolve database name for stream " + storage_id.getNameForLogs(), ErrorCodes::UNKNOWN_TABLE);
+        exception->emplace("Cannot resolve database name for stream " + storage_id.getNameForLogs(), ErrorCodes::UNKNOWN_STREAM);
         /// proton: ends
     return StorageID::createEmpty();
 }

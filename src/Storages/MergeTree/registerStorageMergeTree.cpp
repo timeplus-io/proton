@@ -26,7 +26,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_STORAGE;
     extern const int NO_REPLICA_NAME_GIVEN;
-    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
+    extern const int CANNOT_EXTRACT_STREAM_STRUCTURE;
     extern const int INCORRECT_NUMBER_OF_COLUMNS;
     extern const int TYPE_MISMATCH;
 }
