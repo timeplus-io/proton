@@ -44,15 +44,12 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
+#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends.
-
-/// proton: remove
-#include <Storages/Kafka/StorageKafka.h>
-/// proton: remove
 
 namespace DB
 {
@@ -1144,11 +1141,11 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
             if (proxy->isStreaming())
                 streaming = true;
         }
-        else if (const auto * stream = storage->as<StorageStream>())
+        else if (storage->as<StorageStream>())
             streaming = true;
-        else if (const auto * materialized_view = storage->as<StorageMaterializedView>())
+        else if (storage->as<StorageMaterializedView>())
             streaming = true;
-        else if (const auto * streaming_kafka = storage->as<StorageKafka>())
+        else if (storage->as<StorageExternalStream>())
             streaming = true;
     }
 

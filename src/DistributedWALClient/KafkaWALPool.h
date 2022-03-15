@@ -31,6 +31,8 @@ public:
 
     KafkaWALSimpleConsumerPtr getOrCreateStreaming(const String & cluster_id);
 
+    KafkaWALSimpleConsumerPtr getOrCreateStreamingExternal(const String & brokers);
+
     std::vector<KafkaWALClusterPtr> clusters(const KafkaWALContext & ctx) const;
 
     void startup();
@@ -57,6 +59,9 @@ private:
 
     std::mutex streaming_lock;
     std::unordered_map<String, std::pair<size_t, KafkaWALSimpleConsumerPtrs>> streaming_consumers;
+
+    std::mutex external_streaming_lock;
+    std::unordered_map<String, std::pair<size_t, KafkaWALSimpleConsumerPtrs>> external_streaming_consumers;
 
     Poco::Logger * log;
 };

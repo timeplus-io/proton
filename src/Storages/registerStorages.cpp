@@ -21,6 +21,7 @@ void registerStorageView(StorageFactory & factory);
 /// proton: starts.
 void registerStorageStream(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
+void registerStorageExternalStream(StorageFactory & factory);
 /// proton: ends.
 void registerStorageGenerateRandom(StorageFactory & factory);
 void registerStorageExecutable(StorageFactory & factory);
@@ -28,10 +29,6 @@ void registerStorageExecutable(StorageFactory & factory);
 #if USE_AWS_S3
 void registerStorageS3(StorageFactory & factory);
 void registerStorageCOS(StorageFactory & factory);
-#endif
-
-#if USE_RDKAFKA
-void registerStorageKafka(StorageFactory & factory);
 #endif
 
 #if USE_ROCKSDB
@@ -60,6 +57,7 @@ void registerStorages()
     /// proton: starts.
     registerStorageStream(factory);
     registerStorageMaterializedView(factory);
+    registerStorageExternalStream(factory);
     /// proton: ends.
     registerStorageGenerateRandom(factory);
     registerStorageExecutable(factory);
@@ -67,10 +65,6 @@ void registerStorages()
     #if USE_AWS_S3
     registerStorageS3(factory);
     registerStorageCOS(factory);
-    #endif
-
-    #if USE_RDKAFKA
-    registerStorageKafka(factory);
     #endif
 
     #if USE_FILELOG

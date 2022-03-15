@@ -12,6 +12,7 @@
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -97,10 +98,6 @@
 #include <base/map.h>
 #include <base/scope_guard_safe.h>
 #include <memory>
-
-/// proton: remove
-#include <Storages/Kafka/StorageKafka.h>
-/// proton: remove
 
 namespace DB
 {
@@ -2154,7 +2151,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             buildStreamingProcessingQueryPlan(query_plan);
         else if (auto * materialized_view = storage->as<StorageMaterializedView>())
             buildStreamingProcessingQueryPlan(query_plan);
-        else if (auto * streaming_kafka = storage->as<StorageKafka>())
+        else if (auto * external_stream = storage->as<StorageExternalStream>())
             buildStreamingProcessingQueryPlan(query_plan);
         /// proton: ends
     }

@@ -284,6 +284,8 @@ StorageStream::StorageStream(
     , rng(randomSeed())
     , max_outstanding_blocks(context_->getSettingsRef().aysnc_ingest_max_outstanding_blocks)
 {
+    cacheVirtualColumnNamesAndTypes();
+
     if (!relative_data_path_.empty())
     {
         /// Virtual table which is for data ingestion only
@@ -327,12 +329,7 @@ StorageStream::StorageStream(
 
 NamesAndTypesList StorageStream::getVirtuals() const
 {
-    NamesAndTypesList names_and_types;
-    names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
-    names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
-    names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
-    names_and_types.push_back(NameAndTypePair(RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
-    return names_and_types;
+    return virtual_column_names_and_types;
 }
 
 NamesAndTypesList StorageStream::getVirtualsHistory() const
@@ -469,7 +466,7 @@ void StorageStream::readStreaming(
         else
             header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
 
-        auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
+        auto offsets = getOffsets(settings_ref.seek_to.value);
 
         for (Int32 i = 0; i < shards; ++i)
             pipes.emplace_back(std::make_shared<StreamingStoreSource>(
@@ -1848,4 +1845,11 @@ std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
     }
 }
 
+void StorageStream::cacheVirtualColumnNamesAndTypes()
+{
+    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
+}
 }

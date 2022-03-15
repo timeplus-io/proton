@@ -71,6 +71,9 @@ public:
     /// proton: ends.
     bool replace_view{false}; /// CREATE OR REPLACE VIEW
 
+    /// CREATE EXTERNAL STREAM
+    bool is_external = false;
+
     ASTColumns * columns_list = nullptr;
     ASTExpressionList * tables = nullptr;
 

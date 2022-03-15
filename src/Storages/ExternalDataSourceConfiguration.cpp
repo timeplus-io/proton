@@ -1,6 +1,5 @@
 #include "ExternalDataSourceConfiguration.h"
 
-#include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
@@ -8,10 +7,6 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <IO/WriteBufferFromString.h>
-
-#if USE_RDKAFKA
-#include <Storages/Kafka/KafkaSettings.h>
-#endif
 
 #include <re2/re2.h>
 
@@ -461,11 +456,6 @@ bool getExternalDataSourceConfiguration(const ASTs & args, BaseSettings<T> & set
     }
     return false;
 }
-
-#if USE_RDKAFKA
-template
-bool getExternalDataSourceConfiguration(const ASTs & args, BaseSettings<KafkaSettingsTraits> & settings, ContextPtr context);
-#endif
 
 template
 std::optional<ExternalDataSourceInfo> getExternalDataSourceConfiguration(

@@ -80,21 +80,26 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
         {
             virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.append_time; };
             column_positions[pos] = pos + total_physical_columns_in_schema;
+            /// We are assuming all virtual timestamp columns have the same data type
+            virtual_col_type = column.type;
         }
         else if (column.name == RESERVED_INGEST_TIME)
         {
             virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.ingest_time; };
             column_positions[pos] = pos + total_physical_columns_in_schema;
+            virtual_col_type = column.type;
         }
         else if (column.name == RESERVED_CONSUME_TIME)
         {
             virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.consume_time; };
             column_positions[pos] = pos + total_physical_columns_in_schema;
+            virtual_col_type = column.type;
         }
         else if (column.name == RESERVED_PROCESS_TIME)
         {
             virtual_time_columns_calc[pos] = [](const BlockInfo &) { return UTCMilliseconds::now(); };
             column_positions[pos] = pos + total_physical_columns_in_schema;
+            virtual_col_type = column.type;
         }
         else
         {
@@ -109,15 +114,5 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
     /// Clients like to read virtual columns only, add `_tp_time`, then we know how many rows
     if (physical_column_positions_to_read.empty())
         physical_column_positions_to_read.push_back(schema.getPositionByName(RESERVED_EVENT_TIME));
-
-    for (size_t i = 0; i < virtual_time_columns_calc.size(); ++i)
-    {
-        if (virtual_time_columns_calc[i])
-        {
-            /// We are assuming all virtual timestamp columns have the same data type
-            virtual_col_type = header.getByPosition(i).type;
-            break;
-        }
-    }
 }
 }

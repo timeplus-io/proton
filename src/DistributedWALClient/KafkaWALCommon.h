@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Record.h"
+#include "Results.h"
 
 #include <librdkafka/rdkafka.h>
 
@@ -8,6 +9,11 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+namespace Poco
+{
+    class Logger;
+}
 
 namespace DWAL
 {
@@ -31,6 +37,8 @@ std::shared_ptr<rd_kafka_topic_t>
 initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka_t * rd_kafka, KafkaWALStats * stats);
 
 RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaContext & schema_ctx, bool copy_topic = false);
+
+DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::Logger * log);
 
 std::string boolToString(bool val);
 }

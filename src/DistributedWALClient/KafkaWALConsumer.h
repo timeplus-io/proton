@@ -49,6 +49,8 @@ public:
     /// Commit offset for a partition of a topic
     int32_t commit(const TopicPartitionOffsets & tpos);
 
+    DescribeResult describe(const std::string & name) const;
+
 private:
     void initHandle();
     void handleError(int err);

@@ -39,11 +39,16 @@ public:
     void startup();
     void shutdown();
 
-    /// `callback` will be invoked against the recrods for a partition of a topic
+    /// `callback` will be invoked against the records for a partition of a topic
     /// The callback happens in the same thread as the caller
     int32_t consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const;
 
     ConsumeResult consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const;
+
+    /// `callback` will be invoked against the records for a partition of a topic
+    /// The callback happens in the same thread as the caller
+    /// This consume method consumes the raw kafka message and calls callback for each message
+    int32_t consume(ConsumeRawCallback callback, void * data, uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const;
 
     /// Stop consuming for a partition of a topic
     int32_t stopConsume(const KafkaWALContext & ctx) const;
@@ -52,6 +57,8 @@ public:
     int32_t commit(int64_t offset, const KafkaWALContext & ctx) const;
 
     void initTopicHandle(KafkaWALContext & ctx) const;
+
+    DescribeResult describe(const String & name) const;
 
 private:
     /// Poll consume errors

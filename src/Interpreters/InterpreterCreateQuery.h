@@ -79,7 +79,8 @@ private:
     BlockIO createTable(ASTCreateQuery & create);
 
     /// proton: start
-    bool createTableDistributed(const String & database, ASTCreateQuery & create);
+    bool createStreamDistributed(const String & database, ASTCreateQuery & create);
+    void handleExternalStreamCreation(ASTCreateQuery & create);
     bool createDatabaseDistributed(ASTCreateQuery & create);
     /// proton: end
 

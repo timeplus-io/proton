@@ -451,6 +451,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_temporary("TEMPORARY");
     /// proton: starts
+    ParserKeyword s_external("EXTERNAL");
     ParserKeyword s_stream("STREAM");
     /// proton: ends
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
@@ -483,6 +484,9 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool or_replace = false;
     bool if_not_exists = false;
     bool is_temporary = false;
+    /// proton: starts
+    bool is_external = false;
+    /// proton: ends
 
     if (s_create.ignore(pos, expected))
     {
@@ -501,7 +505,11 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     {
         is_temporary = true;
     }
+
     /// proton: starts
+    if (s_external.ignore(pos, expected))
+        is_external = true;
+
     if (!s_stream.ignore(pos, expected))
         return false;
     /// proton: ends
@@ -628,6 +636,10 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->create_or_replace = or_replace;
     query->if_not_exists = if_not_exists;
     query->temporary = is_temporary;
+
+    /// proton: starts
+    query->is_external = is_external;
+    /// proton: ends
 
     query->database = table_id->getDatabase();
     query->table = table_id->getTable();

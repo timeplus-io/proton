@@ -80,7 +80,7 @@ void StreamingStoreSourceMultiplexer::backgroundPoll()
                 last_metrics_log_time = start;
             }
         }
-        catch (DB::Exception & e)
+        catch (const DB::Exception & e)
         {
             if (e.code() == ErrorCodes::RESOURCE_NOT_FOUND || e.code() == ErrorCodes::DWAL_FATAL_ERROR)
             {

@@ -623,7 +623,7 @@ void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_m
     KafkaWALContext ctx{bench_settings.producer_settings.topic};
     ctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
 
-    auto result = wal->describe(bench_settings.producer_settings.topic, ctx);
+    auto result = wal->describe(bench_settings.producer_settings.topic);
     if (result.err)
     {
         cout << "Failed to describe ingest topic=" << bench_settings.producer_settings.topic << " error=" << result.err << "\n";
@@ -693,7 +693,7 @@ void ingestSync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mu
     KafkaWALContext ctx{bench_settings.producer_settings.topic};
     ctx.request_required_acks = bench_settings.producer_settings.request_required_acks;
 
-    auto dresult = wal->describe(bench_settings.producer_settings.topic, ctx);
+    auto dresult = wal->describe(bench_settings.producer_settings.topic);
     if (dresult.err)
     {
         cout << "Failed to describe ingest topic=" << bench_settings.producer_settings.topic << " error=" << dresult.err << "\n";
@@ -1036,7 +1036,7 @@ void admin(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
     }
     else
     {
-        auto result = wals[0]->describe(bench_settings.topic_settings.name, ctx);
+        auto result = wals[0]->describe(bench_settings.topic_settings.name);
         if (result.err != 0)
         {
             cout << "failed to describe topic " << bench_settings.topic_settings.name << "\n";

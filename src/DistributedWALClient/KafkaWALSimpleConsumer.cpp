@@ -2,8 +2,8 @@
 #include "KafkaWALCommon.h"
 #include "KafkaWALContext.h"
 
-#include <Common/setThreadName.h>
 #include <base/logger_useful.h>
+#include <Common/setThreadName.h>
 
 namespace DB
 {
@@ -191,7 +191,8 @@ void KafkaWALSimpleConsumer::checkLastError(const KafkaWALContext & ctx) const
         case RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART:
         case RD_KAFKA_RESP_ERR__UNKNOWN_TOPIC:
             LOG_ERROR(log, "topic={} partition={} doesn't exist", ctx.topic, ctx.partition);
-            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Underlying streaming store '{}[{}]' doesn't exist", ctx.topic, ctx.partition);
+            throw DB::Exception(
+                DB::ErrorCodes::RESOURCE_NOT_FOUND, "Underlying streaming store '{}[{}]' doesn't exist", ctx.topic, ctx.partition);
         case RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN:
             LOG_ERROR(log, "Streaming store are gone");
             throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store '{}' is gone", ctx.topic);
@@ -201,15 +202,74 @@ void KafkaWALSimpleConsumer::checkLastError(const KafkaWALContext & ctx) const
     }
 }
 
+ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
+{
+    assert(ctx.topic_handle);
+    assert(ctx.schema_ctx.schema_provider);
+
+    auto err = startConsumingIfNotYet(ctx);
+    if (err != 0)
+        return {.err = mapErrorCode(rd_kafka_last_error()), .records = {}};
+
+    checkLastError(ctx);
+
+    std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
+        static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free};
+
+    auto res = rd_kafka_consume_batch(ctx.topic_handle.get(), ctx.partition, timeout_ms, rkmessages.get(), count);
+
+    if (res >= 0)
+    {
+        ConsumeResult result;
+        result.records.reserve(res);
+
+        for (ssize_t idx = 0; idx < res; ++idx)
+        {
+            auto rkmessage = rkmessages.get()[idx];
+            if (rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR)
+            {
+                if (unlikely(rkmessage->offset < ctx.offset))
+                {
+                    /// Ignore the message which has lower offset than what clients like to have
+                    continue;
+                }
+
+                auto record = kafkaMsgToRecord(rkmessage, ctx.schema_ctx, false);
+                if (likely(record))
+                {
+                    result.records.push_back(record);
+                }
+                else
+                {
+                    LOG_WARNING(log, "Returns nullptr record when consuming topic={} partition={}", ctx.topic, ctx.partition);
+                }
+            }
+            else
+            {
+                LOG_ERROR(
+                    log, "Failed to consume topic={} partition={} error={}", ctx.topic, ctx.partition, rd_kafka_message_errstr(rkmessage));
+            }
+
+            rd_kafka_message_destroy(rkmessages.get()[idx]);
+        }
+        return result;
+    }
+    else
+    {
+        LOG_ERROR(
+            log, "Failed to consuming topic={} partition={} error={}", ctx.topic, ctx.partition, rd_kafka_err2str(rd_kafka_last_error()));
+
+        return {.err = mapErrorCode(rd_kafka_last_error()), .records = {}};
+    }
+}
+
 int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbackData * data, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
 
     auto err = startConsumingIfNotYet(ctx);
     if (err != 0)
-    {
         return err;
-    }
 
     checkLastError(ctx);
 
@@ -226,11 +286,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
         Int64 current_bytes = 0;
         Int64 current_rows = 0;
 
-        WrappedData(
-            ConsumeCallback callback_,
-            ConsumeCallbackData * data_,
-            const KafkaWALContext & ctx_,
-            Poco::Logger * log_)
+        WrappedData(ConsumeCallback callback_, ConsumeCallbackData * data_, const KafkaWALContext & ctx_, Poco::Logger * log_)
             : callback(callback_), data(data_), ctx(ctx_), log(log_)
         {
             schema_ctx.schema_provider = data;
@@ -270,7 +326,8 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
                     wrapped->ctx.partition);
             }
 
-            if (wrapped->current_bytes >= wrapped->ctx.consume_callback_max_bytes || wrapped->current_rows >= wrapped->ctx.consume_callback_max_rows)
+            if (wrapped->current_bytes >= wrapped->ctx.consume_callback_max_bytes
+                || wrapped->current_rows >= wrapped->ctx.consume_callback_max_rows)
             {
                 if (likely(wrapped->callback))
                 {
@@ -307,8 +364,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
         }
     };
 
-    if (rd_kafka_consume_callback(ctx.topic_handle.get(), ctx.partition, ctx.consume_callback_timeout_ms, kcallback, &wrapped_data)
-        == -1)
+    if (rd_kafka_consume_callback(ctx.topic_handle.get(), ctx.partition, ctx.consume_callback_timeout_ms, kcallback, &wrapped_data) == -1)
     {
         LOG_ERROR(
             log,
@@ -346,16 +402,13 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
     return DB::ErrorCodes::OK;
 }
 
-ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
+int32_t KafkaWALSimpleConsumer::consume(ConsumeRawCallback callback, void * data, uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
-    assert(ctx.schema_ctx.schema_provider);
 
     auto err = startConsumingIfNotYet(ctx);
     if (err != 0)
-    {
-        return {.err = mapErrorCode(rd_kafka_last_error()), .records = {}};
-    }
+        return err;
 
     checkLastError(ctx);
 
@@ -366,52 +419,58 @@ ConsumeResult KafkaWALSimpleConsumer::consume(uint32_t count, int32_t timeout_ms
 
     if (res >= 0)
     {
-        ConsumeResult result;
-        result.records.reserve(res);
-
         for (ssize_t idx = 0; idx < res; ++idx)
         {
             auto rkmessage = rkmessages.get()[idx];
-            if (rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR)
+            if (likely(rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR))
             {
                 if (unlikely(rkmessage->offset < ctx.offset))
-                {
                     /// Ignore the message which has lower offset than what clients like to have
                     continue;
-                }
 
-                auto record = kafkaMsgToRecord(rkmessage, ctx.schema_ctx, false);
-                if (likely(record))
+                if (likely(callback))
                 {
-                    result.records.push_back(record);
-                }
-                else
-                {
-                    LOG_WARNING(
-                        log, "Returns nullptr record when consuming topic={} partition={}", ctx.topic, ctx.partition);
+                    try
+                    {
+                        callback(
+                            rkmessage->payload,
+                            rkmessage->len,
+                            res,
+                            rkmessage->offset,
+                            rkmessage->partition,
+                            rd_kafka_message_timestamp(rkmessage, nullptr),
+                            data);
+                    }
+                    catch (...)
+                    {
+                        LOG_ERROR(
+                            log,
+                            "Failed to consume topic={} partition={} error={}",
+                            ctx.topic,
+                            ctx.partition,
+                            DB::getCurrentExceptionMessage(true, true));
+                        throw;
+                    }
                 }
             }
             else
             {
                 LOG_ERROR(
-                    log,
-                    "Failed to consume topic={} partition={} error={}",
-                    ctx.topic,
-                    ctx.partition,
-                    rd_kafka_message_errstr(rkmessage));
+                    log, "Failed to consume topic={} partition={} error={}", ctx.topic, ctx.partition, rd_kafka_message_errstr(rkmessage));
             }
 
             rd_kafka_message_destroy(rkmessages.get()[idx]);
         }
-        return result;
     }
     else
     {
         LOG_ERROR(
             log, "Failed to consuming topic={} partition={} error={}", ctx.topic, ctx.partition, rd_kafka_err2str(rd_kafka_last_error()));
 
-        return {.err = mapErrorCode(rd_kafka_last_error()), .records = {}};
+        return res;
     }
+
+    return DB::ErrorCodes::OK;
 }
 
 int32_t KafkaWALSimpleConsumer::stopConsume(const KafkaWALContext & ctx) const
@@ -451,15 +510,15 @@ int32_t KafkaWALSimpleConsumer::commit(int64_t offset, const KafkaWALContext & c
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
         LOG_ERROR(
-            log,
-            "Failed to commit offset={} for topic={} partition={} error={}",
-            offset,
-            ctx.topic,
-            ctx.partition,
-            rd_kafka_err2str(err));
+            log, "Failed to commit offset={} for topic={} partition={} error={}", offset, ctx.topic, ctx.partition, rd_kafka_err2str(err));
         return mapErrorCode(err);
     }
 
     return DB::ErrorCodes::OK;
+}
+
+DescribeResult KafkaWALSimpleConsumer::describe(const String & name) const
+{
+    return describeTopic(name, consumer_handle.get(), log);
 }
 }

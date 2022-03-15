@@ -64,7 +64,6 @@ private:
 using StreamingStoreSourceMultiplexerPtr = std::shared_ptr<StreamingStoreSourceMultiplexer>;
 using StreamingStoreSourceMultiplexerPtrs = std::list<StreamingStoreSourceMultiplexerPtr>;
 
-
 /// A multiplexers is bound to a stream
 class StreamingStoreSourceMultiplexers final
 {

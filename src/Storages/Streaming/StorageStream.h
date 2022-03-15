@@ -295,6 +295,8 @@ private:
     void addSubscription();
     void removeSubscription();
 
+    void cacheVirtualColumnNamesAndTypes();
+
 private:
     Int32 replication_factor;
     Int32 shards;
@@ -311,6 +313,8 @@ private:
     bool sharding_key_is_deterministic = false;
     std::vector<UInt64> slot_to_shard;
     String sharding_key_column_name;
+
+    NamesAndTypesList virtual_column_names_and_types;
 
     /// Cached ctx for reuse
     DWAL::KafkaWALContext dwal_append_ctx;

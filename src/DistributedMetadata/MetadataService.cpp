@@ -130,7 +130,7 @@ void MetadataService::waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) cons
 {
     while (1)
     {
-        if (dwal->describe(ctx.topic, ctx).err == ErrorCodes::OK)
+        if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
         {
             return;
         }
@@ -145,7 +145,7 @@ void MetadataService::waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) cons
 /// Try indefinitely to create dwal
 void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
 {
-    if (dwal->describe(ctx.topic, ctx).err == ErrorCodes::OK)
+    if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
     {
         LOG_INFO(log, "Found topic={} already exists", ctx.topic);
         return;
@@ -231,9 +231,7 @@ void MetadataService::doTailingRecords()
         }
 
         if (result.records.empty())
-        {
             continue;
-        }
 
         try
         {

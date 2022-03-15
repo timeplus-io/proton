@@ -49,7 +49,6 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 #include <Databases/DatabaseFactory.h>
-#include <Databases/IDatabase.h>
 #include <Databases/DatabaseOnDisk.h>
 #include <Databases/TablesLoader.h>
 #include <Databases/DDLDependencyVisitor.h>
@@ -117,9 +116,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
     /// proton: start
     if (createDatabaseDistributed(create))
-    {
         return {};
-    }
     /// proton: end
 
     String database_name = create.getDatabase();
@@ -869,23 +866,36 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 }
 
 /// proton: starts
-bool InterpreterCreateQuery::createTableDistributed(const String & current_database, ASTCreateQuery & create)
+/// external stream is always created locally in the DDL request accepting node
+void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & create)
+{
+    if (!create.is_external)
+        return;
+
+    /// ExternalStreamStorage
+    if (!create.storage)
+        create.set(create.storage, std::make_shared<ASTStorage>());
+
+    if (!create.storage->engine)
+        create.storage->set(create.storage->engine, makeASTFunction("ExternalStream"));
+
+    if (create.storage->engine->name != "ExternalStream")
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "External stream requires ExternalStream engine");
+}
+
+bool InterpreterCreateQuery::createStreamDistributed(const String & current_database, ASTCreateQuery & create)
 {
     auto ctx = getContext();
 
-    if (create.isView() || create.is_dictionary)
+    if (create.isView() || create.is_dictionary || create.is_external)
         return false;
 
     if (!create.storage || !create.storage->engine)
-    {
         prepareEngine(create, ctx);
-    }
 
     if (create.storage->engine->name != "Stream")
-    {
         /// We only support `Stream` table engine for now
         return false;
-    }
 
     if (!ctx->isDistributedEnv())
     {
@@ -1048,10 +1058,10 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     auto database_name = create.database ? create.getDatabase() : current_database;
 
     /// proton: start
-    if (createTableDistributed(database_name, create))
-    {
+    if (createStreamDistributed(database_name, create))
         return {};
-    }
+
+    handleExternalStreamCreation(create);
     /// proton: end
 
     // If this is a stub ATTACH query, read the query definition from the database

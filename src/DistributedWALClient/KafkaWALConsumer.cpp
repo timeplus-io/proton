@@ -261,4 +261,9 @@ int32_t KafkaWALConsumer::commit(const TopicPartitionOffsets & tpos)
 
     return DB::ErrorCodes::OK;
 }
+
+DescribeResult KafkaWALConsumer::describe(const std::string & name) const
+{
+    return describeTopic(name, consumer_handle.get(), log);
+}
 }

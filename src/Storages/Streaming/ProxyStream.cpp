@@ -7,8 +7,8 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Storages//Kafka/StorageKafka.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
@@ -46,8 +46,7 @@ ProxyStream::ProxyStream(
     {
         /// Whether has GlobalAggregation in subquery
         SelectQueryOptions options;
-        auto interpreter_subquery
-            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context_, options.subquery());
+        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context_, options.subquery());
         if (interpreter_subquery)
             has_global_aggr = interpreter_subquery->hasGlobalAggregation();
     }
@@ -141,23 +140,14 @@ void ProxyStream::read(
             processed_stage,
             max_block_size,
             num_streams);
-    else if (auto * kafka = storage->as<StorageKafka>())
-        return kafka->read(
-            query_plan,
-            column_names,
-            metadata_snapshot,
-            query_info,
-            context_,
-            processed_stage,
-            max_block_size,
-            num_streams);
+    else if (auto * external_stream = storage->as<StorageExternalStream>())
+        return external_stream->read(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 
     auto * distributed = storage->as<StorageStream>();
     assert(distributed);
 
     if (streaming && context_->getSettingsRef().query_mode.value != "table")
-        distributed->readStreaming(
-            query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_);
+        distributed->readStreaming(query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_);
     else
         distributed->readHistory(
             query_plan,

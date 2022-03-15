@@ -25,6 +25,7 @@ struct KafkaWALContext
     /// - RD_KAFKA_OFFSET_TAIL
     int64_t offset = -1000;
 
+    /// Enforce consuming from the offset instead of from the last ckpted offset
     bool enforce_offset = false;
 
     /// Admin API settings

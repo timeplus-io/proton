@@ -584,46 +584,9 @@ int32_t KafkaWAL::remove(const String & name, const KafkaWALContext &) const
         "delete");
 }
 
-DescribeResult KafkaWAL::describe(const String & name, const KafkaWALContext &) const
+DescribeResult KafkaWAL::describe(const String & name) const
 {
-    std::shared_ptr<rd_kafka_topic_t> topic_handle{
-        rd_kafka_topic_new(producer_handle.get(), name.c_str(), nullptr), rd_kafka_topic_destroy};
-
-    if (!topic_handle)
-    {
-        LOG_ERROR(log, "Failed to describe topic, can't create topic handle");
-        return {.err = DB::ErrorCodes::UNKNOWN_EXCEPTION};
-    }
-
-    const struct rd_kafka_metadata * metadata = nullptr;
-
-    auto err = rd_kafka_metadata(producer_handle.get(), 0, topic_handle.get(), &metadata, 5000);
-    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
-    {
-        LOG_ERROR(log, "Failed to describe topic, error={}", rd_kafka_err2str(err));
-        return {.err = mapErrorCode(err)};
-    }
-
-    for (int32_t i = 0 ; i < metadata->topic_cnt; ++i)
-    {
-        if (name == metadata->topics[i].topic)
-        {
-            auto partition_cnt = metadata->topics[i].partition_cnt;
-            rd_kafka_metadata_destroy(metadata);
-
-            if (partition_cnt > 0)
-            {
-                return {.err = DB::ErrorCodes::OK, .partitions = partition_cnt};
-            }
-            else
-            {
-                return {.err = DB::ErrorCodes::RESOURCE_NOT_FOUND};
-            }
-        }
-    }
-
-    rd_kafka_metadata_destroy(metadata);
-    return {.err = DB::ErrorCodes::RESOURCE_NOT_FOUND};
+    return describeTopic(name, producer_handle.get(), log);
 }
 
 #if 0

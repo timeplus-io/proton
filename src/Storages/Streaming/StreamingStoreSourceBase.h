@@ -39,7 +39,7 @@ protected:
     std::vector<Chunk>::iterator iter;
 
     /// watermark, only support periodical flush for now
-    // FIXME, late event etc, every second
+    /// FIXME, late event etc, every second
     Int64 flush_interval_ms = 1000;
     Int64 last_flush_ms = 0;
 };

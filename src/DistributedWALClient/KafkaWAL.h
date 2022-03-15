@@ -91,7 +91,7 @@ public:
 
     int32_t remove(const std::string & name, const KafkaWALContext & ctx) const;
 
-    DescribeResult describe(const std::string & name, const KafkaWALContext & ctx) const;
+    DescribeResult describe(const std::string & name) const;
 
     KafkaWALClusterPtr cluster(const KafkaWALContext & ctx) const;
 

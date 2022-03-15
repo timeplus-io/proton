@@ -455,6 +455,9 @@ protected:
   *
   * Or:
   * CREATE[OR REPLACE]|ATTACH [[MATERIALIZED] VIEW] | [VIEW]] [IF NOT EXISTS] [db.]name [TO [db.]name] [ENGINE = engine] [POPULATE] AS SELECT ...
+  *
+  * Or:
+  * CREATE EXTERNAL STREAM [IF NOT EXISTS] ...
   */
 class ParserCreateQuery : public IParserBase
 {

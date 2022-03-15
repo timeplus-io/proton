@@ -85,8 +85,10 @@ list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_dele
 add_headers_and_sources(dbms Disks/IO)
 
 if (TARGET ch_contrib::rdkafka)
-    add_headers_and_sources(dbms Storages/Kafka)
+    add_headers_and_sources(dbms Storages/ExternalStream)
     add_headers_and_sources(dbms DistributedWALClient)
+else()
+    message(FATAL "rdkafka is not enabled which is required")
 endif()
 
 if (USE_LIBPQXX)

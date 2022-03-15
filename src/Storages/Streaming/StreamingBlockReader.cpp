@@ -26,7 +26,7 @@ StreamingBlockReader::StreamingBlockReader(
     , consume_ctx(
           DWAL::escapeDWALName(storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName()),
           shard_,
-          Int64{-1} /* latest */)
+          offset)
     , log(log_)
 {
     if (offset == -1)
@@ -34,7 +34,6 @@ StreamingBlockReader::StreamingBlockReader(
     else if (offset == -2)
         consume_ctx.auto_offset_reset = "earliest";
 
-    consume_ctx.offset = offset;
     consume_ctx.enforce_offset = true;
     consume_ctx.schema_ctx.schema_provider = this;
     /// FIXME, schema version

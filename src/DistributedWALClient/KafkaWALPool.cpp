@@ -253,9 +253,7 @@ KafkaWALPtr KafkaWALPool::getMeta() const { return meta_wal; }
 KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreaming(const String & cluster_id)
 {
     if (cluster_id.empty() && !default_cluster.empty())
-    {
         return getOrCreateStreaming(default_cluster);
-    }
 
     std::lock_guard lock{streaming_lock};
 
@@ -267,12 +265,8 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreaming(const String & clus
     }
 
     for (const auto & consumer : iter->second.second)
-    {
         if (consumer.use_count() == 1)
-        {
             return consumer;
-        }
-    }
 
     /// consumer is used up and if we didn't reach maximum
     if (iter->second.second.size() < iter->second.first)
@@ -353,6 +347,52 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
     }
 
     return *best_multiplexer;
+}
+
+KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const String & brokers)
+{
+    assert(!brokers.empty());
+
+    std::lock_guard lock{external_streaming_lock};
+
+    if (!external_streaming_consumers.contains(brokers))
+        /// FIXME, configurable max cached consumers
+        external_streaming_consumers.emplace(brokers, std::pair<size_t, KafkaWALSimpleConsumerPtrs>(100, KafkaWALSimpleConsumerPtrs{}));
+
+    /// FIXME, remove cached cluster
+    if (external_streaming_consumers.size() > 1000)
+        throw DB::Exception("Too many external Kafka cluster registered", DB::ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
+
+    auto & consumers = external_streaming_consumers[brokers];
+
+    for (const auto & consumer : consumers.second)
+        if (consumer.use_count() == 1)
+            return consumer;
+
+    /// consumer is used up and if we didn't reach maximum
+    if (consumers.second.size() < consumers.first)
+    {
+        /// Create one
+        auto ksettings = std::make_unique<KafkaWALSettings>();
+        ksettings->brokers = brokers;
+
+        /// Streaming WALs have a different group ID
+        ksettings->group_id += "-tp-external-streaming-query-" + std::to_string(consumers.second.size() + 1);
+
+        /// We don't care offset checkpointing for WALs used for streaming processing,
+        /// No auto commit
+        ksettings->enable_auto_commit = false;
+
+        auto consumer = std::make_shared<KafkaWALSimpleConsumer>(std::move(ksettings));
+        consumer->startup();
+        consumers.second.push_back(consumer);
+        return consumer;
+    }
+    else
+    {
+        LOG_ERROR(log, "External streaming processing pool in cluster={} is used up, size={}", brokers, consumers.first);
+        throw DB::Exception("Max external streaming processing pool size has been reached", DB::ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
+    }
 }
 
 std::vector<KafkaWALClusterPtr> KafkaWALPool::clusters(const KafkaWALContext & ctx) const
