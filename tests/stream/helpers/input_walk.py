@@ -181,5 +181,6 @@ if __name__ == "__main__":
     test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
     if test_suites_selected != None and len(test_suites_selected) != 0:
         test_suite = test_suites_selected[0]
+        logger.debug(f"test_suite = {test_suite}")
 
     input_walk(test_id_run, config_file, test_suite, setup)

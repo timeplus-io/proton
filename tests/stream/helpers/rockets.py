@@ -1373,6 +1373,11 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             logger.debug(f"create_table_rest starts...")
             table_name = table_schema.get("name")
             type = table_schema.get("type")
+            query_parameters = table_schema.get("query_parameters")
+            if query_parameters != None:
+                table_create_url = table_ddl_url + "?" + query_parameters
+            else:
+                table_create_url = table_ddl_url
             if type != None:
                 table_schema.pop("type")  # type is not legal key/value for rest api
             event_time_column = table_schema.get("event_time_column")
@@ -1386,15 +1391,16 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             else:
                 table_schema_for_rest = {"name": table_name, "columns": columns}
             post_data = json.dumps(table_schema_for_rest)
+
             logger.debug(
-                f"table_ddl = {table_ddl_url}, data = {post_data} to be posted."
+                f"table_create_url = {table_create_url}, data = {post_data} to be posted."
             )
             # res = requests.post(
             #    table_ddl_url + "?distributed_ingest_mode=sync", data=post_data
             # )  # create the table w/ table schema
 
             res = requests.post(
-                table_ddl_url, data=post_data
+                table_create_url, data=post_data
             )  # create the table w/ table schema
 
             create_start_time = datetime.datetime.now()
