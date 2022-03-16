@@ -273,10 +273,18 @@ def query_run_py(
     pyclient=None,
 ):
 
-    logger = mp.log_to_stderr()
-    logger.setLevel(logging.DEBUG)
+    #logger = mp.log_to_stderr()
+    #logger.setLevel(logging.DEBUG)
 
     if pyclient == None:
+        logger = mp.get_logger()
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.formatter = formatter
+        logger.addHandler(console_handler)
+        logger.setLevel(logging.DEBUG)
+        logger.debug(
+            f"process started: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+        )
         proton_server = config.get("proton_server")
         proton_server_native_port = config.get("proton_server_native_port")
         settings = {"max_block_size": 100000}
@@ -284,6 +292,11 @@ def query_run_py(
             host=proton_server, port=proton_server_native_port
         )  # create python client
         CLEAN_CLIENT = True
+    else:
+        logger = mp.get_logger()
+        logger.debug(
+            f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+        )        
     if config != None:
         rest_setting = config.get("rest_setting")
         table_ddl_url = rest_setting.get("table_ddl_url")
@@ -319,6 +332,7 @@ def query_run_py(
             query_result_iter = pyclient.execute_iter(
                 query, with_column_types=True, query_id=query_sub_id, settings=settings
             )
+            logger.debug(f"query = {query} is executed.")
             i = 0
             for element in query_result_iter:
                 # logger.debug(f"query_run_py: element in query_result_iter in query_id: {query_id} = {element}")
@@ -346,7 +360,7 @@ def query_run_py(
                 pyclient.disconnect()
 
         except (errors.ServerException) as error:
-            logger.debug("query_run_py: running in exception......")
+            logger.debug(f"query_run_py: running in exception......, error = {error}")
             if isinstance(error, errors.ServerException):
                 if (
                     error.code == 394
