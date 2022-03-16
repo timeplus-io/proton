@@ -188,36 +188,6 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (!create.attach && fs::exists(metadata_path))
             throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Metadata directory {} already exists", metadata_path.string());
     }
-    else if (create.storage->engine->name == "MaterializeMySQL"
-        || create.storage->engine->name == "MaterializedMySQL")
-    {
-        /// It creates nested database with Ordinary or Atomic engine depending on UUID in query and default engine setting.
-        /// Do nothing if it's an internal ATTACH on server startup or short-syntax ATTACH query from user,
-        /// because we got correct query from the metadata file in this case.
-        /// If we got query from user, then normalize it first.
-        bool attach_from_user = create.attach && !internal && !create.attach_short_syntax;
-        bool create_from_user = !create.attach;
-
-        if (create_from_user)
-        {
-            const auto & default_engine = getContext()->getSettingsRef().default_database_engine.value;
-            if (create.uuid == UUIDHelpers::Nil && default_engine == DefaultDatabaseEngine::Atomic)
-                create.uuid = UUIDHelpers::generateV4();    /// Will enable Atomic engine for nested database
-        }
-        else if (attach_from_user && create.uuid == UUIDHelpers::Nil)
-        {
-            /// Ambiguity is possible: should we attach nested database as Ordinary
-            /// or throw "UUID must be specified" for Atomic? So we suggest short syntax for Ordinary.
-            throw Exception("Use short attach syntax ('ATTACH DATABASE name;' without engine) to attach existing database "
-                            "or specify UUID to attach new database with Atomic engine", ErrorCodes::INCORRECT_QUERY);
-        }
-
-        /// Set metadata path according to nested engine
-        if (create.uuid == UUIDHelpers::Nil)
-            metadata_path = metadata_path / "metadata" / database_name_escaped;
-        else
-            metadata_path = metadata_path / "store" / DatabaseCatalog::getPathForUUID(create.uuid);
-    }
     else
     {
         bool is_on_cluster = getContext()->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY;
@@ -227,14 +197,6 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         /// Ignore UUID if it's ON CLUSTER query
         create.uuid = UUIDHelpers::Nil;
         metadata_path = metadata_path / "metadata" / database_name_escaped;
-    }
-
-    if ((create.storage->engine->name == "MaterializeMySQL" || create.storage->engine->name == "MaterializedMySQL")
-        && !getContext()->getSettingsRef().allow_experimental_database_materialized_mysql
-        && !internal)
-    {
-        throw Exception("MaterializedMySQL is an experimental database engine. "
-                        "Enable allow_experimental_database_materialized_mysql to use it.", ErrorCodes::UNKNOWN_DATABASE_ENGINE);
     }
 
     if (create.storage->engine->name == "Replicated"

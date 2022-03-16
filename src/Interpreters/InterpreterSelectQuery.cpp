@@ -1889,7 +1889,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && !syntax_analyzer_result->streaming
         && (settings.max_parallel_replicas <= 1)
         && storage
-        && storage->getName() != "MaterializedMySQL"
         && !row_policy_filter
         && processing_stage == QueryProcessingStage::FetchColumns
         && query_analyzer->hasAggregation()
