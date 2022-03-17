@@ -1,6 +1,6 @@
-int mainEntryClickHouseDWal(int argc, char ** argv);
+int mainDWal(int argc, char ** argv);
 
 int main(int argc, char ** argv)
 {
-    return mainEntryClickHouseDWal(argc, argv);
+    return mainDWal(argc, argv);
 }

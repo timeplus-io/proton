@@ -25,46 +25,46 @@
 
 /// Universal executable for various clickhouse applications
 #if ENABLE_PROTON_SERVER
-int mainEntryClickHouseServer(int argc, char ** argv);
+int mainServer(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_CLIENT
-int mainEntryClickHouseClient(int argc, char ** argv);
+int mainClient(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_LOCAL
-int mainEntryClickHouseLocal(int argc, char ** argv);
+int mainLocal(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_BENCHMARK
-int mainEntryClickHouseBenchmark(int argc, char ** argv);
+int mainBenchmark(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_FORMAT
-int mainEntryClickHouseFormat(int argc, char ** argv);
+int mainFormat(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_OBFUSCATOR
-int mainEntryClickHouseObfuscator(int argc, char ** argv);
+int mainObfuscator(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_GIT_IMPORT
-int mainEntryClickHouseGitImport(int argc, char ** argv);
+int mainGitImport(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_KEEPER
-int mainEntryClickHouseKeeper(int argc, char ** argv);
+int mainKeeper(int argc, char ** argv);
 #endif
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
-int mainEntryClickHouseMetaStore(int argc, char ** argv);
+int mainMetaStore(int argc, char ** argv);
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_DWAL_BENCHMARK
-int mainEntryClickHouseDWal(int argc, char ** argv);
+int mainDWal(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_INSTALL
-int mainEntryClickHouseInstall(int argc, char ** argv);
-int mainEntryClickHouseStart(int argc, char ** argv);
-int mainEntryClickHouseStop(int argc, char ** argv);
-int mainEntryClickHouseStatus(int argc, char ** argv);
-int mainEntryClickHouseRestart(int argc, char ** argv);
+int mainInstall(int argc, char ** argv);
+int mainStart(int argc, char ** argv);
+int mainStop(int argc, char ** argv);
+int mainStatus(int argc, char ** argv);
+int mainRestart(int argc, char ** argv);
 #endif
 
-int mainEntryClickHouseHashBinary(int, char **)
+int mainHashBinary(int, char **)
 {
     /// Intentionally without newline. So you can run:
     /// objcopy --add-section .note.ClickHouse.hash=<(./clickhouse hash-binary) clickhouse
@@ -85,45 +85,45 @@ using MainFunc = int (*)(int, char**);
 std::pair<const char *, MainFunc> clickhouse_applications[] =
 {
 #if ENABLE_PROTON_LOCAL
-    {"local", mainEntryClickHouseLocal},
+    {"local", mainLocal},
 #endif
 #if ENABLE_PROTON_CLIENT
-    {"client", mainEntryClickHouseClient},
+    {"client", mainClient},
 #endif
 #if ENABLE_PROTON_BENCHMARK
-    {"benchmark", mainEntryClickHouseBenchmark},
+    {"benchmark", mainBenchmark},
 #endif
 #if ENABLE_PROTON_SERVER
-    {"server", mainEntryClickHouseServer},
+    {"server", mainServer},
 #endif
 #if ENABLE_PROTON_FORMAT
-    {"format", mainEntryClickHouseFormat},
+    {"format", mainFormat},
 #endif
 #if ENABLE_PROTON_OBFUSCATOR
-    {"obfuscator", mainEntryClickHouseObfuscator},
+    {"obfuscator", mainObfuscator},
 #endif
 #if ENABLE_PROTON_GIT_IMPORT
-    {"git-import", mainEntryClickHouseGitImport},
+    {"git-import", mainGitImport},
 #endif
 #if ENABLE_PROTON_KEEPER
-    {"keeper", mainEntryClickHouseKeeper},
+    {"keeper", mainKeeper},
 #endif
 /// proton: starts.
 #if ENABLE_PROTON_METASTORE
-    {"metastore", mainEntryClickHouseMetaStore},
+    {"metastore", mainMetaStore},
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_DWAL_BENCHMARK
-    {"dwal-benchmark", mainEntryClickHouseDWal},
+    {"dwal-benchmark", mainDWal},
 #endif
 #if ENABLE_PROTON_INSTALL
-    {"install", mainEntryClickHouseInstall},
-    {"start", mainEntryClickHouseStart},
-    {"stop", mainEntryClickHouseStop},
-    {"status", mainEntryClickHouseStatus},
-    {"restart", mainEntryClickHouseRestart},
+    {"install", mainInstall},
+    {"start", mainStart},
+    {"stop", mainStop},
+    {"status", mainStatus},
+    {"restart", mainRestart},
 #endif
-    {"hash-binary", mainEntryClickHouseHashBinary},
+    {"hash-binary", mainHashBinary},
 };
 
 int printHelp(int, char **)

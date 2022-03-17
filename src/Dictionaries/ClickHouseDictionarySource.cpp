@@ -159,7 +159,7 @@ bool ClickHouseDictionarySource::hasUpdateField() const
 std::string ClickHouseDictionarySource::toString() const
 {
     const std::string & where = configuration.where;
-    return "ClickHouse: " + configuration.db + '.' + configuration.table + (where.empty() ? "" : ", where: " + where);
+    return "Proton: " + configuration.db + '.' + configuration.table + (where.empty() ? "" : ", where: " + where);
 }
 
 Pipe ClickHouseDictionarySource::createStreamForQuery(const String & query, std::atomic<size_t> * result_size_hint)

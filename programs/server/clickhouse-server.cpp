@@ -3,7 +3,7 @@
 #include <base/phdr_cache.h>
 
 
-int mainEntryClickHouseServer(int argc, char ** argv);
+int mainServer(int argc, char ** argv);
 
 /**
   * This is the entry-point for the split build server. The initialization
@@ -20,5 +20,5 @@ int main(int argc_, char ** argv_)
     ///  will work only after additional call of this function.
     updatePHDRCache();
 
-    return mainEntryClickHouseServer(argc_, argv_);
+    return mainServer(argc_, argv_);
 }

@@ -171,7 +171,7 @@ static bool checkEnums(const capnp::Type & capnp_type, const DataTypePtr column_
         /// In CapnProto Enum fields are numbered sequentially starting from zero.
         if (enumerants.size() > max_value)
         {
-            error_message += "Enum from CapnProto schema contains values that is out of range for Clickhouse Enum";
+            error_message += "Enum from CapnProto schema contains values that is out of range for Proton Enum";
             return false;
         }
 

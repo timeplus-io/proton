@@ -71,7 +71,7 @@ static capnp::DynamicEnum getDynamicEnum(
             return capnp::DynamicEnum(enumerant);
     }
 
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot convert CLickHouse Enum value to CapnProto Enum");
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot convert Proton Enum value to CapnProto Enum");
 }
 
 static capnp::DynamicValue::Builder initStructFieldBuilder(const ColumnPtr & column, size_t row_num, capnp::DynamicStruct::Builder & struct_builder, capnp::StructSchema::Field field)

@@ -1068,7 +1068,7 @@ void dumpStats(Int64 total_cost, const ResultQueues & result_queues, const Bench
 }
 }
 
-int mainEntryClickHouseDWal(int argc, char ** argv)
+int mainDWal(int argc, char ** argv)
 {
     auto bench_settings = parseArgs(argc, argv);
     if (bench_settings.exit)

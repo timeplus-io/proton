@@ -39,7 +39,7 @@
 #endif
 
 
-int mainEntryClickHouseKeeper(int argc, char ** argv)
+int mainKeeper(int argc, char ** argv)
 {
     DB::Keeper app;
 

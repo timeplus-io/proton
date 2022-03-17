@@ -40,7 +40,7 @@ extern const int INVALID_FORMAT_INSERT_QUERY_WITH_DATA;
 }
 }
 
-int mainEntryClickHouseFormat(int argc, char ** argv)
+int mainFormat(int argc, char ** argv)
 {
     using namespace DB;
 

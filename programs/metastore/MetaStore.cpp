@@ -32,7 +32,7 @@
 #endif
 
 
-int mainEntryClickHouseMetaStore(int argc, char ** argv)
+int mainMetaStore(int argc, char ** argv)
 {
     DB::MetaStore app;
 

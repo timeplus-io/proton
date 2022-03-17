@@ -1,3 +1,3 @@
-int mainEntryClickHouseObfuscator(int argc, char ** argv);
-int main(int argc_, char ** argv_) { return mainEntryClickHouseObfuscator(argc_, argv_); }
+int mainObfuscator(int argc, char ** argv);
+int main(int argc_, char ** argv_) { return mainObfuscator(argc_, argv_); }
 

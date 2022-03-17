@@ -1184,7 +1184,7 @@ void processLog(const Options & options)
 
 }
 
-int mainEntryClickHouseGitImport(int argc, char ** argv)
+int mainGitImport(int argc, char ** argv)
 try
 {
     using namespace DB;

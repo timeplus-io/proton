@@ -803,7 +803,7 @@ void LocalServer::processOptions(const OptionsDescription &, const CommandLineOp
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
 
-int mainEntryClickHouseLocal(int argc, char ** argv)
+int mainLocal(int argc, char ** argv)
 {
     try
     {

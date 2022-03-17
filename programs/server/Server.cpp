@@ -150,7 +150,7 @@ static bool jemallocOptionEnabled(const char *name)
 static bool jemallocOptionEnabled(const char *) { return 0; }
 #endif
 
-int mainEntryClickHouseServer(int argc, char ** argv)
+int mainServer(int argc, char ** argv)
 {
     DB::Server app;
 
@@ -757,7 +757,7 @@ if (ThreadFuzzer::instance().isEffective())
             else
             {
                 throw Exception(ErrorCodes::CORRUPTED_DATA,
-                    "Calculated checksum of the ClickHouse binary ({0}) does not correspond"
+                    "Calculated checksum of the Proton binary ({0}) does not correspond"
                     " to the reference checksum stored in the binary ({1})."
                     " It may indicate one of the following:"
                     " - the file {2} was changed just after startup;"
@@ -790,7 +790,7 @@ if (ThreadFuzzer::instance().isEffective())
                     /// Get the memory area with (current) code segment.
                     /// It's better to lock only the code segment instead of calling "mlockall",
                     /// because otherwise debug info will be also locked in memory, and it can be huge.
-                    auto [addr, len] = getMappedArea(reinterpret_cast<void *>(mainEntryClickHouseServer));
+                    auto [addr, len] = getMappedArea(reinterpret_cast<void *>(mainServer));
 
                     LOG_TRACE(log, "Will do mlock to prevent executable memory from being paged out. It may take a few seconds.");
                     if (0 != mlock(addr, len))
@@ -1127,7 +1127,7 @@ if (ThreadFuzzer::instance().isEffective())
                 });
         }
 #else
-        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "ClickHouse server built without NuRaft library. Cannot use internal coordination.");
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Proton server built without NuRaft library. Cannot use internal coordination.");
 #endif
 
     }

@@ -590,7 +590,7 @@ public:
 #pragma GCC optimize("-fno-var-tracking-assignments")
 #endif
 
-int mainEntryClickHouseBenchmark(int argc, char ** argv)
+int mainBenchmark(int argc, char ** argv)
 {
     using namespace DB;
     bool print_stacktrace = true;
