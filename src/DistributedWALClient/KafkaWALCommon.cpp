@@ -6,6 +6,7 @@
 #include <base/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/hex.h>
+#include <Common/parseIntStrict.h>
 
 #include <cstring>
 
@@ -194,9 +195,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaContext & schem
     record->block.info.append_time = rd_kafka_message_timestamp(msg, nullptr);
     record->block.info.consume_time = consume_time;
     if (copy_topic)
-    {
         record->topic = rd_kafka_topic_name(msg->rkt);
-    }
 
     rd_kafka_headers_t * hdrs = nullptr;
     if (rd_kafka_message_headers(msg, &hdrs) == RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -211,11 +210,18 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaContext & schem
 
             if (rd_kafka_header_get_all(hdrs, i, &name, &value, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
             {
-                std::string v{static_cast<const char *>(value), size};
                 if (name == Record::INGEST_TIME_KEY)
-                    record->block.info.ingest_time = std::stoll(v);
+                {
+                    /// We add one more byte to the size to workaround the boundary issue in string_view
+                    record->block.info.ingest_time
+                        = DB::parseIntStrict<int64_t>(std::string_view(static_cast<const char *>(value), size + 1), 0, size);
+                    /// record->block.info.ingest_time = std::stoll(v);
+                }
                 else
+                {
+                    std::string v{static_cast<const char *>(value), size};
                     record->headers.emplace(name, std::move(v));
+                }
             }
         }
     }
@@ -225,8 +231,7 @@ RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const SchemaContext & schem
 
 DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::Logger * log)
 {
-    std::shared_ptr<rd_kafka_topic_t> topic_handle{
-        rd_kafka_topic_new(rk, name.c_str(), nullptr), rd_kafka_topic_destroy};
+    std::shared_ptr<rd_kafka_topic_t> topic_handle{rd_kafka_topic_new(rk, name.c_str(), nullptr), rd_kafka_topic_destroy};
 
     if (!topic_handle)
     {
@@ -243,7 +248,7 @@ DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::
         return {.err = mapErrorCode(err)};
     }
 
-    for (int32_t i = 0 ; i < metadata->topic_cnt; ++i)
+    for (int32_t i = 0; i < metadata->topic_cnt; ++i)
     {
         if (name == metadata->topics[i].topic)
         {

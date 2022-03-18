@@ -104,6 +104,7 @@ NamesAndTypesList Kafka::getVirtuals() const
 void Kafka::cacheVirtualColumnNamesAndTypes()
 {
     virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_EVENT_TIME, std::make_shared<DataTypeInt64>()));
     /// virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));

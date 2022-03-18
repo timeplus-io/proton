@@ -28,7 +28,7 @@ using ConsumeCallbackData = SchemaProvider;
 
 using ConsumeCallback = void (*)(RecordPtrs records, ConsumeCallbackData * data);
 
-using ConsumeRawCallback = void (*)(void * payload, size_t payload_len, size_t total_count, int64_t sn, int32_t partition, int64_t append_time, void * data);
+using ConsumeRawCallback = void (*)(void * kmessage, size_t total_count, void * data);
 
 struct DescribeResult
 {

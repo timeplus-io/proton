@@ -402,7 +402,8 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeCallback callback, ConsumeCallbac
     return DB::ErrorCodes::OK;
 }
 
-int32_t KafkaWALSimpleConsumer::consume(ConsumeRawCallback callback, void * data, uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
+int32_t KafkaWALSimpleConsumer::consume(
+    ConsumeRawCallback callback, void * data, uint32_t count, int32_t timeout_ms, const KafkaWALContext & ctx) const
 {
     assert(ctx.topic_handle);
 
@@ -419,9 +420,10 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeRawCallback callback, void * data
 
     if (res >= 0)
     {
+        auto ** rkmessages_arr = rkmessages.get();
         for (ssize_t idx = 0; idx < res; ++idx)
         {
-            auto rkmessage = rkmessages.get()[idx];
+            auto * rkmessage = rkmessages_arr[idx];
             if (likely(rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR))
             {
                 if (unlikely(rkmessage->offset < ctx.offset))
@@ -432,14 +434,7 @@ int32_t KafkaWALSimpleConsumer::consume(ConsumeRawCallback callback, void * data
                 {
                     try
                     {
-                        callback(
-                            rkmessage->payload,
-                            rkmessage->len,
-                            res,
-                            rkmessage->offset,
-                            rkmessage->partition,
-                            rd_kafka_message_timestamp(rkmessage, nullptr),
-                            data);
+                        callback(rkmessage, res, data);
                     }
                     catch (...)
                     {

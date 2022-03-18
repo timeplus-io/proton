@@ -11,6 +11,8 @@ namespace Poco
 class Logger;
 }
 
+struct rd_kafka_message_s;
+
 namespace DB
 {
 class Kafka;
@@ -40,10 +42,10 @@ private:
     void initConsumer(const Kafka * kafka);
     void initFormatExecutor(const Kafka * kafka);
 
-    static void parseMessage(void * payload, size_t payload_len, size_t total_count, int64_t sn, int32_t partition, int64_t append_time, void * data);
-    void doParseMessage(void * payload, size_t payload_len, size_t total_count, int64_t sn, int32_t partition, int64_t append_time);
-    void parseFormat(void * payload, size_t payload_len, int64_t append_time);
-    void parseRaw(void * payload, size_t payload_len, int64_t append_time);
+    static void parseMessage(void * kmessage, size_t total_count, void * data);
+    void doParseMessage(const rd_kafka_message_s * kmessage, size_t total_count);
+    void parseFormat(const rd_kafka_message_s * kmessage);
+    void parseRaw(const rd_kafka_message_s * kmessage);
 
     inline void readAndProcess();
 
@@ -63,7 +65,7 @@ private:
     std::unique_ptr<StreamingFormatExecutor> format_executor;
     ReadBufferFromMemory read_buffer;
 
-    std::vector<std::function<Int64(Int64)>> virtual_time_columns_calc;
+    std::vector<std::function<Int64(const rd_kafka_message_s *)>> virtual_time_columns_calc;
 
     /// These virtual columns have the same Int64 type
     DataTypePtr virtual_col_type;

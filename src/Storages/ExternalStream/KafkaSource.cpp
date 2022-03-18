@@ -9,6 +9,9 @@
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
 #include <Common/ProtonCommon.h>
+#include <Common/parseIntStrict.h>
+
+#include <librdkafka/rdkafka.h>
 
 namespace DB
 {
@@ -106,24 +109,21 @@ void KafkaSource::readAndProcess()
     iter = result_chunks.begin();
 }
 
-void KafkaSource::parseMessage(
-    void * payload, size_t payload_len, size_t total_count, int64_t sn, int32_t partition, int64_t append_time, void * data)
+void KafkaSource::parseMessage(void * kmessage, size_t total_count, void * data)
 {
     auto * kafka = static_cast<KafkaSource *>(data);
-    kafka->doParseMessage(payload, payload_len, total_count, sn, partition, append_time);
+    kafka->doParseMessage(static_cast<rd_kafka_message_t *>(kmessage), total_count);
 }
 
-void KafkaSource::doParseMessage(
-    void * payload, size_t payload_len, size_t /*total_count*/, int64_t /*sn*/, int32_t /*partition*/, int64_t append_time)
+void KafkaSource::doParseMessage(const rd_kafka_message_t * kmessage, size_t /*total_count*/)
 {
-    /// LOG_INFO(log, "got message from topic={}, size={}, offset={}", consume_ctx.topic, payload_len, sn);
     if (format_executor)
-        parseFormat(payload, payload_len, append_time);
+        parseFormat(kmessage);
     else
-        parseRaw(payload, payload_len, append_time);
+        parseRaw(kmessage);
 }
 
-void KafkaSource::parseRaw(void * payload, size_t payload_len, int64_t append_time)
+void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
 {
     if (!virtual_col_type)
     {
@@ -133,20 +133,20 @@ void KafkaSource::parseRaw(void * payload, size_t payload_len, int64_t append_ti
         if (current_batch.empty())
             current_batch.push_back(physical_header.getByPosition(0).type->createColumn());
 
-        current_batch.back()->insertData(static_cast<const char *>(payload), payload_len);
+        current_batch.back()->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
     }
     else
     {
-        /// slower path
+        /// slower path, request virtual columns
         if (!current_batch.empty())
         {
             assert(current_batch.size() == virtual_time_columns_calc.size());
             for (size_t i = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
             {
                 if (!virtual_time_columns_calc[i])
-                    current_batch[i]->insertData(static_cast<const char *>(payload), payload_len);
+                    current_batch[i]->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
                 else
-                    current_batch[i]->insertMany(virtual_time_columns_calc[i](append_time), 1);
+                    current_batch[i]->insertMany(virtual_time_columns_calc[i](kmessage), 1);
             }
         }
         else
@@ -156,12 +156,12 @@ void KafkaSource::parseRaw(void * payload, size_t payload_len, int64_t append_ti
                 if (!virtual_time_columns_calc[i])
                 {
                     current_batch.push_back(physical_header.getByPosition(0).type->createColumn());
-                    current_batch.back()->insertData(static_cast<const char *>(payload), payload_len);
+                    current_batch.back()->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
                 }
                 else
                 {
                     auto column = virtual_col_type->createColumn();
-                    column->insertMany(virtual_time_columns_calc[i](append_time), 1);
+                    column->insertMany(virtual_time_columns_calc[i](kmessage), 1);
                     current_batch.push_back(std::move(column));
                 }
             }
@@ -169,11 +169,11 @@ void KafkaSource::parseRaw(void * payload, size_t payload_len, int64_t append_ti
     }
 }
 
-void KafkaSource::parseFormat(void * payload, size_t payload_len, int64_t append_time)
+void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 {
     assert(format_executor);
 
-    ReadBufferFromMemory buffer(static_cast<const char *>(payload), payload_len);
+    ReadBufferFromMemory buffer(static_cast<const char *>(kmessage->payload), kmessage->len);
     auto new_rows = format_executor->execute(buffer);
     if (!new_rows)
         return;
@@ -211,7 +211,7 @@ void KafkaSource::parseFormat(void * payload, size_t payload_len, int64_t append
                 }
                 else
                 {
-                    current_batch[i]->insertMany(virtual_time_columns_calc[i](append_time), new_rows);
+                    current_batch[i]->insertMany(virtual_time_columns_calc[i](kmessage), new_rows);
                 }
             }
         }
@@ -230,7 +230,7 @@ void KafkaSource::parseFormat(void * payload, size_t payload_len, int64_t append
                 else
                 {
                     auto column = virtual_col_type->createColumn();
-                    column->insertMany(virtual_time_columns_calc[i](append_time), new_rows);
+                    column->insertMany(virtual_time_columns_calc[i](kmessage), new_rows);
                     current_batch.push_back(std::move(column));
                 }
             }
@@ -276,18 +276,46 @@ void KafkaSource::calculateColumnPositions()
     {
         if (column.name == RESERVED_APPEND_TIME)
         {
-            virtual_time_columns_calc[pos] = [](Int64 append_time) { return append_time; };
+            virtual_time_columns_calc[pos]
+                = [](const rd_kafka_message_t * kmessage) { return rd_kafka_message_timestamp(kmessage, nullptr); };
             /// We are assuming all virtual timestamp columns have the same data type
             virtual_col_type = column.type;
         }
         else if (column.name == RESERVED_CONSUME_TIME)
         {
-            virtual_time_columns_calc[pos] = [](Int64) { return UTCMilliseconds::now(); };
+            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t *) { return UTCMilliseconds::now(); };
             virtual_col_type = column.type;
         }
         else if (column.name == RESERVED_PROCESS_TIME)
         {
-            virtual_time_columns_calc[pos] = [](Int64) { return UTCMilliseconds::now(); };
+            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t *) { return UTCMilliseconds::now(); };
+            virtual_col_type = column.type;
+        }
+        else if (column.name == RESERVED_EVENT_TIME)
+        {
+            /// If Kafka message header contains `_tp_time`, honor it
+            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 {
+                rd_kafka_headers_t * hdrs = nullptr;
+                if (rd_kafka_message_headers(kmessage, &hdrs) == RD_KAFKA_RESP_ERR_NO_ERROR)
+                {
+                    /// Has headers
+                    const void * value = nullptr;
+                    size_t size = 0;
+
+                    if (rd_kafka_header_get_last(hdrs, RESERVED_EVENT_TIME.c_str(), &value, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
+                    {
+                        try
+                        {
+                            return parseIntStrict<Int64>(std::string_view(static_cast<const char *>(value), size + 1), 0, size);
+                        }
+                        catch (...)
+                        {
+                            return 0;
+                        }
+                    }
+                }
+                return 0;
+            };
             virtual_col_type = column.type;
         }
         else
