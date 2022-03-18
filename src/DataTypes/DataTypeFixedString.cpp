@@ -20,7 +20,7 @@ namespace ErrorCodes
 
 std::string DataTypeFixedString::doGetName() const
 {
-    return "FixedString(" + toString(n) + ")";
+    return "fixed_string(" + toString(n) + ")";
 }
 
 MutableColumnPtr DataTypeFixedString::createColumn() const
@@ -47,11 +47,11 @@ SerializationPtr DataTypeFixedString::doGetDefaultSerialization() const
 static DataTypePtr create(const ASTPtr & arguments)
 {
     if (!arguments || arguments->children.size() != 1)
-        throw Exception("FixedString data type family must have exactly one argument - size in bytes", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception("The fixed_string data type family must have exactly one argument - size in bytes", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const auto * argument = arguments->children[0]->as<ASTLiteral>();
     if (!argument || argument->value.getType() != Field::Types::UInt64 || argument->value.get<UInt64>() == 0)
-        throw Exception("FixedString data type family must have a number (positive integer) as its argument", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+        throw Exception("The fixed_string data type family must have a number (positive integer) as its argument", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
     return std::make_shared<DataTypeFixedString>(argument->value.get<UInt64>());
 }
@@ -59,10 +59,10 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeFixedString(DataTypeFactory & factory)
 {
-    factory.registerDataType("FixedString", create);
+    factory.registerDataType("fixed_string", create);
 
     /// Compatibility alias.
-    factory.registerAlias("BINARY", "FixedString", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("BINARY", "fixed_string", DataTypeFactory::CaseInsensitive);
 }
 
 }

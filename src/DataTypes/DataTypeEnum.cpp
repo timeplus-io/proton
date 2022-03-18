@@ -26,8 +26,8 @@ namespace ErrorCodes
 
 
 template <typename FieldType> struct EnumName;
-template <> struct EnumName<Int8> { static constexpr auto value = "Enum8"; };
-template <> struct EnumName<Int16> { static constexpr auto value = "Enum16"; };
+template <> struct EnumName<Int8> { static constexpr auto value = "enum8"; };
+template <> struct EnumName<Int16> { static constexpr auto value = "enum16"; };
 
 
 template <typename Type>
@@ -260,12 +260,12 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeEnum(DataTypeFactory & factory)
 {
-    factory.registerDataType("Enum8", createExact<DataTypeEnum<Int8>>);
-    factory.registerDataType("Enum16", createExact<DataTypeEnum<Int16>>);
-    factory.registerDataType("Enum", create);
+    factory.registerDataType("enum8", createExact<DataTypeEnum<Int8>>);
+    factory.registerDataType("enum16", createExact<DataTypeEnum<Int16>>);
+    factory.registerDataType("enum", create);
 
     /// MySQL
-    factory.registerAlias("ENUM", "Enum", DataTypeFactory::CaseInsensitive);
+    /// factory.registerAlias("ENUM", "enum", DataTypeFactory::CaseInsensitive);
 }
 
 }

@@ -9,7 +9,6 @@
 #include <Poco/String.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
-#include <Core/Defines.h>
 #include <Common/CurrentThread.h>
 #include <Interpreters/Context.h>
 
@@ -81,7 +80,7 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
         else
             low_cardinality_params->children.push_back(std::make_shared<ASTIdentifier>(param_name));
 
-        return get("LowCardinality", low_cardinality_params);
+        return get("low_cardinality", low_cardinality_params);
     }
 
     return findCreatorByName(family_name)(parameters);
@@ -211,7 +210,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDomainIPv4AndIPv6(*this);
     registerDataTypeDomainBool(*this);
     registerDataTypeDomainSimpleAggregateFunction(*this);
-    registerDataTypeDomainGeo(*this);
+    /// registerDataTypeDomainGeo(*this);
     registerDataTypeMap(*this);
 
     /// proton: starts.

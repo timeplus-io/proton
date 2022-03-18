@@ -43,12 +43,12 @@ public:
 
     std::string getName() const override
     {
-        return "Const(" + data->getName() + ")";
+        return "const(" + data->getName() + ")";
     }
 
     const char * getFamilyName() const override
     {
-        return "Const";
+        return "const";
     }
 
     TypeIndex getDataType() const override

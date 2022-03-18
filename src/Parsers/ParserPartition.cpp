@@ -38,7 +38,7 @@ bool ParserPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         const auto * tuple_ast = value->as<ASTFunction>();
         bool surrounded_by_parens = false;
-        if (tuple_ast && tuple_ast->name == "tuple")
+        if (tuple_ast && tuple_ast->name == "tuple_cast")
         {
             surrounded_by_parens = true;
             const auto * arguments_ast = tuple_ast->arguments->as<ASTExpressionList>();

@@ -483,7 +483,7 @@ ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, Mutable
             columns.push_back(checkAndGetColumn<ColumnType>(arg.nested_column));
 
         if (!columns.back())
-            throw Exception("Unexpected array type for function arrayIntersect", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unexpected array type for function array_intersect", ErrorCodes::LOGICAL_ERROR);
 
         if (!arg.null_map)
             all_nullable = false;

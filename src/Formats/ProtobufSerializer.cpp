@@ -257,7 +257,7 @@ namespace
             }
             catch (...)
             {
-                cannotConvertValue(str, "String", TypeName<DestType>);
+                cannotConvertValue(str, "string", TypeName<DestType>);
             }
         }
 
@@ -802,7 +802,7 @@ namespace
                         else if (str == "false")
                             writeUInt(0);
                         else
-                            cannotConvertValue(str, "String", field_descriptor.type_name());
+                            cannotConvertValue(str, "string", field_descriptor.type_name());
                     };
 
                     read_function = [this](PaddedPODArray<UInt8> & str)
@@ -814,7 +814,7 @@ namespace
                             str.insert(ref.data(), ref.data() + ref.length());
                         }
                         else
-                            cannotConvertValue(toString(u64), field_descriptor.type_name(), "String");
+                            cannotConvertValue(toString(u64), field_descriptor.type_name(), "string");
                     };
 
                     default_function = [this]() -> String
@@ -842,7 +842,7 @@ namespace
                 }
 
                 default:
-                    this->incompatibleColumnType(is_fixed_string ? "FixedString" : "String");
+                    this->incompatibleColumnType(is_fixed_string ? "fixed_string" : "string");
             }
         }
 
@@ -884,7 +884,7 @@ namespace
         {
             auto it = string_to_protobuf_enum_value_map.find(str);
             if (it == string_to_protobuf_enum_value_map.end())
-                cannotConvertValue(str, "String", field_descriptor.type_name());
+                cannotConvertValue(str, "string", field_descriptor.type_name());
             return it->second;
         }
 
@@ -892,7 +892,7 @@ namespace
         {
             const auto * enum_value_descriptor = field_descriptor.enum_type()->FindValueByNumber(value);
             if (!enum_value_descriptor)
-                cannotConvertValue(toString(value), field_descriptor.type_name(), "String");
+                cannotConvertValue(toString(value), field_descriptor.type_name(), "string");
             return enum_value_descriptor->name();
         }
 
@@ -1437,7 +1437,7 @@ namespace
                 }
 
                 default:
-                    incompatibleColumnType("Date");
+                    incompatibleColumnType("date");
             }
         }
 
@@ -1519,7 +1519,7 @@ namespace
                 }
 
                 default:
-                    incompatibleColumnType("DateTime");
+                    incompatibleColumnType("datetime");
             }
         }
 
@@ -1588,7 +1588,7 @@ namespace
         void setFunctions()
         {
             if ((field_typeid != FieldTypeId::TYPE_STRING) && (field_typeid != FieldTypeId::TYPE_BYTES))
-                incompatibleColumnType("UUID");
+                incompatibleColumnType("uuid");
 
             write_function = [this](UUID value)
             {

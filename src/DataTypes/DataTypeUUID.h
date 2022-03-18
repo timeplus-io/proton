@@ -17,7 +17,7 @@ public:
     using ColumnType = ColumnVector<UUID>;
     static constexpr auto type_id = TypeIndex::UUID;
 
-    const char * getFamilyName() const override { return "UUID"; }
+    const char * getFamilyName() const override { return "uuid"; }
     TypeIndex getTypeId() const override { return type_id; }
 
     Field getDefault() const override;

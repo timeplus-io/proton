@@ -39,7 +39,7 @@ class FunctionTupleOperator : public ITupleFunction
 {
 public:
     /// constexpr cannot be used due to std::string has not constexpr constructor in this compiler version
-    static inline auto name = "tuple" + makeFirstLetterUppercase(FuncName::name);
+    static inline auto name = std::string("tuple_") + FuncName::name;
 
     explicit FunctionTupleOperator(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionTupleOperator>(context_); }
@@ -216,7 +216,7 @@ class FunctionTupleOperatorByNumber : public ITupleFunction
 {
 public:
     /// constexpr cannot be used due to std::string has not constexpr constructor in this compiler version
-    static inline auto name = "tuple" + makeFirstLetterUppercase(FuncName::name) + "ByNumber";
+    static inline auto name = std::string("tuple_") + FuncName::name + "_by_number";
 
     explicit FunctionTupleOperatorByNumber(ContextPtr context_) : ITupleFunction(context_) {}
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionTupleOperatorByNumber>(context_); }

@@ -63,7 +63,7 @@ public:
         const auto & type = arguments[0].type;
 
         if (!WhichDataType(type.get()).isUInt64())
-            throw Exception("The only argument for function " + getName() + " must be UInt64. Found "
+            throw Exception("The only argument for function " + getName() + " must be uint64. Found "
                 + type->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();

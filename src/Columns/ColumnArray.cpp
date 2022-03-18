@@ -75,7 +75,7 @@ ColumnArray::ColumnArray(MutableColumnPtr && nested_column)
 }
 
 
-std::string ColumnArray::getName() const { return "Array(" + getData().getName() + ")"; }
+std::string ColumnArray::getName() const { return "array(" + getData().getName() + ")"; }
 
 
 MutableColumnPtr ColumnArray::cloneResized(size_t to_size) const
@@ -135,7 +135,7 @@ void ColumnArray::get(size_t n, Field & res) const
     size_t size = sizeAt(n);
 
     if (size > max_array_size_as_field)
-        throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Array of size {} is too large to be manipulated as single field, maximum size {}",
+        throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "array of size {} is too large to be manipulated as single field, maximum size {}",
             size, max_array_size_as_field);
 
     res = Array();

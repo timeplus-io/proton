@@ -79,7 +79,7 @@ INSTANTIATE_TEST_SUITE_P(ParseDecimal,
     ::testing::ValuesIn(
         std::initializer_list<ParseDataTypeTestCase>{
             {
-                "Decimal(8, 0)",
+                "decimal(8, 0)",
                 {"0", "5", "8", "-5", "-8", "12345678", "-12345678"},
 
                 std::initializer_list<Field>{

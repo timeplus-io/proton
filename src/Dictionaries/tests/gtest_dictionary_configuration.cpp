@@ -36,9 +36,9 @@ TEST(ConvertDictionaryAST, SimpleDictConfiguration)
 
     String input = " CREATE DICTIONARY test.dict1"
                    " ("
-                   "    key_column UInt64 DEFAULT 0,"
-                   "    second_column UInt8 DEFAULT 1,"
-                   "    third_column UInt8 DEFAULT 2"
+                   "    key_column uint64 DEFAULT 0,"
+                   "    second_column uint8 DEFAULT 1,"
+                   "    third_column uint8 DEFAULT 2"
                    " )"
                    " PRIMARY KEY key_column"
                    " SOURCE(CLICKHOUSE(HOST 'localhost' PORT 8463 USER 'default' PASSWORD '' DB 'test' TABLE 'table_for_dict'))"
@@ -63,8 +63,8 @@ TEST(ConvertDictionaryAST, SimpleDictConfiguration)
     /// range
     EXPECT_EQ(config->getString("dictionary.structure.range_min.name"), "second_column");
     EXPECT_EQ(config->getString("dictionary.structure.range_max.name"), "third_column");
-    EXPECT_EQ(config->getString("dictionary.structure.range_min.type"), "UInt8");
-    EXPECT_EQ(config->getString("dictionary.structure.range_max.type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure.range_min.type"), "uint8");
+    EXPECT_EQ(config->getString("dictionary.structure.range_max.type"), "uint8");
 
 
     /// source
@@ -81,11 +81,11 @@ TEST(ConvertDictionaryAST, SimpleDictConfiguration)
 
     EXPECT_EQ(keys.size(), 5); /// + ranged keys
     EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".name"), "second_column");
-    EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".type"), "uint8");
     EXPECT_EQ(config->getInt("dictionary.structure." + keys[0] + ".null_value"), 1);
 
     EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".name"), "third_column");
-    EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".type"), "uint8");
     EXPECT_EQ(config->getInt("dictionary.structure." + keys[1] + ".null_value"), 2);
 
     EXPECT_EQ(keys[2], "id");
@@ -109,9 +109,9 @@ TEST(ConvertDictionaryAST, TrickyAttributes)
 
     String input = " CREATE DICTIONARY dict2"
                    " ("
-                   "    key_column UInt64 IS_OBJECT_ID,"
-                   "    second_column UInt8 HIERARCHICAL INJECTIVE,"
-                   "    third_column UInt8 DEFAULT 2 EXPRESSION rand() % 100 * 77"
+                   "    key_column uint64 IS_OBJECT_ID,"
+                   "    second_column uint8 HIERARCHICAL INJECTIVE,"
+                   "    third_column uint8 DEFAULT 2 EXPRESSION rand() % 100 * 77"
                    " )"
                    " PRIMARY KEY key_column"
                    " LAYOUT(hashed())"
@@ -128,13 +128,13 @@ TEST(ConvertDictionaryAST, TrickyAttributes)
 
     EXPECT_EQ(keys.size(), 3);
     EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".name"), "second_column");
-    EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".type"), "uint8");
     EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".null_value"), "");
     EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".hierarchical"), "true");
     EXPECT_EQ(config->getString("dictionary.structure." + keys[0] + ".injective"), "true");
 
     EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".name"), "third_column");
-    EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".type"), "uint8");
     EXPECT_EQ(config->getInt("dictionary.structure." + keys[1] + ".null_value"), 2);
     EXPECT_EQ(config->getString("dictionary.structure." + keys[1] + ".expression"), "(rand() % 100) * 77");
 
@@ -153,10 +153,10 @@ TEST(ConvertDictionaryAST, ComplexKeyAndLayoutWithParams)
 
     String input = " CREATE DICTIONARY dict4"
                    " ("
-                   "    key_column1 String,"
-                   "    key_column2 UInt64,"
-                   "    third_column UInt8,"
-                   "    fourth_column UInt8"
+                   "    key_column1 string,"
+                   "    key_column2 uint64,"
+                   "    third_column uint8,"
+                   "    fourth_column uint8"
                    " )"
                    " PRIMARY KEY key_column1, key_column2"
                    " SOURCE(MYSQL())"
@@ -173,20 +173,20 @@ TEST(ConvertDictionaryAST, ComplexKeyAndLayoutWithParams)
 
     EXPECT_EQ(keys.size(), 2);
     EXPECT_EQ(config->getString("dictionary.structure.key." + keys[0] + ".name"), "key_column1");
-    EXPECT_EQ(config->getString("dictionary.structure.key." + keys[0] + ".type"), "String");
+    EXPECT_EQ(config->getString("dictionary.structure.key." + keys[0] + ".type"), "string");
 
     EXPECT_EQ(config->getString("dictionary.structure.key." + keys[1] + ".name"), "key_column2");
-    EXPECT_EQ(config->getString("dictionary.structure.key." + keys[1] + ".type"), "UInt64");
+    EXPECT_EQ(config->getString("dictionary.structure.key." + keys[1] + ".type"), "uint64");
 
     Poco::Util::AbstractConfiguration::Keys attrs;
     config->keys("dictionary.structure", attrs);
 
     EXPECT_EQ(attrs.size(), 3);
     EXPECT_EQ(config->getString("dictionary.structure." + attrs[0] + ".name"), "third_column");
-    EXPECT_EQ(config->getString("dictionary.structure." + attrs[0] + ".type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure." + attrs[0] + ".type"), "uint8");
 
     EXPECT_EQ(config->getString("dictionary.structure." + attrs[1] + ".name"), "fourth_column");
-    EXPECT_EQ(config->getString("dictionary.structure." + attrs[1] + ".type"), "UInt8");
+    EXPECT_EQ(config->getString("dictionary.structure." + attrs[1] + ".type"), "uint8");
 
     EXPECT_EQ(attrs[2], "key");
 
@@ -204,9 +204,9 @@ TEST(ConvertDictionaryAST, ComplexSource)
 
     String input = " CREATE DICTIONARY dict4"
                    " ("
-                   "    key_column UInt64,"
-                   "    second_column UInt8,"
-                   "    third_column UInt8"
+                   "    key_column uint64,"
+                   "    second_column uint8,"
+                   "    third_column uint8"
                    " )"
                    " PRIMARY KEY key_column"
                    " SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"

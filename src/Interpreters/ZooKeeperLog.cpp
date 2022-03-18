@@ -111,7 +111,7 @@ NamesAndTypesList ZooKeeperLogElement::getNamesAndTypes()
         {"type", std::move(type_enum)},
         {"event_date", std::make_shared<DataTypeDate>()},
         {"event_time", std::make_shared<DataTypeDateTime64>(6)},
-        {"address", DataTypeFactory::instance().get("IPv6")},
+        {"address", DataTypeFactory::instance().get("ipv6")},
         {"port", std::make_shared<DataTypeUInt16>()},
         {"session_id", std::make_shared<DataTypeInt64>()},
 

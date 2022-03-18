@@ -32,7 +32,7 @@ static String getTypeString(const AggregateFunctionPtr & func, std::optional<siz
 {
     WriteBufferFromOwnString stream;
 
-    stream << "AggregateFunction(";
+    stream << "aggregate_function(";
 
     /// If aggregate function does not support versioning its version is 0 and is not printed.
     if (version && *version)

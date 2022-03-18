@@ -11,24 +11,24 @@
                 "columns": [
                     {
                         "name": "id",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "location",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "value",
-                        "type": "Float32"
+                        "type": "float32"
                     },
                     {
                         "name": "json",
-                        "type": "String"
+                        "type": "string"
 
                     },
                     {
                         "name": "timestamp",
-                        "type": "Datetime64(3)",
+                        "type": "datetime64(3)",
                         "default": "now64(3)"
                     }
                 ],
@@ -40,24 +40,24 @@
                 "columns": [
                     {
                         "name": "id",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "location",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "value",
-                        "type": "Float32"
+                        "type": "float32"
                     },
                     {
                         "name": "json",
-                        "type": "String"
+                        "type": "string"
 
                     },
                     {
                         "name": "timestamp",
-                        "type": "Datetime64(3)",
+                        "type": "datetime64(3)",
                         "default": "now64(3)"
                     }
                 ]
@@ -68,24 +68,24 @@
                 "columns": [
                     {
                         "name": "id",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "location",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "value",
-                        "type": "Float32"
+                        "type": "float32"
                     },
                     {
                         "name": "json",
-                        "type": "String"
+                        "type": "string"
 
                     },
                     {
                         "name": "timestamp",
-                        "type": "Datetime64(3)",
+                        "type": "datetime64(3)",
                         "default": "now64(3)"
                     }
                 ],
@@ -97,11 +97,11 @@
                 "columns": [
                     {
                         "name": "id",
-                        "type": "String"
+                        "type": "string"
                     },
                     {
                         "name": "type",
-                        "type": "String"
+                        "type": "string"
                     }
 
                 ]},
@@ -600,7 +600,7 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":1, "query_type": "stream", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 emit last 5s"}]}                
+                    {"client":"python","query_id":"101", "wait":1, "query_type": "stream", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 emit last 5s"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["8"],
@@ -1116,7 +1116,7 @@
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2020-02-02 20:01:11"],
                     ["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2020-02-02 20:01:13"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:12"],
-                    ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]                    
+                    ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2020-02-02 20:01:15"]
                     ]}
                 ]}
             ],
@@ -1754,7 +1754,7 @@
                     ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
-                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]                    
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]
                     ]}
                 ]},
                 {"statements": [
@@ -2119,11 +2119,11 @@
                     {"client":"python","query_type": "input", "query":"truncate stream test"},
                     {"client":"python","query_id":"101", "query_type": "input", "query":"insert into test (id, location, value, json, timestamp) values ('dev1', 'ca', 370, 'jsonstring', '1999-01-01 11:11:11')"},
                     {"client":"python","query_id":"102", "query_type": "input", "query":"insert into test (id, location, value, json, timestamp) values ('dev2', 'ca', 380, 'jsonstring', '1999-01-01 11:11:11')"}
-                    
+
                     ]},
                 {"statements": [
                     {"client":"python","query_id":"103", "wait": 1, "query_type": "table", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(test)"}]}
-                
+
                 ],
             "expected_results": [{"query_id":"103", "expected_results":
                     [["dev1", "ca", 370, "jsonstring", "1999-01-01 11:11:11"],

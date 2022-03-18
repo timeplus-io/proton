@@ -85,7 +85,7 @@ std::string DataTypeTuple::doGetName() const
     size_t size = elems.size();
     WriteBufferFromOwnString s;
 
-    s << "Tuple(";
+    s << "tuple(";
     for (size_t i = 0; i < size; ++i)
     {
         if (i != 0)
@@ -167,7 +167,7 @@ MutableColumnPtr DataTypeTuple::createColumn(const ISerialization & serializatio
 
     const auto * serialization_tuple = typeid_cast<const SerializationTuple *>(current_serialization);
     if (!serialization_tuple)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected serialization to create column of type Tuple");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected serialization to create column of type tuple");
 
     const auto & element_serializations = serialization_tuple->getElementsSerializations();
 
@@ -328,7 +328,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     if (names.empty())
         return std::make_shared<DataTypeTuple>(nested_types);
     else if (names.size() != nested_types.size())
-        throw Exception("Names are specified not for all elements of Tuple type", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Names are specified not for all elements of tuple type", ErrorCodes::BAD_ARGUMENTS);
     else
         return std::make_shared<DataTypeTuple>(nested_types, names);
 }
@@ -336,7 +336,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeTuple(DataTypeFactory & factory)
 {
-    factory.registerDataType("Tuple", create);
+    factory.registerDataType("tuple", create);
 }
 
 }

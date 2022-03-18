@@ -32,7 +32,7 @@ private:
         bool is_function_compiled_ = false);
 
 public:
-    const char * getFamilyName() const override { return "Function"; }
+    const char * getFamilyName() const override { return "function"; }
     TypeIndex getDataType() const override { return TypeIndex::Function; }
 
     MutableColumnPtr cloneResized(size_t size) const override;

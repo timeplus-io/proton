@@ -9,7 +9,7 @@ namespace DB
 class DataTypeDate final : public DataTypeNumberBase<UInt16>
 {
 public:
-    static constexpr auto family_name = "Date";
+    static constexpr auto family_name = "date";
 
     TypeIndex getTypeId() const override { return TypeIndex::Date; }
     const char * getFamilyName() const override { return family_name; }

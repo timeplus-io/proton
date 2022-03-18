@@ -52,7 +52,7 @@ namespace
         if (!callOnIndexAndDataType<void>(type_index, call))
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Dictionary structure type of 'range_min' and 'range_max' should be an Integer, Float, Decimal, Date, Date32, DateTime DateTime64, or Enum."
+                "Dictionary structure type of 'range_min' and 'range_max' should be an integer, float, decimal, date, date32, datetime datetime64, or enum."
                 " Actual 'range_min' and 'range_max' type is {}",
                 range_type->getName());
         }
@@ -987,7 +987,7 @@ Pipe RangeHashedDictionary<dictionary_key_type>::read(const Names & column_names
         const auto * key_to_index_column = typeid_cast<const ColumnUInt64 *>(key_column.get());
         if (!key_to_index_column)
             throw Exception(ErrorCodes::LOGICAL_ERROR,
-                "Dictionary {} read expect indexes column with type UInt64",
+                "Dictionary {} read expect indexes column with type uint64",
                 range_dictionary_ptr->getFullName());
 
         const auto & data = key_to_index_column->getData();

@@ -138,7 +138,7 @@ private:
             return tuple.getPositionByName(name_col->getValue<String>());
         }
         else
-            throw Exception("Second argument to " + getName() + " must be a constant UInt or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception("Second argument to " + getName() + " must be a constant uint or string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 

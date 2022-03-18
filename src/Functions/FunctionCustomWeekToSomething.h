@@ -54,8 +54,8 @@ public:
                 throw Exception(
                     "Function " + getName()
                         + " supports 1 or 2 or 3 arguments. The 1st argument "
-                          "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                          "a constant UInt8 with week mode. The 3rd argument (optional) must be "
+                          "must be of type date or datetime. The 2nd argument (optional) must be "
+                          "a constant uint8 with week mode. The 3rd argument (optional) must be "
                           "a constant string with timezone name",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
@@ -70,16 +70,16 @@ public:
                 throw Exception(
                     "Function " + getName()
                         + " supports 1 or 2 or 3 arguments. The 1st argument "
-                          "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                          "a constant UInt8 with week mode. The 3rd argument (optional) must be "
+                          "must be of type Date or datetime. The 2nd argument (optional) must be "
+                          "a constant uint8 with week mode. The 3rd argument (optional) must be "
                           "a constant string with timezone name",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             if (!isString(arguments[2].type))
                 throw Exception(
                     "Function " + getName()
                         + " supports 1 or 2 or 3 arguments. The 1st argument "
-                          "must be of type Date or DateTime. The 2nd argument (optional) must be "
-                          "a constant UInt8 with week mode. The 3rd argument (optional) must be "
+                          "must be of type Date or datetime. The 2nd argument (optional) must be "
+                          "a constant uint8 with week mode. The 3rd argument (optional) must be "
                           "a constant string with timezone name",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             if (isDate(arguments[0].type) && std::is_same_v<ToDataType, DataTypeDate>)

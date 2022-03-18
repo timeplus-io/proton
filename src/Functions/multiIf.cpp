@@ -100,7 +100,7 @@ public:
 
             if (!WhichDataType(nested_type).isUInt8())
                 throw Exception{"Illegal type " + arg->getName() + " of argument (condition) "
-                    "of function " + getName() + ". Must be UInt8.",
+                    "of function " + getName() + ". Must be uint8.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         });
 

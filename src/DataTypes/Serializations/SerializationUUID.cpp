@@ -22,7 +22,7 @@ void SerializationUUID::deserializeText(IColumn & column, ReadBuffer & istr, con
     assert_cast<ColumnUUID &>(column).getData().push_back(x);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "UUID");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "uuid");
 }
 
 void SerializationUUID::deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const

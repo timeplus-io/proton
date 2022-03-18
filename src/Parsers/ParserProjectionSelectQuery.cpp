@@ -68,7 +68,7 @@ bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected &
         else
         {
             auto function_node = std::make_shared<ASTFunction>();
-            function_node->name = "tuple";
+            function_node->name = "tuple_cast";
             function_node->arguments = expr_list;
             function_node->children.push_back(expr_list);
             order_expression = function_node;

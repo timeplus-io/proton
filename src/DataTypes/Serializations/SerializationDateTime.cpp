@@ -63,7 +63,7 @@ void SerializationDateTime::deserializeWholeText(IColumn & column, ReadBuffer & 
 {
     deserializeTextEscaped(column, istr, settings);
     if (!istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "DateTime");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "datetime");
 }
 
 void SerializationDateTime::deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const

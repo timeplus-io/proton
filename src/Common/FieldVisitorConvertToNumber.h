@@ -82,7 +82,7 @@ public:
 
     T operator() (const UInt128 &) const
     {
-        throw Exception("Cannot convert UInt128 to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
+        throw Exception("Cannot convert uint128 to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
     }
 
     template <typename U>
@@ -102,7 +102,7 @@ public:
                 return UInt128(tmp >> 64, UInt64(tmp));
             }
             else
-                throw Exception("No conversion to old UInt128 from " + demangle(typeid(U).name()), ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception("No conversion to old uint128 from " + demangle(typeid(U).name()), ErrorCodes::NOT_IMPLEMENTED);
         }
         else
             return (x.getValue() / x.getScaleMultiplier()). template convertTo<T>();
@@ -119,7 +119,7 @@ public:
         if constexpr (is_decimal<T>)
             return static_cast<T>(static_cast<typename T::NativeType>(x));
         else if constexpr (std::is_same_v<T, UInt128>)
-            throw Exception("No conversion to old UInt128 from " + demangle(typeid(U).name()), ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception("No conversion to old uint128 from " + demangle(typeid(U).name()), ErrorCodes::NOT_IMPLEMENTED);
         else
             return static_cast<T>(x);
     }

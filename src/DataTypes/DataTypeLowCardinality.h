@@ -19,9 +19,9 @@ public:
 
     String doGetName() const override
     {
-        return "LowCardinality(" + dictionary_type->getName() + ")";
+        return "low_cardinality(" + dictionary_type->getName() + ")";
     }
-    const char * getFamilyName() const override { return "LowCardinality"; }
+    const char * getFamilyName() const override { return "low_cardinality"; }
     TypeIndex getTypeId() const override { return TypeIndex::LowCardinality; }
 
     MutableColumnPtr createColumn() const override;

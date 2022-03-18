@@ -103,6 +103,8 @@ class S3Helper:
             .replace("+", "%2B")
             .replace(" ", "%20")
         )
+    def download_file(self, bucket_name, s3_path, file_path):
+        self.client.download_file(bucket_name, s3_path, file_path)
 
     def upload_test_report_to_s3(self, file_path, s3_path):
         return self._upload_file_to_s3("tp-internal", file_path, s3_path)

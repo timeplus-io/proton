@@ -1,8 +1,4 @@
-#include <IO/WriteBufferFromOStream.h>
-#include <Interpreters/applyTableOverride.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 /// proton: starts
@@ -154,8 +150,8 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateQuery_DICTIONARY_WITH_COMMENT, ParserTest,
         {
             R"sql(CREATE DICTIONARY 2024_dictionary_with_comment
 (
-    id UInt64,
-    value String
+    id uint64,
+    value string
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'source_table'))
@@ -165,8 +161,8 @@ COMMENT 'Test dictionary with comment';
 )sql",
         R"sql(CREATE DICTIONARY `2024_dictionary_with_comment`
 (
-    `id` UInt64,
-    `value` String
+    `id` uint64,
+    `value` string
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'source_table'))
@@ -189,8 +185,8 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateDatabaseQuery, ParserTest,
             "CREATE DATABASE db\nENGINE = MaterializeMySQL('addr:port', 'db', 'user', 'pw')\nTABLE OVERRIDE `tbl`\n(\n    PARTITION BY to_YYYYMM(`created`)\n)"
         },
         {
-            "CREATE DATABASE db ENGINE=Foo TABLE OVERRIDE `tbl` (), TABLE OVERRIDE a (COLUMNS (_created DateTime MATERIALIZED now())), TABLE OVERRIDE b (PARTITION BY rand())",
-            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `tbl`,\nTABLE OVERRIDE `a`\n(\n    COLUMNS\n    (\n        `_created` DateTime MATERIALIZED now()\n    )\n),\nTABLE OVERRIDE `b`\n(\n    PARTITION BY rand()\n)"
+            "CREATE DATABASE db ENGINE=Foo TABLE OVERRIDE `tbl` (), TABLE OVERRIDE a (COLUMNS (_created datetime MATERIALIZED now())), TABLE OVERRIDE b (PARTITION BY rand())",
+            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `tbl`,\nTABLE OVERRIDE `a`\n(\n    COLUMNS\n    (\n        `_created` datetime MATERIALIZED now()\n    )\n),\nTABLE OVERRIDE `b`\n(\n    PARTITION BY rand()\n)"
         },
         {
             "CREATE DATABASE db ENGINE=MaterializeMySQL('addr:port', 'db', 'user', 'pw') TABLE OVERRIDE tbl (COLUMNS (id UUID) PARTITION BY to_YYYYMM(created))",
@@ -205,12 +201,12 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateDatabaseQuery, ParserTest,
             "CREATE DATABASE db\nTABLE OVERRIDE `t1`\n(\n    TTL `inserted` + to_interval_month(1)\n),\nTABLE OVERRIDE `t2`\n(\n    TTL `inserted` + to_interval_month(2)\n)"
         },
         {
-            "CREATE DATABASE db ENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw') SETTINGS allows_query_when_mysql_lost = 1 TABLE OVERRIDE tab3 (COLUMNS (_staged UInt8 MATERIALIZED 1) PARTITION BY (c3) TTL c3 + INTERVAL 10 minute), TABLE OVERRIDE tab5 (PARTITION BY (c3) TTL c3 + INTERVAL 10 minute)",
-            "CREATE DATABASE db\nENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw')\nSETTINGS allows_query_when_mysql_lost = 1\nTABLE OVERRIDE `tab3`\n(\n    COLUMNS\n    (\n        `_staged` UInt8 MATERIALIZED 1\n    )\n    PARTITION BY `c3`\n    TTL `c3` + to_interval_minute(10)\n),\nTABLE OVERRIDE `tab5`\n(\n    PARTITION BY `c3`\n    TTL `c3` + to_interval_minute(10)\n)"
+            "CREATE DATABASE db ENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw') SETTINGS allows_query_when_mysql_lost = 1 TABLE OVERRIDE tab3 (COLUMNS (_staged uint8 MATERIALIZED 1) PARTITION BY (c3) TTL c3 + INTERVAL 10 minute), TABLE OVERRIDE tab5 (PARTITION BY (c3) TTL c3 + INTERVAL 10 minute)",
+            "CREATE DATABASE db\nENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw')\nSETTINGS allows_query_when_mysql_lost = 1\nTABLE OVERRIDE `tab3`\n(\n    COLUMNS\n    (\n        `_staged` uint8 MATERIALIZED 1\n    )\n    PARTITION BY `c3`\n    TTL `c3` + to_interval_minute(10)\n),\nTABLE OVERRIDE `tab5`\n(\n    PARTITION BY `c3`\n    TTL `c3` + to_interval_minute(10)\n)"
         },
         {
-            "CREATE DATABASE db TABLE OVERRIDE tbl (PARTITION BY to_YYYYMM(created) COLUMNS (created DateTime CODEC(Delta)))",
-            "CREATE DATABASE db\nTABLE OVERRIDE `tbl`\n(\n    COLUMNS\n    (\n        `created` DateTime CODEC(Delta)\n    )\n    PARTITION BY to_YYYYMM(`created`)\n)"
+            "CREATE DATABASE db TABLE OVERRIDE tbl (PARTITION BY to_YYYYMM(created) COLUMNS (created datetime CODEC(Delta)))",
+            "CREATE DATABASE db\nTABLE OVERRIDE `tbl`\n(\n    COLUMNS\n    (\n        `created` datetime CODEC(Delta)\n    )\n    PARTITION BY to_YYYYMM(`created`)\n)"
         },
         {
             "CREATE DATABASE db ENGINE = Foo() SETTINGS a = 1",
@@ -236,8 +232,8 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery, ParserTest,
                              ::testing::Values(std::make_shared<ParserCreateQuery>()),
                              ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
                                  {
-                                     "CREATE STREAM tests (`device` String)",
-                                     "CREATE STREAM tests\n(\n    `device` String\n)"
+                                     "CREATE STREAM tests (`device` string)",
+                                     "CREATE STREAM tests\n(\n    `device` string\n)"
                                  }
                              })));
 /// proton: ends
@@ -252,8 +248,8 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                                      "ALTER STREAM tests\n    MODIFY TTL ttl + 1d"
                                  },
                                  {
-                                     "ALTER stream tests MODIFY COLUMN id UInt64 DEFAULT 64",
-                                     "ALTER STREAM tests\n    MODIFY COLUMN `id` UInt64 DEFAULT 64"
+                                     "ALTER stream tests MODIFY COLUMN id uint64 DEFAULT 64",
+                                     "ALTER STREAM tests\n    MODIFY COLUMN `id` uint64 DEFAULT 64"
                                  },
                                  {
                                      "ALTER STREAM tests RENAME COLUMN id to id1",

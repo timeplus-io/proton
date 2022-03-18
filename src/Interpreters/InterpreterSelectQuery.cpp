@@ -963,7 +963,7 @@ static UInt64 getLimitUIntValue(const ASTPtr & node, ContextPtr context, const s
     Field converted = convertFieldToType(field, DataTypeUInt64());
     if (converted.isNull())
         throw Exception(
-            "The value " + applyVisitor(FieldVisitorToString(), field) + " of " + expr + " expression is not representable as UInt64",
+            "The value " + applyVisitor(FieldVisitorToString(), field) + " of " + expr + " expression is not representable as uint64",
             ErrorCodes::INVALID_LIMIT_EXPRESSION);
 
     return converted.safeGet<UInt64>();

@@ -35,7 +35,7 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
             const ColumnNullable * column_nested_nullable = checkAndGetColumn<ColumnNullable>(*column_nested);
             if (!column_nested_nullable || !typeid_cast<const ColumnUInt8 *>(&column_nested_nullable->getNestedColumn()))
             {
-                throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be UInt8 or Nullable(UInt8).",
+                throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be uint8 or nullable(uint8).",
                                 ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
             }
         }
@@ -72,7 +72,7 @@ FilterDescription::FilterDescription(const IColumn & column_)
 
         ColumnUInt8 * concrete_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
         if (!concrete_column)
-            throw Exception("Illegal type " + column.getName() + " of column for filter. Must be UInt8 or Nullable(UInt8).",
+            throw Exception("Illegal type " + column.getName() + " of column for filter. Must be uint8 or nullable(uint8).",
                 ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 
         const NullMap & null_map = nullable_column->getNullMapData();
@@ -87,7 +87,7 @@ FilterDescription::FilterDescription(const IColumn & column_)
         return;
     }
 
-    throw Exception("Illegal type " + column.getName() + " of column for filter. Must be UInt8 or Nullable(UInt8) or Const variants of them.",
+    throw Exception("Illegal type " + column.getName() + " of column for filter. Must be uint8 or nullable(uint8) or const variants of them.",
         ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 }
 

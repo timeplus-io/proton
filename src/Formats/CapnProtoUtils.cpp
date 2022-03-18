@@ -71,22 +71,22 @@ bool compareEnumNames(const String & first, const String & second, FormatSetting
 
 static const std::map<capnp::schema::Type::Which, String> capnp_simple_type_names =
 {
-        {capnp::schema::Type::Which::BOOL, "Bool"},
-        {capnp::schema::Type::Which::VOID, "Void"},
-        {capnp::schema::Type::Which::INT8, "Int8"},
-        {capnp::schema::Type::Which::INT16, "Int16"},
-        {capnp::schema::Type::Which::INT32, "Int32"},
-        {capnp::schema::Type::Which::INT64, "Int64"},
-        {capnp::schema::Type::Which::UINT8, "UInt8"},
-        {capnp::schema::Type::Which::UINT16, "UInt16"},
-        {capnp::schema::Type::Which::UINT32, "UInt32"},
-        {capnp::schema::Type::Which::UINT64, "UInt64"},
-        {capnp::schema::Type::Which::FLOAT32, "Float32"},
-        {capnp::schema::Type::Which::FLOAT64, "Float64"},
-        {capnp::schema::Type::Which::TEXT, "Text"},
-        {capnp::schema::Type::Which::DATA, "Data"},
-        {capnp::schema::Type::Which::INTERFACE, "Interface"},
-        {capnp::schema::Type::Which::ANY_POINTER, "AnyPointer"},
+        {capnp::schema::Type::Which::BOOL, "bool"},
+        {capnp::schema::Type::Which::VOID, "void"},
+        {capnp::schema::Type::Which::INT8, "int8"},
+        {capnp::schema::Type::Which::INT16, "int16"},
+        {capnp::schema::Type::Which::INT32, "int32"},
+        {capnp::schema::Type::Which::INT64, "int64"},
+        {capnp::schema::Type::Which::UINT8, "uint8"},
+        {capnp::schema::Type::Which::UINT16, "uint16"},
+        {capnp::schema::Type::Which::UINT32, "uint32"},
+        {capnp::schema::Type::Which::UINT64, "uint64"},
+        {capnp::schema::Type::Which::FLOAT32, "float32"},
+        {capnp::schema::Type::Which::FLOAT64, "float64"},
+        {capnp::schema::Type::Which::TEXT, "text"},
+        {capnp::schema::Type::Which::DATA, "data"},
+        {capnp::schema::Type::Which::INTERFACE, "interface"},
+        {capnp::schema::Type::Which::ANY_POINTER, "any_pointer"},
 };
 
 static bool checkIfStructContainsUnnamedUnion(const capnp::StructSchema & struct_schema)

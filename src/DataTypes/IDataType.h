@@ -517,7 +517,7 @@ inline bool isCompilableType(const DataTypePtr & data_type)
 
 inline bool isBool(const DataTypePtr & data_type)
 {
-    return data_type->getName() == "Bool";
+    return data_type->getName() == "bool";
 }
 
 template <typename DataType> constexpr bool IsDataTypeDecimal = false;

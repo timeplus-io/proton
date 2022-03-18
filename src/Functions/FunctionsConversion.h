@@ -1023,7 +1023,7 @@ inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer &
         message_buf << " at begin of string";
 
     // Currently there are no functions toIPv{4,6}Or{Null,Zero}
-    if (isNativeNumber(to_type) && !(to_type.getName() == "IPv4" || to_type.getName() == "IPv6"))
+    if (isNativeNumber(to_type) && !(to_type.getName() == "ipv4" || to_type.getName() == "ipv6"))
         /// proton: starts. renaming lower
         message_buf << ". Note: there are to_" << Poco::toLower(to_type.getName()) << "_or_zero and to_" << Poco::toLower(to_type.getName()) << "_or_null functions, which returns zero/NULL instead of throwing exception.";
         /// proton: ends.
@@ -1898,7 +1898,7 @@ public:
                 {
                     throw Exception(
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Illegal type {} of first argument of function {} should take String argument.",
+                        "Illegal type {} of first argument of function {} should take string argument.",
                         arguments[0].type->getName(),
                         getName());
                 }
@@ -1918,7 +1918,7 @@ public:
                     {
                         throw Exception(
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                            "Illegal type {} of 2nd argument of function {} should be String or Integer.",
+                            "Illegal type {} of 2nd argument of function {} should be string or integer.",
                             arguments[1].type->getName(),
                             getName());
                     }
@@ -1928,7 +1928,7 @@ public:
                     if (!isInteger(arguments[1].type))
                         throw Exception(
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                            "Illegal type {} of 2nd argument of function {} should be Integer.",
+                            "Illegal type {} of 2nd argument of function {} should be integer.",
                             arguments[1].type->getName(),
                             getName());
                     scale_arg_num = 1;
@@ -1936,7 +1936,7 @@ public:
                     if (!isStringOrFixedString(arguments[2].type))
                         throw Exception(
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                            "Illegal type {} of 2nd argument of function {} should be String or FixedString.",
+                            "Illegal type {} of 2nd argument of function {} should be string or fixed_string.",
                             arguments[2].type->getName(),
                             getName());
                     time_zone_arg_num = 2;
@@ -1947,11 +1947,11 @@ public:
                 validateFunctionArgumentTypes(
                     *this,
                     arguments,
-                    FunctionArgumentDescriptors{{"string", &isStringOrFixedString<IDataType>, nullptr, "String or FixedString"}},
+                    FunctionArgumentDescriptors{{"string", &isStringOrFixedString<IDataType>, nullptr, "string or fixed_string"}},
                     // optional
                     FunctionArgumentDescriptors{
                         {"precision", &isUInt8<IDataType>, isColumnConst, "const UInt8"},
-                        {"timezone", &isStringOrFixedString<IDataType>, isColumnConst, "const String or FixedString"},
+                        {"timezone", &isStringOrFixedString<IDataType>, isColumnConst, "const string or fixed_string"},
                     });
             }
             /// proton: ends
@@ -1970,7 +1970,7 @@ public:
         {
             if ((arguments.size() != 1 && arguments.size() != 2) || (to_decimal && arguments.size() != 2))
                 throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) +
-                    ", should be 1 or 2. Second argument only make sense for DateTime (time zone, optional) and Decimal (scale).",
+                    ", should be 1 or 2. Second argument only make sense for DateTime (time zone, optional) and decimal (scale).",
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
             if (!isStringOrFixedString(arguments[0].type))

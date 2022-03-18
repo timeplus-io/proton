@@ -69,7 +69,7 @@ bool maybeTrueOnBloomFilter(const IColumn * hash_column, const BloomFilterPtr & 
     const auto * non_const_column = typeid_cast<const ColumnUInt64 *>(hash_column);
 
     if (!const_column && !non_const_column)
-        throw Exception("LOGICAL ERROR: hash column must be Const Column or UInt64 Column.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("LOGICAL ERROR: hash column must be Const Column or uint64 Column.", ErrorCodes::LOGICAL_ERROR);
 
     if (const_column)
     {
@@ -349,7 +349,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTIn(
     {
         WhichDataType which(type);
 
-        if (which.isTuple() && function->name == "tuple")
+        if (which.isTuple() && function->name == "tuple_cast")
         {
             const auto & tuple_column = typeid_cast<const ColumnTuple *>(column.get());
             const auto & tuple_data_type = typeid_cast<const DataTypeTuple *>(type.get());
@@ -611,7 +611,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTEquals(
     {
         WhichDataType which(value_type);
 
-        if (which.isTuple() && function->name == "tuple")
+        if (which.isTuple() && function->name == "tuple_cast")
         {
             const Tuple & tuple = get<const Tuple &>(value_field);
             const auto * value_tuple_data_type = typeid_cast<const DataTypeTuple *>(value_type.get());

@@ -117,39 +117,39 @@ void KafkaWALPool::init(const std::string & key)
     bool system_default = false;
 
     std::vector<std::tuple<String, String, void *>> settings = {
-        {".default", "Bool", &system_default},
-        {".cluster_id", "String", &kafka_settings.cluster_id},
-        {".security_protocol", "String", &kafka_settings.security_protocol},
-        {".brokers", "String", &kafka_settings.brokers},
-        {".topic_metadata_refresh_interval_ms", "Int32", &kafka_settings.topic_metadata_refresh_interval_ms},
-        {".message_max_bytes", "Int32", &kafka_settings.message_max_bytes},
-        {".statistic_internal_ms", "Int32", &kafka_settings.statistic_internal_ms},
-        {".debug", "String", &kafka_settings.debug},
-        {".enable_idempotence", "Bool", &kafka_settings.enable_idempotence},
-        {".queue_buffering_max_messages", "Int32", &kafka_settings.queue_buffering_max_messages},
-        {".queue_buffering_max_kbytes", "Int32", &kafka_settings.queue_buffering_max_kbytes},
-        {".queue_buffering_max_ms", "Int32", &kafka_settings.queue_buffering_max_ms},
-        {".message_send_max_retries", "Int32", &kafka_settings.message_send_max_retries},
-        {".retry_backoff_ms", "Int32", &kafka_settings.retry_backoff_ms},
-        {".compression_codec", "String", &kafka_settings.compression_codec},
-        {".message_timeout_ms", "Int32", &kafka_settings.message_timeout_ms},
-        {".message_delivery_async_poll_ms", "Int32", &kafka_settings.message_delivery_async_poll_ms},
-        {".message_delivery_sync_poll_ms", "Int32", &kafka_settings.message_delivery_sync_poll_ms},
-        {".group_id", "String", &kafka_settings.group_id},
-        {".check_crcs", "Bool", &kafka_settings.check_crcs},
-        {".auto_commit_interval_ms", "Int32", &kafka_settings.auto_commit_interval_ms},
-        {".fetch_message_max_bytes", "Int32", &kafka_settings.fetch_message_max_bytes},
-        {".fetch_wait_max_ms", "Int32", &kafka_settings.fetch_wait_max_ms},
-        {".queued_min_messages", "Int32", &kafka_settings.queued_min_messages},
-        {".queued_max_messages_kbytes", "Int32", &kafka_settings.queued_max_messages_kbytes},
-        {".session_timeout_ms", "Int32", &kafka_settings.session_timeout_ms},
-        {".max_poll_interval_ms", "Int32", &kafka_settings.max_poll_interval_ms},
-        {".dedicated_subscription_pool_size", "Int32", &dedicated_subscription_wal_pool_size},
-        {".shared_subscription_pool_max_size", "Int32", &shared_subscription_wal_pool_max_size},
-        {".shared_subscription_flush_threshold_count", "Int32", &kafka_settings.shared_subscription_flush_threshold_count},
-        {".shared_subscription_flush_threshold_bytes", "Int32", &kafka_settings.shared_subscription_flush_threshold_bytes},
-        {".shared_subscription_flush_threshold_ms", "Int32", &kafka_settings.shared_subscription_flush_threshold_ms},
-        {".streaming_processing_pool_size", "Int32", &streaming_wal_pool_size},
+        {".default", "bool", &system_default},
+        {".cluster_id", "string", &kafka_settings.cluster_id},
+        {".security_protocol", "string", &kafka_settings.security_protocol},
+        {".brokers", "string", &kafka_settings.brokers},
+        {".topic_metadata_refresh_interval_ms", "int32", &kafka_settings.topic_metadata_refresh_interval_ms},
+        {".message_max_bytes", "int32", &kafka_settings.message_max_bytes},
+        {".statistic_internal_ms", "int32", &kafka_settings.statistic_internal_ms},
+        {".debug", "string", &kafka_settings.debug},
+        {".enable_idempotence", "bool", &kafka_settings.enable_idempotence},
+        {".queue_buffering_max_messages", "int32", &kafka_settings.queue_buffering_max_messages},
+        {".queue_buffering_max_kbytes", "int32", &kafka_settings.queue_buffering_max_kbytes},
+        {".queue_buffering_max_ms", "int32", &kafka_settings.queue_buffering_max_ms},
+        {".message_send_max_retries", "int32", &kafka_settings.message_send_max_retries},
+        {".retry_backoff_ms", "int32", &kafka_settings.retry_backoff_ms},
+        {".compression_codec", "string", &kafka_settings.compression_codec},
+        {".message_timeout_ms", "int32", &kafka_settings.message_timeout_ms},
+        {".message_delivery_async_poll_ms", "int32", &kafka_settings.message_delivery_async_poll_ms},
+        {".message_delivery_sync_poll_ms", "int32", &kafka_settings.message_delivery_sync_poll_ms},
+        {".group_id", "string", &kafka_settings.group_id},
+        {".check_crcs", "bool", &kafka_settings.check_crcs},
+        {".auto_commit_interval_ms", "int32", &kafka_settings.auto_commit_interval_ms},
+        {".fetch_message_max_bytes", "int32", &kafka_settings.fetch_message_max_bytes},
+        {".fetch_wait_max_ms", "int32", &kafka_settings.fetch_wait_max_ms},
+        {".queued_min_messages", "int32", &kafka_settings.queued_min_messages},
+        {".queued_max_messages_kbytes", "int32", &kafka_settings.queued_max_messages_kbytes},
+        {".session_timeout_ms", "int32", &kafka_settings.session_timeout_ms},
+        {".max_poll_interval_ms", "int32", &kafka_settings.max_poll_interval_ms},
+        {".dedicated_subscription_pool_size", "int32", &dedicated_subscription_wal_pool_size},
+        {".shared_subscription_pool_max_size", "int32", &shared_subscription_wal_pool_max_size},
+        {".shared_subscription_flush_threshold_count", "int32", &kafka_settings.shared_subscription_flush_threshold_count},
+        {".shared_subscription_flush_threshold_bytes", "int32", &kafka_settings.shared_subscription_flush_threshold_bytes},
+        {".shared_subscription_flush_threshold_ms", "int32", &kafka_settings.shared_subscription_flush_threshold_ms},
+        {".streaming_processing_pool_size", "int32", &streaming_wal_pool_size},
     };
 
     for (const auto & t : settings)
@@ -158,11 +158,11 @@ void KafkaWALPool::init(const std::string & key)
         if (config.has(k))
         {
             const auto & type = std::get<1>(t);
-            if (type == "String")
+            if (type == "string")
             {
                 *static_cast<std::string *>(std::get<2>(t)) = config.getString(k);
             }
-            else if (type == "Int32")
+            else if (type == "int32")
             {
                 auto i = config.getInt(k);
                 if (i < 0)
@@ -171,7 +171,7 @@ void KafkaWALPool::init(const std::string & key)
                 }
                 *static_cast<int32_t *>(std::get<2>(t)) = i;
             }
-            else if (type == "Bool")
+            else if (type == "bool")
             {
                 *static_cast<bool *>(std::get<2>(t)) = config.getBool(k);
             }

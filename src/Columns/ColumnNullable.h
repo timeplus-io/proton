@@ -44,8 +44,8 @@ public:
     template <typename ... Args, typename = typename std::enable_if<IsMutableColumns<Args ...>::value>::type>
     static MutablePtr create(Args &&... args) { return Base::create(std::forward<Args>(args)...); }
 
-    const char * getFamilyName() const override { return "Nullable"; }
-    std::string getName() const override { return "Nullable(" + nested_column->getName() + ")"; }
+    const char * getFamilyName() const override { return "nullable"; }
+    std::string getName() const override { return "nullable(" + nested_column->getName() + ")"; }
     TypeIndex getDataType() const override { return TypeIndex::Nullable; }
     MutableColumnPtr cloneResized(size_t size) const override;
     size_t size() const override { return nested_column->size(); }

@@ -38,10 +38,10 @@ void StreamColumnValidateMatcher::visit(ASTColumnDeclaration & column, StreamCol
     if (!column.name.compare(RESERVED_EVENT_TIME))
     {
         auto * func = column.type->as<ASTFunction>();
-        if (data.is_stream && (!func || func->name.compare("DateTime64")))
+        if (data.is_stream && (!func || func->name.compare("datetime64")))
         {
             throw Exception(
-                ErrorCodes::ILLEGAL_COLUMN, "The type of {} column must be DateTime64, but got {}", RESERVED_EVENT_TIME, func->name);
+                ErrorCodes::ILLEGAL_COLUMN, "The type of {} column must be datetime64, but got {}", RESERVED_EVENT_TIME, func->name);
         }
         else
         {

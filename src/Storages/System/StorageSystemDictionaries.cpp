@@ -103,7 +103,7 @@ void StorageSystemDictionaries::fillData(MutableColumns & res_columns, ContextPt
         res_columns[i++]->insert(collections::map<Array>(dictionary_structure.getKeysNames(), [] (auto & name) { return name; }));
 
         if (dictionary_structure.id)
-            res_columns[i++]->insert(Array({"UInt64"}));
+            res_columns[i++]->insert(Array({"uint64"}));
         else
             res_columns[i++]->insert(collections::map<Array>(*dictionary_structure.key, [] (auto & attr) { return attr.type->getName(); }));
 

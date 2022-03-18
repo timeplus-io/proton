@@ -62,7 +62,7 @@ public:
         if (!ptr || ptr->getN() != IPV6_BINARY_LENGTH)
             throw Exception("Illegal type " + arguments[0]->getName() +
                             " of argument of function " + getName() +
-                            ", expected FixedString(" + toString(IPV6_BINARY_LENGTH) + ")",
+                            ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
@@ -81,7 +81,7 @@ public:
                 throw Exception("Illegal type " + col_type_name.type->getName() +
                                 " of column " + col_in->getName() +
                                 " argument of function " + getName() +
-                                ", expected FixedString(" + toString(IPV6_BINARY_LENGTH) + ")",
+                                ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             const auto size = col_in->size();
@@ -133,7 +133,7 @@ public:
         if (!ptr || ptr->getN() != IPV6_BINARY_LENGTH)
             throw Exception("Illegal type " + arguments[0]->getName() +
                             " of argument 1 of function " + getName() +
-                            ", expected FixedString(" + toString(IPV6_BINARY_LENGTH) + ")",
+                            ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!WhichDataType(arguments[1]).isUInt8())
@@ -168,7 +168,7 @@ public:
                 throw Exception("Illegal type " + col_type_name.type->getName() +
                                 " of column " + col_in->getName() +
                                 " argument of function " + getName() +
-                                ", expected FixedString(" + toString(IPV6_BINARY_LENGTH) + ")",
+                                ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             const auto * ipv6_zeroed_tail_bytes = checkAndGetColumnConst<ColumnVector<UInt8>>(col_ipv6_zeroed_tail_bytes.get());
@@ -338,7 +338,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!WhichDataType(arguments[0]).isUInt32())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected UInt32",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected uint32",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
@@ -524,7 +524,7 @@ public:
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return DataTypeFactory::instance().get("IPv4");
+        return DataTypeFactory::instance().get("ipv4");
     }
 };
 
@@ -544,7 +544,7 @@ public:
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return DataTypeFactory::instance().get("IPv6");
+        return DataTypeFactory::instance().get("ipv6");
     }
 };
 
@@ -566,7 +566,7 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!WhichDataType(arguments[0]).isUInt64())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected UInt64",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected uint64",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
@@ -791,16 +791,16 @@ public:
         if (!first_argument || first_argument->getN() != IPV6_BINARY_LENGTH)
             throw Exception("Illegal type " + arguments[0]->getName() +
                             " of first argument of function " + getName() +
-                            ", expected FixedString(" + toString(IPV6_BINARY_LENGTH) + ")",
+                            ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const DataTypePtr & second_argument = arguments[1];
         if (!isUInt8(second_argument))
             throw Exception{"Illegal type " + second_argument->getName()
                             + " of second argument of function " + getName()
-                            + ", expected UInt8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                            + ", expected uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        DataTypePtr element = DataTypeFactory::instance().get("IPv6");
+        DataTypePtr element = DataTypeFactory::instance().get("ipv6");
         return std::make_shared<DataTypeTuple>(DataTypes{element, element});
     }
 
@@ -825,7 +825,7 @@ public:
             throw Exception("Illegal type " + col_type_name_ip.type->getName() +
                             " of column " + column_ip->getName() +
                             " argument of function " + getName() +
-                            ", expected FixedString(" + toString(IPV6_BINARY_LENGTH) + ")",
+                            ", expected fixed_string(" + toString(IPV6_BINARY_LENGTH) + ")",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const auto & col_type_name_cidr = arguments[1];
@@ -905,7 +905,7 @@ public:
         if (!WhichDataType(arguments[0]).isUInt32())
             throw Exception("Illegal type " + arguments[0]->getName() +
                             " of first argument of function " + getName() +
-                            ", expected UInt32",
+                            ", expected uint32",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
 
@@ -913,9 +913,9 @@ public:
         if (!isUInt8(second_argument))
             throw Exception{"Illegal type " + second_argument->getName()
                             + " of second argument of function " + getName()
-                            + ", expected UInt8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                            + ", expected uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        DataTypePtr element = DataTypeFactory::instance().get("IPv4");
+        DataTypePtr element = DataTypeFactory::instance().get("ipv4");
         return std::make_shared<DataTypeTuple>(DataTypes{element, element});
     }
 

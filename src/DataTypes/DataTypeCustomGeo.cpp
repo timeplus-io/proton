@@ -11,31 +11,31 @@ namespace DB
 void registerDataTypeDomainGeo(DataTypeFactory & factory)
 {
     // Custom type for point represented as its coordinates stored as Tuple(Float64, Float64)
-    factory.registerSimpleDataTypeCustom("Point", []
+    factory.registerSimpleDataTypeCustom("point", []
     {
-        return std::make_pair(DataTypeFactory::instance().get("Tuple(Float64, Float64)"),
+        return std::make_pair(DataTypeFactory::instance().get("tuple(float64, float64)"),
             std::make_unique<DataTypeCustomDesc>(std::make_unique<DataTypePointName>()));
     });
 
     // Custom type for simple polygon without holes stored as Array(Point)
-    factory.registerSimpleDataTypeCustom("Ring", []
+    factory.registerSimpleDataTypeCustom("ring", []
     {
-        return std::make_pair(DataTypeFactory::instance().get("Array(Point)"),
+        return std::make_pair(DataTypeFactory::instance().get("array(point)"),
             std::make_unique<DataTypeCustomDesc>(std::make_unique<DataTypeRingName>()));
     });
 
     // Custom type for polygon with holes stored as Array(Ring)
     // First element of outer array is outer shape of polygon and all the following are holes
-    factory.registerSimpleDataTypeCustom("Polygon", []
+    factory.registerSimpleDataTypeCustom("polygon", []
     {
-        return std::make_pair(DataTypeFactory::instance().get("Array(Ring)"),
+        return std::make_pair(DataTypeFactory::instance().get("array(ring)"),
             std::make_unique<DataTypeCustomDesc>(std::make_unique<DataTypePolygonName>()));
     });
 
     // Custom type for multiple polygons with holes stored as Array(Polygon)
-    factory.registerSimpleDataTypeCustom("MultiPolygon", []
+    factory.registerSimpleDataTypeCustom("multi_polygon", []
     {
-        return std::make_pair(DataTypeFactory::instance().get("Array(Polygon)"),
+        return std::make_pair(DataTypeFactory::instance().get("array(polygon)"),
             std::make_unique<DataTypeCustomDesc>(std::make_unique<DataTypeMultiPolygonName>()));
     });
 }

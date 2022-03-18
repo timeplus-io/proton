@@ -164,7 +164,7 @@ public:
             return;
 
         if (params[1].getType() != Field::Types::UInt64)
-                throw Exception("Aggregate function " + getName() + " require second parameter to be a UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception("Aggregate function " + getName() + " require second parameter to be a uint64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         continuity_correction = static_cast<bool>(params[1].get<UInt64>());
     }

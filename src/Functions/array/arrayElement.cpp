@@ -1169,7 +1169,7 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
             || (res = executeArgument<Int16>(arguments, result_type, builder, input_rows_count))
             || (res = executeArgument<Int32>(arguments, result_type, builder, input_rows_count))
             || (res = executeArgument<Int64>(arguments, result_type, builder, input_rows_count))))
-        throw Exception("Second argument for function " + getName() + " must have UInt or Int type.",
+        throw Exception("Second argument for function " + getName() + " must have uint or int type.",
                         ErrorCodes::ILLEGAL_COLUMN);
     }
     else

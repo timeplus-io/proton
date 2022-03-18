@@ -107,7 +107,7 @@ public:
             DataTypePtr nested_type = array_type->getNestedType();
 
             if (Impl::needBoolean() && !WhichDataType(nested_type).isUInt8())
-                throw Exception("The only argument for function " + getName() + " must be array of UInt8. Found "
+                throw Exception("The only argument for function " + getName() + " must be array of uint8. Found "
                                 + arguments[0].type->getName() + " instead.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             return Impl::getReturnType(nested_type, nested_type);
@@ -128,7 +128,7 @@ public:
 
             DataTypePtr return_type = removeLowCardinality(data_type_function->getReturnType());
             if (Impl::needBoolean() && !WhichDataType(return_type).isUInt8())
-                throw Exception("Expression for function " + getName() + " must return UInt8, found "
+                throw Exception("Expression for function " + getName() + " must return uint8, found "
                                 + return_type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             const auto * first_array_type = checkAndGetDataType<DataTypeArray>(arguments[1].type.get());

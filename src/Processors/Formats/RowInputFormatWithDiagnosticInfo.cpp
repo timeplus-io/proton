@@ -134,10 +134,10 @@ bool RowInputFormatWithDiagnosticInfo::deserializeFieldAndPrintDiagnosticInfo(co
 
     if (exception)
     {
-        if (type->getName() == "DateTime")
-            out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
-        else if (type->getName() == "Date")
-            out << "ERROR: Date must be in YYYY-MM-DD format.\n";
+        if (type->getName() == "datetime")
+            out << "ERROR: datetime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
+        else if (type->getName() == "date")
+            out << "ERROR: date must be in YYYY-MM-DD format.\n";
         else
             out << "ERROR\n";
         // Print exception message
@@ -155,10 +155,10 @@ bool RowInputFormatWithDiagnosticInfo::deserializeFieldAndPrintDiagnosticInfo(co
             verbosePrintString(curr_position, std::min(curr_position + 10, in->buffer().end()), out);
             out << "\n";
 
-            if (type->getName() == "DateTime")
-                out << "ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
-            else if (type->getName() == "Date")
-                out << "ERROR: Date must be in YYYY-MM-DD format.\n";
+            if (type->getName() == "datetime")
+                out << "ERROR: datetime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.\n";
+            else if (type->getName() == "date")
+                out << "ERROR: date must be in YYYY-MM-DD format.\n";
 
             return false;
         }

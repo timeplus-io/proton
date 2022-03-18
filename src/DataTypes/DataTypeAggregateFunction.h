@@ -44,7 +44,7 @@ public:
 
     String doGetName() const override;
     String getNameWithoutVersion() const;
-    const char * getFamilyName() const override { return "AggregateFunction"; }
+    const char * getFamilyName() const override { return "aggregate_function"; }
     TypeIndex getTypeId() const override { return TypeIndex::AggregateFunction; }
 
     Array getParameters() const { return parameters; }

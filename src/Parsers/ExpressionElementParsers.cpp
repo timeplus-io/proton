@@ -70,7 +70,7 @@ bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ++pos;
 
     auto function_node = std::make_shared<ASTFunction>();
-    function_node->name = "array";
+    function_node->name = "array_cast";
     function_node->arguments = contents_node;
     function_node->children.push_back(contents_node);
     node = function_node;
@@ -127,7 +127,7 @@ bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
     }
 
     auto function_node = std::make_shared<ASTFunction>();
-    function_node->name = "tuple";
+    function_node->name = "tuple_cast";
     function_node->arguments = contents_node;
     function_node->children.push_back(contents_node);
     node = function_node;
@@ -1822,7 +1822,7 @@ bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & e
                     throw Exception(ErrorCodes::SYNTAX_ERROR, "lambda requires two arguments");
 
                 const auto * lambda_args_tuple = func->arguments->children.at(0)->as<ASTFunction>();
-                if (!lambda_args_tuple || lambda_args_tuple->name != "tuple")
+                if (!lambda_args_tuple || lambda_args_tuple->name != "tuple_cast")
                     throw Exception(ErrorCodes::SYNTAX_ERROR, "First argument of lambda must be a tuple");
 
                 const ASTs & lambda_arg_asts = lambda_args_tuple->arguments->children;

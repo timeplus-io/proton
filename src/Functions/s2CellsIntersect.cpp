@@ -56,7 +56,7 @@ public:
             if (!WhichDataType(arg).isUInt64())
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Illegal type {} of argument {} of function {}. Must be UInt64",
+                    "Illegal type {} of argument {} of function {}. Must be uint64",
                     arg->getName(), i, getName());
         }
 

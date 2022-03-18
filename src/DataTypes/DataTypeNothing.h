@@ -15,7 +15,7 @@ class DataTypeNothing final : public IDataTypeDummy
 public:
     static constexpr bool is_parametric = false;
 
-    const char * getFamilyName() const override { return "Nothing"; }
+    const char * getFamilyName() const override { return "nothing"; }
     TypeIndex getTypeId() const override { return TypeIndex::Nothing; }
 
     MutableColumnPtr createColumn() const override;

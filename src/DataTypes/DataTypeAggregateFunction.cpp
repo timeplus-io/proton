@@ -55,7 +55,7 @@ size_t DataTypeAggregateFunction::getVersion() const
 String DataTypeAggregateFunction::getNameImpl(bool with_version) const
 {
     WriteBufferFromOwnString stream;
-    stream << "AggregateFunction(";
+    stream << "aggregate_function(";
 
     /// If aggregate function does not support versioning its version is 0 and is not printed.
     auto data_type_version = getVersion();
@@ -138,7 +138,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     std::optional<size_t> version;
 
     if (!arguments || arguments->children.empty())
-        throw Exception("Data type AggregateFunction requires parameters: "
+        throw Exception("Data type aggregate_function requires parameters: "
             "version(optionally), name of aggregate function and list of data types for arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     ASTPtr data_type_ast = arguments->children[0];
@@ -152,7 +152,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     {
         if (arguments->children.size() < 2)
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Data type AggregateFunction has version, but it requires at least one more parameter - name of aggregate function");
+                "Data type aggregate_function has version, but it requires at least one more parameter - name of aggregate function");
         version = version_ast->value.safeGet<UInt64>();
         data_type_ast = arguments->children[1];
         argument_types_start_idx = 2;
@@ -190,11 +190,11 @@ static DataTypePtr create(const ASTPtr & arguments)
     }
     else if (data_type_ast->as<ASTLiteral>())
     {
-        throw Exception("Aggregate function name for data type AggregateFunction must be passed as identifier (without quotes) or function",
+        throw Exception("Aggregate function name for data type aggregate_function must be passed as identifier (without quotes) or function",
             ErrorCodes::BAD_ARGUMENTS);
     }
     else
-        throw Exception("Unexpected AST element passed as aggregate function name for data type AggregateFunction. Must be identifier or function.",
+        throw Exception("Unexpected AST element passed as aggregate function name for data type aggregate_function. Must be identifier or function.",
             ErrorCodes::BAD_ARGUMENTS);
 
     for (size_t i = argument_types_start_idx; i < arguments->children.size(); ++i)
@@ -211,7 +211,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeAggregateFunction(DataTypeFactory & factory)
 {
-    factory.registerDataType("AggregateFunction", create);
+    factory.registerDataType("aggregate_function", create);
 }
 
 }

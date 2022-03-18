@@ -154,7 +154,7 @@ struct IndexesSerializationType
         {
             if (need_global_dictionary)
                 throw Exception(ErrorCodes::INCORRECT_DATA,
-                                "LowCardinality indexes serialization type for Native format "
+                                "low_cardinality indexes serialization type for Native format "
                                 "cannot use global dictionary");
         }
     }
@@ -458,7 +458,7 @@ namespace
         else if (auto * data_uint64 = getIndexesData<UInt64>(column))
             return mapIndexWithAdditionalKeys(*data_uint64, dict_size);
         else
-            throw Exception("Indexes column for mapIndexWithAdditionalKeys must be UInt, got " + column.getName(),
+            throw Exception("Indexes column for mapIndexWithAdditionalKeys must be uint, got " + column.getName(),
                             ErrorCodes::LOGICAL_ERROR);
     }
 }

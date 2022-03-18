@@ -573,7 +573,7 @@ bool MergeTreeConditionFullText::tryPrepareSetBloomFilter(
     DataTypes data_types;
 
     const auto * left_arg_tuple = typeid_cast<const ASTFunction *>(left_arg.get());
-    if (left_arg_tuple && left_arg_tuple->name == "tuple")
+    if (left_arg_tuple && left_arg_tuple->name == "tuple_cast")
     {
         const auto & tuple_elements = left_arg_tuple->arguments->children;
         for (size_t i = 0; i < tuple_elements.size(); ++i)
@@ -708,7 +708,7 @@ void bloomFilterIndexValidator(const IndexDescription & index, bool /*attach*/)
         }
 
         if (!data_type.isString() && !data_type.isFixedString())
-            throw Exception("Bloom filter index can be used only with `String`, `FixedString` column or Array with `String` or `FixedString` values column.", ErrorCodes::INCORRECT_QUERY);
+            throw Exception("Bloom filter index can be used only with `string`, `fixed_string` column or array with `string` or `fixed_string` values column.", ErrorCodes::INCORRECT_QUERY);
     }
 
     if (index.type == NgramTokenExtractor::getName())

@@ -45,11 +45,11 @@ NamesAndTypesList QueryThreadLogElement::getNamesAndTypes()
         {"is_initial_query", std::make_shared<DataTypeUInt8>()},
         {"user", std::make_shared<DataTypeString>()},
         {"query_id", std::make_shared<DataTypeString>()},
-        {"address", DataTypeFactory::instance().get("IPv6")},
+        {"address", DataTypeFactory::instance().get("ipv6")},
         {"port", std::make_shared<DataTypeUInt16>()},
         {"initial_user", std::make_shared<DataTypeString>()},
         {"initial_query_id", std::make_shared<DataTypeString>()},
-        {"initial_address", DataTypeFactory::instance().get("IPv6")},
+        {"initial_address", DataTypeFactory::instance().get("ipv6")},
         {"initial_port", std::make_shared<DataTypeUInt16>()},
         {"initial_query_start_time", std::make_shared<DataTypeDateTime>()},
         {"initial_query_start_time_microseconds", std::make_shared<DataTypeDateTime64>(6)},
@@ -77,8 +77,8 @@ NamesAndAliases QueryThreadLogElement::getNamesAndAliases()
 {
     return
     {
-        {"ProfileEvents.Names", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "map_keys(ProfileEvents)"},
-        {"ProfileEvents.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())}, "map_values(ProfileEvents)"}
+        {"ProfileEvents.Names", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "map_keys(ProfileEvents)"},
+        {"ProfileEvents.Values", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>()), "map_values(ProfileEvents)"}
     };
 }
 

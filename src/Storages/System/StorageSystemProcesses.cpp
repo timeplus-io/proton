@@ -6,12 +6,9 @@
 #include <Interpreters/ProcessList.h>
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Interpreters/Context.h>
-#include <Core/Settings.h>
 #include <Interpreters/ProfileEventsExt.h>
-#include <Common/typeid_cast.h>
 #include <Common/IPv6ToBinary.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnArray.h>
 
 
 namespace DB
@@ -24,12 +21,12 @@ NamesAndTypesList StorageSystemProcesses::getNamesAndTypes()
 
         {"user", std::make_shared<DataTypeString>()},
         {"query_id", std::make_shared<DataTypeString>()},
-        {"address", DataTypeFactory::instance().get("IPv6")},
+        {"address", DataTypeFactory::instance().get("ipv6")},
         {"port", std::make_shared<DataTypeUInt16>()},
 
         {"initial_user", std::make_shared<DataTypeString>()},
         {"initial_query_id", std::make_shared<DataTypeString>()},
-        {"initial_address", DataTypeFactory::instance().get("IPv6")},
+        {"initial_address", DataTypeFactory::instance().get("ipv6")},
         {"initial_port", std::make_shared<DataTypeUInt16>()},
 
         {"interface", std::make_shared<DataTypeUInt8>()},

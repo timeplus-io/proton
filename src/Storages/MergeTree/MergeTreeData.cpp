@@ -3,10 +3,6 @@
 #include <Backups/BackupEntryFromImmutableFile.h>
 #include <Backups/BackupEntryFromSmallFile.h>
 #include <Backups/IBackup.h>
-#include <Compression/CompressedReadBuffer.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -17,10 +13,8 @@
 #include <Disks/TemporaryFileOnDisk.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
-#include <IO/ConcatReadBuffer.h>
 #include <IO/copyData.h>
 #include <IO/Operators.h>
-#include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -33,7 +27,6 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTPartition.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ExpressionListParsers.h>
@@ -46,8 +39,6 @@
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
-#include <Storages/MergeTree/MergedBlockOutputStream.h>
-#include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/StorageMergeTree.h>
@@ -59,13 +50,10 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
-#include <Processors/QueryPlan/ReadFromMergeTree.h>
 #include <Processors/Formats/IInputFormat.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
 
-#include <boost/range/adaptor/filtered.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/replace.hpp>
 
 #include <base/insertAtEnd.h>
 #include <base/sort.h>
@@ -714,7 +702,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
             if (column.name == sign_column)
             {
                 if (!typeid_cast<const DataTypeInt8 *>(column.type.get()))
-                    throw Exception("Sign column (" + sign_column + ") for storage " + storage + " must have type Int8."
+                    throw Exception("Sign column (" + sign_column + ") for storage " + storage + " must have type int8."
                             " Provided column of type " + column.type->getName() + ".", ErrorCodes::BAD_TYPE_OF_FIELD);
                 miss_column = false;
                 break;
@@ -3768,7 +3756,7 @@ String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr loc
         /// Function tuple(...) requires at least one argument, so empty key is a special case
         assert(!partition_ast.fields_count);
         assert(typeid_cast<ASTFunction *>(partition_ast.value.get()));
-        assert(partition_ast.value->as<ASTFunction>()->name == "tuple");
+        assert(partition_ast.value->as<ASTFunction>()->name == "tuple_cast");
         assert(partition_ast.value->as<ASTFunction>()->arguments);
         bool empty_tuple = partition_ast.value->as<ASTFunction>()->arguments->children.empty();
         if (!empty_tuple)
@@ -3779,7 +3767,7 @@ String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr loc
         ASTPtr partition_value_ast = partition_ast.value;
         if (auto * tuple = partition_value_ast->as<ASTFunction>())
         {
-            assert(tuple->name == "tuple");
+            assert(tuple->name == "tuple_cast");
             assert(tuple->arguments);
             assert(tuple->arguments->children.size() == 1);
             partition_value_ast = tuple->arguments->children[0];
@@ -4413,7 +4401,7 @@ bool MergeTreeData::mayBenefitFromIndexForIn(
     ///  must be part of the key (probably wrapped by a chain of some acceptable functions).
     const auto * left_in_operand_tuple = left_in_operand->as<ASTFunction>();
     const auto & index_wrapper_factory = MergeTreeIndexFactory::instance();
-    if (left_in_operand_tuple && left_in_operand_tuple->name == "tuple")
+    if (left_in_operand_tuple && left_in_operand_tuple->name == "tuple_cast")
     {
         for (const auto & item : left_in_operand_tuple->arguments->children)
         {

@@ -13,14 +13,14 @@ bool DataTypeInterval::equals(const IDataType & rhs) const
 
 void registerDataTypeInterval(DataTypeFactory & factory)
 {
-    factory.registerSimpleDataType("IntervalSecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Second)); });
-    factory.registerSimpleDataType("IntervalMinute", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Minute)); });
-    factory.registerSimpleDataType("IntervalHour", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Hour)); });
-    factory.registerSimpleDataType("IntervalDay", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Day)); });
-    factory.registerSimpleDataType("IntervalWeek", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Week)); });
-    factory.registerSimpleDataType("IntervalMonth", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Month)); });
-    factory.registerSimpleDataType("IntervalQuarter", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Quarter)); });
-    factory.registerSimpleDataType("IntervalYear", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Year)); });
+    factory.registerSimpleDataType("interval_second", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Second)); });
+    factory.registerSimpleDataType("interval_minute", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Minute)); });
+    factory.registerSimpleDataType("interval_hour", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Hour)); });
+    factory.registerSimpleDataType("interval_day", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Day)); });
+    factory.registerSimpleDataType("interval_week", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Week)); });
+    factory.registerSimpleDataType("interval_month", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Month)); });
+    factory.registerSimpleDataType("interval_quarter", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Quarter)); });
+    factory.registerSimpleDataType("interval_year", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Year)); });
 }
 
 }

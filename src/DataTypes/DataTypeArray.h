@@ -23,12 +23,12 @@ public:
 
     std::string doGetName() const override
     {
-        return "Array(" + nested->getName() + ")";
+        return "array(" + nested->getName() + ")";
     }
 
     const char * getFamilyName() const override
     {
-        return "Array";
+        return "array";
     }
 
     bool canBeInsideNullable() const override

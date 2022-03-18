@@ -97,7 +97,7 @@ public:
                 {
                     if constexpr (exception_mode == ConvertToFixedStringExceptionMode::Throw)
                     {
-                        throw Exception("String too long for type FixedString(" + toString(n) + ")",
+                        throw Exception("String too long for type fixed_string(" + toString(n) + ")",
                             ErrorCodes::TOO_LARGE_STRING_SIZE);
                     }
                     else
@@ -121,7 +121,7 @@ public:
             {
                 if constexpr (exception_mode == ConvertToFixedStringExceptionMode::Throw)
                 {
-                    throw Exception{"String too long for type FixedString(" + toString(n) + ")", ErrorCodes::TOO_LARGE_STRING_SIZE};
+                    throw Exception{"String too long for type fixed_string(" + toString(n) + ")", ErrorCodes::TOO_LARGE_STRING_SIZE};
                 }
                 else
                 {

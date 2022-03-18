@@ -31,7 +31,7 @@ namespace
 
         DataTypePtr getReturnTypeImpl(const DataTypes &) const override
         {
-            return DataTypeFactory::instance().get("Bool");
+            return DataTypeFactory::instance().get("bool");
         }
 
         ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
@@ -40,7 +40,7 @@ namespace
             {
                 arguments[0],
                 {
-                    DataTypeString().createColumnConst(arguments[0].column->size(), "Bool"),
+                    DataTypeString().createColumnConst(arguments[0].column->size(), "bool"),
                     std::make_shared<DataTypeString>(),
                     ""
                 }
@@ -48,7 +48,7 @@ namespace
 
             FunctionOverloadResolverPtr func_builder_cast = CastInternalOverloadResolver<CastType::nonAccurate>::createImpl();
             auto func_cast = func_builder_cast->build(cast_args);
-            return func_cast->execute(cast_args, DataTypeFactory::instance().get("Bool"), arguments[0].column->size());
+            return func_cast->execute(cast_args, DataTypeFactory::instance().get("bool"), arguments[0].column->size());
         }
     };
 

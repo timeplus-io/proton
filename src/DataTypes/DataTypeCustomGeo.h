@@ -8,25 +8,25 @@ namespace DB
 class DataTypePointName : public DataTypeCustomFixedName
 {
 public:
-    DataTypePointName() : DataTypeCustomFixedName("Point") {}
+    DataTypePointName() : DataTypeCustomFixedName("point") {}
 };
 
 class DataTypeRingName : public DataTypeCustomFixedName
 {
 public:
-    DataTypeRingName() : DataTypeCustomFixedName("Ring") {}
+    DataTypeRingName() : DataTypeCustomFixedName("ring") {}
 };
 
 class DataTypePolygonName : public DataTypeCustomFixedName
 {
 public:
-    DataTypePolygonName() : DataTypeCustomFixedName("Polygon") {}
+    DataTypePolygonName() : DataTypeCustomFixedName("polygon") {}
 };
 
 class DataTypeMultiPolygonName : public DataTypeCustomFixedName
 {
 public:
-    DataTypeMultiPolygonName() : DataTypeCustomFixedName("MultiPolygon") {}
+    DataTypeMultiPolygonName() : DataTypeCustomFixedName("multi_polygon") {}
 };
 
 }

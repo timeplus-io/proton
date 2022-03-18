@@ -12,7 +12,7 @@ namespace DB
 class ParserArray : public IParserBase
 {
 protected:
-    const char * getName() const override { return "array"; }
+    const char * getName() const override { return "array_cast"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
@@ -243,7 +243,7 @@ protected:
 class ParserBool : public IParserBase
 {
 protected:
-    const char * getName() const override { return "Bool"; }
+    const char * getName() const override { return "bool"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
@@ -304,7 +304,7 @@ class ParserTupleOfLiterals : public IParserBase
 public:
     ParserCollectionOfLiterals<Tuple> tuple_parser{TokenType::OpeningRoundBracket, TokenType::ClosingRoundBracket};
 protected:
-    const char * getName() const override { return "tuple"; }
+    const char * getName() const override { return "tuple_cast"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {
         return tuple_parser.parse(pos, node, expected);
@@ -316,7 +316,7 @@ class ParserArrayOfLiterals : public IParserBase
 public:
     ParserCollectionOfLiterals<Array> array_parser{TokenType::OpeningSquareBracket, TokenType::ClosingSquareBracket};
 protected:
-    const char * getName() const override { return "array"; }
+    const char * getName() const override { return "array_cast"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {
         return array_parser.parse(pos, node, expected);

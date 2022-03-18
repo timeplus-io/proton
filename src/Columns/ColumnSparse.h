@@ -55,8 +55,8 @@ public:
     }
 
     bool isSparse() const override { return true; }
-    const char * getFamilyName() const override { return "Sparse"; }
-    std::string getName() const override { return "Sparse(" + values->getName() + ")"; }
+    const char * getFamilyName() const override { return "sparse"; }
+    std::string getName() const override { return "sparse(" + values->getName() + ")"; }
     TypeIndex getDataType() const override { return values->getDataType(); }
     MutableColumnPtr cloneResized(size_t new_size) const override;
     size_t size() const override { return _size; }

@@ -157,7 +157,7 @@ inline void readDecimalText(ReadBuffer & buf, T & x, uint32_t precision, uint32_
     if (static_cast<int32_t>(digits) + exponent > static_cast<int32_t>(precision - scale))
     {
         static constexpr const char * pattern =
-            "Decimal value is too big: {} digits were read: {}e{}."
+            "decimal value is too big: {} digits were read: {}e{}."
             " Expected to read decimal with scale {} and precision {}";
 
         if constexpr (is_big_int_v<typename T::NativeType>)

@@ -1,5 +1,4 @@
 #include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
@@ -53,7 +52,7 @@ public:
         auto ngram_input_argument_type = WhichDataType(arguments[0].type);
         if (!ngram_input_argument_type.isStringOrFixedString())
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Function {} first argument type should be String or FixedString. Actual {}",
+                "Function {} first argument type should be string or fixed_string. Actual {}",
                 getName(),
                 arguments[0].type->getName());
 
@@ -65,7 +64,7 @@ public:
 
             if (!ngram_argument_type.isNativeUInt() || !ngram_argument_column || !isColumnConst(*ngram_argument_column))
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                    "Function {} second argument type should be constant UInt. Actual {}",
+                    "Function {} second argument type should be constant uint. Actual {}",
                     getName(),
                     arguments[1].type->getName());
         }

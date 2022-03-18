@@ -134,7 +134,7 @@ ProjectionDescription::getProjectionFromAST(const ASTPtr & definition_ast, const
             else
             {
                 auto function_node = std::make_shared<ASTFunction>();
-                function_node->name = "tuple";
+                function_node->name = "tuple_cast";
                 function_node->arguments = group_expression_list->clone();
                 result.key_size = function_node->arguments->children.size();
                 for (auto & child : function_node->arguments->children)

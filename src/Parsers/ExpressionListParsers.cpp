@@ -582,7 +582,7 @@ bool ParserLambdaExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
         auto tuple = std::make_shared<ASTFunction>();
         outer_arguments->children.push_back(tuple);
-        tuple->name = "tuple";
+        tuple->name = "tuple_cast";
         tuple->arguments = inner_arguments;
         tuple->children.push_back(inner_arguments);
 

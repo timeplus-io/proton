@@ -98,7 +98,7 @@ void OptimizeShardingKeyRewriteInMatcher::visit(ASTFunction & function, Data & d
     /// NOTE: that we should not take care about empty tuple,
     /// since after optimize_skip_unused_shards,
     /// at least one element should match each shard.
-    if (auto * tuple_func = right->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple")
+    if (auto * tuple_func = right->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple_cast")
     {
         auto * tuple_elements = tuple_func->children.front()->as<ASTExpressionList>();
         std::erase_if(tuple_elements->children, [&](auto & child)

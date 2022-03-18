@@ -259,56 +259,56 @@ Field Field::restoreFromDump(const std::string_view & dump_)
     if (dump == "NULL")
         return {};
 
-    std::string_view prefix = std::string_view{"Int64_"};
+    std::string_view prefix = std::string_view{"int64_"};
     if (dump.starts_with(prefix))
     {
         Int64 value = parseFromString<Int64>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"UInt64_"};
+    prefix = std::string_view{"uint64_"};
     if (dump.starts_with(prefix))
     {
         UInt64 value = parseFromString<UInt64>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"Int128_"};
+    prefix = std::string_view{"int128_"};
     if (dump.starts_with(prefix))
     {
         Int128 value = parseFromString<Int128>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"UInt128_"};
+    prefix = std::string_view{"uint128_"};
     if (dump.starts_with(prefix))
     {
         UInt128 value = parseFromString<UInt128>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"Int256_"};
+    prefix = std::string_view{"int256_"};
     if (dump.starts_with(prefix))
     {
         Int256 value = parseFromString<Int256>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"UInt256_"};
+    prefix = std::string_view{"uint256_"};
     if (dump.starts_with(prefix))
     {
         UInt256 value = parseFromString<UInt256>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"Float64_"};
+    prefix = std::string_view{"float64_"};
     if (dump.starts_with(prefix))
     {
         Float64 value = parseFromString<Float64>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"Decimal32_"};
+    prefix = std::string_view{"decimal32_"};
     if (dump_.starts_with(prefix))
     {
         DecimalField<Decimal32> decimal;
@@ -317,7 +317,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return decimal;
     }
 
-    prefix = std::string_view{"Decimal64_"};
+    prefix = std::string_view{"decimal64_"};
     if (dump_.starts_with(prefix))
     {
         DecimalField<Decimal64> decimal;
@@ -326,7 +326,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return decimal;
     }
 
-    prefix = std::string_view{"Decimal128_"};
+    prefix = std::string_view{"decimal128_"};
     if (dump_.starts_with(prefix))
     {
         DecimalField<Decimal128> decimal;
@@ -335,7 +335,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return decimal;
     }
 
-    prefix = std::string_view{"Decimal256_"};
+    prefix = std::string_view{"decimal256_"};
     if (dump_.starts_with(prefix))
     {
         DecimalField<Decimal256> decimal;
@@ -352,14 +352,14 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return str;
     }
 
-    prefix = std::string_view{"Bool_"};
+    prefix = std::string_view{"bool_"};
     if (dump.starts_with(prefix))
     {
         bool value = parseFromString<bool>(dump.substr(prefix.length()));
         return value;
     }
 
-    prefix = std::string_view{"Array_["};
+    prefix = std::string_view{"array_["};
     if (dump.starts_with(prefix))
     {
         std::string_view tail = dump.substr(prefix.length());
@@ -383,7 +383,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return array;
     }
 
-    prefix = std::string_view{"Tuple_("};
+    prefix = std::string_view{"tuple_("};
     if (dump.starts_with(prefix))
     {
         std::string_view tail = dump.substr(prefix.length());
@@ -407,7 +407,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return tuple;
     }
 
-    prefix = std::string_view{"Map_("};
+    prefix = std::string_view{"map_("};
     if (dump.starts_with(prefix))
     {
         std::string_view tail = dump.substr(prefix.length());
@@ -431,7 +431,7 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         return map;
     }
 
-    prefix = std::string_view{"AggregateFunctionState_("};
+    prefix = std::string_view{"aggregate_function_state_("};
     if (dump.starts_with(prefix))
     {
         std::string_view after_prefix = dump.substr(prefix.length());
@@ -500,9 +500,9 @@ template bool decimalLessOrEqual<DateTime64>(DateTime64 x, DateTime64 y, UInt32 
 inline void writeText(const Null & x, WriteBuffer & buf)
 {
     if (x.isNegativeInfinity())
-        writeText("-Inf", buf);
+        writeText("-inf", buf);
     if (x.isPositiveInfinity())
-        writeText("+Inf", buf);
+        writeText("+inf", buf);
     else
         writeText("NULL", buf);
 }

@@ -40,7 +40,7 @@ std::string DataTypeDateTime64::doGetName() const
         return std::string(getFamilyName()) + "(" + std::to_string(this->scale) + ")";
 
     WriteBufferFromOwnString out;
-    out << "DateTime64(" << this->scale << ", " << quote << time_zone.getTimeZone() << ")";
+    out << "datetime64(" << this->scale << ", " << quote << time_zone.getTimeZone() << ")";
     return out.str();
 }
 

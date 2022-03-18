@@ -1,7 +1,5 @@
 #include <vector>
 #include <list>
-#include <map>
-#include <random>
 #include <pcg_random.hpp>
 
 #include <Common/Stopwatch.h>
@@ -159,21 +157,21 @@ int main(int argc, char ** argv)
     std::string type_name = std::string(argv[2]);
     size_t n = std::stoull(argv[3]);
 
-    if (type_name == "UInt8")
+    if (type_name == "uint8")
         testForType<UInt8>(method, n);
-    else if (type_name == "UInt16")
+    else if (type_name == "uint16")
         testForType<UInt16>(method, n);
-    else if (type_name == "UInt32")
+    else if (type_name == "uint32")
         testForType<UInt32>(method, n);
-    else if (type_name == "UInt64")
+    else if (type_name == "uint64")
         testForType<UInt64>(method, n);
-    else if (type_name == "Int8")
+    else if (type_name == "int8")
         testForType<Int8>(method, n);
-    else if (type_name == "Int16")
+    else if (type_name == "int16")
         testForType<Int16>(method, n);
-    else if (type_name == "Int32")
+    else if (type_name == "int32")
         testForType<Int32>(method, n);
-    else if (type_name == "Int64")
+    else if (type_name == "int64")
         testForType<Int64>(method, n);
     else
         std::cerr << "Unexpected type passed " << type_name << std::endl;

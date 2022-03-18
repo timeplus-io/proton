@@ -46,21 +46,21 @@ public:
         if (!WhichDataType(arg).isFloat64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be Float64",
+                "Illegal type {} of argument {} of function {}. Must be float64",
                 arg->getName(), 1, getName());
 
         arg = arguments[1].get();
         if (!WhichDataType(arg).isFloat64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be Float64",
+                "Illegal type {} of argument {} of function {}. Must be float64",
                 arg->getName(), 2, getName());
 
         arg = arguments[2].get();
         if (!WhichDataType(arg).isUInt8())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt8",
+                "Illegal type {} of argument {} of function {}. Must be uint8",
                 arg->getName(), 3, getName());
 
         return std::make_shared<DataTypeUInt64>();

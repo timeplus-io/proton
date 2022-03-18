@@ -38,11 +38,11 @@ struct FunctionPort : public IFunction
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!WhichDataType(arguments[0].type).isString())
-            throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() + ". Must be String.",
+            throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() + ". Must be string.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2 && !WhichDataType(arguments[1].type).isUInt16())
-            throw Exception("Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() + ". Must be UInt16.",
+            throw Exception("Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() + ". Must be uint16.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt16>();
@@ -56,7 +56,7 @@ struct FunctionPort : public IFunction
         {
             const auto * port_column = checkAndGetColumn<ColumnConst>(arguments[1].column.get());
             if (!port_column)
-                throw Exception("Second argument for function " + getName() + " must be constant UInt16", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception("Second argument for function " + getName() + " must be constant uint16", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             default_port = port_column->getValue<UInt16>();
         }
 

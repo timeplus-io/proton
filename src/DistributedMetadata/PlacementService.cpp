@@ -229,8 +229,8 @@ void PlacementService::doBroadcast()
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
 
-    auto string_type = data_type_factory.get("String", nullptr);
-    auto uint64_type = data_type_factory.get("UInt64", nullptr);
+    auto string_type = data_type_factory.get("string", nullptr);
+    auto uint64_type = data_type_factory.get("uint64", nullptr);
 
     auto policy_name_col = string_type->createColumn();
     auto disk_space_col = uint64_type->createColumn();

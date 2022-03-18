@@ -18,7 +18,7 @@ public:
 
     const char * getFamilyName() const override
     {
-        return "String";
+        return "string";
     }
 
     TypeIndex getTypeId() const override { return type_id; }

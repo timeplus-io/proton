@@ -175,10 +175,10 @@ ASTPtr ASTFunction::toLiteral() const
     if (!arguments)
         return {};
 
-    if (name == "array")
+    if (name == "array_cast")
         return createLiteral<Array>(arguments->children);
 
-    if (name == "tuple")
+    if (name == "tuple_cast")
         return createLiteral<Tuple>(arguments->children);
 
     return {};
@@ -505,7 +505,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
 
                 const auto * first_arg_func = arguments->children[0]->as<ASTFunction>();
                 if (first_arg_func
-                    && first_arg_func->name == "tuple"
+                    && first_arg_func->name == "tuple_cast"
                     && first_arg_func->arguments
                     && (first_arg_func->arguments->children.size() == 1 || first_arg_func->arguments->children.empty()))
                 {
@@ -553,7 +553,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
             }
         }
 
-        if (!written && name == "array"sv)
+        if (!written && name == "array_cast"sv)
         {
             settings.ostr << (settings.hilite ? hilite_operator : "") << '[' << (settings.hilite ? hilite_none : "");
             for (size_t i = 0; i < arguments->children.size(); ++i)
@@ -566,7 +566,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
             written = true;
         }
 
-        if (!written && arguments->children.size() >= 2 && name == "tuple"sv)
+        if (!written && arguments->children.size() >= 2 && name == "tuple_cast"sv)
         {
             settings.ostr << (settings.hilite ? hilite_operator : "") << '(' << (settings.hilite ? hilite_none : "");
             for (size_t i = 0; i < arguments->children.size(); ++i)
@@ -579,9 +579,9 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
             written = true;
         }
 
-        if (!written && name == "map"sv)
+        if (!written && name == "map_cast"sv)
         {
-            settings.ostr << (settings.hilite ? hilite_operator : "") << "map(" << (settings.hilite ? hilite_none : "");
+            settings.ostr << (settings.hilite ? hilite_operator : "") << "map_cast(" << (settings.hilite ? hilite_none : "");
             for (size_t i = 0; i < arguments->children.size(); ++i)
             {
                 if (i != 0)

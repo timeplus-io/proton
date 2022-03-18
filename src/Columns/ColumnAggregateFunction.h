@@ -120,8 +120,8 @@ public:
     /// This method is made static and receive MutableColumnPtr object to explicitly destroy it.
     static MutableColumnPtr convertToValues(MutableColumnPtr column);
 
-    std::string getName() const override { return "AggregateFunction(" + func->getName() + ")"; }
-    const char * getFamilyName() const override { return "AggregateFunction"; }
+    std::string getName() const override { return "aggregate_function(" + func->getName() + ")"; }
+    const char * getFamilyName() const override { return "aggregate_function"; }
     TypeIndex getDataType() const override { return TypeIndex::AggregateFunction; }
 
     MutableColumnPtr predictValues(const ColumnsWithTypeAndName & arguments, ContextPtr context) const;

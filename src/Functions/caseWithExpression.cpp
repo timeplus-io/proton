@@ -87,7 +87,7 @@ public:
         ColumnWithTypeAndName src_array_col{nullptr, src_array_type, ""};
         ColumnWithTypeAndName dst_array_col{nullptr, dst_array_type, ""};
 
-        auto fun_array = FunctionFactory::instance().get("array", context);
+        auto fun_array = FunctionFactory::instance().get("array_cast", context);
 
         src_array_col.column = fun_array->build(src_array_elems)->execute(src_array_elems, src_array_type, input_rows_count);
         dst_array_col.column = fun_array->build(dst_array_elems)->execute(dst_array_elems, dst_array_type, input_rows_count);

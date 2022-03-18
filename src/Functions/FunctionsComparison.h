@@ -1265,7 +1265,7 @@ public:
                   || (res = executeNumLeftType<UInt64>(c0_converted.get(), c1_converted.get()))
                   || (res = executeNumLeftType<Int32>(c0_converted.get(), c1_converted.get()))
                   || (res = executeDecimal({c0_converted, common_type, "left"}, {c1_converted, common_type, "right"}))))
-                throw Exception("Date related common types can only be UInt32/UInt64/Int32/Decimal", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("The date related common types can only be uint32/uint64/int32/decimal", ErrorCodes::LOGICAL_ERROR);
             return res;
         }
         else if (left_type->equals(*right_type))

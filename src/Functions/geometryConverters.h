@@ -331,13 +331,13 @@ static void callOnGeometryDataType(DataTypePtr type, F && f)
     const auto & factory = DataTypeFactory::instance();
 
     /// There is no Point type, because for most of geometry functions it is useless.
-    if (factory.get("Point")->equals(*type))
+    if (factory.get("point")->equals(*type))
         return f(ConverterType<ColumnToPointsConverter<Point>>());
-    else if (factory.get("Ring")->equals(*type))
+    else if (factory.get("ring")->equals(*type))
         return f(ConverterType<ColumnToRingsConverter<Point>>());
-    else if (factory.get("Polygon")->equals(*type))
+    else if (factory.get("polygon")->equals(*type))
         return f(ConverterType<ColumnToPolygonsConverter<Point>>());
-    else if (factory.get("MultiPolygon")->equals(*type))
+    else if (factory.get("multi_polygon")->equals(*type))
         return f(ConverterType<ColumnToMultiPolygonsConverter<Point>>());
     throw Exception(fmt::format("Unknown geometry type {}", type->getName()), ErrorCodes::BAD_ARGUMENTS);
 }

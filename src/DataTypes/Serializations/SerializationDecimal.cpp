@@ -58,7 +58,7 @@ void SerializationDecimal<T>::deserializeText(IColumn & column, ReadBuffer & ist
     assert_cast<ColumnType &>(column).getData().push_back(x);
 
     if (whole && !istr.eof())
-        ISerialization::throwUnexpectedDataAfterParsedValue(column, istr, settings, "Decimal");
+        ISerialization::throwUnexpectedDataAfterParsedValue(column, istr, settings, "decimal");
 }
 
 template <typename T>

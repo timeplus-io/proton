@@ -508,7 +508,7 @@ DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTyp
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    auto result_type = has_bool_arguments ? DataTypeFactory::instance().get("Bool") : std::make_shared<DataTypeUInt8>();
+    auto result_type = has_bool_arguments ? DataTypeFactory::instance().get("bool") : std::make_shared<DataTypeUInt8>();
     return has_nullable_arguments
             ? makeNullable(result_type)
             : result_type;
@@ -716,7 +716,7 @@ DataTypePtr FunctionUnaryLogical<Impl, Name>::getReturnTypeImpl(const DataTypes 
             + ") of argument of function " + getName(),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    return isBool(arguments[0]) ? DataTypeFactory::instance().get("Bool") : std::make_shared<DataTypeUInt8>();
+    return isBool(arguments[0]) ? DataTypeFactory::instance().get("bool") : std::make_shared<DataTypeUInt8>();
 }
 
 template <template <typename> class Impl, typename T>

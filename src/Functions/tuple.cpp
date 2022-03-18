@@ -15,14 +15,14 @@ namespace ErrorCodes
 namespace
 {
 
-/** tuple(x, y, ...) is a function that allows you to group several columns
-  * tupleElement(tuple, n) is a function that allows you to retrieve a column from tuple.
+/** tuple_cast(x, y, ...) is a function that allows you to group several columns
+  * tuple_element(tuple, n) is a function that allows you to retrieve a column from tuple.
   */
 
 class FunctionTuple : public IFunction
 {
 public:
-    static constexpr auto name = "tuple";
+    static constexpr auto name = "tuple_cast";
 
     static FunctionPtr create(ContextPtr)
     {

@@ -265,7 +265,7 @@ public:
         if constexpr (is_arithmetic_v<T>)
             return UInt64(data[n]);
         else
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as UInt", TypeName<T>);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as uint", TypeName<T>);
     }
 
     /// Out of range conversion is permitted.
@@ -274,7 +274,7 @@ public:
         if constexpr (is_arithmetic_v<T>)
             return Int64(data[n]);
         else
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as Int", TypeName<T>);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as int", TypeName<T>);
     }
 
     bool getBool(size_t n) const override

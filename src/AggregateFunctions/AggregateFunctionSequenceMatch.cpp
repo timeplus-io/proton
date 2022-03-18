@@ -49,7 +49,7 @@ AggregateFunctionPtr createAggregateFunctionSequenceBase(
         const auto * cond_arg = argument_types[i].get();
         if (!isUInt8(cond_arg))
             throw Exception{"Illegal type " + cond_arg->getName() + " of argument " + toString(i + 1)
-                + " of aggregate function " + name + ", must be UInt8",
+                + " of aggregate function " + name + ", must be uint8",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
     }
 
@@ -66,7 +66,7 @@ AggregateFunctionPtr createAggregateFunctionSequenceBase(
         return std::make_shared<AggregateFunction<DataTypeDate::FieldType, Data<DataTypeDate::FieldType>>>(argument_types, params, pattern);
 
     throw Exception{"Illegal type " + time_arg->getName() + " of first argument of aggregate function "
-            + name + ", must be DateTime",
+            + name + ", must be datetime",
         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 }
 

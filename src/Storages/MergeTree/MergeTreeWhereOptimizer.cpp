@@ -120,7 +120,7 @@ static bool isConditionGood(const ASTPtr & condition)
 
 static const ASTFunction * getAsTuple(const ASTPtr & node)
 {
-    if (const auto * func = node->as<ASTFunction>(); func && func->name == "tuple")
+    if (const auto * func = node->as<ASTFunction>(); func && func->name == "tuple_cast")
         return func;
     return {};
 };

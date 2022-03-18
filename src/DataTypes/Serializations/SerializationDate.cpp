@@ -20,7 +20,7 @@ void SerializationDate::deserializeWholeText(IColumn & column, ReadBuffer & istr
 {
     deserializeTextEscaped(column, istr, settings);
     if (!istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "Date");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "date");
 }
 
 void SerializationDate::deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings &) const

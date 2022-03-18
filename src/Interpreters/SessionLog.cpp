@@ -3,11 +3,9 @@
 #include <Access/ContextAccess.h>
 #include <Access/User.h>
 #include <Access/EnabledRolesInfo.h>
-#include <Core/Settings.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -135,7 +133,7 @@ NamesAndTypesList SessionLogElement::getNamesAndTypes()
         {"roles", std::make_shared<DataTypeArray>(lc_string_datatype)},
         {"settings", std::move(settings_type_column)},
 
-        {"client_address", DataTypeFactory::instance().get("IPv6")},
+        {"client_address", DataTypeFactory::instance().get("ipv6")},
         {"client_port", std::make_shared<DataTypeUInt16>()},
         {"interface", std::move(interface_type_column)},
 

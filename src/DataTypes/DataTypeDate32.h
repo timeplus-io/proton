@@ -8,7 +8,7 @@ namespace DB
 class DataTypeDate32 final : public DataTypeNumberBase<Int32>
 {
 public:
-    static constexpr auto family_name = "Date32";
+    static constexpr auto family_name = "date32";
 
     TypeIndex getTypeId() const override { return TypeIndex::Date32; }
     const char * getFamilyName() const override { return family_name; }

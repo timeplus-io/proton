@@ -244,7 +244,7 @@ static void checkPositionsAreLimited(const IColumn & positions, UInt64 limit)
         !check_for_type(UInt16()) &&
         !check_for_type(UInt32()) &&
         !check_for_type(UInt64()))
-        throw Exception("Invalid column for ColumnLowCardinality index. Expected UInt, got " + positions.getName(),
+        throw Exception("Invalid column for ColumnLowCardinality index. Expected uint, got " + positions.getName(),
                         ErrorCodes::ILLEGAL_COLUMN);
 }
 
@@ -550,7 +550,7 @@ size_t ColumnLowCardinality::Index::getSizeOfIndexType(const IColumn & column, s
     if (auto size = try_get_size_for(UInt64()))
         return size;
 
-    throw Exception("Unexpected indexes type for ColumnLowCardinality. Expected UInt, got " + column.getName(),
+    throw Exception("Unexpected indexes type for ColumnLowCardinality. Expected uint, got " + column.getName(),
                     ErrorCodes::ILLEGAL_COLUMN);
 }
 
@@ -566,7 +566,7 @@ typename ColumnVector<IndexType>::Container & ColumnLowCardinality::Index::getPo
     auto * positions_ptr = typeid_cast<ColumnVector<IndexType> *>(positions->assumeMutable().get());
     if (!positions_ptr)
         throw Exception("Invalid indexes type for ColumnLowCardinality."
-                        " Expected UInt" + toString(8 * sizeof(IndexType)) + ", got " + positions->getName(),
+                        " Expected uint" + toString(8 * sizeof(IndexType)) + ", got " + positions->getName(),
                         ErrorCodes::LOGICAL_ERROR);
 
     return positions_ptr->getData();
@@ -578,7 +578,7 @@ const typename ColumnVector<IndexType>::Container & ColumnLowCardinality::Index:
     const auto * positions_ptr = typeid_cast<const ColumnVector<IndexType> *>(positions.get());
     if (!positions_ptr)
         throw Exception("Invalid indexes type for ColumnLowCardinality."
-                        " Expected UInt" + toString(8 * sizeof(IndexType)) + ", got " + positions->getName(),
+                        " Expected uint" + toString(8 * sizeof(IndexType)) + ", got " + positions->getName(),
                         ErrorCodes::LOGICAL_ERROR);
 
     return positions_ptr->getData();
@@ -702,7 +702,7 @@ void ColumnLowCardinality::Index::insertPositionsRange(const IColumn & column, U
         !insert_for_type(UInt16()) &&
         !insert_for_type(UInt32()) &&
         !insert_for_type(UInt64()))
-        throw Exception("Invalid column for ColumnLowCardinality index. Expected UInt, got " + column.getName(),
+        throw Exception("Invalid column for ColumnLowCardinality index. Expected uint, got " + column.getName(),
                         ErrorCodes::ILLEGAL_COLUMN);
 
     checkSizeOfType();

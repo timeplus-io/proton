@@ -57,7 +57,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
-        return DataTypeFactory::instance().get("Polygon");
+        return DataTypeFactory::instance().get("polygon");
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override

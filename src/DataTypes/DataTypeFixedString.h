@@ -32,15 +32,15 @@ public:
     DataTypeFixedString(size_t n_) : n(n_)
     {
         if (n == 0)
-            throw Exception("FixedString size must be positive", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("The fixed_string size must be positive", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         if (n > MAX_FIXEDSTRING_SIZE)
-            throw Exception("FixedString size is too large", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("The fixed_string size is too large", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     }
 
     std::string doGetName() const override;
     TypeIndex getTypeId() const override { return type_id; }
 
-    const char * getFamilyName() const override { return "FixedString"; }
+    const char * getFamilyName() const override { return "fixed_string"; }
 
     size_t getN() const
     {

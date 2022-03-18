@@ -28,7 +28,7 @@ static IAggregateFunction * createWithUIntegerOrTimeType(const std::string & nam
     if (which.idx == TypeIndex::UInt64) return new AggregateFunctionTemplate<UInt64, Data>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::UInt128) return new AggregateFunctionTemplate<UInt128, Data>(std::forward<TArgs>(args)...);
     if (which.idx == TypeIndex::UInt256) return new AggregateFunctionTemplate<UInt256, Data>(std::forward<TArgs>(args)...);
-    throw Exception("The first argument type must be UInt or Date or DateTime for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    throw Exception("The first argument type must be uint or date or datetime for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 template <typename ... TArgs>

@@ -30,10 +30,10 @@ namespace ErrorCodes
 void DataTypeCustomSimpleAggregateFunction::checkSupportedFunctions(const AggregateFunctionPtr & function)
 {
     /// TODO Make it sane.
-    static const std::vector<String> supported_functions{"any", "anyLast", "min",
-        "max", "sum", "sumWithOverflow", "groupBitAnd", "groupBitOr", "groupBitXor",
-        "sumMap", "minMap", "maxMap", "groupArrayArray", "groupUniqArrayArray",
-        "sumMappedArrays", "minMappedArrays", "maxMappedArrays"};
+    static const std::vector<String> supported_functions{"any", "any_last", "min",
+        "max", "sum", "sum_with_overflow", "group_bit_and", "group_bit_or", "group_bit_xor",
+        "sum_map", "min_map", "max_map", "group_array_array", "group_uniq_array_array",
+        "sum_mapped_arrays", "min_mapped_arrays", "max_mapped_arrays"};
 
     // check function
     if (std::find(std::begin(supported_functions), std::end(supported_functions), function->getName()) == std::end(supported_functions))
@@ -46,7 +46,7 @@ void DataTypeCustomSimpleAggregateFunction::checkSupportedFunctions(const Aggreg
 String DataTypeCustomSimpleAggregateFunction::getName() const
 {
     WriteBufferFromOwnString stream;
-    stream << "SimpleAggregateFunction(" << function->getName();
+    stream << "simple_aggregate_function(" << function->getName();
 
     if (!parameters.empty())
     {
@@ -76,7 +76,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
     Array params_row;
 
     if (!arguments || arguments->children.empty())
-        throw Exception("Data type SimpleAggregateFunction requires parameters: "
+        throw Exception("Data type simple_aggregate_function requires parameters: "
                         "name of aggregate function and list of data types for arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (const ASTFunction * parametric = arguments->children[0]->as<ASTFunction>())
@@ -111,11 +111,11 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
     }
     else if (arguments->children[0]->as<ASTLiteral>())
     {
-        throw Exception("Aggregate function name for data type SimpleAggregateFunction must be passed as identifier (without quotes) or function",
+        throw Exception("Aggregate function name for data type simple_aggregate_function must be passed as identifier (without quotes) or function",
                         ErrorCodes::BAD_ARGUMENTS);
     }
     else
-        throw Exception("Unexpected AST element passed as aggregate function name for data type SimpleAggregateFunction. Must be identifier or function.",
+        throw Exception("Unexpected AST element passed as aggregate function name for data type simple_aggregate_function. Must be identifier or function.",
                         ErrorCodes::BAD_ARGUMENTS);
 
     for (size_t i = 1; i < arguments->children.size(); ++i)
@@ -144,7 +144,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
 
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory)
 {
-    factory.registerDataTypeCustom("SimpleAggregateFunction", create);
+    factory.registerDataTypeCustom("simple_aggregate_function", create);
 }
 
 }

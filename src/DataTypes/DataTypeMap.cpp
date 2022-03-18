@@ -61,7 +61,7 @@ void DataTypeMap::assertKeyType() const
 
     if (type_error)
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Type of Map key must be a type, that can be represented by integer or String or FixedString (possibly LowCardinality) or UUID,"
+            "Type of map key must be a type, that can be represented by integer or string or fixed_string (possibly low_cardinality) or uuid,"
             " but {} given", key_type->getName());
 }
 
@@ -69,7 +69,7 @@ void DataTypeMap::assertKeyType() const
 std::string DataTypeMap::doGetName() const
 {
     WriteBufferFromOwnString s;
-    s << "Map(" << key_type->getName() << ", " << value_type->getName() << ")";
+    s << "map(" << key_type->getName() << ", " << value_type->getName() << ")";
 
     return s.str();
 }
@@ -104,7 +104,7 @@ bool DataTypeMap::equals(const IDataType & rhs) const
 static DataTypePtr create(const ASTPtr & arguments)
 {
     if (!arguments || arguments->children.size() != 2)
-        throw Exception("Map data type family must have two arguments: key and value types", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception("The map data type family must have two arguments: key and value types", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     DataTypes nested_types;
     nested_types.reserve(arguments->children.size());
@@ -118,6 +118,6 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeMap(DataTypeFactory & factory)
 {
-    factory.registerDataType("Map", create);
+    factory.registerDataType("map", create);
 }
 }

@@ -650,7 +650,7 @@ void ConstantExpressionTemplate::TemplateStructure::addNodesToCastResult(const I
         auto cast = makeASTFunction("_cast", std::move(expr), std::make_shared<ASTLiteral>(result_column_type.getName()));
 
         auto cond = makeASTFunction("if", std::move(is_null), std::move(default_value), std::move(cast));
-        expr = makeASTFunction("tuple", std::move(cond), std::make_shared<ASTIdentifier>("_is_expression_nullable"));
+        expr = makeASTFunction("tuple_cast", std::move(cond), std::make_shared<ASTIdentifier>("_is_expression_nullable"));
     }
     else
     {

@@ -69,7 +69,6 @@
 
 /// proton: starts.
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedMetadata/TaskStatusService.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <Interpreters/Streaming/StreamColumnValidateVisitor.h>
 #include <Storages/Streaming/StorageStreamProperties.h>
@@ -689,7 +688,7 @@ void InterpreterCreateQuery::validateTableStructure(const ASTCreateQuery & creat
         for (const auto & name_and_type_pair : properties.columns.getAllPhysical())
         {
             const auto & type = name_and_type_pair.type->getName();
-            if (type == "MultiPolygon" || type == "Polygon" || type == "Ring" || type == "Point")
+            if (type == "multi_polygon" || type == "polygon" || type == "ring" || type == "point")
             {
                 /// proton: starts
                 String message = "Cannot create stream with column '" + name_and_type_pair.name + "' which type is '"

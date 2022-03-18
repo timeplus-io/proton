@@ -19,7 +19,7 @@ private:
     ColumnNothing(const ColumnNothing &) = default;
 
 public:
-    const char * getFamilyName() const override { return "Nothing"; }
+    const char * getFamilyName() const override { return "nothing"; }
     MutableColumnPtr cloneDummy(size_t s_) const override { return ColumnNothing::create(s_); }
     TypeIndex getDataType() const override { return TypeIndex::Nothing; }
 

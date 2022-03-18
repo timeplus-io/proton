@@ -9,15 +9,15 @@ TEST(ColumnsDescription, Normalize)
 {
     constexpr auto columns = "columns format version: 1\n"
                              "3 columns:\n"
-                             "`a` UInt32\n"
-                             "`b` String\tDEFAULT\tIf(a = 0, 'true', 'false')\n"
-                             "`c` String\tDEFAULT\tcAsT(a, 'String')\n";
+                             "`a` uint32\n"
+                             "`b` string\tDEFAULT\tIf(a = 0, 'true', 'false')\n"
+                             "`c` string\tDEFAULT\tcAsT(a, 'string')\n";
 
     constexpr auto columns_normalized = "columns format version: 1\n"
                                         "3 columns:\n"
-                                        "`a` UInt32\n"
-                                        "`b` String\tDEFAULT\tif(a = 0, 'true', 'false')\n"
-                                        "`c` String\tDEFAULT\tcast(a, 'String')\n";
+                                        "`a` uint32\n"
+                                        "`b` string\tDEFAULT\tif(a = 0, 'true', 'false')\n"
+                                        "`c` string\tDEFAULT\tcast(a, 'string')\n";
 
     tryRegisterFunctions();
 

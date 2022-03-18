@@ -18,7 +18,7 @@ namespace ErrorCodes
 String DataTypeJsonCustomName::getName() const
 {
     WriteBufferFromOwnString s;
-    s << "Json(";
+    s << "json(";
     for (size_t i = 0; i < elems.size(); ++i)
     {
         if (i != 0)
@@ -35,7 +35,7 @@ String DataTypeJsonCustomName::getName() const
 static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & arguments)
 {
     if (!arguments || arguments->children.empty())
-        throw Exception("Nested cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
+        throw Exception("The json type cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
 
     DataTypes nested_types;
     Strings nested_names;
@@ -46,7 +46,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
     {
         const auto * name_type = child->as<ASTNameTypePair>();
         if (!name_type)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Data type Nested accepts only pairs with name and type");
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Data type json accepts only pairs with name and type");
 
         auto nested_type = DataTypeFactory::instance().get(name_type->type);
         nested_types.push_back(std::move(nested_type));
@@ -61,7 +61,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
 
 void registerDataTypeJson(DataTypeFactory & factory)
 {
-    return factory.registerDataTypeCustom("Json", create);
+    return factory.registerDataTypeCustom("json", create);
 }
 
 DataTypePtr createJson(const DataTypes & types, const Names & names)

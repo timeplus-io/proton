@@ -412,7 +412,7 @@ static void deserializeTextImpl(IColumn & column, ReadBuffer & istr, Reader && r
     if (checkChar('[', istr))
         has_braces = true;
     else if (!allow_unenclosed)
-        throw Exception(ErrorCodes::CANNOT_READ_ARRAY_FROM_TEXT, "Array does not start with '[' character");
+        throw Exception(ErrorCodes::CANNOT_READ_ARRAY_FROM_TEXT, "array does not start with '[' character");
 
     try
     {
@@ -477,7 +477,7 @@ void SerializationArray::deserializeText(IColumn & column, ReadBuffer & istr, co
         }, false);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "Array");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "array");
 }
 
 void SerializationArray::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

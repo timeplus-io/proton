@@ -65,7 +65,7 @@ public:
             DictionaryLifetime dict_lifetime_,
             Configuration configuration_);
 
-    std::string getTypeName() const override { return "Polygon"; }
+    std::string getTypeName() const override { return "polygon"; }
 
     size_t getBytesAllocated() const override { return bytes_allocated; }
 

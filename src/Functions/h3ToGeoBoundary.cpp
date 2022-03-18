@@ -41,7 +41,7 @@ public:
         {
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt64",
+                "Illegal type {} of argument {} of function {}. Must be uint64",
                 arg->getName(), 1, getName());
         }
 
@@ -56,7 +56,7 @@ public:
         if (!column)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt64.",
+                "Illegal type {} of argument {} of function {}. Must be uint64.",
                 arguments[0].type->getName(),
                 1,
                 getName());

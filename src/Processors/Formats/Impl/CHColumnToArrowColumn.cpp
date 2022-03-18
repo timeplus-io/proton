@@ -59,23 +59,23 @@ namespace DB
 
     static const std::initializer_list<std::pair<String, std::shared_ptr<arrow::DataType>>> internal_type_to_arrow_type =
     {
-        {"UInt8", arrow::uint8()},
-        {"Int8", arrow::int8()},
-        {"UInt16", arrow::uint16()},
-        {"Int16", arrow::int16()},
-        {"UInt32", arrow::uint32()},
-        {"Int32", arrow::int32()},
-        {"UInt64", arrow::uint64()},
-        {"Int64", arrow::int64()},
-        {"Float32", arrow::float32()},
-        {"Float64", arrow::float64()},
+        {"uint8", arrow::uint8()},
+        {"int8", arrow::int8()},
+        {"uint16", arrow::uint16()},
+        {"int16", arrow::int16()},
+        {"uint32", arrow::uint32()},
+        {"int32", arrow::int32()},
+        {"uint64", arrow::uint64()},
+        {"int64", arrow::int64()},
+        {"float32", arrow::float32()},
+        {"float64", arrow::float64()},
 
-        {"Date", arrow::uint16()},      /// uint16 is used instead of date32, because Apache Arrow cannot correctly serialize Date32Array.
-        {"DateTime", arrow::uint32()},  /// uint32 is used instead of date64, because we don't need milliseconds.
-        {"Date32", arrow::date32()},
+        {"date", arrow::uint16()},      /// uint16 is used instead of date32, because Apache Arrow cannot correctly serialize Date32Array.
+        {"datetime", arrow::uint32()},  /// uint32 is used instead of date64, because we don't need milliseconds.
+        {"date32", arrow::date32()},
 
-        {"String", arrow::binary()},
-        {"FixedString", arrow::binary()},
+        {"string", arrow::binary()},
+        {"fixed_string", arrow::binary()},
     };
 
 

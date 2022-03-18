@@ -217,7 +217,7 @@ public:
 
             if (!(range_col_type->isValueRepresentedByInteger() && range_col_type->getSizeOfValueInMemory() <= sizeof(Int64)))
                 throw Exception(ErrorCodes::ILLEGAL_COLUMN,
-                    "Illegal type {} of fourth argument of function {} must be convertible to Int64.",
+                    "Illegal type {} of fourth argument of function {} must be convertible to int64.",
                     range_col_type->getName(),
                     getName());
         }
@@ -399,7 +399,7 @@ public:
 
             if (!(range_col_type->isValueRepresentedByInteger() && range_col_type->getSizeOfValueInMemory() <= sizeof(Int64)))
                 throw Exception(ErrorCodes::ILLEGAL_COLUMN,
-                    "Illegal type {} of fourth argument of function must be convertible to Int64.",
+                    "Illegal type {} of fourth argument of function must be convertible to int64.",
                     range_col_type->getName(),
                     getName());
 
@@ -944,13 +944,13 @@ private:
     {
         if (!isString(arguments[0]))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of first argument of function {}. Expected String. Actual type {}",
+                "Illegal type of first argument of function {}. Expected string. Actual type {}",
                 getName(),
                 arguments[0]->getName());
 
         if (!WhichDataType(arguments[1]).isUInt64())
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of second argument of function {}. Expected UInt64. Actual type {}",
+                "Illegal type of second argument of function {}. Expected uint64. Actual type {}",
                 getName(),
                 arguments[1]->getName());
 
@@ -1005,19 +1005,19 @@ private:
     {
         if (!isString(arguments[0]))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of first argument of function {}. Expected String. Actual type {}",
+                "Illegal type of first argument of function {}. Expected string. Actual type {}",
                 getName(),
                 arguments[0]->getName());
 
         if (!WhichDataType(arguments[1]).isUInt64())
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of second argument of function {}. Expected UInt64. Actual type {}",
+                "Illegal type of second argument of function {}. Expected uint64. Actual type {}",
                 getName(),
                 arguments[1]->getName());
 
         if (!WhichDataType(arguments[2]).isUInt64())
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of third argument of function {}. Expected UInt64. Actual type {}",
+                "Illegal type of third argument of function {}. Expected uint64. Actual type {}",
                 getName(),
                 arguments[2]->getName());
 
@@ -1073,13 +1073,13 @@ private:
     {
         if (!isString(arguments[0]))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of first argument of function {}. Expected String. Actual type {}",
+                "Illegal type of first argument of function {}. Expected string. Actual type {}",
                 getName(),
                 arguments[0]->getName());
 
         if (!WhichDataType(arguments[1]).isUInt64())
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of second argument of function {}. Expected UInt64. Actual type {}",
+                "Illegal type of second argument of function {}. Expected uint64. Actual type {}",
                 getName(),
                 arguments[1]->getName());
 
@@ -1150,7 +1150,7 @@ private:
 
         if (!WhichDataType(arguments[1]).isUInt64())
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of second argument of function {}. Expected UInt64. Actual type {}",
+                "Illegal type of second argument of function {}. Expected uint64. Actual type {}",
                 getName(),
                 arguments[1]->getName());
 

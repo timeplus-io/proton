@@ -123,8 +123,8 @@ private: /// it's not correct for Decimal
 public:
     static constexpr bool allow_decimal = IsOperation<Operation>::allow_decimal;
 
-    /// Appropriate result type for binary operator on numeric types. "Date" can also mean
-    /// DateTime, but if both operands are Dates, their type must be the same (e.g. Date - DateTime is invalid).
+    /// Appropriate result type for binary operator on numeric types. "date" can also mean
+    /// datetime, but if both operands are Dates, their type must be the same (e.g. Date - DateTime is invalid).
     using ResultDataType = Switch<
         /// Decimal cases
         Case<!allow_decimal && (IsDataTypeDecimal<LeftDataType> || IsDataTypeDecimal<RightDataType>), InvalidType>,

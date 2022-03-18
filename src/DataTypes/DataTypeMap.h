@@ -28,7 +28,7 @@ public:
 
     TypeIndex getTypeId() const override { return TypeIndex::Map; }
     std::string doGetName() const override;
-    const char * getFamilyName() const override { return "Map"; }
+    const char * getFamilyName() const override { return "map"; }
 
     bool canBeInsideNullable() const override { return false; }
 

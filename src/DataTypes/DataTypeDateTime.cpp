@@ -20,10 +20,10 @@ DataTypeDateTime::DataTypeDateTime(const TimezoneMixin & time_zone_)
 String DataTypeDateTime::doGetName() const
 {
     if (!has_explicit_time_zone)
-        return "DateTime";
+        return "datetime";
 
     WriteBufferFromOwnString out;
-    out << "DateTime(" << quote << time_zone.getTimeZone() << ")";
+    out << "datetime(" << quote << time_zone.getTimeZone() << ")";
     return out.str();
 }
 

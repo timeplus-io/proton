@@ -40,7 +40,7 @@ public:
     {
     }
 
-    const char * getFamilyName() const override { return "Compressed"; }
+    const char * getFamilyName() const override { return "compressed"; }
 
     size_t size() const override { return rows; }
     size_t byteSize() const override { return bytes; }

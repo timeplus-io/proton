@@ -42,8 +42,8 @@ private:
     ColumnFixedString(const ColumnFixedString & src) : chars(src.chars.begin(), src.chars.end()), n(src.n) {}
 
 public:
-    std::string getName() const override { return "FixedString(" + std::to_string(n) + ")"; }
-    const char * getFamilyName() const override { return "FixedString"; }
+    std::string getName() const override { return "fixed_string(" + std::to_string(n) + ")"; }
+    const char * getFamilyName() const override { return "fixed_string"; }
     TypeIndex getDataType() const override { return TypeIndex::FixedString; }
 
     MutableColumnPtr cloneResized(size_t size) const override;

@@ -39,7 +39,7 @@ public:
     static MutablePtr create(Arg && arg) { return Base::create(std::forward<Arg>(arg)); }
 
     std::string getName() const override;
-    const char * getFamilyName() const override { return "Tuple"; }
+    const char * getFamilyName() const override { return "tuple"; }
     TypeIndex getDataType() const override { return TypeIndex::Tuple; }
 
     MutableColumnPtr cloneEmpty() const override;

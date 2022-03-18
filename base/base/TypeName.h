@@ -16,33 +16,33 @@ struct AggregateFunctionStateData;
  */
 template <class T> constexpr inline std::string_view TypeName;
 
-#define TN_MAP(_A) \
-    template <> constexpr inline std::string_view TypeName<_A> = #_A;
+#define TN_MAP(_A, _T) \
+    template <> constexpr inline std::string_view TypeName<_A> = #_T;
 
-TN_MAP(UInt8)
-TN_MAP(UInt16)
-TN_MAP(UInt32)
-TN_MAP(UInt64)
-TN_MAP(UInt128)
-TN_MAP(UInt256)
-TN_MAP(Int8)
-TN_MAP(Int16)
-TN_MAP(Int32)
-TN_MAP(Int64)
-TN_MAP(Int128)
-TN_MAP(Int256)
-TN_MAP(Float32)
-TN_MAP(Float64)
-TN_MAP(String)
-TN_MAP(UUID)
-TN_MAP(Decimal32)
-TN_MAP(Decimal64)
-TN_MAP(Decimal128)
-TN_MAP(Decimal256)
-TN_MAP(DateTime64)
-TN_MAP(Array)
-TN_MAP(Tuple)
-TN_MAP(Map)
+TN_MAP(UInt8, uint8)
+TN_MAP(UInt16, uint16)
+TN_MAP(UInt32, uint32)
+TN_MAP(UInt64, uint64)
+TN_MAP(UInt128, uint128)
+TN_MAP(UInt256, uint256)
+TN_MAP(Int8, int8)
+TN_MAP(Int16, int16)
+TN_MAP(Int32, int32)
+TN_MAP(Int64, int64)
+TN_MAP(Int128, int128)
+TN_MAP(Int256, int256)
+TN_MAP(Float32, float32)
+TN_MAP(Float64, float64)
+TN_MAP(String, string)
+TN_MAP(UUID, uuid)
+TN_MAP(Decimal32, decimal32)
+TN_MAP(Decimal64, decimal64)
+TN_MAP(Decimal128, decimal128)
+TN_MAP(Decimal256, decimal256)
+TN_MAP(DateTime64, datetime64)
+TN_MAP(Array, array)
+TN_MAP(Tuple, tuple)
+TN_MAP(Map, map)
 
 /// Special case
 template <> constexpr inline std::string_view TypeName<AggregateFunctionStateData> = "AggregateFunctionState";

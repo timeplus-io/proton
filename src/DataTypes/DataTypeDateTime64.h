@@ -19,7 +19,7 @@ public:
     using Base = DataTypeDecimalBase<DateTime64>;
     static constexpr UInt8 default_scale = 3;
 
-    static constexpr auto family_name = "DateTime64";
+    static constexpr auto family_name = "datetime64";
     static constexpr auto type_id = TypeIndex::DateTime64;
 
     explicit DataTypeDateTime64(UInt32 scale_, const std::string & time_zone_name = "");

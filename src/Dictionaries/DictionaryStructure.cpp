@@ -114,7 +114,7 @@ DictionaryStructure::DictionaryStructure(const Poco::Util::AbstractConfiguration
         {
             if (id && attribute.underlying_type != AttributeUnderlyingType::UInt64)
                 throw Exception(ErrorCodes::TYPE_MISMATCH,
-                    "Hierarchical attribute type for dictionary with simple key must be UInt64. Actual {}",
+                    "Hierarchical attribute type for dictionary with simple key must be uint64. Actual {}",
                     attribute.underlying_type);
             else if (key)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Dictionary with complex key does not support hierarchy");
@@ -211,7 +211,7 @@ size_t DictionaryStructure::getKeysSize() const
 std::string DictionaryStructure::getKeyDescription() const
 {
     if (id)
-        return "UInt64";
+        return "uint64";
 
     WriteBufferFromOwnString out;
 
@@ -382,7 +382,7 @@ std::vector<DictionaryAttribute> DictionaryStructure::getAttributes(
 
 void DictionaryStructure::parseRangeConfiguration(const Poco::Util::AbstractConfiguration & config, const std::string & structure_prefix)
 {
-    static constexpr auto range_default_type = "Date";
+    static constexpr auto range_default_type = "date";
 
     if (config.has(structure_prefix + ".range_min"))
         range_min.emplace(makeDictionaryTypedSpecialAttribute(config, structure_prefix + ".range_min", range_default_type));

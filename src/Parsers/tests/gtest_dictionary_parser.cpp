@@ -31,9 +31,9 @@ TEST(ParserDictionaryDDL, SimpleDictionary)
 {
     String input = " CREATE DICTIONARY test.dict1"
                    " ("
-                   "    key_column UInt64 DEFAULT 0,"
-                   "    second_column UInt8 DEFAULT 1,"
-                   "    third_column UInt8 DEFAULT 2"
+                   "    key_column uint64 DEFAULT 0,"
+                   "    second_column uint8 DEFAULT 1,"
+                   "    third_column uint8 DEFAULT 2"
                    " )"
                    " PRIMARY KEY key_column"
                    " SOURCE(CLICKHOUSE(HOST 'localhost' PORT 8463 USER 'default' PASSWORD '' DB 'test' TABLE 'table_for_dict'))"
@@ -130,9 +130,9 @@ TEST(ParserDictionaryDDL, AttributesWithMultipleProperties)
 {
     String input = " CREATE DICTIONARY dict2"
                    " ("
-                   "    key_column UInt64 IS_OBJECT_ID,"
-                   "    second_column UInt8 DEFAULT 1 HIERARCHICAL INJECTIVE,"
-                   "    third_column UInt8 DEFAULT 2 EXPRESSION rand() % 100 * 77"
+                   "    key_column uint64 IS_OBJECT_ID,"
+                   "    second_column uint8 DEFAULT 1 HIERARCHICAL INJECTIVE,"
+                   "    third_column uint8 DEFAULT 2 EXPRESSION rand() % 100 * 77"
                    " )"
                    " PRIMARY KEY key_column"
                    " SOURCE(CLICKHOUSE(HOST 'localhost'))";
@@ -176,9 +176,9 @@ TEST(ParserDictionaryDDL, CustomAttributePropertiesOrder)
 {
     String input = " CREATE DICTIONARY dict3"
                    " ("
-                   "    key_column UInt64 IS_OBJECT_ID DEFAULT 100,"
-                   "    second_column UInt8 INJECTIVE HIERARCHICAL DEFAULT 1,"
-                   "    third_column UInt8 EXPRESSION rand() % 100 * 77 DEFAULT 2 INJECTIVE HIERARCHICAL"
+                   "    key_column uint64 IS_OBJECT_ID DEFAULT 100,"
+                   "    second_column uint8 INJECTIVE HIERARCHICAL DEFAULT 1,"
+                   "    third_column uint8 EXPRESSION rand() % 100 * 77 DEFAULT 2 INJECTIVE HIERARCHICAL"
                    " )"
                    " PRIMARY KEY key_column"
                    " SOURCE(CLICKHOUSE(REPLICA(HOST '127.0.0.1' PRIORITY 1)))"
@@ -229,9 +229,9 @@ TEST(ParserDictionaryDDL, NestedSource)
 {
     String input = " CREATE DICTIONARY dict4"
                    " ("
-                   "    key_column UInt64,"
-                   "    second_column UInt8,"
-                   "    third_column UInt8"
+                   "    key_column uint64,"
+                   "    second_column uint8,"
+                   "    third_column uint8"
                    " )"
                    " PRIMARY KEY key_column"
                    " SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
@@ -276,10 +276,10 @@ TEST(ParserDictionaryDDL, Formatting)
 {
     String input = " CREATE DICTIONARY test.dict5"
                    " ("
-                   "    key_column1 UInt64 DEFAULT 1 HIERARCHICAL INJECTIVE,"
-                   "    key_column2 String DEFAULT '',"
-                   "    second_column UInt8 EXPRESSION intDiv(50, rand() % 1000),"
-                   "    third_column UInt8"
+                   "    key_column1 uint64 DEFAULT 1 HIERARCHICAL INJECTIVE,"
+                   "    key_column2 string DEFAULT '',"
+                   "    second_column uint8 EXPRESSION int_div(50, rand() % 1000),"
+                   "    third_column uint8"
                    " )"
                    " PRIMARY KEY key_column1, key_column2"
                    " SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA(HOST '127.0.0.1' PRIORITY 1) PASSWORD ''))"
@@ -291,7 +291,7 @@ TEST(ParserDictionaryDDL, Formatting)
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateQuery * create = ast->as<ASTCreateQuery>();
     auto str = serializeAST(*create, true);
-    EXPECT_EQ(str, "CREATE DICTIONARY test.dict5 (`key_column1` UInt64 DEFAULT 1 HIERARCHICAL INJECTIVE, `key_column2` String DEFAULT '', `second_column` UInt8 EXPRESSION intDiv(50, rand() % 1000), `third_column` UInt8) PRIMARY KEY key_column1, key_column2 SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA (HOST '127.0.0.1' PRIORITY 1) PASSWORD '')) LIFETIME(MIN 1 MAX 10) LAYOUT(CACHE(SIZE_IN_CELLS 50)) RANGE(MIN second_column MAX third_column)");
+    EXPECT_EQ(str, "CREATE DICTIONARY test.dict5 (`key_column1` uint64 DEFAULT 1 HIERARCHICAL INJECTIVE, `key_column2` string DEFAULT '', `second_column` uint8 EXPRESSION int_div(50, rand() % 1000), `third_column` uint8) PRIMARY KEY key_column1, key_column2 SOURCE(MYSQL(HOST 'localhost' PORT 8463 USER 'default' REPLICA (HOST '127.0.0.1' PRIORITY 1) PASSWORD '')) LIFETIME(MIN 1 MAX 10) LAYOUT(CACHE(SIZE_IN_CELLS 50)) RANGE(MIN second_column MAX third_column)");
 }
 
 TEST(ParserDictionaryDDL, ParseDropQuery)

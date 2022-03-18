@@ -6,7 +6,7 @@ import math
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)" 
+        "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
     )
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,7 +50,7 @@ def test_set(request):
 def query_result_check(test_set, order_check=False, logging_level="INFO"):
 
     #formatter = logging.Formatter(
-    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"  
+    #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
     #)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
@@ -59,7 +59,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
     if logging_level=="INFO":
         logger.setLevel(logging.INFO)
     else:
-        logger.setLevel(logging.DEBUG)       
+        logger.setLevel(logging.DEBUG)
     expected_results = test_set.get("expected_results")
     logging.info(f"\n test run: expected_results: {expected_results}")
     statements_results = test_set.get("statements_results")
@@ -123,7 +123,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                             ):  # for each filed of each row of each query_results
                                 expected_result_field = expected_result_row[i]
                                 query_result_field = query_result_row[i]
-                                if "Array" in query_result_column_types[i][1]:
+                                if "array" in query_result_column_types[i][1]:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
@@ -131,7 +131,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                     else:
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
                                         logging.debug("test_run: not match")
-                                elif "Float" in query_result_column_types[i][1]:
+                                elif "float" in query_result_column_types[i][1]:
                                     if math.isclose(
                                         float(expected_result_field),
                                         float(query_result_field),
@@ -142,8 +142,8 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                         logging.debug("test_run: match")
                                     else:
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
-                                        logging.debug("test_run: not match")                                                                                
-                                elif "Int" in query_result_column_types[i][1]:
+                                        logging.debug("test_run: not match")
+                                elif "int" in query_result_column_types[i][1]:
                                     if int(expected_result_field) == int(
                                         query_result_field
                                     ):
@@ -152,15 +152,15 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                         logging.debug("test_run: match")
                                     else:
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
-                                        logging.debug("test_run: match")                                                                                
+                                        logging.debug("test_run: match")
                                 else:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
                                         logging.debug("test_run: match")
-                                    else: 
+                                    else:
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
-                                        logging.debug("test_run: not match")                                        
+                                        logging.debug("test_run: not match")
 
                             logging.debug(f"test_run: expected_result_row_field_check_arry = {expected_result_row_field_check_arry}")
                             expected_result_row_check = 1
@@ -188,15 +188,15 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                         ):  # for each filed of each row of each query_results
                             expected_result_field = expected_result_row[i]
                             query_result_field = query_result_row[i]
-                            if "Array" in query_result_column_types[i][1]:
+                            if "array" in query_result_column_types[i][1]:
                                 assert expected_result_field == query_result_field
-                            elif "Float" in query_result_column_types[i][1]:
+                            elif "float" in query_result_column_types[i][1]:
                                 assert math.isclose(
                                     float(expected_result_field),
                                     float(query_result_field),
                                     rel_tol=1e-2,
                                 )
-                            elif "Int" in query_result_column_types[i][1]:
+                            elif "int" in query_result_column_types[i][1]:
                                 assert int(expected_result_field) == int(
                                     query_result_field
                                 )

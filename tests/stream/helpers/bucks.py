@@ -204,7 +204,7 @@ def systest_context(config_file=None, tests_file=None):
 
 
 def create_table_from_column_list(table_ddl_url, table_name, column_list):
-    # create table based on a given column_list like: [('id', 'String'), ('location', 'String'), ('value', 'Float32'), ('json', 'String'), ('timestamp', 'DateTime64(3)'), ('_tp_time', 'DateTime64(3)'), ('_tp_index_time', 'DateTime64(3)')])
+    # create table based on a given column_list like: [('id', 'string'), ('location', 'string'), ('value', 'float32'), ('json', 'string'), ('timestamp', 'datetime64(3)'), ('_tp_time', 'datetime64(3)'), ('_tp_index_time', 'datetime64(3)')])
     # print(f"create_table_from_column_list: table_ddl_url = {table_ddl_url}, table_name = {table_name}, column_list = {column_list}")
     table_schema_columns = []
     table_column_headers = []
@@ -233,7 +233,7 @@ def create_table_from_column_list(table_ddl_url, table_name, column_list):
 
 
 def create_table_schema_from_query_result_column(table_name, column_list):
-    # create table based on a given column_list like: [('id', 'String'), ('location', 'String'), ('value', 'Float32'), ('json', 'String'), ('timestamp', 'DateTime64(3)'), ('_tp_time', 'DateTime64(3)'), ('_tp_index_time', 'DateTime64(3)')])
+    # create table based on a given column_list like: [('id', 'string'), ('location', 'string'), ('value', 'float32'), ('json', 'string'), ('timestamp', 'datetime64(3)'), ('_tp_time', 'datetime64(3)'), ('_tp_index_time', 'datetime64(3)')])
     # print(f"create_table_from_column_list: table_ddl_url = {table_ddl_url}, table_name = {table_name}, column_list = {column_list}")
     table_schema_columns = []
     table_column_headers = []

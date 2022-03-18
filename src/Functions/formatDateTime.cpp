@@ -362,7 +362,7 @@ public:
                 {
                     throw Exception(
                         "Illegal column " + arguments[0].column->getName() + " of function " + getName()
-                            + ", must be Integer or DateTime when arguments size is 1.",
+                            + ", must be integer or datetime when arguments size is 1.",
                         ErrorCodes::ILLEGAL_COLUMN);
                 }
             }
@@ -374,7 +374,7 @@ public:
                         if (!(res = executeType<FromDataType>(arguments, result_type)))
                             throw Exception(
                                 "Illegal column " + arguments[0].column->getName() + " of function " + getName()
-                                    + ", must be Integer or DateTime.",
+                                    + ", must be integer or datetime.",
                                 ErrorCodes::ILLEGAL_COLUMN);
                         return true;
                     }))
@@ -384,7 +384,7 @@ public:
                         || (res = executeType<DataTypeDateTime64>(arguments, result_type))))
                         throw Exception(
                             "Illegal column " + arguments[0].column->getName() + " of function " + getName()
-                                + ", must be Integer or DateTime.",
+                                + ", must be integer or datetime.",
                             ErrorCodes::ILLEGAL_COLUMN);
                 }
             }

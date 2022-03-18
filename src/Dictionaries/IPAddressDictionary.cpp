@@ -134,13 +134,13 @@ static void validateKeyTypes(const DataTypes & key_types)
 
     if (key_ipv4type == nullptr && (key_ipv6type == nullptr || key_ipv6type->getN() != 16))
         throw Exception(ErrorCodes::TYPE_MISMATCH,
-            "Key does not match, expected either `IPv4` (`UInt32`) or `IPv6` (`FixedString(16)`)");
+            "Key does not match, expected either `ipv4` (`uint32`) or `ipv6` (`fixed_string(16)`)");
 
     if (key_types.size() > 1)
     {
         const auto * mask_col_type = typeid_cast<const DataTypeUInt8 *>(key_types[1].get());
         if (mask_col_type == nullptr)
-            throw Exception(ErrorCodes::TYPE_MISMATCH, "Mask do not match, expected UInt8");
+            throw Exception(ErrorCodes::TYPE_MISMATCH, "Mask do not match, expected uint8");
     }
 }
 
@@ -313,7 +313,7 @@ ColumnUInt8::Ptr IPAddressDictionary::hasKeys(const Columns & key_columns, const
         {
             auto addr = first_column->getDataAt(i);
             if (unlikely(addr.size != IPV6_BINARY_LENGTH))
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected key to be FixedString(16)");
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected key to be fixed_string(16)");
 
             auto found = tryLookupIPv6(reinterpret_cast<const uint8_t *>(addr.data));
             out[i] = (found != ipNotFound());
@@ -621,7 +621,7 @@ void IPAddressDictionary::getItemsByTwoKeyColumnsImpl(
     {
         const auto * key_ip_column_ptr = typeid_cast<const ColumnVector<UInt32> *>(&*key_columns.front());
         if (key_ip_column_ptr == nullptr)
-            throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected a UInt32 IP column");
+            throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected a uint32 IP column");
 
         const auto & key_mask_column = assert_cast<const ColumnVector<UInt8> &>(*key_columns.back());
 
@@ -655,7 +655,7 @@ void IPAddressDictionary::getItemsByTwoKeyColumnsImpl(
 
     const auto * key_ip_column_ptr = typeid_cast<const ColumnFixedString *>(&*key_columns.front());
     if (key_ip_column_ptr == nullptr || key_ip_column_ptr->getN() != IPV6_BINARY_LENGTH)
-        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected a FixedString(16) IP column");
+        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected a fixed_string(16) IP column");
 
     const auto & key_mask_column = assert_cast<const ColumnVector<UInt8> &>(*key_columns.back());
 
@@ -733,7 +733,7 @@ void IPAddressDictionary::getItemsImpl(
         {
             auto addr = first_column->getDataAt(i);
             if (addr.size != IPV6_BINARY_LENGTH)
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected key to be FixedString(16)");
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected key to be fixed_string(16)");
 
             auto found = tryLookupIPv6(reinterpret_cast<const uint8_t *>(addr.data));
             if (found != ipNotFound())

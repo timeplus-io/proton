@@ -29,7 +29,7 @@ const ColumnUInt8 * checkAndGetSerializeColumnType(const IColumn & column)
 {
     const auto * col = checkAndGetColumn<ColumnUInt8>(&column);
     if (!checkAndGetColumn<ColumnUInt8>(&column))
-        throw Exception("Bool type can only serialize columns of type UInt8." + column.getName(),
+        throw Exception("Bool type can only serialize columns of type uint8." + column.getName(),
                         ErrorCodes::ILLEGAL_COLUMN);
     return col;
 }
@@ -38,7 +38,7 @@ ColumnUInt8 * checkAndGetDeserializeColumnType(IColumn & column)
 {
     auto * col =  typeid_cast<ColumnUInt8 *>(&column);
     if (!checkAndGetColumn<ColumnUInt8>(&column))
-        throw Exception("Bool type can only deserialize columns of type UInt8." + column.getName(),
+        throw Exception("Bool type can only deserialize columns of type uint8." + column.getName(),
                         ErrorCodes::ILLEGAL_COLUMN);
     return col;
 }

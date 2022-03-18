@@ -9,11 +9,11 @@
 namespace DB
 {
 
-/// array(c1, c2, ...) - create an array.
+/// array_cast(c1, c2, ...) - create an array.
 class FunctionArray : public IFunction
 {
 public:
-    static constexpr auto name = "array";
+    static constexpr auto name = "array_cast";
     static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionArray>();

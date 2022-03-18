@@ -45,7 +45,7 @@ public:
         if (!WhichDataType(arg).isUInt8())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt8",
+                "Illegal type {} of argument {} of function {}. Must be uint8",
                 arg->getName(), 1, getName());
 
         return std::make_shared<DataTypeFloat64>();
@@ -57,7 +57,7 @@ public:
         if (!column)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt8",
+                "Illegal type {} of argument {} of function {}. Must be uint8",
                 arguments[0].column->getName(),
                 1,
                 getName());

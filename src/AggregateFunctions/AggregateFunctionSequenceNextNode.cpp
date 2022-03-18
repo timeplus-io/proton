@@ -96,20 +96,20 @@ createAggregateFunctionSequenceNode(const std::string & name, const DataTypes & 
 
     if (const auto * cond_arg = argument_types[2].get(); cond_arg && !isUInt8(cond_arg))
         throw Exception("Illegal type " + cond_arg->getName() + " of third argument of aggregate function "
-                + name + ", must be UInt8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                + name + ", must be uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     for (const auto i : collections::range(min_required_args, argument_types.size()))
     {
         const auto * cond_arg = argument_types[i].get();
         if (!isUInt8(cond_arg))
             throw Exception(fmt::format(
-                "Illegal type '{}' of {} argument of aggregate function '{}', must be UInt8", cond_arg->getName(), i + 1, name),
+                "Illegal type '{}' of {} argument of aggregate function '{}', must be uint8", cond_arg->getName(), i + 1, name),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     if (WhichDataType(argument_types[1].get()).idx != TypeIndex::String)
         throw Exception{"Illegal type " + argument_types[1].get()->getName()
-                + " of second argument of aggregate function " + name + ", must be String",
+                + " of second argument of aggregate function " + name + ", must be string",
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
     DataTypePtr data_type = makeNullable(argument_types[1]);
@@ -129,7 +129,7 @@ createAggregateFunctionSequenceNode(const std::string & name, const DataTypes & 
         return createAggregateFunctionSequenceNodeImpl<DataTypeDateTime::FieldType>(data_type, argument_types, parameters, direction, base);
 
     throw Exception{"Illegal type " + argument_types.front().get()->getName()
-            + " of first argument of aggregate function " + name + ", must be Unsigned Number, Date, DateTime",
+            + " of first argument of aggregate function " + name + ", must be unsigned number, date, datetime",
         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 }
 

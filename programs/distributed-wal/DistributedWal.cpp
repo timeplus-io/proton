@@ -86,19 +86,19 @@ void dumpData(Block & block)
         for (auto & col : block)
         {
             const auto type = col.type->getName();
-            if (type == "Float64")
+            if (type == "float64")
             {
                 std::cout << col.name << "=" << col.column->getFloat64(idx) << "\n";
             }
-            else if (type == "UInt64")
+            else if (type == "uint64")
             {
                 std::cout << col.name << "=" << col.column->getUInt(idx) << "\n";
             }
-            else if (type == "DateTime64")
+            else if (type == "datetime64")
             {
                 std::cout << col.name << "=" << col.column->getFloat64(idx) << "\n";
             }
-            else if (type == "String")
+            else if (type == "string")
             {
                 std::cout << col.name << "=" << col.column->getDataAt(idx) << "\n";
             }

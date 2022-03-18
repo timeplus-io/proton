@@ -76,7 +76,7 @@ public:
 
             const ColumnConst * const_column = checkAndGetColumnConst<ColumnUInt8>(precision_column.column.get());
             if (!const_column)
-                throw Exception("Second argument for function " + getName() + " must be constant UInt8: precision.",
+                throw Exception("Second argument for function " + getName() + " must be constant uint8: precision.",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             precision = const_column->getValue<UInt8>();

@@ -30,7 +30,7 @@ void ColumnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const AST
         if (col_decl.default_specifier == "DEFAULT")
         {
             String default_str = queryToString(col_decl.default_expression);
-            if (type == "String")
+            if (type == "string")
             {
                 default_str = default_str.substr(1, default_str.length() - 2);
             }

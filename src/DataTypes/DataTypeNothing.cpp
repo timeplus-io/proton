@@ -25,7 +25,7 @@ SerializationPtr DataTypeNothing::doGetDefaultSerialization() const
 
 void registerDataTypeNothing(DataTypeFactory & factory)
 {
-    factory.registerSimpleDataType("Nothing", [] { return DataTypePtr(std::make_shared<DataTypeNothing>()); });
+    factory.registerSimpleDataType("nothing", [] { return DataTypePtr(std::make_shared<DataTypeNothing>()); });
 }
 
 }

@@ -1,13 +1,13 @@
 ATTACH VIEW tables
 (
-    `table_catalog` String,
-    `table_schema` String,
-    `table_name` String,
-    `table_type` Enum8('BASE TABLE' = 1, 'VIEW' = 2, 'FOREIGN TABLE' = 3, 'LOCAL TEMPORARY' = 4, 'SYSTEM VIEW' = 5),
-    `TABLE_CATALOG` String ALIAS table_catalog,
-    `TABLE_SCHEMA` String ALIAS table_schema,
-    `TABLE_NAME` String ALIAS table_name,
-    `TABLE_TYPE` Enum8('BASE TABLE' = 1, 'VIEW' = 2, 'FOREIGN TABLE' = 3, 'LOCAL TEMPORARY' = 4, 'SYSTEM VIEW' = 5) ALIAS table_type
+    `table_catalog` string,
+    `table_schema` string,
+    `table_name` string,
+    `table_type` enum8('BASE TABLE' = 1, 'VIEW' = 2, 'FOREIGN TABLE' = 3, 'LOCAL TEMPORARY' = 4, 'SYSTEM VIEW' = 5),
+    `TABLE_CATALOG` string ALIAS table_catalog,
+    `TABLE_SCHEMA` string ALIAS table_schema,
+    `TABLE_NAME` string ALIAS table_name,
+    `TABLE_TYPE` enum8('BASE TABLE' = 1, 'VIEW' = 2, 'FOREIGN TABLE' = 3, 'LOCAL TEMPORARY' = 4, 'SYSTEM VIEW' = 5) ALIAS table_type
 ) AS
 SELECT
     database AS table_catalog,

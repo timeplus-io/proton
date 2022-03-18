@@ -23,7 +23,7 @@ public:
             : argument_types(argument_types_), return_type(return_type_) {}
 
     std::string doGetName() const override;
-    const char * getFamilyName() const override { return "Function"; }
+    const char * getFamilyName() const override { return "function"; }
     TypeIndex getTypeId() const override { return TypeIndex::Function; }
 
     const DataTypes & getArgumentTypes() const

@@ -24,7 +24,7 @@ std::vector<String> RequiredSourceColumnsMatcher::extractNamesFromLambda(const A
 
     const auto * lambda_args_tuple = node.arguments->children[0]->as<ASTFunction>();
 
-    if (!lambda_args_tuple || lambda_args_tuple->name != "tuple")
+    if (!lambda_args_tuple || lambda_args_tuple->name != "tuple_cast")
         throw Exception("First argument of lambda must be a tuple", ErrorCodes::TYPE_MISMATCH);
 
     std::vector<String> names;

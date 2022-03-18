@@ -154,7 +154,7 @@ void buildLayoutConfiguration(
         {
             throw DB::Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "Dictionary layout parameter value must be an UInt64 or String, got '{}' instead",
+                "Dictionary layout parameter value must be an uint64 or string, got '{}' instead",
                 value_field.getTypeName());
         }
 

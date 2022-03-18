@@ -47,14 +47,14 @@ public:
         if (!WhichDataType(arg).isUInt64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt64",
+                "Illegal type {} of argument {} of function {}. Must be uint64",
                 arg->getName(), 1, getName());
 
         arg = arguments[1].get();
         if (!WhichDataType(arg).isUInt16())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be UInt16",
+                "Illegal type {} of argument {} of function {}. Must be uint16",
                 arg->getName(),
                 2,
                 getName());
@@ -68,7 +68,7 @@ public:
         if (!col_hindex)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt64.",
+                "Illegal type {} of argument {} of function {}. Must be uint64.",
                 arguments[0].type->getName(),
                 1,
                 getName());
@@ -80,7 +80,7 @@ public:
         if (!col_k)
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal type {} of argument {} of function {}. Must be UInt16.",
+                "Illegal type {} of argument {} of function {}. Must be uint16.",
                 arguments[1].type->getName(),
                 2,
                 getName());

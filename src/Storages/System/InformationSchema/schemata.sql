@@ -1,19 +1,19 @@
 ATTACH VIEW schemata
 (
-    `catalog_name` String,
-    `schema_name` String,
-    `schema_owner` String,
-    `default_character_set_catalog` Nullable(String),
-    `default_character_set_schema` Nullable(String),
-    `default_character_set_name` Nullable(String),
-    `sql_path` Nullable(String),
-    `CATALOG_NAME` String ALIAS catalog_name,
-    `SCHEMA_NAME` String ALIAS schema_name,
-    `SCHEMA_OWNER` String ALIAS schema_owner,
-    `DEFAULT_CHARACTER_SET_CATALOG` Nullable(String) ALIAS default_character_set_catalog,
-    `DEFAULT_CHARACTER_SET_SCHEMA` Nullable(String) ALIAS default_character_set_schema,
-    `DEFAULT_CHARACTER_SET_NAME` Nullable(String) ALIAS default_character_set_name,
-    `SQL_PATH` Nullable(String) ALIAS sql_path
+    `catalog_name` string,
+    `schema_name` string,
+    `schema_owner` string,
+    `default_character_set_catalog` nullable(string),
+    `default_character_set_schema` nullable(string),
+    `default_character_set_name` nullable(string),
+    `sql_path` nullable(string),
+    `CATALOG_NAME` string ALIAS catalog_name,
+    `SCHEMA_NAME` string ALIAS schema_name,
+    `SCHEMA_OWNER` string ALIAS schema_owner,
+    `DEFAULT_CHARACTER_SET_CATALOG` nullable(string) ALIAS default_character_set_catalog,
+    `DEFAULT_CHARACTER_SET_SCHEMA` nullable(string) ALIAS default_character_set_schema,
+    `DEFAULT_CHARACTER_SET_NAME` nullable(string) ALIAS default_character_set_name,
+    `SQL_PATH` nullable(string) ALIAS sql_path
 ) AS
 SELECT
     name AS catalog_name,

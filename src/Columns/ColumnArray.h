@@ -53,7 +53,7 @@ public:
     using ColumnOffsets = ColumnVector<Offset>;
 
     std::string getName() const override;
-    const char * getFamilyName() const override { return "Array"; }
+    const char * getFamilyName() const override { return "array"; }
     TypeIndex getDataType() const override { return TypeIndex::Array; }
     MutableColumnPtr cloneResized(size_t size) const override;
     size_t size() const override;

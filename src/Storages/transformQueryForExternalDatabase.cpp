@@ -133,13 +133,13 @@ bool isCompatible(IAST & node)
             || name == "not_in"
             || name == "is_null"
             || name == "is_not_null"
-            || name == "tuple"))
+            || name == "tuple_cast"))
             return false;
 
         /// A tuple with zero or one elements is represented by a function tuple(x) and is not compatible,
         /// but a normal tuple with more than one element is represented as a parenthesized expression (x, y) and is perfectly compatible.
         /// So to support tuple with zero or one elements we can clear function name to get (x) instead of tuple(x)
-        if (name == "tuple")
+        if (name == "tuple_cast")
         {
             if (function->arguments->children.size() <= 1)
             {

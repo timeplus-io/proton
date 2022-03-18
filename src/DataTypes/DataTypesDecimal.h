@@ -34,7 +34,7 @@ public:
     using typename Base::ColumnType;
     using Base::Base;
 
-    static constexpr auto family_name = "Decimal";
+    static constexpr auto family_name = "decimal";
 
     const char * getFamilyName() const override { return family_name; }
     std::string doGetName() const override;

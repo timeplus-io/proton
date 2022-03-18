@@ -33,7 +33,7 @@ public:
     explicit DataTypeDateTime(const String & time_zone_name = "");
     explicit DataTypeDateTime(const TimezoneMixin & time_zone);
 
-    static constexpr auto family_name = "DateTime";
+    static constexpr auto family_name = "datetime";
 
     const char * getFamilyName() const override { return family_name; }
     String doGetName() const override;

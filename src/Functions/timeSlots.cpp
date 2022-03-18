@@ -130,15 +130,15 @@ public:
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!WhichDataType(arguments[0].type).isDateTime())
-            throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() + ". Must be DateTime.",
+            throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() + ". Must be datetime.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!WhichDataType(arguments[1].type).isUInt32())
-            throw Exception("Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() + ". Must be UInt32.",
+            throw Exception("Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() + ". Must be uint32.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 3 && !WhichDataType(arguments[2].type).isNativeUInt())
-            throw Exception("Illegal type " + arguments[2].type->getName() + " of third argument of function " + getName() + ". Must be UInt32.",
+            throw Exception("Illegal type " + arguments[2].type->getName() + " of third argument of function " + getName() + ". Must be uint32.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         /// If time zone is specified for source data type, attach it to the resulting type.
@@ -163,7 +163,7 @@ public:
         {
             const auto * time_slot_column = checkAndGetColumn<ColumnConst>(arguments[2].column.get());
             if (!time_slot_column)
-                throw Exception("Third argument for function " + getName() + " must be constant UInt32", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception("Third argument for function " + getName() + " must be constant uint32", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             if (time_slot_size = time_slot_column->getValue<UInt32>(); time_slot_size == 0)
                 throw Exception("Third argument for function " + getName() + " must be greater than zero", ErrorCodes::ILLEGAL_COLUMN);

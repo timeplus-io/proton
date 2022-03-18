@@ -33,6 +33,7 @@
 
 ///proton: starts
 #include <Interpreters/PipelineMetricLog.h>
+#include <Parsers/queryToString.h>
 ///proton: ends
 
 

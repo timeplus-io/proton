@@ -70,7 +70,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeArray(DataTypeFactory & factory)
 {
-    factory.registerDataType("Array", create);
+    factory.registerDataType("array", create);
 }
 
 }

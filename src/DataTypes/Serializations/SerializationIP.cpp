@@ -26,7 +26,7 @@ void SerializationIPv4::serializeText(const IColumn & column, size_t row_num, Wr
     const auto * col = checkAndGetColumn<ColumnUInt32>(&column);
     if (!col)
     {
-        throw Exception("IPv4 type can only serialize columns of type UInt32." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("The ipv4 type can only serialize columns of type uint32." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     char buffer[IPV4_MAX_TEXT_LENGTH + 1] = {'\0'};
@@ -41,7 +41,7 @@ void SerializationIPv4::deserializeText(IColumn & column, ReadBuffer & istr, con
     ColumnUInt32 * col = typeid_cast<ColumnUInt32 *>(&column);
     if (!col)
     {
-        throw Exception("IPv4 type can only deserialize columns of type UInt32." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("The ipv4 type can only deserialize columns of type uint32." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     char buffer[IPV4_MAX_TEXT_LENGTH + 1] = {'\0'};
@@ -49,13 +49,13 @@ void SerializationIPv4::deserializeText(IColumn & column, ReadBuffer & istr, con
     UInt32 ipv4_value = 0;
     if (!parseIPv4(buffer, reinterpret_cast<unsigned char *>(&ipv4_value)))
     {
-        throw Exception("Invalid IPv4 value.", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
+        throw Exception("Invalid ipv4 value.", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
     }
 
     col->insert(ipv4_value);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "IPv4");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "ipv4");
 }
 
 SerializationIPv6::SerializationIPv6(const SerializationPtr & nested_)
@@ -67,7 +67,7 @@ void SerializationIPv6::serializeText(const IColumn & column, size_t row_num, Wr
     const auto * col = checkAndGetColumn<ColumnFixedString>(&column);
     if (!col)
     {
-        throw Exception("IPv6 type domain can only serialize columns of type FixedString(16)." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("The ipv6 type domain can only serialize columns of type fixed_string(16)." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     char buffer[IPV6_MAX_TEXT_LENGTH + 1] = {'\0'};
@@ -82,7 +82,7 @@ void SerializationIPv6::deserializeText(IColumn & column, ReadBuffer & istr, con
     ColumnFixedString * col = typeid_cast<ColumnFixedString *>(&column);
     if (!col)
     {
-        throw Exception("IPv6 type domain can only deserialize columns of type FixedString(16)." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("The ipv6 type domain can only deserialize columns of type fixed_string(16)." + column.getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
 
     char buffer[IPV6_MAX_TEXT_LENGTH + 1] = {'\0'};
@@ -91,13 +91,13 @@ void SerializationIPv6::deserializeText(IColumn & column, ReadBuffer & istr, con
     std::string ipv6_value(IPV6_BINARY_LENGTH, '\0');
     if (!parseIPv6(buffer, reinterpret_cast<unsigned char *>(ipv6_value.data())))
     {
-        throw Exception("Invalid IPv6 value.", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
+        throw Exception("Invalid ipv6 value.", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
     }
 
     col->insertString(ipv6_value);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "IPv6");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "ipv6");
 }
 
 }

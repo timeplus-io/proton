@@ -172,7 +172,7 @@ void prepareColumns(ASTCreateQuery & create)
             {
                 has_event_time = true;
                 auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "DateTime64")
+                if (!type_name || *type_name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
@@ -183,7 +183,7 @@ void prepareColumns(ASTCreateQuery & create)
             {
                 has_index_time = true;
                 auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "DateTime64")
+                if (!type_name || *type_name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
@@ -194,10 +194,10 @@ void prepareColumns(ASTCreateQuery & create)
             {
                 has_sequence_id = true;
                 auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "Int64")
+                if (!type_name || *type_name != "int64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
-                        "Column {} is reserved, expected type 'Int64 ' but actual type '{}'.",
+                        "Column {} is reserved, expected type 'int64 ' but actual type '{}'.",
                         RESERVED_EVENT_SEQUENCE_ID,
                         column.type->getID());
             }
@@ -213,7 +213,7 @@ void prepareColumns(ASTCreateQuery & create)
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
         col_tp_time->name = RESERVED_EVENT_TIME;
         col_tp_time->type
-            = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+            = makeASTFunction("datetime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         col_tp_time->default_specifier = "DEFAULT";
         col_tp_time->default_expression = functionToAST(expr);
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
@@ -230,7 +230,7 @@ void prepareColumns(ASTCreateQuery & create)
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
         col_tp_time->name = RESERVED_INDEX_TIME;
         col_tp_time->type
-            = makeASTFunction("DateTime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+            = makeASTFunction("datetime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         /// index time is the timestamp indexed to historical store. Don't specify a default value expression here to save disk space in streaming store
         /// since light ingest will ignore this column completely
         /// col_tp_time->default_specifier = "DEFAULT";
@@ -251,7 +251,7 @@ void prepareColumns(ASTCreateQuery & create)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
         col_tp_time->name = RESERVED_EVENT_SEQUENCE_ID;
-        col_tp_time->type = makeASTFunction("Int64");
+        col_tp_time->type = makeASTFunction("int64");
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
         auto func_delta = std::make_shared<ASTFunction>();
         func_delta->name = "Delta";

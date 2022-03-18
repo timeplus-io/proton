@@ -24,7 +24,7 @@ String getCreateColumnDefination(const Poco::JSON::Object::Ptr & column)
     {
         String default_str = column->get("default").toString();
 
-        if (column->get("type").toString() == "String")
+        if (column->get("type").toString() == "string")
         {
             default_str = "'" + default_str + "'";
         }
@@ -86,7 +86,7 @@ String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const 
 
         String default_str = payload->get("default").toString();
 
-        if (type == "String")
+        if (type == "string")
         {
             default_str = "'" + default_str + "'";
         }

@@ -31,11 +31,11 @@ namespace ErrorCodes
 namespace
 {
 
-// map(x, y, ...) is a function that allows you to make key-value pair
+// map_cast(x, y, ...) is a function that allows you to make key-value pair
 class FunctionMap : public IFunction
 {
 public:
-    static constexpr auto name = "map";
+    static constexpr auto name = "map_cast";
 
     static FunctionPtr create(ContextPtr)
     {

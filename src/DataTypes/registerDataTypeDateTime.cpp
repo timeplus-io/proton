@@ -63,11 +63,11 @@ static DataTypePtr create(const ASTPtr & arguments)
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime>();
 
-    const auto scale = getArgument<UInt64, ArgumentKind::Optional>(arguments, 0, "scale", "DateTime");
-    const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, !!scale, "timezone", "DateTime");
+    const auto scale = getArgument<UInt64, ArgumentKind::Optional>(arguments, 0, "scale", "datetime");
+    const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, !!scale, "timezone", "datetime");
 
     if (!scale && !timezone)
-        throw Exception(getExceptionMessage(" has wrong type: ", 0, "scale", "DateTime", Field::Types::Which::UInt64),
+        throw Exception(getExceptionMessage(" has wrong type: ", 0, "scale", "datetime", Field::Types::Which::UInt64),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     /// If scale is defined, the data type is DateTime when scale = 0 otherwise the data type is DateTime64
@@ -83,9 +83,9 @@ static DataTypePtr create32(const ASTPtr & arguments)
         return std::make_shared<DataTypeDateTime>();
 
     if (arguments->children.size() != 1)
-        throw Exception("DateTime32 data type can optionally have only one argument - time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception("The datetime32 data type can optionally have only one argument - time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const auto timezone = getArgument<String, ArgumentKind::Mandatory>(arguments, 0, "timezone", "DateTime32");
+    const auto timezone = getArgument<String, ArgumentKind::Mandatory>(arguments, 0, "timezone", "datetime32");
 
     return std::make_shared<DataTypeDateTime>(timezone);
 }
@@ -96,21 +96,21 @@ static DataTypePtr create64(const ASTPtr & arguments)
         return std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
 
     if (arguments->children.size() > 2)
-        throw Exception("DateTime64 data type can optionally have two argument - scale and time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception("The datetime64 data type can optionally have two argument - scale and time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const auto scale = getArgument<UInt64, ArgumentKind::Mandatory>(arguments, 0, "scale", "DateTime64");
-    const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, 1, "timezone", "DateTime64");
+    const auto scale = getArgument<UInt64, ArgumentKind::Mandatory>(arguments, 0, "scale", "datetime64");
+    const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, 1, "timezone", "datetime64");
 
     return std::make_shared<DataTypeDateTime64>(scale, timezone.value_or(String{}));
 }
 
 void registerDataTypeDateTime(DataTypeFactory & factory)
 {
-    factory.registerDataType("DateTime", create, DataTypeFactory::CaseInsensitive);
-    factory.registerDataType("DateTime32", create32, DataTypeFactory::CaseInsensitive);
-    factory.registerDataType("DateTime64", create64, DataTypeFactory::CaseInsensitive);
+    factory.registerDataType("datetime", create, DataTypeFactory::CaseInsensitive);
+    factory.registerDataType("datetime32", create32, DataTypeFactory::CaseInsensitive);
+    factory.registerDataType("datetime64", create64, DataTypeFactory::CaseInsensitive);
 
-    factory.registerAlias("TIMESTAMP", "DateTime", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("TIMESTAMP", "datetime", DataTypeFactory::CaseInsensitive);
 }
 
 }

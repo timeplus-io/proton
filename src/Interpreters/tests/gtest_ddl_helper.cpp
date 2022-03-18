@@ -3,7 +3,6 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ParserQuery.h>
-#include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 
@@ -51,35 +50,35 @@ TEST(DDLHelper, getJSONFromCreateQuery)
         ignoreEmptyChars(queryToJSON(R"###(
 CREATE STREAM default.tests
 (
-    `device`         String,
-    `location`       String,
-    `cpu_usage`      Float32,
-    `timestamp`      DateTime64(3) DEFAULT now64(3),
-    `ttl`            DateTime DEFAULT now()
+    `device`         string,
+    `location`       string,
+    `cpu_usage`      float32,
+    `timestamp`      datetime64(3) DEFAULT now64(3),
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(1, 1, rand()))###")),
         ignoreEmptyChars(R"###({
 "columns": [{
     "name": "device",
     "nullable": false,
-    "type": "String"
+    "type": "string"
 }, {
     "name": "location",
     "nullable": false,
-    "type": "String"
+    "type": "string"
 }, {
     "name": "cpu_usage",
     "nullable": false,
-    "type": "Float32"
+    "type": "float32"
 }, {
     "default": "now64(3)",
     "name": "timestamp",
     "nullable": false,
-    "type": "DateTime64(3)"
+    "type": "datetime64(3)"
 }, {
     "default": "now()",
     "name": "ttl",
     "nullable": false,
-    "type": "DateTime"
+    "type": "datetime"
 }],
 "name": "tests",
 "order_by_granularity": "H",
@@ -94,10 +93,10 @@ CREATE STREAM default.tests
         queryToJSON(R"###(
 CREATE STREAM default.tests
 (
-    `_tp_time`      DateTime(3) DEFAULT now(UTC),
-    `_tp_index_time`DateTime(3) DEFAULT now(UTC),
-    `_tp_xxxx`      UInt64,
-    `ttl`            DateTime DEFAULT now()
+    `_tp_time`      datetime(3) DEFAULT now(UTC),
+    `_tp_index_time`datetime(3) DEFAULT now(UTC),
+    `_tp_xxxx`      uint64,
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand()))###"),
         ignoreEmptyChars(R"###(
 {
@@ -105,21 +104,21 @@ CREATE STREAM default.tests
 		"default": "now(UTC)",
 		"name": "_tp_time",
 		"nullable": false,
-		"type": "DateTime64(3)"
+		"type": "datetime64(3)"
 	}, {
 		"default": "now(UTC)",
 		"name": "_tp_index_time",
 		"nullable": false,
-		"type": "DateTime64(3)"
+		"type": "datetime64(3)"
 	}, {
 		"name": "_tp_xxxx",
 		"nullable": false,
-		"type": "UInt64"
+		"type": "uint64"
 	}, {
 		"default": "now()",
 		"name": "ttl",
 		"nullable": false,
-		"type": "DateTime"
+		"type": "datetime"
 	}],
 	"name": "tests",
 	"order_by_granularity": "H",
@@ -134,7 +133,7 @@ CREATE STREAM default.tests
         ignoreEmptyChars(queryToJSON(R"###(
 CREATE STREAM default.tests
 (
-    `ttl`            DateTime DEFAULT now()
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand())
 PARTITION BY ttl
 ORDER BY ttl
@@ -146,7 +145,7 @@ TTL ttl + to_interval_day(1)
 		"default": "now()",
 		"name": "ttl",
 		"nullable": false,
-		"type": "DateTime"
+		"type": "datetime"
 	}],
 	"name": "tests",
 	"order_by_granularity": "H",
@@ -167,18 +166,18 @@ TEST(DDLHelper, getJSONFromAlterQuery)
 
     /// add column
     EXPECT_EQ(
-        queryToJSON(R"###(ALTER STREAM tests ADD COLUMN id UInt32 DEFAULT 20)###"),
-        ignoreEmptyChars(R"###({"default": "20", "name": "id", "nullable": false, "type": "UInt32"})###"));
+        queryToJSON(R"###(ALTER STREAM tests ADD COLUMN id uint32 DEFAULT 20)###"),
+        ignoreEmptyChars(R"###({"default": "20", "name": "id", "nullable": false, "type": "uint32"})###"));
 
     /// modify column
     EXPECT_EQ(
-        queryToJSON(R"###(ALTER STREAM tests MODIFY COLUMN id UInt64 DEFAULT 64)###"),
-        ignoreEmptyChars(R"###({"default": "64", "name": "id", "nullable": false, "type": "UInt64"})###"));
+        queryToJSON(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64)###"),
+        ignoreEmptyChars(R"###({"default": "64", "name": "id", "nullable": false, "type": "uint64"})###"));
 
     /// modify column add comment
     EXPECT_EQ(
-        queryToJSON(R"###(ALTER STREAM tests MODIFY COLUMN id UInt64 DEFAULT 64 COMMENT 'test')###"),
-        ignoreEmptyChars(R"###({"comment": "test", "default": "64", "name": "id", "nullable": false, "type": "UInt64"})###"));
+        queryToJSON(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64 COMMENT 'test')###"),
+        ignoreEmptyChars(R"###({"comment": "test", "default": "64", "name": "id", "nullable": false, "type": "uint64"})###"));
 
     /// rename column
     EXPECT_EQ(queryToJSON(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), ignoreEmptyChars(R"###({"name":"id1"})###"));
@@ -202,10 +201,10 @@ TEST(DDLHelper, getOpCodeFromQuery)
     EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), DWAL::OpCode::ALTER_TABLE);
 
     /// add column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id UInt32 DEFAULT 20)###"), DWAL::OpCode::CREATE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id uint32 DEFAULT 20)###"), DWAL::OpCode::CREATE_COLUMN);
 
     /// modify column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id UInt64 DEFAULT 64)###"), DWAL::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64)###"), DWAL::OpCode::ALTER_COLUMN);
 
     /// rename column
     EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), DWAL::OpCode::ALTER_COLUMN);
@@ -238,11 +237,11 @@ TEST(DDLHelper, prepareCreateQueryForStream)
     ASTPtr ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
-    `device`         String,
-    `location`       String,
-    `cpu_usage`      Float32,
-    `timestamp`      DateTime64(3) DEFAULT now64(3),
-    `ttl`            DateTime DEFAULT now()
+    `device`         string,
+    `location`       string,
+    `cpu_usage`      float32,
+    `timestamp`      datetime64(3) DEFAULT now64(3),
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(1, 1, rand())
 )###");
     auto * create = ast->as<ASTCreateQuery>();
@@ -259,10 +258,10 @@ CREATE STREAM default.tests
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
-    `_tp_time`      DateTime(3) DEFAULT now(UTC),
-    `_tp_index_time`DateTime(3) DEFAULT now(UTC),
-    `_tp_xxxx`      UInt64,
-    `ttl`            DateTime DEFAULT now()
+    `_tp_time`      datetime(3) DEFAULT now(UTC),
+    `_tp_index_time`datetime(3) DEFAULT now(UTC),
+    `_tp_xxxx`      uint64,
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand()))###");
     create = ast->as<ASTCreateQuery>();
     EXPECT_THROW(prepareCreateQueryForStream(*create), DB::Exception);
@@ -271,7 +270,7 @@ CREATE STREAM default.tests
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
-    `ttl`            DateTime DEFAULT now()
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand())
 PARTITION BY ttl
 ORDER BY ttl
@@ -289,8 +288,8 @@ TTL ttl + to_interval_day(1)
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
-    `timestamp`      DateTime64(3) DEFAULT now64(3),
-    `ttl`            DateTime DEFAULT now()
+    `timestamp`      datetime64(3) DEFAULT now64(3),
+    `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(1, 1, rand())
 SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
@@ -299,10 +298,10 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
     prepareCreateQueryForStream(*create);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
 CREATE STREAM default.tests (
-  `timestamp` DateTime64(3) DEFAULT now64(3),
-  `ttl` DateTime DEFAULT now(),
-  `_tp_time` DateTime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
-  `_tp_index_time` DateTime64(3,'UTC') CODEC(DoubleDelta(), LZ4())
+  `timestamp` datetime64(3) DEFAULT now64(3),
+  `ttl` datetime DEFAULT now(),
+  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
+  `_tp_index_time` datetime64(3,'UTC') CODEC(DoubleDelta(), LZ4())
 ) ENGINE = Stream(1, 1, rand())
 PARTITION BY to_YYYYMMDD(_tp_time)
 ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
@@ -320,7 +319,7 @@ TEST(DDLHelper, prepareEngine)
     ASTPtr ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
-    `ttl`            DateTime DEFAULT now()
+    `ttl`            datetime DEFAULT now()
 ))###");
     auto * create = ast->as<ASTCreateQuery>();
 
@@ -330,7 +329,7 @@ CREATE STREAM default.tests
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
-    `ttl`            DateTime DEFAULT now()
+    `ttl`            datetime DEFAULT now()
 )
 SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
 )###");

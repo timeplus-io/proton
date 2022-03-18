@@ -74,7 +74,7 @@ struct ArrayDifferenceImpl
                         static_cast<ResultNativeType>(prev.value),
                         result_value);
                     if (overflow)
-                        throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "Decimal math overflow");
+                        throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "decimal math overflow");
 
                     dst[pos] = Result(result_value);
                 }

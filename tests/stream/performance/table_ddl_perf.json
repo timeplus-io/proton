@@ -20,23 +20,23 @@
         "columns": [
             {
                 "name": "id",
-                "type": "String"
+                "type": "string"
             },
             {
                 "name": "location",
-                "type": "String"
+                "type": "string"
             },
             {
                 "name": "value",
-                "type": "Float32"
+                "type": "float32"
             },
             {
                 "name": "json",
-                "type": "String"
+                "type": "string"
             },
             {
                 "name": "timestamp",
-                "type": "Datetime64(3)",
+                "type": "datetime64(3)",
                 "default": "now64(3)"
             }
         ],
@@ -49,23 +49,23 @@
             "columns": [
                 {
                     "name": "id",
-                    "type": "String"
+                    "type": "string"
                 },
                 {
                     "name": "location",
-                    "type": "String"
+                    "type": "string"
                 },
                 {
                     "name": "value",
-                    "type": "Float32"
+                    "type": "float32"
                 },
                 {
                     "name": "json",
-                    "type": "String"
+                    "type": "string"
                 },
                 {
                     "name": "timestamp",
-                    "type": "Datetime64(3)",
+                    "type": "datetime64(3)",
                     "default": "now64(3)"
                 }
             ],

@@ -493,16 +493,16 @@ bool TaskStatusService::createTaskTable()
         "CREATE STREAM IF NOT EXISTS \
                     system.tasks \
                     ( \
-                    `id` String, \
-                    `status` String, \
-                    `progress` String, \
-                    `reason` String, \
-                    `user` String, \
-                    `context` String, \
-                    `created` Int64, \
-                    `last_modified` Int64, \
-                    `_tp_time` DateTime64(3, 'UTC') DEFAULT from_unix_timestamp64_milli(created, 'UTC'), \
-                    `_tp_index_time` DateTime64(3, 'UTC') \
+                    `id` string, \
+                    `status` string, \
+                    `progress` string, \
+                    `reason` string, \
+                    `user` string, \
+                    `context` string, \
+                    `created` int64, \
+                    `last_modified` int64, \
+                    `_tp_time` datetime64(3, 'UTC') DEFAULT from_unix_timestamp64_milli(created, 'UTC'), \
+                    `_tp_index_time` datetime64(3, 'UTC') \
                      ) \
                     ENGINE = Stream(1,{},rand()) \
                     ORDER BY (to_minute(_tp_time), user, id) \

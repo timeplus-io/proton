@@ -74,7 +74,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
 void registerDataTypeNullable(DataTypeFactory & factory)
 {
-    factory.registerDataType("Nullable", create);
+    factory.registerDataType("nullable", create);
 }
 
 

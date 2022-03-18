@@ -67,7 +67,7 @@ void changeTransformArguments(ASTPtr & array_to, ASTPtr & other)
 
     auto array_cast = makeASTFunction("_cast");
     array_cast->arguments->children.push_back(array_to);
-    array_cast->arguments->children.push_back(std::make_shared<ASTLiteral>("Array(" + enum_string + ")"));
+    array_cast->arguments->children.push_back(std::make_shared<ASTLiteral>("array(" + enum_string + ")"));
     array_to = array_cast;
 
     auto other_cast = makeASTFunction("_cast");
@@ -149,7 +149,7 @@ void ConvertStringsToEnumMatcher::visit(ASTFunction & function_node, Data & data
         if (!literal1 || !literal2)
             return;
 
-        if (literal1->value.getTypeName() != "String" || literal2->value.getTypeName() != "String")
+        if (literal1->value.getTypeName() != "string" || literal2->value.getTypeName() != "string")
             return;
 
         changeIfArguments(function_node.arguments->children[1],
@@ -165,14 +165,14 @@ void ConvertStringsToEnumMatcher::visit(ASTFunction & function_node, Data & data
         if (!literal_to || !literal_other)
             return;
 
-        if (literal_to->value.getTypeName() != "Array" || literal_other->value.getTypeName() != "String")
+        if (literal_to->value.getTypeName() != "array" || literal_other->value.getTypeName() != "string")
             return;
 
         Array array_to = literal_to->value.get<Array>();
         if (array_to.empty())
             return;
 
-        bool to_strings = checkSameType(array_to, "String");
+        bool to_strings = checkSameType(array_to, "string");
         if (!to_strings)
             return;
 

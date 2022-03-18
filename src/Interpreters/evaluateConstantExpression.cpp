@@ -210,7 +210,7 @@ namespace
                 return true;
             };
 
-            if (const auto * tuple_func = right->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple")
+            if (const auto * tuple_func = right->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple_cast")
             {
                 const auto * tuple_elements = tuple_func->children.front()->as<ASTExpressionList>();
                 for (const auto & child : tuple_elements->children)

@@ -19,7 +19,7 @@ namespace ErrorCodes
 
 
 /** Not an aggregate function, but an adapter of aggregate functions,
-  *  which any aggregate function `agg(x)` makes an aggregate function of the form `aggArray(x)`.
+  *  which any aggregate function `agg(x)` makes an aggregate function of the form `agg_array(x)`.
   * The adapted aggregate function calculates nested aggregate function for each element of the array.
   */
 class AggregateFunctionArray final : public IAggregateFunctionHelper<AggregateFunctionArray>
@@ -41,7 +41,7 @@ public:
 
     String getName() const override
     {
-        return nested_func->getName() + "Array";
+        return nested_func->getName() + "_array";
     }
 
     DataTypePtr getReturnType() const override

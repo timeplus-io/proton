@@ -207,7 +207,7 @@ struct ArrayAggregateImpl
                             T product_val = product.value;
 
                             if (common::mulOverflow(x_val, product_val, product.value))
-                                throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "Decimal math overflow");
+                                throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "decimal math overflow");
                         }
 
                         auto result_scale = column_typed->getScale() * array_size;
@@ -293,7 +293,7 @@ struct ArrayAggregateImpl
                         AggregateValueDecimalUnderlyingValue element_value = static_cast<AggregateValueDecimalUnderlyingValue>(element.value);
 
                         if (common::mulOverflow(current_aggregate_value, element_value, aggregate_value.value))
-                            throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "Decimal math overflow");
+                            throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "decimal math overflow");
                     }
                     else
                     {

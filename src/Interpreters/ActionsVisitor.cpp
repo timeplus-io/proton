@@ -182,7 +182,7 @@ static Block createBlockFromAST(const ASTPtr & node, const DataTypes & types, Co
 
             /// Tuple can be represented as a function in AST.
             auto * func = elem->as<ASTFunction>();
-            if (func && func->name != "tuple")
+            if (func && func->name != "tuple_cast")
             {
                 if (!tuple_type)
                     tuple_type = std::make_shared<DataTypeTuple>(types);
@@ -300,7 +300,7 @@ Block createBlockForSet(
 {
     auto get_tuple_type_from_ast = [context](const auto & func) -> DataTypePtr
     {
-        if (func && (func->name == "tuple" || func->name == "array") && !func->arguments->children.empty())
+        if (func && (func->name == "tuple_cast" || func->name == "array_cast") && !func->arguments->children.empty())
         {
             /// Won't parse all values of outer tuple.
             auto element = func->arguments->children.at(0);
@@ -328,7 +328,7 @@ Block createBlockForSet(
     else if (left_tuple_depth + 1 == right_tuple_depth)
     {
         const auto * set_func = right_arg->as<ASTFunction>();
-        if (!set_func || (set_func->name != "tuple" && set_func->name != "array"))
+        if (!set_func || (set_func->name != "tuple_cast" && set_func->name != "array_cast"))
             throw Exception("Incorrect type of 2nd argument for function 'in'"
                             ". Must be subquery or set of elements with type " + left_arg_type->getName() + ".",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -374,7 +374,7 @@ SetPtr makeExplicitSet(
 
     Block block;
     const auto & right_arg_func = std::dynamic_pointer_cast<ASTFunction>(right_arg);
-    if (right_arg_func && (right_arg_func->name == "tuple" || right_arg_func->name == "array"))
+    if (right_arg_func && (right_arg_func->name == "tuple_cast" || right_arg_func->name == "array_cast"))
         block = createBlockForSet(left_arg_type, right_arg_func, set_element_types, context);
     else
         block = createBlockForSet(left_arg_type, right_arg, set_element_types, context);
@@ -905,7 +905,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
 
                 const auto * lambda_args_tuple = function->arguments->children.at(0)->as<ASTFunction>();
 
-                if (!lambda_args_tuple || lambda_args_tuple->name != "tuple")
+                if (!lambda_args_tuple || lambda_args_tuple->name != "tuple_cast")
                     throw Exception("First argument of lambda must be a tuple", ErrorCodes::TYPE_MISMATCH);
 
                 has_lambda_arguments = true;

@@ -5,7 +5,6 @@
 #include <Storages/Streaming/StorageStream.h>
 
 #include <Common/Macros.h>
-#include <Common/OptimizedRegularExpression.h>
 #include <Common/typeid_cast.h>
 #include <Common/thread_local_rng.h>
 
@@ -40,7 +39,7 @@ static Names extractColumnNames(const ASTPtr & node)
 {
     const auto * expr_func = node->as<ASTFunction>();
 
-    if (expr_func && expr_func->name == "tuple")
+    if (expr_func && expr_func->name == "tuple_cast")
     {
         const auto & elements = expr_func->children.at(0)->children;
         Names res;
@@ -241,7 +240,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
                 /// If we got ASTFunction, let's evaluate it and replace with ASTLiteral.
                 /// Do not try evaluate array or tuple, because it's array or tuple of column identifiers.
-                if (arg_func->name == "array" || arg_func->name == "tuple")
+                if (arg_func->name == "array_cast" || arg_func->name == "tuple_cast")
                     continue;
                 Field value = evaluateConstantExpression(arg, args.getLocalContext()).first;
                 arg = std::make_shared<ASTLiteral>(value);
@@ -433,7 +432,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// Get date:
         if (!tryGetIdentifierNameInto(engine_args[arg_num], date_column_name))
             throw Exception(
-                "Date column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                "date column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
                 ErrorCodes::BAD_ARGUMENTS);
 
         auto partition_by_ast = makeASTFunction("to_YYYYMM", std::make_shared<ASTIdentifier>(date_column_name));

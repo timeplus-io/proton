@@ -45,7 +45,7 @@ static bool tryExtractConstValueFromCondition(const ASTPtr & condition, bool & v
                     if (type_literal->value.getType() == Field::Types::String)
                     {
                         const auto & type_str = type_literal->value.get<std::string>();
-                        if (type_str == "UInt8" || type_str == "Nullable(UInt8)")
+                        if (type_str == "uint8" || type_str == "nullable(uint8)")
                             return tryExtractConstValueFromCondition(expr_list->children.at(0), value);
                     }
                 }

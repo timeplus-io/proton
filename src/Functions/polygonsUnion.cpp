@@ -56,7 +56,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
-        return DataTypeFactory::instance().get("MultiPolygon");
+        return DataTypeFactory::instance().get("multi_polygon");
     }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }

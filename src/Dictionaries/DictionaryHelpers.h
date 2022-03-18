@@ -416,7 +416,7 @@ public:
 
             const auto * vector_col = checkAndGetColumn<ColumnVector<UInt64>>(key_columns[0].get());
             if (!vector_col)
-                throw Exception(ErrorCodes::TYPE_MISMATCH, "Column type mismatch for simple key expected UInt64");
+                throw Exception(ErrorCodes::TYPE_MISMATCH, "Column type mismatch for simple key expected uint64");
         }
 
         keys_size = key_columns.front()->size();

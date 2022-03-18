@@ -55,7 +55,7 @@ private:
     void getPermutationImpl(size_t limit, Permutation & res, Comparator cmp) const;
 
 public:
-    const char * getFamilyName() const override { return "String"; }
+    const char * getFamilyName() const override { return "string"; }
     TypeIndex getDataType() const override { return TypeIndex::String; }
 
     size_t size() const override

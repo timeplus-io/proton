@@ -148,7 +148,7 @@ void SerializationTuple::deserializeText(IColumn & column, ReadBuffer & istr, co
     assertChar(')', istr);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "Tuple");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "tuple");
 }
 
 void SerializationTuple::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

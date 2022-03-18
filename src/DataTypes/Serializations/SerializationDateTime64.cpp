@@ -44,14 +44,14 @@ void SerializationDateTime64::deserializeText(IColumn & column, ReadBuffer & ist
     assert_cast<ColumnType &>(column).getData().push_back(result);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "DateTime64");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "datetime64");
 }
 
 void SerializationDateTime64::deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     deserializeTextEscaped(column, istr, settings);
     if (!istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "DateTime64");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "datetime64");
 }
 
 void SerializationDateTime64::serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

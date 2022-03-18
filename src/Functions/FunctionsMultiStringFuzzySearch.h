@@ -95,7 +95,7 @@ public:
         else
             throw Exception(
                 "Illegal column " + arguments[1].column->getName()
-                    + ". The number is not const or does not fit in UInt32",
+                    + ". The number is not const or does not fit in uint32",
                 ErrorCodes::ILLEGAL_COLUMN);
 
 

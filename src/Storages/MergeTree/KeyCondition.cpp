@@ -874,7 +874,7 @@ bool KeyCondition::tryPrepareSetIndex(
 
     size_t left_args_count = 1;
     const auto * left_arg_tuple = left_arg->as<ASTFunction>();
-    if (left_arg_tuple && left_arg_tuple->name == "tuple")
+    if (left_arg_tuple && left_arg_tuple->name == "tuple_cast")
     {
         const auto & tuple_elements = left_arg_tuple->arguments->children;
         left_args_count = tuple_elements.size();

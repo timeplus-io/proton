@@ -3,31 +3,31 @@
     "columns": [
         {
             "name": "sepal_length",
-            "type": "Float64"
+            "type": "float64"
         },
         {
             "name": "sepal_width",
-            "type": "Float64"
+            "type": "float64"
         },
         {
             "name": "petal_length",
-            "type": "Float64"
+            "type": "float64"
         },
         {
             "name": "petal_width",
-            "type": "Float64"
+            "type": "float64"
         },
         {
             "name": "species",
-            "type": "String"
+            "type": "string"
         },
         {
             "name": "perf_agent_id",
-            "type": "String"
+            "type": "string"
         },
         {
             "name": "perf_event_time",
-            "type": "Datetime64(3)",
+            "type": "datetime64(3)",
             "default": "now64(3)"
         }
     ]
