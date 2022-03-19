@@ -10,6 +10,7 @@ formatter = logging.Formatter(
 PROTON_PYTHON_DRIVER_S3_BUCKET_NAME = "tp-internal"
 PROTON_PYTHON_DIRVER_S3_OBJ_NAME = "proton/proton-python-driver/clickhouse-driver-0.2.4.tar.gz"
 PROTON_PYTHON_DRIVER_FILE_NAME ="clickhouse-driver-0.2.4.tar.gz"
+PROTON_PYTHON_DRIVER_NANME = "clickhouse-driver"
 
 proton_log_in_container = "proton-server:/var/log/proton-server/proton-server.log"
 proton_err_log_in_container = (
@@ -89,13 +90,18 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
     report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
     proton_log_folder = f"{local_all_results_folder_path}/proton"
     pytest_logging_level_set = f"--log-cli-level={logging_level}"
-
     s3_helper = S3Helper("https://s3.amazonaws.com")
-    s3_helper.client.download_file(PROTON_PYTHON_DRIVER_S3_BUCKET_NAME, PROTON_PYTHON_DIRVER_S3_OBJ_NAME, PROTON_PYTHON_DRIVER_FILE_NAME)
-    logger.debug(f"{PROTON_PYTHON_DRIVER_FILE_NAME} is downloaded")
-    command = "pip3 install ./" + PROTON_PYTHON_DRIVER_FILE_NAME
+
+    command = "pip3 list | grep clickhouse-driver"
     ret = ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=600)
-    logger.debug(f"ret of subprocess.run({command}) = {ret}")
+    if PROTON_PYTHON_DRIVER_NANME not in ret.stdout:
+        s3_helper.client.download_file(PROTON_PYTHON_DRIVER_S3_BUCKET_NAME, PROTON_PYTHON_DIRVER_S3_OBJ_NAME, PROTON_PYTHON_DRIVER_FILE_NAME)
+        logger.debug(f"{PROTON_PYTHON_DRIVER_FILE_NAME} is downloaded")
+        command = "pip3 install ./" + PROTON_PYTHON_DRIVER_FILE_NAME
+        ret = ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=600)
+        logger.debug(f"ret of subprocess.run({command}) = {ret}")
+    else:
+        logger.debug(f"{PROTON_PYTHON_DRIVER_NANME} exists bypass s3 download and install")
 
     retcode = pytest.main(
         ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]

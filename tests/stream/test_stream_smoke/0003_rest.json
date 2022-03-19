@@ -90,6 +90,7 @@
                         {
                             "client": "rest",
                             "rest_type": "http_snapshot",
+                            "wait": 2,
                             "query_type": "table",
                             "query_id": "101",
                             "query_url": "/?query=show streams where name = 'test'",

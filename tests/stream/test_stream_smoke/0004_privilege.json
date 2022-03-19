@@ -19,7 +19,7 @@
                     {"client":"exec", "query_type": "table","user":"proton", "password":"proton@t+", "query":"grant select on default.* to select_only"},
                     {"client":"exec", "query_type": "table","user":"proton", "password":"proton@t+", "query":"grant select_only to user_select_only"},
                     {"client":"python", "query_type": "table", "query":"drop stream if exists test_ingest"},
-                    {"client":"python", "query_type": "table","query_id":"100", "user": "user_select_only", "password":"password", "query":"create stream test_ingest (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
+                    {"client":"python", "query_type": "table","query_id":"100", "wait":1, "user": "user_select_only", "password":"password", "query":"create stream test_ingest (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                     {"client":"python", "query_type": "table","query":"create stream test_ingest (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into test_ingest (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11')"},
                     {"client":"python", "query_type": "table", "query":"insert into test_ingest (id, value, location, timestamp) values ('dev2', 100, 'ca', '2020-01-01 11:11:11')"},

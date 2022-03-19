@@ -1,5 +1,5 @@
 from ast import Pass
-import os, sys, getopt, json, random
+import os, sys, getopt, json, random, copy
 from re import sub
 import logging, logging.config
 from clickhouse_driver import Client
@@ -204,7 +204,7 @@ def systest_context(config_file=None, tests_file=None):
 
 
 def create_table_from_column_list(table_ddl_url, table_name, column_list):
-    # create table based on a given column_list like: [('id', 'string'), ('location', 'string'), ('value', 'float32'), ('json', 'string'), ('timestamp', 'datetime64(3)'), ('_tp_time', 'datetime64(3)'), ('_tp_index_time', 'datetime64(3)')])
+    # create table based on a given column_list like: [('id', 'String'), ('location', 'String'), ('value', 'Float32'), ('json', 'String'), ('timestamp', 'DateTime64(3)'), ('_tp_time', 'DateTime64(3)'), ('_tp_index_time', 'DateTime64(3)')])
     # print(f"create_table_from_column_list: table_ddl_url = {table_ddl_url}, table_name = {table_name}, column_list = {column_list}")
     table_schema_columns = []
     table_column_headers = []
@@ -233,7 +233,7 @@ def create_table_from_column_list(table_ddl_url, table_name, column_list):
 
 
 def create_table_schema_from_query_result_column(table_name, column_list):
-    # create table based on a given column_list like: [('id', 'string'), ('location', 'string'), ('value', 'float32'), ('json', 'string'), ('timestamp', 'datetime64(3)'), ('_tp_time', 'datetime64(3)'), ('_tp_index_time', 'datetime64(3)')])
+    # create table based on a given column_list like: [('id', 'String'), ('location', 'String'), ('value', 'Float32'), ('json', 'String'), ('timestamp', 'DateTime64(3)'), ('_tp_time', 'DateTime64(3)'), ('_tp_index_time', 'DateTime64(3)')])
     # print(f"create_table_from_column_list: table_ddl_url = {table_ddl_url}, table_name = {table_name}, column_list = {column_list}")
     table_schema_columns = []
     table_column_headers = []
@@ -275,24 +275,23 @@ def query_run_py(
 
     #logger = mp.log_to_stderr()
     #logger.setLevel(logging.DEBUG)
-
     if pyclient == None:
+        run_mode = 'process'
         logger = mp.get_logger()
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.formatter = formatter
         logger.addHandler(console_handler)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
         logger.debug(
             f"process started: handler of logger = {logger.handlers}, logger.level = {logger.level}"
         )
         proton_server = config.get("proton_server")
         proton_server_native_port = config.get("proton_server_native_port")
         settings = {"max_block_size": 100000}
-        pyclient = Client(
-            host=proton_server, port=proton_server_native_port
-        )  # create python client
+
         CLEAN_CLIENT = True
     else:
+        run_mode = 'local'
         logger = mp.get_logger()
         logger.debug(
             f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
@@ -304,7 +303,15 @@ def query_run_py(
     query_id = str(statement_2_run.get("query_id"))
     query_sub_id = str(statement_2_run.get("query_sub_id"))
     query_type = statement_2_run.get("query_type")
-    run_mode = statement_2_run.get("run_mode")
+    #run_mode = statement_2_run.get("run_mode")
+    wait = statement_2_run.get("wait")
+    #exception_reload = statement_2_run.get("exception_reload")
+    loop_times = statement_2_run.get("loop_times")
+    if loop_times != None: 
+        loop_times = int(loop_times)
+    else:
+        loop_times = 1 # if no loop_times in statement, execute once at least
+    logger.debug(f"loop_times = {loop_times}")
     result_keep = statement_2_run.get("result_keep")
 
     query_record_table = statement_2_run.get("query_record_table")
@@ -324,11 +331,22 @@ def query_run_py(
         + str(datetime.datetime.now())
         + ".csv"
     )
-    with open(query_record_file_name, "w") as f:
-        writer = csv.writer(f)
+    #with open(query_record_file_name, "w") as f:
+    #    writer = csv.writer(f)
 
         # logger.debug(f"query_run_py: query_id = {query_id}, query = {query} to be execute.........")
+    i = 0 # at least run once
+    while i < loop_times or loop_times < 0:
         try:
+            if run_mode == 'process':
+                pyclient = Client(
+                host=proton_server, port=proton_server_native_port
+                )  # create python client
+            logger.debug(f"query = {query} is to be executed.")
+            #if wait != None:
+            #    time.sleep(int(wait))
+            if query_type != None and query_type == "table" and loop_times <0: #when table query in loop, have interval between table query run
+                time.sleep(2) #todo: table query internval could be set in tests.json
             query_result_iter = pyclient.execute_iter(
                 query, with_column_types=True, query_id=query_sub_id, settings=settings
             )
@@ -341,7 +359,7 @@ def query_run_py(
                 else:
                     if isinstance(element, list) or isinstance(element, tuple):
                         element = list(element)
-                        element.append(str(datetime.datetime.now()))
+                        #element.append(str(datetime.datetime.now()))
 
                     if i == 0:
                         query_result_column_types = element
@@ -350,7 +368,7 @@ def query_run_py(
                         # logger.debug(f"query_run_py: element before tuple_2_list = {element}")
                         element_list = tuple_2_list(element)
                         # logger.debug(f"query_run_py: element_list in query_result_iter in query_id: {query_id} = {element_list}")
-                        writer.writerow(element)
+                        # writer.writerow(element)
                 i += 1
             query_end_time_str = str(
                 datetime.datetime.now()
@@ -359,7 +377,7 @@ def query_run_py(
             if run_mode == "process" or query_type == "stream":
                 pyclient.disconnect()
 
-        except (errors.ServerException) as error:
+        except (BaseException, errors.ServerException) as error:
             logger.debug(f"query_run_py: running in exception......, error = {error}")
             if isinstance(error, errors.ServerException):
                 if (
@@ -369,12 +387,15 @@ def query_run_py(
                     pass
 
                 else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
-                    writer.writerow(["ServerException", error.code])
+                    #writer.writerow(["ServerException", error.code])
+                    logger.debug(f"ServerException, error = {error}")
             else:
-                writer.writerow(["Exception", error.code])
-
-        if run_mode == "process" or query_type == "stream":
-            pyclient.disconnect()
+                #writer.writerow(["Exception", error.code])
+                logger.debug(f"Exception, error = {error}")
+        finally:
+            i += 1
+            if run_mode == "process" or query_type == "stream":
+                pyclient.disconnect()
 
     # logger.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
     print(f"query_run_py: ended.")
@@ -384,8 +405,14 @@ def query_run_py(
 def query_execute(config, child_conn, query_results_queue, alive):
     # logging.basicConfig(level=logger.debug, filename="rockets.log")
     # query_result_list = query_result_list
-    logger = mp.log_to_stderr()
+    logger = mp.get_logger()
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logger.addHandler(console_handler)
     logger.setLevel(logging.DEBUG)
+    logger.debug(
+        f"process started: handler of logger = {logger.handlers}, logger.level = {logger.level}"
+    )
 
     logger.debug(f"bucks: query_execute starts...")
 
@@ -490,7 +517,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
                 if terminate == "auto":
                     auto_terminate_queries.append(statement_2_run)
                 run_mode = statement_2_run.get("run_mode")
-
+                interval = statement_2_run.get("interval")
                 query = statement_2_run.get("query")
                 query_end_timer = statement_2_run.get("query_end_timer")
                 query_start_time_str = str(datetime.datetime.now())
@@ -502,12 +529,17 @@ def query_execute(config, child_conn, query_results_queue, alive):
                         i
                     )  # the actual query_id for query execution and cancel
                     query_sub_id = query_id + "_" + str(i)
-                    statement_2_run[
+                    statement_2_run_copy = copy.deepcopy(statement_2_run)
+                    if "$" in query:
+                        query_copy =statement_2_run_copy.get("query")
+                        query_copy = query_copy.replace("$", str(i))
+                        statement_2_run_copy["query"] = query_copy
+                    statement_2_run_copy[
                         "query_sub_id"
                     ] = query_sub_id  # add sub_query_id into statement_2_run
                     query_run_args = (
                         query_agent_id,
-                        statement_2_run,
+                        statement_2_run_copy,
                         settings,
                         query_done_semaphore,
                         query_results_queue,
@@ -516,6 +548,8 @@ def query_execute(config, child_conn, query_results_queue, alive):
                     query_agent_id = "query_agent_" + str(i)
                     query_proc = mp.Process(target=query_run_py, args=query_run_args)
 
+                    if interval != None:
+                        time.sleep(int(interval)) #wait for interval and then start a proc to work around ddl timeout issue
                     query_proc.start()
                     query_procs.append(
                         {
@@ -529,9 +563,9 @@ def query_execute(config, child_conn, query_results_queue, alive):
                         }
                     )
 
-                    # logger.debug(
-                    #    f"query_execute: start a proc for query = {query}, query_run_args = {query_run_args}, query_proc.pid = {query_proc.pid}"
-                    # )
+                    logger.debug(
+                        f"query_execute: start a proc for query = {query}, query_run_args = {query_run_args}, query_proc.pid = {query_proc.pid}"
+                    )
 
                 message_2_send = f"query proc started for query_id = {query_id}"
                 child_conn.send(message_2_send)
@@ -588,6 +622,8 @@ def query_walk_through(statements, query_conn=None):
             query_end_timer = 0
 
         # query_exe_queue.put(statement)
+        if wait != None:
+            time.sleep(int(wait))        
         query_conn.send(statement)
         logger.debug(
             # f"query_walk_through: statement query_id = {query_id} was pushed into query_exe_queue."
@@ -599,12 +635,13 @@ def query_walk_through(statements, query_conn=None):
         logger.debug(
             f"query_walk_through: message_recv = {message_recv} received after send statement to query_execute"
         )
-
+ 
+        '''
         if isinstance(wait, dict):  # if wait for a specific query done
             print()  # todo: check the query_id and implement the logic to notify the query_execute that this query need to be done after the query to be wait done and implement the wait logic in query_execute_new
         elif str(wait).isdigit():  # if wait for x seconds and then execute the query
             time.sleep(wait)
-
+        '''
         statement_id_run += 1
         # time.sleep(1) # wait the query_execute execute the stream command
 
@@ -907,6 +944,8 @@ def input_client(
     )
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
+    
+    
     client = Client(
         host=proton_server, port=proton_server_native_port
     )  # create python client
@@ -916,81 +955,89 @@ def input_client(
         loop_count = 0
         loop_limit = 10 if loop_times < 0 else loop_times
         while loop_count < loop_limit:
-            table_columns = ""
-            input_sql_list = []
-            i = 0  # row_index to identify the fist row as header
-            j = 0  # as batch counter
-            batch_str = ""
-            for row in data_set:
-                # print("input_walk_through: row:", row)
-                row_str = ""
-                if i == 0:
-                    for field in row:
-                        table_columns = table_columns + field + ","
-                    table_columns_str = (
-                        "("
-                        + table_columns
-                        + "_perf_row_id"
-                        + ","
-                        + "_perf_ingest_time"
-                        + ")"
-                    )
-                    # table_columns_str = "(" + table_columns[: len(table_columns) - 1] + ")"
-                    i += 1
-                else:
-                    # if j == 0: metric_create_batch_time.append(f"start create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
-                    for field in row:
-                        # print("input_walk_through: field:", field)
-                        if isinstance(field, str):
-                            field.replace('"', '//"')  # proton does
-                        row_str = (
-                            row_str + "'" + str(field) + "'" + ","
-                        )  # python client does not support "", so put ' here
-                    _perf_row_id = str(uuid.uuid1())
-                    _perf_ingest_time = str(datetime.datetime.now())
-                    row_str = (
-                        "("
-                        + row_str
-                        + "'"
-                        + _perf_row_id
-                        + "'"
-                        + ","
-                        + "'"
-                        + _perf_ingest_time
-                        + "'"
-                        + ")"
-                    )
-                    # row_str = "(" + row_str[: len(row_str) - 1] + ")"
-                    batch_str = batch_str + row_str + ","
-
-                    if j >= batch_size - 1:
-
-                        batch_str = batch_str[: len(batch_str) - 1]
-                        input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
-                        logger.debug(f"input_client: input_sql = {input_sql}")
-                        # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
-                        client.execute(input_sql)
-
-                        # input_sql_list.append(input_sql)
-                        batch_str = ""
-                        j = 0
-
+            try:
+                table_columns = ""
+                input_sql_list = []
+                i = 0  # row_index to identify the fist row as header
+                j = 0  # as batch counter
+                batch_str = ""
+                for row in data_set:
+                    # print("input_walk_through: row:", row)
+                    row_str = ""
+                    if i == 0:
+                        for field in row:
+                            table_columns = table_columns + field + ","
+                        table_columns_str = (
+                            "("
+                            + table_columns
+                            + "_perf_row_id"
+                            + ","
+                            + "_perf_ingest_time"
+                            + ")"
+                        )
+                        # table_columns_str = "(" + table_columns[: len(table_columns) - 1] + ")"
+                        i += 1
                     else:
-                        j += 1
+                        # if j == 0: metric_create_batch_time.append(f"start create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
+                        for field in row:
+                            # print("input_walk_through: field:", field)
+                            if isinstance(field, str):
+                                field.replace('"', '//"')  # proton does
+                            row_str = (
+                                row_str + "'" + str(field) + "'" + ","
+                            )  # python client does not support "", so put ' here
+                        _perf_row_id = str(uuid.uuid1())
+                        _perf_ingest_time = str(datetime.datetime.now())
+                        row_str = (
+                            "("
+                            + row_str
+                            + "'"
+                            + _perf_row_id
+                            + "'"
+                            + ","
+                            + "'"
+                            + _perf_ingest_time
+                            + "'"
+                            + ")"
+                        )
+                        # row_str = "(" + row_str[: len(row_str) - 1] + ")"
+                        batch_str = batch_str + row_str + ","
 
-            if len(batch_str) != 0 and batch_str[len(batch_str) - 1] == ",":
-                batch_str = batch_str[: len(batch_str) - 1]
-                input_sql = (
-                    f"insert into {table_name} {table_columns_str} values {batch_str}"
-                )
-                # print(f"input_client: input_sql = {input_sql}")
-                # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
-                client.execute(input_sql)
+                        if j >= batch_size - 1:
 
-            # print(metric_create_batch_time)
+                            batch_str = batch_str[: len(batch_str) - 1]
+                            input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
+                            logger.debug(f"input_client: input_sql = {input_sql}")
+                            # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
+                            client.execute(input_sql)
 
-            if loop_times > 0:
-                loop_count += 1  # if loop_times < 0, run infinitely
+                            # input_sql_list.append(input_sql)
+                            batch_str = ""
+                            j = 0
+
+                        else:
+                            j += 1
+
+                if len(batch_str) != 0 and batch_str[len(batch_str) - 1] == ",":
+                    batch_str = batch_str[: len(batch_str) - 1]
+                    input_sql = (
+                        f"insert into {table_name} {table_columns_str} values {batch_str}"
+                    )
+                    # print(f"input_client: input_sql = {input_sql}")
+                    # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
+                    client.execute(input_sql)
+
+                # print(metric_create_batch_time)
+
+                if loop_times > 0:
+                    loop_count += 1  # if loop_times < 0, run infinitely
+            except(BaseException) as error:
+                logger.debug(f"exception, error = {error}")
+                client.disconnect()
+                client = Client(
+                    host=proton_server, port=proton_server_native_port
+                )  # create python client
+
 
         input_done.value = True  # set input_done mp.Value to True to indicate all the inputs are executed.
 
@@ -1115,25 +1162,25 @@ def env_setup(
     client, rest_setting, test_suite_config, env_compose_file, proton_ci_mode
 ):
     ci_mode = proton_ci_mode
-    logging.info(f"env_setup: ci_mode = {ci_mode}")
-    logging.debug(f"env_setup: rest_setting = {rest_setting}")
+    logger.info(f"env_setup: ci_mode = {ci_mode}")
+    logger.debug(f"env_setup: rest_setting = {rest_setting}")
     health_url = rest_setting.get("health_check_url")
-    logging.debug(f"env_setup: health_url = {health_url}")
+    logger.debug(f"env_setup: health_url = {health_url}")
     if ci_mode == "local":
         env_docker_compose_res = True
-        logging.info(f"Bypass docker compose up.")
+        logger.info(f"Bypass docker compose up.")
     else:
         env_docker_compose_res = compose_up(env_compose_file)
-        logging.info(f"env_setup: docker compose up...")
-    logging.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
+        logger.info(f"env_setup: docker compose up...")
+    logger.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
     env_health_check_res = env_health_check(health_url)
-    logging.info(f"env_setup: env_health_check_res: {env_health_check_res}")
+    logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
     if env_docker_compose_res:
         retry = 5
         while env_health_check_res == False and retry > 0:
             time.sleep(2)
             env_health_check_res = env_health_check(health_url)
-            logging.debug(f"env_setup: retry = {retry}")
+            logger.debug(f"env_setup: retry = {retry}")
             retry -= 1
 
         if env_health_check_res == False:
@@ -1151,7 +1198,7 @@ def env_setup(
     for table_schema in table_schemas:
         table_name = table_schema.get("name")
         reset = table_schema.get("reset")
-        logging.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
+        logger.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
 
         table_type = table_schema.get("type")
         if reset != None and reset == "False":
@@ -1173,7 +1220,7 @@ def env_setup(
                 create_table_pyclient(client, table_schema)
 
     setup = test_suite_config.get("setup")
-    logging.debug(f"env_setup: setup = {setup}")
+    logger.debug(f"env_setup: setup = {setup}")
     if setup != None:
         setup_inputs = setup.get("inputs")
         if setup_inputs != None:
