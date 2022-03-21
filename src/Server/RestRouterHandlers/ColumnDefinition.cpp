@@ -13,7 +13,7 @@ String getCreateColumnDefination(const Poco::JSON::Object::Ptr & column)
     column_definition.push_back("`" + column->get("name").toString() + "`");
     if (column->has("nullable") && column->get("nullable"))
     {
-        column_definition.push_back(" Nullable(" + column->get("type").toString() + ")");
+        column_definition.push_back(" nullable(" + column->get("type").toString() + ")");
     }
     else
     {

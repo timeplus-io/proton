@@ -175,7 +175,7 @@ void prepareColumns(ASTCreateQuery & create)
                 if (!type_name || *type_name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
-                        "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
+                        "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
                         RESERVED_EVENT_TIME,
                         column.type->getID());
             }
@@ -186,7 +186,7 @@ void prepareColumns(ASTCreateQuery & create)
                 if (!type_name || *type_name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
-                        "Column {} is reserved, expected type 'DateTime64' but actual type '{}'.",
+                        "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
                         RESERVED_INDEX_TIME,
                         column.type->getID());
             }
