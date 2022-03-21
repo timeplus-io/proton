@@ -108,13 +108,15 @@ bool Client::executeMultiQuery(const String & all_queries_text)
     // the same in tests and in normal usage. The only difference is that in
     // normal mode we ignore the test hints.
     const bool test_mode = config().has("testmode");
-    if (test_mode)
-    {
-        /// disable logs if expects errors
-        TestHint test_hint(test_mode, all_queries_text);
-        if (test_hint.clientError() || test_hint.serverError())
-            processTextAsSingleQuery("SET send_logs_level = 'fatal'");
-    }
+    /// proton: starts. Disable send_logs_level
+    // if (test_mode)
+    // {
+    //     /// disable logs if expects errors
+    //     TestHint test_hint(test_mode, all_queries_text);
+    //     if (test_hint.clientError() || test_hint.serverError())
+    //         processTextAsSingleQuery("SET send_logs_level = 'fatal'");
+    // }
+    /// proton: ends.
 
     bool echo_query = echo_queries;
 

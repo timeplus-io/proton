@@ -605,7 +605,9 @@ class TestCase:
             pattern = '{test} > {stdout} 2> {stderr}'
 
         if self.ext == '.sql':
-            pattern = "{client} --send_logs_level={logs_level} --testmode --multiquery {options} < " + pattern
+            # proton: starts. remove '--send_logs_level={logs_level}'
+            pattern = "{client} --testmode --multiquery {options} < " + pattern
+            # proton: ends.
 
         command = pattern.format(**params)
 

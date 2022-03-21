@@ -233,19 +233,21 @@ void TCPHandler::runImpl()
             state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), receive_timeout, send_timeout);
 
             /// Should we send internal logs to client?
-            const auto client_logs_level = query_context->getSettingsRef().send_logs_level;
-            if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_LOGS
-                && client_logs_level != LogsLevel::none)
-            {
-                state.logs_queue = std::make_shared<InternalTextLogsQueue>();
-                state.logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
-                CurrentThread::attachInternalTextLogsQueue(state.logs_queue, client_logs_level);
-                CurrentThread::setFatalErrorCallback([this]
-                {
-                    std::lock_guard lock(fatal_error_mutex);
-                    sendLogs();
-                });
-            }
+            /// proton: starts. Disable send_logs_level
+            // const auto client_logs_level = query_context->getSettingsRef().send_logs_level;
+            // if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_LOGS
+            //     && client_logs_level != LogsLevel::none)
+            // {
+            //     state.logs_queue = std::make_shared<InternalTextLogsQueue>();
+            //     state.logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
+            //     CurrentThread::attachInternalTextLogsQueue(state.logs_queue, client_logs_level);
+            //     CurrentThread::setFatalErrorCallback([this]
+            //     {
+            //         std::lock_guard lock(fatal_error_mutex);
+            //         sendLogs();
+            //     });
+            // }
+            /// proton: ends.
             if (client_tcp_protocol_version >= DBMS_MIN_PROTOCOL_VERSION_WITH_INCREMENTAL_PROFILE_EVENTS)
             {
                 state.profile_queue = std::make_shared<InternalProfileEventsQueue>(std::numeric_limits<int>::max());

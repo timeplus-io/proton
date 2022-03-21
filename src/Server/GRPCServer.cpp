@@ -817,14 +817,16 @@ namespace
         /// Prepare for sending exceptions and logs.
         const Settings & settings = query_context->getSettingsRef();
         send_exception_with_stacktrace = settings.calculate_text_stack_trace;
-        const auto client_logs_level = settings.send_logs_level;
-        if (client_logs_level != LogsLevel::none)
-        {
-            logs_queue = std::make_shared<InternalTextLogsQueue>();
-            logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
-            CurrentThread::attachInternalTextLogsQueue(logs_queue, client_logs_level);
-            CurrentThread::setFatalErrorCallback([this]{ onFatalError(); });
-        }
+        /// proton: starts. Disable send_logs_level
+        // const auto client_logs_level = settings.send_logs_level;
+        // if (client_logs_level != LogsLevel::none)
+        // {
+        //     logs_queue = std::make_shared<InternalTextLogsQueue>();
+        //     logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
+        //     CurrentThread::attachInternalTextLogsQueue(logs_queue, client_logs_level);
+        //     CurrentThread::setFatalErrorCallback([this]{ onFatalError(); });
+        // }
+        /// proton: ends.
 
         /// Set the current database if specified.
         if (!query_info.database().empty())
