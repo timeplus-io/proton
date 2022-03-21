@@ -38,6 +38,7 @@
 # }
 # import global_settigns
 
+from cgi import test
 import os, sys, json, getopt, subprocess, traceback
 import logging, logging.config
 import time
@@ -131,8 +132,9 @@ def scan_tests_file_path(tests_file_path):
                     f"test_suite_file = {test_suite_file}, was loaded successfully."
                 )
                 test_suite_name = test_suite.get("test_suite_name")
-                if test_suite_name == None:
-                    logger.debug(f"test_suite_name is vacant and ignore this json file")
+                test_suite_tag = test_suite.get("tag")
+                if test_suite_name == None or test_suite_tag == "skip":
+                    logger.debug(f"test_suite_name is vacant or test_suite_tag == skip and ignore this json file")
                     pass
                 else:
                     logger.debug(
@@ -156,9 +158,13 @@ def scan_tests_file_path(tests_file_path):
         "test_suites_selected": test_suites_selected,
     }
 
-
 def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=None):
     test_suites = []
+    test_suite_names_selected = []
+    test_suites_selected = []
+    test_suite_set_dict = {}
+    test_suites_selected_sets = [] # a list of tuple of (test_suite, test_result_queue)
+    test_suite_query_reulst_queue_list = [] # a list of map of test_sutie_name and test_suite_query_result_queue
     root_logger = logging.getLogger()
     logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
     if root_logger.level != None and root_logger.level == 20:
@@ -182,44 +188,62 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
         "test_suite_names_selected"
     )
     test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
-    logger.debug(f"test_suite_names_selected = {test_suite_names_selected}")
+    logger.debug(f"test_suite_names_selected = {test_suite_names_selected}") 
+
+    test_suite_run_ctl_queue = mp.JoinableQueue() # queue for rockets_run and test_sute_runner ctrl communication
+    test_suite_result_done_queue = mp.JoinableQueue() # queue for rockets_run get test_suite_result_summary that complete query_results_done test_suite_runner 
+
+    for suite in test_suites_selected:
+
+        test_suite_name = suite.get("test_suite_name")
+
+
+        query_results_queue = mp.JoinableQueue()
+        test_suite_query_reulst_queue_list.append(
+            {
+                test_suite_name: query_results_queue
+            }
+        )
+        
+        #test_suite_run_ctl_queue = mp.JoinableQueue()
+        #test_suite_result_queue = mp.JoinableQueue()
+        #query_result_queue = mp.Queue() # create result queue for each test_sute_run and query_execute pair
+        alive = mp.Value("b", True)
+
+        test_suite_set_dict = {
+            "test_suite_name":test_suite_name,
+            "test_suite": suite,
+            "test_suite_run_ctl_queue": test_suite_run_ctl_queue,
+            "test_suite_result_done_queue": test_suite_result_done_queue,
+            #"query_exe_parent_conn": query_exe_parent_conn,
+            #"query_exe_child_conn": query_exe_child_conn,
+            "query_results_queue": query_results_queue,
+            "alive": alive,
+            "logging_level": logging_level
+        }
+        
+        test_suites_selected_sets.append(test_suite_set_dict)
 
     # tests = test_suite.get("tests")
-    (
-        query_exe_parent_conn,
-        query_exe_child_conn,
-    ) = (
-        mp.Pipe()
-    )  # create the pipe for inter-process conn of rockets_run and query_execute, control path
+
     # query_exe_client = mp.Process(target=query_execute, args=(config, query_exe_child_conn, query_result_list)) # Create query_exe_client process
     # query_exe_queue = mp.Queue() #control path queue for query statements, rockets_run pushes statements into the queue.
-    query_results_queue = (
-        mp.Queue()
-    )  # data path queue for query results, query_execute and threads created by query_execute process pushed query results into this queue.
+    # query_results_queue = (
+    #    mp.Queue()
+    #)  # data path queue for query results, query_execute and threads created by query_execute process pushed query results into this queue.
 
     # query_exe_client = mp.Process(target=query_execute_new, args=(config, query_exe_queue, query_results_queue))
-    alive = mp.Value("b", True)
-    query_exe_client = mp.Process(
-        target=query_execute,
-        args=(
-            config,
-            query_exe_child_conn,
-            query_results_queue,
-            alive,
-            logging_level,
-        ),
-    )  # Create query_exe_client process
+    
+
 
     rockets_context = {
         "config": config,
+        "test_suite_run_ctl_queue": test_suite_run_ctl_queue,
+        "test_suite_result_done_queue": test_suite_result_done_queue,
+        "test_suite_query_result_queue_list": test_suite_query_reulst_queue_list, 
         "test_suite_names_selected": test_suite_names_selected,
-        "test_suites_selected": test_suites_selected,
-        "query_exe_client": query_exe_client,
-        "docker_compose_file": docker_compose_file,
-        "query_exe_parent_conn": query_exe_parent_conn,
-        "query_exe_child_conn": query_exe_child_conn,
-        "query_results_queue": query_results_queue,
-        "alive": alive,
+        "test_suites_selected_sets": test_suites_selected_sets,
+        "docker_compose_file": docker_compose_file
     }
     """
     rockets_context = {
@@ -233,6 +257,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     """
     ROCKETS_CONTEXT = rockets_context
     return rockets_context
+
 
 
 def tuple_2_list(tuple):
@@ -773,11 +798,9 @@ def query_run_py(
 
 
 def query_execute(config, child_conn, query_results_queue, alive, logging_level="INFO"):
-    # query_result_list = query_result_list
     mp_mgr = (
         None  # multiprocess manager, will be created when loading query_run_py process
     )
-    # logger = logging.getLogger(__name__)
     logger = mp.get_logger()
     # formatter = logging.Formatter(
     #    "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s"
@@ -821,8 +844,9 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
             query_proc = None
 
             logger.debug(
-                f"query_execute: tear_down = {tear_down}, query_run_count = {query_run_count}, wait for message from rockets_run......"
+                f"query_execute: tear_down = {tear_down}, query_run_count = {query_run_count}, wait for message from test_suite_run......"
             )
+            logger.debug(f"child_conn = {child_conn}")
             message_recv = child_conn.recv()
             logger.debug(f"query_execute: message_recv = {message_recv}")
 
@@ -1623,6 +1647,8 @@ def table_exist_py(pyclient, table_name):
 
 
 def test_suite_env_setup(client, rest_setting, test_suite_config):
+    logger = mp.get_logger()
+    
     if test_suite_config == None:
         return []
     tables_setup = []
@@ -1706,6 +1732,8 @@ def env_setup(
         time.sleep(
             10
         )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
+
+    #clean_all_res = clean_all() #todl: drop all the streams and views
 
     return {
         "env_docker_compose_res": env_docker_compose_res,
@@ -1894,191 +1922,229 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set):
     return test_run_list
 
 
-# @pytest.fixture(scope="module")
-def rockets_run(test_context):
-    # todo: split tests.json to test_suite_config.json and tests.json
-    root_logger = logging.getLogger()
-    logger.info(
-        f"rockets_run starts..., root_logger.level={root_logger.level}, logger.level={logger.level}"
-    )
-    if root_logger.level != None and root_logger.level == 20:
-        logging_level = "INFO"
-    else:
-        logging_level = "DEBUG"
-    docker_compose_file = test_context.get("docker_compose_file")
-    config = test_context.get("config")
+def test_suite_run(config, test_suite_run_ctl_queue,test_suite_result_done_queue, test_suite_set_dict):
+    logger = mp.get_logger()
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.formatter = formatter
+    logging_level = test_suite_set_dict.get("logging_level")
+    logger.addHandler(console_handler)
+    logger.setLevel(logging_level)
+
+    logger.debug(
+        f"query_execute starts, logging_level = {logging_level}, logger.handlers = {logger.handlers}"
+    )    
+    # run the test suite in a standlone process
+    test_suite_name = test_suite_set_dict.get("test_suite_name")
+    logger.info(f"test_suite: {test_suite_name} running starts......")
+    test_suite = test_suite_set_dict.get("test_suite")
+    query_results_queue = test_suite_set_dict.get("query_results_queue")
+    #q_exec_client = test_suite_set_dict.get("query_exe_client")
+
+    (
+        query_conn, #query_exe_parent_conn
+        q_exec_client_conn, #query_exe_child_conn
+    ) = (
+        mp.Pipe(True)
+    )  # create the pipe for inter-process conn of each test_suite_run and query_execute pair, control path
+
+    #query_conn = test_suite_set_dict.get("query_exe_parent_conn")
+    #q_exec_client_conn = test_suite_set_dict.get("query_exe_child_conn")
+    alive = test_suite_set_dict.get("alive")
+    
+        
+    query_exe_client = mp.Process(
+        target=query_execute,
+        args=(
+            config,
+            q_exec_client_conn,
+            query_results_queue,
+            alive,
+            logging_level,
+        ),
+    )  # Create query_exe_client process
+
+
+    query_results_queue = test_suite_set_dict.get("query_results_queue")
+    logger.debug(f"alive.value = {alive.value}")
+    query_exe_client.start()  # start the query execute process
+    logger.debug(f"query_exe_client: {query_exe_client} started.")
+
     rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
-    q_exec_client = test_context.get("query_exe_client")
-    query_conn = test_context.get("query_exe_parent_conn")
-    q_exec_client_conn = test_context.get("query_exe_child_conn")
-    query_exe_queue = test_context.get("query_exe_queue")
-    query_results_queue = test_context.get("query_results_queue")
-    alive = test_context.get("alive")
-    logger.debug(f"rockets_run: alive.value = {alive.value}")
-    q_exec_client.start()  # start the query execute process
-    logger.debug(f"q_exec_client: {q_exec_client} started.")
-    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+
     test_ids_set = os.getenv("PROTON_TEST_IDS", None)
 
     table_ddl_url = rest_setting.get("table_ddl_url")
-    test_suites_selected = None
-    test_suites_selected = test_context.get("test_suites_selected")
+
     test_run_list_len_total = 0
     test_sets = []  # test_set for collecting testing results of all test_suites
-    if test_suites_selected != None and len(test_suites_selected) != 0:
-        env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
-        logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
+    if test_suite != None and len(test_suite) != 0:
         test_id_run = 0
-        for test_suite in test_suites_selected:
-            # test_suite = test_context.get("test_suite")
-            test_suite_name = test_suite.get("test_suite_name")
-            logger.info(f"test_suite: {test_suite_name} running starts......")
-            test_suite_config = test_suite.get("test_suite_config")
-            if test_suite_config != None:
-                table_schemas = test_suite_config.get("table_schemas")
-            else:
-                table_schemas = []
-            tests = test_suite.get("tests")
-            tests_2_run = test_suite_config.get("tests_2_run")
-            test_run_list = []
-            test_run_id_list = []
-            test_run_list = test_case_collect(test_suite, tests_2_run, test_ids_set)
-            test_run_list_len = len(test_run_list)
-            test_run_list_len_total += test_run_list_len
-            if test_run_list_len == 0:
-                logger.debug(
-                    f"test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
-                )
-                pass
-            else:
-                try:
-                    client = Client(host=proton_server, port=proton_server_native_port)
-                    if test_suite_config != None:
-                        tables_setup = test_suite_env_setup(
-                            client, rest_setting, test_suite_config
-                        )
-                        logger.info(
-                            f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done."
-                        )
-                        logger.info(
-                            f"test_suite_name = {test_suite_name}, len(test_run_list) = {len(test_run_list)} case collected."
-                        )
-                    else:
-                        logger.info(
-                            f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup"
-                        )
-                    i = 0
-                    while i < len(test_run_list):
-                        test_case = test_run_list[i]
-                        statements_results = []
-                        inputs_record = []
-                        test_id = test_case.get("id")
-                        test_name = test_case.get("name")
-                        steps = test_case.get("steps")
-                        # logger.debug(f"rockets_run: test_id = {test_id}, test_case = {test_case}, steps = {steps}")
-                        expected_results = test_case.get("expected_results")
-                        step_id = 0
-                        auto_terminate_queries = []
-                        # scan steps to find out tables used in inputs and truncate all the tables
 
-                        tables_recreated = reset_tables_of_test_inputs(
-                            client, table_ddl_url, table_schemas, test_case
-                        )
-                        logger.info(
-                            f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
-                        )
-                        logger.info(
-                            f"tables: {tables_recreated} are dropted and recreated."
-                        )
+        test_suite_config = test_suite.get("test_suite_config")
+        if test_suite_config != None:
+            table_schemas = test_suite_config.get("table_schemas")
+        else:
+            table_schemas = []
+        tests = test_suite.get("tests")
+        tests_2_run = test_suite_config.get("tests_2_run")
+        test_run_list = []
+        test_run_id_list = []
+        logger.debug("test_case_collect is to be started......")
+        test_run_list = test_case_collect(test_suite, tests_2_run, test_ids_set)
+        test_run_list_len = len(test_run_list)
+        if test_run_list_len == 0:
+            logger.debug(
+                f"test_suite_name = {test_suite_name}, test_run_list = {test_run_list}, 0 case collected, bypass."
+            )
+            pass
+        else:
+            try:
+                client = Client(host=proton_server, port=proton_server_native_port)
+                if test_suite_config != None:
+                    logger.debug(f"test_suite_env_setup is to be started......")
+                    tables_setup = test_suite_env_setup(
+                        client, rest_setting, test_suite_config
+                    )
+                    logger.info(
+                        f"test_suite_name = {test_suite_name}, tables_setup = {tables_setup} done."
+                    )
+                    logger.info(
+                        f"test_suite_name = {test_suite_name}, len(test_run_list) = {len(test_run_list)} case collected."
+                    )
+                else:
+                    logger.info(
+                        f"test_suite_name = {test_suite_name}, no test_suite_config, bypass test_suite_env_setup"
+                    )
+                i = 0
+                while i < len(test_run_list):
+                    test_case = test_run_list[i]
+                    statements_results = []
+                    inputs_record = []
+                    test_id = test_case.get("id")
+                    test_name = test_case.get("name")
+                    steps = test_case.get("steps")
+                    # logger.debug(f"rockets_run: test_id = {test_id}, test_case = {test_case}, steps = {steps}")
+                    expected_results = test_case.get("expected_results")
+                    step_id = 0
+                    auto_terminate_queries = []
+                    # scan steps to find out tables used in inputs and truncate all the tables
 
-                        for step in steps:
-                            statements_id = 0
-                            inputs_id = 0
+                    tables_recreated = reset_tables_of_test_inputs(
+                        client, table_ddl_url, table_schemas, test_case
+                    )
+                    logger.info(
+                        f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
+                    )
+                    logger.info(
+                        f"tables: {tables_recreated} are dropted and recreated."
+                    )
 
-                            if "statements" in step:
-                                step_statements = step.get("statements")
-                                query_walk_through_res = query_walk_through(
-                                    step_statements, query_conn
-                                )
-                                statement_result_from_query_execute = (
-                                    query_walk_through_res
-                                )
-                                logger.debug(
-                                    f"rockets_run: query_walk_through_res = {query_walk_through_res}"
-                                )
+                    for step in steps:
+                        statements_id = 0
+                        inputs_id = 0
 
-                                if (
-                                    statement_result_from_query_execute != None
-                                    and len(statement_result_from_query_execute) > 0
-                                ):
-                                    for element in statement_result_from_query_execute:
-                                        statements_results.append(element)
-
-                                logger.info(
-                                    f"rockets_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
-                                )
-
-                                statements_id += 1
-                            elif "inputs" in step:
-                                inputs = step.get("inputs")
-                                logger.info(
-                                    f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} inputs = {inputs}"
-                                )
-
-                                inputs_record = input_walk_through_rest(
-                                    rest_setting, inputs, table_schemas
-                                )  # inputs walk through rest_client
-                                logger.info(
-                                    f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} input_walk_through done"
-                                )
-                                # time.sleep(0.5) #wait for the data inputs done.
-                            step_id += 1
-
-                        query_conn.send("test_steps_done")
-                        logger.debug("test_steps_done sent to query_execute")
-
-                        message_recv = (
-                            query_conn.recv()
-                        )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
-
-                        logger.debug(
-                            f"rockets_run: mssage_recv from query_execute = {message_recv}"
-                        )
-                        assert message_recv == "case_result_done"
-
-                        while (
-                            not query_results_queue.empty()
-                        ):  # collect all the query_results from queue after "case_result_done" received
-                            time.sleep(0.2)
-                            message_recv = query_results_queue.get()
-                            logger.debug(
-                                f"rockets_run: message_recv of query_results_queue.get() = {message_recv}"
+                        if "statements" in step:
+                            step_statements = step.get("statements")
+                            logger.debug(f"test_suite_name = {test_suite_name}, step_statements = {step_statements}")
+                            query_walk_through_res = query_walk_through(
+                                step_statements, query_conn
                             )
-                            query_results = json.loads(message_recv)
-                            statements_results.append(query_results)
+                            statement_result_from_query_execute = (
+                                query_walk_through_res
+                            )
+                            logger.debug(
+                                f"query_walk_through_res = {query_walk_through_res}"
+                            )
 
-                        test_sets.append(
-                            {
-                                "test_suite_name": test_suite_name,
-                                "test_id_run": test_id_run,
-                                "test_id": test_id,
-                                "test_name": test_name,
-                                "steps": steps,
-                                "expected_results": expected_results,
-                                "statements_results": statements_results,
-                            }
+                            if (
+                                statement_result_from_query_execute != None
+                                and len(statement_result_from_query_execute) > 0
+                            ):
+                                for element in statement_result_from_query_execute:
+                                    statements_results.append(element)
+
+                            logger.info(
+                                f"rockets_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
+                            )
+
+                            statements_id += 1
+                        elif "inputs" in step:
+                            inputs = step.get("inputs")
+                            logger.info(
+                                f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} inputs = {inputs}"
+                            )
+
+                            inputs_record = input_walk_through_rest(
+                                rest_setting, inputs, table_schemas
+                            )  # inputs walk through rest_client
+                            logger.info(
+                                f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} input_walk_through done"
+                            )
+                            # time.sleep(0.5) #wait for the data inputs done.
+                        step_id += 1
+
+                    query_conn.send("test_steps_done")
+                    logger.debug("test_steps_done sent to query_execute")
+
+                    message_recv = (
+                        query_conn.recv()
+                    )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
+
+                    logger.debug(
+                        f"rockets_run: mssage_recv from query_execute = {message_recv}"
+                    )
+                    assert message_recv == "case_result_done"
+
+
+
+
+                    while (
+                        not query_results_queue.empty()
+                    ):  # collect all the query_results from queue after "case_result_done" received
+                        time.sleep(0.2)
+                        message_recv = query_results_queue.get()
+                        logger.debug(
+                            f"rockets_run: message_recv of query_results_queue.get() = {message_recv}"
                         )
-                        i += 1
-                        test_id_run += 1
+                        query_results = json.loads(message_recv)
+                        statements_results.append(query_results)
 
-                except (BaseException) as error:
-                    logger.info(f"exception: {error}")
+                    test_sets.append(
+                        {
+                            "test_suite_name": test_suite_name,
+                            "test_id_run": test_id_run,
+                            "test_id": test_id,
+                            "test_name": test_name,
+                            "steps": steps,
+                            "expected_results": expected_results,
+                            "statements_results": statements_results,
+                        }
+                    )
+                    i += 1
+                    test_id_run += 1
 
+            except (BaseException) as error:
+                logger.info(f"exception: {error}")
+
+            finally:
+                test_suite_run_ctl_queue.get()
+                test_suite_run_ctl_queue.task_done()
+             
             logger.info(
                 f"test_suite_name = {test_suite_name} running ends, test_sets = {test_sets}......"
             )
+        test_suite_result_summary = {
+            "test_suite_name": test_suite_name,
+            "test_run_list_len":test_run_list_len,
+            "test_sets": test_sets
+        }
+
+        test_suite_result_done_queue.put(test_suite_result_summary)
+        test_suite_result_done_queue.join()
+
+
     TESTS_QUERY_RESULTS = test_sets
     query_conn.send("tear_down")
     message_recv = query_conn.recv()
@@ -2087,7 +2153,7 @@ def rockets_run(test_context):
     q_exec_client_conn.close()
     alive.value = False
     # q_exec_client.terminate()
-    q_exec_client.join()
+    query_exe_client.join()
     del alive
     client.disconnect()
     logger.debug(f"TABLE_CREATE_RECORDS = {TABLE_CREATE_RECORDS}")
@@ -2117,7 +2183,80 @@ def rockets_run(test_context):
         f"table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}"
     )
 
+
     return (test_run_list_len_total, test_sets)
+
+
+# @pytest.fixture(scope="module")
+def rockets_run(test_context):
+    # todo: split tests.json to test_suite_config.json and tests.json
+    root_logger = logging.getLogger()
+    logger.info(
+        f"rockets_run starts..., root_logger.level={root_logger.level}, logger.level={logger.level}"
+    )
+    if root_logger.level != None and root_logger.level == 20:
+        logging_level = "INFO"
+    else:
+        logging_level = "DEBUG"
+    docker_compose_file = test_context.get("docker_compose_file")
+    config = test_context.get("config")
+    proton_ci_mode = os.getenv("PROTON_CI_MODE", "Github")
+    test_suites_selected_sets = None
+    test_suites_selected_sets = test_context.get("test_suites_selected_sets")
+    test_suite_run_ctl_queue = test_context.get("test_suite_run_ctl_queue")
+    test_suite_result_done_queue = test_context.get("test_suite_result_done_queue")
+    test_suite_query_reulst_queue_list = test_context.get("test_suite_query_reulst_queue_list")
+    rest_setting = config.get("rest_setting")
+    if test_suites_selected_sets != None and len(test_suites_selected_sets) != 0:
+        env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
+        logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
+    else:
+        sys.exit(1) 
+
+    test_suite_runners = []
+    test_sets = []
+    test_suite_count = 1
+    for test_suite_set_dict in test_suites_selected_sets:
+        test_suite_name = test_suite_set_dict.get("test_suite_name")
+        test_suite_run_ctl_queue.put("run a test suite")
+ 
+        test_suite_runner = mp.Process(target=test_suite_run, args=(config, test_suite_run_ctl_queue, test_suite_result_done_queue, test_suite_set_dict))
+        test_suite_runner.start()
+        test_suite_runners.append(
+            {
+                "test_suite_name":test_suite_name,
+                "test_suite_runner": test_suite_runner,
+                
+            }
+        )
+    
+    try:
+        test_suite_run_ctl_queue.join()
+        test_suite_result_collect_done = 0
+        test_run_list_len_total = 0
+        while test_suite_result_collect_done < len(test_suites_selected_sets):
+            test_suite_result_summary = test_suite_result_done_queue.get()
+            test_suite_name_recvd = test_suite_result_summary.get("test_suite_name")
+            test_run_list_len_recvd = test_suite_result_summary.get("test_run_list_len")
+            test_sets_recvd = test_suite_result_summary.get("test_sets")
+
+            logger.debug(f"test_suite: {test_suite_name_recvd}, test_suite_summary is received, len(test_sets_recvd)={len(test_sets_recvd)}, test_run_list_len_recvd = {test_run_list_len_recvd}")
+            test_run_list_len_total += test_run_list_len_recvd
+            test_sets.extend(test_sets_recvd)
+            logger.debug(f"test_suite: {test_suite_name} result received, len(test_sets) after test_sets.extend(test_sets_recvd) = {len(test_sets)}")
+            test_suite_result_done_queue.task_done()
+            test_suite_result_collect_done += 1
+            time.sleep(random.random())
+
+    except(BaseException) as error:
+        logger.debug(f"exception, error = {error}")    
+        
+
+    for test_suite_runner_dict in test_suite_runners:
+        test_suite_runner_dict["test_suite_runner"].join()
+    logger.debug(f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}")
+    return (test_run_list_len_total, test_sets)
+
 
 
 if __name__ == "__main__":

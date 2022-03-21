@@ -15,7 +15,7 @@
             ]
         }
     },
-    "commments": "Tests covering the steam query smoke cases.",
+    "commments": "test_rests covering the steam query smoke cases.",
     "tests": [
         {
             "id": 0,
@@ -31,11 +31,11 @@
                             "client": "rest",
                             "rest_type": "raw",
                             "query_type": "table",
-                            "query_id": "101",
+                            "query_id": "401",
                             "query_url": "/proton/v1/sqlformat",
                             "http_method": "POST",
                             "data": {
-                                "query": "select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop( test, timestamp, interval 3 second, interval 5 second ) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"
+                                "query": "select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test_rest, timestamp, interval 3 second, interval 5 second ) as a join table(test_rest_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"
                             }
                         }
                     ]
@@ -43,9 +43,9 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "101",
+                    "query_id": "401",
                     "expected_results": {
-                        "query": "SELECT\n    a.id,\n    b.type,\n    max(a.value),\n    window_start AS joined_w_start,\n    window_end AS joined_w_end\nFROM hop(test, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_d) AS b ON a.id = b.id\nWHERE (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n    a.id,\n    b.type,\n    window_start,\n    window_end",
+                        "query": "SELECT\n    a.id,\n    b.type,\n    max(a.value),\n    window_start AS joined_w_start,\n    window_end AS joined_w_end\nFROM hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n    a.id,\n    b.type,\n    window_start,\n    window_end",
                         "request_id": "any_value"
                     }
                 }
@@ -64,36 +64,36 @@
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "drop stream if exists test"
+                            "query": "drop stream if exists test_rest"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "create stream test (id string, location string, value float, timestamp datetime64(3) default now64(3))"
+                            "query": "create stream test_rest (id string, location string, value float, timestamp datetime64(3) default now64(3))"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11')"
+                            "query": "insert into test_rest (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11')"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "insert into test (id, value, location, timestamp) values ('dev2', 100, 'ca', '2020-01-01 11:11:11')"
+                            "query": "insert into test_rest (id, value, location, timestamp) values ('dev2', 100, 'ca', '2020-01-01 11:11:11')"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
-                            "query": "insert into test (id, value, timestamp) values ('dev3', 100, '2020-01-01 11:11:11')"
+                            "query": "insert into test_rest (id, value, timestamp) values ('dev3', 100, '2020-01-01 11:11:11')"
                         },
                         {
                             "client": "rest",
                             "rest_type": "http_snapshot",
                             "wait": 2,
                             "query_type": "table",
-                            "query_id": "101",
-                            "query_url": "/?query=show streams where name = 'test'",
+                            "query_id": "401",
+                            "query_url": "/?query=show streams where name = 'test_rest'",
                             "http_method": "GET"
                         }
                     ]
@@ -107,7 +107,7 @@
                             "wait": 1,
                             "query_url": "/",
                             "http_method": "POST",
-                            "data": "insert into test (id, value, timestamp) values ('dev777', 100, '2020-01-01 11:11:11')"
+                            "data": "insert into test_rest (id, value, timestamp) values ('dev777', 100, '2020-01-01 11:11:11')"
                         }
                     ]
                 },
@@ -118,10 +118,10 @@
                             "rest_type": "http_snapshot",
                             "query_type": "table",
                             "wait": 2,
-                            "query_id": "102",
+                            "query_id": "402",
                             "query_url": "/",
                             "http_method": "POST",
-                            "data": "select id, location, value, timestamp from test order by id format JSON"
+                            "data": "select id, location, value, timestamp from test_rest order by id format JSON"
                         }
                     ]
                 },
@@ -131,21 +131,21 @@
                             "client": "rest",
                             "rest_type": "http_snapshot",
                             "query_type": "table",
-                            "query_id": "103",
+                            "query_id": "403",
                             "query_url": "/",
                             "http_method": "POST",
-                            "data": "select id, location, value, value, timestamp from test order by id"
+                            "data": "select id, location, value, value, timestamp from test_rest order by id"
                         }
                     ]
                 }
             ],
             "expected_results": [
                 {
-                    "query_id": "101",
-                    "expected_results": "test\n"
+                    "query_id": "401",
+                    "expected_results": "test_rest\n"
                 },
                 {
-                    "query_id": "102",
+                    "query_id": "402",
                     "expected_results": {
                         "meta": [
                             {
@@ -196,7 +196,7 @@
                     }
                 },
                 {
-                    "query_id": "103",
+                    "query_id": "403",
                     "expected_results": "dev1\tca\t100\t100\t2020-01-01 11:11:11.000\ndev2\tca\t100\t100\t2020-01-01 11:11:11.000\ndev3\t\t100\t100\t2020-01-01 11:11:11.000\ndev777\t\t100\t100\t2020-01-01 11:11:11.000\n"
                 }
             ]
