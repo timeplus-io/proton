@@ -35,16 +35,18 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     calculateDataFormat(storage);
 
     cacheVirtualColumnNamesAndTypes();
-}
 
-void Kafka::startup()
-{
+    /// Check if topic exists
     auto consumer = DWAL::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value);
     auto result = consumer->describe(settings->topic.value);
     if (result.err != ErrorCodes::OK)
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
 
     shards = result.partitions;
+}
+
+void Kafka::startup()
+{
 }
 
 Pipe Kafka::read(
