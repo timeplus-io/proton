@@ -75,7 +75,7 @@ ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInter
         (void)type;
     }
     else
-        throw Exception("Target column for process time filtering is not Datetime nor DateTime64", ErrorCodes::TYPE_MISMATCH);
+        throw Exception("Target column for process time filtering is not datetime nor datetime64", ErrorCodes::TYPE_MISMATCH);
 }
 
 void ProcessTimeFilter::transform(Chunk & chunk)

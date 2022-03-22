@@ -48,7 +48,7 @@ void IPolygonDictionary::convertKeyColumns(Columns & key_columns, DataTypes & ke
 {
     if (key_columns.size() != 2)
         throw Exception(ErrorCodes::TYPE_MISMATCH,
-            "Dictionary {} key lookup structure does not match, expected two columns of coordinates with type Float64",
+            "Dictionary {} key lookup structure does not match, expected two columns of coordinates with type float64",
             getFullName());
 
     auto float_64_type = std::make_shared<DataTypeFloat64>();
@@ -287,13 +287,13 @@ void IPolygonDictionary::calculateBytesAllocated()
 std::vector<IPolygonDictionary::Point> IPolygonDictionary::extractPoints(const Columns & key_columns)
 {
     if (key_columns.size() != 2)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Expected two columns of coordinates with type Float64");
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Expected two columns of coordinates with type float64");
 
     const auto * column_x = typeid_cast<const ColumnVector<Float64>*>(key_columns[0].get());
     const auto * column_y = typeid_cast<const ColumnVector<Float64>*>(key_columns[1].get());
 
     if (!column_x || !column_y)
-        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected columns of Float64");
+        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected columns of float64");
 
     const auto rows = key_columns.front()->size();
 
@@ -517,7 +517,7 @@ void handlePointsReprByArrays(const IColumn * column, Data & data, Offset & offs
     const auto * ptr_points = typeid_cast<const ColumnArray*>(column);
     const auto * ptr_coord = typeid_cast<const ColumnVector<Float64>*>(&ptr_points->getData());
     if (!ptr_coord)
-        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected coordinates to be of type Float64");
+        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected coordinates to be of type float64");
     const auto & offsets = ptr_points->getOffsets();
     IColumn::Offset prev_offset = 0;
     for (size_t i = 0; i < offsets.size(); ++i)
@@ -539,7 +539,7 @@ void handlePointsReprByTuples(const IColumn * column, Data & data, Offset & offs
     const auto * column_x = typeid_cast<const ColumnVector<Float64>*>(&ptr_points->getColumn(0));
     const auto * column_y = typeid_cast<const ColumnVector<Float64>*>(&ptr_points->getColumn(1));
     if (!column_x || !column_y)
-        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected coordinates to be of type Float64");
+        throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected coordinates to be of type float64");
     for (size_t i = 0; i < column_x->size(); ++i)
     {
         addNewPoint(column_x->getElement(i), column_y->getElement(i), data, offset);

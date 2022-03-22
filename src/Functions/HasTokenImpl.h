@@ -86,7 +86,7 @@ struct HasTokenImpl
     template <typename... Args>
     static void vectorFixedConstant(Args &&...)
     {
-        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Function '{}' doesn't support FixedString haystack argument", name);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Function '{}' doesn't support fixed_string haystack argument", name);
     }
 };
 

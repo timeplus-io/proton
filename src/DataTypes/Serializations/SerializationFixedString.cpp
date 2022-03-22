@@ -90,7 +90,7 @@ void SerializationFixedString::deserializeBinaryBulk(IColumn & column, ReadBuffe
     size_t read_bytes = istr.readBig(reinterpret_cast<char *>(&data[initial_size]), max_bytes);
 
     if (read_bytes % n != 0)
-        throw Exception("Cannot read all data of type FixedString. Bytes read:" + toString(read_bytes) + ". String size:" + toString(n) + ".",
+        throw Exception("Cannot read all data of type fixed_string. Bytes read:" + toString(read_bytes) + ". String size:" + toString(n) + ".",
             ErrorCodes::CANNOT_READ_ALL_DATA);
 
     data.resize(initial_size + read_bytes);
@@ -120,7 +120,7 @@ void SerializationFixedString::alignStringLength(size_t n, PaddedPODArray<UInt8>
     else if (length > n)
     {
         data.resize_assume_reserved(string_start);
-        throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "Too large value for FixedString({})", n);
+        throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "Too large value for fixed_string({})", n);
     }
 }
 

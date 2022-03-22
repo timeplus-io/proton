@@ -728,7 +728,7 @@ private:
                 c0_const_size = c0_const_fixed_string->getN();
             }
             else
-                throw Exception("Logical error: ColumnConst contains not String nor FixedString column", ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception("Logical error: ColumnConst contains not string nor fixed_string column", ErrorCodes::ILLEGAL_COLUMN);
         }
 
         if (c1_const)
@@ -747,7 +747,7 @@ private:
                 c1_const_size = c1_const_fixed_string->getN();
             }
             else
-                throw Exception("Logical error: ColumnConst contains not String nor FixedString column", ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception("Logical error: ColumnConst contains not string nor fixed_string column", ErrorCodes::ILLEGAL_COLUMN);
         }
 
         using StringImpl = StringComparisonImpl<Op<int, int>>;

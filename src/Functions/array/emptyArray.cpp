@@ -21,7 +21,7 @@ template <typename DataType>
 class FunctionEmptyArray : public IFunction
 {
 public:
-    static String getNameImpl() { return "emptyArray" + DataType().getName(); }
+    static String getNameImpl() { return "empty_array_" + DataType().getName(); }
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionEmptyArray>(); }
 
 private:

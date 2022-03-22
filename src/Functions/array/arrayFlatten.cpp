@@ -31,7 +31,7 @@ public:
         if (!isArray(arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() +
                             " of argument of function " + getName() +
-                            ", expected Array", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                            ", expected array", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         DataTypePtr nested_type = arguments[0];
         while (isArray(nested_type))
@@ -83,7 +83,7 @@ result: Row 1: [1, 2, 3], Row2: [4]
         const ColumnArray * src_col = checkAndGetColumn<ColumnArray>(arguments[0].column.get());
 
         if (!src_col)
-            throw Exception("Illegal column " + arguments[0].column->getName() + " in argument of function 'arrayFlatten'",
+            throw Exception("Illegal column " + arguments[0].column->getName() + " in argument of function 'array_flatten'",
                 ErrorCodes::ILLEGAL_COLUMN);
 
         const IColumn::Offsets & src_offsets = src_col->getOffsets();

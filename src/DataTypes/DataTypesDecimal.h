@@ -209,7 +209,7 @@ convertToDecimalImpl(const typename FromDataType::FieldType & value, UInt32 scal
             out >= static_cast<FromFieldType>(std::numeric_limits<ToNativeType>::max()))
         {
             if constexpr (throw_exception)
-                throw Exception(std::string(ToDataType::family_name) + " convert overflow. Float is out of Decimal range",
+                throw Exception(std::string(ToDataType::family_name) + " convert overflow. Float is out of decimal range",
                                 ErrorCodes::DECIMAL_OVERFLOW);
             else
                 return ReturnType(false);

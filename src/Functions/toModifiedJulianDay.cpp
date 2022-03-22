@@ -193,7 +193,7 @@ namespace DB
             if (!isStringOrFixedString(arguments[0]))
             {
                 throw Exception(
-                    "The argument of function " + getName() + " must be String or FixedString", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    "The argument of function " + getName() + " must be string or fixed_string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
 
             DataTypePtr base_type = std::make_shared<ToDataType>();

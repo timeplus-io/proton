@@ -101,7 +101,7 @@ struct ExtractSubstringImpl
 
     static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
     {
-        throw Exception("Column of type FixedString is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("Column of type fixed_string is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -156,7 +156,7 @@ struct CutSubstringImpl
 
     static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
     {
-        throw Exception("Column of type FixedString is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("Column of type fixed_string is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 

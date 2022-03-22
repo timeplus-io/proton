@@ -107,22 +107,22 @@ public:
                 default:
                     throw Exception(
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Map key type " + key_type->getName() + " is not is not supported by combinator " + getName());
+                        "The map key type " + key_type->getName() + " is not is not supported by combinator " + getName());
             }
         }
         else
         {
-            // in case of tuple of arrays or just arrays (checked in transformArguments), try to redirect to sum/min/max-MappedArrays to implement old behavior
+            // in case of tuple of arrays or just arrays (checked in transformArguments), try to redirect to sum/min/max-_mapped_arrays to implement old behavior
             auto nested_func_name = nested_function->getName();
             if (nested_func_name == "sum" || nested_func_name == "min" || nested_func_name == "max")
             {
                 AggregateFunctionProperties out_properties;
                 auto & aggr_func_factory = AggregateFunctionFactory::instance();
-                return aggr_func_factory.get(nested_func_name + "MappedArrays", arguments, params, out_properties);
+                return aggr_func_factory.get(nested_func_name + "_mapped_arrays", arguments, params, out_properties);
             }
             else
                 throw Exception(
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregation '" + nested_func_name + "Map' is not implemented for mapped arrays");
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregation '" + nested_func_name + "_map' is not implemented for mapped arrays");
         }
     }
 };

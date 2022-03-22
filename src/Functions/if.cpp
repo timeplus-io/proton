@@ -226,7 +226,7 @@ private:
             UInt32 left_scale = getDecimalScale(*arguments[1].type);
             UInt32 right_scale = getDecimalScale(*arguments[2].type);
             if (left_scale != right_scale)
-                throw Exception("Conditional functions with different Decimal scales", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception("Conditional functions with different decimal scales", ErrorCodes::NOT_IMPLEMENTED);
             return left_scale;
         }
         else

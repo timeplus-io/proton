@@ -37,11 +37,11 @@ public:
     {
         if (!isStringOrFixedString(arguments[1].type))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of second argument (pattern) of function {}. Must be String/FixedString.",
+                "Illegal type {} of second argument (pattern) of function {}. Must be string/fixed_string.",
                 arguments[1].type->getName(), getName());
         if (!isStringOrFixedString(arguments[0].type))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of first argument (haystack) of function {}. Must be String/FixedString.",
+                "Illegal type {} of first argument (haystack) of function {}. Must be string/fixed_string.",
                 arguments[0].type->getName(), getName());
         const auto * column = arguments[1].column.get();
         if (!column || !checkAndGetColumnConstStringOrFixedString(column))

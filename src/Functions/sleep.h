@@ -72,7 +72,7 @@ public:
 
         if (!which.isFloat()
             && !which.isNativeUInt())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected Float64",
+            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName() + ", expected float64",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt8>();

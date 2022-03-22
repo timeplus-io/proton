@@ -231,7 +231,7 @@ static SummingSortedAlgorithm::ColumnsDefinition defineColumns(
         {
             const auto map_name = Nested::extractTableName(column.name);
             /// if nested table name ends with `Map` it is a possible candidate for special handling
-            if (map_name == column.name || !endsWith(map_name, "Map"))
+            if (map_name == column.name || !endsWith(map_name, "_map"))
             {
                 def.column_numbers_not_to_aggregate.push_back(i);
                 continue;
@@ -280,7 +280,7 @@ static SummingSortedAlgorithm::ColumnsDefinition defineColumns(
                 }
                 else if (!is_agg_func)
                 {
-                    desc.init("sumWithOverflow", {column.type});
+                    desc.init("sum_with_overflow", {column.type});
                 }
 
                 def.columns_to_aggregate.emplace_back(std::move(desc));
@@ -328,9 +328,9 @@ static SummingSortedAlgorithm::ColumnsDefinition defineColumns(
             const IDataType & nested_type = *assert_cast<const DataTypeArray &>(*key_col.type).getNestedType();
 
             if (column_num_it == map.second.begin()
-                || endsWith(name, "ID")
-                || endsWith(name, "Key")
-                || endsWith(name, "Type"))
+                || endsWith(name, "id")
+                || endsWith(name, "key")
+                || endsWith(name, "type"))
             {
                 if (!nested_type.isValueRepresentedByInteger() && !isStringOrFixedString(nested_type))
                     break;
@@ -360,7 +360,7 @@ static SummingSortedAlgorithm::ColumnsDefinition defineColumns(
         if (map_desc.key_col_nums.size() == 1)
         {
             // Create summation for all value columns in the map
-            desc.init("sumMapWithOverflow", argument_types);
+            desc.init("sum_map_with_overflow", argument_types);
             def.columns_to_aggregate.emplace_back(std::move(desc));
         }
         else

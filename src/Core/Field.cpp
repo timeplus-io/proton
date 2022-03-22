@@ -221,7 +221,7 @@ void readQuoted(DecimalField<T> & x, ReadBuffer & buf)
     {
         scale = 0;
         if (common::mulOverflow(value.value, DecimalUtils::scaleMultiplier<T>(exponent), value.value))
-            throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+            throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
     }
     else
         scale = -exponent;

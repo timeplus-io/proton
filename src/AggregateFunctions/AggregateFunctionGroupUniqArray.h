@@ -53,7 +53,7 @@ public:
           AggregateFunctionGroupUniqArray<T, Tlimit_num_elem>>({argument_type}, parameters_),
           max_elems(max_elems_) {}
 
-    String getName() const override { return "groupUniqArray"; }
+    String getName() const override { return "group_uniq_array"; }
 
     DataTypePtr getReturnType() const override
     {
@@ -137,7 +137,7 @@ template <bool is_plain_column>
 static void deserializeAndInsertImpl(StringRef str, IColumn & data_to);
 
 /** Template parameter with true value should be used for columns that store their elements in memory continuously.
- *  For such columns groupUniqArray() can be implemented more efficiently (especially for small numeric arrays).
+ *  For such columns group_uniq_array() can be implemented more efficiently (especially for small numeric arrays).
  */
 template <bool is_plain_column = false, typename Tlimit_num_elem = std::false_type>
 class AggregateFunctionGroupUniqArrayGeneric
@@ -157,7 +157,7 @@ public:
         , input_data_type(this->argument_types[0])
         , max_elems(max_elems_) {}
 
-    String getName() const override { return "groupUniqArray"; }
+    String getName() const override { return "group_uniq_array"; }
 
     DataTypePtr getReturnType() const override
     {

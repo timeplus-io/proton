@@ -25,7 +25,7 @@ std::string ColumnMap::getName() const
 {
     WriteBufferFromOwnString res;
     const auto & nested_tuple = getNestedData();
-    res << "Map(" << nested_tuple.getColumn(0).getName()
+    res << "map(" << nested_tuple.getColumn(0).getName()
         << ", " << nested_tuple.getColumn(1).getName() << ")";
 
     return res.str();

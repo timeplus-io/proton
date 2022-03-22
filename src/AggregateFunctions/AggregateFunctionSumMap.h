@@ -43,9 +43,9 @@ struct AggregateFunctionMapData
 /** Aggregate function, that takes at least two arguments: keys and values, and as a result, builds a tuple of at least 2 arrays -
   * ordered keys and variable number of argument values aggregated by corresponding keys.
   *
-  * sumMap function is the most useful when using SummingMergeTree to sum Nested columns, which name ends in "Map".
+  * sum_map function is the most useful when using SummingMergeTree to sum Nested columns, which name ends in "_map".
   *
-  * Example: sumMap(k, v...) of:
+  * Example: sum_map(k, v...) of:
   *  k           v
   *  [1,2,3]     [10,10,10]
   *  [3,4,5]     [10,10,10]
@@ -152,7 +152,7 @@ public:
                 // No overflow, meaning we promote the types if necessary.
                 if (!value_type_without_nullable->canBePromoted())
                     throw Exception{ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Values for {} are expected to be Numeric, Float or Decimal, passed type {}",
+                        "Values for {} are expected to be numeric, float or decimal, passed type {}",
                         getName(), value_type->getName()};
 
                 WhichDataType value_type_to_check(value_type);
@@ -450,11 +450,11 @@ public:
     {
         if constexpr (overflow)
         {
-            return "sumMapWithOverflow";
+            return "sum_map_with_overflow";
         }
         else
         {
-            return "sumMap";
+            return "sum_map";
         }
     }
 
@@ -487,12 +487,12 @@ public:
         if (params_.size() != 1)
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                 "Aggregate function '{}' requires exactly one parameter "
-                "of Array type", getName());
+                "of array type", getName());
 
         Array keys_to_keep_;
         if (!params_.front().tryGet<Array>(keys_to_keep_))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Aggregate function {} requires an Array as a parameter",
+                "Aggregate function {} requires an array as a parameter",
                 getName());
 
         keys_to_keep.reserve(keys_to_keep_.size());
@@ -502,7 +502,7 @@ public:
     }
 
     String getName() const override
-    { return overflow ? "sumMapFilteredWithOverflow" : "sumMapFiltered"; }
+    { return overflow ? "sum_map_filtered_with_overflow" : "sum_map_filtered"; }
 
     bool keepKey(const T & key) const { return keys_to_keep.count(key); }
 };
@@ -532,7 +532,7 @@ private:
 public:
     explicit FieldVisitorMax(const Field & rhs_) : rhs(rhs_) {}
 
-    bool operator() (Null &) const { throw Exception("Cannot compare Nulls", ErrorCodes::LOGICAL_ERROR); }
+    bool operator() (Null &) const { throw Exception("Cannot compare nulls", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (AggregateFunctionStateData &) const { throw Exception("Cannot compare AggregateFunctionStates", ErrorCodes::LOGICAL_ERROR); }
 
     bool operator() (Array & x) const { return compareImpl<Array>(x); }
@@ -567,7 +567,7 @@ private:
 public:
     explicit FieldVisitorMin(const Field & rhs_) : rhs(rhs_) {}
 
-    bool operator() (Null &) const { throw Exception("Cannot compare Nulls", ErrorCodes::LOGICAL_ERROR); }
+    bool operator() (Null &) const { throw Exception("Cannot compare nulls", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (AggregateFunctionStateData &) const { throw Exception("Cannot sum AggregateFunctionStates", ErrorCodes::LOGICAL_ERROR); }
 
     bool operator() (Array & x) const { return compareImpl<Array>(x); }
@@ -598,7 +598,7 @@ public:
         assertNoParameters(getName(), params_);
     }
 
-    String getName() const override { return "minMap"; }
+    String getName() const override { return "min_map"; }
 
     bool keepKey(const T &) const { return true; }
 };
@@ -622,7 +622,7 @@ public:
         assertNoParameters(getName(), params_);
     }
 
-    String getName() const override { return "maxMap"; }
+    String getName() const override { return "max_map"; }
 
     bool keepKey(const T &) const { return true; }
 };

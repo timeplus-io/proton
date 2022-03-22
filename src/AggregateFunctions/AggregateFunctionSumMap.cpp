@@ -46,7 +46,7 @@ auto parseArguments(const std::string & name, const DataTypes & arguments)
     }
 
     if (args.size() < 2)
-        throw Exception("Aggregate function " + name + " requires at least two arguments of Array type or one argument of tuple of two arrays",
+        throw Exception("Aggregate function " + name + " requires at least two arguments of array type or one argument of tuple of two arrays",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const auto * array_type = checkAndGetDataType<DataTypeArray>(args[0].get());
@@ -145,27 +145,27 @@ struct MaxMapDispatchOnTupleArgument
 
 void registerAggregateFunctionSumMap(AggregateFunctionFactory & factory)
 {
-    // these functions used to be called *Map, with now these names occupied by
+    // these functions used to be called *_map, with now these names occupied by
     // Map combinator, which redirects calls here if was called with
     // array or tuple arguments.
-    factory.registerFunction("sumMappedArrays", createAggregateFunctionMap<
+    factory.registerFunction("sum_mapped_arrays", createAggregateFunctionMap<
         SumMapVariants<false, false>::DispatchOnTupleArgument>);
 
-    factory.registerFunction("minMappedArrays",
+    factory.registerFunction("min_mapped_arrays",
         createAggregateFunctionMap<MinMapDispatchOnTupleArgument>);
 
-    factory.registerFunction("maxMappedArrays",
+    factory.registerFunction("max_mapped_arrays",
         createAggregateFunctionMap<MaxMapDispatchOnTupleArgument>);
 
-    // these functions could be renamed to *MappedArrays too, but it would
+    // these functions could be renamed to *_mapped_arrays too, but it would
     // break backward compatibility
-    factory.registerFunction("sumMapWithOverflow", createAggregateFunctionMap<
+    factory.registerFunction("sum_map_with_overflow", createAggregateFunctionMap<
         SumMapVariants<false, true>::DispatchOnTupleArgument>);
 
-    factory.registerFunction("sumMapFiltered", createAggregateFunctionMap<
+    factory.registerFunction("sum_map_filtered", createAggregateFunctionMap<
         SumMapVariants<true, false>::DispatchOnTupleArgument>);
 
-    factory.registerFunction("sumMapFilteredWithOverflow",
+    factory.registerFunction("sum_map_filtered_with_overflow",
         createAggregateFunctionMap<
             SumMapVariants<true, true>::DispatchOnTupleArgument>);
 }

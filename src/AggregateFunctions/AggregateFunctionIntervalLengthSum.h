@@ -174,7 +174,7 @@ private:
     }
 
 public:
-    String getName() const override { return "intervalLengthSum"; }
+    String getName() const override { return "interval_length_sum"; }
 
     explicit AggregateFunctionIntervalLengthSum(const DataTypes & arguments)
         : IAggregateFunctionDataHelper<Data, AggregateFunctionIntervalLengthSum<T, Data>>(arguments, {})

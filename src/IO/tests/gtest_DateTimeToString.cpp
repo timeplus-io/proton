@@ -194,22 +194,22 @@ INSTANTIATE_TEST_SUITE_P(DateTimeToString, DateTimeToStringParamTestDateTime64,
     {
         /// Inside basic LUT boundaries
         {
-            "Zero DateTime64 with scale 0 string representation matches one of zero time_t",
+            "Zero datetime64 with scale 0 string representation matches one of zero time_t",
             DateTime64WithScale{0, 0},
             "1970-01-01 00:00:00"
         },
         {
-            "Zero DateTime64 with scale 3 string representation matches one of zero time_t with subsecond part",
+            "Zero datetime64 with scale 3 string representation matches one of zero time_t with subsecond part",
             DateTime64WithScale{0, 3},
             "1970-01-01 00:00:00.000"
         },
         {
-            "Non-Zero DateTime64 with scale 0",
+            "Non-Zero datetime64 with scale 0",
             DateTime64WithScale{NON_ZERO_TIME_T, 0},
             "1979-12-31 10:17:36"
         },
         {
-            "Non-Zero DateTime64 with scale 3",
+            "Non-Zero datetime64 with scale 3",
             DateTime64WithScale{NON_ZERO_TIME_T * 1000LL + 123, 3},
             "1979-12-31 10:17:36.123"
         },

@@ -57,7 +57,7 @@ public:
         if (!WhichDataType(arg).isUInt64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument {} of function {}. Must be Float64",
+                "Illegal type {} of argument {} of function {}. Must be float64",
                 arg->getName(), 1, getName());
 
         DataTypePtr element = std::make_shared<DataTypeFloat64>();

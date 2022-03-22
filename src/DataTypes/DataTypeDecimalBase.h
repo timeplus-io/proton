@@ -129,7 +129,7 @@ public:
     T scaleFactorFor(const DataTypeDecimalBase<U> & x, bool) const
     {
         if (getScale() < x.getScale())
-            throw Exception("Decimal result's scale is less than argument's one", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("The decimal result's scale is less than argument's one", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         UInt32 scale_delta = getScale() - x.getScale(); /// scale_delta >= 0
         return getScaleMultiplier(scale_delta);
     }

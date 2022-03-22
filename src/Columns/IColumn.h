@@ -284,7 +284,7 @@ public:
     /// Equivalent to compareAt, but collator is used to compare values.
     virtual int compareAtWithCollation(size_t, size_t, const IColumn &, int, const Collator &) const
     {
-        throw Exception("Collations could be specified only for String, LowCardinality(String), Nullable(String) or for Array or Tuple, containing it.", ErrorCodes::BAD_COLLATION);
+        throw Exception("Collations could be specified only for string, low_cardinality(string), nullable(string) or for array or tuple, containing it.", ErrorCodes::BAD_COLLATION);
     }
 
     /// Compare the whole column with single value from rhs column.
@@ -318,15 +318,15 @@ public:
     virtual void updatePermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_ranges) const = 0;
 
     /** Equivalent to getPermutation and updatePermutation but collator is used to compare values.
-      * Supported for String, LowCardinality(String), Nullable(String) and for Array and Tuple, containing them.
+      * Supported for string, low_cardinality(string), nullable(string) and for array and tuple, containing them.
       */
     virtual void getPermutationWithCollation(const Collator &, bool, size_t, int, Permutation &) const
     {
-        throw Exception("Collations could be specified only for String, LowCardinality(String), Nullable(String) or for Array or Tuple, containing them.", ErrorCodes::BAD_COLLATION);
+        throw Exception("Collations could be specified only for string, low_cardinality(string), nullable(string) or for array or tuple, containing them.", ErrorCodes::BAD_COLLATION);
     }
     virtual void updatePermutationWithCollation(const Collator &, bool, size_t, int, Permutation &, EqualRanges&) const
     {
-        throw Exception("Collations could be specified only for String, LowCardinality(String), Nullable(String) or for Array or Tuple, containing them.", ErrorCodes::BAD_COLLATION);
+        throw Exception("Collations could be specified only for string, low_cardinality(string), nullable(string) or for array or tuple, containing them.", ErrorCodes::BAD_COLLATION);
     }
 
     /** Copies each element according offsets parameter.

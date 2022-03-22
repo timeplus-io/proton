@@ -113,7 +113,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         if (have_array)
         {
             if (!all_arrays)
-                throw Exception(getExceptionMessagePrefix(types) + " because some of them are Array and some of them are not", ErrorCodes::NO_COMMON_TYPE);
+                throw Exception(getExceptionMessagePrefix(types) + " because some of them are array and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
             return std::make_shared<DataTypeArray>(getLeastSupertype(nested_types));
         }
@@ -139,7 +139,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
                         nested_types[elem_idx].reserve(types.size());
                 }
                 else if (tuple_size != type_tuple->getElements().size())
-                    throw Exception(getExceptionMessagePrefix(types) + " because Tuples have different sizes", ErrorCodes::NO_COMMON_TYPE);
+                    throw Exception(getExceptionMessagePrefix(types) + " because tuples have different sizes", ErrorCodes::NO_COMMON_TYPE);
 
                 have_tuple = true;
 
@@ -153,7 +153,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         if (have_tuple)
         {
             if (!all_tuples)
-                throw Exception(getExceptionMessagePrefix(types) + " because some of them are Tuple and some of them are not", ErrorCodes::NO_COMMON_TYPE);
+                throw Exception(getExceptionMessagePrefix(types) + " because some of them are tuple and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
             DataTypes common_tuple_types(tuple_size);
             for (size_t elem_idx = 0; elem_idx < tuple_size; ++elem_idx)
@@ -187,7 +187,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         if (have_maps)
         {
             if (!all_maps)
-                throw Exception(getExceptionMessagePrefix(types) + " because some of them are Maps and some of them are not", ErrorCodes::NO_COMMON_TYPE);
+                throw Exception(getExceptionMessagePrefix(types) + " because some of them are maps and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
             return std::make_shared<DataTypeMap>(getLeastSupertype(key_types), getLeastSupertype(value_types));
         }
@@ -268,7 +268,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         {
             bool all_strings = type_ids.size() == (have_string + have_fixed_string);
             if (!all_strings)
-                throw Exception(getExceptionMessagePrefix(types) + " because some of them are String/FixedString and some of them are not", ErrorCodes::NO_COMMON_TYPE);
+                throw Exception(getExceptionMessagePrefix(types) + " because some of them are string/fixed_string and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
             return std::make_shared<DataTypeString>();
         }
@@ -285,7 +285,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         {
             bool all_date_or_datetime = type_ids.size() == (have_date + have_date32 + have_datetime + have_datetime64);
             if (!all_date_or_datetime)
-                throw Exception(getExceptionMessagePrefix(types) + " because some of them are Date/Date32/DateTime/DateTime64 and some of them are not",
+                throw Exception(getExceptionMessagePrefix(types) + " because some of them are date/date32/datetime/datetime64 and some of them are not",
                     ErrorCodes::NO_COMMON_TYPE);
 
             if (have_datetime64 == 0 && have_date32 == 0)
@@ -362,7 +362,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             }
 
             if (num_supported != type_ids.size())
-                throw Exception(getExceptionMessagePrefix(types) + " because some of them have no lossless conversion to Decimal",
+                throw Exception(getExceptionMessagePrefix(types) + " because some of them have no lossless conversion to decimal",
                                 ErrorCodes::NO_COMMON_TYPE);
 
             UInt32 max_scale = 0;
@@ -385,7 +385,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             }
 
             if (min_precision > DataTypeDecimal<Decimal128>::maxPrecision())
-                throw Exception(getExceptionMessagePrefix(types) + " because the least supertype is Decimal("
+                throw Exception(getExceptionMessagePrefix(types) + " because the least supertype is decimal("
                                 + toString(min_precision) + ',' + toString(max_scale) + ')',
                                 ErrorCodes::NO_COMMON_TYPE);
 

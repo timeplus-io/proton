@@ -70,7 +70,7 @@ public:
     {
         if (!isStringOrFixedString(arguments[0].type))
             throw Exception(
-                "First argument of function " + getName() + " must be String or FixedString", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "First argument of function " + getName() + " must be string or fixed_string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1].column || !isFloat(arguments[1].type))
             throw Exception("Second argument of function " + getName() + " must be constant float", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -149,7 +149,7 @@ public:
 
             size_t total_size;
             if (common::mulOverflow(input_rows_count, n, total_size))
-                throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
 
             chars_to.resize(total_size);
 

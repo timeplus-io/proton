@@ -66,7 +66,7 @@ public:
 
         size_t total_size;
         if (common::mulOverflow(input_rows_count, n, total_size))
-            throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+            throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
 
         /// Fill random bytes.
         data_to.resize(total_size);

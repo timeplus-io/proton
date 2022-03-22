@@ -584,7 +584,7 @@ private:
 
             if (tuple_size < 1)
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Tuple second argument of function {} must contain multiple constant string columns");
+                    "The tuple second argument of function {} must contain multiple constant string columns");
 
             for (size_t i = 0; i < tuple_col.tupleSize(); ++i)
             {
@@ -594,7 +594,7 @@ private:
 
                 if (!attribute_name_column)
                     throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Tuple second argument of function {} must contain multiple constant string columns",
+                        "The tuple second argument of function {} must contain multiple constant string columns",
                         getName());
 
                 attribute_names.emplace_back(attribute_name_column->getDataAt(0));

@@ -129,7 +129,7 @@ static void fillLiteralInfo(DataTypes & nested_types, LiteralInfo & info)
             field_type = Field::Types::Map;
         }
         else
-            throw Exception("Unexpected literal type inside Array: " + nested_type->getName() + ". It's a bug",
+            throw Exception("Unexpected literal type inside array: " + nested_type->getName() + ". It's a bug",
                             ErrorCodes::LOGICAL_ERROR);
 
         if (is_nullable)
@@ -345,7 +345,7 @@ ConstantExpressionTemplate::TemplateStructure::TemplateStructure(LiteralsInfo & 
     actions_on_literals = ExpressionAnalyzer(expression, syntax_result, context).getActions(false);
     if (actions_on_literals->hasArrayJoin())
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Array joins are not allowed in constant expressions for IN, VALUES, LIMIT and similar sections.");
+                        "The array joins are not allowed in constant expressions for IN, VALUES, LIMIT and similar sections.");
 
 }
 

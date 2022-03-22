@@ -542,7 +542,7 @@ private:
         {
             NativeResultType res;
             if (Op::template apply<NativeResultType>(a, b, res))
-                throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
             return res;
         }
         else
@@ -570,7 +570,7 @@ private:
                 res = Op::template apply<NativeResultType>(a, b);
 
             if (overflow)
-                throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
         }
         else
         {
@@ -596,7 +596,7 @@ private:
                     overflow |= common::mulOverflow(scale, scale, scale);
                 overflow |= common::mulOverflow(a, scale, a);
                 if (overflow)
-                    throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                    throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
             }
             else
             {

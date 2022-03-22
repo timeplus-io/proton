@@ -96,7 +96,7 @@ public:
         if (arguments.size() == 1 && !isStringOrFixedString(arguments[0].type))
         {
             throw Exception(
-                "Arguments of function " + getName() + " should be String or FixedString", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Arguments of function " + getName() + " should be string or fixed_string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         if (arguments.size() == 1)
         {
@@ -114,7 +114,7 @@ public:
         if (arguments.size() == 1 && !isStringOrFixedString(arguments[0].type))
         {
             throw Exception(
-                "Arguments of function " + getName() + " should be String or FixedString", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                "Arguments of function " + getName() + " should be string or fixed_string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         if (arguments.size() == 1)
             return std::make_unique<FunctionBaseNow>(

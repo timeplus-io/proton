@@ -208,7 +208,7 @@ public:
                     /// The first condition is optimization: do not compare data if the pointers are equal.
                     if (column_array->getOffsetsPtr() != offsets_column
                         && column_array->getOffsets() != typeid_cast<const ColumnArray::ColumnOffsets &>(*offsets_column).getData())
-                        throw Exception("Arrays passed to " + getName() + " must have equal size", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
+                        throw Exception("The arrays passed to " + getName() + " must have equal size", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
                 }
 
                 if (i == 1)

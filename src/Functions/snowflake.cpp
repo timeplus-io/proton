@@ -6,29 +6,29 @@ namespace DB
 
 void registerDateTimeToSnowflake(FunctionFactory & factory)
 {
-    factory.registerFunction("dateTimeToSnowflake",
+    factory.registerFunction("datetime_to_snowflake",
         [](ContextPtr){ return std::make_unique<FunctionToOverloadResolverAdaptor>(
-            std::make_shared<FunctionDateTimeToSnowflake>("dateTimeToSnowflake")); });
+            std::make_shared<FunctionDateTimeToSnowflake>("datetime_to_snowflake")); });
 }
 
 void registerDateTime64ToSnowflake(FunctionFactory & factory)
 {
-    factory.registerFunction("dateTime64ToSnowflake",
+    factory.registerFunction("datetime64_to_snowflake",
         [](ContextPtr){ return std::make_unique<FunctionToOverloadResolverAdaptor>(
-            std::make_shared<FunctionDateTime64ToSnowflake>("dateTime64ToSnowflake")); });
+            std::make_shared<FunctionDateTime64ToSnowflake>("datetime64_to_snowflake")); });
 }
 
 void registerSnowflakeToDateTime(FunctionFactory & factory)
 {
-    factory.registerFunction("snowflakeToDateTime",
+    factory.registerFunction("snowflake_to_datetime",
         [](ContextPtr){ return std::make_unique<FunctionToOverloadResolverAdaptor>(
-            std::make_shared<FunctionSnowflakeToDateTime>("snowflakeToDateTime")); });
+            std::make_shared<FunctionSnowflakeToDateTime>("snowflake_to_datetime")); });
 }
 void registerSnowflakeToDateTime64(FunctionFactory & factory)
 {
-    factory.registerFunction("snowflakeToDateTime64",
+    factory.registerFunction("snowflake_to_datetime64",
         [](ContextPtr){ return std::make_unique<FunctionToOverloadResolverAdaptor>(
-            std::make_shared<FunctionSnowflakeToDateTime64>("snowflakeToDateTime64")); });
+            std::make_shared<FunctionSnowflakeToDateTime64>("snowflake_to_datetime64")); });
 }
 
 }

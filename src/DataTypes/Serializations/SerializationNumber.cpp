@@ -32,7 +32,7 @@ void SerializationNumber<T>::deserializeText(IColumn & column, ReadBuffer & istr
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "Number");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "number");
 }
 
 template <typename T>

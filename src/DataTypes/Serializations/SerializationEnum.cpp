@@ -56,7 +56,7 @@ void SerializationEnum<Type>::deserializeWholeText(IColumn & column, ReadBuffer 
     {
         assert_cast<ColumnType &>(column).getData().push_back(readValue(istr));
         if (!istr.eof())
-            ISerialization::throwUnexpectedDataAfterParsedValue(column, istr, settings, "Enum");
+            ISerialization::throwUnexpectedDataAfterParsedValue(column, istr, settings, "enum");
     }
     else
     {

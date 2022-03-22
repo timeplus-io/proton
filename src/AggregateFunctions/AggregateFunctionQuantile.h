@@ -218,40 +218,40 @@ public:
 
 struct NameQuantile { static constexpr auto name = "quantile"; };
 struct NameQuantiles { static constexpr auto name = "quantiles"; };
-struct NameQuantileDeterministic { static constexpr auto name = "quantileDeterministic"; };
-struct NameQuantilesDeterministic { static constexpr auto name = "quantilesDeterministic"; };
+struct NameQuantileDeterministic { static constexpr auto name = "quantile_deterministic"; };
+struct NameQuantilesDeterministic { static constexpr auto name = "quantiles_deterministic"; };
 
-struct NameQuantileExact { static constexpr auto name = "quantileExact"; };
-struct NameQuantilesExact { static constexpr auto name = "quantilesExact"; };
+struct NameQuantileExact { static constexpr auto name = "quantile_exact"; };
+struct NameQuantilesExact { static constexpr auto name = "quantiles_exact"; };
 
-struct NameQuantileExactLow { static constexpr auto name = "quantileExactLow"; };
-struct NameQuantilesExactLow { static constexpr auto name = "quantilesExactLow"; };
+struct NameQuantileExactLow { static constexpr auto name = "quantile_exact_low"; };
+struct NameQuantilesExactLow { static constexpr auto name = "quantiles_exact_low"; };
 
-struct NameQuantileExactHigh { static constexpr auto name = "quantileExactHigh"; };
-struct NameQuantilesExactHigh { static constexpr auto name = "quantilesExactHigh"; };
+struct NameQuantileExactHigh { static constexpr auto name = "quantile_exact_high"; };
+struct NameQuantilesExactHigh { static constexpr auto name = "quantiles_exact_high"; };
 
-struct NameQuantileExactExclusive { static constexpr auto name = "quantileExactExclusive"; };
-struct NameQuantilesExactExclusive { static constexpr auto name = "quantilesExactExclusive"; };
+struct NameQuantileExactExclusive { static constexpr auto name = "quantile_exact_exclusive"; };
+struct NameQuantilesExactExclusive { static constexpr auto name = "quantiles_exact_exclusive"; };
 
-struct NameQuantileExactInclusive { static constexpr auto name = "quantileExactInclusive"; };
-struct NameQuantilesExactInclusive { static constexpr auto name = "quantilesExactInclusive"; };
+struct NameQuantileExactInclusive { static constexpr auto name = "quantile_exact_inclusive"; };
+struct NameQuantilesExactInclusive { static constexpr auto name = "quantiles_exact_inclusive"; };
 
-struct NameQuantileExactWeighted { static constexpr auto name = "quantileExactWeighted"; };
-struct NameQuantilesExactWeighted { static constexpr auto name = "quantilesExactWeighted"; };
+struct NameQuantileExactWeighted { static constexpr auto name = "quantile_exact_weighted"; };
+struct NameQuantilesExactWeighted { static constexpr auto name = "quantiles_exact_weighted"; };
 
-struct NameQuantileTiming { static constexpr auto name = "quantileTiming"; };
-struct NameQuantileTimingWeighted { static constexpr auto name = "quantileTimingWeighted"; };
-struct NameQuantilesTiming { static constexpr auto name = "quantilesTiming"; };
-struct NameQuantilesTimingWeighted { static constexpr auto name = "quantilesTimingWeighted"; };
+struct NameQuantileTiming { static constexpr auto name = "quantile_timing"; };
+struct NameQuantileTimingWeighted { static constexpr auto name = "quantile_timing_weighted"; };
+struct NameQuantilesTiming { static constexpr auto name = "quantiles_timing"; };
+struct NameQuantilesTimingWeighted { static constexpr auto name = "quantiles_timing_weighted"; };
 
-struct NameQuantileTDigest { static constexpr auto name = "quantileTDigest"; };
-struct NameQuantileTDigestWeighted { static constexpr auto name = "quantileTDigestWeighted"; };
-struct NameQuantilesTDigest { static constexpr auto name = "quantilesTDigest"; };
-struct NameQuantilesTDigestWeighted { static constexpr auto name = "quantilesTDigestWeighted"; };
+struct NameQuantileTDigest { static constexpr auto name = "quantile_t_digest"; };
+struct NameQuantileTDigestWeighted { static constexpr auto name = "quantile_t_digest_weighted"; };
+struct NameQuantilesTDigest { static constexpr auto name = "quantiles_t_digest"; };
+struct NameQuantilesTDigestWeighted { static constexpr auto name = "quantiles_t_digest_weighted"; };
 
-struct NameQuantileBFloat16 { static constexpr auto name = "quantileBFloat16"; };
-struct NameQuantilesBFloat16 { static constexpr auto name = "quantilesBFloat16"; };
-struct NameQuantileBFloat16Weighted { static constexpr auto name = "quantileBFloat16Weighted"; };
-struct NameQuantilesBFloat16Weighted { static constexpr auto name = "quantilesBFloat16Weighted"; };
+struct NameQuantileBFloat16 { static constexpr auto name = "quantile_b_float16"; };
+struct NameQuantilesBFloat16 { static constexpr auto name = "quantiles_b_float16"; };
+struct NameQuantileBFloat16Weighted { static constexpr auto name = "quantile_b_float16_weighted"; };
+struct NameQuantilesBFloat16Weighted { static constexpr auto name = "quantiles_b_float16_weighted"; };
 
 }

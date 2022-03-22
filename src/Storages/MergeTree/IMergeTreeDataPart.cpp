@@ -408,7 +408,7 @@ std::pair<time_t, time_t> IMergeTreeDataPart::getMinMaxTime() const
             return { left.getValue() / left.getScaleMultiplier(), right.getValue() / right.getScaleMultiplier() };
         }
         else
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Part minmax index by time is neither DateTime or DateTime64");
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Part minmax index by time is neither datetime or datetime64");
     }
     else
         return {};

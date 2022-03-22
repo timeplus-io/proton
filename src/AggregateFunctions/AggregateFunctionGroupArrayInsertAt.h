@@ -99,7 +99,7 @@ public:
         }
     }
 
-    String getName() const override { return "groupArrayInsertAt"; }
+    String getName() const override { return "group_array_insert_at"; }
 
     DataTypePtr getReturnType() const override
     {

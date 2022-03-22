@@ -26,7 +26,7 @@ paths:
                       - name: _raw
                         type: String
                       - name: _index_time
-                        type: DateTime64(3)
+                        type: datetime64(3)
                     data:
                       - - proton
                         - '2020.08.14 23:54:41.290486 [ 7891 ] {} <Debug> DNSResolver: Updating DNS cache'
@@ -117,7 +117,7 @@ paths:
                       - name: _raw
                         type: String
                       - name: _index_time
-                        type: DateTime64(3)
+                        type: datetime64(3)
                     data:
                       - - proton
                         - '2020.08.14 23:54:41.290486 [ 7891 ] {} <Debug> DNSResolver: Updating DNS cache'

@@ -175,7 +175,7 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         const auto & time_column = timestamp_func_desc->expr->getSampleBlock().getByPosition(0);
         assert(time_column.name == STREAMING_TIMESTAMP_ALIAS);
         if (!isDateTime(time_column.type) && !isDateTime64(time_column.type))
-            throw Exception("The resulting type of time column expression shall be DateTime or DateTime64", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("The resulting type of time column expression shall be datetime or datetime64", ErrorCodes::BAD_ARGUMENTS);
 
         auto * node = streaming_func_ast->as<ASTFunction>();
         /// We need rewrite streaming function ast to depend on the time expression resulting column directly

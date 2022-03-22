@@ -939,7 +939,7 @@ private:
                     null_map_item);
             else
                 throw Exception(
-                    "Logical error: ColumnConst contains not String nor FixedString column",
+                    "Logical error: ColumnConst contains not string nor fixed_string column",
                         ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (const auto *const item_arg_vector = checkAndGetColumn<ColumnString>(&data.right))

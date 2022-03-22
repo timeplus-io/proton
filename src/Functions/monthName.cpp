@@ -46,7 +46,7 @@ public:
         if (!argument_type.isDate() && !argument_type.isDateTime() && !argument_type.isDateTime64())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type of argument of function {}, should be Date, DateTime or DateTime64",
+                "Illegal type of argument of function {}, should be date, datetime or datetime64",
                 getName());
 
         return std::make_shared<DataTypeString>();

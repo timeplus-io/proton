@@ -51,7 +51,7 @@ namespace
 
         [[noreturn]] static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
         {
-            throw Exception("Function encodeXML cannot work with FixedString argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception("Function encode_xml cannot work with fixed_string argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
     private:

@@ -41,7 +41,7 @@ namespace
             if (!isNativeNumber(arg) && !isDate(arg) && !isDateTime(arg))
                 throw Exception(
                     "Illegal type " + arg->getName() + " of argument of aggregate function " + name
-                        + ", must be native integral type, Date/DateTime or Float",
+                        + ", must be native integral type, date/datetime or float",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
@@ -52,7 +52,7 @@ namespace
 
         throw Exception(
             "Illegal type " + arguments.front().get()->getName() + " of argument of aggregate function " + name
-            + ", must be native integral type, Date/DateTime or Float",
+            + ", must be native integral type, date/datetime or float",
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
@@ -60,7 +60,7 @@ namespace
 
 void registerAggregateFunctionIntervalLengthSum(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("intervalLengthSum", createAggregateFunctionIntervalLengthSum<AggregateFunctionIntervalLengthSumData>);
+    factory.registerFunction("interval_length_sum", createAggregateFunctionIntervalLengthSum<AggregateFunctionIntervalLengthSumData>);
 }
 
 }

@@ -1317,7 +1317,7 @@ namespace
         close();
     }
 
-    void Call::onFatalError()
+    [[maybe_unused]] void Call::onFatalError()
     {
         if (responder && !responder_finished)
         {

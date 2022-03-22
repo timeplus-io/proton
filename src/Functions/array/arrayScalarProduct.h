@@ -64,7 +64,7 @@ private:
             return nullptr;
 
         if (!col_array1->hasEqualOffsets(*col_array2))
-            throw Exception("Array arguments for function " + getName() + " must have equal sizes", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("The array arguments for function " + getName() + " must have equal sizes", ErrorCodes::BAD_ARGUMENTS);
 
         const ColumnVector<T> * col_nested1 = checkAndGetColumn<ColumnVector<T>>(col_array1->getData());
         const ColumnVector<U> * col_nested2 = checkAndGetColumn<ColumnVector<U>>(col_array2->getData());

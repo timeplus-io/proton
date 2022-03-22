@@ -109,7 +109,7 @@ private:
             auto result_type = v->getNestedType();
             if (!result_type->canBePromoted())
                 throw Exception(
-                    "Values to be summed are expected to be Numeric, Float or Decimal.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    "Values to be summed are expected to be numeric, float or decimal.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             auto promoted_val_type = result_type->promoteNumericType();
             if (!key_type)
@@ -140,7 +140,7 @@ private:
 
             if (!v->canBePromoted())
                 throw Exception(
-                    "Values to be summed are expected to be Numeric, Float or Decimal.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    "Values to be summed are expected to be numeric, float or decimal.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
             auto promoted_val_type = v->promoteNumericType();
             if (!key_type)
@@ -233,7 +233,7 @@ private:
                             key = col_str->getDataAt(offset + j).toString();
                         else // should not happen
                             throw Exception(ErrorCodes::LOGICAL_ERROR,
-                                "Expected String or FixedString, got {} in {}",
+                                "Expected string or fixed_string, got {} in {}",
                                 arg.key_column->getDataType(), getName());
                     }
                     else

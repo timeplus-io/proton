@@ -56,7 +56,7 @@ Block createBlockForSet(
 /** For ActionsVisitor
   * A stack of ExpressionActions corresponding to nested lambda expressions.
   * The new action should be added to the highest possible level.
-  * For example, in the expression "select arrayMap(x -> x + column1 * column2, array1)"
+  * For example, in the expression "select array_map(x -> x + column1 * column2, array1)"
   *  calculation of the product must be done outside the lambda expression (it does not depend on x),
   *  and the calculation of the sum is inside (depends on x).
   */

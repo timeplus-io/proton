@@ -19,22 +19,22 @@ static void validateCreate(const String & query)
 
 TEST(StreamColumnValidateVisitor, validCreate)
 {
-    EXPECT_NO_THROW(validateCreate("CREATE STREAM example_table(d DateTime64(3)) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"));
+    EXPECT_NO_THROW(validateCreate("CREATE STREAM example_table(d datetime64(3)) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"));
     EXPECT_NO_THROW(validateCreate(
-        "CREATE STREAM example_table(d DateTime64(3), _time DateTime64) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"));
+        "CREATE STREAM example_table(d datetime64(3), _time datetime64) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"));
     EXPECT_NO_THROW(validateCreate(
-        "CREATE STREAM example_table(d DateTime64(3), _time DateTime64(3)) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"));
-    EXPECT_NO_THROW(validateCreate("CREATE STREAM example_table(d DateTime64(3), _time DateTime64(3) DEFAULT d) ENGINE = Stream "
+        "CREATE STREAM example_table(d datetime64(3), _time datetime64(3)) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"));
+    EXPECT_NO_THROW(validateCreate("CREATE STREAM example_table(d datetime64(3), _time datetime64(3) DEFAULT d) ENGINE = Stream "
                                    "PARTITION BY to_YYYYMM(d) ORDER BY d"));
     EXPECT_NO_THROW(
         validateCreate(
-            "CREATE STREAM example_table(d DateTime64(3), _time DateTime DEFAULT d) ENGINE = MergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
+            "CREATE STREAM example_table(d datetime64(3), _time dateTime DEFAULT d) ENGINE = MergeTree PARTITION BY to_YYYYMM(d) ORDER BY d"));
 }
 
 TEST(StreamColumnValidateVisitor, invalidCreate)
 {
     EXPECT_THROW(
         validateCreate(
-            "CREATE STREAM example_table(d DateTime64(3), _tp_time String DEFAULT d) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"),
+            "CREATE STREAM example_table(d datetime64(3), _tp_time string DEFAULT d) ENGINE = Stream PARTITION BY to_YYYYMM(d) ORDER BY d"),
         DB::Exception);
 }

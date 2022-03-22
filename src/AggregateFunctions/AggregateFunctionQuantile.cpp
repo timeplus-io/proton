@@ -186,17 +186,17 @@ void registerAggregateFunctionsQuantile(AggregateFunctionFactory & factory)
 
     /// 'median' is an alias for 'quantile'
     factory.registerAlias("median", NameQuantile::name);
-    factory.registerAlias("medianDeterministic", NameQuantileDeterministic::name);
-    factory.registerAlias("medianExact", NameQuantileExact::name);
-    factory.registerAlias("medianExactLow", NameQuantileExactLow::name);
-    factory.registerAlias("medianExactHigh", NameQuantileExactHigh::name);
-    factory.registerAlias("medianExactWeighted", NameQuantileExactWeighted::name);
-    factory.registerAlias("medianTiming", NameQuantileTiming::name);
-    factory.registerAlias("medianTimingWeighted", NameQuantileTimingWeighted::name);
-    factory.registerAlias("medianTDigest", NameQuantileTDigest::name);
-    factory.registerAlias("medianTDigestWeighted", NameQuantileTDigestWeighted::name);
-    factory.registerAlias("medianBFloat16", NameQuantileBFloat16::name);
-    factory.registerAlias("medianBFloat16Weighted", NameQuantileBFloat16Weighted::name);
+    factory.registerAlias("median_deterministic", NameQuantileDeterministic::name);
+    factory.registerAlias("median_exact", NameQuantileExact::name);
+    factory.registerAlias("median_exact_low", NameQuantileExactLow::name);
+    factory.registerAlias("median_exact_high", NameQuantileExactHigh::name);
+    factory.registerAlias("median_exact_weighted", NameQuantileExactWeighted::name);
+    factory.registerAlias("median_timing", NameQuantileTiming::name);
+    factory.registerAlias("median_timing_weighted", NameQuantileTimingWeighted::name);
+    factory.registerAlias("median_t_digest", NameQuantileTDigest::name);
+    factory.registerAlias("median_t_digest_weighted", NameQuantileTDigestWeighted::name);
+    factory.registerAlias("median_b_float16", NameQuantileBFloat16::name);
+    factory.registerAlias("median_b_float16_weighted", NameQuantileBFloat16Weighted::name);
 }
 
 }

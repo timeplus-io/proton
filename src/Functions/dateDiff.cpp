@@ -146,7 +146,7 @@ private:
         else if (const auto * x_const_64 = checkAndGetColumnConst<ColumnDateTime64>(&x))
             dispatchConstForSecondColumn<Transform>(x_const_64->getValue<DecimalField<DateTime64>>(), y, timezone_x, timezone_y, result);
         else
-            throw Exception("Illegal column for first argument of function " + getName() + ", must be Date, DateTime or DateTime64", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception("Illegal column for first argument of function " + getName() + ", must be date, datetime or datetime64", ErrorCodes::ILLEGAL_COLUMN);
     }
 
     template <typename Transform, typename LeftColumnType>

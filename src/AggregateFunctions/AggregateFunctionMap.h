@@ -101,7 +101,7 @@ public:
         key_type = map_type->getKeyType();
     }
 
-    String getName() const override { return nested_func->getName() + "Map"; }
+    String getName() const override { return nested_func->getName() + "_map"; }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeMap>(DataTypes{key_type, nested_func->getReturnType()}); }
 

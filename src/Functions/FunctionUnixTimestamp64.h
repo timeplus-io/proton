@@ -42,7 +42,7 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (!isDateTime64(arguments[0].type))
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The only argument for function {} must be DateTime64", name);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The only argument for function {} must be datetime64", name);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -70,7 +70,7 @@ public:
             {
                 Int64 result_value = source_data[i];
                 if (common::mulOverflow(result_value, scale_multiplier, result_value))
-                    throw Exception("Decimal overflow in " + getName(), ErrorCodes::DECIMAL_OVERFLOW);
+                    throw Exception("decimal overflow in " + getName(), ErrorCodes::DECIMAL_OVERFLOW);
 
                 result_data[i] = result_value;
             }

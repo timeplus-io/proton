@@ -21,7 +21,7 @@ namespace ErrorCodes
 }
 
 
-/** emptyArrayToSingle(arr) - replace empty arrays with arrays of one element with a default value.
+/** empty_array_to_single(arr) - replace empty arrays with arrays of one element with a default value.
   */
 class FunctionEmptyArrayToSingle : public IFunction
 {

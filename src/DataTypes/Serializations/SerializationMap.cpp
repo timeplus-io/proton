@@ -131,7 +131,7 @@ void SerializationMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, 
                 if (*istr.position() == ',')
                     ++istr.position();
                 else
-                    throw Exception("Cannot read Map from text", ErrorCodes::CANNOT_READ_MAP_FROM_TEXT);
+                    throw Exception("Cannot read map from text", ErrorCodes::CANNOT_READ_MAP_FROM_TEXT);
             }
 
             first = false;
@@ -180,7 +180,7 @@ void SerializationMap::deserializeText(IColumn & column, ReadBuffer & istr, cons
         });
 
     if (whole && !istr.eof())
-        throwUnexpectedDataAfterParsedValue(column, istr, settings, "Map");
+        throwUnexpectedDataAfterParsedValue(column, istr, settings, "map");
 }
 
 void SerializationMap::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

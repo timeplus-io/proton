@@ -446,7 +446,7 @@ public:
             default:
             {
                 throw Exception("Invalid type of 1st argument of function " + getName() + ": "
-                    + arguments[0].type->getName() + ", expected: Date, DateTime or DateTime64.",
+                    + arguments[0].type->getName() + ", expected: date, datetime or datetime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }

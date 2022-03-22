@@ -51,7 +51,7 @@ public:
     {
         const DataTypeArray * arr = checkAndGetDataType<DataTypeArray>(arguments[0].get());
         if (!arr)
-            throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception("Argument for function " + getName() + " must be array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arr->getNestedType();
     }

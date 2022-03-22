@@ -1690,7 +1690,7 @@ struct WindowFunctionExponentialTimeDecayedSum final : public RecurrentWindowFun
         if (!isNumber(argument_types[ARGUMENT_TIME]) && !isDateTime(argument_types[ARGUMENT_TIME]) && !isDateTime64(argument_types[ARGUMENT_TIME]))
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Argument {} must be DateTime, DateTime64 or a number, '{}' given",
+                "Argument {} must be datetime, datetime64 or a number, '{}' given",
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }
@@ -1758,7 +1758,7 @@ struct WindowFunctionExponentialTimeDecayedMax final : public RecurrentWindowFun
         if (!isNumber(argument_types[ARGUMENT_TIME]) && !isDateTime(argument_types[ARGUMENT_TIME]) && !isDateTime64(argument_types[ARGUMENT_TIME]))
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Argument {} must be DateTime, DateTime64 or a number, '{}' given",
+                "Argument {} must be datetime, datetime64 or a number, '{}' given",
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }
@@ -1817,7 +1817,7 @@ struct WindowFunctionExponentialTimeDecayedCount final : public RecurrentWindowF
         if (!isNumber(argument_types[ARGUMENT_TIME]) && !isDateTime(argument_types[ARGUMENT_TIME]) && !isDateTime64(argument_types[ARGUMENT_TIME]))
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Argument {} must be DateTime, DateTime64 or a number, '{}' given",
+                "Argument {} must be datetime, datetime64 or a number, '{}' given",
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }

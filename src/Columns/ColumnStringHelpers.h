@@ -69,7 +69,7 @@ public:
             if (buffer.count() > prev_row_buffer_size + col.getN())
                 throw Exception(
                         ErrorCodes::TOO_LARGE_STRING_SIZE,
-                        "Too large string for FixedString column");
+                        "Too large string for fixed_string column");
 
             // Pad with zeroes on the right to maintain FixedString invariant.
             const auto excess_bytes = buffer.count() % col.getN();

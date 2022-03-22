@@ -570,7 +570,7 @@ namespace
             , fixed_string_data_type(fixed_string_data_type_)
             , n(fixed_string_data_type->getN())
         {
-            static_assert(is_fixed_string, "This constructor for FixedString only");
+            static_assert(is_fixed_string, "This constructor for fixed_string only");
             setFunctions();
             prepareEnumMapping();
         }

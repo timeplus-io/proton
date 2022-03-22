@@ -28,7 +28,7 @@ namespace ErrorCodes
 std::string ColumnTuple::getName() const
 {
     WriteBufferFromOwnString res;
-    res << "Tuple(";
+    res << "tuple(";
     bool is_first = true;
     for (const auto & column : columns)
     {

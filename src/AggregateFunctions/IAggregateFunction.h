@@ -698,7 +698,7 @@ struct AggregateFunctionProperties
       */
     bool returns_default_when_only_null = false;
 
-    /** Result varies depending on the data order (example: groupArray).
+    /** Result varies depending on the data order (example: group_array).
       * Some may also name this property as "non-commutative".
       */
     bool is_order_dependent = false;

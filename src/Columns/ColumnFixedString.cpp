@@ -62,7 +62,7 @@ void ColumnFixedString::insert(const Field & x)
     const String & s = DB::get<const String &>(x);
 
     if (s.size() > n)
-        throw Exception("Too large string '" + s + "' for FixedString column", ErrorCodes::TOO_LARGE_STRING_SIZE);
+        throw Exception("Too large string '" + s + "' for fixed_string column", ErrorCodes::TOO_LARGE_STRING_SIZE);
 
     size_t old_size = chars.size();
     chars.resize_fill(old_size + n);
@@ -74,7 +74,7 @@ void ColumnFixedString::insertFrom(const IColumn & src_, size_t index)
     const ColumnFixedString & src = assert_cast<const ColumnFixedString &>(src_);
 
     if (n != src.getN())
-        throw Exception("Size of FixedString doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
+        throw Exception("Size of fixed_string doesn't match", ErrorCodes::SIZE_OF_FIXED_STRING_DOESNT_MATCH);
 
     size_t old_size = chars.size();
     chars.resize(old_size + n);

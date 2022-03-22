@@ -45,13 +45,13 @@ DataTypePtr FunctionValidateNestedArraySizes::getReturnTypeImpl(const DataTypes 
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (!WhichDataType(arguments[0]).isUInt8())
-        throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + " Must be UInt.",
+        throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + " Must be uint.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     for (size_t i = 1; i < num_args; ++i)
         if (!WhichDataType(arguments[i]).isArray())
             throw Exception(
-                "Illegal type " + arguments[i]->getName() + " of " + toString(i) + " argument of function " + getName() + " Must be Array.",
+                "Illegal type " + arguments[i]->getName() + " of " + toString(i) + " argument of function " + getName() + " Must be array.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return std::make_shared<DataTypeUInt8>();
@@ -109,7 +109,7 @@ ColumnPtr FunctionValidateNestedArraySizes::executeImpl(
             {
                 throw Exception(
                     ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH,
-                    "Elements '{}' and '{}' of Nested data structure (Array columns) "
+                    "Elements '{}' and '{}' of Nested data structure (array columns) "
                     "have different array sizes ({} and {} respectively) on row {}",
                     arguments[1].name, arguments[args_idx].name, first_length, length, i);
             }

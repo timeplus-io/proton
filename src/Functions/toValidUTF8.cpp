@@ -128,7 +128,7 @@ struct ToValidUTF8Impl
 
     [[noreturn]] static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
     {
-        throw Exception("Column of type FixedString is not supported by toValidUTF8 function", ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception("Column of type fixed_string is not supported by to_valid_utf8 function", ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 

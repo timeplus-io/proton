@@ -246,13 +246,13 @@ static bool checkTupleType(const capnp::Type & capnp_type, const DataTypePtr & d
     auto nested_types = tuple_data_type->getElements();
     if (nested_types.size() != struct_schema.getFields().size())
     {
-        error_message += "Tuple and Struct types have different sizes";
+        error_message += "The tuple and struct types have different sizes";
         return false;
     }
 
     if (!tuple_data_type->haveExplicitNames())
     {
-        error_message += "Only named Tuple can be converted to CapnProto Struct";
+        error_message += "Only named tuple can be converted to CapnProto struct";
         return false;
     }
     for (const auto & name : tuple_data_type->getElementNames())
@@ -495,10 +495,10 @@ static DataTypePtr getDataTypeFromCapnProtoType(const capnp::Type & capnp_type)
             {
                 auto fields = struct_schema.getUnionFields();
                 if (fields.size() != 2 || (!fields[0].getType().isVoid() && !fields[1].getType().isVoid()))
-                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Unions are not supported");
+                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "The unions are not supported");
                 auto value_type = fields[0].getType().isVoid() ? fields[1].getType() : fields[0].getType();
                 if (value_type.isStruct() || value_type.isList())
-                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "Tuples and Lists cannot be inside Nullable");
+                    throw Exception(ErrorCodes::CANNOT_EXTRACT_STREAM_STRUCTURE, "The tuples and lists cannot be inside Nullable");
 
                 auto nested_type = getDataTypeFromCapnProtoType(value_type);
                 return std::make_shared<DataTypeNullable>(nested_type);

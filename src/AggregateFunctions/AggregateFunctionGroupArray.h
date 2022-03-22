@@ -51,9 +51,9 @@ template <typename Trait>
 static constexpr const char * getNameByTrait()
 {
     if (Trait::sampler == Sampler::NONE)
-        return "groupArray";
+        return "group_array";
     else if (Trait::sampler == Sampler::RNG)
-        return "groupArraySample";
+        return "group_array_sample";
     // else if (Trait::sampler == Sampler::DETERMINATOR) // TODO
 
     __builtin_unreachable();
@@ -309,7 +309,7 @@ public:
 /// General case
 
 
-/// Nodes used to implement a linked list for storage of groupArray states
+/// Nodes used to implement a linked list for storage of group_array states
 
 template <typename Node>
 struct GroupArrayNodeBase
@@ -406,7 +406,7 @@ struct GroupArrayGeneralData<Node, true> : public GroupArraySamplerData<Node *>
 {
 };
 
-/// Implementation of groupArray for String or any ComplexObject via Array
+/// Implementation of group_array for String or any ComplexObject via array
 template <typename Node, typename Trait>
 class GroupArrayGeneralImpl final
     : public IAggregateFunctionDataHelper<GroupArrayGeneralData<Node, Trait::sampler != Sampler::NONE>, GroupArrayGeneralImpl<Node, Trait>>
@@ -681,7 +681,7 @@ struct GroupArrayGeneralListData
 };
 
 
-/// Implementation of groupArray for String or any ComplexObject via linked list
+/// Implementation of group_array for String or any ComplexObject via linked list
 /// It has poor performance in case of many small objects
 template <typename Node, typename Trait>
 class GroupArrayGeneralListImpl final

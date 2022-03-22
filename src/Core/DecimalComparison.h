@@ -189,7 +189,7 @@ private:
                 if (const ColVecB * c1_vec = checkAndGetColumn<ColVecB>(c1.get()))
                     constantVector<scale_left, scale_right>(a, c1_vec->getData(), vec_res, scale);
                 else
-                    throw Exception("Wrong column in Decimal comparison", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Wrong column in decimal comparison", ErrorCodes::LOGICAL_ERROR);
             }
             else if (c1_is_const)
             {
@@ -198,7 +198,7 @@ private:
                 if (const ColVecA * c0_vec = checkAndGetColumn<ColVecA>(c0.get()))
                     vectorConstant<scale_left, scale_right>(c0_vec->getData(), b, vec_res, scale);
                 else
-                    throw Exception("Wrong column in Decimal comparison", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Wrong column in decimal comparison", ErrorCodes::LOGICAL_ERROR);
             }
             else
             {
@@ -207,10 +207,10 @@ private:
                     if (const ColVecB * c1_vec = checkAndGetColumn<ColVecB>(c1.get()))
                         vectorVector<scale_left, scale_right>(c0_vec->getData(), c1_vec->getData(), vec_res, scale);
                     else
-                        throw Exception("Wrong column in Decimal comparison", ErrorCodes::LOGICAL_ERROR);
+                        throw Exception("Wrong column in decimal comparison", ErrorCodes::LOGICAL_ERROR);
                 }
                 else
-                    throw Exception("Wrong column in Decimal comparison", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Wrong column in decimal comparison", ErrorCodes::LOGICAL_ERROR);
             }
         }
 

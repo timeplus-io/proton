@@ -1180,7 +1180,7 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
             builder.initSink(input_rows_count);
 
         if (index == 0u)
-            throw Exception("Array indices are 1-based", ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX);
+            throw Exception("The array indices are 1-based", ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX);
 
         if (!((res = executeNumberConst<UInt8>(arguments, index, builder))
             || (res = executeNumberConst<UInt16>(arguments, index, builder))

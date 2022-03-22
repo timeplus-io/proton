@@ -219,7 +219,7 @@ size_t DataTypeTuple::getPositionByName(const String & name) const
     for (size_t i = 0; i < size; ++i)
         if (names[i] == name)
             return i;
-    throw Exception("Tuple doesn't have element with name '" + name + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+    throw Exception("The tuple doesn't have element with name '" + name + "'", ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
 }
 
 String DataTypeTuple::getNameByPosition(size_t i) const
@@ -306,7 +306,7 @@ MutableSerializationInfoPtr DataTypeTuple::createSerializationInfo(const Seriali
 static DataTypePtr create(const ASTPtr & arguments)
 {
     if (!arguments || arguments->children.empty())
-        throw Exception("Tuple cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
+        throw Exception("The tuple cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
 
     DataTypes nested_types;
     nested_types.reserve(arguments->children.size());

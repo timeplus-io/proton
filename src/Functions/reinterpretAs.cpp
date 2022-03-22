@@ -82,14 +82,14 @@ public:
         {
             if (!from_type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion())
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Cannot reinterpret {} as FixedString because it is not fixed size and contiguous in memory",
+                    "Cannot reinterpret {} as fixed_string because it is not fixed size and contiguous in memory",
                     from_type->getName());
         }
         else if (result_reinterpret_type.isString())
         {
             if (!from_type->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Cannot reinterpret {} as String because it is not contiguous in memory",
+                    "Cannot reinterpret {} as string because it is not contiguous in memory",
                     from_type->getName());
         }
         else if (canBeReinterpretedAsNumeric(result_reinterpret_type))
@@ -98,14 +98,14 @@ public:
 
             if (!canBeReinterpretedAsNumeric(from_data_type) && !from_data_type.isStringOrFixedString())
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Cannot reinterpret {} as {} because only Numeric, String or FixedString can be reinterpreted in Numeric",
+                    "Cannot reinterpret {} as {} because only numeric, string or fixed_string can be reinterpreted in numeric",
                     from_type->getName(),
                     to_type->getName());
         }
         else
         {
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Cannot reinterpret {} as {} because only reinterpretation in String, FixedString and Numeric types is supported",
+                "Cannot reinterpret {} as {} because only reinterpretation in string, fixed_string and numeric types is supported",
                 from_type->getName(),
                 to_type->getName());
         }
@@ -391,7 +391,7 @@ public:
 
             if (!type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion())
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Cannot reinterpret {} as FixedString because it is not fixed size and contiguous in memory",
+                    "Cannot reinterpret {} as fixed_string because it is not fixed size and contiguous in memory",
                     type->getName());
 
             size_t type_value_size_in_memory = type->getSizeOfValueInMemory();

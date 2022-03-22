@@ -13,7 +13,7 @@
 
 
 /** This test program evaluates different solutions for a simple degenerate task:
-  * Aggregate data by UInt8 key, calculate "avg" function on Float values.
+  * Aggregate data by uint8 key, calculate "avg" function on float values.
   *
   * It tests the overhead of various data structures in comparison to the minimal code doing the same task.
   * It also tests what does it cost to access aggregation state via single pointer indirection.

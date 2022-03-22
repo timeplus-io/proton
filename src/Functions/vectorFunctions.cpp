@@ -815,7 +815,7 @@ public:
         else if (isUnsignedInteger(p_column_const->getDataType()))
             p = p_column_const->getUInt(0);
         else
-            throw Exception{"Second argument for function " + getName() + " must be either constant Float64 or constant UInt", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception{"Second argument for function " + getName() + " must be either constant float64 or constant uint", ErrorCodes::ILLEGAL_COLUMN};
 
         if (p < 1 || p == HUGE_VAL)
             throw Exception{"Second argument for function " + getName() + " must be not less than one and not be an infinity", ErrorCodes::ARGUMENT_OUT_OF_BOUND};

@@ -122,7 +122,7 @@ ColumnsWithSortDescriptions getColumnsWithSortDescription(const Block & block, c
         {
             if (!column->isCollationSupported())
                 throw Exception(
-                    "Collations could be specified only for String, LowCardinality(String), Nullable(String) or for Array or Tuple, "
+                    "Collations could be specified only for string, low_cardinality(string), nullable(string) or for array or tuple, "
                     "containing them.",
                     ErrorCodes::BAD_COLLATION);
         }

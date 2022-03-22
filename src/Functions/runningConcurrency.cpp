@@ -148,7 +148,7 @@ namespace DB
             case TypeIndex::DateTime64: f(TypeTag<DataTypeDateTime64>()); break;
             default:
                 throw Exception(
-                    "Arguments for function " + getName() + " must be Date, DateTime, or DateTime64.",
+                    "Arguments for function " + getName() + " must be date, datetime, or datetime64.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }

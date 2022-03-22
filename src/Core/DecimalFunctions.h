@@ -76,7 +76,7 @@ struct DataTypeDecimalTrait
     T scaleFactorFor(const DataTypeDecimalTrait<U> & x, bool) const
     {
         if (scale < x.scale)
-            throw Exception("Decimal result's scale is less than argument's one", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception("The decimal result's scale is less than argument's one", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         const UInt32 scale_delta = scale - x.scale; /// scale_delta >= 0
         return DecimalUtils::scaleMultiplier<typename T::NativeType>(scale_delta);
     }
@@ -101,11 +101,11 @@ inline DecimalType decimalFromComponentsWithMultiplier(
 
     T whole_scaled = 0;
     if (common::mulOverflow(whole, scale_multiplier, whole_scaled))
-        throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+        throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
 
     T value;
     if (common::addOverflow(whole_scaled, fractional_sign * (fractional % scale_multiplier), value))
-        throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+        throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
 
     return DecimalType(value);
 }

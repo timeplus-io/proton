@@ -89,7 +89,7 @@ inline UInt32 extractToDecimalScale(const ColumnWithTypeAndName & named_column)
         || checkAndGetDataType<DataTypeUInt16>(arg_type)
         || checkAndGetDataType<DataTypeUInt8>(arg_type);
     if (!ok)
-        throw Exception("Illegal type of toDecimal() scale " + named_column.type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("Illegal type of to_decimal() scale " + named_column.type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     Field field;
     named_column.column->get(0, field);
@@ -1051,7 +1051,7 @@ template <typename FromDataType, typename ToDataType, typename Name,
 struct ConvertThroughParsing
 {
     static_assert(std::is_same_v<FromDataType, DataTypeString> || std::is_same_v<FromDataType, DataTypeFixedString>,
-        "ConvertThroughParsing is only applicable for String or FixedString data types");
+        "ConvertThroughParsing is only applicable for string or fixed_string data types");
 
     static constexpr bool to_datetime64 = std::is_same_v<ToDataType, DataTypeDateTime64>;
 
@@ -1565,12 +1565,12 @@ public:
 
         if constexpr (to_decimal)
         {
-            mandatory_args.push_back({"scale", &isNativeInteger<IDataType>, &isColumnConst, "const Integer"});
+            mandatory_args.push_back({"scale", &isNativeInteger<IDataType>, &isColumnConst, "const integer"});
         }
 
         if (!to_decimal && isDateTime64<Name, ToDataType>(arguments))
         {
-            mandatory_args.push_back({"scale", &isNativeInteger<IDataType>, &isColumnConst, "const Integer"});
+            mandatory_args.push_back({"scale", &isNativeInteger<IDataType>, &isColumnConst, "const integer"});
         }
 
         // toString(DateTime or DateTime64, [timezone: String])
@@ -1586,7 +1586,7 @@ public:
             // toDateTime64(value, scale : Integer[, timezone: String])
             || std::is_same_v<ToDataType, DataTypeDateTime64>)
         {
-            optional_args.push_back({"timezone", &isString<IDataType>, &isColumnConst, "const String"});
+            optional_args.push_back({"timezone", &isString<IDataType>, &isColumnConst, "const string"});
         }
 
         validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
@@ -1731,12 +1731,12 @@ private:
                 {
                     /// Account for optional timezone argument.
                     if (arguments.size() != 2 && arguments.size() != 3)
-                        throw Exception{"Function " + getName() + " expects 2 or 3 arguments for DataTypeDateTime64.",
+                        throw Exception{"Function " + getName() + " expects 2 or 3 arguments for datetime64.",
                             ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
                 }
                 else if (arguments.size() != 2)
                 {
-                    throw Exception{"Function " + getName() + " expects 2 arguments for Decimal.",
+                    throw Exception{"Function " + getName() + " expects 2 arguments for decimal.",
                         ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
                 }
 
@@ -1764,7 +1764,7 @@ private:
                 if constexpr ((bad_left && std::is_same_v<RightDataType, DataTypeUUID>) ||
                               (bad_right && std::is_same_v<LeftDataType, DataTypeUUID>))
                 {
-                    throw Exception("Wrong UUID conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
+                    throw Exception("Wrong uuid conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
                 }
                 else
                 {
@@ -1889,7 +1889,7 @@ public:
                     throw Exception(
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                         "Number of arguments for function {} doesn't match: passed {} , should be 1, 2 or 3, should be 1 or 2. Second "
-                        "argument only make sense for timezone (String) or scale (Decimal).",
+                        "argument only make sense for timezone (string) or scale (decimal).",
                         getName(),
                         arguments.size());
                 }
@@ -1950,7 +1950,7 @@ public:
                     FunctionArgumentDescriptors{{"string", &isStringOrFixedString<IDataType>, nullptr, "string or fixed_string"}},
                     // optional
                     FunctionArgumentDescriptors{
-                        {"precision", &isUInt8<IDataType>, isColumnConst, "const UInt8"},
+                        {"precision", &isUInt8<IDataType>, isColumnConst, "const uint8"},
                         {"timezone", &isStringOrFixedString<IDataType>, isColumnConst, "const string or fixed_string"},
                     });
             }
@@ -1981,7 +1981,7 @@ public:
                     throw Exception(
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                         "Illegal type {} of first argument of function {}. Conversion functions with postfix '_or_zero' or '_or_null' "
-                        "should take String argument",
+                        "should take string argument",
                         arguments[0].type->getName(),
                         getName());
                 /// proton: ends.
@@ -2009,7 +2009,7 @@ public:
                 else
                 {
                     throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                        + toString(arguments.size()) + ", should be 1. Second argument makes sense only for DateTime and Decimal.",
+                        + toString(arguments.size()) + ", should be 1. Second argument makes sense only for datetime and decimal.",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
                 }
             }
@@ -2089,7 +2089,7 @@ public:
         /// proton: starts. renaming lower
         if (!result_column)
             throw Exception("Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                + ". Only String or FixedString argument is accepted for try-conversion function."
+                + ". Only string or fixed_string argument is accepted for try-conversion function."
                 + " For other arguments, use function without '_or_zero' or '_or_null'.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         /// proton: ends.
@@ -2806,7 +2806,7 @@ private:
     WrapperType createFixedStringWrapper(const DataTypePtr & from_type, const size_t N) const
     {
         if (!isStringOrFixedString(from_type))
-            throw Exception{"CAST AS FixedString is only implemented for types String and FixedString", ErrorCodes::NOT_IMPLEMENTED};
+            throw Exception{"CAST AS fixed_string is only implemented for types string and fixed_string", ErrorCodes::NOT_IMPLEMENTED};
 
         bool exception_mode_null = cast_type == CastType::accurateOrNull;
         return [exception_mode_null, N] (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t /*input_rows_count*/)
@@ -2942,7 +2942,7 @@ private:
         if (!from_type)
         {
             throw Exception(ErrorCodes::TYPE_MISMATCH,
-                "CAST AS Array can only be performed between same-dimensional Array, Map or String types");
+                "CAST AS array can only be performed between same-dimensional array, map or string types");
         }
 
         DataTypePtr from_nested_type = from_type->getNestedType();
@@ -2952,7 +2952,7 @@ private:
 
         if (from_type->getNumberOfDimensions() != to_type.getNumberOfDimensions() && !from_empty_array)
             throw Exception(ErrorCodes::TYPE_MISMATCH,
-                "CAST AS Array can only be performed between same-dimensional array types");
+                "CAST AS array can only be performed between same-dimensional array types");
 
         const DataTypePtr & to_nested_type = to_type.getNestedType();
 
@@ -2985,7 +2985,7 @@ private:
             else
             {
                 throw Exception(ErrorCodes::LOGICAL_ERROR,
-                    "Illegal column {} for function CAST AS Array",
+                    "Illegal column {} for function CAST AS array",
                     argument_column.column->getName());
             }
         };
@@ -3019,11 +3019,11 @@ private:
 
         const auto * from_type = checkAndGetDataType<DataTypeTuple>(from_type_untyped.get());
         if (!from_type)
-            throw Exception{"CAST AS Tuple can only be performed between tuple types or from String.\nLeft type: "
+            throw Exception{"CAST AS tuple can only be performed between tuple types or from string.\nLeft type: "
                 + from_type_untyped->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
 
         if (from_type->getElements().size() != to_type->getElements().size())
-            throw Exception{"CAST AS Tuple can only be performed between tuple types with the same number of elements or from String.\n"
+            throw Exception{"CAST AS tuple can only be performed between tuple types with the same number of elements or from string.\n"
                 "Left type: " + from_type->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
 
         const auto & from_element_types = from_type->getElements();
@@ -3074,7 +3074,7 @@ private:
             const auto & values_offsets = assert_cast<const ColumnArray::ColumnOffsets &>(*offsets[1]).getData();
             if (keys_offsets != values_offsets)
                 throw Exception(ErrorCodes::TYPE_MISMATCH,
-                    "CAST AS Map can only be performed from tuple of arrays with equal sizes.");
+                    "CAST AS map can only be performed from tuple of arrays with equal sizes.");
 
             return ColumnMap::create(converted_columns[0], converted_columns[1], offsets[0]);
         };
@@ -3127,7 +3127,7 @@ private:
         if (const auto * from_tuple = checkAndGetDataType<DataTypeTuple>(from_type_untyped.get()))
         {
             if (from_tuple->getElements().size() != 2)
-                throw Exception{"CAST AS Map from tuple requeires 2 elements.\n"
+                throw Exception{"CAST AS map from tuple requeires 2 elements.\n"
                     "Left type: " + from_tuple->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
 
             DataTypes from_kv_types;
@@ -3138,7 +3138,7 @@ private:
                 const auto * type_array = checkAndGetDataType<DataTypeArray>(elem.get());
                 if (!type_array)
                     throw Exception(ErrorCodes::TYPE_MISMATCH,
-                        "CAST AS Map can only be performed from tuples of array. Got: {}", from_tuple->getName());
+                        "CAST AS map can only be performed from tuples of array. Got: {}", from_tuple->getName());
 
                 from_kv_types.push_back(type_array->getNestedType());
             }
@@ -3149,7 +3149,7 @@ private:
         {
             const auto * nested_tuple = typeid_cast<const DataTypeTuple *>(from_array->getNestedType().get());
             if (!nested_tuple || nested_tuple->getElements().size() != 2)
-                throw Exception{"CAST AS Map from array requeires nested tuple of 2 elements.\n"
+                throw Exception{"CAST AS map from array requeires nested tuple of 2 elements.\n"
                     "Left type: " + from_array->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
 
             return createArrayToMapWrrapper(nested_tuple->getElements(), to_type->getKeyValueTypes());
@@ -3160,7 +3160,7 @@ private:
         }
         else
         {
-            throw Exception{"Unsupported types to CAST AS Map\n"
+            throw Exception{"Unsupported types to CAST AS map\n"
                 "Left type: " + from_type_untyped->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
         }
     }
@@ -3348,7 +3348,7 @@ private:
                     const auto * col_low_cardinality = typeid_cast<const ColumnLowCardinality *>(arguments[0].column.get());
 
                     if (skip_not_null_check && col_low_cardinality->containsNull())
-                        throw Exception{"Cannot convert NULL value to non-Nullable type",
+                        throw Exception{"Cannot convert null value to non-nullable type",
                                         ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
 
                     arg.column = col_low_cardinality->getDictionary().getNestedColumn();
@@ -3454,7 +3454,7 @@ private:
                     const auto & null_map = nullable_col.getNullMapData();
 
                     if (!memoryIsZero(null_map.data(), null_map.size()))
-                        throw Exception{"Cannot convert NULL value to non-Nullable type",
+                        throw Exception{"Cannot convert null value to non-nullable type",
                                         ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
                 }
                 const ColumnNullable * nullable_source = typeid_cast<const ColumnNullable *>(arguments.front().column.get());

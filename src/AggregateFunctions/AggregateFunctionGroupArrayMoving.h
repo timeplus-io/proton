@@ -51,7 +51,7 @@ struct MovingData
 template <typename T>
 struct MovingSumData : public MovingData<T>
 {
-    static constexpr auto name = "groupArrayMovingSum";
+    static constexpr auto name = "group_array_moving_sum";
 
     T NO_SANITIZE_UNDEFINED get(size_t idx, UInt64 window_size) const
     {
@@ -65,7 +65,7 @@ struct MovingSumData : public MovingData<T>
 template <typename T>
 struct MovingAvgData : public MovingData<T>
 {
-    static constexpr auto name = "groupArrayMovingAvg";
+    static constexpr auto name = "group_array_moving_avg";
 
     T NO_SANITIZE_UNDEFINED get(size_t idx, UInt64 window_size) const
     {

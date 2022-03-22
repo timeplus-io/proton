@@ -45,7 +45,7 @@ public:
         const auto * arg = arguments[0].get();
         if (!WhichDataType(arg).isStringOrFixedString())
             throw Exception(
-                "Illegal type " + arg->getName() + " of argument " + std::to_string(1) + " of function " + getName() + ". Must be String or FixedString",
+                "Illegal type " + arg->getName() + " of argument " + std::to_string(1) + " of function " + getName() + ". Must be string or fixed_string",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt64>();

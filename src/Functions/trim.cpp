@@ -71,7 +71,7 @@ public:
 
     static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
     {
-        throw Exception("Functions trimLeft, trimRight and trimBoth cannot work with FixedString argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("Functions trim_left, trim_right and trim_both cannot work with fixed_string argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 private:

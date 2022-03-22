@@ -364,14 +364,14 @@ public:
         const DataTypeString * pattern_type = checkAndGetDataType<DataTypeString>(arguments[1].type.get());
 
         if (!map_type)
-            throw Exception{"First argument for function " + getName() + " must be a Map",
+            throw Exception{"First argument for function " + getName() + " must be a map",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         if (!pattern_type)
-            throw Exception{"Second argument for function " + getName() + " must be String",
+            throw Exception{"Second argument for function " + getName() + " must be string",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         if (!isStringOrFixedString(map_type->getKeyType()))
-            throw Exception{"Key type of map for function " + getName() + " must be `String` or `FixedString`",
+            throw Exception{"Key type of map for function " + getName() + " must be `string` or `fixed_string`",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         return std::make_shared<DataTypeUInt8>();
@@ -417,11 +417,11 @@ public:
         WhichDataType which(key_type);
 
         if (!which.isStringOrFixedString())
-            throw Exception{"Function " + getName() + "only support the map with String or FixedString key",
+            throw Exception{"Function " + getName() + "only support the map with string or fixed_string key",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         if (!isStringOrFixedString(arguments[1].type))
-            throw Exception{"Second argument passed to function " + getName() + " must be String or FixedString",
+            throw Exception{"Second argument passed to function " + getName() + " must be string or fixed_string",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
         return std::make_shared<DataTypeMap>(map_type->getKeyType(), map_type->getValueType());

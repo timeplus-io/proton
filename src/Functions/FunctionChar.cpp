@@ -44,7 +44,7 @@ public:
             WhichDataType which(arg);
             if (!(which.isInt() || which.isUInt() || which.isFloat()))
                 throw Exception("Illegal type " + arg->getName() + " of argument of function " + getName()
-                                + ", must be Int, UInt or Float number",
+                                + ", must be int, uint or float number",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         return std::make_shared<DataTypeString>();
