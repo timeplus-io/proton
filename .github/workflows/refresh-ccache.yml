@@ -1,0 +1,54 @@
+name: RefreshCcache
+
+on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  schedule:
+    # refresh ccache every Month
+    - cron:  '0 0 1 * *'
+
+jobs:
+  Build:
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.4xlarge
+      ec2-image-id: ami-045a86d6d301ab637
+      submodules: 'true'
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+        
+        mkdir $GITHUB_WORKSPACE/ccache
+
+        # compiling
+        echo "compiling"
+        ./docker/packager/packager --package-type binary --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+        # upload build cache
+        echo "upload cache.tar.gz"
+        tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal/proton/
+
+        # clear ccache directory
+        rm -rf $GITHUB_WORKSPACE/ccache
+        mkdir $GITHUB_WORKSPACE/ccache
+
+        # compiling sanitizer=address
+        echo "compiling sanitizer=address"
+        ./docker/packager/packager --package-type binary --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        
+        # upload build cache
+        echo "upload cache-address.tar.gz"
+        tar -zcf ./cache-address.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache-address.tar.gz s3://tp-internal/proton/
+
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
