@@ -28,6 +28,9 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int UNION_ALL_RESULT_STRUCTURES_MISMATCH;
+    /// proton: starts
+    extern const int INTO_OUTFILE_NOT_ALLOWED;
+    /// proton: ends
 }
 
 InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
@@ -45,6 +48,11 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
     size_t num_children = ast->list_of_selects->children.size();
     if (!num_children)
         throw Exception("Logical error: no children in ASTSelectWithUnionQuery", ErrorCodes::LOGICAL_ERROR);
+
+    /// proton: starts. Not allow INTO OUTFILE for beta
+    if (ast->out_file)
+        throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+    /// proton: ends
 
     /// Note that we pass 'required_result_column_names' to first SELECT.
     /// And for the rest, we pass names at the corresponding positions of 'required_result_column_names' in the result of first SELECT,
