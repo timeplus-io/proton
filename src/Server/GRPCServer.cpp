@@ -594,7 +594,7 @@ namespace
 
         void finishQuery();
         void onException(const Exception & exception);
-        void onFatalError();
+        [[maybe_unused]] void onFatalError();
         void releaseQueryIDAndSessionID();
         void close();
 

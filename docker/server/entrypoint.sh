@@ -220,6 +220,33 @@ if [ -n "$MAX_CONCURRENT_INSERT_QUERIES" ]; then
     fi
 fi
 
+if [ -n "$MAX_CONCURRENT_STREAMING_QUERIES" ]; then
+    # Replace `streaming_processing_pool_size: 100` in config.yaml with customized one
+    sed -i"" "s/streaming_processing_pool_size: 100/streaming_processing_pool_size: $MAX_CONCURRENT_STREAMING_QUERIES/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup streaming_processing_pool_size for stream storage.'
+        exit 1
+    fi
+fi
+
+if [ -n "$MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO" ]; then
+    # Replace `max_server_memory_usage_to_ram_ratio: 0.9` in config.yaml with customized one
+    sed -i"" "s/max_server_memory_usage_to_ram_ratio: 0.9/max_server_memory_usage_to_ram_ratio: $MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup max_server_memory_usage_to_ram_ratio for stream storage.'
+        exit 1
+    fi
+fi
+
+if [ -n "$MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO" ]; then
+    # Replace `cache_size_to_ram_max_ratio: 0.5` in config.yaml with customized one
+    sed -i"" "s/cache_size_to_ram_max_ratio: 0.5/cache_size_to_ram_max_ratio: $MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup cache_size_to_ram_max_ratio for stream storage.'
+        exit 1
+    fi
+fi
+
 # if no args passed to `docker run` or first argument start with `--`, then the user is passing proton-server arguments
 if [[ $# -lt 1 ]] || [[ "$1" == "--"* ]]; then
     # Watchdog is launched by default, but does not send SIGINT to the main process,

@@ -7,6 +7,7 @@
 #include <Functions/IFunction.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/castColumn.h>
+#include <Common/AllocatorWithMemoryTracking.h>
 
 #include <base/map.h>
 
@@ -28,7 +29,10 @@ namespace
     class ColumnsCache final
     {
     private:
-        using ColumnsWithIndex = std::deque<std::pair<size_t, ColumnPtr>>;
+        /// NOTE: The maxinum of cached ColumnsWithIndex size is `1073741824 * (sizeof(size_t) + sizeof(ColumnPtr))` bytes
+        /// Default alloctor will tracking by `CurrentMemoryTracker::allocNoThrow()`, which means that the memory will be unlimited
+        /// Fixed here by using 'AllocatorWithMemoryTracking' -> `CurrentMemoryTracker::alloc()`
+        using ColumnsWithIndex = std::deque<std::pair<size_t, ColumnPtr>, AllocatorWithMemoryTracking<std::pair<size_t, ColumnPtr>>>;
         Int64 max_prev_cache_rows = 0;
         ColumnsWithIndex columns;
         Int64 curr_cache_rows = 0;

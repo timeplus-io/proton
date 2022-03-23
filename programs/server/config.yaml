@@ -242,6 +242,9 @@ total_memory_profiler_step: 4194304
 # You may want to set 'total_memory_profiler_step' to 1 for extra fine grained sampling.
 total_memory_tracker_sample_probability: 0
 
+# Limit the size of the cache. e.g., uncompressed_cache_size or mark_cache_size
+cache_size_to_ram_max_ratio: 0.5
+
 # Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
 # correct maximum value.
 # max_open_files: 262144
@@ -923,8 +926,6 @@ settings:
         default_sharding_expr: "rand()"
         distributed_ingest_mode: "async"    # Data ingestion mode for Stream
 
-    view:
-
 cluster_settings:
     streaming_storage:
         # Multiple clusters of streaming storage are supported
@@ -969,6 +970,7 @@ cluster_settings:
             shared_subscription_flush_threshold_count: 10000
             shared_subscription_flush_threshold_size: 10485760
             shared_subscription_flush_threshold_ms: 1000
+            streaming_processing_pool_size: 100
 
     # Internal Kafka topic for DDLs operations
     system_ddls:
