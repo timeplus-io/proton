@@ -60,7 +60,7 @@ void registerDataTypeNumbers(DataTypeFactory & factory)
     /// factory.registerAlias("INT1", "int8", DataTypeFactory::CaseInsensitive);    /// MySQL
     factory.registerAlias("byte", "int8", DataTypeFactory::CaseInsensitive);    /// MS Access
     factory.registerAlias("smallint", "int16", DataTypeFactory::CaseInsensitive);
-    /// factory.registerAlias("INT", "int32", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("int", "int32", DataTypeFactory::CaseInsensitive);
     factory.registerAlias("integer", "int32", DataTypeFactory::CaseInsensitive);
     factory.registerAlias("bigint", "int64", DataTypeFactory::CaseInsensitive);
     factory.registerAlias("float", "float32", DataTypeFactory::CaseInsensitive);
