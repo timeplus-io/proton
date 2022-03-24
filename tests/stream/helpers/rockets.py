@@ -410,7 +410,7 @@ def query_run_exec(statement_2_run, config):
     query_result_list = []
     query_results = {}
     rest_request = ""
-    command = f'docker exec -it proton-server proton-client -u {user} --password {password} --query="{query}"'
+    command = f'docker exec proton-server proton-client -u {user} --password {password} --query="{query}"'
     logger.debug(f"command = {command}")
     try: 
         query_result_str = exec_command(command)

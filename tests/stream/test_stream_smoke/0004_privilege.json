@@ -1,6 +1,6 @@
 {
     "test_suite_name": "privilege",
-    "tag": "skip",
+    "tag": "smoke",
     "test_suite_config":{
         "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
     },
