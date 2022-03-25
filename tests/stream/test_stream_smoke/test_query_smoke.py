@@ -143,7 +143,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                     else:
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
                                         logging.debug("test_run: not match")
-                                elif "int" in query_result_column_types[i][1]:
+                                elif "int" in query_result_column_types[i][1] and "tuple" not in query_result_column_types[i][1] and "map" not in query_result_column_types[i][1]:
                                     if int(expected_result_field) == int(
                                         query_result_field
                                     ):
@@ -153,6 +153,16 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                     else:
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
                                         logging.debug("test_run: match")
+                                elif "nullable" in query_result_column_types[i][1]:
+                                    if  query_result_field == "None":
+                                        expected_result_row_field_check_arry[i] = 1
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")
+                                    else:
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")                                
+                                
+                                
                                 else:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1

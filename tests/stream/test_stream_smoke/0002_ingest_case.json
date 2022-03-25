@@ -29,8 +29,28 @@
                 ["dev3", "", 100, "2020-01-01 11:11:11"]]}
             ]
         },
+
         {
             "id": 1,
+            "tags": ["ingest","bug"],
+            "name": "ingest no explictly column",
+            "description": "create a table test_ingest, ingest columns same/difference as sequence of show create",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists test_ingest"},
+                    {"client":"python", "query_type": "table", "query":"create stream test_ingest (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"insert into test_ingest values ('dev1', 'ca', 100, '2020-01-01 11:11:11')"},
+                    {"client":"python","query_id":"201", "query_end_timer":2, "query_type": "stream", "query":"select id, location, value, timestamp from test_ingest settings seek_to = 'earliest'"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"201", "expected_results":[
+                ["dev1", "ca", 100, "2020-01-01 11:11:11"]]}
+            ]
+        },
+
+        {
+            "id": 2,
             "tags": ["ingest"],
             "name": "ingest column sequence",
             "description": "create a table test_ingest, ingest columns same/difference as sequence of show create",
@@ -52,7 +72,7 @@
             ]
         },
         {
-            "id": 2,
+            "id": 3,
             "tags": ["ingest"],
             "name": "ingest column sequence",
             "description": "create a table test_ingest, ingest columns same/difference as sequence of show create",

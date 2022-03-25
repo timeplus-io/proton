@@ -85,12 +85,12 @@
             "input_info_table": "input_info",
             "steps":[
                 {"statements": [
-                    {"client":"python", "config_set": "setting_1", "query_id": 101, "run_mode":"process", "workers": 10, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
+                    {"client":"python", "config_set": "setting_1", "query_id": 101, "run_mode":"process", "workers": 100, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
                 ]},
                     
 
                 {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":69, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
                         "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
                 ]}
 

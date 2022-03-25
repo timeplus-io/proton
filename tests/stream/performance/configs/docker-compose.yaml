@@ -14,12 +14,18 @@ services:
       - "7587:7587" # table mode
     deploy:
       replicas: 1
-      restart_policy:
-        condition: on-failure
+      #restart_policy:
+      #  condition: on-failure
     # `proton` depends on STREAM_STORAGE_BROKERS env variable
     # to discover stream store
     environment:
       - STREAM_STORAGE_BROKERS=stream-store:9092
+      - MAX_CONCURRENT_QUERIES=300        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=150     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=150     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=150   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.6 # Default: 0.0
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.2 # Default: 0.5      
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
     depends_on:

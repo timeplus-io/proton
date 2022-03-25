@@ -1068,9 +1068,15 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
 
             message_2_send = json.dumps(query_results)
             query_results_queue.put(message_2_send)
+            if message_recv == "test_steps_done":
+                message_2_send = "case_result_done"
+                # query_exe_queue.put(message_2_send)
+                child_conn.send(message_2_send)
+                query_run_count -= 1                  
             query_run_count = query_run_count - 1
         finally:
-            print()  # todo: some logic here for handling.
+            print()  # todo: some logic here for handling.              
+
             # if query_proc != None:
             #    query_procs.append(
             #        {
