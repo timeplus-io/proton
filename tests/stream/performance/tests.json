@@ -90,8 +90,10 @@
                     
 
                 {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
+                    {"table_name": "iris","input_id": 201,"client":"python", "workers":20, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 5, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris","input_id": 202,"client":"rest", "workers":80, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris1.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 5, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record1"}                        
                 ]}
 
             ]               
@@ -138,14 +140,14 @@
                     {"client":"python","config_set": "setting_1","workers": 10, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
                     {"client":"python","config_set": "setting_1","workers": 10, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
 
-
-
                 ]},
                     
 
                 {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
+                    {"table_name": "iris","input_id": 201, "workers":10, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris","input_id": 201, "client":"rest", "workers":70, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                        
                 ]}
 
             ]               

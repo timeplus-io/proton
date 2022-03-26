@@ -273,10 +273,10 @@ def query_run_py(
     pyclient=None,
 ):
 
-    #logger = mp.log_to_stderr()
-    #logger.setLevel(logging.DEBUG)
+    # logger = mp.log_to_stderr()
+    # logger.setLevel(logging.INFO)
     if pyclient == None:
-        run_mode = 'process'
+        run_mode = "process"
         logger = mp.get_logger()
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.formatter = formatter
@@ -291,11 +291,11 @@ def query_run_py(
 
         CLEAN_CLIENT = True
     else:
-        run_mode = 'local'
+        run_mode = "local"
         logger = mp.get_logger()
         logger.debug(
             f"local running: handler of logger = {logger.handlers}, logger.level = {logger.level}"
-        )        
+        )
     if config != None:
         rest_setting = config.get("rest_setting")
         table_ddl_url = rest_setting.get("table_ddl_url")
@@ -303,14 +303,14 @@ def query_run_py(
     query_id = str(statement_2_run.get("query_id"))
     query_sub_id = str(statement_2_run.get("query_sub_id"))
     query_type = statement_2_run.get("query_type")
-    #run_mode = statement_2_run.get("run_mode")
+    # run_mode = statement_2_run.get("run_mode")
     wait = statement_2_run.get("wait")
-    #exception_reload = statement_2_run.get("exception_reload")
+    # exception_reload = statement_2_run.get("exception_reload")
     loop_times = statement_2_run.get("loop_times")
-    if loop_times != None: 
+    if loop_times != None:
         loop_times = int(loop_times)
     else:
-        loop_times = 1 # if no loop_times in statement, execute once at least
+        loop_times = 1  # if no loop_times in statement, execute once at least
     logger.debug(f"loop_times = {loop_times}")
     result_keep = statement_2_run.get("result_keep")
 
@@ -331,22 +331,24 @@ def query_run_py(
         + str(datetime.datetime.now())
         + ".csv"
     )
-    #with open(query_record_file_name, "w") as f:
+    # with open(query_record_file_name, "w") as f:
     #    writer = csv.writer(f)
 
-        # logger.debug(f"query_run_py: query_id = {query_id}, query = {query} to be execute.........")
-    i = 0 # at least run once
+    # logger.debug(f"query_run_py: query_id = {query_id}, query = {query} to be execute.........")
+    i = 0  # at least run once
     while i < loop_times or loop_times < 0:
         try:
-            if run_mode == 'process':
+            if run_mode == "process":
                 pyclient = Client(
-                host=proton_server, port=proton_server_native_port
+                    host=proton_server, port=proton_server_native_port
                 )  # create python client
             logger.debug(f"query = {query} is to be executed.")
-            #if wait != None:
+            # if wait != None:
             #    time.sleep(int(wait))
-            if query_type != None and query_type == "table" and loop_times <0: #when table query in loop, have interval between table query run
-                time.sleep(2) #todo: table query internval could be set in tests.json
+            if (
+                query_type != None and query_type == "table" and loop_times < 0
+            ):  # when table query in loop, have interval between table query run
+                time.sleep(2)  # todo: table query internval could be set in tests.json
             query_result_iter = pyclient.execute_iter(
                 query, with_column_types=True, query_id=query_sub_id, settings=settings
             )
@@ -354,12 +356,12 @@ def query_run_py(
             i = 0
             for element in query_result_iter:
                 # logger.debug(f"query_run_py: element in query_result_iter in query_id: {query_id} = {element}")
-                if result_keep != None and result_keep == "False":
+                if result_keep == None or result_keep != "False":
                     pass
                 else:
                     if isinstance(element, list) or isinstance(element, tuple):
                         element = list(element)
-                        #element.append(str(datetime.datetime.now()))
+                        # element.append(str(datetime.datetime.now()))
 
                     if i == 0:
                         query_result_column_types = element
@@ -387,10 +389,10 @@ def query_run_py(
                     pass
 
                 else:  # for other exception code, send the error_code as query_result back, some tests expect eception will use.
-                    #writer.writerow(["ServerException", error.code])
+                    # writer.writerow(["ServerException", error.code])
                     logger.debug(f"ServerException, error = {error}")
             else:
-                #writer.writerow(["Exception", error.code])
+                # writer.writerow(["Exception", error.code])
                 logger.debug(f"Exception, error = {error}")
         finally:
             i += 1
@@ -409,7 +411,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.debug(
         f"process started: handler of logger = {logger.handlers}, logger.level = {logger.level}"
     )
@@ -531,7 +533,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
                     query_sub_id = query_id + "_" + str(i)
                     statement_2_run_copy = copy.deepcopy(statement_2_run)
                     if "$" in query:
-                        query_copy =statement_2_run_copy.get("query")
+                        query_copy = statement_2_run_copy.get("query")
                         query_copy = query_copy.replace("$", str(i))
                         statement_2_run_copy["query"] = query_copy
                     statement_2_run_copy[
@@ -549,7 +551,9 @@ def query_execute(config, child_conn, query_results_queue, alive):
                     query_proc = mp.Process(target=query_run_py, args=query_run_args)
 
                     if interval != None:
-                        time.sleep(int(interval)) #wait for interval and then start a proc to work around ddl timeout issue
+                        time.sleep(
+                            int(interval)
+                        )  # wait for interval and then start a proc to work around ddl timeout issue
                     query_proc.start()
                     query_procs.append(
                         {
@@ -623,7 +627,7 @@ def query_walk_through(statements, query_conn=None):
 
         # query_exe_queue.put(statement)
         if wait != None:
-            time.sleep(int(wait))        
+            time.sleep(int(wait))
         query_conn.send(statement)
         logger.debug(
             # f"query_walk_through: statement query_id = {query_id} was pushed into query_exe_queue."
@@ -635,13 +639,13 @@ def query_walk_through(statements, query_conn=None):
         logger.debug(
             f"query_walk_through: message_recv = {message_recv} received after send statement to query_execute"
         )
- 
-        '''
+
+        """
         if isinstance(wait, dict):  # if wait for a specific query done
             print()  # todo: check the query_id and implement the logic to notify the query_execute that this query need to be done after the query to be wait done and implement the wait logic in query_execute_new
         elif str(wait).isdigit():  # if wait for x seconds and then execute the query
             time.sleep(wait)
-        '''
+        """
         statement_id_run += 1
         # time.sleep(1) # wait the query_execute execute the stream command
 
@@ -799,6 +803,10 @@ def data_prep_csv_2_list(
     return _data_sets_list
 
 
+def input_rest_from_list(table_name, data_set_list_with_header, batch_size=1):
+    print()
+
+
 def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
     logger.debug(f"input_sql_from_list: batch_size = {batch_size}")
     table_columns = ""
@@ -858,67 +866,20 @@ def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
     return input_sql_list
 
 
-"""
-def input_sql_from_list(table_name, data_set_list_with_header, batch_size=1):
-    logger.debug(f"input_sql_from_list: batch_size = {batch_size}")
-    table_columns = ""
-    input_sql_list = []
-    i = 0  # row_index to identify the fist row as header
-    j = 0  # as batch counter
-    batch_str = ""
-    for row in data_set_list_with_header:
-        # print("input_walk_through: row:", row)
-        row_str = ""
-        if i == 0:
-            for field in row:
-                table_columns = table_columns + field + ","
-            table_columns_str = "(" + table_columns[: len(table_columns) - 1] + ")"
-            i += 1
-        else:
-            for field in row:
-                # print("input_walk_through: field:", field)
-                if isinstance(field, str):
-                    field.replace('"', '//"')  # proton does
-                row_str = (
-                    row_str + "'" + str(field) + "'" + ","
-                )  # python client does not support "", so put ' here
-            row_str = "(" + row_str[: len(row_str) - 1] + ")"
-            batch_str = batch_str + row_str + ","
-
-            if j >= batch_size - 1:
-
-                batch_str = batch_str[: len(batch_str) - 1]
-                input_sql = (
-                    f"insert into {table_name} {table_columns_str} values {batch_str}"
-                )
-                input_sql_list.append(input_sql)
-                batch_str = ""
-                j = 0
-            else:
-                j += 1
-
-    if len(batch_str) != 0 and batch_str[len(batch_str) - 1] == ",":
-        batch_str = batch_str[: len(batch_str) - 1]
-        input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
-        input_sql_list.append(input_sql)
-    # logger.debug(f"input_sql_from_list: input_sql_list = {input_sql_list}")
-    return input_sql_list
-"""
-
-
 def input_client(
     config,
     source,
+    table_schema,
     input_sub_id,
     data_set,
     agent_id,
-    input_record_table,
     input_tear_down,
     input_done,
     interval=0.5,
     data_sets_play_mode="sequence",
     batch_size=1,
     loop_times=0,
+    input_record_table=None,
 ):
     # print(f"input_from_csv: csv_file_path = {csv_file_path}")
 
@@ -931,7 +892,7 @@ def input_client(
     console_handler.formatter = formatter
     logger.addHandler(console_handler)
 
-    # logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     test_id = source.get("test_id")
     input_id = source.get("input_id")
@@ -939,112 +900,184 @@ def input_client(
     result_keep = source.get("result_keep")
     loop_times = int(source.get("loop_times"))
 
-    print(
-        f"input_client: worker for agend_id = {agent_id} started... input_tear_down.value = {input_tear_down.value}"
+    logger.debug(
+        f"worker for input_id = {input_id}, input_sub_id = {input_sub_id}, agend_id = {agent_id} started... input_tear_down.value = {input_tear_down.value}"
     )
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
-    
-    
-    client = Client(
-        host=proton_server, port=proton_server_native_port
-    )  # create python client
 
-    # metric_create_batch_time = [] #for caculating time spent for creating a batch, for a batch of 1000 row, 20ms will be spent baed on the rough test
-    if data_sets_play_mode == "sequence":
-        loop_count = 0
-        loop_limit = 10 if loop_times < 0 else loop_times
-        while loop_count < loop_limit:
-            try:
-                table_columns = ""
-                input_sql_list = []
-                i = 0  # row_index to identify the fist row as header
-                j = 0  # as batch counter
-                batch_str = ""
-                for row in data_set:
-                    # print("input_walk_through: row:", row)
-                    row_str = ""
-                    if i == 0:
-                        for field in row:
-                            table_columns = table_columns + field + ","
-                        table_columns_str = (
-                            "("
-                            + table_columns
-                            + "_perf_row_id"
-                            + ","
-                            + "_perf_ingest_time"
-                            + ")"
-                        )
-                        # table_columns_str = "(" + table_columns[: len(table_columns) - 1] + ")"
-                        i += 1
-                    else:
-                        # if j == 0: metric_create_batch_time.append(f"start create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
-                        for field in row:
-                            # print("input_walk_through: field:", field)
-                            if isinstance(field, str):
-                                field.replace('"', '//"')  # proton does
-                            row_str = (
-                                row_str + "'" + str(field) + "'" + ","
-                            )  # python client does not support "", so put ' here
-                        _perf_row_id = str(uuid.uuid1())
-                        _perf_ingest_time = str(datetime.datetime.now())
-                        row_str = (
-                            "("
-                            + row_str
-                            + "'"
-                            + _perf_row_id
-                            + "'"
-                            + ","
-                            + "'"
-                            + _perf_ingest_time
-                            + "'"
-                            + ")"
-                        )
-                        # row_str = "(" + row_str[: len(row_str) - 1] + ")"
-                        batch_str = batch_str + row_str + ","
+    client = source.get("client")
+    logger.debug(f"client = {client}")
+    if client == None or client == "python":
+        py_client = Client(
+            host=proton_server, port=proton_server_native_port
+        )  # create python client
 
-                        if j >= batch_size - 1:
-
-                            batch_str = batch_str[: len(batch_str) - 1]
-                            input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
-                            logger.debug(f"input_client: input_sql = {input_sql}")
-                            # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
-                            client.execute(input_sql)
-
-                            # input_sql_list.append(input_sql)
-                            batch_str = ""
-                            j = 0
-
+        # metric_create_batch_time = [] #for caculating time spent for creating a batch, for a batch of 1000 row, 20ms will be spent baed on the rough test
+        if data_sets_play_mode == "sequence":
+            loop_count = 0
+            # loop_limit = 10 if loop_times < 0 else loop_times
+            while loop_count < loop_times or loop_times < 0:
+                try:
+                    table_columns = ""
+                    input_sql_list = []
+                    i = 0  # row_index to identify the fist row as header
+                    j = 0  # as batch counter
+                    batch_str = ""
+                    for row in data_set:
+                        # print("input_walk_through: row:", row)
+                        row_str = ""
+                        if i == 0:
+                            for field in row:
+                                table_columns = table_columns + field + ","
+                            table_columns_str = (
+                                "("
+                                + table_columns
+                                + "_perf_row_id"
+                                + ","
+                                + "_perf_ingest_time"
+                                + ")"
+                            )
+                            # table_columns_str = "(" + table_columns[: len(table_columns) - 1] + ")"
+                            i += 1
                         else:
-                            j += 1
+                            # if j == 0: metric_create_batch_time.append(f"start create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
+                            for field in row:
+                                # print("input_walk_through: field:", field)
+                                if isinstance(field, str):
+                                    field = field.replace('"', '//"')  # proton does
+                                row_str = (
+                                    row_str + "'" + str(field) + "'" + ","
+                                )  # python client does not support "", so put ' here
+                            _perf_row_id = str(uuid.uuid1())
+                            _perf_ingest_time = str(datetime.datetime.now())
+                            row_str = (
+                                "("
+                                + row_str
+                                + "'"
+                                + _perf_row_id
+                                + "'"
+                                + ","
+                                + "'"
+                                + _perf_ingest_time
+                                + "'"
+                                + ")"
+                            )
+                            # row_str = "(" + row_str[: len(row_str) - 1] + ")"
+                            batch_str = batch_str + row_str + ","
 
-                if len(batch_str) != 0 and batch_str[len(batch_str) - 1] == ",":
-                    batch_str = batch_str[: len(batch_str) - 1]
-                    input_sql = (
-                        f"insert into {table_name} {table_columns_str} values {batch_str}"
-                    )
-                    # print(f"input_client: input_sql = {input_sql}")
-                    # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
-                    client.execute(input_sql)
+                            if j >= batch_size - 1:
 
-                # print(metric_create_batch_time)
+                                batch_str = batch_str[: len(batch_str) - 1]
+                                input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
+                                logger.debug(
+                                    f"input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: input_sql = {input_sql} to be executed"
+                                )
+                                # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
+                                py_client.execute(input_sql)
+                                logger.debug(
+                                    f"input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: input_sql = {input_sql} executed"
+                                )
 
-                if loop_times > 0:
-                    loop_count += 1  # if loop_times < 0, run infinitely
-            except(BaseException) as error:
-                logger.debug(f"exception, error = {error}")
-                client.disconnect()
-                client = Client(
-                    host=proton_server, port=proton_server_native_port
-                )  # create python client
+                                # input_sql_list.append(input_sql)
+                                batch_str = ""
+                                j = 0
 
+                            else:
+                                j += 1
 
-        input_done.value = True  # set input_done mp.Value to True to indicate all the inputs are executed.
+                    if len(batch_str) != 0 and batch_str[len(batch_str) - 1] == ",":
+                        batch_str = batch_str[: len(batch_str) - 1]
+                        input_sql = f"insert into {table_name} {table_columns_str} values {batch_str}"
+                        # print(f"input_client: input_sql = {input_sql}")
+                        # metric_create_batch_time.append(f"complete create one batch......, batch_size = {batch_size}, now = {str(datetime.datetime.now())}")
+                        py_client.execute(input_sql)
 
-        print(f"input_client: waiting for input_tear_down......")
-    elif data_sets_play_mode == "random":
-        print()  # play randomly
-    client.disconnect()
+                    # print(metric_create_batch_time)
+
+                    if loop_times > 0:
+                        loop_count += 1  # if loop_times < 0, run infinitely
+                except (BaseException) as error:
+                    logger.debug(f"exception, error = {error}")
+                    py_client.disconnect()
+                    py_client = Client(
+                        host=proton_server, port=proton_server_native_port
+                    )  # create python client
+
+            input_done.value = True  # set input_done mp.Value to True to indicate all the inputs are executed.
+
+            print(f"waiting for input_tear_down......")
+        elif data_sets_play_mode == "random":
+            print()  # play randomly
+        py_client.disconnect()
+    elif client == "rest":
+        os.environ["no_proxy"] = "*"
+        session = requests.Session()
+        rest_setting = config.get("rest_setting")
+        input_url = rest_setting.get("ingest_url")
+        query_url = rest_setting.get("query_url")
+        table_ddl_url = rest_setting.get("table_ddl_url")
+        table_name = source.get("table_name")
+        input_url = f"{input_url}/{table_name}"
+        input_rest_columns = []
+        for element in table_schema.get("columns"):
+            input_rest_columns.append(element.get("name"))
+
+        if data_sets_play_mode == "sequence":
+            loop_count = 0
+            while loop_count < loop_times or loop_times < 0:
+                try:
+                    input_rest_body_data = []
+                    i = 0  # row_index to identify the fist row as header
+                    j = 0  # as batch counter
+                    for row in data_set:
+                        row_list = []
+                        if i == 0:
+                            i += 1
+                        else:
+                            for field in row:
+                                if isinstance(field, str):
+                                    field = field.replace('"', '//"')  # proton does
+                                    row_list.append(field)
+                            _perf_row_id = str(uuid.uuid1())
+                            row_list.append(_perf_row_id)
+                            _perf_ingest_time = str(datetime.datetime.now())
+                            row_list.append(_perf_row_id)
+                            # logger.debug(f"i = {i}, j = {j}, row = {row}, row_list = {row_list}")
+                            input_rest_body_data.append(row_list)
+                            if j >= batch_size - 1:
+                                input_rest_body = {
+                                    "columns": input_rest_columns,
+                                    "data": input_rest_body_data,
+                                }
+                                # logger.debug(f"input_rest_body: {input_rest_body}")
+                                input_rest_body_json = json.dumps(input_rest_body)
+                                # logger.debug(f"i = {i}, j = {j}, input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: input_rest_body_json = {input_rest_body_json} to be executed")
+                                res = session.post(input_url, data=input_rest_body_json)
+                                logger.debug(
+                                    f"i = {i}, j = {j}, input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}, res.status_code of requests.post({input_url}, data={input_rest_body_json} = {res.status_code}"
+                                )
+                                input_rest_body_data = []
+                                j = 0
+                            else:
+                                j += 1
+
+                    if input_rest_body_data != None and len(input_rest_body_data) > 0:
+                        input_rest_body = {
+                            "columns": input_rest_columns,
+                            "data": input_rest_body_data,
+                        }
+                        logger.debug(f"input_rest_body: {input_rest_body}")
+                        input_rest_body_json = json.dumps(input_rest_body)
+                        res = session.post(input_url, data=input_rest_body_json)
+                        logger.debug(
+                            f"res.status_code of requests.post({input_url}, data={input_rest_body_json} = {res.status_code}"
+                        )
+                except (BaseException) as error:
+                    logger.debug(f"exception, error = {error}")
+            input_done.value = True
+        elif data_sets_play_mode == "random":
+            print()  # play randomly
 
 
 def input_walk_through(
@@ -1057,22 +1090,27 @@ def input_walk_through(
     alive=None,
 ):
 
-    # logger.debug(f"input_walk_through: config = {config}, inputs = {inputs}, table_schemas = {table_schemas}, wait_before_inputs = {wait_before_inputs}, sleep_after_inputs = {sleep_after_inputs}, alive = {alive}")
+    logger.debug(
+        f"input_walk_through: config = {config}, inputs = {inputs}, table_schemas = {table_schemas}, wait_before_inputs = {wait_before_inputs}, sleep_after_inputs = {sleep_after_inputs}, alive = {alive}"
+    )
 
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
     time.sleep(wait_before_inputs)
     inputs_record = []
     data_set_abspath = None
+    proc_workers = []
 
     for source in inputs:
         table_name = source.get("table_name")
         input_id = source.get("input_id")
+        client = source.get("client")
         table_schema = find_schema(table_name, table_schemas)
         workers = source.get("workers")
         data_source = source.get("data_source")
         data_set_path = source.get("data_set_path")
         input_record_table = source.get("input_record_table")
+        loop_times = source.get("loop_times")
 
         if data_set_path != None:
             data_set_abspath = (
@@ -1103,7 +1141,7 @@ def input_walk_through(
         if batch_size != None:
             batch_size = int(batch_size)
 
-        logger.debug(f"input_walk_through: workers = {workers}")
+        logger.debug(f"input_id = {input_id}, client = {client}, workers = {workers}")
 
         data_sets_for_workers = data_prep_csv_2_list(
             data_set_file_abspath,
@@ -1118,7 +1156,6 @@ def input_walk_through(
 
         # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")
 
-        proc_workers = []
         for data_set_dict in data_sets_for_workers:
             input_sub_id = data_set_dict.get("input_sub_id")
             data_set = data_set_dict.get("data_set")
@@ -1126,33 +1163,41 @@ def input_walk_through(
             input_done = mp.Value("b", False)
             input_tear_down = mp.Value("b", False)
             # logger.debug(f"{sys._getframe().f_code.co_name}: agent_id = {agent_id}, data_set = {data_set}")
-            # logger.debug(f"worker for agend_id = {agent_id} to be started..., alive = {alive}, alive.value = {alive.value}")
-
-            proc = mp.Process(
-                target=input_client,
-                args=(
-                    config,
-                    source,
-                    input_sub_id,
-                    data_set,
-                    agent_id,
-                    input_record_table,
-                    input_tear_down,
-                    input_done,
-                    ingest_interval,
-                    data_set_play_mode,
-                    batch_size,
-                ),
+            logger.debug(
+                f"worker for input_id = {input_id}, input_sub_id = {input_sub_id}, agend_id = {agent_id} to be started..., alive = {alive}, alive.value = {alive.value}"
             )
-            proc.start()
+            args = (
+                config,
+                source,
+                table_schema,
+                input_sub_id,
+                data_set,
+                agent_id,
+                input_tear_down,
+                input_done,
+                ingest_interval,
+                data_set_play_mode,
+                batch_size,
+                loop_times,
+            )
+            # logger.debug(f"args = {args}")
+            proc = mp.Process(target=input_client, args=args)
+
             proc_workers.append(
                 {
+                    "input_id": input_id,
+                    "input_sub_id": input_sub_id,
                     "agent_id": agent_id,
                     "proc": proc,
                     "input_done": input_done,
                     "input_tear_down": input_tear_down,
                 }
             )
+
+        logger.debug(f"proc_workers = {proc_workers}")
+    for worker in proc_workers:
+        worker["proc"].start()
+        logger.debug(f"input_sub_id = {worker['input_sub_id']}, {proc} started")
 
     time.sleep(sleep_after_inputs)
     return proc_workers
@@ -1206,7 +1251,6 @@ def env_setup(
         else:
             if table_type == "table":
                 drop_table_if_exist_rest(table_ddl_url, table_name)
-
 
     for table_schema in table_schemas:
         table_type = table_schema.get("type")
@@ -1387,15 +1431,15 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                         for element in statement_result_from_query_execute:
                             statements_results.append(element)
 
-                    logger.debug(
-                        f"rockets_run: {test_id_run}, test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
+                    logger.info(
+                        f"rockets_run: {test_id_run}, test_id = {test_id}, step{step_id}.statements{statements_id}, done, {len(step_statements)} statement run..."
                     )
 
                     statements_id += 1
                 elif "inputs" in step:
                     inputs = step.get("inputs")
                     logger.info(
-                        f"rockets_run: {test_id_run}, test_id = {test_id} inputs = {inputs}"
+                        f"rockets_run: {test_id_run}, test_id = {test_id} started."
                     )
                     logger.debug(f"test_suite_run: alive.value = {alive.value}")
 
@@ -1403,7 +1447,13 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                         config, test_id, inputs, table_schemas, alive=alive
                     )  # inputs walk through py_client
 
+                    logger.info(
+                        f"{test_id_run}, test_id = {test_id}, inputs{inputs_id} batch started, {len(input_procs)} processes input processes started"
+                    )
                     all_inputs_done = 0
+                    logger.debug(
+                        f"input_procs = {input_procs}, all_inputs_done = {all_inputs_done}"
+                    )
                     while all_inputs_done == 0:  # todo: optimize algorithm
                         done_flags = []
                         for input_proc in input_procs:
@@ -1418,10 +1468,12 @@ def test_suite_run(test_context, proc_target_func=query_execute):
                         for flag in done_flags:
                             all_inputs_done = all_inputs_done * flag
                         time.sleep(1)
+                        logger.debug(f"checks")
 
-                    logger.debug(
-                        f"rockets_run: {test_id_run}, test_id = {test_id} input_walk_through done, input_record will be written after results_down to avoid impact to perf test"
+                    logger.info(
+                        f"rockets_run: {test_id_run}, test_id = {test_id} input_walk_through done"
                     )
+                    inputs_id += 1
                     # time.sleep(0.5) #wait for the data inputs done.
 
                 step_id += 1
