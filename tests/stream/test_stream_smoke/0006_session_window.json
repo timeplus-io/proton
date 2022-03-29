@@ -1,6 +1,6 @@
 {
     "test_suite_name": "session",
-    "tag":"skip",
+    "tag":"smoke",
     "commments":
         "Tests covering session window test cases.",
     "test_suite_config": {
@@ -64,8 +64,8 @@
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
                 [
-                    ["58.3", "2020-02-02 20:00:00.000", "2020-02-02 20:00:00.000", "341031629", "dev2"],
-                    ["66", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "1500306067","dev1"]
+                    ["58.3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:00+00:00", "341031629", "dev2"],
+                    ["66", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "1500306067","dev1"]
                 ]}
             ]
         },
@@ -99,8 +99,8 @@
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
             [
-                ["60", "2020-02-02 20:00:01.000", "2020-02-02 20:00:02.000", "341031629", "dev2"],
-                ["68", "2020-02-02 20:00:00.000", "2020-02-02 20:00:03.000", "1500306067", "dev1"]
+                ["60", "2020-02-02 20:00:01+00:00", "2020-02-02 20:00:02+00:00", "341031629", "dev2"],
+                ["68", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:03+00:00", "1500306067", "dev1"]
             ]}
             ]
         },
@@ -111,7 +111,7 @@
             "description": "stream session window with interval triggered emit, 5s interval with session_size 25s",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), window_start, window_end, __tp_session_id, id from session(test_session, toStartOfInterval(timestamp, 2s), 5s, id) group by __tp_session_id, window_start, window_end, id"}
+                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), window_start, window_end, __tp_session_id, id from session(test_session, to_start_of_interval(timestamp, 2s), 5s, id) group by __tp_session_id, window_start, window_end, id"}
                 ]},
                 {"inputs": [
                     {"table_name":"test_session","depends_on":"701", "data": [
@@ -130,7 +130,7 @@
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
             [
-                ["60", "2020-02-02 20:00:00", "2020-02-02 20:00:02", "341031629", "dev2"]
+                ["60", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "341031629", "dev2"]
             ]}
             ]
         },
@@ -160,9 +160,9 @@
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
             [
-                ["66", "2020-02-02 20:00:00.000", "2020-02-02 20:00:02.000", "2746372735", "dev1", "ca"],
-                ["60", "2020-02-02 20:00:02.000", "2020-02-02 20:00:02.000", "4072938192", "dev2", "ca"],
-                ["58.3", "2020-02-02 20:00:01.000", "2020-02-02 20:00:01", "4269204367", "dev2", "bj"]
+                ["66", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "2746372735", "dev1", "ca"],
+                ["60", "2020-02-02 20:00:02+00:00", "2020-02-02 20:00:02+00:00", "4072938192", "dev2", "ca"],
+                ["58.3", "2020-02-02 20:00:01+00:00", "2020-02-02 20:00:01+00:00", "4269204367", "dev2", "bj"]
             ]}
             ]
         }

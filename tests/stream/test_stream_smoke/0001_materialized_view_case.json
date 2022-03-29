@@ -162,8 +162,8 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "query_id":"301", "query_type": "table", "wait": 5, "query_end_timer":1, "query":"select id, sum_value from table(test_mv_stream_sum_view)"},
-                    {"client":"python", "wait": 6, "query_type": "table", "query":"drop view if exists test_mv_stream_sum_view"}
+                    {"client":"python", "query_id":"301", "query_type": "table", "wait": 6, "query_end_timer":1, "query":"select id, sum_value from table(test_mv_stream_sum_view)"},
+                    {"client":"python", "wait": 7, "query_type": "table", "query":"drop view if exists test_mv_stream_sum_view"}
                 ]
                 }
             ],
