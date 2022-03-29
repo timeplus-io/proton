@@ -454,4 +454,48 @@ public:
 
         return buckets;
     }
+
+    std::vector<size_t> bucketsOfSession(size_t session_id)
+    {
+        std::vector<size_t> buckets;
+        buckets.reserve(10);
+
+        for (auto it = impls.begin(), it_end = impls.end(); it != it_end; ++it)
+        {
+            if (it->first == session_id)
+            {
+                buckets.push_back(it->first);
+                break;
+            }
+        }
+
+        return buckets;
+    }
+
+    template <typename MappedDestroyFunc>
+    std::tuple<size_t, size_t, size_t> removeBucketsOfSession(size_t session_id, MappedDestroyFunc && mapped_destroy)
+    {
+        UInt64 last_removed_watermark = 0;
+        size_t removed = 0;
+
+        /// Step 1, remove very old windows
+        for (auto it = impls.begin(), it_end = impls.end(); it != it_end;)
+        {
+            if (it->first == session_id)
+            {
+                it->second.forEachMapped(mapped_destroy);
+                it->second.clearAndShrink();
+
+                last_removed_watermark = it->first;
+                ++removed;
+
+                it = impls.erase(it);
+            }
+            else
+                break;
+        }
+
+        auto new_size = impls.size();
+        return {removed, last_removed_watermark, new_size};
+    }
 };

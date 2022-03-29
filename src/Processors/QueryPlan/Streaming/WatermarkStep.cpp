@@ -24,12 +24,13 @@ namespace DB
 {
 WatermarkStep::WatermarkStep(
     const DataStream & input_stream_,
+    Block output_header_,
     ASTPtr query_,
     TreeRewriterResultPtr syntax_analyzer_result_,
     StreamingFunctionDescriptionPtr desc_,
     bool proc_time_,
     Poco::Logger * log_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits())
+    : ITransformingStep(input_stream_, std::move(output_header_), getTraits())
     , query(std::move(query_))
     , syntax_analyzer_result(std::move(syntax_analyzer_result_))
     , desc(std::move(desc_))
@@ -41,7 +42,7 @@ WatermarkStep::WatermarkStep(
 void WatermarkStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WatermarkTransform>(query, syntax_analyzer_result, desc, proc_time, header, log);
+        return std::make_shared<WatermarkTransform>(query, syntax_analyzer_result, desc, proc_time, header, output_stream->header, log);
     });
 }
 }

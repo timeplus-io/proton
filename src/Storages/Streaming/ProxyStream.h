@@ -66,6 +66,12 @@ public:
     /// Whether has streaming func itself, i.e. tumble(...) or hop(...)
     bool hasStreamingFunc() const { return streaming_func_desc != nullptr; }
 
+    /// Return WindowType::NONE, if it has no window func
+    WindowType windowType() const
+    {
+        return streaming_func_desc != nullptr ? streaming_func_desc->type : WindowType::NONE;
+    }
+
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }
 

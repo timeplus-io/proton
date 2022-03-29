@@ -7,11 +7,9 @@
 
 namespace DB
 {
-
 static ITransformingStep::Traits getTraits()
 {
-    return ITransformingStep::Traits
-    {
+    return ITransformingStep::Traits{
         {
             .preserves_distinct_columns = false, /// Actually, we may check that distinct names are in aggregation keys
             .returns_single_stream = true,
@@ -20,8 +18,7 @@ static ITransformingStep::Traits getTraits()
         },
         {
             .preserves_number_of_rows = false,
-        }
-    };
+        }};
 }
 
 StreamingAggregatingStep::StreamingAggregatingStep(
@@ -31,7 +28,11 @@ StreamingAggregatingStep::StreamingAggregatingStep(
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
     bool storage_has_evenly_distributed_read_)
-    : ITransformingStep(input_stream_, params_.getHeader(final_), getTraits(), false)
+    : ITransformingStep(
+        input_stream_,
+        params_.getHeader(final_, params_.group_by == StreamingAggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64),
+        getTraits(),
+        false)
     , params(std::move(params_))
     , final(std::move(final_))
     , merge_threads(merge_threads_)
@@ -70,9 +71,9 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
         auto many_data = std::make_shared<ManyStreamingAggregatedData>(pipeline.getNumStreams());
 
         size_t counter = 0;
-        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor>
-        {
-            return std::make_shared<StreamingAggregatingTransform>(header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
+            return std::make_shared<StreamingAggregatingTransform>(
+                header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
         });
 
         pipeline.resize(1);
@@ -83,8 +84,7 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
     {
         pipeline.resize(1);
 
-        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor>
-        {
+        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
             return std::make_shared<StreamingAggregatingTransform>(header, transform_params);
         });
 

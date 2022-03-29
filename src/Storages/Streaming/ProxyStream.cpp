@@ -98,7 +98,8 @@ void ProxyStream::read(
     updated_column_names.reserve(column_names.size());
     for (const auto & column_name : column_names)
     {
-        if (column_name == STREAMING_WINDOW_START || column_name == STREAMING_WINDOW_END || column_name == STREAMING_TIMESTAMP_ALIAS)
+        if (column_name == STREAMING_WINDOW_START || column_name == STREAMING_WINDOW_END || column_name == STREAMING_TIMESTAMP_ALIAS
+            || column_name == STREAMING_SESSION_ID)
             continue;
 
         updated_column_names.push_back(column_name);

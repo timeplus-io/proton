@@ -7,16 +7,28 @@
 
 namespace DB
 {
+enum class WindowType
+{
+    NONE,
+    HOP,
+    TUMBLE,
+    SESSION
+};
+
 class ASTFunction;
 
 const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 parameters: "
                                    "<name of the table>, [timestamp column], <tumble window size>, [time zone]";
 const String HOP_HELP_MESSAGE = "Function 'hop' requires from 3 to 5 parameters: "
                                 "<name of the table>, [timestamp column], <hop interval size>, <hop window size>, [time zone]";
+const String SESSION_HELP_MESSAGE = "Function 'session' requires at least 2 parameters: "
+                                    "<name of the stream>, [timestamp column], <timeout interval>, [key column1, key column2, ...]";
+
 
 bool isTableFunctionTumble(const ASTFunction * ast);
 bool isTableFunctionHop(const ASTFunction * ast);
 bool isTableFunctionHist(const ASTFunction * ast);
+bool isTableFunctionSession(const ASTFunction * ast);
 
 /// Note: the extracted arguments is whole (include omitted parameters represented by an empty ASTPtr)
 /// for example:
@@ -25,12 +37,15 @@ bool isTableFunctionHist(const ASTFunction * ast);
 /// [table, timestamp(nullptr), win_interval, timezone(nullptr)]
 ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast);
 ASTs checkAndExtractHopArguments(const ASTFunction * func_ast);
+ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast);
 
 void checkIntervalAST(const ASTPtr & ast, const String & msg = "Invalid interval");
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind);
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
 
 Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
+
+WindowType toWindowType(const String & func_name);
 
 /// BaseScaleInterval util class converts interval in different scale to a common base scale.
 /// BaseScale-1: Second    Range: Second, Minute, Hour, Day, Week
@@ -111,7 +126,10 @@ public:
     String toString() const;
 
 protected:
-    constexpr BaseScaleInterval(Int64 num_units_, IntervalKind::Kind scale_, IntervalKind::Kind src_kind_) : num_units(num_units_), scale(scale_), src_kind(src_kind_) { }
+    constexpr BaseScaleInterval(Int64 num_units_, IntervalKind::Kind scale_, IntervalKind::Kind src_kind_)
+        : num_units(num_units_), scale(scale_), src_kind(src_kind_)
+    {
+    }
 };
 using BasedScaleIntervalPtr = std::shared_ptr<BaseScaleInterval>;
 

@@ -12,6 +12,7 @@ class WatermarkStep final : public ITransformingStep
 public:
     WatermarkStep(
         const DataStream & input_stream_,
+        Block output_header,
         ASTPtr query_,
         TreeRewriterResultPtr syntax_analyzer_result_,
         StreamingFunctionDescriptionPtr desc_,

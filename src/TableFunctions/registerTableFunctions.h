@@ -31,6 +31,7 @@ void registerTableFunctionDictionary(TableFunctionFactory & factory);
 void registerTableFunctionHop(TableFunctionFactory & factory);
 void registerTableFunctionTumble(TableFunctionFactory & factory);
 void registerTableFunctionHist(TableFunctionFactory & factory);
+void registerTableFunctionSession(TableFunctionFactory & factory);
 /// proton: ends
 
 void registerTableFunctions();

@@ -27,7 +27,7 @@ protected:
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
     virtual void init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast);
-    void handleResultType(const ColumnWithTypeAndName & type_and_name);
+    virtual void handleResultType(const ColumnWithTypeAndName & type_and_name);
     virtual DataTypePtr getElementType(const DataTypeTuple * tuple) const = 0;
 
     String name;

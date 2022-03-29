@@ -17,6 +17,7 @@
 
 /// proton: starts.
 #include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
 /// proton: ends.
 
 namespace Poco
@@ -110,6 +111,8 @@ public:
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
     bool hasStreamingFunc() const override;
+    WindowType windowType() const;
+    StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const;
     bool hasGlobalAggregation() const override;
     /// proton: ends
 
@@ -168,7 +171,7 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
-    void executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_);
+    void executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_) const;
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;

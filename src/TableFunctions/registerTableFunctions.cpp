@@ -32,6 +32,7 @@ void registerTableFunctions()
     registerTableFunctionHop(factory);
     registerTableFunctionTumble(factory);
     registerTableFunctionHist(factory);
+    registerTableFunctionSession(factory);
     /// proton: ends
 }
 

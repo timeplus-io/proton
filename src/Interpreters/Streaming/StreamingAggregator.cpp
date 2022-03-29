@@ -25,8 +25,11 @@
 #include <Common/typeid_cast.h>
 
 /// proton: starts
-#include <Common/ProtonCommon.h>
+#include <Columns/ColumnDecimal.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends
 
 
@@ -90,9 +93,9 @@ void StreamingAggregatedDataVariants::convertToTwoLevel()
     }
 }
 
-Block StreamingAggregator::getHeader(bool final) const
+Block StreamingAggregator::getHeader(bool final, bool ignore_session_columns) const
 {
-    return params.getHeader(final);
+    return params.getHeader(final, ignore_session_columns ? false : params.group_by == Params::GroupBy::SESSION, params.time_col_is_datetime64);
 }
 
 Block StreamingAggregator::Params::getHeader(
@@ -100,7 +103,9 @@ Block StreamingAggregator::Params::getHeader(
     const Block & intermediate_header,
     const ColumnNumbers & keys,
     const AggregateDescriptions & aggregates,
-    bool final)
+    bool final,
+    bool is_session_window,
+    bool is_datetime64)
 {
     Block res;
 
@@ -138,6 +143,27 @@ Block StreamingAggregator::Params::getHeader(
                 type = std::make_shared<DataTypeAggregateFunction>(aggregate.function, argument_types, aggregate.parameters);
 
             res.insert({ type, aggregate.column_name });
+        }
+    }
+
+    /// insert 'window_start', 'window_end', "__tp_session_id" hidden key columns for session window
+    if (is_session_window)
+    {
+        if (is_datetime64)
+        {
+            auto data_type_end = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
+            res.insert(1, {data_type_end, STREAMING_WINDOW_END});
+
+            auto data_type_start = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
+            res.insert(1, {data_type_start, STREAMING_WINDOW_START});
+        }
+        else
+        {
+            auto data_type_end = std::make_shared<DataTypeDateTime>(String{"UTC"});
+            res.insert(1, {data_type_end, STREAMING_WINDOW_END});
+
+            auto data_type_start = std::make_shared<DataTypeDateTime>(String{"UTC"});
+            res.insert(1, {data_type_start, STREAMING_WINDOW_START});
         }
     }
 
@@ -269,6 +295,12 @@ StreamingAggregator::StreamingAggregator(const Params & params_)
     compileAggregateFunctionsIfNeeded();
 #endif
 
+    /// proton: starts
+    if (params.group_by == Params::GroupBy::SESSION)
+    {
+        session_map.init(SessionHashMap::Type::map32);
+    }
+    /// proton: ends
 }
 
 #if USE_EMBEDDED_COMPILER
@@ -531,7 +563,8 @@ StreamingAggregatedDataVariants::Type StreamingAggregator::chooseAggregationMeth
     bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes)
 {
     if (params.group_by != Params::GroupBy::WINDOW_END
-        && params.group_by != Params::GroupBy::WINDOW_START)
+        && params.group_by != Params::GroupBy::WINDOW_START
+        && params.group_by != Params::GroupBy::SESSION)
         return StreamingAggregatedDataVariants::Type::EMPTY;
 
     if (has_nullable_key)
@@ -566,7 +599,7 @@ StreamingAggregatedDataVariants::Type StreamingAggregator::chooseAggregationMeth
         if (size_of_field == 8)
             return StreamingAggregatedDataVariants::Type::streaming_key64_two_level;
 
-        Exception("Logical error: the first streaming aggregation column has sizeOfField not in 2, 4, 8.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Logical error: the first streaming aggregation column has sizeOfField not in 2, 4, 8.", ErrorCodes::LOGICAL_ERROR);
     }
 
     /// If all keys fits in N bits, will use hash table with all keys packed (placed contiguously) to single N-bit key.
@@ -1636,7 +1669,8 @@ Block StreamingAggregator::prepareBlockAndFill(
     MutableColumns final_aggregate_columns(params.aggregates_size);
     AggregateColumnsData aggregate_columns_data(params.aggregates_size);
 
-    Block header = getHeader(final);
+    /// ignore session window related columns, which will be added in later in StreamingAggregatingTransform
+    Block header = getHeader(final, true);
 
     for (size_t i = 0; i < params.keys_size; ++i)
     {
@@ -3032,6 +3066,69 @@ void StreamingAggregator::removeBucketsBefore(StreamingAggregatedDataVariants & 
         stats.free_list_misses);
 }
 
+void StreamingAggregator::removeBucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id) const
+{
+    if (session_id <= 0)
+        return;
+
+    auto destroy = [&](AggregateDataPtr & data)
+    {
+        if (nullptr == data)
+            return;
+
+        for (size_t i = 0; i < params.aggregates_size; ++i)
+            aggregate_functions[i]->destroy(data + offsets_of_aggregate_states[i]);
+
+        data = nullptr;
+    };
+
+    size_t removed = 0;
+    UInt64 last_removed_watermark = 0;
+    size_t remaining = 0;
+
+    switch (result.type)
+    {
+#define M(NAME, IS_TWO_LEVEL) \
+            case StreamingAggregatedDataVariants::Type::NAME: \
+                std::tie(removed, last_removed_watermark, remaining) = result.NAME->data.removeBucketsOfSession(session_id, destroy); break;
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
+#undef M
+
+        default:
+            break;
+    }
+
+    Arena::Stats stats;
+
+    if (removed)
+        stats = result.aggregates_pool->free(last_removed_watermark);
+
+    LOG_INFO(
+        log,
+        "Removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}. "
+        "Arena: arena_chunks={}, arena_size={}, chunks_removed={}, bytes_removed={}. chunks_reused={}, bytes_reused={}, head_chunk_size={}, "
+        "free_list_hits={}, free_list_missed={}",
+        removed,
+        last_removed_watermark,
+        params.streaming_window_count,
+        remaining,
+        stats.chunks,
+        stats.bytes,
+        stats.chunks_removed,
+        stats.bytes_removed,
+        stats.chunks_reused,
+        stats.bytes_reused,
+        stats.head_chunk_size,
+        stats.free_list_hits,
+        stats.free_list_misses);
+}
+
+void StreamingAggregator::clearInfoOfEmitSessions()
+{
+    const_cast<SessionHashMap &>(session_map).removeSessionInfo(sessions_to_emit);
+    sessions_to_emit.clear();
+}
+
 std::vector<size_t> StreamingAggregator::bucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
 {
     auto get_defaults = []()
@@ -3064,5 +3161,115 @@ std::vector<size_t> StreamingAggregator::bucketsBefore(StreamingAggregatedDataVa
 
     return get_defaults();
 }
+
+/// Get buckets of given session
+std::vector<size_t> StreamingAggregator::bucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id)
+{
+    auto get_defaults = []() {
+        /// By default, we are using 256 buckets for 2 level hash table
+        /// and ConvertingAggregatedToChunksSource is using this default value / convention
+        /// This is a fallback to normal 2 level hashtable
+
+        std::vector<size_t> defaults(256);
+        std::iota(defaults.begin(), defaults.end(), 0);
+        return defaults;
+    };
+
+    if (session_id <= 0)
+        return get_defaults();
+
+    switch (result.type)
+    {
+#define M(NAME, IS_TWO_LEVEL) \
+    case StreamingAggregatedDataVariants::Type::NAME: \
+        return result.NAME->data.bucketsOfSession(session_id);
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
+#undef M
+
+        default:
+            break;
+    }
+
+    return get_defaults();
+}
+
+template <typename TargetColumnType>
+bool StreamingAggregator::processSessionRow(
+    SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const
+{
+    Block block;
+    const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_column.get())->getData();
+    const typename ColumnUInt32::Container & session_id_vec = checkAndGetColumn<ColumnUInt32>(key_columns[0])->getData();
+
+    Int64 ts_secs = 0;
+    if (params.time_col_is_datetime64)
+        ts_secs = DecimalUtils::getWholePart(DateTime64(time_vec[offset]), params.time_scale);
+    else
+        ts_secs = time_vec[offset];
+    UInt32 session_id = session_id_vec[offset];
+
+    if (ts_secs >= max_ts)
+    {
+        max_ts = ts_secs;
+        /// emit sessions if possible
+        emitSessionsIfPossible(max_ts, session_id, const_cast<std::vector<size_t> &>(sessions_to_emit));
+        if (!sessions_to_emit.empty())
+            return true;
+    }
+
+    /// step1. handle session info
+    SessionInfo & info = *(map.getSessionInfo(session_id));
+    bool has_session = info.win_end != 0;
+    if (!has_session)
+    {
+        /// Initial session window
+        info.win_start = ts_secs;
+        info.win_end = ts_secs;
+        info.interval = params.window_interval;
+        info.id = session_id;
+        info.cur_session_id = 0;
+        return false;
+    }
+
+    switch (handleSession(ts_secs, info, params.kind, params.session_size, params.window_interval))
+    {
+        case SessionStatus::IGNORE:
+        case SessionStatus::KEEP:
+        case SessionStatus::END_EXTENDED:
+        case SessionStatus::START_EXTENDED:
+            /// TODO: check possible_session_end_list if window boundary can be updated
+            //            updateSessionInfo(tp_time, *queue, session_size, window_interval);
+            return false;
+        case SessionStatus::EMIT:
+            /// TODO: update all cached block
+            LOG_DEBUG(
+                log, "It should emit session after calling emitSessionsIfPossible(), timestamp: {}, info: {}", ts_secs, info.toString());
+            return true;
+    }
+
+    return false;
+}
+
+void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, size_t session_id, std::vector<size_t> & sessions) const
+{
+    const DateLUTImpl & time_zone = DateLUT::instance("UTC");
+    for (const auto & it : session_map.map32)
+    {
+        Int64 low_bound = addTime(max_ts, params.kind, -1 * params.window_interval, time_zone);
+        Int64 max_bound = addTime(max_ts, params.kind, -1 * params.session_size, time_zone);
+        if (max_bound > it.second->win_end || (it.first == session_id && low_bound > it.second->win_end))
+        {
+            sessions.push_back(it.first);
+            LOG_DEBUG(log, "emit session {}, watermark: <{}, {}>, info: {}", it.first, session_id, max_ts, it.second->toString());
+        }
+    }
+}
+
+template bool StreamingAggregator::processSessionRow<ColumnDecimal<DateTime64>>(
+    SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+
+template bool StreamingAggregator::processSessionRow<ColumnVector<UInt32>>(
+    SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
 /// proton: ends
 }
+

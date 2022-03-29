@@ -110,11 +110,11 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     assert(col_tuple);
 
     /// Insert window_begin and window_end
-    if (func_name == "__tumble")
+    if (func_name == TUMBLE_FUNC_NAME)
     {
         assignTumbleWindow(result, col_tuple);
     }
-    else if (func_name == "__hop")
+    else if (func_name == HOP_FUNC_NAME)
     {
         assignHopWindow(result, col_tuple);
     }

@@ -22,6 +22,7 @@ public:
         StreamingFunctionDescriptionPtr desc,
         bool proc_time,
         const Block & header,
+        const Block & output_header,
         Poco::Logger * log);
 
     ~WatermarkTransform() override = default;

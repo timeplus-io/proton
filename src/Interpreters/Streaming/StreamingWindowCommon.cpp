@@ -4,6 +4,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -56,6 +57,19 @@ namespace
     ALWAYS_INLINE bool isTimeZoneAST(const ASTPtr ast) { return (ast->as<ASTLiteral>()); }
 }
 
+WindowType toWindowType(const String & func_name)
+{
+    WindowType type = WindowType::NONE;
+    if (func_name == HOP_FUNC_NAME)
+        type = WindowType::HOP;
+    else if (func_name == TUMBLE_FUNC_NAME)
+        type = WindowType::TUMBLE;
+    else if (func_name == SESSION_FUNC_NAME)
+        type = WindowType::SESSION;
+
+    return type;
+}
+
 ALWAYS_INLINE bool isTableFunctionTumble(const ASTFunction * ast)
 {
     assert(ast);
@@ -66,6 +80,12 @@ ALWAYS_INLINE bool isTableFunctionHop(const ASTFunction * ast)
 {
     assert(ast);
     return !strcasecmp("HOP", ast->name.c_str());
+}
+
+ALWAYS_INLINE bool isTableFunctionSession(const ASTFunction * ast)
+{
+    assert(ast);
+    return !strcasecmp("SESSION", ast->name.c_str());
 }
 
 ALWAYS_INLINE bool isTableFunctionHist(const ASTFunction * ast)
@@ -220,6 +240,69 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
     } while (false);
 
     throw Exception(HOP_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
+}
+
+ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
+{
+    assert(isTableFunctionSession(func_ast));
+
+    ASTs asts;
+    /// session(table, [timestamp_expr], timeout_interval, [key_column1, key_column2, ...])
+    if (func_ast->children.size() != 1)
+    {
+        throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    }
+    const auto & args = func_ast->arguments->children;
+    if (args.size() < 2)
+        throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+
+    ASTPtr table;
+    ASTPtr time_expr;
+    ASTPtr session_interval;
+
+    do
+    {
+        table = args[0];
+
+        bool has_time_column = true;
+        if (args.size() == 2)
+        {
+            /// Case: session(table, INTERVAL 5 SECOND)
+            if (isIntervalAST(args[1]))
+            {
+                session_interval = args[1];
+                time_expr = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+            }
+            else
+                break; /// throw error
+        }
+        else if (args.size() >= 3)
+        {
+            if (isTimeExprAST(args[1]) && isIntervalAST(args[2]))
+            {
+                /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
+                time_expr = args[1];
+                session_interval = args[2];
+            }
+            else if (isIntervalAST(args[1]))
+            {
+                time_expr = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+                session_interval = args[1];
+                has_time_column = false;
+            }
+            else
+                break; /// throw error
+        }
+
+        asts.emplace_back(table);
+        asts.emplace_back(time_expr);
+        asts.emplace_back(session_interval);
+        asts.insert(asts.end(), std::next(args.begin(), has_time_column ? 3 : 2), args.end());
+        return asts;
+
+    } while (false);
+
+    throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
 }
 
 void checkIntervalAST(const ASTPtr & ast, const String & msg)

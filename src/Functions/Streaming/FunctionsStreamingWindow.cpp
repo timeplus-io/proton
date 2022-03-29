@@ -1,5 +1,7 @@
 #include "FunctionsStreamingWindow.h"
 
+#include <Common/ProtonCommon.h>
+
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
@@ -617,6 +619,49 @@ struct WindowImpl<HOP>
     }
 };
 
+template <>
+struct WindowImpl<SESSION>
+{
+    static constexpr auto name = "__session";
+    static constexpr auto external_name = "session";
+
+    [[maybe_unused]] static DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments, const String & function_name)
+    {
+        bool result_type_is_date = true;
+        IntervalKind window_kind;
+        Int64 window_size = 0;
+
+        if (arguments.size() >= 2)
+        {
+            checkFirstArgument(arguments[0], function_name);
+            checkIntervalArgument(arguments[1], function_name, window_kind, window_size, result_type_is_date);
+        }
+        else
+        {
+            throw Exception(
+                "Number of arguments for function " + function_name + " doesn't match: passed " + toString(arguments.size())
+                    + ", should be at least 2",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        }
+
+        size_t time_zone_arg_num_check = 0;
+        DataTypePtr data_type = getReturnDataType(result_type_is_date, arguments, time_zone_arg_num_check);
+        return std::make_shared<DataTypeTuple>(DataTypes{data_type, data_type});
+    }
+
+    static ColumnPtr dispatchForColumns(const ColumnsWithTypeAndName & /*arguments*/, const String & /*function_name*/)
+    {
+        MutableColumns result;
+        return ColumnTuple::create(std::move(result));
+    }
+};
+
+template <>
+ColumnNumbers FunctionWindow<SESSION>::getArgumentsThatAreAlwaysConstant() const
+{
+    return {1};
+}
+
 template <WindowFunctionName type>
 DataTypePtr FunctionWindow<type>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
@@ -634,5 +679,6 @@ void registerFunctionsStreamingWindow(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionTumble>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionHop>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionSession>(FunctionFactory::CaseInsensitive);
 }
 }

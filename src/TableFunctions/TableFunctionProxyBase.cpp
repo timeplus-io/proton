@@ -11,8 +11,8 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <Storages/Streaming/ProxyStream.h>
 #include <Storages/StorageView.h>
+#include <Storages/Streaming/ProxyStream.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -22,6 +22,39 @@ namespace DB
 {
 namespace
 {
+    StreamingFunctionDescriptionPtr
+    createStreamingFunctionDescriptionForSession(ASTPtr ast, ExpressionActionsPtr & streaming_func_expr, Names required_columns)
+    {
+        ColumnNumbers keys;
+        const auto & actions = streaming_func_expr->getActions();
+
+        for (const auto & action : actions)
+        {
+            if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(SESSION_FUNC_NAME))
+            {
+                Names argument_names;
+                argument_names.reserve(action.node->children.size());
+
+                DataTypes argument_types;
+                argument_types.reserve(action.node->children.size());
+                keys.reserve(action.node->children.size() - 2);
+
+                size_t it = 0;
+                for (const auto * node : action.node->children)
+                {
+                    argument_names.push_back(node->result_name);
+                    argument_types.push_back(node->result_type);
+                    if (it > 1)
+                        keys.push_back(it);
+                    it++;
+                }
+                return std::make_shared<StreamingFunctionDescription>(
+                    ast, WindowType::SESSION, argument_names, argument_types, streaming_func_expr, required_columns, keys);
+            }
+        }
+        __builtin_unreachable();
+    }
+
     StreamingFunctionDescriptionPtr createStreamingFunctionDescription(
         ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix)
     {
@@ -29,7 +62,19 @@ namespace
 
         auto streaming_func_expr = func_expr_analyzer.getActions(true);
         /// Loop actions to figure out input argument types
+
+        auto & func_name = ast->as<ASTFunction>()->name;
+        boost::to_lower(func_name);
+
+        ColumnNumbers keys;
+
+        /// Window Type
+        WindowType type = toWindowType(func_name);
         const auto & actions = streaming_func_expr->getActions();
+
+        if (type == WindowType::SESSION)
+            return createStreamingFunctionDescriptionForSession(ast, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns());
+
         for (const auto & action : actions)
         {
             if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
@@ -40,27 +85,26 @@ namespace
                 DataTypes argument_types;
                 argument_types.reserve(action.node->children.size());
 
+                size_t it = 0;
                 for (const auto * node : action.node->children)
                 {
                     argument_names.push_back(node->result_name);
                     argument_types.push_back(node->result_type);
+                    it++;
                 }
                 return std::make_shared<StreamingFunctionDescription>(
-                    ast, argument_names, argument_types, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns());
+                    ast, type, argument_names, argument_types, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns(), keys);
             }
         }
 
         /// The timestamp function ends up with const column, like toDateTime('2020-01-01 00:00:00') or now('UTC') or now64(3, 'UTC')
         /// Check the function name is now or now64 since these are the only const function we support
-        auto & func_name = ast->as<ASTFunction>()->name;
-        boost::to_lower(func_name);
-
         if (func_name != "now" && func_name != "now64")
-            throw Exception("Unsupported const timestamp func", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Unsupported const timestamp func for timestamp column", ErrorCodes::BAD_ARGUMENTS);
 
         /// Parse the argument names
         return std::make_shared<StreamingFunctionDescription>(
-            ast, Names{}, DataTypes{}, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns(), true);
+            ast, type, Names{}, DataTypes{}, streaming_func_expr, syntax_analyzer_result->requiredSourceColumns(), keys, true);
     }
 }
 

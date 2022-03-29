@@ -1,7 +1,8 @@
-#include "TableFunctionHop.h"
+#include "TableFunctionSession.h"
 
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
@@ -20,11 +21,11 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
-TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionProxyBase(name_)
+TableFunctionSession::TableFunctionSession(const String & name_) : TableFunctionProxyBase(name_)
 {
 }
 
-void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr context)
+void TableFunctionSession::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
     if (func_ast->children.size() != 1)
         throw Exception(HOP_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -33,11 +34,11 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     auto * node = streaming_func_ast->as<ASTFunction>();
     assert(node);
 
-    /// hop(table, [timestamp_column], hop_interval, hop_win_interval, [timezone])
-    auto args = checkAndExtractHopArguments(node);
+    /// session(stream, [timestamp_column], timeout_interval, [key_column1, key_column2, ...])
+    auto args = checkAndExtractSessionArguments(node);
 
     /// First argument is expected to be table
-    storage_id= resolveStorageID(args[0], context);
+    storage_id = resolveStorageID(args[0], context);
 
     /// The rest of the arguments are streaming window arguments
     /// Change the name to call the internal streaming window functions
@@ -54,7 +55,7 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     /// The following logic is adding system default time column to hop function if user doesn't specify one
     if (args[0])
     {
-        if (auto func_node = args[0]->as<ASTFunction>(); func_node)
+        if (auto * func_node = args[0]->as<ASTFunction>(); func_node)
         {
             /// time column is a transformed one, for example, hop(table, toDateTime32(t), INTERVAL 5 SECOND, ...)
             func_node->alias = STREAMING_TIMESTAMP_ALIAS;
@@ -64,35 +65,45 @@ void TableFunctionHop::parseArguments(const ASTPtr & func_ast, ContextPtr contex
     else
         args[0] = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
 
-    /// Try do the same scale conversion of hop_interval and win_interval
-    convertToSameKindIntervalAST(
-        BaseScaleInterval::toBaseScale(extractInterval(args[1]->as<ASTFunction>())),
-        BaseScaleInterval::toBaseScale(extractInterval(args[2]->as<ASTFunction>())),
-        args[1],
-        args[2]);
-
-    //// [timezone]
-    /// Prune the empty timezone if user doesn't specify one
-    if (!args.back())
-        args.pop_back();
-
     node->arguments->children.swap(args);
 
     /// Calculate column description
-    init(context, std::move(streaming_func_ast), HOP_FUNC_NAME + "(", std::move(timestamp_expr_ast));
+    init(context, std::move(streaming_func_ast), SESSION_FUNC_NAME + "(", std::move(timestamp_expr_ast));
 }
 
-DataTypePtr TableFunctionHop::getElementType(const DataTypeTuple * tuple) const
+DataTypePtr TableFunctionSession::getElementType(const DataTypeTuple * tuple) const
 {
-    DataTypePtr element_type = tuple->getElements()[0];
-    assert(isArray(element_type));
-
-    auto array_type = checkAndGetDataType<DataTypeArray>(element_type.get());
-    return array_type->getNestedType();
+    return tuple->getElements()[0];
 }
 
-void registerTableFunctionHop(TableFunctionFactory & factory)
+void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_and_name)
 {
-    factory.registerFunction("hop", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); });
+    const auto * tuple_result_type = checkAndGetDataType<DataTypeTuple>(type_and_name.type.get());
+    assert(tuple_result_type);
+    assert(tuple_result_type->getElements().size() == 2);
+
+    /// If streaming table function is used, we will need project `wstart, wend` columns to metadata
+    {
+        DataTypePtr element_type = getElementType(tuple_result_type);
+
+
+        ColumnDescription wstart(STREAMING_WINDOW_START, element_type);
+        columns.add(wstart);
+
+        ColumnDescription wend(STREAMING_WINDOW_END, element_type);
+        columns.add(wend);
+    }
+
+    {
+        DataTypePtr element_type = std::make_shared<DataTypeUInt32>();
+
+        ColumnDescription session_id(STREAMING_SESSION_ID, std::move(element_type));
+        columns.add(session_id);
+    }
+}
+
+void registerTableFunctionSession(TableFunctionFactory & factory)
+{
+    factory.registerFunction("session", []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); });
 }
 }

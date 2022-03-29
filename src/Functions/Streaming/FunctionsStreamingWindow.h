@@ -18,6 +18,7 @@ enum WindowFunctionName
 {
     TUMBLE,
     HOP,
+    SESSION,
 };
 
 template <IntervalKind::Kind unit>
@@ -129,4 +130,5 @@ public:
 
 using FunctionTumble = FunctionWindow<TUMBLE>;
 using FunctionHop = FunctionWindow<HOP>;
+using FunctionSession = FunctionWindow<SESSION>;
 }

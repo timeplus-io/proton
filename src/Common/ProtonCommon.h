@@ -12,6 +12,12 @@ const String STREAMING_WINDOW_END = "window_end";
 const std::vector<String> STREAMING_WINDOW_COLUMN_NAMES = {STREAMING_WINDOW_START, STREAMING_WINDOW_END};
 const String STREAMING_WINDOW_FUNC_ALIAS = "__tp_swin";
 const String STREAMING_TIMESTAMP_ALIAS = "__tp_ts";
+const String STREAMING_SESSION_ID = "__tp_session_id";
+
+/// Internal function names
+const String TUMBLE_FUNC_NAME = "__tumble";
+const String HOP_FUNC_NAME = "__hop";
+const String SESSION_FUNC_NAME = "__session";
 
 /// Reserved column names / aliases for streaming view
 const String RESERVED_VIEW_VERSION = "__tp_version";
@@ -33,4 +39,7 @@ const String STORAGE_TYPE_STREAMING = "streaming";
 
 /// Default settings for DDL
 const UInt64 DEFAULT_DDL_TIMEOUT_MS = 2000;
+
+/// Default settings for session window
+const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeout_interval of session window
 }

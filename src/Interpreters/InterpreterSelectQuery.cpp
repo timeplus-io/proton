@@ -118,6 +118,8 @@ namespace ErrorCodes
 
     /// proton: starts
     extern const int WINDOW_COLUMN_NOT_REFERENCED;
+    extern const int INVALID_STREAMING_FUNC_DESC;
+    extern const int MISSING_GROUP_BY;
     /// proton: ends
 }
 
@@ -660,6 +662,13 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// If there is no WHERE, filter blocks as usual
     if (query.prewhere() && !query.where())
         analysis_result.prewhere_info->need_filter = true;
+
+    /// proton: starts
+    if (windowType() == WindowType::SESSION && !query.groupBy())
+    {
+        throw Exception("Missing GROUP BY clause for session window", ErrorCodes::MISSING_GROUP_BY);
+    }
+    /// proton: ends
 
     if (table_id && got_storage_from_query && !joined_tables.isLeftTableFunction())
     {
@@ -2751,7 +2760,7 @@ void InterpreterSelectQuery::initSettings()
 }
 
 /// proton: starts
-void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_)
+void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_) const
 {
     if (!isStreaming())
         return;
@@ -2762,7 +2771,8 @@ void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const Base
     query_plan.addStep(std::move(proc_filter_step));
 }
 
-void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeStreamingAggregation(
+    QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final)
 {
     assert(isStreaming());
 
@@ -2779,19 +2789,46 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
     /// If `window_start/end` are in aggregation columns, move them to the beginning
     /// of the aggregation columns for later window extraction
     StreamingAggregator::Params::GroupBy streaming_group_by = StreamingAggregator::Params::GroupBy::OTHER;
+    size_t time_col_pos = 0;
+    if (windowType() == WindowType::SESSION)
+    {
+        streaming_group_by = StreamingAggregator::Params::GroupBy::SESSION;
+        auto desc = getStreamingFunctionDescription();
+
+        if (!desc)
+            throw Exception(
+                "StreamingFunctionDescription should not be nullptr for session window", ErrorCodes::INVALID_STREAMING_FUNC_DESC);
+
+        time_col_pos = header_before_aggregation.getPositionByName(desc->argument_names[0]);
+
+        /// add STREAMING_SESSION_ID key into group by keys at the beginning
+        keys.insert(keys.begin(), header_before_aggregation.getPositionByName(STREAMING_SESSION_ID));
+    }
+
+    auto window_type = windowType();
     for (const auto & key : query_analyzer->aggregationKeys())
     {
+        /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because StreamingAggregator automatically add three session related columns.
+        /// Also ignore STREAMING_SESSION_ID, as it has already been added in group by keys.
+        if (window_type == WindowType::SESSION
+            && (key.name == STREAMING_WINDOW_START || key.name == STREAMING_WINDOW_END || key.name == STREAMING_SESSION_ID))
+            continue;
+
         if ((key.name == STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = StreamingAggregator::Params::GroupBy::WINDOW_END;
         }
-        else if ((key.name == STREAMING_WINDOW_START)
-                 && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
-                 && (streaming_group_by != StreamingAggregator::Params::GroupBy::WINDOW_END))
+        else if (
+            (key.name == STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
+            && (streaming_group_by != StreamingAggregator::Params::GroupBy::WINDOW_END))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = StreamingAggregator::Params::GroupBy::WINDOW_START;
+        }
+        else if (window_type == WindowType::SESSION && key.name == STREAMING_SESSION_ID)
+        {
+            keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
         }
         else
             keys.push_back(header_before_aggregation.getPositionByName(key.name));
@@ -2826,7 +2863,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
         {},
         shouldKeepState(),
         settings.keep_windows,
-        streaming_group_by);
+        streaming_group_by,
+        time_col_pos,
+        getStreamingFunctionDescription());
 
     auto merge_threads = max_streams;
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
@@ -2836,12 +2875,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(QueryPlan & query_plan,
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
     auto aggregating_step = std::make_unique<StreamingAggregatingStep>(
-        query_plan.getCurrentDataStream(),
-        params,
-        final,
-        merge_threads,
-        temporary_data_merge_threads,
-        storage_has_evenly_distributed_read);
+        query_plan.getCurrentDataStream(), params, final, merge_threads, temporary_data_merge_threads, storage_has_evenly_distributed_read);
 
     query_plan.addStep(std::move(aggregating_step));
 }
@@ -2875,6 +2909,30 @@ bool InterpreterSelectQuery::hasStreamingFunc() const
     }
 
     return false;
+}
+
+StreamingFunctionDescriptionPtr InterpreterSelectQuery::getStreamingFunctionDescription() const
+{
+    if (storage)
+    {
+        if (auto * proxy = storage->as<ProxyStream>())
+            return proxy->getStreamingFunctionDescription();
+    }
+
+    return nullptr;
+}
+
+WindowType InterpreterSelectQuery::windowType() const
+{
+    if (storage)
+    {
+        if (auto * proxy = storage->as<ProxyStream>())
+        {
+            return proxy->windowType();
+        }
+    }
+
+    return WindowType::NONE;
 }
 
 bool InterpreterSelectQuery::hasGlobalAggregation() const
@@ -2960,7 +3018,7 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
     {
         if (auto * proxy = storage->as<ProxyStream>())
         {
-            if (proxy->hasStreamingFunc())
+            if (proxy->hasStreamingFunc() && proxy->windowType() != WindowType::SESSION)
             {
                 bool has_win_col = false;
                 for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
@@ -3012,10 +3070,19 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
     auto stream_func_desc = proxy_stream->getStreamingFunctionDescription();
 
     if (shouldApplyWatermark())
+    {
+        Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
+        if (stream_func_desc && stream_func_desc->type == WindowType::SESSION)
+        {
+            /// insert _tp_session_id column for session window
+            auto data_type = std::make_shared<DataTypeUInt32>();
+            output_header.insert(0, {data_type, STREAMING_SESSION_ID});
+        }
         query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, proc_time, log));
+            query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, proc_time, log));
+    }
 
-    if (stream_func_desc)
+    if (stream_func_desc && stream_func_desc->type != WindowType::SESSION)
     {
         Block output_header;
         if (!proxy_stream->getInnerStorage())
@@ -3035,8 +3102,17 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
 {
     if (shouldApplyWatermark())
+    {
+        Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
+        if (windowType() == WindowType::SESSION)
+        {
+            /// insert _tp_session_id column for session window
+            auto data_type = std::make_shared<DataTypeUInt32>();
+            output_header.insert(0, {data_type, STREAMING_SESSION_ID});
+        }
         query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
+            query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
+    }
 }
 /// proton: ends
 }

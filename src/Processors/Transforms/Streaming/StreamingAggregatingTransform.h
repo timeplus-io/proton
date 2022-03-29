@@ -97,13 +97,17 @@ private:
     void consume(Chunk chunk);
     bool needsFinalization(const Chunk & chunk) const;
     void finalize(ChunkInfoPtr chunk_info);
+    void finalizeSession(std::vector<size_t> & sessions, Block & merged_block);
     void doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
     void initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
     void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
     void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
     void mergeTwoLevelStreamingWindow(
         ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
+    void mergeTwoLevelSessionWindow(
+        ManyStreamingAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & merged_block);
     void removeBuckets();
+    void removeBucketsOfSessions(std::vector<size_t> & sessions);
     void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
     IProcessor::Status preparePushToOutput();
 

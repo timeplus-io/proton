@@ -7,6 +7,11 @@
 #include <QueryPipeline/Pipe.h>
 
 /// proton: starts. Added by proton
+#include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <Interpreters/Streaming/SessionMap.h>
+#include <Common/ProtonCommon.h>
+/// proton: ends
 
 namespace ProfileEvents
 {
@@ -531,26 +536,86 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
         return;
 
     rows_since_last_finalization += num_rows;
-
     if (num_rows > 0)
     {
+        Columns columns = chunk.detachColumns();
+        if(params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
+        {
+            size_t session_keys_size = 1;
+            ColumnRawPtrs session_key_columns;
+            session_key_columns.resize(session_keys_size);
+            Block merged_block;
+
+            /// Get session_id column
+            session_key_columns[0] = columns.at(params->params.keys[0])->convertToFullColumnIfConst().get();
+            if (!variants.isLowCardinality())
+            {
+                auto column_no_lc = recursiveRemoveLowCardinality(session_key_columns[0]->getPtr());
+                if (column_no_lc.get() != session_key_columns[0])
+                {
+                    session_key_columns[0] = column_no_lc.get();
+                }
+            }
+
+            /// proton: starts. Prepare for session window
+            ColumnPtr time_column = columns.at(params->params.time_col_pos);
+
+            bool emit = false;
+            ChunkInfoPtr info = std::make_shared<ChunkInfo>();
+            for (size_t i = 0; i < num_rows;)
+            {
+                /// For session window, it has two rounds to execute each row of block if it might trigger a session emit.
+                /// the first round is to find all sessions to emit, then emit those sessions before process the current row.
+                /// After emit sessions and clear up session info, the second round to process the current row.
+                if (params->params.time_col_is_datetime64)
+                {
+                    emit = params->aggregator.processSessionRow<ColumnDecimal<DateTime64>>(
+                        const_cast<SessionHashMap &>(params->aggregator.session_map),
+                        session_key_columns,
+                        time_column,
+                        i,
+                        const_cast<Int64 &>(params->aggregator.max_event_ts));
+                }
+                else
+                {
+                    emit = params->aggregator.processSessionRow<ColumnVector<UInt32>>(
+                        const_cast<SessionHashMap &>(params->aggregator.session_map),
+                        session_key_columns,
+                        time_column,
+                        i,
+                        const_cast<Int64 &>(params->aggregator.max_event_ts));
+                }
+                if (!emit)
+                    i++;
+                else
+                    finalizeSession(params->aggregator.sessions_to_emit, merged_block);
+            }
+
+            if (merged_block.rows()>0)
+                setCurrentChunk(convertToChunk(merged_block), info);
+        }
+
         src_rows += num_rows;
         src_bytes += chunk.bytes();
         if (params->only_merge)
         {
-            auto block = getInputs().front().getHeader().cloneWithColumns(chunk.detachColumns());
+            /// proton: starts
+            auto block = getInputs().front().getHeader().cloneWithColumns(columns);
+            /// proton: ends
             block = materializeBlock(block);
             if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
                 is_consume_finished = true;
         }
         else
         {
-            if (!params->aggregator.executeOnBlock(chunk.detachColumns(), num_rows, variants, key_columns, aggregate_columns, no_more_keys))
+            /// proton: starts
+            if (!params->aggregator.executeOnBlock(columns, num_rows, variants, key_columns, aggregate_columns, no_more_keys))
+            /// proton: ends
                 is_consume_finished = true;
         }
     }
 
-    if (needsFinalization(chunk))
+    if (needsFinalization(chunk) && params->params.group_by != StreamingAggregator::Params::GroupBy::SESSION)
     {
         finalize(chunk.getChunkInfo());
     }
@@ -742,6 +807,75 @@ void StreamingAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
     }
 }
 
+/// Finalize what we have in memory and produce a finalized Block
+/// and push the block to downstream pipe
+/// Only for streaming aggregation case
+void StreamingAggregatingTransform::finalizeSession(std::vector<size_t> & sessions, Block & merged_block)
+{
+    if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
+    {
+        auto start = MonotonicMilliseconds::now();
+
+        /// FIXME spill to disk, overflow_row etc cases
+        auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
+        auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
+
+        if (prepared_data_ptr->empty())
+            return;
+
+        /// At least we need one arena in first data item per thread
+        StreamingAggregatedDataVariantsPtr & first = prepared_data_ptr->at(0);
+        if (max_threads > first->aggregates_pools.size())
+        {
+            Arenas & first_pool = first->aggregates_pools;
+            for (size_t j = first_pool.size(); j < max_threads; j++)
+                first_pool.emplace_back(std::make_shared<Arena>());
+        }
+
+        if (prepared_data_ptr->at(0)->isTwoLevel())
+        {
+            mergeTwoLevelSessionWindow(prepared_data_ptr, sessions, merged_block);
+        }
+
+        rows_since_last_finalization = 0;
+
+
+        auto end = MonotonicMilliseconds::now();
+
+        LOG_INFO(
+            log, "StreamingAggregated. Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
+
+        // Clear the finalization count
+        many_data->finalizations.store(0);
+
+        /// We are done with finalization, notify all transforms start to work again
+        many_data->finalized.notify_all();
+
+        /// We first notify all other variants that the aggregation is done for this round
+        /// and then remove the project window buckets and their memory arena for the current variant.
+        /// This save a bit time and a bit more efficiency because all variants can do memory arena
+        /// recycling in parallel.
+        removeBucketsOfSessions(sessions);
+    }
+    else
+    {
+        /// Condition wait for finalization transform thread to finish the aggregation
+        auto start = MonotonicMilliseconds::now();
+
+        std::unique_lock<std::mutex> lk(many_data->finalizing_mutex);
+        many_data->finalized.wait(lk);
+
+        auto end = MonotonicMilliseconds::now();
+        LOG_INFO(
+            log,
+            "StreamingAggregated. Took {} milliseconds to wait for finalizing {} shard aggregation",
+            end - start,
+            many_data->variants.size());
+
+        removeBucketsOfSessions(sessions);
+    }
+}
+
 void StreamingAggregatingTransform::doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
 {
     /// FIXME spill to disk, overflow_row etc cases
@@ -875,12 +1009,122 @@ void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(
     many_data->arena_watermark = watermark;
 }
 
+void StreamingAggregatingTransform::mergeTwoLevelSessionWindow(
+    ManyStreamingAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & final_block)
+{
+    /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
+    /// one project window for streaming processing
+    auto & first = data->at(0);
+
+    std::atomic<bool> is_cancelled{false};
+
+    Block merged_block;
+    Block header = first->aggregator->getHeader(true, false).cloneEmpty();
+    auto window_start_col = header.getByName(STREAMING_WINDOW_START);
+    auto window_start_col_ptr = IColumn::mutate(window_start_col.column);
+    auto window_end_col = header.getByName(STREAMING_WINDOW_END);
+    auto window_end_col_ptr = IColumn::mutate(window_end_col.column);
+
+    size_t index = data->size() == 1 ? 0 : 1;
+    for (; index < first->aggregates_pools.size(); ++index)
+    {
+        Arena * arena = first->aggregates_pools.at(index).get();
+
+        /// Figure out which buckets need get merged
+        auto & data_variant = data->at(index);
+
+        for (const size_t & session_id : sessions)
+        {
+            size_t session_rows = 0;
+
+            SessionInfo & info = *(const_cast<SessionHashMap &>(data_variant->aggregator->session_map).getSessionInfo(session_id));
+            LOG_DEBUG(log, "emit session {} with {}", info.id, info.toString());
+
+            /// emit session
+            std::vector<size_t> buckets = data_variant->aggregator->bucketsOfSession(*data_variant, info.id);
+
+            for (auto bucket : buckets)
+            {
+                Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket, &is_cancelled);
+                if (is_cancelled)
+                    return;
+
+                session_rows += block.rows();
+                if (merged_block)
+                {
+                    assertBlocksHaveEqualStructure(merged_block, block, "merging buckets for streaming two level hashtable");
+                    for (size_t i = 0, size = merged_block.columns(); i < size; ++i)
+                    {
+                        const auto source_column = block.getByPosition(i).column;
+                        auto mutable_column = IColumn::mutate(std::move(merged_block.getByPosition(i).column));
+                        mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+                        merged_block.getByPosition(i).column = std::move(mutable_column);
+                    }
+                }
+                else
+                    merged_block = std::move(block);
+            }
+
+            if (merged_block)
+            {
+                /// fill session info columns, i.e. 'window_start', 'window_end'
+                for (size_t i = 0; i < session_rows; i++)
+                {
+                    if (params->params.time_col_is_datetime64)
+                    {
+                        window_start_col_ptr->insert(
+                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_start, 0, params->params.time_scale));
+                        window_end_col_ptr->insert(
+                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_end, 0, params->params.time_scale));
+                    }
+                    else
+                    {
+                        window_start_col_ptr->insert(info.win_start);
+                        window_end_col_ptr->insert(info.win_end);
+                    }
+                }
+            }
+        }
+    }
+    LOG_DEBUG(log, "total {} sessions, emit {} sessions", params->aggregator.session_map.size(), sessions.size());
+
+    if (merged_block && merged_block.rows() > 0)
+    {
+        merged_block.insert(1, {std::move(window_end_col_ptr), window_end_col.type, window_end_col.name});
+        merged_block.insert(1, {std::move(window_start_col_ptr), window_start_col.type, window_start_col.name});
+    }
+
+    if (final_block.rows()>0)
+    {
+        assertBlocksHaveEqualStructure(merged_block, final_block, "merging buckets for streaming two level hashtable");
+        for (size_t i = 0, size = final_block.columns(); i < size; ++i)
+        {
+            const auto source_column = merged_block.getByPosition(i).column;
+            auto mutable_column = IColumn::mutate(std::move(final_block.getByPosition(i).column));
+            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+            final_block.getByPosition(i).column = std::move(mutable_column);
+        }
+    } else
+        final_block = std::move(merged_block);
+}
+
 /// Cleanup memory arena for the projected window buckets
 void StreamingAggregatingTransform::removeBuckets()
 {
     if (params->params.group_by != StreamingAggregator::Params::GroupBy::OTHER)
         variants.aggregator->removeBucketsBefore(
             variants, many_data->arena_watermark.watermark_lower_bound, many_data->arena_watermark.watermark);
+}
+
+/// Cleanup memory arena for the projected window buckets
+void StreamingAggregatingTransform::removeBucketsOfSessions(std::vector<size_t> & sessions)
+{
+    if (params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
+    {
+        for (const size_t & session_id : sessions)
+            variants.aggregator->removeBucketsOfSession(variants, session_id);
+        const_cast<StreamingAggregator *>(variants.aggregator)->clearInfoOfEmitSessions();
+    }
 }
 
 void StreamingAggregatingTransform::setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_Info)

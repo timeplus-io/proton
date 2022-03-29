@@ -37,8 +37,14 @@
 #include <Columns/ColumnLowCardinality.h>
 
 /// proton: starts
+#include <DataTypes/DataTypeDateTime64.h>
+#include <Interpreters/Streaming/SessionMap.h>
+#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/StreamingTwoLevelHashMap.h>
+#include <Common/ProtonCommon.h>
 
 #include <numeric>
 /// proton: ends
@@ -630,11 +636,23 @@ public:
         {
             WINDOW_START,
             WINDOW_END,
+            SESSION,
             OTHER,
         };
         GroupBy group_by = GroupBy::OTHER;
+
+        /// Params for session window
+        size_t session_id_col_pos = 0;
+        size_t time_col_pos = 0;
+        size_t time_scale = 0;
+        bool time_col_is_datetime64 = false;
+        Int64 window_interval = 0;
+        UInt64 session_size = 0;
+        StreamingFunctionDescriptionPtr window_desc;
+        IntervalKind::Kind kind = IntervalKind::Second;
         /// proton: ends
 
+        /// proton: starts
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_,
@@ -649,7 +667,9 @@ public:
             const Block & intermediate_header_ = {},
             bool keep_state_ = true,
             size_t streaming_window_count_ = 0,
-            GroupBy streaming_group_by_ = GroupBy::OTHER)
+            GroupBy streaming_group_by_ = GroupBy::OTHER,
+            size_t time_col_pos_ = 0,
+            StreamingFunctionDescriptionPtr window_desc_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -663,9 +683,21 @@ public:
             min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
             keep_state(keep_state_),
             streaming_window_count(streaming_window_count_),
-            group_by(streaming_group_by_)
+            group_by(streaming_group_by_),
+            time_col_pos(time_col_pos_),
+            window_desc(window_desc_)
         {
+            if (window_desc)
+            {
+                time_col_is_datetime64 = isDateTime64(window_desc->argument_types[0]);
+                auto * func_ast = window_desc->func_ast->as<ASTFunction>();
+                extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), window_interval, kind);
+                session_size = window_interval * SESSION_SIZE_MULTIPLIER;
+                if (time_col_is_datetime64)
+                    time_scale = checkAndGetDataType<DataTypeDateTime64>(window_desc->argument_types[0].get())->getScale();
+            }
         }
+        /// proton: ends
 
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
@@ -675,17 +707,22 @@ public:
             intermediate_header = intermediate_header_;
         }
 
+        /// proton: starts
         static Block getHeader(
             const Block & src_header,
             const Block & intermediate_header,
             const ColumnNumbers & keys,
             const AggregateDescriptions & aggregates,
-            bool final);
+            bool final,
+            bool is_session_window = false,
+            bool is_datetime64 = false);
 
-        Block getHeader(bool final) const
+
+        Block getHeader(bool final, bool is_session_window, bool is_datetime64 = false) const
         {
-            return getHeader(src_header, intermediate_header, keys, aggregates, final);
+            return getHeader(src_header, intermediate_header, keys, aggregates, final, is_session_window, is_datetime64);
         }
+        /// proton: ends
 
         /// Returns keys and aggregated for EXPLAIN query
         void explain(WriteBuffer & out, size_t indent) const;
@@ -760,7 +797,9 @@ public:
     const TemporaryFiles & getTemporaryFiles() const { return temporary_files; }
 
     /// Get data structure of the result.
-    Block getHeader(bool final) const;
+    /// proton: starts
+    Block getHeader(bool final, bool ignore_session_columns = false) const;
+    /// proton: ends
 
 private:
 
@@ -772,6 +811,12 @@ private:
     friend class StreamingConvertingAggregatedToChunksTransform;
     friend class StreamingConvertingAggregatedToChunksSource;
     friend class StreamingAggregatingTransform;
+    /// proton: ends
+
+    /// proton: starts
+    SessionHashMap session_map;
+    std::vector<size_t> sessions_to_emit;
+    Int64 max_event_ts = 0;
     /// proton: ends
 
     Params params;
@@ -1061,7 +1106,14 @@ private:
     /// proton: starts
     void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, StreamingAggregatedDataVariants & result) const;
     void removeBucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    void removeBucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id) const;
+    void clearInfoOfEmitSessions();
     std::vector<size_t> bucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    static std::vector<size_t> bucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id);
+    template <typename TargetColumnType>
+    bool processSessionRow(
+        SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+    void emitSessionsIfPossible(DateTime64 max_ts, size_t session_id, std::vector<size_t> & sessions) const;
     /// proton: ends
 };
 
