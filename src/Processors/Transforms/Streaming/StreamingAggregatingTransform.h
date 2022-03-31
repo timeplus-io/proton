@@ -95,6 +95,8 @@ public:
 
 private:
     void consume(Chunk chunk);
+    void consumeForSession(Columns & columns);
+    bool executeOrMergeColumns(Columns & columns);
     bool needsFinalization(const Chunk & chunk) const;
     void finalize(ChunkInfoPtr chunk_info);
     void finalizeSession(std::vector<size_t> & sessions, Block & merged_block);

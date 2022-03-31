@@ -1111,8 +1111,8 @@ private:
     std::vector<size_t> bucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
     static std::vector<size_t> bucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id);
     template <typename TargetColumnType>
-    bool processSessionRow(
-        SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+    SessionStatus processSessionRow(
+        SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
     void emitSessionsIfPossible(DateTime64 max_ts, size_t session_id, std::vector<size_t> & sessions) const;
     /// proton: ends
 };

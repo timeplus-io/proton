@@ -3194,12 +3194,12 @@ std::vector<size_t> StreamingAggregator::bucketsOfSession(StreamingAggregatedDat
 }
 
 template <typename TargetColumnType>
-bool StreamingAggregator::processSessionRow(
-    SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const
+SessionStatus StreamingAggregator::processSessionRow(
+    SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const
 {
     Block block;
     const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_column.get())->getData();
-    const typename ColumnUInt32::Container & session_id_vec = checkAndGetColumn<ColumnUInt32>(key_columns[0])->getData();
+    const typename ColumnUInt32::Container & session_id_vec = checkAndGetColumn<ColumnUInt32>(session_id_column.get())->getData();
 
     Int64 ts_secs = 0;
     if (params.time_col_is_datetime64)
@@ -3214,7 +3214,7 @@ bool StreamingAggregator::processSessionRow(
         /// emit sessions if possible
         emitSessionsIfPossible(max_ts, session_id, const_cast<std::vector<size_t> &>(sessions_to_emit));
         if (!sessions_to_emit.empty())
-            return true;
+            return SessionStatus::EMIT;
     }
 
     /// step1. handle session info
@@ -3224,30 +3224,14 @@ bool StreamingAggregator::processSessionRow(
     {
         /// Initial session window
         info.win_start = ts_secs;
-        info.win_end = ts_secs;
+        info.win_end = ts_secs + 1;
         info.interval = params.window_interval;
         info.id = session_id;
         info.cur_session_id = 0;
-        return false;
+        return SessionStatus::KEEP;
     }
 
-    switch (handleSession(ts_secs, info, params.kind, params.session_size, params.window_interval))
-    {
-        case SessionStatus::IGNORE:
-        case SessionStatus::KEEP:
-        case SessionStatus::END_EXTENDED:
-        case SessionStatus::START_EXTENDED:
-            /// TODO: check possible_session_end_list if window boundary can be updated
-            //            updateSessionInfo(tp_time, *queue, session_size, window_interval);
-            return false;
-        case SessionStatus::EMIT:
-            /// TODO: update all cached block
-            LOG_DEBUG(
-                log, "It should emit session after calling emitSessionsIfPossible(), timestamp: {}, info: {}", ts_secs, info.toString());
-            return true;
-    }
-
-    return false;
+    return handleSession(ts_secs, info, params.kind, params.session_size, params.window_interval);
 }
 
 void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, size_t session_id, std::vector<size_t> & sessions) const
@@ -3257,7 +3241,7 @@ void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, size_t sessi
     {
         Int64 low_bound = addTime(max_ts, params.kind, -1 * params.window_interval, time_zone);
         Int64 max_bound = addTime(max_ts, params.kind, -1 * params.session_size, time_zone);
-        if (max_bound > it.second->win_end || (it.first == session_id && low_bound > it.second->win_end))
+        if (max_bound > it.second->win_start || (it.first == session_id && low_bound > it.second->win_end))
         {
             sessions.push_back(it.first);
             LOG_DEBUG(log, "emit session {}, watermark: <{}, {}>, info: {}", it.first, session_id, max_ts, it.second->toString());
@@ -3265,11 +3249,11 @@ void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, size_t sessi
     }
 }
 
-template bool StreamingAggregator::processSessionRow<ColumnDecimal<DateTime64>>(
-    SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+template SessionStatus StreamingAggregator::processSessionRow<ColumnDecimal<DateTime64>>(
+    SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
 
-template bool StreamingAggregator::processSessionRow<ColumnVector<UInt32>>(
-    SessionHashMap & map, ColumnRawPtrs & key_columns, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+template SessionStatus StreamingAggregator::processSessionRow<ColumnVector<UInt32>>(
+    SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
 /// proton: ends
 }
 

@@ -75,6 +75,17 @@ namespace
         CompressedReadBuffer compressed_in;
         std::unique_ptr<NativeReader> block_in;
     };
+
+    /// proton: starts.
+    void splitColumns(size_t start, size_t size, IColumn::Filter & filt, size_t late_events, Columns & columns, Columns & to_process)
+    {
+        assert(columns.size() == to_process.size());
+        for (size_t i = 0; i < columns.size(); i++)
+        {
+            to_process[i] = columns[i]->cut(start, size)->filter(filt, size - late_events);
+        }
+    }
+    /// proton: ends
 }
 
 /// Worker which merges buckets for two-level aggregation.
@@ -539,61 +550,12 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
     if (num_rows > 0)
     {
         Columns columns = chunk.detachColumns();
+        /// proton: starts. for session window
         if(params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
         {
-            size_t session_keys_size = 1;
-            ColumnRawPtrs session_key_columns;
-            session_key_columns.resize(session_keys_size);
-            Block merged_block;
-
-            /// Get session_id column
-            session_key_columns[0] = columns.at(params->params.keys[0])->convertToFullColumnIfConst().get();
-            if (!variants.isLowCardinality())
-            {
-                auto column_no_lc = recursiveRemoveLowCardinality(session_key_columns[0]->getPtr());
-                if (column_no_lc.get() != session_key_columns[0])
-                {
-                    session_key_columns[0] = column_no_lc.get();
-                }
-            }
-
-            /// proton: starts. Prepare for session window
-            ColumnPtr time_column = columns.at(params->params.time_col_pos);
-
-            bool emit = false;
-            ChunkInfoPtr info = std::make_shared<ChunkInfo>();
-            for (size_t i = 0; i < num_rows;)
-            {
-                /// For session window, it has two rounds to execute each row of block if it might trigger a session emit.
-                /// the first round is to find all sessions to emit, then emit those sessions before process the current row.
-                /// After emit sessions and clear up session info, the second round to process the current row.
-                if (params->params.time_col_is_datetime64)
-                {
-                    emit = params->aggregator.processSessionRow<ColumnDecimal<DateTime64>>(
-                        const_cast<SessionHashMap &>(params->aggregator.session_map),
-                        session_key_columns,
-                        time_column,
-                        i,
-                        const_cast<Int64 &>(params->aggregator.max_event_ts));
-                }
-                else
-                {
-                    emit = params->aggregator.processSessionRow<ColumnVector<UInt32>>(
-                        const_cast<SessionHashMap &>(params->aggregator.session_map),
-                        session_key_columns,
-                        time_column,
-                        i,
-                        const_cast<Int64 &>(params->aggregator.max_event_ts));
-                }
-                if (!emit)
-                    i++;
-                else
-                    finalizeSession(params->aggregator.sessions_to_emit, merged_block);
-            }
-
-            if (merged_block.rows()>0)
-                setCurrentChunk(convertToChunk(merged_block), info);
+            return consumeForSession(columns);
         }
+        /// proton: ends.
 
         src_rows += num_rows;
         src_bytes += chunk.bytes();
@@ -618,6 +580,119 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
     if (needsFinalization(chunk) && params->params.group_by != StreamingAggregator::Params::GroupBy::SESSION)
     {
         finalize(chunk.getChunkInfo());
+    }
+}
+
+bool StreamingAggregatingTransform::executeOrMergeColumns(Columns & columns)
+{
+    size_t num_rows = columns[0]->size();
+    src_rows += num_rows;
+    for (const auto & column : columns)
+        src_bytes += column->byteSize();
+
+    if (params->only_merge)
+    {
+        /// proton: starts
+        auto block = getInputs().front().getHeader().cloneWithColumns(columns);
+        /// proton: ends
+        block = materializeBlock(block);
+        return params->aggregator.mergeOnBlock(block, variants, no_more_keys);
+    }
+    else
+        return params->aggregator.executeOnBlock(columns, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
+}
+
+void StreamingAggregatingTransform::consumeForSession(Columns & columns)
+{
+    size_t num_rows = columns[0]->size();
+    ColumnPtr session_id_column;
+    Block merged_block;
+
+    /// Get session_id column
+    session_id_column = columns.at(params->params.keys[0]);
+
+    /// proton: starts. Prepare for session window
+    ColumnPtr time_column = columns.at(params->params.time_col_pos);
+
+    size_t prev = 0;
+    size_t late_events = 0;
+    IColumn::Filter filter(num_rows, 1);
+
+    for (size_t i = 0; i < num_rows;)
+    {
+        SessionStatus status;
+        /// filter starts from prev to pos of event to be emitted
+        filter.resize_fill(num_rows - prev, 1);
+
+        /// For session window, it has two rounds to execute each row of block if it might trigger a session emit.
+        /// the first round is to find all sessions to emit, then emit those sessions before process the current row.
+        /// After emit sessions and clear up session info, the second round to process the current row.
+        if (params->params.time_col_is_datetime64)
+        {
+            status = params->aggregator.processSessionRow<ColumnDecimal<DateTime64>>(
+                const_cast<SessionHashMap &>(params->aggregator.session_map),
+                session_id_column,
+                time_column,
+                i,
+                const_cast<Int64 &>(params->aggregator.max_event_ts));
+        }
+        else
+        {
+            status = params->aggregator.processSessionRow<ColumnVector<UInt32>>(
+                const_cast<SessionHashMap &>(params->aggregator.session_map),
+                session_id_column,
+                time_column,
+                i,
+                const_cast<Int64 &>(params->aggregator.max_event_ts));
+        }
+
+        if (status != SessionStatus::IGNORE)
+        {
+            filter[i - prev] = 1;
+        }
+        else
+        {
+            filter[i - prev] = 0;
+            late_events++;
+        }
+
+        if (status == SessionStatus::EMIT)
+        {
+            /// if need to emit, first split rows before emit row to process,
+            /// then finalizeSessio0 to emit sessions,
+            /// last continue to process next row
+            Columns to_process(columns.size());
+            if (i > prev)
+            {
+                filter.resize_fill(i - prev);
+                splitColumns(prev, i - prev, filter, late_events, columns, to_process);
+                /// FIXME: handle the process error when return value is true
+                if (!executeOrMergeColumns(to_process))
+                    is_consume_finished = false;
+                prev = i;
+                late_events = 0;
+            }
+
+            finalizeSession(params->aggregator.sessions_to_emit, merged_block);
+        }
+        else
+            i++;
+    }
+
+    if (prev < num_rows)
+    {
+        Columns to_process(columns.size());
+        splitColumns(prev, num_rows - prev, filter, late_events, columns, to_process);
+
+        /// FIXME: handle the process error when return value is true
+        if (!executeOrMergeColumns(to_process))
+            is_consume_finished = false;
+    }
+
+    if (merged_block.rows() > 0)
+    {
+        ChunkInfoPtr info = std::make_shared<ChunkInfo>();
+        setCurrentChunk(convertToChunk(merged_block), info);
     }
 }
 
