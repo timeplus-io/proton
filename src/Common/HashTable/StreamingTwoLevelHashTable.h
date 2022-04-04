@@ -479,20 +479,16 @@ public:
         size_t removed = 0;
 
         /// Step 1, remove very old windows
-        for (auto it = impls.begin(), it_end = impls.end(); it != it_end;)
+        auto it = impls.find(session_id);
+        if (it!=impls.end())
         {
-            if (it->first == session_id)
-            {
-                it->second.forEachMapped(mapped_destroy);
-                it->second.clearAndShrink();
+            it->second.forEachMapped(mapped_destroy);
+            it->second.clearAndShrink();
 
-                last_removed_watermark = it->first;
-                ++removed;
+            last_removed_watermark = it->first;
+            ++removed;
 
-                it = impls.erase(it);
-            }
-            else
-                break;
+            it = impls.erase(it);
         }
 
         auto new_size = impls.size();

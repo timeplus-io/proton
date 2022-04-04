@@ -16,6 +16,7 @@ namespace ErrorCodes
     extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
     extern const int BAD_ARGUMENTS;
+    extern const int MISSING_SESSION_KEY;
 }
 
 namespace
@@ -253,46 +254,34 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
     const auto & args = func_ast->arguments->children;
-    if (args.size() < 2)
+    if (args.size() < 3)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
 
     ASTPtr table;
     ASTPtr time_expr;
     ASTPtr session_interval;
+    bool has_time_column = true;
 
     do
     {
         table = args[0];
 
-        bool has_time_column = true;
-        if (args.size() == 2)
+        if (isTimeExprAST(args[1]) && isIntervalAST(args[2]))
         {
-            /// Case: session(table, INTERVAL 5 SECOND)
-            if (isIntervalAST(args[1]))
-            {
-                session_interval = args[1];
-                time_expr = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
-            }
-            else
-                break; /// throw error
+            /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
+            time_expr = args[1];
+            session_interval = args[2];
+            if (args.size() == 3)
+                throw Exception("session(stream, ...) requires at least one session key column, provides zero", ErrorCodes::MISSING_SESSION_KEY); /// throw error, missing session key
         }
-        else if (args.size() >= 3)
+        else if (isIntervalAST(args[1]))
         {
-            if (isTimeExprAST(args[1]) && isIntervalAST(args[2]))
-            {
-                /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
-                time_expr = args[1];
-                session_interval = args[2];
-            }
-            else if (isIntervalAST(args[1]))
-            {
-                time_expr = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
-                session_interval = args[1];
-                has_time_column = false;
-            }
-            else
-                break; /// throw error
+            time_expr = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+            session_interval = args[1];
+            has_time_column = false;
         }
+        else
+            break; /// throw error
 
         asts.emplace_back(table);
         asts.emplace_back(time_expr);
