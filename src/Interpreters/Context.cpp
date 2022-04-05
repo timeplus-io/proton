@@ -78,6 +78,7 @@
 #include <filesystem>
 
 /// proton: starts
+#include <Access/Authentication.h>
 #include <Coordination/MetaStoreDispatcher.h>
 #include <Core/SettingsUtil.h>
 #include <base/getFQDNOrHostName.h>
@@ -712,7 +713,27 @@ String Context::getPasswordByUserName(const String & user_name) const
 {
     if (auto id = getAccessControl().find<User>(user_name))
         if (auto user = getAccessControl().tryRead<User>(*id))
-            return user->auth_data.getPassword();
+        {
+            switch (user->auth_data.getType())
+            {
+                case AuthenticationType::NO_PASSWORD:
+                    return "";
+                case AuthenticationType::PLAINTEXT_PASSWORD:
+                case AuthenticationType::DOUBLE_SHA1_PASSWORD:
+                case AuthenticationType::SHA256_PASSWORD:
+                {
+                    const auto & password_hash = user->auth_data.getPasswordHashBinary();
+                    return String(password_hash.data(), password_hash.data() + password_hash.size());
+                }
+                /// TODO: Support LDAP and Kerberos authentication type
+                case AuthenticationType::LDAP:
+                    throw Authentication::Require<BasicCredentials>("Proton LDAP Authentication: " + user->auth_data.getLDAPServerName());
+                case AuthenticationType::KERBEROS:
+                    throw Authentication::Require<GSSAcceptorContext>(user->auth_data.getKerberosRealm());
+                default:
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown authentication type: {}", user->auth_data.getType());
+            }
+        }
 
     return "";
 }

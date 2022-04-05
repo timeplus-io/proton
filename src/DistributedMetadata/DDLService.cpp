@@ -9,6 +9,7 @@
 #include <DistributedWALClient/KafkaWAL.h>
 #include <DistributedWALClient/KafkaWALCommon.h>
 #include <Interpreters/Context.h>
+#include <Common/ErrorCodes.h>
 #include <Common/escapeForFileName.h>
 
 #include <Poco/Net/HTTPRequest.h>
@@ -287,11 +288,22 @@ void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const Strin
     /// FIXME : Parallelize doDDL on the uris
     for (auto & uri : target_hosts)
     {
-        uri.addQueryParameter("distributed_ddl", "false");
-        auto err = doDDL(payload, uri, method, query_id, user);
-        if (err != ErrorCodes::OK)
+        try
         {
-            failed_hosts.push_back(uri.getHost() + ":" + toString(uri.getPort()));
+            uri.addQueryParameter("distributed_ddl", "false");
+            auto err = doDDL(payload, uri, method, query_id, user);
+            if (err != ErrorCodes::OK)
+            {
+                failed_hosts.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), err, ErrorCodes::getName(err)));
+            }
+        }
+        catch (const Exception & e)
+        {
+            failed_hosts.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), e.code(), e.what()));
+        }
+        catch (...)
+        {
+            failed_hosts.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), getCurrentExceptionCode(), getCurrentExceptionMessage(false)));
         }
     }
 
