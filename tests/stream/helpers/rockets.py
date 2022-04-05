@@ -316,12 +316,13 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
     )
     kill_res = proton_client.execute(kill_sql)
     logger.info(
-        f"kill_query: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res} was called"
+        f"kill query_id = {query_2_kill}: kill_sql = {kill_sql} cmd executed, kill_res = {kill_res} was called"
     )
     while len(kill_res):
         time.sleep(0.2)
         kill_res = proton_client.execute(kill_sql)
         logger.debug(f"kill_query: kill_res = {kill_res} was called")
+    logger.info(f"kill query_id = {query_2_kill}, kill_sql = {kill_sql} cmd executed and success.")
 
 
 def request_rest(
@@ -1233,6 +1234,7 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
 
 def input_batch_rest(rest_setting, input_batch, table_schema):
     # todo: complete the input by rest
+    logger = mp.get_logger()
     input_batch_record = {}
     try:
         logger.debug(
@@ -1254,7 +1256,6 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
         while not table_exist(table_ddl_url, table_name):
             time.sleep(0.01)
             retry -= 1
-
         input_rest_columns = []
         input_rest_body_data = []
         input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
@@ -1376,11 +1377,15 @@ def input_walk_through_rest(
     wait_before_inputs=1,  # todo: remove all the sleep
     sleep_after_inputs=1.5,  # todo: remove all the sleep (current stable set wait_before_inputs=1, sleep_after_inputs=1.5)
 ):
+    logger = mp.get_logger()
+    logger.debug(f"running here, rest_setting = {rest_setting}, table_schemas = {table_schemas}")
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
+    logger.debug(f"running here.")
     time.sleep(wait_before_inputs)
     input_url = rest_setting.get("ingest_url")
     inputs_record = []
+    
     try:
         for batch in inputs:
             table_name = batch.get("table_name")
@@ -1458,6 +1463,8 @@ def table_exist_py(pyclient, table_name):
 
 
 def table_exist(table_ddl_url, table_name):
+    logger = mp.get_logger()
+    pyclient = Client('localhost', port=8463) # use table_exist_py as an backup in case rest is broken
     logger.debug(
         f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}"
     )
@@ -1477,6 +1484,8 @@ def table_exist(table_ddl_url, table_name):
             logger.debug(f"table_name = {table_name} does not exist")
             return False
         else:
+            if table_exist_py(pyclient, table_name):
+                return True            
             logger.debug("table_list is [] table_name = {table_name} does not exist.")
             return False
 
@@ -1674,9 +1683,11 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
         else:
             if table_type == "table":
                 drop_table_res = drop_table_if_exist_rest(table_ddl_url, table_name)
+                logger.debug(f"drop_table_if_exist_rest({table_ddl_url}, {table_name}) = {drop_table_res}")
                 tables_setup.append(table_name)
             elif table_type == "view":
                 drop_view_res = drop_view_if_exist_py(client, table_name)
+                logger.debug(f"drop_view_if_exist_py(clieent, {table_name}) = {drop_view_res}")
                 tables_setup.append(table_name)
 
     for table_schema in table_schemas:
@@ -1695,6 +1706,7 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
     if setup != None:
         setup_inputs = setup.get("inputs")
         if setup_inputs != None:
+            logger.debug(f"input_walk_through_rest to be started.")
             setup_input_res = input_walk_through_rest(
                 rest_setting, setup_inputs, table_schemas
             )

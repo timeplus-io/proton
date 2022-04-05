@@ -184,7 +184,7 @@
         },
         {
             "id": 1,
-            "tags": ["sytax exception"],
+            "tags": ["syntax exception"],
             "name": "stream query expected exception: not under aggregate and not in group",
             "description": "expected exception",
             "steps":[
@@ -198,7 +198,7 @@
         },
         {
             "id": 2,
-            "tags": ["sytax exception", "bug"],
+            "tags": ["syntax exception", "bug"],
             "name": "stream query expected exception: global stream query w/ PERIODIC INTERVAL but no aggreagation",
             "description": "expected exception",
             "steps": [
@@ -211,7 +211,7 @@
         },
         {
             "id": 3,
-            "tags": ["sytax exception"],
+            "tags": ["syntax exception"],
             "name": "stream query expected exception: stream query group by w/ both window_start and window_end lacked",
             "description": "expected exception",
             "steps":[
@@ -927,7 +927,7 @@
         {
             "id": 28,
             "tags": ["join"],
-            "name": "stream bumble aggregation join table",
+            "name": "stream tumble aggregation join table",
             "description": "stream stream aggregation join",
             "steps":[
                 {"statements": [
@@ -962,7 +962,7 @@
         {
             "id": 29,
             "tags": ["join"],
-            "name": "stream bumble aggregation join table w/where",
+            "name": "stream tumble aggregation join table w/where",
             "description": "stream stream aggregation join table w/where",
             "steps":[
                 {"statements": [
@@ -1285,7 +1285,7 @@
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":1, "query_type": "table", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
+                    {"client":"python","query_id":"101", "wait":1, "query_type": "table", "query_end_timer":2, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":

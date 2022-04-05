@@ -27,13 +27,13 @@
         },
         {
             "id": 1,
-            "tags": ["type", "bug"],
+            "tags": ["type"],
             "name": "uint",
             "description": "create a table t_unit with uint type and ingest, query",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_unit"},
-                    {"client":"python", "query_type": "table", "query":"create stream t_unit (uint uint)"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_uint"},
+                    {"client":"python", "query_type": "table", "query":"create stream t_uint (uint uint)"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_uint (uint) values (123456)"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select  uint from t_uint settings seek_to = 'earliest'"}
                     ]}
@@ -63,7 +63,7 @@
         },
         {
             "id": 3,
-            "tags": ["type", "bug"],
+            "tags": ["type"],
             "name": "bool",
             "description": "create a table t_bool with bool type and ingest, query, but of proton-python-driver",
             "steps":[
@@ -76,12 +76,12 @@
             ],
 
             "expected_results": [{"query_id":"801", "expected_results":[
-                ["true"]]}
+                ["True"]]}
             ]
         },
         {
             "id": 4,
-            "tags": ["type", "bug"],
+            "tags": ["type"],
             "name": "fixed_string",
             "description": "create a table t_fixeds with fixed_string type and ingest, query, but of proton-python-driver",
             "steps":[
