@@ -311,9 +311,9 @@ bool HTTPHandler::authenticateUser(
 
     /// The user and password can be passed by headers (similar to X-Auth-*),
     /// which is used by load balancers to pass authentication information.
-    std::string user = request.get("X-Proton-User", "");
-    std::string password = request.get("X-Proton-Key", "");
-    std::string quota_key = request.get("X-Proton-Quota", "");
+    std::string user = request.get("x-proton-user", "");
+    std::string password = request.get("x-proton-key", "");
+    std::string quota_key = request.get("x-proton-quota", "");
 
     std::string spnego_challenge;
 
@@ -361,7 +361,7 @@ bool HTTPHandler::authenticateUser(
     {
         /// It is prohibited to mix different authorization schemes.
         if (request.hasCredentials() || params.has("user") || params.has("password") || params.has("quota_key"))
-            throw Exception("Invalid authentication: it is not allowed to use X-Proton HTTP headers and other authentication methods simultaneously", ErrorCodes::AUTHENTICATION_FAILED);
+            throw Exception("Invalid authentication: it is not allowed to use x-proton HTTP headers and other authentication methods simultaneously", ErrorCodes::AUTHENTICATION_FAILED);
     }
 
     if (spnego_challenge.empty()) // I.e., now using user name and password strings ("Basic").
@@ -671,8 +671,8 @@ void HTTPHandler::processQuery(
         reserved_param_suffixes.emplace_back("_structure");
     }
 
-    std::string database = request.get("X-Proton-Database", "");
-    std::string default_format = request.get("X-Proton-Format", "");
+    std::string database = request.get("x-proton-database", "");
+    std::string default_format = request.get("x-proton-format", "");
 
     SettingsChanges settings_changes;
     for (const auto & [key, value] : params)
@@ -709,7 +709,7 @@ void HTTPHandler::processQuery(
     context->applySettingsChanges(settings_changes);
 
     /// Set the query id supplied by the user, if any, and also update the OpenTelemetry fields.
-    context->setCurrentQueryId(params.get("query_id", request.get("X-Proton-Query-Id", "")));
+    context->setCurrentQueryId(params.get("query_id", request.get("x-proton-query-id", "")));
 
     /// Initialize query scope, once query_id is initialized.
     /// (To track as much allocations as possible)
@@ -780,9 +780,9 @@ void HTTPHandler::processQuery(
         [&response] (const String & current_query_id, const String & content_type, const String & format, const String & timezone)
         {
             response.setContentType(content_type);
-            response.add("X-Proton-Query-Id", current_query_id);
-            response.add("X-Proton-Format", format);
-            response.add("X-Proton-Timezone", timezone);
+            response.add("x-proton-query-id", current_query_id);
+            response.add("x-proton-format", format);
+            response.add("x-proton-timezone", timezone);
         }
     );
 
@@ -800,7 +800,7 @@ void HTTPHandler::trySendExceptionToClient(
     const std::string & s, int exception_code, HTTPServerRequest & request, HTTPServerResponse & response, Output & used_output)
 try
 {
-    response.set("X-Proton-Exception-Code", toString<int>(exception_code));
+    response.set("x-proton-exception-code", toString<int>(exception_code));
 
     /// FIXME: make sure that no one else is reading from the same stream at the moment.
 
@@ -897,7 +897,7 @@ void HTTPHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse 
             return;
         }
         response.setContentType("text/plain; charset=UTF-8");
-        response.set("X-Proton-Server-Display-Name", server_display_name);
+        response.set("x-proton-server-display-name", server_display_name);
         /// For keep-alive to work.
         if (request.getVersion() == HTTPServerRequest::HTTP_1_1)
             response.setChunkedTransferEncoding(true);

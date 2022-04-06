@@ -7,7 +7,6 @@ class FunctionFactory;
 
 #if USE_MISC_FUNCS
 void registerFunctionCurrentDatabase(FunctionFactory &);
-void registerFunctionCurrentUser(FunctionFactory &);
 void registerFunctionCurrentProfiles(FunctionFactory &);
 void registerFunctionCurrentRoles(FunctionFactory &);
 void registerFunctionHostName(FunctionFactory &);
@@ -72,6 +71,7 @@ void registerFunctionConvertCharset(FunctionFactory &);
 
 #endif
 
+void registerFunctionCurrentUser(FunctionFactory &);
 void registerFunctionTimezone(FunctionFactory &);
 void registerFunctionVersion(FunctionFactory &);
 
@@ -101,7 +101,6 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
 {
 #if USE_MISC_FUNCS
     registerFunctionCurrentDatabase(factory);
-    registerFunctionCurrentUser(factory);
     registerFunctionCurrentProfiles(factory);
     registerFunctionCurrentRoles(factory);
     registerFunctionHostName(factory);
@@ -173,6 +172,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionGetFuzzerData(factory);
 #endif
 
+    registerFunctionCurrentUser(factory);
     registerFunctionToTypeName(factory);
     registerFunctionMaterialize(factory);
     registerFunctionDefaultValueOfTypeName(factory);
