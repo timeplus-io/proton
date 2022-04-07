@@ -143,8 +143,8 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 101, "depends_on_table":"test", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
-                    {"client":"python", "query_id": 102, "depends_on_table":"test", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
+                    {"client":"python", "query_id": 101, "depends_on_stream":"test", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
+                    {"client":"python", "query_id": 102, "depends_on_stream":"test", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
                 ]},
 
 
@@ -1285,7 +1285,7 @@
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":1, "query_type": "table", "query_end_timer":2, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
+                    {"client":"python","query_id":"101", "wait":3, "query_type": "table", "query_end_timer":2, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":

@@ -144,8 +144,8 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":601, "depends_on_table":"test_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
-                    {"client":"python", "query_id":602, "depends_on_table":"test_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
+                    {"client":"python", "query_id":601, "depends_on_stream":"test_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
+                    {"client":"python", "query_id":602, "depends_on_stream":"test_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
                 ]},
 
 

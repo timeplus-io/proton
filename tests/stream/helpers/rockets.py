@@ -400,7 +400,7 @@ def query_run_exec(statement_2_run, config):
     query_type = statement_2_run.get("query_type")
     query = statement_2_run.get("query")
     query_client = statement_2_run.get("client")
-    depends_on_table = statement_2_run.get("depends_on_table")
+    depends_on_stream = statement_2_run.get("depends_on_stream")
     query_start_time_str = str(datetime.datetime.now())
     query_end_time_str = str(datetime.datetime.now())
     user = statement_2_run.get("user")
@@ -414,6 +414,25 @@ def query_run_exec(statement_2_run, config):
     command = f'docker exec proton-server proton-client -u {user} --password {password} --query="{query}"'
     logger.debug(f"command = {command}")
     try: 
+        if depends_on_stream != None:
+            proton_server = config.get("proton_server")
+            proton_server_native_port = config.get("proton_server_native_port")
+            settings = {"max_block_size": 100000}            
+            logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
+            retry = 500
+            pyclient = Client(
+                host=proton_server, port=proton_server_native_port
+            )  # create python client
+            while not table_exist_py(pyclient, depends_on_stream):
+                time.sleep(0.01)
+                retry -= 1
+            if retry >0:
+                logger.debug(f"depends_on_stream exists.")
+            else:
+                logger.debug(f"depends_on_stream does not exist, raise exception")
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")             
+        
+    
         query_result_str = exec_command(command)
         query_end_time_str = str(datetime.datetime.now())
         query_results = {
@@ -460,7 +479,7 @@ def query_run_rest(rest_setting, statement_2_run):
     query_id = str(statement_2_run.get("query_id"))
     query_type = statement_2_run.get("query_type")
     query = statement_2_run.get("query")
-    depends_on_table = statement_2_run.get("depends_on_table")
+    depends_on_stream = statement_2_run.get("depends_on_stream")
     query_start_time_str = str(datetime.datetime.now())
     query_end_time_str = str(datetime.datetime.now())
     query_result_str = ""
@@ -475,12 +494,25 @@ def query_run_rest(rest_setting, statement_2_run):
         http_snapshot_url = rest_setting.get("http_snapshot_url")
         rest_type = statement_2_run.get("rest_type")
         query_url = statement_2_run.get("query_url")
+        table_ddl_url = rest_setting.get("table_ddl_url")
         wait = statement_2_run.get("wait")
         http_method = statement_2_run.get("http_method")
         data = statement_2_run.get("data")
         args = statement_2_run.get("args")
         body = statement_2_run.get("body")
         params = statement_2_run.get("params")
+        
+        if depends_on_stream != None:
+            logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
+            retry = 500
+            while not table_exist(table_ddl_url, depends_on_stream):
+                time.sleep(0.01)
+                retry -= 1
+            if retry >0:
+                logger.debug(f"depends_on_stream exists.")
+            else:
+                logger.debug(f"depends_on_stream does not exist, raise exception")
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")         
         # if params == None: params = rest_setting.get("params")
         if rest_type == "raw":
             url = host_url + query_url
@@ -603,7 +635,7 @@ def query_run_py(
         query_id = str(statement_2_run.get("query_id"))
         query_type = statement_2_run.get("query_type")
         run_mode = statement_2_run.get("run_mode")
-        depends_on_table = statement_2_run.get("depends_on_table")
+        depends_on_stream = statement_2_run.get("depends_on_stream")
         query_start_time_str = str(datetime.datetime.now())
         query_end_time_str = str(datetime.datetime.now())
         element_json_str = ""
@@ -618,19 +650,20 @@ def query_run_py(
         streams = pyclient.execute("show streams")
         logger.debug(f"show streams = {streams}")
 
-        if depends_on_table != None and isinstance(depends_on_table, str):
+        if depends_on_stream != None and isinstance(depends_on_stream, str):
             retry = 500
-            while not table_exist_py(pyclient, depends_on_table) and retry > 0:
+            while not table_exist_py(pyclient, depends_on_stream) and retry > 0:
                 time.sleep(0.02)
                 retry -= 1
             logger.debug(f"retry remains after retry -=1 {retry}")
             if retry <= 0:
                 logger.debug(
-                    f"check depends_on_table 500 times and depends_on_table={depends_on_table} does not exist"
+                    f"check depends_on_stream 500 times and depends_on_stream={depends_on_stream} does not exist"
                 )
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")                
             else:
                 logger.debug(
-                    f"check depends_on_table, depends_on_table={depends_on_table} found."
+                    f"check depends_on_stream, depends_on_stream={depends_on_stream} found."
                 )
 
         query_result_iter = pyclient.execute_iter(
@@ -1259,6 +1292,20 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
         input_rest_columns = []
         input_rest_body_data = []
         input_rest_body = {"columns": input_rest_columns, "data": input_rest_body_data}
+
+        depends_on_stream = input_batch.get("depends_on_stream")
+        if depends_on_stream != None:
+            logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
+            retry = 500
+            while not table_exist(table_ddl_url, depends_on_stream):
+                time.sleep(0.01)
+                retry -= 1
+            if retry >0:
+                logger.debug(f"depends_on_stream exists.")
+            else:
+                logger.debug(f"depends_on_stream does not exist, raise exception")
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")             
+
         depends_on = input_batch.get("depends_on")
         depends_on_exists = False
 
@@ -1269,7 +1316,7 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             query_id_list = res_json.get("data")
             logger.debug(f"query_id_list: {query_id_list}")
             if query_id_list != None and len(query_id_list) > 0:
-                retry = 20
+                retry = 200
                 # depends_on_exists = False
                 while retry > 0 and depends_on_exists != True:
                     for element in query_id_list:

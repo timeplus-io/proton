@@ -137,9 +137,9 @@
         },                
         {
             "id": 3,
-            "tags": ["session window", "bug"],
+            "tags": ["session window"],
             "name": "multiple stream session window with multiple emits",
-            "description": "3 unique stream session window based id and location, session window interval 1s, input data in 2 batches and triggle 2 batch emits",
+            "description": "3 unique stream session window based id and location, session window interval 1s, input data in 2 batches and 1st batch is emit dur to force timeout threshold is it while 2nd is not emit for not hitting threshold",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select count(), window_start, window_end, __tp_session_id, id from session(test_session, timestamp, 1s, id) group by __tp_session_id, window_start, window_end, id"}
@@ -158,7 +158,7 @@
                     {"table_name":"test_session", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:07+00:00"]]},
                     {"table_name":"test_session", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:07+00:00"]]},
                     {"table_name":"test_session", "data": [["dev3", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:07+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev4", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:09+00:00"]]}
+                    {"table_name":"test_session", "data": [["dev4", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:11+00:00"]]}
                 ]
                 }
             ],
@@ -167,22 +167,19 @@
                     ["2", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:01+00:00", "341031629", "dev2"],
                     ["2", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:01+00:00", "1084008069", "dev3"],
                     ["2", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:01+00:00", "1500306067","dev1"],
-                    ["1", "2020-02-02 20:00:05+00:00", "2020-02-02 20:00:06+00:00", "1978072629","dev4"],
-                    ["2", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "341031629", "dev2"],
-                    ["2", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "1084008069", "dev3"],
-                    ["2", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "1500306067","dev1"]
+                    ["1", "2020-02-02 20:00:05+00:00", "2020-02-02 20:00:06+00:00", "1978072629","dev4"]
                 ]}
             ]
         }, 
 
         {
             "id": 4,
-            "tags": ["session window", "bug", "todo"],
+            "tags": ["session window"],
             "name": "multiple stream session window with multiple emits with where clause",
             "description": "3 unique stream session window based id and location, session window interval 1s, input data in 2 batches and triggle 2 batch emits, where clause filter events",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select count(), window_start, window_end, __tp_session_id, id from session(test_session, timestamp, 1s, id) where id !='dev4' group by __tp_session_id, window_start, window_end, id"}
+                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select count(), window_start, window_end, __tp_session_id, id from session(test_session, timestamp, 1s, id) where id !='dev4' group by __tp_session_id, window_start, window_end, id"}
                 ]},
                 {"inputs": [
                     {"table_name":"test_session", "depends_on":"701", "wait":2, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:00+00:00"]]},
@@ -192,24 +189,17 @@
                     {"table_name":"test_session", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:01+00:00"]]},
                     {"table_name":"test_session", "data": [["dev3", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:01+00:00"]]},
                     {"table_name":"test_session", "data": [["dev4", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:05+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:06+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:06+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev3", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:06+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:07+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:07+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev3", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:07+00:00"]]},
-                    {"table_name":"test_session", "data": [["dev4", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:09+00:00"]]}
+                    {"table_name":"test_session", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:02+00:00"]]},
+                    {"table_name":"test_session", "data": [["dev3", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:02+00:00"]]},
+                    {"table_name":"test_session", "data": [["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:04+00:00"]]},
+                    {"table_name":"test_session", "data": [["dev3", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:04+00:00"]]}
                 ]
                 }
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
                 [
-                    ["2", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:01+00:00", "341031629", "dev2"],
-                    ["2", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:01+00:00", "1084008069", "dev3"],
-                    ["2", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:01+00:00", "1500306067","dev1"],
-                    ["2", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "341031629", "dev2"],
-                    ["2", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "1084008069", "dev3"],
-                    ["2", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "1500306067","dev1"]
+                    ["3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "341031629", "dev2"],
+                    ["3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "1084008069", "dev3"]
                 ]}
             ]
         },        
@@ -351,7 +341,7 @@
         }  ,
         {
             "id": 9,
-            "tags": ["session window", "bug"],
+            "tags": ["session window"],
             "name": "stream session window on top of sub query tail",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on transformed tail",
             "steps":[
@@ -360,16 +350,16 @@
                 ]},
                 {"inputs": [
                     {"table_name":"test_session","depends_on":"701", "wait":2, "data": [
-                        ["dev1", "ca", 57.3, "{\"create_time\":\"2020-02-02 20:00:00+00:00\"}", "2020-02-02 20:00:00+00:00"],
-                        ["dev2", "bj", 58.3, "{\"create_time\":\"2020-02-02 20:00:01+00:00\"}", "2020-02-02 20:00:01+00:00"]
+                        ["dev1", "ca", 57.3, "{\"create_time\":\"2020-02-02 20:00:00\"}", "2020-02-02 20:00:00+00:00"],
+                        ["dev2", "bj", 58.3, "{\"create_time\":\"2020-02-02 20:00:01\"}", "2020-02-02 20:00:01+00:00"]
                     ]},
 
                     {"table_name":"test_session","data": [
-                        ["dev1", "ca", 66, "{\"create_time\":\"2020-02-02 20:00:02+00:00\"}", "2020-02-02 20:00:02+00:00"],
-                        ["dev2", "ca", 60, "{\"create_time\":\"2020-02-02 20:00:02+00:00\"}", "2020-02-02 20:00:02+00:00"]
+                        ["dev1", "ca", 66, "{\"create_time\":\"2020-02-02 20:00:02\"}", "2020-02-02 20:00:02+00:00"],
+                        ["dev2", "ca", 60, "{\"create_time\":\"2020-02-02 20:00:02\"}", "2020-02-02 20:00:02+00:00"]
                     ]},
 
-                    {"table_name":"test_session", "data": [["dev3", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:15+00:00\"}", "2020-02-02 20:00:15+00:00"]]}
+                    {"table_name":"test_session", "data": [["dev3", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:15\"}", "2020-02-02 20:00:15+00:00"]]}
                 ]
                 }
             ],
@@ -421,39 +411,45 @@
         },         
         {
             "id": 11,
-            "tags": ["session window", "bug", "todo"],
+            "tags": ["session window"],
             "name": "stream session window on top of tumble sub query",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on tumble",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test_session) select max(value), window_start, window_end, __tp_session_id, id, location from session(transformed, transformed_timestamp, 2s, id, location) group by __tp_session_id, window_start, window_end, id, location"}
+                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"with transformed as (select id, location, max(value) as max_v, window_start as w_s, window_end as w_e from tumble(test_session, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC'), 2s) group by id, location, window_start, window_end) select count(max_v), window_start, window_end, __tp_session_id, id, location from session(transformed, w_e, 2s, id, location) group by __tp_session_id, window_start, window_end, id, location"}
                 ]},
                 {"inputs": [
                     {"table_name":"test_session","depends_on":"701", "wait":2, "data": [
-                        ["dev1", "ca", 57.3, "{\"create_time\":\"2020-02-02 20:00:00+00:00\"}", "2020-02-02 20:00:00+00:00"],
-                        ["dev2", "bj", 58.3, "{\"create_time\":\"2020-02-02 20:00:01+00:00\"}", "2020-02-02 20:00:01+00:00"]
+                        ["dev1", "ca", 57.3, "{\"create_time\":\"2020-02-02 20:00:00\"}", "2020-02-02 20:00:00+00:00"],
+                        ["dev2", "bj", 58.3, "{\"create_time\":\"2020-02-02 20:00:01\"}", "2020-02-02 20:00:01+00:00"],
+                        ["dev2", "bj", 58.3, "{\"create_time\":\"2020-02-02 20:00:02\"}", "2020-02-02 20:00:02+00:00"]
                     ]},
 
                     {"table_name":"test_session","depends_on":"701", "data": [
-                        ["dev1", "ca", 66, "{\"create_time\":\"2020-02-02 20:00:02+00:00\"}", "2020-02-02 20:00:02+00:00"],
-                        ["dev2", "ca", 60, "{\"create_time\":\"2020-02-02 20:00:02+00:00\"}", "2020-02-02 20:00:02+00:00"]
+                        ["dev1", "ca", 66, "{\"create_time\":\"2020-02-02 20:00:03\"}", "2020-02-02 20:00:03+00:00"],
+                        ["dev2", "ca", 60, "{\"create_time\":\"2020-02-02 20:00:04\"}", "2020-02-02 20:00:04+00:00"]
                     ]},
 
-                    {"table_name":"test_session", "data": [["dev3", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:15+00:00\"}", "2020-02-02 20:00:15+00:00"]]}
+                    {"table_name":"test_session", "data": [
+                        ["dev1", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:15\"}", "2020-02-02 20:00:15+00:00"],
+                        ["dev2", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:16\"}", "2020-02-02 20:00:16+00:00"],
+                        ["dev3", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:20\"}", "2020-02-02 20:00:20+00:00"]
+                    
+                    ]}
                 ]
                 }
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
             [
-                ["66", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "2746372735", "dev1", "ca"],
-                ["60", "2020-02-02 20:00:02+00:00", "2020-02-02 20:00:03+00:00", "4072938192", "dev2", "ca"],
-                ["58.3", "2020-02-02 20:00:01+00:00", "2020-02-02 20:00:02+00:00", "4269204367", "dev2", "bj"]
+                ["2", "2020-02-02 20:00:02+00:00", "2020-02-02 20:00:04+00:00", "2746372735", "dev1", "ca"],
+                ["2", "2020-02-02 20:00:02+00:00", "2020-02-02 20:00:04+00:00", "4269204367", "dev2", "bj"],
+                ["1", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:07+00:00", "4072938192", "dev2", "ca"]
             ]}
             ]
         }, 
         {
             "id": 12,
-            "tags": ["session window", "bug", "todo"],
+            "tags": ["session window", "todo"],
             "name": "stream session window on top of hopping sub query",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session based on hop",
             "steps":[
@@ -485,7 +481,7 @@
         },
         {
             "id": 13,
-            "tags": ["session window", "bug", "todo"],
+            "tags": ["session window", "todo"],
             "name": "tumble window on top of session window sub query",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, tumble based on session",
             "steps":[
