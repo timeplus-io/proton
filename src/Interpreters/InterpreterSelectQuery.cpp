@@ -626,6 +626,22 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             result_header.erase(STREAMING_TIMESTAMP_ALIAS);
     };
 
+    /// proton: starts. Add timestamp column and '__tp_session_id' to group by
+    if (windowType() == WindowType::SESSION && query.groupBy())
+    {
+        auto & group_exprs = query_ptr->as<ASTSelectQuery>()->groupBy()->children;
+        auto desc = getStreamingFunctionDescription();
+
+        if (desc)
+        {
+            const auto time_col_name = desc->argument_names[0];
+            group_exprs.emplace_back(std::make_shared<ASTIdentifier>(time_col_name));
+            group_exprs.emplace_back(std::make_shared<ASTIdentifier>(STREAMING_SESSION_ID));
+        }
+
+    }
+    /// proto: ends
+
     analyze(shouldMoveToPrewhere());
 
     bool need_analyze_again = false;
@@ -2790,6 +2806,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     /// of the aggregation columns for later window extraction
     StreamingAggregator::Params::GroupBy streaming_group_by = StreamingAggregator::Params::GroupBy::OTHER;
     size_t time_col_pos = 0;
+    String time_col_name;
     if (windowType() == WindowType::SESSION)
     {
         streaming_group_by = StreamingAggregator::Params::GroupBy::SESSION;
@@ -2799,6 +2816,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             throw Exception(
                 "StreamingFunctionDescription should not be nullptr for session window", ErrorCodes::INVALID_STREAMING_FUNC_DESC);
 
+        time_col_name = desc->argument_names[0];
         time_col_pos = header_before_aggregation.getPositionByName(desc->argument_names[0]);
 
         /// add STREAMING_SESSION_ID key into group by keys at the beginning
@@ -2811,7 +2829,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because StreamingAggregator automatically add three session related columns.
         /// Also ignore STREAMING_SESSION_ID, as it has already been added in group by keys.
         if (window_type == WindowType::SESSION
-            && (key.name == STREAMING_WINDOW_START || key.name == STREAMING_WINDOW_END || key.name == STREAMING_SESSION_ID))
+            && (key.name == STREAMING_WINDOW_START || key.name == STREAMING_WINDOW_END || key.name == STREAMING_SESSION_ID
+                || key.name == time_col_name))
             continue;
 
         if ((key.name == STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
