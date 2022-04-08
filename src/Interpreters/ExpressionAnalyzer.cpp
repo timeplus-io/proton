@@ -190,7 +190,7 @@ void tryTranslateToParametricAggregateFunction(
     assert(node->arguments);
     const ASTs & arguments = node->arguments->children;
     const auto & lower_name = node->name;
-    if (lower_name == "min_k" || lower_name == "max_k" || lower_name == "top_k")
+    if (lower_name == "min_k" || lower_name == "max_k")
     {
         /// Translate `min_k(key, num[, context...])` to `min_k(num)(key[, context...])`
         /// Make the second argument as a const parameter
@@ -204,6 +204,21 @@ void tryTranslateToParametricAggregateFunction(
 
         aggregate.argument_names.erase(aggregate.argument_names.begin() + 1);
         types.erase(types.begin() + 1);
+    }
+    else if (lower_name == "top_k")
+    {
+        /// Translate `top_k(key, num, with_count)` to `top_k(num, with_count)(key)`
+        auto size = arguments.size();
+        if (size < 2 || size > 3)
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 or 3 arguments.", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.assign(arguments.begin() + 1, arguments.end());
+        aggregate.parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        aggregate.argument_names = {aggregate.argument_names[0]};
+        types = {types[0]};
     }
     else if (lower_name == "quantile")
     {

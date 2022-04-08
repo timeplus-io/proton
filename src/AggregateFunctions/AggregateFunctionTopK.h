@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
 
 #include <Columns/ColumnArray.h>
 
@@ -121,7 +122,7 @@ template <bool is_plain_column, bool is_weighted>
 class AggregateFunctionTopKGeneric
     : public IAggregateFunctionDataHelper<AggregateFunctionTopKGenericData, AggregateFunctionTopKGeneric<is_plain_column, is_weighted>>
 {
-private:
+protected:
     using State = AggregateFunctionTopKGenericData;
 
     UInt64 threshold;
@@ -228,4 +229,83 @@ public:
     }
 };
 
+/// proton: starts. Extended with count
+template <typename T, bool is_weighted>
+class AggregateFunctionTopKWithCount : public AggregateFunctionTopK<T, is_weighted>
+{
+public:
+    using AggregateFunctionTopK<T, is_weighted>::AggregateFunctionTopK;
+
+    String getName() const override { return is_weighted ? "top_k_weighted_with_count" : "top_k_with_count"; }
+
+    /// Result: (top_value, count)
+    DataTypePtr getReturnType() const override
+    {
+        return std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeTuple>(DataTypes{this->argument_types[0], std::make_shared<DataTypeUInt64>()}));
+    }
+
+    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
+    {
+        auto & arr_to = assert_cast<ColumnArray &>(to);
+        auto & tuple_to = assert_cast<ColumnTuple &>(arr_to.getData());
+        ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
+
+        const auto & set = this->data(place).value;
+        const auto & result_vec = set.topK(this->threshold);
+
+        auto & column_value = assert_cast<ColumnVector<T> &>(tuple_to.getColumn(0));
+        auto & column_count = assert_cast<ColumnVector<UInt64> &>(tuple_to.getColumn(1));
+
+        for (const auto & elem : result_vec)
+        {
+            column_value.getData().push_back(elem.key);
+            column_count.getData().push_back(elem.count);
+        }
+
+        offsets_to.push_back(tuple_to.size());
+    }
+};
+
+template <bool is_plain_column, bool is_weighted>
+class AggregateFunctionTopKGenericWithCount : public AggregateFunctionTopKGeneric<is_plain_column, is_weighted>
+{
+public:
+    using AggregateFunctionTopKGeneric<is_plain_column, is_weighted>::AggregateFunctionTopKGeneric;
+
+    String getName() const override { return is_weighted ? "top_k_weighted_with_count" : "top_k_with_count"; }
+
+    /// Result: (top_value, count)
+    DataTypePtr getReturnType() const override
+    {
+        return std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeTuple>(DataTypes{this->input_data_type, std::make_shared<DataTypeUInt64>()}));
+    }
+
+    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
+    {
+        auto & arr_to = assert_cast<ColumnArray &>(to);
+        auto & tuple_to = assert_cast<ColumnTuple &>(arr_to.getData());
+        ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
+
+        const auto & set = this->data(place).value;
+        const auto & result_vec = set.topK(this->threshold);
+
+        auto & column_value = tuple_to.getColumn(0);
+        auto & column_count = assert_cast<ColumnVector<UInt64> &>(tuple_to.getColumn(1));
+
+        for (const auto & elem : result_vec)
+        {
+            if constexpr (is_plain_column)
+                column_value.insertData(elem.key.data, elem.key.size);
+            else
+                column_value.deserializeAndInsertFromArena(elem.key.data);
+
+            column_count.getData().push_back(elem.count);
+        }
+
+        offsets_to.push_back(tuple_to.size());
+    }
+};
+/// proton: ends.
 }
