@@ -53,7 +53,7 @@ int mainKeeper(int argc, char ** argv);
 int mainMetaStore(int argc, char ** argv);
 #endif
 /// proton: ends.
-#if ENABLE_PROTON_DWAL_BENCHMARK
+#if ENABLE_PROTON_KLOG_BENCHMARK
 int mainKLog(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_INSTALL
@@ -113,7 +113,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"metastore", mainMetaStore},
 #endif
 /// proton: ends.
-#if ENABLE_PROTON_DWAL_BENCHMARK
+#if ENABLE_PROTON_KLOG_BENCHMARK
     {"klog-benchmark", mainKLog},
 #endif
 #if ENABLE_PROTON_INSTALL

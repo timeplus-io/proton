@@ -21,5 +21,5 @@
 #cmakedefine01 ENABLE_PROTON_STATIC_FILES_DISK_UPLOADER
 /// proton : starts.
 #cmakedefine01 ENABLE_PROTON_METASTORE
+#cmakedefine01 ENABLE_PROTON_KLOG_BENCHMARK
 /// proton : ends.
-#cmakedefine01 ENABLE_PROTON_DWAL_BENCHMARK
