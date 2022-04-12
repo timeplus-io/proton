@@ -119,17 +119,21 @@ createAggregateFunctionTopK(const std::string & name, const DataTypes & argument
                 "The second argument for aggregate function 'top_k_weighted' must have integer type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
+    /// Synatx: top_k(key, k [, with_count = true] [, load_factor = 1000)
     UInt64 threshold = 10; /// default values
-    UInt64 load_factor = 3;
-    bool with_count = false;
+    UInt64 load_factor = 1000;
+    bool with_count = true;
 
     if (!params.empty())
     {
-        if (params.size() > 2)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function '{}' requires two parameters or less", name);
+        if (params.size() > 3)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function '{}' requires three parameters or less", name);
 
-        if (params.size() == 2)
+        if (params.size() >= 2)
             with_count = applyVisitor(FieldVisitorConvertToNumber<bool>(), params[1]);
+
+        if (params.size() == 3)
+            load_factor = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), params[2]);
 
         threshold = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), params[0]);
 

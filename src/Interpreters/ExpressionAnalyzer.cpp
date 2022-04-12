@@ -207,11 +207,11 @@ void tryTranslateToParametricAggregateFunction(
     }
     else if (lower_name == "top_k")
     {
-        /// Translate `top_k(key, num, with_count)` to `top_k(num, with_count)(key)`
+        /// Translate `top_k(key, num[, with_count, load_factor])` to `top_k(num[, with_count, load_factor])(key)`
         auto size = arguments.size();
-        if (size < 2 || size > 3)
+        if (size < 2 || size > 4)
             throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 or 3 arguments.", node->name);
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 to 4 arguments.", node->name);
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.assign(arguments.begin() + 1, arguments.end());
