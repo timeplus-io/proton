@@ -127,7 +127,7 @@ def scan_tests_file_path(tests_file_path):
             file_abs_path = f"{tests_file_path}/{file_name}"
             logger.debug(f"file_abs_path = {file_abs_path}")
             with open(file_abs_path) as test_suite_file:
-                test_suite = json.load(test_suite_file)
+                test_suite = json.load(test_suite_file, strict=False)
                 logger.debug(
                     f"test_suite_file = {test_suite_file}, was loaded successfully."
                 )
@@ -634,6 +634,7 @@ def query_run_py(
         query = statement_2_run.get("query")
         query_id = str(statement_2_run.get("query_id"))
         query_type = statement_2_run.get("query_type")
+        iter_wait = statement_2_run.get("iter_wait") #for some slow table query like test_id=61 in materialized_view
         run_mode = statement_2_run.get("run_mode")
         depends_on_stream = statement_2_run.get("depends_on_stream")
         query_start_time_str = str(datetime.datetime.now())
@@ -674,6 +675,10 @@ def query_run_py(
             f"query_run_py: query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
         )
 
+        if (query_type != None and query_type == 'table') and (iter_wait != None):
+            iter_wait = int(iter_wait)
+            time.sleep(iter_wait) # sleep for materialized_view test_id = 61, the execute_iter is async way, if too quick to start to iter, wait for 1s until query is setup, need to observe
+            logger.debug(f"query_type = {query_type}, sleep for iter_wait = {iter_wait}s")
         i = 0
         for element in query_result_iter:
             logger.debug(
@@ -725,7 +730,7 @@ def query_run_py(
             pyclient.disconnect()
 
     except (BaseException, errors.ServerException) as error:
-        logger.debug(f"exception, error = {error}")
+        logger.debug(f"exception, query_id={query_id}, query={query}, error = {error}")
         if isinstance(error, errors.ServerException):
             if (
                 error.code == 394
@@ -1493,7 +1498,7 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
                 f"table_list is [], table {table_name} does not exit, drop table {table_name} bypass"
             )
     else:
-        raise Exception(f"table list rest acces failed, status code={res.status_code}")
+        raise Exception(f"table list rest acces failed,requests.get({table_ddl_url}) status code={res.status_code}")
 
 
 def table_exist_py(pyclient, table_name):
@@ -1535,6 +1540,9 @@ def table_exist(table_ddl_url, table_name):
                 return True            
             logger.debug("table_list is [] table_name = {table_name} does not exist.")
             return False
+    else:
+        logger.debug(f"table list rest acces failed, requests.get({table_ddl_url}), status code={res.status_code}")
+        raise Exception(f"table list rest acces failed, requests.get({table_ddl_url}), status code={res.status_code}")
 
 
 def create_table_rest(table_ddl_url, table_schema, retry=3):
@@ -2286,6 +2294,7 @@ def rockets_run(test_context):
         test_suite_run_ctl_queue.put("run a test suite")
  
         test_suite_runner = mp.Process(target=test_suite_run, args=(config, test_suite_run_ctl_queue, test_suite_result_done_queue, test_suite_set_dict))
+        time.sleep(random.randint(1,10)) # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159
         test_suite_runner.start()
         test_suite_runners.append(
             {

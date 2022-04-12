@@ -90,6 +90,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                 continue
             else:
                 assert expected_result == query_result
+
         elif isinstance(expected_result, dict):
             for key in expected_result:
                 if expected_result[key] == "any_value":
@@ -123,7 +124,7 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                             ):  # for each filed of each row of each query_results
                                 expected_result_field = expected_result_row[i]
                                 query_result_field = query_result_row[i]
-                                if "array" in query_result_column_types[i][1]:
+                                if "array" in query_result_column_types[i][1] and "array_join" not in query_result_column_types[i][1]:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
@@ -162,7 +163,23 @@ def query_result_check(test_set, order_check=False, logging_level="INFO"):
                                         logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
                                         logging.debug("test_run: match")                                
                                 
-                                
+                                elif isinstance(expected_result_field,str):
+                                    _match = 1
+                                    _expected_field_itmes = expected_result_field.split(",")
+                                    _query_field_items = query_result_field.split(",")
+                                    for (_expected_item, _result_item)  in zip(_expected_field_itmes, _query_field_items):
+                                        logging.debug(f"_expected_item = {_expected_item}, _result_item = {_result_item}")
+                                        if _expected_item == 'any_value' or _expected_item == _result_item:
+                                            _match *= 1
+                                        else:
+                                            _match *= 0
+                                    if _match:
+                                        expected_result_row_field_check_arry[i] = 1
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: match")
+                                    else:
+                                        logging.debug(f"test_run: expected_result_field = {expected_result_field}, typeof expected_result = {type(expected_result_field)} query_result_field = {query_result_field} typeof query_result_field = {type(query_result_field)}")
+                                        logging.debug("test_run: not match")                                           
                                 else:
                                     if expected_result_field == query_result_field:
                                         expected_result_row_field_check_arry[i] = 1

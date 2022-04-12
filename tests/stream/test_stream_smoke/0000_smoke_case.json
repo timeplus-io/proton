@@ -132,7 +132,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample", "native_not_support"]}
     },
 
     "tests": [
@@ -325,11 +325,11 @@
         {
             "id": 8,
             "tags": ["tumble window"],
-            "name": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
+            "name": "stream tumble w/inputs across multiple windows for window start alignment - #101",
             "description": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 2,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:50"]]},
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:51"]]},
@@ -465,7 +465,7 @@
                 {"statements": [
                     {"client":"python", "query_id":"101", "query_type": "stream","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 5 second, interval 3 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
-                    {"table_name":"test","depends_on":"101","wait":1, "data": [
+                    {"table_name":"test","wait":1, "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                         ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:03"]
                     ]},
@@ -513,12 +513,12 @@
         },
         {
             "id": 15,
-            "tags": ["global aggregation"],
+            "tags": ["global"],
             "name": "global aggregation by max and group by id w/by default periodic",
             "description": "global aggregation by max and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, max(value) from test group by id emit periodic 5s"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, max(value) from test group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -544,12 +544,12 @@
 
         {
             "id": 16,
-            "tags": ["global aggregation distinct"],
+            "tags": ["global"],
             "name": "global sum distinct",
             "description": "global aggregation sum distinct and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, sum(distinct value), count(distinct value) from test group by id emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, sum(distinct value), count(distinct value) from test group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -578,7 +578,7 @@
 
         {
             "id": 17,
-            "tags": ["last x global aggregation w/where"],
+            "tags": ["last x", "native_not_support"],
             "name": "last x global aggregation w/where",
             "description": "last 5s global aggregation count *",
             "steps":[
@@ -599,7 +599,7 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":1, "query_type": "stream", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 emit last 5s"}]}
+                    {"client":"python","query_id":"101", "wait":1, "query_type": "stream", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 limit 5 emit last 5s"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["8"],
@@ -611,12 +611,12 @@
         },
         {
             "id": 18,
-            "tags": ["last x tumble delay"],
+            "tags": ["last x", "native_not_support"],
             "name": "last x tumble delay",
             "description": "max(value) tumble 5s and delay 2s group by id, window_start, window_end and last 1m",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_start, window_end from tumble(test_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end  emit after watermark and delay 2s and last 6s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_start, window_end from tumble(test_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end limit 6 emit after watermark and delay 2s and last 6s"}]},
                 {"inputs": [
                     {"table_name":"test_no_default_tp_time", "depends_on":"101", "wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -645,7 +645,7 @@
 
         {
             "id": 19,
-            "tags": ["last x tumble delay with distinct"],
+            "tags": ["last x", "native_not_support"],
             "name": "last x tumble delay with distinct",
             "description": "last 20s tumble 5s count(*)",
             "steps":[
@@ -868,7 +868,7 @@
             "description": "global stream aggregation join table",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -901,7 +901,7 @@
             "description": "global stream aggregation join table w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type limit 3 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -1069,7 +1069,7 @@
 
                 {
                 "statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id limit 7 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1678,7 +1678,7 @@
 
         {
             "id": 51,
-            "tags": ["seek to", "to reproduce"],
+            "tags": ["seek to", "to reproduce", "native_not_support"],
             "name": "seek to ago interval",
             "description": "seek to ago interval",
             "steps":[
@@ -1722,7 +1722,7 @@
                         ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, count(*), window_end from tumble(test, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'"}]}
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, count(*), window_end from tumble(test,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":

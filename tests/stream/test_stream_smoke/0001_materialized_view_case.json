@@ -145,7 +145,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_stream_sum_view"},
-                    {"client":"python","query_id":"300", "query_type": "table", "query":"create materialized view test_mv_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id emit periodic 5s"}
+                    {"client":"python","query_id":"300", "query_type": "table", "query":"create materialized view test_mv_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id limit 4 emit periodic 5s"}
                     ]},
                 {"inputs": [
                     {"table_name":"test_mv","depends_on_stream":"test_mv_stream_sum_view", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -162,7 +162,7 @@
                     ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "query_id":"301", "query_type": "table", "wait": 7, "query_end_timer":1, "query":"select id, sum_value from table(test_mv_stream_sum_view)"},
+                    {"client":"python", "query_id":"301", "query_type": "table", "iter_wait":1, "wait": 7, "query_end_timer":1, "query":"select id, sum_value from table(test_mv_stream_sum_view)"},
                     {"client":"python", "wait": 2, "query_type": "table", "query":"drop view if exists test_mv_stream_sum_view"}
                 ]
                 }
