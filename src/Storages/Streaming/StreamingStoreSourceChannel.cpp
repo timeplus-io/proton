@@ -24,7 +24,7 @@ StreamingStoreSourceChannel::~StreamingStoreSourceChannel()
 
 void StreamingStoreSourceChannel::readAndProcess()
 {
-    DWAL::RecordPtrs records;
+    nlog::RecordPtrs records;
     auto got_records = records_queue.tryPop(records, 100);
     if (!got_records)
         return;
@@ -43,7 +43,7 @@ void StreamingStoreSourceChannel::readAndProcess()
     {
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
-        Block & block = record->block;
+        Block & block = record->getBlock();
         auto rows = block.rows();
 
         /// Block in channel shall always contain full columns
@@ -67,17 +67,17 @@ void StreamingStoreSourceChannel::readAndProcess()
         }
 
         result_chunks.emplace_back(std::move(columns), rows);
-        if (likely(record->block.info.append_time > 0))
+        if (likely(block.info.append_time > 0))
         {
             auto chunk_info = std::make_shared<ChunkInfo>();
-            chunk_info->ctx.setAppendTime(record->block.info.append_time);
+            chunk_info->ctx.setAppendTime(block.info.append_time);
             result_chunks.back().setChunkInfo(std::move(chunk_info));
         }
     }
     iter = result_chunks.begin();
 }
 
-void StreamingStoreSourceChannel::add(DWAL::RecordPtrs records)
+void StreamingStoreSourceChannel::add(nlog::RecordPtrs records)
 {
     auto added = records_queue.emplace(std::move(records));
     assert(added);

@@ -6,10 +6,10 @@
 #include "sendRequest.h"
 
 #include <Core/Block.h>
-#include <DistributedWALClient/KafkaWAL.h>
-#include <DistributedWALClient/KafkaWALCommon.h>
 #include <Interpreters/Context.h>
 #include <Common/ErrorCodes.h>
+#include <KafkaLog/KafkaWAL.h>
+#include <KafkaLog/KafkaWALCommon.h>
 #include <Common/escapeForFileName.h>
 
 #include <Poco/Net/HTTPRequest.h>
@@ -61,9 +61,7 @@ namespace
         for (const auto & err_code : UNRETRIABLE_ERROR_CODES)
         {
             if (err_msg.find("code:" + err_code) != String::npos || err_msg.find("Code: " + err_code) != String::npos)
-            {
                 return true;
-            }
         }
 
         return false;
@@ -72,48 +70,44 @@ namespace
     int toErrorCode(int http_code, const String & error_message)
     {
         if (http_code == Poco::Net::HTTPResponse::HTTP_OK)
-        {
             return ErrorCodes::OK;
-        }
 
         if (http_code < 0)
-        {
             return ErrorCodes::UNRETRIABLE_ERROR;
-        }
 
         return isUnretriableError(error_message) ? ErrorCodes::UNRETRIABLE_ERROR : ErrorCodes::UNKNOWN_EXCEPTION;
     }
 
-    String getTableCategory(const std::unordered_map<String, String> & headers)
+    String getTableCategory(const nlog::Record & record)
     {
-        if (headers.contains("table_type") && headers.at("table_type") == "rawstore")
-        {
+        if (record.hasHeader("table_type") && record.getHeader("table_type") == "rawstore")
             return "rawstores";
-        }
+
         return "streams";
     }
 
-    String getDeleteMode(const std::unordered_map<String, String> & headers)
+    String getDeleteMode(const nlog::Record & record)
     {
-        if (headers.contains("mode"))
-            return headers.at("mode");
+        if (record.hasHeader("mode"))
+            return record.getHeader("mode");
+
         return "drop";
     }
 
-    String getTableApiPath(const std::unordered_map<String, String> & headers, const String & table, const String & method)
+    String getTableApiPath(nlog::Record & record, const String & table, const String & method)
     {
         if (method == Poco::Net::HTTPRequest::HTTP_POST)
         {
-            return fmt::format(DDL_TABLE_POST_API_PATH_FMT, getTableCategory(headers));
+            return fmt::format(DDL_TABLE_POST_API_PATH_FMT, getTableCategory(record));
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return fmt::format(DDL_TABLE_PATCH_API_PATH_FMT, getTableCategory(headers), escapeForFileName(table));
+            return fmt::format(DDL_TABLE_PATCH_API_PATH_FMT, getTableCategory(record), escapeForFileName(table));
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            auto mode = getDeleteMode(headers);
-            return fmt::format(DDL_TABLE_DELETE_API_PATH_FMT, getTableCategory(headers), escapeForFileName(table), mode);
+            auto mode = getDeleteMode(record);
+            return fmt::format(DDL_TABLE_DELETE_API_PATH_FMT, getTableCategory(record), escapeForFileName(table), mode);
         }
         else
         {
@@ -122,7 +116,7 @@ namespace
         }
     }
 
-    String getColumnApiPath(const std::unordered_map<String, String> & headers, const String & table, const String & method)
+    String getColumnApiPath(const String & column, const String & table, const String & method)
     {
         if (method == Poco::Net::HTTPRequest::HTTP_POST)
         {
@@ -130,11 +124,11 @@ namespace
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return fmt::format(DDL_COLUMN_PATCH_API_PATH_FMT, escapeForFileName(table), escapeForFileName(headers.at("column")));
+            return fmt::format(DDL_COLUMN_PATCH_API_PATH_FMT, escapeForFileName(table), escapeForFileName(column));
         }
         else if (method == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return fmt::format(DDL_COLUMN_DELETE_API_PATH_FMT, escapeForFileName(table), escapeForFileName(headers.at("column")));
+            return fmt::format(DDL_COLUMN_DELETE_API_PATH_FMT, escapeForFileName(table), escapeForFileName(column));
         }
         else
         {
@@ -172,7 +166,7 @@ DDLService::DDLService(const ContextMutablePtr & global_context_)
 {
 }
 
-Int32 DDLService::append(const DWAL::Record & ddl_record) const
+Int32 DDLService::append(nlog::Record & ddl_record) const
 {
     if (ready())
         return appendRecord(ddl_record).err;
@@ -239,9 +233,8 @@ bool DDLService::validateSchema(const Block & block, const std::vector<String> &
             String query_id = block.getByName("query_id").column->getDataAt(0).toString();
             String user = "";
             if (block.has("user"))
-            {
                 user = block.getByName("user").column->getDataAt(0).toString();
-            }
+
             failDDL(query_id, user, "", "invalid DDL");
             return false;
         }
@@ -261,9 +254,7 @@ Int32 DDLService::doDDL(
 
         err = toErrorCode(http_code, response);
         if (err == ErrorCodes::OK)
-        {
             return err;
-        }
 
         if (err == ErrorCodes::UNRETRIABLE_ERROR)
         {
@@ -272,17 +263,20 @@ Int32 DDLService::doDDL(
         }
 
         if (i < MAX_RETRIES - 1)
-        {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 * (2 << i)));
-        }
     }
 
     LOG_ERROR(log, "Failed to send request to uri={} error_code={}", uri.toString(), err);
     return err;
 }
 
-void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const String & payload,
-                              const String & method, const String & query_id, const String & user, CallBack finished_callback) const
+void DDLService::doDDLOnHosts(
+    std::vector<Poco::URI> & target_hosts,
+    const String & payload,
+    const String & method,
+    const String & query_id,
+    const String & user,
+    CallBack finished_callback) const
 {
     std::vector<String> failed_hosts;
     /// FIXME : Parallelize doDDL on the uris
@@ -293,9 +287,7 @@ void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const Strin
             uri.addQueryParameter("distributed_ddl", "false");
             auto err = doDDL(payload, uri, method, query_id, user);
             if (err != ErrorCodes::OK)
-            {
                 failed_hosts.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), err, ErrorCodes::getName(err)));
-            }
         }
         catch (const Exception & e)
         {
@@ -311,23 +303,17 @@ void DDLService::doDDLOnHosts(std::vector<Poco::URI> & target_hosts, const Strin
         finished_callback();
 
     if (failed_hosts.empty())
-    {
         succeedDDL(query_id, user, payload);
-    }
     else
-    {
         failDDL(query_id, user, payload, "Failed to do DDL on hosts: " + boost::algorithm::join(failed_hosts, ","));
-    }
 }
 
-void DDLService::createTable(DWAL::RecordPtr record)
+void DDLService::createTable(nlog::Record & record)
 {
-    const Block & block = record->block;
+    const Block & block = record.getBlock();
     assert(block.has("query_id"));
     if (!validateSchema(block, {"payload", "database", "table", "shards", "replication_factor", "query_id", "user", "timestamp"}))
-    {
         return;
-    }
 
     String database = block.getByName("database").column->getDataAt(0).toString();
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
@@ -340,16 +326,15 @@ void DDLService::createTable(DWAL::RecordPtr record)
     /// FIXME : check with catalog to see if this DDL is fulfilled
     /// Build a data structure to cached last 10000 DDLs, check against this data structure
 
-    if (record->headers.contains("hosts"))
+    if (record.hasHeader("hosts"))
     {
         /// If `hosts` exists in the block, we already placed the replicas
         /// then we move to the execution stage
 
         const String * url_parameters = nullptr;
-        if (record->headers.contains("url_parameters"))
-        {
-            url_parameters = &record->headers.at("url_parameters");
-        }
+        if (record.hasHeader("url_parameters"))
+            url_parameters = &record.getHeader("url_parameters");
+
         /// Create a DWAL for this table.
         try
         {
@@ -362,12 +347,12 @@ void DDLService::createTable(DWAL::RecordPtr record)
             return;
         }
 
-        const String & hosts_val = record->headers.at("hosts");
+        const String & hosts_val = record.getHeader("hosts");
         std::vector<String> hosts;
         boost::algorithm::split(hosts, hosts_val, boost::is_any_of(","));
         assert(!hosts.empty());
 
-        std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record->headers, table, Poco::Net::HTTPRequest::HTTP_POST))};
+        std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record, table, Poco::Net::HTTPRequest::HTTP_POST))};
 
         /// Set the parameters in uris
         for (Int32 i = 0; i < replication_factor; ++i)
@@ -376,9 +361,8 @@ void DDLService::createTable(DWAL::RecordPtr record)
             {
                 auto & uri = target_hosts[i * shards + j];
                 if (url_parameters != nullptr)
-                {
                     uri.setRawQuery(*url_parameters);
-                }
+
                 uri.addQueryParameter("shard", std::to_string(j));
             }
         }
@@ -406,17 +390,15 @@ void DDLService::createTable(DWAL::RecordPtr record)
         std::vector<String> target_hosts;
         target_hosts.reserve(qualified_nodes.size());
         for (const auto & node : qualified_nodes)
-        {
             /// FIXME, https
             target_hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
-        }
 
         /// We got the placement, commit the placement decision
         /// Add `hosts` into to record header
         String hosts{boost::algorithm::join(target_hosts, ",")};
-        record->headers["hosts"] = hosts;
+        record.addHeader("hosts", hosts);
 
-        auto result = append(*record.get());
+        auto result = append(record);
         if (result != ErrorCodes::OK)
         {
             LOG_ERROR(log, "Failed to commit placement decision for create stream payload={}", payload);
@@ -429,15 +411,13 @@ void DDLService::createTable(DWAL::RecordPtr record)
     }
 }
 
-void DDLService::mutateTable(DWAL::RecordPtr record, const String & method, CallBack finished_callback) const
+void DDLService::mutateTable(nlog::Record & record, const String & method, CallBack finished_callback) const
 {
-    Block & block = record->block;
+    Block & block = record.getBlock();
     assert(block.has("query_id"));
 
     if (!validateSchema(block, {"payload", "database", "table", "timestamp", "query_id", "user"}))
-    {
         return;
-    }
 
     String database = block.getByName("database").column->getDataAt(0).toString();
     String table = block.getByName("table").column->getDataAt(0).toString();
@@ -477,15 +457,13 @@ void DDLService::mutateTable(DWAL::RecordPtr record, const String & method, Call
     doDDLOnHosts(target_hosts, payload, method, query_id, user, std::move(finished_callback));
 }
 
-void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) const
+void DDLService::mutateDatabase(nlog::Record & record, const String & method) const
 {
-    Block & block = record->block;
+    Block & block = record.getBlock();
     assert(block.has("query_id"));
 
     if (!validateSchema(block, {"payload", "database", "timestamp", "query_id", "user"}))
-    {
         return;
-    }
 
     String payload = block.getByName("payload").column->getDataAt(0).toString();
     String database = block.getByName("database").column->getDataAt(0).toString();
@@ -509,10 +487,8 @@ void DDLService::mutateDatabase(DWAL::RecordPtr record, const String & method) c
     std::vector<String> hosts;
     hosts.reserve(nodes.size());
     for (const auto & node : nodes)
-    {
         /// FIXME, https
         hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
-    }
 
     std::vector<Poco::URI> target_hosts;
     if (method == Poco::Net::HTTPRequest::HTTP_POST)
@@ -568,109 +544,100 @@ void DDLService::commit(Int64 last_sn)
     }
 }
 
-void DDLService::processRecords(const DWAL::RecordPtrs & records)
+void DDLService::processRecords(const nlog::RecordPtrs & records)
 {
     for (auto & record : records)
     {
         assert(!record->hasSchema());
-        switch (record->op_code)
+        switch (record->opcode())
         {
-            case DWAL::OpCode::CREATE_TABLE:
-            {
-                createTable(record);
+            case nlog::OpCode::CREATE_TABLE: {
+                createTable(*record);
                 break;
             }
-            case DWAL::OpCode::ALTER_TABLE:
-            {
-                mutateTable(record, Poco::Net::HTTPRequest::HTTP_PATCH);
+            case nlog::OpCode::ALTER_TABLE: {
+                mutateTable(*record, Poco::Net::HTTPRequest::HTTP_PATCH);
                 break;
             }
-            case DWAL::OpCode::DELETE_TABLE:
-            {
+            case nlog::OpCode::DELETE_TABLE: {
+                Block & block = record->getBlock();
                 /// We need delete table DWAL after done delete operation
-                if (record->block.has("database") && record->block.has("table"))
+                if (block.has("database") && block.has("table"))
                 {
-                    String database = record->block.getByName("database").column->getDataAt(0).toString();
-                    String table = record->block.getByName("table").column->getDataAt(0).toString();
-                    auto finished_callback = [this, topic_ = DWAL::escapeDWALName(database, table)]() {
-                        DWAL::KafkaWALContext ctx{topic_};
+                    String database = block.getByName("database").column->getDataAt(0).toString();
+                    String table = block.getByName("table").column->getDataAt(0).toString();
+                    auto finished_callback = [this, topic_ = klog::escapeTopicName(database, table)]() {
+                        klog::KafkaWALContext ctx{topic_};
                         this->doDeleteDWal(ctx);
                     };
-                    mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE, std::move(finished_callback));
+                    mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE, std::move(finished_callback));
                 }
                 break;
             }
-            case DWAL::OpCode::TRUNCATE_TABLE:
-            {
-                mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE);
+            case nlog::OpCode::TRUNCATE_TABLE: {
+                mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 break;
             }
-            case DWAL::OpCode::CREATE_COLUMN:
-            {
-                mutateTable(record, Poco::Net::HTTPRequest::HTTP_POST);
+            case nlog::OpCode::CREATE_COLUMN: {
+                mutateTable(*record, Poco::Net::HTTPRequest::HTTP_POST);
                 break;
             }
-            case DWAL::OpCode::ALTER_COLUMN:
-            {
-                mutateTable(record, Poco::Net::HTTPRequest::HTTP_PATCH);
+            case nlog::OpCode::ALTER_COLUMN: {
+                mutateTable(*record, Poco::Net::HTTPRequest::HTTP_PATCH);
                 break;
             }
-            case DWAL::OpCode::DELETE_COLUMN:
-            {
-                mutateTable(record, Poco::Net::HTTPRequest::HTTP_DELETE);
+            case nlog::OpCode::DELETE_COLUMN: {
+                mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 break;
             }
-            case DWAL::OpCode::CREATE_DATABASE:
-            {
-                mutateDatabase(record, Poco::Net::HTTPRequest::HTTP_POST);
+            case nlog::OpCode::CREATE_DATABASE: {
+                mutateDatabase(*record, Poco::Net::HTTPRequest::HTTP_POST);
                 break;
             }
-            case DWAL::OpCode::DELETE_DATABASE:
-            {
-                mutateDatabase(record, Poco::Net::HTTPRequest::HTTP_DELETE);
+            case nlog::OpCode::DELETE_DATABASE: {
+                mutateDatabase(*record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 break;
             }
-            default:
-            {
+            default: {
                 assert(0);
-                LOG_ERROR(log, "Unknown operation={}", static_cast<Int32>(record->op_code));
+                LOG_ERROR(log, "Unknown operation={}", static_cast<Int32>(record->opcode()));
             }
         }
     }
 
-    const_cast<DDLService *>(this)->commit(records.back()->sn);
+    const_cast<DDLService *>(this)->commit(records.back()->getSN());
 
     /// FIXME, update DDL task status after committing offset / local offset checkpoint ...
 }
 
 std::vector<Poco::URI>
-DDLService::getTargetURIs(DWAL::RecordPtr record, const String & database, const String & table, const String & method) const
+DDLService::getTargetURIs(nlog::Record & record, const String & database, const String & table, const String & method) const
 {
-    if (record->op_code == DWAL::OpCode::CREATE_COLUMN || record->op_code == DWAL::OpCode::ALTER_COLUMN
-        || record->op_code == DWAL::OpCode::DELETE_COLUMN)
+    auto opcode = record.opcode();
+    if (opcode == nlog::OpCode::CREATE_COLUMN || opcode == nlog::OpCode::ALTER_COLUMN || opcode == nlog::OpCode::DELETE_COLUMN)
     {
         /// Column DDL request
-        return toURIs(placement.placed(database, table), getColumnApiPath(record->headers, table, method));
+        return toURIs(placement.placed(database, table), getColumnApiPath(record.getHeader("column"), table, method));
     }
     else
     {
         /// Table DDL request
-        if (record->op_code == DWAL::OpCode::TRUNCATE_TABLE)
-            record->headers["mode"] = "truncate";
-        return toURIs(placement.placed(database, table), getTableApiPath(record->headers, table, method));
+        if (opcode == nlog::OpCode::TRUNCATE_TABLE)
+            record.addHeader("mode", "truncate");
+        return toURIs(placement.placed(database, table), getTableApiPath(record, table, method));
     }
 }
 
 void DDLService::createDWAL(
     const String & database, const String & table, Int32 shards, Int32 replication_factor, const String * url_parameters) const
 {
-    DWAL::KafkaWALContext ctx{DWAL::escapeDWALName(database, table), shards, replication_factor, "delete"};
+    klog::KafkaWALContext ctx{klog::escapeTopicName(database, table), shards, replication_factor, "delete"};
 
     /// Parse these settings from url parameters
-    /// streaming_storage_retention_bytes,
-    /// streaming_storage_retention_ms,
-    /// streaming_storage_flush_messages,
-    /// streaming_storage_flush_ms
+    /// logstore_retention_bytes,
+    /// logstore_retention_ms,
+    /// logstore_flush_messages,
+    /// logstore_flush_ms
     if (url_parameters != nullptr)
     {
         Poco::URI uri;
@@ -679,19 +646,19 @@ void DDLService::createDWAL(
 
         for (const auto & kv : params)
         {
-            if (kv.first == "streaming_storage_retention_bytes")
+            if (kv.first == "logstore_retention_bytes")
             {
                 ctx.retention_bytes = std::stoll(kv.second);
             }
-            else if (kv.first == "streaming_storage_retention_ms")
+            else if (kv.first == "logstore_retention_ms")
             {
                 ctx.retention_ms = std::stoll(kv.second);
             }
-            else if (kv.first == "streaming_storage_flush_messages")
+            else if (kv.first == "logstore_flush_messages")
             {
                 ctx.flush_messages = std::stoll(kv.second);
             }
-            else if (kv.first == "streaming_storage_flush_ms")
+            else if (kv.first == "logstore_flush_ms")
             {
                 ctx.flush_ms = std::stoll(kv.second);
             }

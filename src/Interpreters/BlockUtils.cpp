@@ -97,12 +97,11 @@ Block buildBlock(
 void appendDDLBlock(
     Block && block,
     ContextPtr context,
-    const std::vector<String> & parameter_names,
-    DWAL::OpCode opCode,
+    const std::vector<String> & parameter_names, nlog::OpCode opCode,
     const Poco::Logger * log)
 {
-    DWAL::Record record{opCode, std::move(block), DWAL::NO_SCHEMA};
-    record.headers["_version"] = "1";
+    nlog::Record record{opCode, std::move(block), nlog::NO_SCHEMA};
+    record.addHeader("_version", "1");
 
     const auto & query_params = context->getQueryParameters();
     for (const auto & parameter_name : parameter_names)
@@ -110,7 +109,7 @@ void appendDDLBlock(
         auto iter = query_params.find(parameter_name);
         if (iter != query_params.end())
         {
-            record.headers[parameter_name] = iter->second;
+            record.addHeader(parameter_name, iter->second);
         }
     }
 

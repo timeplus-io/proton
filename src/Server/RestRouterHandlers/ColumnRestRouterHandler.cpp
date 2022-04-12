@@ -80,7 +80,7 @@ std::pair<String, Int32> ColumnRestRouterHandler::executePost(const Poco::JSON::
     std::vector<String> create_segments;
     create_segments.push_back("ALTER STREAM " + database + ".`" + table + "`");
     create_segments.push_back("ADD COLUMN ");
-    create_segments.push_back(getCreateColumnDefination(payload));
+    create_segments.push_back(getCreateColumnDefinition(payload));
     const String & query = boost::algorithm::join(create_segments, " ");
 
     return {processQuery(query), HTTPResponse::HTTP_OK};

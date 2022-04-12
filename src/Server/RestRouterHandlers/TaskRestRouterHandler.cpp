@@ -3,7 +3,6 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/TaskStatusService.h>
 #include <DistributedMetadata/sendRequest.h>
-#include <Common/DateLUT.h>
 
 
 namespace DB
@@ -12,6 +11,7 @@ namespace ErrorCodes
 {
     extern const int RESOURCE_NOT_FOUND;
     extern const int RESOURCE_NOT_INITED;
+    extern const int UNSUPPORTED;
 }
 
 namespace
@@ -41,6 +41,9 @@ namespace
 
 std::pair<String, Int32> TaskRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
+    if (!TaskStatusService::instance(query_context).enabled())
+        throw Exception(ErrorCodes::UNSUPPORTED, "Task status REST is not supported in current setup");
+
     const auto & node_roles = CatalogService::instance(query_context).nodeRoles();
     if (node_roles.find("task") != String::npos)
     {
@@ -52,9 +55,7 @@ std::pair<String, Int32> TaskRestRouterHandler::executeGet(const Poco::JSON::Obj
         auto nodes{CatalogService::instance(query_context).nodes("task")};
 
         if (nodes.empty())
-        {
             return {jsonErrorResponse("Internal server error", ErrorCodes::RESOURCE_NOT_INITED), HTTPResponse::HTTP_INTERNAL_SERVER_ERROR};
-        }
 
         /// FIXME, https
         /// Forward the request to TaskService node
@@ -69,9 +70,7 @@ std::pair<String, Int32> TaskRestRouterHandler::executeGet(const Poco::JSON::Obj
             log);
 
         if (http_status == HTTPResponse::HTTP_OK)
-        {
             return {response, http_status};
-        }
 
         return {jsonErrorResponseFrom(response), http_status};
     }

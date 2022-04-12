@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DistributedWALClient/Record.h>
 #include <Interpreters/Context_fwd.h>
+#include <NativeLog/Record/Record.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -21,8 +21,8 @@ void prepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
 void prepareCreateQueryForStream(ASTCreateQuery & create);
 void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list);
-DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);
-DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
+nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);
+nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
 
 String getJSONFromCreateQuery(const ASTCreateQuery & create);
 String getJSONFromAlterQuery(const ASTAlterQuery & alter);

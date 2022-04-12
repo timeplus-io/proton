@@ -1,7 +1,7 @@
 #pragma once
 
 #include <NativeLog/Base/Stds.h>
-#include <NativeLog/Common/TopicShard.h>
+#include <NativeLog/Common/StreamShard.h>
 
 #include <memory>
 
@@ -11,8 +11,8 @@ namespace nlog
 class ProducerStateManager final
 {
 public:
-    ProducerStateManager(const TopicShard & topic_shard_, const fs::path & log_dir_, int32_t max_producer_id_expiration_ms_)
-        : topic_shard(topic_shard_), max_producer_id_expiration_ms(max_producer_id_expiration_ms_)
+    ProducerStateManager(const StreamShard & stream_shard_, const fs::path & log_dir_, int32_t max_producer_id_expiration_ms_)
+        : stream_shard(stream_shard_), max_producer_id_expiration_ms(max_producer_id_expiration_ms_)
     {
         (void)max_producer_id_expiration_ms;
         (void)log_dir_;
@@ -53,7 +53,7 @@ private:
     friend class LogLoader;
 
 private:
-    TopicShard topic_shard;
+    StreamShard stream_shard;
     int32_t max_producer_id_expiration_ms;
 };
 

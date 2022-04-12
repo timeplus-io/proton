@@ -5,14 +5,8 @@ in a very light-weight by compromising fewer features.
 
 # Develop Guideline 
 
-NativeLog shall not depend on application related code of `proton` in general but can depend on its third party libraries 
-and `base`, `Common`, `IO` libs. For `base`, `Common` and `IO`, we will NOT create any wrapper layer for now due to complexity and performance concerns.
-However since these components are relatively standalone, in future if we like to spin out NativeLog and make it buildable as standalone application,
-it is still doable.
-
-The design chooses to returning error code or setting up thread local error code `err = XXX` for a function instead of throw exception in low level code. 
-Exception can still be used in constructors, very high level code like env setup, application argument parsing, main entry point etc code. We are still 
-using Proton's ErrorCodes, logger etc low facility to make error handling, logging and propagation consistent.
+NativeLog is tightly coupled with existing proton code. A clean / standalone buildable code base for NativeLog is not a goal 
+since tightly couple is the only way for efficiency (we don't want to introduce another abstraction layer comparing to Kafka).
 
 # Goals
 - Simple instance simple.
@@ -26,41 +20,33 @@ using Proton's ErrorCodes, logger etc low facility to make error handling, loggi
 - No external dependency
 
 # Concepts
-**Record** : 
+**Record** : A record is the smallest read/write unit in NativeLog. It contains CRC, sequence number, timestamp etc metadata and a Proton `Block` as the payload
 
-**Record Batch** : 
+**Segment** : A segment is the smallest unit in file system which contains a range of Record. Every time there is only one active segment which accepts data append request.
 
-**Segment** :
+**Shard** : A shard is a unit in a `Stream`. Physically in file system, different shards in the same `Stream` have different folders. 
 
-**Shard** :
+**Stream** : The highest entity which represents a write-ahead-log which backs Proton's stream. A stream can have multiple shards
 
-**Topic** :
+**AppendTimeIndex** : An reverse index which maps record append time to the starting record. It is used to fast seek by append time. 
 
-**Index** :
+**EventTimeIndex** : An reverse index which maps record event time to the starting record. It is used to fast seek by append time.
 
-**TimeIndex** :
+**Namespace** : A logic concept which groups `Streams` to a namespace. In filesystem, different namespaces have different folders
 
-**Namespace** :
+**Sequencer** : Assign each record a unique number called `Sequence Number` (similar to `offset` in Kafka)
 
-**Sequencer** :
-
-**MetaStore** :
+**MetaStore** : A data store which persists stream metadata information like schema, shards, etc
 
 # APIs
 
-## Record
-
 ## Client APIs
 
-# On Disk Layout
+# On Disk Layouts
+## Stream On Disk Layout
 
-# Milestone Checklists
-- [ ] Singe instance
-    - [ ] Single instance sequencer 
-    - [ ] Single instance metastore
-    - [ ] Single instance InmemoryLoglet
-    - [ ] Single instance NativeLoglet
-    
-- [ ] Cluster
-    - [ ] Multiple shards 
-    - [ ] Shard replication
+```
+
+```
+
+## Record On Disk Layout

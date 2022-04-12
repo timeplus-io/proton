@@ -44,14 +44,18 @@ struct BlockInfo
     /// watermark = -1 => force flush
     /// watermark > 0 => timestamp watermark
     Int64 watermark = 0;
+
     /// watermark_start is `watermark - window_size`
     Int64 watermark_lower_bound = 0;
-    /// Milliseconds since UTC
-    Int64 append_time = 0;
+
     /// Milliseconds since UTC
     Int64 ingest_time = 0;
+
     /// Milliseconds since UTC
     Int64 consume_time = 0;
+
+    /// Milliseconds since UTC
+    Int64 append_time = 0;
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.

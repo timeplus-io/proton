@@ -2,35 +2,35 @@
 
 namespace nlog
 {
-/// Index by base offset of a Segment and it is multi-thread safe
-LogSegments::LogSegments(const TopicShard & topic_shard_) : topic_shard(topic_shard_) { }
+/// Index by base sn of a Segment and it is multi-thread safe
+LogSegments::LogSegments(const StreamShard & stream_shard_) : stream_shard(stream_shard_) { }
 
 void LogSegments::add(LogSegmentPtr segment)
 {
     std::unique_lock guard{mlock};
-    segments[segment->baseOffset()] = std::move(segment);
+    segments[segment->baseSequence()] = std::move(segment);
 }
 
-void LogSegments::remove(int64_t offset)
+void LogSegments::remove(int64_t sn)
 {
     std::unique_lock guard{mlock};
-    segments.erase(offset);
+    segments.erase(sn);
 }
 
-LogSegmentPtr LogSegments::get(int64_t offset) const
+LogSegmentPtr LogSegments::get(int64_t sn) const
 {
     std::shared_lock guard{mlock};
-    auto iter = segments.find(offset);
+    auto iter = segments.find(sn);
     if (iter != segments.end())
         return iter->second;
 
     return {};
 }
 
-bool LogSegments::contains(int64_t offset) const
+bool LogSegments::contains(int64_t sn) const
 {
     std::shared_lock guard{mlock};
-    return segments.contains(offset);
+    return segments.contains(sn);
 }
 
 LogSegmentPtr LogSegments::firstSegment() const
@@ -51,49 +51,49 @@ LogSegmentPtr LogSegments::lastSegment() const
     return segments.rbegin()->second;
 }
 
-/// strictly > offset
-LogSegmentPtr LogSegments::higherSegment(int64_t offset) const
+/// strictly > sn
+LogSegmentPtr LogSegments::higherSegment(int64_t sn) const
 {
     std::shared_lock guard{mlock};
-    auto iter = segments.upper_bound(offset);
+    auto iter = segments.upper_bound(sn);
     if (iter != segments.end())
         return iter->second;
 
     return {};
 }
 
-/// < offset
-LogSegmentPtr LogSegments::lowerSegment(int64_t offset) const
+/// < sn
+LogSegmentPtr LogSegments::lowerSegment(int64_t sn) const
 {
     std::shared_lock guard{mlock};
-    auto iter = segments.lower_bound(offset);
+    auto iter = segments.lower_bound(sn);
     if (iter == segments.end())
         return {};
 
     if (iter != segments.begin())
-        /// lower_bound returns first key >= offset
+        /// lower_bound returns first key >= sn
         /// back off one item to get the last maximum key
-        /// which is greater than < offset
+        /// which is greater than < sn
         return (--iter)->second;
 
     return {};
 }
 
-/// greatest offset <= offset
-LogSegmentPtr LogSegments::floorSegment(int64_t offset) const
+/// greatest sn <= sn
+LogSegmentPtr LogSegments::floorSegment(int64_t sn) const
 {
     std::shared_lock guard{mlock};
     if (segments.empty())
         return {};
 
-    auto iter = segments.lower_bound(offset);
+    auto iter = segments.lower_bound(sn);
     if (iter == segments.end())
-        /// There are no keys >= offset
+        /// There are no keys >= sn
         /// return the last segment
         return segments.rbegin()->second;
 
-    /// lower_bound returns first key >= offset
-    if (iter->first == offset)
+    /// lower_bound returns first key >= sn
+    if (iter->first == sn)
         return iter->second;
 
     if (iter != segments.begin())
@@ -102,23 +102,23 @@ LogSegmentPtr LogSegments::floorSegment(int64_t offset) const
     return {};
 }
 
-/// <= offset
-std::vector<LogSegmentPtr> LogSegments::lowerEqualSegments(int64_t offset) const
+/// <= sn
+std::vector<LogSegmentPtr> LogSegments::lowerEqualSegments(int64_t sn) const
 {
     std::shared_lock guard{mlock};
 
-    auto iter = segments.lower_bound(offset);
+    auto iter = segments.lower_bound(sn);
     if (iter != segments.end())
     {
-        if (iter->first == offset)
+        if (iter->first == sn)
         {
-            /// Found key == offset, progress iter to next item which is strictly > offset
+            /// Found key == sn, progress iter to next item which is strictly > sn
             ++iter;
         }
         else
         {
-            /// Found key > offset, if it is the first item, then there are no such
-            /// key <= offset
+            /// Found key > sn, if it is the first item, then there are no such
+            /// key <= sn
             if (iter == segments.begin())
                 return {};
         }
@@ -132,16 +132,16 @@ std::vector<LogSegmentPtr> LogSegments::lowerEqualSegments(int64_t offset) const
     return results;
 }
 
-std::vector<int64_t> LogSegments::baseOffsets() const
+std::vector<int64_t> LogSegments::baseSequences() const
 {
-    std::vector<int64_t> base_offsets;
+    std::vector<int64_t> base_sns;
 
     std::shared_lock guard{mlock};
-    base_offsets.reserve(segments.size());
+    base_sns.reserve(segments.size());
     for (const auto & item : segments)
-        base_offsets.push_back(item.second->baseOffset());
+        base_sns.push_back(item.second->baseSequence());
 
-    return base_offsets;
+    return base_sns;
 }
 
 /// @return a list of segments beginning with the segment that includes `from`
@@ -180,11 +180,12 @@ std::vector<LogSegmentPtr> LogSegments::values()
     return results;
 }
 
-void LogSegments::apply(std::function<void(LogSegmentPtr &)> func)
+void LogSegments::apply(std::function<bool(LogSegmentPtr &)> func)
 {
     std::shared_lock guard{mlock};
     for (auto & item : segments)
-        func(item.second);
+        if (func(item.second))
+            break;
 }
 
 void LogSegments::close()
@@ -196,7 +197,7 @@ void LogSegments::close()
 
 void LogSegments::updateParentDir(const fs::path & parent_dir)
 {
-    apply([&parent_dir](LogSegmentPtr & segment) { segment->updateParentDir(parent_dir); });
+    apply([&parent_dir](LogSegmentPtr & segment) { segment->updateParentDir(parent_dir); return false; });
 }
 
 void LogSegments::clear()

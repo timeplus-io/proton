@@ -56,36 +56,67 @@ AppendOnlyFile::~AppendOnlyFile()
         ::close(fd);
 }
 
-int64_t AppendOnlyFile::append(const void * data, uint64_t count)
+int64_t AppendOnlyFile::append(const char * data, uint64_t bytes_to_write)
 {
     if (read_only)
         throw DB::Exception(DB::ErrorCodes::READONLY, "File {} is readonly", filename.c_str());
 
-    /// FIXME: io_uring
-    auto n = ::write(fd, data, count);
-    if (n < 0 && errno != EINTR)
-        DB::throwFromErrnoWithPath(
-            "Cannot write to file " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
+    int64_t written_bytes = 0;
+    while (bytes_to_write)
+    {
+        /// FIXME: io_uring
+        auto n = ::write(fd, data + written_bytes, bytes_to_write);
+        if (n >= 0)
+        {
+            written_bytes += n;
+            bytes_to_write -= n;
+        }
+        else
+        {
+            if (errno != EINTR)
+                DB::throwFromErrnoWithPath(
+                    "Cannot write to file " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
 
-    return n;
+        }
+    }
+
+    return written_bytes;
 }
 
-int64_t AppendOnlyFile::append(std::span<uint8_t> data)
+int64_t AppendOnlyFile::append(std::span<char> data)
 {
     return append(data.data(), data.size());
 }
 
-int64_t AppendOnlyFile::read(void * dst, uint64_t count, uint64_t offset)
+/// Keep reading until expected bytes have been read or EOF is reached
+int64_t AppendOnlyFile::read(char * dst, uint64_t bytes_to_read, uint64_t offset)
 {
-    auto n = ::pread(fd, dst, count, offset);
-    if (n < 0 && errno != EINTR)
-        DB::throwFromErrnoWithPath(
-            "Cannot read from file " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+    int64_t read_bytes = 0;
+    while (bytes_to_read)
+    {
+        auto n = ::pread(fd, dst, bytes_to_read, offset + read_bytes);
+        if (n > 0)
+        {
+            read_bytes += n;
+            bytes_to_read -= n;
+        }
+        else if (n == 0 )
+        {
+            /// EOF
+            break;
+        }
+        else
+        {
+            if (errno != EINTR)
+                DB::throwFromErrnoWithPath(
+                    "Cannot read from file " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+        }
+    }
 
-    return n;
+    return read_bytes;
 }
 
-int64_t AppendOnlyFile::read(std::span<uint8_t> dst, uint64_t offset)
+int64_t AppendOnlyFile::read(std::span<char> dst, uint64_t offset)
 {
     return read(dst.data(), dst.size(), offset);
 }

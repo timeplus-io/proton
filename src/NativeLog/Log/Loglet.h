@@ -7,9 +7,8 @@
 #include <NativeLog/Base/Utils.h>
 #include <NativeLog/Checkpoints/LeaderEpochFileCache.h>
 #include <NativeLog/Common/LogDirFailureChannel.h>
-#include <NativeLog/Common/TopicShard.h>
-#include <NativeLog/Schemas/MemoryRecords.h>
-#include "NativeLog/Common/LogOffsetMetadata.h"
+#include <NativeLog/Common/StreamShard.h>
+#include "NativeLog/Common/LogSequenceMetadata.h"
 
 #include <Common/BackgroundSchedulePool.h>
 
@@ -18,41 +17,46 @@
 
 namespace nlog
 {
+struct Record;
+struct LogAppendDescription;
+
 /// An append-only log which contains a list of segments
 /// Loglet is not multi-thread safe
 class Loglet final : private boost::noncopyable
 {
 public:
+    /// @param stream_shard_ Stream name / UUID and shard number
     /// @param log_dir_ The directory in which log segments are created
     /// @param log_config_ The log configuration settings
-    /// @param recovery_point_ The offset at which to begin the next recovery
-    ///        i.e. the first offset that has not been flushed to disk
-    /// @param next_offset_meta_ The offset where the next message could be appended
+    /// @param recovery_point_ The sn at which to begin the next recovery
+    ///        i.e. the first sn that has not been flushed to disk
+    /// @param next_sn_meta_ The sn where the next message could be appended
     /// @param segments_ The non-empty log segments recovered from disk
     Loglet(
+        const StreamShard & stream_shard_,
         const fs::path & log_dir_,
         LogConfigPtr log_config_,
         int64_t recovery_point_,
-        const LogOffsetMetadata & next_offset_meta_,
+        const LogSequenceMetadata & next_sn_meta_,
         LogSegmentsPtr segments_,
         std::shared_ptr<DB::NLOG::BackgroundSchedulePool> scheduler_,
         std::shared_ptr<ThreadPool> adhoc_scheduler_,
         Poco::Logger * logger_);
 
-    /// Return record batch read at start_offset
-    FetchDataInfo read(int64_t offset, int64_t max_size) const;
+    /// Return record read at sn
+    FetchDataDescription fetch(int64_t sn, int64_t max_size, std::optional<int64_t> position) const;
 
-    /// @param target_offset The offset to truncate to, an upper bound on all offsets in the log after
+    /// @param target_sn The sn to truncate to, an upper bound on all sn in the log after
     ///        truncation is complete
     /// @return a list of segments that were scheduled for deletion
-    std::vector<LogSegmentPtr> trim(int64_t target_offset);
+    std::vector<LogSegmentPtr> trim(int64_t target_sn);
 
-    void flush(int64_t offset);
+    void flush(int64_t sn);
 
     void close();
 
 public:
-    static TopicShard topicShardFrom(const fs::path & log_dir_);
+    static StreamShard streamShardFrom(const fs::path & log_dir_);
 
 private:
     /// Construct a log file name in the given dir with the given base offset and the given suffix
@@ -64,31 +68,27 @@ private:
     /// Construct index file folder name in the given dir with the given base offset and the given suffix
     static fs::path indexFileDir(const fs::path & dir, int64_t offset, const std::string & suffix = "");
 
-    /// Return a future directory name for the given topic shard. The name will be in the following format:
-    /// `topic-shard.unique_id-future` where topic, shard and unique_id are variables
-    static std::string logFutureDirName(const TopicShard & topic_shard_) { return logDirNameWithSuffix(topic_shard_, FUTURE_DIR_SUFFIX); }
+    /// Return a future directory name for the given stream shard. The name will be in the following format:
+    /// `stream_uuid.shard.future` where stream, shard and unique_id are variables
+    static std::string logFutureDirName(const StreamShard & stream_shard_) { return logDirNameWithSuffix(stream_shard_, FUTURE_DIR_SUFFIX); }
 
-    static std::string logDirName(const TopicShard & topic_shard_) { return fmt::format("{}-{}", topic_shard_.topic, topic_shard_.shard); }
+    /// stream_uuid.shard_id
+    static std::string logDirName(const StreamShard & stream_shard_);
 
     /// Return a directory name to rename the log directory to for async deletion.
-    /// The name will be in the following format: "topic-shard.unique_id-delete"
-    /// If the topic name is too long, it will be truncated to prevent the total name
-    /// from exceeding 255 chars
-    static std::string logDeleteDirName(const TopicShard & topic_shard_);
+    /// The name will be in the following format: "stream_uuid.shard.delete"
+    static std::string logDeleteDirName(const StreamShard & stream_shard_) { return logDirNameWithSuffix(stream_shard_, DELETED_FILE_SUFFIX); }
 
     /// Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
     /// so that ls sorts the files numerically
     static std::string filenamePrefixFromOffset(int64_t offset) { return fmt::format("{:024d}", offset); }
 
-    static std::string logDirNameWithSuffix(const TopicShard & topic_shard_, const std::string & suffix)
-    {
-        return fmt::format("{}.{}{}", logDirName(topic_shard_), uuidStringWithoutHyphen(), suffix);
-    }
+    static std::string logDirNameWithSuffix(const StreamShard & stream_shard_, const std::string & suffix);
 
     static LeaderEpochFileCachePtr
-    createLeaderEpochCache(const fs::path & log_dir, const TopicShard & topic_shard, LogDirFailureChannelPtr log_dir_failure_channel);
+    createLeaderEpochCache(const fs::path & log_dir, const StreamShard & stream_shard, LogDirFailureChannelPtr log_dir_failure_channel);
 
-    static int64_t offsetFromFileName(const std::string & filename);
+    static int64_t sequenceFromFileName(const std::string & filename);
 
     static bool isIndexFile(const std::string & filename);
 
@@ -102,7 +102,13 @@ private:
         bool reload_from_clean_shutdown_);
 
 private:
-    void append(int64_t last_offset, int64_t largest_timestamp, int64_t offset_of_max_timestamp, MemoryRecords & records);
+    void append(const ByteVector & record, const LogAppendDescription & append_info);
+
+    /// Translate timestamp to sn
+    /// @param ts Timestamp
+    /// @param append_time Is the ts append time or event time
+    /// @return The very start sn for the timestamp ts
+    int64_t sequenceForTimestamp(int64_t ts, bool append_time) const;
 
     LogSegmentPtr roll(std::optional<int64_t> expected_next_offset);
 
@@ -131,16 +137,16 @@ private:
 
     void markFlushed(int64_t offset);
 
-    LogOffsetMetadata convertToOffsetMetadataOrThrow(int64_t offset) const;
+    LogSequenceMetadata convertToSequenceMetadataOrThrow(int64_t sn) const;
 
     /// The offset of the next message that will be appended to the log
-    int64_t logEndOffset() const { return next_offset_meta.message_offset; }
+    int64_t logEndSequence() const { return next_sn_meta.record_sn; }
 
-    int64_t unflushedRecords() const { return logEndOffset() - recoveryPoint(); }
+    int64_t unflushedRecords() const { return logEndSequence() - recoveryPoint(); }
 
-    LogOffsetMetadata logEndOffsetMetadata() const { return next_offset_meta; }
+    LogSequenceMetadata logEndSequenceMetadata() const { return next_sn_meta; }
 
-    void updateLogEndOffset(int64_t end_offset, int64_t segment_base_offset, int64_t segment_pos);
+    void updateLogEndSequence(int64_t end_offset, int64_t segment_base_offset, int64_t segment_pos);
 
     void updateRecoveryPoint(int64_t new_recovery_point) { recovery_point = new_recovery_point; }
 
@@ -160,7 +166,7 @@ private:
 
     int64_t recoveryPoint() const { return recovery_point; }
 
-    const TopicShard & topicShard() const { return topic_shard; }
+    const StreamShard & streamShard() const { return stream_shard; }
 
     const LogConfig & config() const { return *log_config; }
 
@@ -198,26 +204,26 @@ private:
     inline static const std::string SWAP_FILE_SUFFIX = ".swap";
 
     /// A directory that is scheduled to be deleted
-    inline static const std::string DELETE_DIR_SUFFIX = "-delete";
+    inline static const std::string DELETE_DIR_SUFFIX = ".delete";
 
     /// A directory that is used for future partition
-    inline static const std::string FUTURE_DIR_SUFFIX = "-future";
+    inline static const std::string FUTURE_DIR_SUFFIX = ".future";
 
-    inline static auto DELETE_DIR_PATTERN = re2::RE2{"^(\\S+)-(\\d+)\\.(\\S+)-delete"};
-    inline static auto FUTURE_DIR_PATTERN = re2::RE2{"^(\\S+)-(\\d+)\\.(\\S+)-future"};
-    inline static auto LOG_DIR_PATTERN = re2::RE2{"^(\\S+)-(\\d+)"};
+    inline static auto DELETE_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)\\.(\\S+)\\.delete$"};
+    inline static auto FUTURE_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)\\.(\\S+)\\.future$"};
+    inline static auto LOG_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)$"};
 
-    static const int64_t UNKNOWN_OFFSET = -1;
+    /// static constexpr int64_t UNKNOWN_SN = -1;
 
-    inline static std::string METADATA_TOPIC = "__cluster_metadata";
+    /// inline static std::string METADATA_STREAM = "__cluster_metadata";
 
 private:
     std::filesystem::path log_dir;
     std::filesystem::path parent_dir;
     std::filesystem::path root_dir;
-    TopicShard topic_shard;
+
+    StreamShard stream_shard;
     LogConfigPtr log_config;
-    Poco::UUID topic_id;
 
     /// Recovery point offset are periodically checkpointed in persistent store.
     /// It is used when system reboots and the log is loaded from disk. It is
@@ -234,7 +240,7 @@ private:
     /// Last checkpointed recovery point. Used to avoid re-checkpointing
     std::atomic<int64_t> recovery_point_checkpoint;
 
-    LogOffsetMetadata next_offset_meta;
+    LogSequenceMetadata next_sn_meta;
 
     LogSegmentsPtr segments;
 

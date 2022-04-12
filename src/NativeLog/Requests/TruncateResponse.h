@@ -4,8 +4,8 @@
 
 namespace nlog
 {
-struct TruncateResponse
+struct TruncateResponse final : public CommonResponse
 {
-    CommonResponse error;
+    using CommonResponse::CommonResponse;
 };
 }

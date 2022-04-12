@@ -1,6 +1,5 @@
 #include "FileRecords.h"
 
-#include <base/defines.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -23,83 +22,55 @@ FileRecords::FileRecords(AppendOnlyFilePtr file_, uint64_t start_pos_, uint64_t 
     : file(file_), start_pos(start_pos_), end_pos(end_pos_), is_slice(is_slice_), bytes(file->size())
 {
     (void)is_slice;
-    (void)end_pos;
 }
 
-int64_t FileRecords::append(const MemoryRecords & records)
+int64_t FileRecords::append(const ByteVector & record)
 {
-    auto data = records.data();
-    size_t to_write = data.size();
-
-    size_t written = 0;
-    while (written < to_write)
-    {
-        auto n = file->append(data.data() + written, to_write - written);
-        if (n < 0)
-            /// Interrupted
-            continue;
-
-        written += n;
-    }
-
+    auto written = file->append(record.data(), record.size());
     bytes += written;
-
     return written;
 }
 
-std::shared_ptr<FileRecords> FileRecords::slice(uint32_t position, uint32_t size_)
+std::shared_ptr<FileRecords> FileRecords::slice(uint64_t position, uint64_t size_)
 {
+    assert(size_ >= 0);
     auto available_bytes = availableBytes(position, size_);
 
     return std::make_shared<FileRecords>(file, start_pos + position, start_pos + position + available_bytes, true);
 }
 
-int64_t FileRecords::read(uint8_t * dst, size_t count, uint32_t position)
+int64_t FileRecords::read(char * dst, size_t bytes_to_read, uint64_t position)
 {
     auto start_offset = start_pos + position;
-    size_t read_bytes = 0;
-    while (read_bytes < count)
-    {
-        auto n = file->read(dst, count, start_offset + read_bytes);
-        if (n < 0)
-            // Interrupted
-            continue;
-        else if (n == 0)
-            /// EOF
-            break;
-
-        read_bytes += n;
-    }
-    return read_bytes;
+    return file->read(dst, bytes_to_read, start_offset);
 }
 
-size_t FileRecords::availableBytes(uint32_t position, uint32_t size_) const
+size_t FileRecords::availableBytes(uint64_t position, uint64_t size_) const
 {
     /// Cache the current size in case concurrent write changes it
-    size_t current_size = bytes;
+    uint64_t current_size = bytes;
 
     if (start_pos + position > current_size)
         throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Slice from position {} exceeds end position of {}", position, current_size);
 
     auto end = start_pos + position + size_;
-    if (end > start_pos + current_size)
+    if (end > start_pos + current_size || size_ == 0)
         /// Beyond the end of the file
         end = start_pos + current_size;
 
     return end - start_pos - position;
 }
 
-FileRecords::LogOffsetPosition FileRecords::searchForOffsetWithSize(int64_t target_offset, uint64_t starting_position)
+FileRecords::LogSequencePosition FileRecords::searchForSequenceWithSize(int64_t target_sequence, uint64_t starting_position)
 {
     uint64_t target_size = 0;
     uint64_t target_position = 0;
 
-    apply(
-        [&target_size, &target_position, target_offset](const MemoryRecords & batch, uint64_t position) -> bool {
-            auto offset = batch.lastOffset();
-            if (offset >= target_offset)
+    applyRecordMetadata(
+        [&target_size, &target_position, target_sequence](RecordPtr record, uint64_t position) -> bool {
+            if (record->getSN() == target_sequence)
             {
-                target_size = batch.sizeInBytes();
+                target_size = record->serializedBytes();
                 target_position = position;
                 return true;
             }
@@ -108,100 +79,110 @@ FileRecords::LogOffsetPosition FileRecords::searchForOffsetWithSize(int64_t targ
         starting_position);
 
     if (target_size > 0)
-        return {target_offset, target_position, target_size};
+        return {target_sequence, target_position, target_size};
 
     return {-1, 0, 0};
 }
 
-void FileRecords::apply(std::function<bool(const MemoryRecords &, uint64_t)> callback, std::optional<uint64_t> starting_position, size_t bufsize)
+void FileRecords::applyRecordMetadata(std::function<bool(RecordPtr, uint64_t)> callback, std::optional<uint64_t> starting_position) const
 {
-    std::vector<uint8_t> buf(std::min<size_t>(8192 * 1024, bufsize), '\0');
+    assert(callback);
+
+    std::vector<char> buf(Record::commonMetadataBytes() + Record::prefixLengthSize(), '\0');
 
     auto start_offset = start_pos;
     if (starting_position.has_value())
         start_offset = starting_position.value();
 
+    auto * data = buf.data();
+    int64_t bytes_to_read = buf.size();
+
     /// Initial read
-    auto n = file->read(buf.data(), buf.size(), start_offset);
+    while (1)
+    {
+        auto n = file->read(data, bytes_to_read, start_offset);
+        if (n == bytes_to_read)
+        {
+            auto record{Record::deserializeCommonMetadata(data, n)};
+
+            auto next_record_offset = start_offset + record->totalSerializedBytes();
+            if (callback(std::move(record), start_offset))
+                /// done
+                break;
+            else
+                /// progress to next record's file position
+                start_offset = next_record_offset;
+        }
+        else
+            /// hit EOF
+            break;
+    }
+}
+
+RecordPtrs FileRecords::deserialize(std::vector<char> & read_buf, const SchemaContext & schema_ctx) const
+{
+    auto start_offset = start_pos;
+    auto end_offset = end_pos;
+
+    /// When FileRecords are sliced, it guarantees [start_pos, end_pos) contains complete number of records
+    /// We don't want to read pass end_pos
+    auto max_to_read = std::min(end_offset - start_offset + 1, read_buf.size());
+
+    /// Initial read
+    auto n = file->read(read_buf.data(), max_to_read, start_offset);
     if (n <= 0)
         /// EOF or Error
-        return;
+        return {};
+
+    RecordPtrs records;
+    records.reserve(100);
 
     size_t next_consuming_pos = 0;
     size_t unconsumed = n;
-    uint64_t current_file_position = n + start_offset;
+    uint64_t current_file_offset = n + start_offset;
 
     /// Return true done, else false
-    auto read_data = [&](bool resize = false) -> bool {
+    auto read_more_data = [&](bool resize = false) -> bool {
         if (likely(!resize))
         {
             /// First copy unconsumed to the beginning of the buf if necessary
-            if (buf.size() == next_consuming_pos + unconsumed)
+            if (read_buf.size() == next_consuming_pos + unconsumed)
             {
-                for (auto start = next_consuming_pos, index = 0ul; start < buf.size(); ++start, ++index)
-                    buf[index] = buf[start];
-
+                ::memmove(read_buf.data(), read_buf.data() + next_consuming_pos, read_buf.size() - next_consuming_pos);
                 next_consuming_pos = 0;
             }
         }
         else
-            buf.resize(buf.size() * 2);
+            read_buf.resize(read_buf.size() * 2);
 
-        /// Read more data
-        auto r
-            = file->read(buf.data() + next_consuming_pos + unconsumed, buf.size() - next_consuming_pos - unconsumed, current_file_position);
+        /// Read more data. We don't want read passed end_pos
+        max_to_read = std::min(end_offset - current_file_offset + 1, read_buf.size() - next_consuming_pos - unconsumed);
+
+        auto r = file->read(read_buf.data() + next_consuming_pos + unconsumed, max_to_read, current_file_offset);
         if (r <= 0)
             return true;
 
         unconsumed += r;
-        current_file_position += r;
+        current_file_offset += r;
 
         return false;
     };
 
-    auto constexpr prefix_len_size = sizeof(flatbuffers::uoffset_t);
-
-    /// Read RecordBatch until EOF or done with reading from callback
+    /// Read Record until EOF or end_pos
     while (1)
     {
-        if (unlikely(unconsumed < prefix_len_size))
-        {
-            if (read_data())
-                break;
-            else
-                continue;
-        }
+        next_consuming_pos = Record::deserialize(read_buf.data() + next_consuming_pos, unconsumed, records, schema_ctx);
+        assert(unconsumed >= next_consuming_pos);
+        unconsumed -= next_consuming_pos;
 
-        auto batch_size = flatbuffers::ReadScalar<flatbuffers::uoffset_t>(buf.data() + next_consuming_pos) + prefix_len_size;
-        if (batch_size > unconsumed)
-        {
-            /// We don't have enough data for this batch, read more
-            if (read_data(unconsumed >= buf.size()))
-                break;
-            else
-                continue;
-        }
-
-        MemoryRecords records(std::span<uint8_t>(buf.data() + next_consuming_pos, batch_size));
-
-        unconsumed -= batch_size;
-        next_consuming_pos += batch_size;
-        ///                                                      current_file_position
-        ///                                                                |
-        ///                                                                v
-        ///  |---record_batch--with_batch_size---|---read_but_unconsumed---|
-        ///  ^
-        ///  |
-        ///  batch_start_file_position
-        auto batch_start_file_position = current_file_position - unconsumed - batch_size;
-
-        if (callback(records, batch_start_file_position))
-            /// Done
+        if (current_file_offset >= end_offset)
             break;
 
-        if (current_file_position - unconsumed >= end_pos)
-            /// We reach the maximum file position of the FileRecords slice
+        if (read_more_data(unconsumed >= read_buf.size()))
             break;
     }
+
+    return records;
 }
+
 }

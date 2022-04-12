@@ -2,10 +2,16 @@
 
 #include "IngestMode.h"
 
+#include <KafkaLog/Results.h>
+#include <NativeLog/Requests/AppendRequest.h>
 #include <Processors/Sinks/SinkToStorage.h>
-#include <DistributedWALClient/Results.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
+
+namespace nlog
+{
+class NativeLog;
+}
 
 namespace DB
 {
@@ -26,8 +32,7 @@ using BlocksWithShard = std::vector<BlockWithShard>;
 class StreamSink final : public SinkToStorage
 {
 public:
-    StreamSink(
-        StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_);
+    StreamSink(StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_);
     ~StreamSink() override = default;
 
     void consume(Chunk chunk) override;
@@ -40,14 +45,20 @@ private:
     IngestMode getIngestMode() const;
 
 private:
-    void writeCallback(const DWAL::AppendResult & result);
+    void appendToKafka(nlog::RecordPtr & record, IngestMode ingest_mode);
+    void appendToNativeLog(nlog::RecordPtr & record, IngestMode ingest_mode);
 
-    static void writeCallback(const DWAL::AppendResult & result, void * data);
+    void writeCallback(const klog::AppendResult & result);
+    static void writeCallback(const klog::AppendResult & result, void * data);
 
 private:
     StorageStream & storage;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr query_context;
+
+    StorageID storage_id;
+    nlog::AppendRequest request;
+    nlog::NativeLog * native_log = nullptr;
 
     std::vector<UInt16> column_positions;
 

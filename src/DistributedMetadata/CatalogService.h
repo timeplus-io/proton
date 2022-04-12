@@ -42,7 +42,7 @@ public:
         String storage_policy;
         Int32 shard = 0;
 
-        Table(const String & node_identity_, const String & host_) : node_identity(node_identity_), host(host_) { }
+        Table(const String & node_identity_, const String & host_, const Block & block, size_t rows);
 
         friend bool operator==(const Table & lhs, const Table & rhs)
         {
@@ -99,7 +99,7 @@ public:
 private:
     bool setTableStorageByName(const String & database, const String & table, const StoragePtr & storage);
 
-    void processRecords(const DWAL::RecordPtrs & records) override;
+    void processRecords(const nlog::RecordPtrs & records) override;
     String role() const override { return "catalog"; }
     String cleanupPolicy() const override { return "compact"; }
     ConfigSettings configSettings() const override;

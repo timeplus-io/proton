@@ -694,11 +694,11 @@ class IColumn;
 /// proton: starts. Support 'ConfigurableBaseSettings'
 #define GLOBAL_SETTINGS(M) \
     M(UInt64, max_windows, 1000, "Maximum number of streaming windows in one streaming query.", 0) \
+    M(UInt64, fetch_buffer_size, 4 * 1024 * 1024, "Fetch buffer per query", 0) \
     M(UInt64, record_consume_batch_count, 1000, "Maximum number for consuming records at once", 0) \
     M(Int64, record_consume_timeout, 100, "Timeout of consuming record", 0) \
     M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in streaming view", 0) \
     M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in streaming view", 0) \
-    M(Bool, disable_distributed, false, "If setting is enabled and distributed mode will be disabled for debug and test only", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "latest", "Seeking to an offset of the streaming store to seek when a streaming query is initiated", 0) \
     M(Bool, enable_backfill_from_historical_store, false, "Enable backfill data from historical data store", 0) \

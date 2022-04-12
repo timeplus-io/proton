@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DistributedWALClient/KafkaWALContext.h>
-#include <DistributedWALClient/KafkaWALSimpleConsumer.h>
+#include <KafkaLog/KafkaWALContext.h>
+#include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Storages/StorageInMemoryMetadata.h>
@@ -59,8 +59,8 @@ private:
     Block physical_header;
     Chunk header_chunk;
 
-    DWAL::KafkaWALSimpleConsumerPtr consumer;
-    DWAL::KafkaWALContext consume_ctx;
+    klog::KafkaWALSimpleConsumerPtr consumer;
+    klog::KafkaWALContext consume_ctx;
 
     std::unique_ptr<StreamingFormatExecutor> format_executor;
     ReadBufferFromMemory read_buffer;

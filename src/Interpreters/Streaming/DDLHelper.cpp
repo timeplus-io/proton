@@ -32,21 +32,21 @@ namespace ErrorCodes
 namespace
 {
     const std::vector<String> CREATE_TABLE_SETTINGS = {
-        "streaming_storage_cluster_id",
-        "streaming_storage_subscription_mode",
-        "streaming_storage_auto_offset_reset",
-        "streaming_storage_request_required_acks",
-        "streaming_storage_request_timeout_ms",
-        "streaming_storage_retention_bytes",
-        "streaming_storage_retention_ms",
-        "streaming_storage_flush_messages",
-        "streaming_storage_flush_ms",
+        "logstore_cluster_id",
+        "logstore_subscription_mode",
+        "logstore_auto_offset_reset",
+        "logstore_request_required_acks",
+        "logstore_request_timeout_ms",
+        "logstore_retention_bytes",
+        "logstore_retention_ms",
+        "logstore_flush_messages",
+        "logstore_flush_ms",
         "distributed_ingest_mode",
         "distributed_flush_threshold_ms",
         "distributed_flush_threshold_count",
         "distributed_flush_threshold_bytes",
         "storage_type",
-        "streaming_storage",
+        "logstore",
     };
 }
 
@@ -59,17 +59,15 @@ void getAndValidateStorageSetting(
         if (value.empty())
             continue;
 
-        if (key == "streaming_storage_subscription_mode")
+        if (key == "logstore_subscription_mode")
         {
             if (value != "shared" && value != "dedicated")
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE, "streaming_storage_subscription_mode only supports 'shared' or 'dedicated'");
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "logstore_subscription_mode only supports 'shared' or 'dedicated'");
         }
-        else if (key == "streaming_storage_auto_offset_reset")
+        else if (key == "logstore_auto_offset_reset")
         {
             if (value != "earliest" && value != "latest")
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE, "streaming_storage_auto_offset_reset only supports 'earliest' or 'latest'");
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "logstore_auto_offset_reset only supports 'earliest' or 'latest'");
         }
         else if (key == "distributed_ingest_mode")
         {
@@ -115,8 +113,7 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
     sharding_expr_field.tryGet<String>(expr);
     ASTPtr sharding_expr = functionToAST(expr);
 
-    auto engine = makeASTFunction(
-        "Stream", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
+    auto engine = makeASTFunction("Stream", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
     create.storage->set(create.storage->engine, engine);
 }
 
@@ -302,7 +299,7 @@ void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * column
     resp_table.set("columns", columns_mapping_json);
 }
 
-DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
+nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
 {
     if (queryParams.contains("column"))
     {
@@ -310,37 +307,37 @@ DWAL::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std:
 
         if (iter->second == Poco::Net::HTTPRequest::HTTP_POST)
         {
-            return DWAL::OpCode::CREATE_COLUMN;
+            return nlog::OpCode::CREATE_COLUMN;
         }
         else if (iter->second == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return DWAL::OpCode::ALTER_COLUMN;
+            return nlog::OpCode::ALTER_COLUMN;
         }
         else if (iter->second == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return DWAL::OpCode::DELETE_COLUMN;
+            return nlog::OpCode::DELETE_COLUMN;
         }
         else
         {
             assert(false);
-            return DWAL::OpCode::MAX_OPS_CODE;
+            return nlog::OpCode::MAX_OPS_CODE;
         }
     }
 
-    return DWAL::OpCode::ALTER_TABLE;
+    return nlog::OpCode::ALTER_TABLE;
 }
 
-std::map<ASTAlterCommand::Type, DWAL::OpCode> command_type_to_opCode
-    = {{ASTAlterCommand::Type::ADD_COLUMN, DWAL::OpCode::CREATE_COLUMN},
-       {ASTAlterCommand::Type::MODIFY_COLUMN, DWAL::OpCode::ALTER_COLUMN},
-       {ASTAlterCommand::Type::RENAME_COLUMN, DWAL::OpCode::ALTER_COLUMN},
-       {ASTAlterCommand::Type::MODIFY_TTL, DWAL::OpCode::ALTER_TABLE},
-       {ASTAlterCommand::Type::DROP_COLUMN, DWAL::OpCode::DELETE_COLUMN}};
+std::map<ASTAlterCommand::Type, nlog::OpCode> command_type_to_opCode
+    = {{ASTAlterCommand::Type::ADD_COLUMN, nlog::OpCode::CREATE_COLUMN},
+       {ASTAlterCommand::Type::MODIFY_COLUMN, nlog::OpCode::ALTER_COLUMN},
+       {ASTAlterCommand::Type::RENAME_COLUMN, nlog::OpCode::ALTER_COLUMN},
+       {ASTAlterCommand::Type::MODIFY_TTL, nlog::OpCode::ALTER_TABLE},
+       {ASTAlterCommand::Type::DROP_COLUMN, nlog::OpCode::DELETE_COLUMN}};
 
-DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
+nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
 {
     if (alter.command_list->children.empty())
-        return DWAL::OpCode::MAX_OPS_CODE;
+        return nlog::OpCode::MAX_OPS_CODE;
 
     for (const auto & child : alter.command_list->children)
     {
@@ -353,7 +350,7 @@ DWAL::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
             }
         }
     }
-    return DWAL::OpCode::MAX_OPS_CODE;
+    return nlog::OpCode::MAX_OPS_CODE;
 }
 
 String getJSONFromCreateQuery(const ASTCreateQuery & create)
@@ -433,9 +430,8 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
     }
 
     if (has_payload)
-    {
         payload = JSONToString(payload_json);
-    }
+
     return payload;
 }
 

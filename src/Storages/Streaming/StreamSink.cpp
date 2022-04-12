@@ -1,9 +1,10 @@
 #include "StreamSink.h"
 #include "StorageStream.h"
 
-#include <DistributedWALClient/KafkaWAL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
+#include <KafkaLog/KafkaWAL.h>
+#include <NativeLog/Server/NativeLog.h>
 #include <base/ClockUtils.h>
 
 
@@ -13,15 +14,17 @@ namespace ErrorCodes
 {
     extern const int TIMEOUT_EXCEEDED;
     extern const int UNSUPPORTED_PARAMETER;
+    extern const int INTERNAL_ERROR;
     extern const int OK;
 }
 
-StreamSink::StreamSink(
-    StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
+StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metadata_snapshot_, ContextPtr query_context_)
     : SinkToStorage(metadata_snapshot_->getSampleBlockNonMaterialized())
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , query_context(query_context_)
+    , storage_id(storage.getStorageID())
+    , request{storage_id.getTableName(), storage_id.uuid, storage.shard, nullptr}
 {
     /// metadata_snapshot can contain only partial columns of the schema when light ingest feature is on
     /// Check this case here
@@ -38,6 +41,13 @@ StreamSink::StreamSink(
         /// Figure out the column positions since we need encode them to file system
         for (const auto & col : sink_block_header)
             column_positions.push_back(full_header.getPositionByName(col.name));
+    }
+
+
+    if (!storage.kafka)
+    {
+        native_log = &nlog::NativeLog::instance(query_context);
+        assert(native_log->enabled());
     }
 }
 
@@ -119,84 +129,105 @@ void StreamSink::consume(Chunk chunk)
     const auto & idem_key = query_context->getIdempotentKey();
     auto ingest_time = query_context->getIngestTime();
 
-    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, Block{}, schema_version};
-    record.column_positions = column_positions;
+    auto record = std::make_shared<nlog::Record>(nlog::OpCode::ADD_DATA_BLOCK, Block{}, schema_version);
+    record->setColumnPositions(column_positions);
 
     for (auto & current_block : blocks)
     {
-        record.block.swap(current_block.block);
-        record.partition_key = current_block.shard;
+        record->getBlock().swap(current_block.block);
+        record->setShard(current_block.shard);
 
         if (!idem_key.empty())
-            record.setIdempotentKey(idem_key);
+            record->setIdempotentKey(idem_key);
 
         if (ingest_time > 0)
-            record.setIngestTime(ingest_time);
+            record->setIngestTime(ingest_time);
 
-        switch (ingest_mode)
-        {
-            case IngestMode::ASYNC:
-            {
-//                LOG_TRACE(
-//                    storage.log,
-//                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
-//                    outstanding,
-//                    record.block.rows(),
-//                    current_block.shard,
-//                    query_context->getQueryStatusPollId());
-
-                storage.appendAsync(record, query_context->getBlockBaseId(), outstanding);
-                break;
-            }
-            case IngestMode::SYNC:
-            {
-//                LOG_TRACE(
-//                    storage.log,
-//                    "[sync] write a block={} rows={} shard={} committed={} ...",
-//                    outstanding,
-//                    record.block.rows(),
-//                    current_block.shard,
-//                    committed);
-
-                auto ret = storage.dwal->append(record, &StreamSink::writeCallback, this, storage.dwal_append_ctx);
-                if (ret != 0)
-                    throw Exception("Failed to insert data sync", ret);
-
-                break;
-            }
-            case IngestMode::FIRE_AND_FORGET:
-            {
-//                LOG_TRACE(
-//                    storage.log,
-//                    "[fire_and_forget] write a block={} rows={} shard={} ...",
-//                    outstanding,
-//                    record.block.rows(),
-//                    current_block.shard);
-
-                auto ret = storage.dwal->append(record, nullptr, nullptr, storage.dwal_append_ctx);
-                if (ret != 0)
-                    throw Exception("Failed to insert data fire_and_forget", ret);
-
-                break;
-            }
-            case IngestMode::ORDERED:
-            {
-                auto ret = storage.dwal->append(record, storage.dwal_append_ctx);
-                if (ret.err != ErrorCodes::OK)
-                    throw Exception("Failed to insert data ordered", ret.err);
-
-                break;
-            }
-            case IngestMode::None:
-                /// FALLTHROUGH
-            case IngestMode::INVALID:
-                throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
-        }
-        outstanding += 1;
+        if (native_log)
+            appendToNativeLog(record, ingest_mode);
+        else
+            appendToKafka(record, ingest_mode);
     }
 }
 
-void StreamSink::writeCallback(const DWAL::AppendResult & result)
+void StreamSink::appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/)
+{
+    assert(native_log);
+
+    request.stream_shard.shard = record->getShard();
+    request.record = record;
+
+    auto resp{native_log->append(storage_id.getDatabaseName(), request)};
+    if (resp.hasError())
+    {
+        LOG_ERROR(storage.log, "Failed to append record to native log, error={}", resp.errString());
+        throw DB::Exception(ErrorCodes::INTERNAL_ERROR, "Failed to append record to native log, error={}", resp.errString());
+    }
+}
+
+void StreamSink::appendToKafka(nlog::RecordPtr & record, IngestMode ingest_mode)
+{
+    assert(storage.kafka);
+
+    switch (ingest_mode)
+    {
+        case IngestMode::ASYNC: {
+            //                LOG_TRACE(
+            //                    storage.log,
+            //                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard,
+            //                    query_context->getQueryStatusPollId());
+
+            storage.appendAsync(*record, query_context->getBlockBaseId(), outstanding);
+            break;
+        }
+        case IngestMode::SYNC: {
+            //                LOG_TRACE(
+            //                    storage.log,
+            //                    "[sync] write a block={} rows={} shard={} committed={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard,
+            //                    committed);
+
+            auto ret = storage.kafka->log->append(*record, &StreamSink::writeCallback, this, storage.kafka->append_ctx);
+            if (ret != 0)
+                throw Exception("Failed to insert data sync", ret);
+
+            break;
+        }
+        case IngestMode::FIRE_AND_FORGET: {
+            //                LOG_TRACE(
+            //                    storage.log,
+            //                    "[fire_and_forget] write a block={} rows={} shard={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard);
+
+            auto ret = storage.kafka->log->append(*record, nullptr, nullptr, storage.kafka->append_ctx);
+            if (ret != 0)
+                throw Exception("Failed to insert data fire_and_forget", ret);
+
+            break;
+        }
+        case IngestMode::ORDERED: {
+            auto ret = storage.kafka->log->append(*record, storage.kafka->append_ctx);
+            if (ret.err != ErrorCodes::OK)
+                throw Exception("Failed to insert data ordered", ret.err);
+
+            break;
+        }
+        case IngestMode::None:
+            /// FALLTHROUGH
+        case IngestMode::INVALID:
+            throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
+    }
+    outstanding += 1;
+}
+
+void StreamSink::writeCallback(const klog::AppendResult & result)
 {
     ++committed;
     if (result.err != ErrorCodes::OK)
@@ -205,7 +236,7 @@ void StreamSink::writeCallback(const DWAL::AppendResult & result)
     /// LOG_TRACE(storage.log, "[sync] written a block, and current committed={}, error={}", committed, errcode);
 }
 
-void StreamSink::writeCallback(const DWAL::AppendResult & result, void * data_)
+void StreamSink::writeCallback(const klog::AppendResult & result, void * data_)
 {
     auto * stream = static_cast<StreamSink *>(data_);
     stream->writeCallback(result);
@@ -216,7 +247,7 @@ void StreamSink::onFinish()
     /// We need wait for all outstanding ingesting block committed
     /// before dtor itself. Otherwise the if the registered callback is invoked
     /// after dtor, crash will happen
-    if (query_context->getIngestMode() != IngestMode::SYNC)
+    if (!storage.kafka || getIngestMode() != IngestMode::SYNC)
         return;
 
     /// 3) Inplace poll append result until either all of records have been committed
@@ -233,7 +264,7 @@ void StreamSink::onFinish()
         }
         else
         {
-            storage.dwal->poll(10, storage.dwal_append_ctx);
+            storage.kafka->log->poll(10, storage.kafka->append_ctx);
         }
 
         if (MonotonicSeconds::now() - start >= 2)

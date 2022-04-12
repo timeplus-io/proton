@@ -32,12 +32,12 @@ void registerStorageStream(StorageFactory & factory)
             * - shard_by_expr
 
             * Stream engine settings :
-            * - streaming_storage=kafka
-            * - streaming_storage_cluster_id=<my_cluster>
-            * - streaming_storage_partition=<partition>
-            * - streaming_storage_request_required_acks=1
-            * - streaming_storage_request_timeout_ms=30000
-            * - streaming_storage_auto_offset_reset=earliest
+            * - logstore=kafka
+            * - logstore_cluster_id=<my_cluster>
+            * - logstore_partition=<partition>
+            * - logstore_request_required_acks=1
+            * - logstore_request_timeout_ms=30000
+            * - logstore_auto_offset_reset=earliest
             */
 
             MergeTreeData::MergingParams merging_params;

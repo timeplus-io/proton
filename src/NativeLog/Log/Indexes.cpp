@@ -1,5 +1,7 @@
 #include "Indexes.h"
 
+#include <NativeLog/Rocks/IntegerComparator.h>
+
 #include <base/logger_useful.h>
 
 namespace DB
@@ -12,8 +14,8 @@ namespace ErrorCodes
 
 namespace nlog
 {
-Indexes::Indexes(const fs::path & index_dir, int64_t base_offset_, Poco::Logger * logger_)
-    : base_offset(base_offset_), last_indexed_etimestamp(-1, -1), last_indexed_atimestamp(-1, -1), logger(logger_)
+Indexes::Indexes(const fs::path & index_dir, int64_t base_sn_, Poco::Logger * logger_)
+    : base_sn(base_sn_), last_indexed_etimestamp(-1, -1), last_indexed_atimestamp(-1, -1), logger(logger_)
 {
     /// FIXME, lazy init index db since if there are lots of segments, init may take a long time
     rocksdb::Options options;
@@ -22,37 +24,53 @@ Indexes::Indexes(const fs::path & index_dir, int64_t base_offset_, Poco::Logger 
     options.create_if_missing = true;
     options.create_missing_column_families = true;
     options.atomic_flush = true;
+    options.comparator = integerComparator<int64_t>();
+
+    rocksdb::ColumnFamilyOptions cf_options;
+    cf_options.comparator = integerComparator<int64_t>();
 
     std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
-    /// default cf : offset to physical position mapping
-    column_families.push_back(rocksdb::ColumnFamilyDescriptor(ROCKSDB_NAMESPACE::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions()));
-    /// position_offset cf : physical position to offset mapping
-    column_families.push_back(rocksdb::ColumnFamilyDescriptor("position_offset", rocksdb::ColumnFamilyOptions()));
-    /// atime_offset cf : append time to offset mapping
-    column_families.push_back(rocksdb::ColumnFamilyDescriptor("atime_offset", rocksdb::ColumnFamilyOptions()));
-    /// etime_offset cf : event time to offset mapping
-    column_families.push_back(rocksdb::ColumnFamilyDescriptor("etime_offset", rocksdb::ColumnFamilyOptions()));
+    /// default cf : sn to physical position mapping
+    column_families.push_back(rocksdb::ColumnFamilyDescriptor(ROCKSDB_NAMESPACE::kDefaultColumnFamilyName, cf_options));
+    /// position_sn cf : physical position to sn mapping
+    column_families.push_back(rocksdb::ColumnFamilyDescriptor("position_sn", cf_options));
+    /// atime_sn cf : append time to sn mapping
+    column_families.push_back(rocksdb::ColumnFamilyDescriptor("atime_sn", cf_options));
+    /// etime_sn cf : event time to sn mapping
+    column_families.push_back(rocksdb::ColumnFamilyDescriptor("etime_sn", cf_options));
 
     std::vector<rocksdb::ColumnFamilyHandle *> cf_handles;
 
     rocksdb::DB * db;
+    /// Opening rocksdb can be very expensive: around 1 second
     auto status = rocksdb::DB::Open(options, index_dir, column_families, &cf_handles, &db);
     if (!status.ok())
         throw DB::Exception(DB::ErrorCodes::CANNOT_OPEN_DATABASE, "Filed to open index db, {}", status.ToString());
 
     indexes.reset(db);
-    offset_position_cf_handle = cf_handles[0];
-    position_offset_cf_handle = cf_handles[1];
-    etime_offset_cf_handle = cf_handles[2];
-    atime_offset_cf_handle = cf_handles[3];
+    sn_position_cf_handle = cf_handles[0];
+    position_sn_cf_handle = cf_handles[1];
+    etime_sn_cf_handle = cf_handles[2];
+    atime_sn_cf_handle = cf_handles[3];
 
-    last_indexed_etimestamp = lastIndexedEventTimeOffset();
-    last_indexed_atimestamp = lastIndexedAppendTimeOffset();
+    last_indexed_etimestamp = lastIndexedEventTimeSequence();
+    last_indexed_atimestamp = lastIndexedAppendTimeSequence();
 }
 
 Indexes::~Indexes()
 {
-    for (auto * cf_handle : {offset_position_cf_handle, position_offset_cf_handle, etime_offset_cf_handle, atime_offset_cf_handle})
+    close();
+}
+
+void Indexes::close()
+{
+    if (closed.test_and_set())
+        /// Already closed
+        return;
+
+    sync();
+
+    for (auto * cf_handle : {sn_position_cf_handle, position_sn_cf_handle, etime_sn_cf_handle, atime_sn_cf_handle})
     {
         if (cf_handle != nullptr)
         {
@@ -65,26 +83,28 @@ Indexes::~Indexes()
     auto status = indexes->Close();
     if (!status.ok())
         LOG_ERROR(logger, "Failed to close indexes db");
+
+    LOG_INFO(logger, "Closed indexes successfully");
 }
 
-TimestampOffset Indexes::lastIndexedAppendTimeOffset()
+TimestampSequence Indexes::lastIndexedAppendTimeSequence() const
 {
-    return lastIndexedEntry(atime_offset_cf_handle);
+    return lastIndexedEntry(atime_sn_cf_handle);
 }
 
-TimestampOffset Indexes::lastIndexedEventTimeOffset()
+TimestampSequence Indexes::lastIndexedEventTimeSequence() const
 {
-    return lastIndexedEntry(etime_offset_cf_handle);
+    return lastIndexedEntry(etime_sn_cf_handle);
 }
 
-OffsetPosition Indexes::lastIndexedOffsetPosition()
+SequencePosition Indexes::lastIndexedSequencePosition() const
 {
-    return lastIndexedEntry(offset_position_cf_handle);
+    return lastIndexedEntry(sn_position_cf_handle);
 }
 
-PositionOffset Indexes::lastIndexedPositionOffset()
+PositionSequence Indexes::lastIndexedPositionSequence() const
 {
-    return lastIndexedEntry(position_offset_cf_handle);
+    return lastIndexedEntry(position_sn_cf_handle);
 }
 
 IndexEntry Indexes::lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const
@@ -103,13 +123,21 @@ IndexEntry Indexes::lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) co
     return {-1, -1};
 }
 
-OffsetPosition Indexes::lowerBoundOffsetPosition(int64_t offset)
+SequencePosition Indexes::lowerBoundPositionForSequence(int64_t sn) const
 {
-    auto entry = lowerBound(offset, offset_position_cf_handle);
+    auto entry = lowerBound(sn, sn_position_cf_handle);
     if (!entry.isInvalid())
         return entry;
 
-    return {base_offset, 0};
+    return {base_sn, 0};
+}
+
+TimestampSequence Indexes::lowerBoundSequenceForTimestamp(int64_t ts, bool append_time) const
+{
+    if (append_time)
+        return lowerBound(ts, atime_sn_cf_handle);
+    else
+        return lowerBound(ts, etime_sn_cf_handle);
 }
 
 /// IndexEntry.key <= key
@@ -126,54 +154,80 @@ IndexEntry Indexes::lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_han
         auto k = *reinterpret_cast<const int64_t *>(iter->key().data());
         assert(iter->value().size() == sizeof(int64_t));
         auto v = *reinterpret_cast<const int64_t *>(iter->value().data());
+        assert(k <= key);
+        return {k, v};
+    }
+    return {-1, -1};
+}
+
+PositionSequence Indexes::upperBoundSequenceForPosition(int64_t position) const
+{
+    return upperBound(position, position_sn_cf_handle);
+}
+
+/// IndexEntry.key >= key
+/// @return IndexEntry which has key great or equal to key specified in the parameter if found such entry
+/// Otherwise return IndexEntry{-1, -1}
+IndexEntry Indexes::upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const
+{
+    std::unique_ptr<rocksdb::Iterator> iter{indexes->NewIterator(rocksdb::ReadOptions{}, cf_handle)};
+    rocksdb::Slice key_s{reinterpret_cast<char *>(&key), sizeof(key)};
+    iter->Seek(key_s);
+    if (iter->Valid())
+    {
+        assert(iter->key().size() == sizeof(int64_t));
+        auto k = *reinterpret_cast<const int64_t *>(iter->key().data());
+        assert(iter->value().size() == sizeof(int64_t));
+        auto v = *reinterpret_cast<const int64_t *>(iter->value().data());
+        assert(k >= key);
         return {k, v};
     }
     return {-1, -1};
 }
 
 void Indexes::index(
-    int64_t largest_offset,
+    int64_t largest_sn,
     int64_t physical_position,
-    const TimestampOffset & max_etimestamp_offset,
-    const TimestampOffset & max_atimestamp_offset)
+    const TimestampSequence & max_etimestamp_sn,
+    const TimestampSequence & max_atimestamp_sn)
 {
-    rocksdb::Slice offset_s{reinterpret_cast<char *>(&largest_offset), sizeof(largest_offset)};
+    rocksdb::Slice sn_s{reinterpret_cast<char *>(&largest_sn), sizeof(largest_sn)};
     rocksdb::Slice position_s{reinterpret_cast<char *>(&physical_position), sizeof(physical_position)};
 
     rocksdb::WriteBatch batch;
 
-    /// Insert offset -> physical position mapping
-    batch.Put(offset_position_cf_handle, offset_s, position_s);
+    /// Insert sn -> physical position mapping
+    batch.Put(sn_position_cf_handle, sn_s, position_s);
 
-    /// Insert physical position -> offset mapping
-    batch.Put(position_offset_cf_handle, position_s, offset_s);
+    /// Insert physical position -> sn mapping
+    batch.Put(position_sn_cf_handle, position_s, sn_s);
 
-    index(max_etimestamp_offset, max_atimestamp_offset, batch);
+    index(max_etimestamp_sn, max_atimestamp_sn, batch);
 }
 
-void Indexes::index(const TimestampOffset & max_etimestamp_offset, const TimestampOffset & max_atimestamp_offset)
+void Indexes::index(const TimestampSequence & max_etimestamp_sn, const TimestampSequence & max_atimestamp_sn)
 {
     rocksdb::WriteBatch batch;
-    index(max_etimestamp_offset, max_atimestamp_offset, batch);
+    index(max_etimestamp_sn, max_atimestamp_sn, batch);
 }
 
 void Indexes::index(
-    const TimestampOffset & max_etimestamp_offset, const TimestampOffset & max_atimestamp_offset, rocksdb::WriteBatch & batch)
+    const TimestampSequence & max_etimestamp_sn, const TimestampSequence & max_atimestamp_sn, rocksdb::WriteBatch & batch)
 {
-    if (max_etimestamp_offset > last_indexed_etimestamp)
+    if (max_etimestamp_sn > last_indexed_etimestamp)
     {
-        /// event timestamp -> offset mapping
-        rocksdb::Slice event_time_s{reinterpret_cast<const char *>(&max_etimestamp_offset.key), sizeof(max_etimestamp_offset.key)};
-        rocksdb::Slice event_offset_s{reinterpret_cast<const char *>(&max_etimestamp_offset.value), sizeof(max_etimestamp_offset.value)};
-        batch.Put(etime_offset_cf_handle, event_time_s, event_offset_s);
+        /// event timestamp -> sn mapping
+        rocksdb::Slice event_time_s{reinterpret_cast<const char *>(&max_etimestamp_sn.key), sizeof(max_etimestamp_sn.key)};
+        rocksdb::Slice event_sn_s{reinterpret_cast<const char *>(&max_etimestamp_sn.value), sizeof(max_etimestamp_sn.value)};
+        batch.Put(etime_sn_cf_handle, event_time_s, event_sn_s);
     }
 
-    if (max_atimestamp_offset > last_indexed_atimestamp)
+    if (max_atimestamp_sn > last_indexed_atimestamp)
     {
-        /// append timestamp -> offset mapping
-        rocksdb::Slice append_time_s{reinterpret_cast<const char *>(&max_atimestamp_offset.key), sizeof(max_atimestamp_offset.key)};
-        rocksdb::Slice event_offset_s{reinterpret_cast<const char *>(&max_atimestamp_offset.value), sizeof(max_atimestamp_offset.value)};
-        batch.Put(atime_offset_cf_handle, append_time_s, event_offset_s);
+        /// append timestamp -> sn mapping
+        rocksdb::Slice append_time_s{reinterpret_cast<const char *>(&max_atimestamp_sn.key), sizeof(max_atimestamp_sn.key)};
+        rocksdb::Slice event_sn_s{reinterpret_cast<const char *>(&max_atimestamp_sn.value), sizeof(max_atimestamp_sn.value)};
+        batch.Put(atime_sn_cf_handle, append_time_s, event_sn_s);
     }
 
     rocksdb::WriteOptions write_options;
@@ -185,11 +239,11 @@ void Indexes::index(
 
     /// sync();
 
-    if (max_etimestamp_offset > last_indexed_etimestamp)
-        last_indexed_etimestamp = max_etimestamp_offset;
+    if (max_etimestamp_sn > last_indexed_etimestamp)
+        last_indexed_etimestamp = max_etimestamp_sn;
 
-    if (max_atimestamp_offset > last_indexed_atimestamp)
-        last_indexed_atimestamp = max_atimestamp_offset;
+    if (max_atimestamp_sn > last_indexed_atimestamp)
+        last_indexed_atimestamp = max_atimestamp_sn;
 }
 
 void Indexes::sync()

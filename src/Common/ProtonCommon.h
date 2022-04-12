@@ -36,6 +36,8 @@ const std::vector<String> RESERVED_COLUMN_NAMES = {RESERVED_EVENT_TIME, RESERVED
 const String DEFAULT_EVENT_TIME = "now64(3, 'UTC')";
 const String DEFAULT_STORAGE_TYPE = "hybrid";
 const String STORAGE_TYPE_STREAMING = "streaming";
+const String LOGSTORE_KAFKA = "kafka";
+const String LOGSTORE_NATIVE_LOG = "nativelog";
 
 /// Default settings for DDL
 const UInt64 DEFAULT_DDL_TIMEOUT_MS = 2000;

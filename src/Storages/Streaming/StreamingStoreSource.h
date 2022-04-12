@@ -2,12 +2,10 @@
 
 #include "StreamingStoreSourceBase.h"
 
-#include <DistributedWALClient/KafkaWALSimpleConsumer.h>
-
 namespace DB
 {
-class StreamingBlockReader;
-class IStorage;
+class StreamingBlockReaderKafka;
+class StreamingBlockReaderNativeLog;
 
 class StreamingStoreSource final : public StreamingStoreSourceBase
 {
@@ -18,8 +16,7 @@ public:
         const StorageMetadataPtr & metadata_snapshot_,
         ContextPtr context_,
         Int32 shard_,
-        Int64 offset,
-        DWAL::KafkaWALSimpleConsumerPtr consumer_,
+        Int64 sn,
         Poco::Logger * log_);
 
     ~StreamingStoreSource() override = default;
@@ -27,16 +24,16 @@ public:
     String getName() const override { return "StreamingStoreSource"; }
 
 private:
+    inline nlog::RecordPtrs read();
     void readAndProcess() override;
 
 private:
-    std::shared_ptr<IStorage> storage;
-
     Int32 shard;
-    DWAL::KafkaWALSimpleConsumerPtr consumer;
     Poco::Logger * log;
 
-    std::unique_ptr<StreamingBlockReader> reader;
+    std::unique_ptr<StreamingBlockReaderKafka> kafka_reader;
+
+    std::unique_ptr<StreamingBlockReaderNativeLog> nativelog_reader;
 
     UInt64 record_consume_batch_count = 1000;
     Int64 record_consume_timeout = 100;

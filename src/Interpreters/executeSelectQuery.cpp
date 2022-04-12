@@ -21,9 +21,7 @@ void executeNonInsertQuery(const String & query, ContextMutablePtr query_context
         while (executor.pull(block, 100))
         {
             if (block && callback)
-            {
                 callback(std::move(block));
-            }
         }
     }
     else if (io.pipeline.completed())
@@ -31,16 +29,12 @@ void executeNonInsertQuery(const String & query, ContextMutablePtr query_context
         CompletedPipelineExecutor executor(io.pipeline);
         executor.execute();
         if (callback)
-        {
             callback({});
-        }
     }
     else
     {
         if (callback)
-        {
             callback({});
-        }
     }
 
     io.onFinish();

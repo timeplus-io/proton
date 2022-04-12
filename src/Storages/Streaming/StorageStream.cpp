@@ -1,15 +1,13 @@
 #include "StorageStream.h"
-#include "StreamCallbackData.h"
 #include "StreamSink.h"
-#include "StreamingBlockReader.h"
+#include "StreamingBlockReaderKafka.h"
+#include "StreamingBlockReaderNativeLog.h"
 #include "StreamingStoreSource.h"
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnDecimal.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedWALClient/KafkaWALCommon.h>
-#include <DistributedWALClient/KafkaWALPool.h>
 #include <Functions/IFunction.h>
 #include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
@@ -20,6 +18,9 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/createBlockSelector.h>
 #include <Interpreters/evaluateConstantExpression.h>
+#include <KafkaLog/KafkaWALCommon.h>
+#include <KafkaLog/KafkaWALPool.h>
+#include <NativeLog/Server/NativeLog.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
@@ -31,7 +32,6 @@
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <base/logger_useful.h>
-#include <Common/ProtonCommon.h>
 #include <Common/parseIntStrict.h>
 #include <Common/randomSeed.h>
 #include <Common/setThreadName.h>
@@ -51,6 +51,7 @@ namespace ErrorCodes
     extern const int ARGUMENT_OUT_OF_BOUND;
     extern const int BAD_ARGUMENTS;
     extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
+    extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace
@@ -213,9 +214,9 @@ namespace
         return buf.str();
     }
 
-    inline void assignSequenceID(DWAL::RecordPtr & record)
+    inline void assignSequenceID(nlog::RecordPtr & record)
     {
-        auto * col = record->block.findByName(RESERVED_EVENT_SEQUENCE_ID);
+        auto * col = record->getBlock().findByName(RESERVED_EVENT_SEQUENCE_ID);
         if (!col)
             return;
 
@@ -224,7 +225,7 @@ namespace
         {
             auto & data = seq_id_col->getData();
             for (auto & item : data)
-                item = record->sn;
+                item = record->getSN();
         }
     }
 
@@ -276,10 +277,6 @@ StorageStream::StorageStream(
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
-    , topic(DWAL::escapeDWALName(table_id_.getDatabaseName(), table_id_.getTableName()))
-    , dwal_append_ctx(topic, shards_, replication_factor_)
-    , dwal_consume_ctx(topic, shards_, replication_factor_)
-    , ingesting_blocks(context_->getSettingsRef().async_ingest_block_timeout_ms, log)
     , part_commit_pool(context_->getPartCommitPool())
     , rng(randomSeed())
     , max_outstanding_blocks(context_->getSettingsRef().aysnc_ingest_max_outstanding_blocks)
@@ -288,7 +285,6 @@ StorageStream::StorageStream(
 
     if (!relative_data_path_.empty())
     {
-        /// Virtual table which is for data ingestion only
         storage = StorageMergeTree::create(
             table_id_,
             relative_data_path_,
@@ -402,13 +398,13 @@ void StorageStream::readConcat(
 
     auto create_streaming_source = [this, header, metadata_snapshot, context_](Int64 & max_sn_in_parts) {
         auto committed = storage->committedSN();
-        auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
         if (max_sn_in_parts < 0)
         {
             /// Fallback to seek streaming store
             auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
             LOG_INFO(log, "Fused read fallbacks to seek stream. shard={}", currentShard());
-            return std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], consumer, log);
+            return std::make_shared<StreamingStoreSource>(
+                shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], log);
         }
         else if (committed < max_sn_in_parts)
         {
@@ -416,20 +412,41 @@ void StorageStream::readConcat(
             /// Please refer to SequenceInfo.h for more details
             /// Fallback to seek streaming store
             auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
-            LOG_INFO(log, "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, current_committed_sn={}", currentShard(), max_sn_in_parts, committed);
+            LOG_INFO(
+                log,
+                "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, "
+                "current_committed_sn={}",
+                currentShard(),
+                max_sn_in_parts,
+                committed);
 
             /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
             max_sn_in_parts = -1;
-            return std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], consumer, log);
+            return std::make_shared<StreamingStoreSource>(
+                shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], log);
         }
         else
         {
-            LOG_INFO(log, "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}", currentShard(), max_sn_in_parts, committed);
-            return std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, currentShard(), max_sn_in_parts + 1, consumer, log);
+            LOG_INFO(
+                log,
+                "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}",
+                currentShard(),
+                max_sn_in_parts,
+                committed);
+            return std::make_shared<StreamingStoreSource>(
+                shared_from_this(), header, metadata_snapshot, context_, currentShard(), max_sn_in_parts + 1, log);
         }
     };
 
-    storage->readConcat(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, std::move(create_streaming_source));
+    storage->readConcat(
+        query_plan,
+        column_names,
+        metadata_snapshot,
+        query_info,
+        context_,
+        processed_stage,
+        max_block_size,
+        std::move(create_streaming_source));
 }
 
 void StorageStream::readStreaming(
@@ -456,7 +473,7 @@ void StorageStream::readStreaming(
     }
     else
     {
-        auto consumer = DWAL::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
+        /// auto consumer = klog::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
 
         /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
         /// We will need add one
@@ -469,8 +486,8 @@ void StorageStream::readStreaming(
         auto offsets = getOffsets(settings_ref.seek_to.value);
 
         for (Int32 i = 0; i < shards; ++i)
-            pipes.emplace_back(std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, metadata_snapshot, context_, i, offsets[i], consumer, log));
+            pipes.emplace_back(
+                std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, i, offsets[i], log));
     }
 
     LOG_INFO(
@@ -499,13 +516,15 @@ void StorageStream::read(
     if (query_info.syntax_analyzer_result->streaming)
     {
         /// FIXME, to support seek_to='-1h'
-        if (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value && !requireDistributedQuery(context_))
+        if (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value
+            && !requireDistributedQuery(context_))
             readConcat(query_plan, query_info, column_names, metadata_snapshot, std::move(context_), processed_stage, max_block_size);
         else
             readStreaming(query_plan, query_info, column_names, metadata_snapshot, std::move(context_));
     }
     else
-        readHistory(query_plan, column_names, metadata_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
+        readHistory(
+            query_plan, column_names, metadata_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
 }
 
 void StorageStream::readHistory(
@@ -546,45 +565,62 @@ Pipe StorageStream::read(
 void StorageStream::startup()
 {
     if (inited.test_and_set())
-    {
         return;
-    }
 
     source_multiplexers.reset(new StreamingStoreSourceMultiplexers(shared_from_this(), getContext(), log));
 
-    initWal();
+    initLog();
 
-    if (storage)
+    if (!storage)
+        return;
+
+    LOG_INFO(log, "Starting");
+    storage->startup();
+
+    if (storage_settings.get()->storage_type.value == "streaming")
     {
-        LOG_INFO(log, "Starting");
-        storage->startup();
-
-        if (storage_settings.get()->storage_type.value == "hybrid")
+        LOG_INFO(log, "Pure streaming storage mode, skip indexing data to historical store");
+    }
+    else
+    {
+        if (kafka)
         {
-            if (storage_settings.get()->streaming_storage_subscription_mode.value == "shared")
+            if (storage_settings.get()->logstore_subscription_mode.value == "shared")
             {
                 /// Shared mode, register callback
-                addSubscription();
+                addSubscriptionKafka();
                 LOG_INFO(log, "Tailing streaming store in shared subscription mode");
             }
             else
             {
                 /// Dedicated mode has dedicated poll thread
                 poller.emplace(1);
-                poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
+                poller->scheduleOrThrowOnError([this] { backgroundPollKafka(); });
                 LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
             }
         }
         else
-            LOG_INFO(log, "Pure streaming storage mode, skip indexing data to historical store");
-
-        LOG_INFO(log, "Started");
+        {
+            /// Dedicated mode has dedicated poll thread. nativelog only supports dedicate mode for now
+            poller.emplace(1);
+            poller->scheduleOrThrowOnError([this] { backgroundPollNativeLog(); });
+            LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
+        }
     }
+
+    LOG_INFO(log, "Started");
 }
 
 StorageStream::~StorageStream()
 {
-    shutdown();
+    try
+    {
+        shutdown();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Failed to shutdown");
+    }
 
     /// Wait for outstanding blocks
     while (outstanding_blocks != 0)
@@ -612,13 +648,13 @@ void StorageStream::shutdown()
         }
         else
         {
-            removeSubscription();
+            removeSubscriptionKafka();
         }
         storage->shutdown();
     }
 
-    if (dwal)
-        dwal.reset();
+    if (kafka)
+        kafka->shutdown();
 
     LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
 }
@@ -674,8 +710,7 @@ std::optional<UInt64> StorageStream::totalRows(const Settings & settings) const
     return storage->totalRows(settings);
 }
 
-std::optional<UInt64>
-StorageStream::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
+std::optional<UInt64> StorageStream::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
 {
     assert(storage);
     return storage->totalRowsByPartitionPredicate(query_info, context_);
@@ -687,8 +722,7 @@ std::optional<UInt64> StorageStream::totalBytes(const Settings & settings) const
     return storage->totalBytes(settings);
 }
 
-SinkToStoragePtr
-StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
+SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
 {
     return std::make_shared<StreamSink>(*this, metadata_snapshot, context_);
 }
@@ -696,18 +730,19 @@ StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metada
 void StorageStream::checkTableCanBeDropped() const
 {
     if (storage)
-    {
         storage->checkTableCanBeDropped();
-    }
+}
+
+void StorageStream::preDrop()
+{
+    shutdown();
+    deinitNativeLog();
 }
 
 void StorageStream::drop()
 {
-    shutdown();
     if (storage)
-    {
         storage->drop();
-    }
 }
 
 void StorageStream::truncate(
@@ -818,15 +853,14 @@ void StorageStream::dropPartition(const ASTPtr & partition, bool detach, Context
     storage->dropPartition(partition, detach, context_);
 }
 
-PartitionCommandsResultInfo StorageStream::attachPartition(
-    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context_)
+PartitionCommandsResultInfo
+StorageStream::attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context_)
 {
     assert(storage);
     return storage->attachPartition(partition, metadata_snapshot, part, context_);
 }
 
-void StorageStream::replacePartitionFrom(
-    const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
+void StorageStream::replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
 {
     assert(storage);
     storage->replacePartitionFrom(source_table, partition, replace, context_);
@@ -941,8 +975,8 @@ ClusterPtr StorageStream::skipUnusedShards(
     return cluster->getClusterWithMultipleShards({shard_ids.begin(), shard_ids.end()});
 }
 
-ClusterPtr StorageStream::getOptimizedCluster(
-    ContextPtr context_, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const
+ClusterPtr
+StorageStream::getOptimizedCluster(ContextPtr context_, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const
 {
     ClusterPtr cluster = getCluster();
     const Settings & settings = context_->getSettingsRef();
@@ -1119,24 +1153,24 @@ size_t StorageStream::getNextShardIndex() const
     return next_shard++ % shards;
 }
 
-DWAL::RecordSN StorageStream::lastSN() const
+nlog::RecordSN StorageStream::lastSN() const
 {
     std::lock_guard lock(sns_mutex);
     return last_sn;
 }
 
-void StorageStream::appendAsync(const DWAL::Record & record, UInt64 block_id, UInt64 sub_block_id)
+void StorageStream::appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id)
 {
-    assert(dwal);
+    assert(kafka && kafka->log);
 
     if (outstanding_blocks > max_outstanding_blocks)
         throw Exception("Too many request", ErrorCodes::RECEIVED_ERROR_TOO_MANY_REQUESTS);
 
-    [[maybe_unused]] auto added = ingesting_blocks.add(block_id, sub_block_id);
+    [[maybe_unused]] auto added = kafka->ingesting_blocks.add(block_id, sub_block_id);
     assert(added);
 
     auto data = std::make_unique<WriteCallbackData>(block_id, sub_block_id, this);
-    auto ret = dwal->append(record, &StorageStream::writeCallback, data.get(), dwal_append_ctx);
+    auto ret = kafka->log->append(record, &StorageStream::writeCallback, data.get(), kafka->append_ctx);
     if (ret == ErrorCodes::OK)
         /// The writeCallback takes over the ownership of callback data
         data.release();
@@ -1144,21 +1178,23 @@ void StorageStream::appendAsync(const DWAL::Record & record, UInt64 block_id, UI
         throw Exception("Failed to insert data async", ret);
 }
 
-void StorageStream::writeCallback(const DWAL::AppendResult & result, UInt64 block_id, UInt64 sub_block_id)
+void StorageStream::writeCallback(const klog::AppendResult & result, UInt64 block_id, UInt64 sub_block_id)
 {
+    assert(kafka);
+
     if (result.err)
     {
-        ingesting_blocks.fail(block_id, result.err);
+        kafka->ingesting_blocks.fail(block_id, result.err);
         LOG_ERROR(log, "[async] Failed to write sub_block_id={} in block_id={} error={}", sub_block_id, block_id, result.err);
     }
     else
     {
-        ingesting_blocks.remove(block_id, sub_block_id);
+        kafka->ingesting_blocks.remove(block_id, sub_block_id);
         LOG_TRACE(log, "[async] Written sub_block_id={} in block_id={}", sub_block_id, block_id);
     }
 }
 
-void StorageStream::writeCallback(const DWAL::AppendResult & result, void * data)
+void StorageStream::writeCallback(const klog::AppendResult & result, void * data)
 {
     std::unique_ptr<StorageStream::WriteCallbackData> pdata(static_cast<WriteCallbackData *>(data));
 
@@ -1176,16 +1212,16 @@ void StorageStream::mergeBlocks(Block & lhs, Block & rhs)
     for (size_t pos = 0; auto & rhs_col : rhs)
     {
         auto & lhs_col = lhs.getByPosition(pos);
-//        if (unlikely(lhs_col == nullptr))
-//        {
-//            /// lhs doesn't have this column
-//            ColumnWithTypeAndName new_col{rhs_col.cloneEmpty()};
-//
-//            /// what about column with default expression
-//            new_col.column->assumeMutable()->insertManyDefaults(lhs_rows);
-//            lhs.insert(std::move(new_col));
-//            lhs_col = lhs.findByName(rhs_col.name);
-//        }
+        //        if (unlikely(lhs_col == nullptr))
+        //        {
+        //            /// lhs doesn't have this column
+        //            ColumnWithTypeAndName new_col{rhs_col.cloneEmpty()};
+        //
+        //            /// what about column with default expression
+        //            new_col.column->assumeMutable()->insertManyDefaults(lhs_rows);
+        //            lhs.insert(std::move(new_col));
+        //            lhs_col = lhs.findByName(rhs_col.name);
+        //        }
 
         lhs_col.column->assumeMutable()->insertRangeFrom(*rhs_col.column.get(), 0, rhs_col.column->size());
         ++pos;
@@ -1200,14 +1236,14 @@ Int64 StorageStream::maxCommittedSN() const
     return storage->maxCommittedSN();
 }
 
-void StorageStream::commitSNLocal(DWAL::RecordSN commit_sn)
+void StorageStream::commitSNLocal(nlog::RecordSN commit_sn)
 {
     try
     {
         storage->commitSN(commit_sn);
         last_commit_ts = MonotonicSeconds::now();
 
-        LOG_INFO(log, "Committed offset={} for shard={} to local file system", commit_sn, shard);
+        LOG_INFO(log, "Committed sn={} for shard={} to local file system", commit_sn, shard);
 
         std::lock_guard lock(sns_mutex);
         local_sn = commit_sn;
@@ -1217,34 +1253,35 @@ void StorageStream::commitSNLocal(DWAL::RecordSN commit_sn)
         /// It is ok as next commit will override this commit if it makes through
         LOG_ERROR(
             log,
-            "Failed to commit offset={} for shard={} to local file system exception={}",
+            "Failed to commit sn={} for shard={} to local file system exception={}",
             commit_sn,
             shard,
             getCurrentExceptionMessage(true, true));
     }
 }
 
-void StorageStream::commitSNRemote(DWAL::RecordSN commit_sn)
+void StorageStream::commitSNRemote(nlog::RecordSN commit_sn)
 {
+    if (!kafka)
+        return;
+
     /// Commit sequence number to dwal
     try
     {
         Int32 err = 0;
-        if (multiplexer)
+        if (kafka->multiplexer)
         {
-            DWAL::TopicPartitionOffset tpo{topic, shard, commit_sn};
-            err = multiplexer->commit(tpo);
+            klog::TopicPartitionOffset tpo{kafka->topic(), shard, commit_sn};
+            err = kafka->multiplexer->commit(tpo);
         }
         else
         {
-            err = dwal->commit(commit_sn, dwal_consume_ctx);
+            err = kafka->log->commit(commit_sn, kafka->consume_ctx);
         }
 
         if (unlikely(err != 0))
-        {
             /// It is ok as next commit will override this commit if it makes through
             LOG_ERROR(log, "Failed to commit sequence={} for shard={} to dwal error={}", commit_sn, shard, err);
-        }
     }
     catch (...)
     {
@@ -1262,7 +1299,7 @@ void StorageStream::commitSN()
     size_t outstanding_sns_size = 0;
     size_t local_committed_sns_size = 0;
 
-    DWAL::RecordSN commit_sn = -1;
+    nlog::RecordSN commit_sn = -1;
     Int64 outstanding_commits = 0;
     {
         std::lock_guard lock(sns_mutex);
@@ -1443,7 +1480,7 @@ inline void StorageStream::addIdempotentKey(const String & key)
     assert(idempotent_keys.size() == idempotent_keys_index.size());
 }
 
-bool StorageStream::dedupBlock(const DWAL::RecordPtr & record)
+bool StorageStream::dedupBlock(const nlog::RecordPtr & record)
 {
     if (!record->hasIdempotentKey())
     {
@@ -1463,13 +1500,13 @@ bool StorageStream::dedupBlock(const DWAL::RecordPtr & record)
 
     if (key_exists)
     {
-        LOG_INFO(log, "Skipping duplicate block, idempotent_key={} offset={}", idem_key, record->sn);
+        LOG_INFO(log, "Skipping duplicate block, idempotent_key={} sn={}", idem_key, record->getSN());
         return true;
     }
     return false;
 }
 
-void StorageStream::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges)
+void StorageStream::commit(nlog::RecordPtrs records, SequenceRanges missing_sequence_ranges)
 {
     if (records.empty())
         return;
@@ -1479,7 +1516,7 @@ void StorageStream::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequ
 
     for (auto & rec : records)
     {
-        if (likely(rec->op_code == DWAL::OpCode::ADD_DATA_BLOCK))
+        if (likely(rec->opcode() == nlog::OpCode::ADD_DATA_BLOCK))
         {
             if (dedupBlock(rec))
                 continue;
@@ -1490,22 +1527,22 @@ void StorageStream::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequ
             {
                 /// Merge next block
                 /// assign event sequence ID to block events
-                mergeBlocks(block, rec->block);
+                mergeBlocks(block, rec->getBlock());
             }
             else
             {
                 /// First block
-                block.swap(rec->block);
-                assert(!rec->block);
+                block.swap(rec->getBlock());
+                assert(!rec->getBlock());
             }
 
             if (rec->hasIdempotentKey())
-                keys->emplace_back(rec->sn, std::move(rec->idempotentKey()));
+                keys->emplace_back(rec->getSN(), std::move(rec->idempotentKey()));
         }
-        else if (rec->op_code == DWAL::OpCode::ALTER_DATA_BLOCK)
+        else if (rec->opcode() == nlog::OpCode::ALTER_DATA_BLOCK)
         {
             /// FIXME: execute the later before doing any ingestion
-            throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Log opcode {} is not implemented", static_cast<uint8_t>(rec->opcode()));
         }
     }
 
@@ -1513,32 +1550,92 @@ void StorageStream::commit(DWAL::RecordPtrs records, SequenceRanges missing_sequ
         log, "Committing records={} rows={} bytes={} for shard={} to file system", records.size(), block.rows(), block.bytes(), shard);
 
     doCommit(
-        std::move(block), std::make_pair(records.front()->sn, records.back()->sn), std::move(keys), std::move(missing_sequence_ranges));
+        std::move(block),
+        std::make_pair(records.front()->getSN(), records.back()->getSN()),
+        std::move(keys),
+        std::move(missing_sequence_ranges));
     assert(!block);
     assert(!keys);
     assert(missing_sequence_ranges.empty());
 }
 
-DWAL::RecordSN StorageStream::snLoaded() const
+nlog::RecordSN StorageStream::snLoaded() const
 {
     std::lock_guard lock(sns_mutex);
     if (local_sn >= 0)
-    {
-        /// Sequence number committed on disk is offset of a record
-        /// `plus one` is the next offset expecting
+        /// Sequence number committed on disk is sequence of a record
+        /// `plus one` is the next sequence expecting
         return local_sn + 1;
-    }
 
-    /// STORED
-    return -1000;
+    if (kafka)
+        return -1000; /// STORED
+    else
+        return nlog::toSN(storage_settings.get()->logstore_auto_offset_reset.value);
 }
 
-void StorageStream::backgroundPoll()
+void StorageStream::backgroundPollNativeLog()
+{
+    setThreadName("StorageStream");
+
+    const auto & missing_sequence_ranges = storage->missingSequenceRanges();
+
+    auto ssettings = storage_settings.get();
+
+    LOG_INFO(
+        log,
+        "Start consuming records from shard={} sn={} distributed_flush_threshold_ms={} "
+        "distributed_flush_threshold_count={} "
+        "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
+        shard,
+        snLoaded(),
+        ssettings->distributed_flush_threshold_ms.value,
+        ssettings->distributed_flush_threshold_count,
+        ssettings->distributed_flush_threshold_bytes,
+        sequenceRangesToString(missing_sequence_ranges));
+
+    StreamCallbackData stream_commit{this, missing_sequence_ranges};
+
+    StreamingBlockReaderNativeLog block_reader(
+        shared_from_this(), shard, snLoaded(), /*max_wait_ms*/ 1000, /*read_buf_size*/ 16 * 1024 * 1024, &stream_commit, nlog::ALL_SCHEMA, {}, log);
+
+    std::vector<char> read_buf(16 * 1024 * 1024 + 8 * 1024, '\0');
+
+    while (!stopped.test())
+    {
+        try
+        {
+            /// Check if we have something to commit
+            /// Every 10 seconds, flush the local file system checkpoint
+            if (MonotonicSeconds::now() - last_commit_ts >= 10)
+                periodicallyCommit();
+
+            auto records{block_reader.read()};
+            if (!records.empty())
+                stream_commit.commit(std::move(records));
+        }
+        catch (const DB::Exception & e)
+        {
+            LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, e.message());
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, fmt::format("Failed to consume data for shard={}", shard));
+        }
+    }
+
+    stream_commit.wait();
+
+    /// When tearing down, commit whatever it has
+    finalCommit();
+}
+
+void StorageStream::backgroundPollKafka()
 {
     /// Sleep a while to let librdkafka to populate topic / partition metadata
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-    setThreadName("DistMergeTree");
+    setThreadName("StorageStream");
 
     const auto & missing_sequence_ranges = storage->missingSequenceRanges();
 
@@ -1548,10 +1645,10 @@ void StorageStream::backgroundPoll()
         "distributed_flush_threshold_count={} "
         "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
         shard,
-        dwal_consume_ctx.offset,
-        dwal_consume_ctx.consume_callback_timeout_ms,
-        dwal_consume_ctx.consume_callback_max_rows,
-        dwal_consume_ctx.consume_callback_max_bytes,
+        kafka->consume_ctx.offset,
+        kafka->consume_ctx.consume_callback_timeout_ms,
+        kafka->consume_ctx.consume_callback_max_rows,
+        kafka->consume_ctx.consume_callback_max_bytes,
         sequenceRangesToString(missing_sequence_ranges));
 
     callback_data = std::make_unique<StreamCallbackData>(this, missing_sequence_ranges);
@@ -1560,7 +1657,7 @@ void StorageStream::backgroundPoll()
     {
         try
         {
-            auto err = dwal->consume(&StorageStream::consumeCallback, callback_data.get(), dwal_consume_ctx);
+            auto err = kafka->log->consume(&StorageStream::consumeCallback, callback_data.get(), kafka->consume_ctx);
             if (err != ErrorCodes::OK)
             {
                 LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, err);
@@ -1573,14 +1670,19 @@ void StorageStream::backgroundPoll()
             if (MonotonicSeconds::now() - last_commit_ts >= 10)
                 periodicallyCommit();
         }
+        catch (const DB::Exception & e)
+        {
+            LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, e.message());
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        }
         catch (...)
         {
-            LOG_ERROR(log, "Failed to consume data for shard={}, exception={}", shard, getCurrentExceptionMessage(true, true));
+            tryLogCurrentException(log, fmt::format("Failed to consume data for shard={}", shard));
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
     }
 
-    dwal->stopConsume(dwal_consume_ctx);
+    kafka->log->stopConsume(kafka->consume_ctx);
 
     callback_data->wait();
 
@@ -1592,7 +1694,7 @@ inline void StorageStream::finalCommit()
 {
     commitSN();
 
-    DWAL::RecordSN commit_sn = -1;
+    nlog::RecordSN commit_sn = -1;
     {
         std::lock_guard lock(sns_mutex);
         if (last_sn != local_sn)
@@ -1605,8 +1707,8 @@ inline void StorageStream::finalCommit()
 
 inline void StorageStream::periodicallyCommit()
 {
-    DWAL::RecordSN remote_commit_sn = -1;
-    DWAL::RecordSN commit_sn = -1;
+    nlog::RecordSN remote_commit_sn = -1;
+    nlog::RecordSN commit_sn = -1;
     {
         std::lock_guard lock(sns_mutex);
         if (last_sn != local_sn)
@@ -1628,7 +1730,7 @@ inline void StorageStream::periodicallyCommit()
     last_commit_ts = MonotonicSeconds::now();
 }
 
-void StorageStream::consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data)
+void StorageStream::consumeCallback(nlog::RecordPtrs records, klog::ConsumeCallbackData * data)
 {
     auto * cdata = dynamic_cast<StreamCallbackData *>(data);
 
@@ -1641,20 +1743,20 @@ void StorageStream::consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallb
     cdata->commit(std::move(records));
 }
 
-void StorageStream::addSubscription()
+void StorageStream::addSubscriptionKafka()
 {
     const auto & missing_sequence_ranges = storage->missingSequenceRanges();
     callback_data = std::make_unique<StreamCallbackData>(this, missing_sequence_ranges);
 
-    const auto & cluster_id = storage_settings.get()->streaming_storage_cluster_id.value;
-    multiplexer = DWAL::KafkaWALPool::instance(getContext()).getOrCreateConsumerMultiplexer(cluster_id);
+    const auto & cluster_id = storage_settings.get()->logstore_cluster_id.value;
+    kafka->multiplexer = klog::KafkaWALPool::instance(getContext()).getOrCreateConsumerMultiplexer(cluster_id);
 
-    DWAL::TopicPartitionOffset tpo{topic, shard, snLoaded()};
-    auto res = multiplexer->addSubscription(tpo, &StorageStream::consumeCallback, callback_data.get());
+    klog::TopicPartitionOffset tpo{kafka->topic(), shard, snLoaded()};
+    auto res = kafka->multiplexer->addSubscription(tpo, &StorageStream::consumeCallback, callback_data.get());
     if (res.err != ErrorCodes::OK)
         throw Exception("Failed to add subscription for shard=" + std::to_string(shard), res.err);
 
-    shared_subscription_ctx = res.ctx;
+    kafka->shared_subscription_ctx = res.ctx;
 
     LOG_INFO(
         log,
@@ -1665,23 +1767,21 @@ void StorageStream::addSubscription()
         sequenceRangesToString(missing_sequence_ranges));
 }
 
-void StorageStream::removeSubscription()
+void StorageStream::removeSubscriptionKafka()
 {
-    if (!multiplexer)
-    {
+    if (!kafka || !kafka->multiplexer)
         /// It is possible that storage is called with `shutdown` without calling `startup`
-        /// during system startup and partitially deleted table gets cleaned up
+        /// during system startup and partially deleted table gets cleaned up
         return;
-    }
 
-    DWAL::TopicPartitionOffset tpo{topic, shard, snLoaded()};
-    auto res = multiplexer->removeSubscription(tpo);
+    klog::TopicPartitionOffset tpo{kafka->topic(), shard, snLoaded()};
+    auto res = kafka->multiplexer->removeSubscription(tpo);
     if (res != ErrorCodes::OK)
         throw Exception("Failed to remove subscription for shard=" + std::to_string(shard), res);
 
     callback_data->wait();
 
-    while (!shared_subscription_ctx.expired())
+    while (!kafka->shared_subscription_ctx.expired())
     {
         LOG_INFO(log, "Waiting for subscription context to get away for shard={}", shard);
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1689,61 +1789,137 @@ void StorageStream::removeSubscription()
     LOG_INFO(log, "Removed subscription for shard={}", shard);
 
     finalCommit();
-    multiplexer.reset();
+    kafka->multiplexer.reset();
 }
 
 String StorageStream::streamingStorageClusterId() const
 {
-    return storage_settings.get()->streaming_storage_cluster_id.value;
+    return storage_settings.get()->logstore_cluster_id.value;
 }
 
-void StorageStream::initWal()
+void StorageStream::initLog()
 {
     auto ssettings = storage_settings.get();
-    const auto & offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
+    shard = ssettings->shard.value;
+    if (shard < 0)
+        shard = 0;
+
+    const auto & logstore = ssettings->logstore.value;
+
+    if (logstore == LOGSTORE_NATIVE_LOG || nlog::NativeLog::instance(getContext()).enabled())
+        initNativeLog();
+    else if (logstore == LOGSTORE_KAFKA || klog::KafkaWALPool::instance(getContext()).enabled())
+        initKafkaLog();
+    else
+        throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "Logstore type {} is not supported", logstore);
+}
+
+void StorageStream::initKafkaLog()
+{
+    auto ssettings = storage_settings.get();
+
+    const auto & storage_id = getStorageID();
+    auto kafka_log = std::make_unique<KafkaLog>(
+        klog::escapeTopicName(storage_id.getDatabaseName(), storage_id.getTableName()),
+        shards,
+        replication_factor,
+        getContext()->getSettingsRef().async_ingest_block_timeout_ms,
+        log);
+
+    kafka.swap(kafka_log);
+
+    const auto & offset_reset = ssettings->logstore_auto_offset_reset.value;
     if (offset_reset != "earliest" && offset_reset != "latest")
         throw Exception(
-            "Invalid streaming_storage_auto_offset_reset, only 'earliest' and 'latest' are supported",
-            ErrorCodes::INVALID_CONFIG_PARAMETER);
+            "Invalid logstore_auto_offset_reset, only 'earliest' and 'latest' are supported", ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     Int32 dwal_request_required_acks = 1;
-    auto acks = ssettings->streaming_storage_request_required_acks.value;
+    auto acks = ssettings->logstore_request_required_acks.value;
     if (acks >= -1 && acks <= replication_factor)
         dwal_request_required_acks = acks;
     else
         throw Exception(
-            "Invalid streaming_storage_request_required_acks, shall be in [-1, " + std::to_string(replication_factor) + "] range",
+            "Invalid logstore_request_required_acks, shall be in [-1, " + std::to_string(replication_factor) + "] range",
             ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     Int32 dwal_request_timeout_ms = 30000;
-    auto timeout = ssettings->streaming_storage_request_timeout_ms.value;
+    auto timeout = ssettings->logstore_request_timeout_ms.value;
     if (timeout > 0)
         dwal_request_timeout_ms = timeout;
 
-    shard = ssettings->shard.value;
-
     default_ingest_mode = toIngestMode(ssettings->distributed_ingest_mode.value);
 
-    dwal = DWAL::KafkaWALPool::instance(getContext()).get(ssettings->streaming_storage_cluster_id.value);
+    kafka->log = klog::KafkaWALPool::instance(getContext()).get(ssettings->logstore_cluster_id.value);
+    assert(kafka->log);
 
     if (storage)
     {
         /// Init consume context only when it has backing storage
-        dwal_consume_ctx.partition = shard;
-        dwal_consume_ctx.offset = snLoaded();
-        dwal_consume_ctx.auto_offset_reset = ssettings->streaming_storage_auto_offset_reset.value;
-        dwal_consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
-        dwal_consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
-        dwal_consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
-        dwal->initConsumerTopicHandle(dwal_consume_ctx);
+        kafka->consume_ctx.partition = shard;
+        kafka->consume_ctx.offset = snLoaded();
+        kafka->consume_ctx.auto_offset_reset = ssettings->logstore_auto_offset_reset.value;
+        kafka->consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
+        kafka->consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
+        kafka->consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
+        kafka->log->initConsumerTopicHandle(kafka->consume_ctx);
     }
 
     /// Init produce context
     /// Cached ctx, reused by append. Multiple threads are accessing append context
     /// since librdkafka topic handle is thread safe, so we are good
-    dwal_append_ctx.request_required_acks = dwal_request_required_acks;
-    dwal_append_ctx.request_timeout_ms = dwal_request_timeout_ms;
-    dwal->initProducerTopicHandle(dwal_append_ctx);
+    kafka->append_ctx.request_required_acks = dwal_request_required_acks;
+    kafka->append_ctx.request_timeout_ms = dwal_request_timeout_ms;
+    kafka->log->initProducerTopicHandle(kafka->append_ctx);
+}
+
+void StorageStream::initNativeLog()
+{
+    auto & native_log = nlog::NativeLog::instance(getContext());
+    if (!native_log.enabled())
+        return;
+
+    auto ssettings = storage_settings.get();
+    const auto & storage_id = getStorageID();
+
+    nlog::CreateStreamRequest request{storage_id.getTableName(), storage_id.uuid, shards, static_cast<UInt8>(replication_factor)};
+    request.flush_messages = ssettings->logstore_flush_messages.value;
+    request.flush_ms = ssettings->logstore_flush_ms.value;
+    request.retention_bytes = ssettings->logstore_retention_bytes;
+    request.retention_ms = ssettings->logstore_retention_ms;
+
+    auto list_resp{native_log.listStreams(storage_id.getDatabaseName(), nlog::ListStreamsRequest(storage_id.getTableName()))};
+    if (list_resp.hasError() || list_resp.streams.empty())
+    {
+        auto create_resp{native_log.createStream(storage_id.getDatabaseName(), request)};
+        if (create_resp.hasError())
+            throw DB::Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to create stream, error={}", create_resp.errString());
+        else
+            LOG_INFO(log, "Log was provisioned successfully");
+    }
+}
+
+void StorageStream::deinitNativeLog()
+{
+    auto & native_log = nlog::NativeLog::instance(getContext());
+    if (!native_log.enabled())
+        return;
+
+    const auto & storage_id = getStorageID();
+    nlog::DeleteStreamRequest request{storage_id.getTableName(), storage_id.uuid};
+    for (Int32 i = 0; i < 3; ++i)
+    {
+        auto resp{native_log.deleteStream(storage_id.getDatabaseName(), request)};
+        if (resp.hasError())
+        {
+            LOG_ERROR(log, "Failed to clean up log, error={}", resp.errString());
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+        else
+        {
+            LOG_INFO(log, "Cleaned up log");
+            break;
+        }
+    }
 }
 
 std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
@@ -1751,11 +1927,11 @@ std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
     /// -1 latest, -2 earliest
     if (seek_to == "latest")
     {
-        return std::vector<Int64>(shards, -1);
+        return std::vector<Int64>(shards, nlog::LATEST_SN);
     }
     else if (seek_to == "earliest")
     {
-        return std::vector<Int64>(shards, -2);
+        return std::vector<Int64>(shards, nlog::EARLIEST_SN);
     }
     else
     {
@@ -1763,9 +1939,7 @@ std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
         /// ISO8601
         /// Streaming store broker timestamp in milliseconds
         if (seek_to.empty())
-        {
             throw Exception("Empty seek_to", ErrorCodes::BAD_ARGUMENTS);
-        }
 
         Int64 multiplier = 0;
         bool is_month = false, is_quarter = false, is_year = false;
@@ -1841,8 +2015,30 @@ std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
             utc_ms = res;
         }
 
-        return dwal->offsetsForTimestamps(topic, utc_ms, shards);
+        if (kafka)
+            return kafka->log->offsetsForTimestamps(kafka->topic(), utc_ms, shards);
+        else
+            return sequencesForTimestamps(utc_ms);
     }
+}
+
+std::vector<Int64> StorageStream::sequencesForTimestamps(Int64 ts, bool append_time) const
+{
+    const auto & storage_id = getStorageID();
+
+    std::vector<int32_t> shard_ids;
+    shard_ids.reserve(shards);
+
+    for (Int32 i = 0; i < shards; ++i)
+        shard_ids.push_back(i);
+
+    nlog::TranslateTimestampsRequest request{nlog::Stream{storage_id.getTableName(), storage_id.uuid}, std::move(shard_ids), ts, append_time};
+    auto & native_log = nlog::NativeLog::instance(getContext());
+    auto response{native_log.translateTimestamps(storage_id.getDatabaseName(), request)};
+    if (response.hasError())
+        throw Exception(response.error_code, "Failed to translate timestamps to record sequences");
+
+    return response.sequences;
 }
 
 void StorageStream::cacheVirtualColumnNamesAndTypes()

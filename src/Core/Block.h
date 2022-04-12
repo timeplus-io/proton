@@ -150,7 +150,12 @@ public:
       */
     void updateHash(SipHash & hash) const;
 
+    /// proton: starts
     void reserve(size_t count);
+
+    /// in-place sort columns according to positions
+    void sortColumnInplace(const std::vector<UInt16> & positions);
+    /// proton: ends
 
 private:
     void eraseImpl(size_t position);

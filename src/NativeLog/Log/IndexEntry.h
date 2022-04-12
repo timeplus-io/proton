@@ -27,12 +27,12 @@ struct IndexEntry
     int64_t value;
 };
 
-using OffsetPosition = IndexEntry;
-using PositionOffset = IndexEntry;
-using TimestampOffset = IndexEntry;
+using SequencePosition = IndexEntry;
+using PositionSequence = IndexEntry;
+using TimestampSequence = IndexEntry;
 
-/// static const IndexEntry UNKNOWN_OFFSET_POSITION{-1, -1};
-/// static const IndexEntry UNKNOWN_TIMESTAMP_OFFSET{-1, -1};
+/// static const IndexEntry UNKNOWN_SN_POSITION{-1, -1};
+/// static const IndexEntry UNKNOWN_TIMESTAMP_SN{-1, -1};
 
 inline bool operator==(const IndexEntry & lhs, const IndexEntry & rhs)
 {

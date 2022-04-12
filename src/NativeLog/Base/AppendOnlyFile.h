@@ -21,23 +21,26 @@ public:
     ~AppendOnlyFile();
 
     /// Append a sequence of bytes to this channel from the given data buffer
+    /// It keeps writes the data until all data has been written or throw exception if error happens
     /// The file is grown if necessary to accommodate the written bytes, and then the file offset
     /// is updated with the number of bytes actually written.
-    int64_t append(const void * data, uint64_t count);
+    int64_t append(const char * data, uint64_t bytes_to_write);
 
-    int64_t append(std::span<uint8_t> data);
+    int64_t append(std::span<char> data);
 
     /// Reads a sequence of bytes from this channel into the given buffer, starting
     /// from the given file offset.
+    /// It keeps reading until requested bytes has been read or EOF is hit.
+    /// It throws exception if error happens during read.
     /// This method doesn't modify this channel's offset nor the file descriptor underlying
     /// @param dst The target buffer into which bytes are copied
-    /// @param count The maximum number of bytes to read
+    /// @param bytes_to_read The maximum number of bytes to read
     /// @param offset The starting offset of the current channel
     /// @return The number of bytes read, possibly zero, or -1 if the given offset is greater
     /// than or equal to the file's current size
-    int64_t read(void * dst, uint64_t count, uint64_t offset);
+    int64_t read(char * dst, uint64_t bytes_to_read, uint64_t offset);
 
-    int64_t read(std::span<uint8_t> dst, uint64_t offset);
+    int64_t read(std::span<char> dst, uint64_t offset);
 
     /// Transfer bytes from this channel's file to the given writable target file descriptor
     /// for example a socket or another file descriptor. The underlying implementation will use

@@ -36,6 +36,16 @@ struct ColumnWithTypeAndName
     void dumpNameAndType(WriteBuffer & out) const;
     void dumpStructure(WriteBuffer & out) const;
     String dumpStructure() const;
+
+    /// proton: starts
+    ColumnWithTypeAndName & swap(ColumnWithTypeAndName & rhs)
+    {
+        column.swap(rhs.column);
+        type.swap(rhs.type);
+        name.swap(rhs.name);
+        return *this;
+    }
+    /// proton: ends
 };
 #pragma GCC diagnostic pop
 

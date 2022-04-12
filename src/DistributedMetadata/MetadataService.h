@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DistributedWALClient/KafkaWAL.h>
+#include <KafkaLog/KafkaWAL.h>
 #include <Common/ThreadPool.h>
 
 #include <boost/noncopyable.hpp>
@@ -21,10 +21,11 @@ public:
     void shutdown();
 
     virtual bool ready() const { return started.test(); }
+    bool enabled() const { return dwal != nullptr; }
 
     const String & nodeRoles() const { return node_roles; }
     bool hasCurrentRole() const { return node_roles.find(role()) != String::npos; }
-    std::vector<DWAL::KafkaWALClusterPtr> clusters();
+    std::vector<klog::KafkaWALClusterPtr> clusters();
 
 private:
     void initPorts();
@@ -34,7 +35,7 @@ private:
     virtual void postStartup() { started.test_and_set(); }
     virtual void preShutdown() {}
 
-    virtual void processRecords(const DWAL::RecordPtrs & records) = 0;
+    virtual void processRecords(const nlog::RecordPtrs & records) = 0;
 
     virtual String role() const = 0;
     virtual String cleanupPolicy() const { return "delete"; }
@@ -42,15 +43,15 @@ private:
     virtual std::pair<Int32, Int32> batchSizeAndTimeout() const { return std::make_pair(100, 500); }
 
     /// Create DWal on server
-    void waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) const;
+    void waitUntilDWalReady(const klog::KafkaWALContext & ctx) const;
 
 protected:
-    void setupRecordHeaders(DWAL::Record & record, const String & version) const;
+    void setupRecordHeaders(nlog::Record & record, const String & version) const;
 
-    void doCreateDWal(const DWAL::KafkaWALContext & ctx) const;
-    void doDeleteDWal(const DWAL::KafkaWALContext & ctx) const;
+    void doCreateDWal(const klog::KafkaWALContext & ctx) const;
+    void doDeleteDWal(const klog::KafkaWALContext & ctx) const;
 
-    DWAL::AppendResult appendRecord(const DWAL::Record & record) const
+    klog::AppendResult appendRecord(nlog::Record & record) const
     {
         /// A centralized place to append record for metadata services
         /// for easy record checking
@@ -80,9 +81,9 @@ protected:
 protected:
     ContextMutablePtr global_context;
 
-    DWAL::KafkaWALContext dwal_append_ctx;
-    DWAL::KafkaWALContext dwal_consume_ctx;
-    DWAL::KafkaWALPtr dwal;
+    klog::KafkaWALContext dwal_append_ctx;
+    klog::KafkaWALContext dwal_consume_ctx;
+    klog::KafkaWALPtr dwal;
 
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
     std::atomic_flag started = ATOMIC_FLAG_INIT;

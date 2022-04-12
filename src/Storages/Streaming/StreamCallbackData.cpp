@@ -21,7 +21,7 @@ void StreamCallbackData::wait() const
     }
 }
 
-void StreamCallbackData::commit(DWAL::RecordPtrs records)
+void StreamCallbackData::commit(nlog::RecordPtrs records)
 {
     ++outstanding_commits;
 
@@ -44,7 +44,7 @@ void StreamCallbackData::commit(DWAL::RecordPtrs records)
 
         /// Wait until we consume a record which has sequence number larger
         /// than max committed sn
-        if (recovery_records.back()->sn < storage->maxCommittedSN())
+        if (recovery_records.back()->getSN() < storage->maxCommittedSN())
         {
             --outstanding_commits;
             return;
@@ -71,7 +71,7 @@ void StreamCallbackData::commit(DWAL::RecordPtrs records)
     --outstanding_commits;
 }
 
-inline void StreamCallbackData::doCommit(DWAL::RecordPtrs records, SequenceRanges sequence_ranges)
+inline void StreamCallbackData::doCommit(nlog::RecordPtrs records, SequenceRanges sequence_ranges)
 {
     try
     {
@@ -85,19 +85,20 @@ inline void StreamCallbackData::doCommit(DWAL::RecordPtrs records, SequenceRange
 }
 
 std::vector<RecordsSequenceRangesPair> StreamCallbackData::categorizeRecordsAccordingToSequenceRanges(
-    const DWAL::RecordPtrs & records, const SequenceRanges & sequence_ranges, DWAL::RecordSN max_committed_sn)
+    const nlog::RecordPtrs & records, const SequenceRanges & sequence_ranges, nlog::RecordSN max_committed_sn)
 {
     std::vector<RecordsSequenceRangesPair> range_buckets(sequence_ranges.size() + 1);
 
     for (auto & record : records)
     {
-        if (record->sn > max_committed_sn)
+        auto record_sn = record->getSN();
+        if (record_sn > max_committed_sn)
         {
             range_buckets.back().first.push_back(std::move(record));
             continue;
         }
 
-        if (record->sn > sequence_ranges.back().end_sn)
+        if (record_sn > sequence_ranges.back().end_sn)
         {
             /// records fall in [sequence_ranges.back().end_sn, max_committed_sn] are committed
             continue;
@@ -107,7 +108,7 @@ std::vector<RecordsSequenceRangesPair> StreamCallbackData::categorizeRecordsAcco
         for (size_t i = 0; i < sequence_ranges.size(); ++i)
         {
             const auto & sequence_range = sequence_ranges[i];
-            if (record->sn >= sequence_range.start_sn && record->sn <= sequence_range.end_sn)
+            if (record_sn >= sequence_range.start_sn && record_sn <= sequence_range.end_sn)
             {
                 /// Found the missing range for current record
                 auto & range_bucket = range_buckets[i];

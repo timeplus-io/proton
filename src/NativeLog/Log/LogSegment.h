@@ -6,10 +6,8 @@
 
 #include <NativeLog/Base/AppendOnlyFile.h>
 #include <NativeLog/Base/Stds.h>
-#include <NativeLog/Common/FetchDataInfo.h>
+#include <NativeLog/Common/FetchDataDescription.h>
 #include <NativeLog/Common/FileRecords.h>
-#include <NativeLog/Common/LogAppendInfo.h>
-#include <NativeLog/Schemas/MemoryRecords.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -25,25 +23,26 @@ class Logger;
 namespace nlog
 {
 struct LogConfig;
+struct LogAppendDescription;
 
 /// A segment of `Log`. Each segment has 2 components: log and indexes
 /// `log` is backed by a local append-only binary file which contains the actual messages
 /// `indexes` contain
-/// - offset to physical file position mapping index
-/// - physical file position to offset mapping index
-/// - event time to offset mapping index
-/// - append time to offset mapping index
-/// Each segment has a base offset with is an offset <= the least offset of any message
-/// in this segment and > any offset in any previous segment.
-/// A segment with a base offset [base_offset] would be stored in 2 files:
-/// - a [base_offset].log
-/// - a [base_offset].index
+/// - sn to physical file position mapping index
+/// - physical file position to sn mapping index
+/// - event time to sn mapping index
+/// - append time to sn mapping index
+/// Each segment has a base sn with is an sn <= the least sn of any message
+/// in this segment and > any sn in any previous segment.
+/// A segment with a base sn [base_sn] would be stored in 2 files:
+/// - a [base_sn].log
+/// - a [base_sn].index
 class LogSegment final : private boost::noncopyable
 {
 public:
     LogSegment(
         const fs::path & log_dir,
-        int64_t base_offset,
+        int64_t base_sn,
         const LogConfig & log_config,
         Poco::Logger * logger,
         bool file_already_exists = false,
@@ -51,27 +50,26 @@ public:
         const std::string & file_suffix = "");
     ~LogSegment();
 
-    /// Append the given messages starting with the given offset. Add one entry to the index if needed
+    /// Append the given messages starting with the given sn. Add one entry to the index if needed
     /// Append is not multi-thread safe so it is assumed this method is being called from within a lock
-    /// @param largest_offset The last offset in the records
-    /// @param largest_timestamp The largest event timestamp in the records
-    /// @param offset_of_max_timestamp The largest timestamp in the records
-    /// @param records The log entries to append
+    /// @param record The log entries to append
+    /// @param append_info Append info which carries record information
     /// @return the physical position in the file of the appended records
-    int64_t append(int64_t largest_offset, int64_t largest_timestamp, int64_t offset_of_max_timestamp, const MemoryRecords & records);
+    int64_t append(const ByteVector & record, const LogAppendDescription & append_info);
 
-    /// Read a message set from this segment starting with the first offset >= start_offset.
-    /// The message set will include no more than max_size bytes and will end before max_offset if a
-    /// max_offset is specified.
+    /// Read a message set from this segment starting with the first sn >= start_sn.
+    /// The message set will include no more than max_size bytes and will end before max_sn if a
+    /// max_sn is specified.
     /// Read is multi-thread safe
-    /// @start_offset Logic record offset to read from
-    /// @max_size maximum size to read
-    /// @return The fetched data and the offset metadata of the first message whose offset is >= start_offset
-    /// or empty if the start_offset is larger than the largest offset in this log
-    FetchDataInfo read(int64_t start_offset, uint64_t max_size);
+    /// @param start_sn Logic record sn to read from
+    /// @param max_size maximum size to read
+    /// @param position File position for sn if set
+    /// @return The fetched data and the sn metadata of the first message whose sn is >= start_sn
+    /// or empty if the start_sn is larger than the largest sn in this log
+    FetchDataDescription read(int64_t start_sn, int64_t max_size, std::optional<int64_t> position);
 
-    /// Trim to offset, returns bytes trimmed
-    int64_t trim(int64_t offset);
+    /// Trim to sn, returns bytes trimmed
+    int64_t trim(int64_t sn);
 
     void flush();
 
@@ -85,13 +83,13 @@ public:
     /// Physical size in bytes
     int64_t size() const { return log->size(); }
 
-    int64_t baseOffset() const { return base_offset; }
+    int64_t baseSequence() const { return base_sn; }
 
-    /// Calculate the offset that would be used for next message to be appended to this
-    /// segment. It is expensive as it needs replay from the last offset checkpoint
+    /// Calculate the sn that would be used for next record to be appended to this
+    /// segment. It is expensive as it needs replay from the last sn checkpoint
     /// and it is usually called during system startup
     /// This method is multi-thread safe
-    int64_t readNextOffset();
+    int64_t readNextSequence();
 
     int32_t recover() { return 0; }
 
@@ -108,20 +106,25 @@ public:
     /// entry appended will be used to decide when to delete the segment
     void turnInactive();
 
+    const Indexes & getIndexes() const { return indexes; }
+
+    TimestampSequence maxEventTimestampSequence() const { return max_etimestamp_and_sn_so_far; }
+    TimestampSequence maxAppendTimestampSequence() const { return max_atimestamp_and_sn_so_far; }
+
 private:
-    /// Find the physical file position for the first message with offset >= the request offset
+    /// Find the physical file position for the first message with sn >= the request sn
     /// The starting_file_position argument is an optimization that can be used if we already know a
     /// valid starting position in the file higher than the greatest-lower-bound from the index
-    /// @param offset The logic offset want to translate
+    /// @param sn The stream sn want to translate
     /// @param starting_file_position A lower bound on the file position from which to begin the search
-    /// @returearch The physical position in the log storing the message with the least offset >= the requested offset and the size
-    /// of the message or
-    FileRecords::LogOffsetPosition translateOffset(int64_t offset, uint64_t starting_file_position = 0);
+    /// @return The physical position in the log storing the record with the least sn >= the requested sn and the size
+    ///         of the record
+    FileRecords::LogSequencePosition translateSequence(int64_t sn, int64_t starting_file_position = 0);
 
-    void index(int64_t largest_offset, int64_t physical_position);
+    void index(int64_t largest_sn, int64_t physical_position);
 
 private:
-    int64_t base_offset;
+    int64_t base_sn;
     int32_t max_index_size;
     int32_t index_interval_bytes;
     int32_t bytes_since_last_index_entry = 0;
@@ -132,8 +135,8 @@ private:
     std::atomic<int64_t> rolling_based_timestamp;
 
     /// FIXME, multi-thread sync
-    TimestampOffset max_etimestamp_and_offset_so_far;
-    TimestampOffset max_atimestamp_and_offset_so_far;
+    TimestampSequence max_etimestamp_and_sn_so_far;
+    TimestampSequence max_atimestamp_and_sn_so_far;
 
     Indexes indexes;
 

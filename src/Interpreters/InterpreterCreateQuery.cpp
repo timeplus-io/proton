@@ -71,6 +71,7 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <Interpreters/Streaming/StreamColumnValidateVisitor.h>
+#include <NativeLog/Server/NativeLog.h>
 #include <Storages/Streaming/StorageStreamProperties.h>
 /// proton: ends.
 
@@ -862,11 +863,21 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     {
         if (create.storage->engine->name == "Stream")
         {
-            /// proton: starts
+            if (nlog::NativeLog::instance(ctx).enabled())
+            {
+                if (ctx->isLocalQueryFromTCP())
+                {
+                    /// it comes from TCPHandler, therefore update column definitions if required
+                    prepareCreateQueryForStream(create);
+                    prepareEngineSettings(create, ctx);
+                }
+                return false;
+            }
+
             throw Exception(
-                "Distributed environment is not setup. Unable to create stream with the current engine", ErrorCodes::CONFIG_ERROR);
-            /// proton: ends
+                "Distributed environment is not setup. Unable to create stream", ErrorCodes::CONFIG_ERROR);
         }
+
         return false;
     }
 
@@ -891,16 +902,12 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     }
 
     if (payload.empty() || !ctx->isDistributedDDLOperation())
-    {
         return false;
-    }
 
     TableProperties properties = getTablePropertiesAndNormalizeCreateQuery(create);
 
     if (create.getDatabase().empty())
-    {
         create.setDatabase(current_database);
-    }
 
     const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
     auto tables = catalog_service.findTableByName(create.getDatabase(), create.getTable());
@@ -909,9 +916,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
         if (create.if_not_exists)
             return true;
         else
-            /// proton: starts
             throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Stream {}.{} already exists", create.getDatabase(), create.getTable());
-            /// proton: ends
     }
 
     assert(create.storage);
@@ -940,7 +945,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor)
     Block block = buildBlock(string_cols, int32_cols, uint64_cols);
 
-    appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, DWAL::OpCode::CREATE_TABLE, log);
+    appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, nlog::OpCode::CREATE_TABLE, log);
 
     LOG_INFO(log, "Request of creating stream query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
@@ -997,7 +1002,7 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
         Block block = buildBlock(string_cols, int32_cols, uint64_cols);
         /// Schema: (payload, database, timestamp, query_id, user)
 
-        appendDDLBlock(std::move(block), ctx, {"table_type"}, DWAL::OpCode::CREATE_DATABASE, log);
+        appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::CREATE_DATABASE, log);
 
         LOG_INFO(log, "Request of create database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 

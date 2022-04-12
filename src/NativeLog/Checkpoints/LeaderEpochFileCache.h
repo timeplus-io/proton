@@ -12,8 +12,8 @@ namespace nlog
 class LeaderEpochFileCache final
 {
 public:
-    LeaderEpochFileCache(const TopicShard & topic_shard_, LeaderEpochCheckpointFilePtr checkpoint_)
-        : topic_shard(topic_shard_), checkpoint(checkpoint_)
+    LeaderEpochFileCache(const StreamShard & stream_shard_, LeaderEpochCheckpointFilePtr checkpoint_)
+        : stream_shard(stream_shard_), checkpoint(checkpoint_)
     {
         assert(checkpoint);
     }
@@ -46,7 +46,7 @@ public:
     }
 
 private:
-    TopicShard topic_shard;
+    StreamShard stream_shard;
     LeaderEpochCheckpointFilePtr checkpoint;
 
     std::shared_mutex epoch_lock;

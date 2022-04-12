@@ -33,7 +33,6 @@
 #include <Access/EnabledRowPolicies.h>
 #include <Access/QuotaUsage.h>
 #include <Access/User.h>
-#include <Access/Credentials.h>
 #include <Access/SettingsProfile.h>
 #include <Access/SettingsProfilesInfo.h>
 #include <Access/SettingsConstraintsAndProfileIDs.h>
@@ -62,8 +61,6 @@
 #include <Common/StackTrace.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
-#include <Common/DNSResolver.h>
-#include <Common/ShellCommand.h>
 #include <base/logger_useful.h>
 #include <base/EnumReflection.h>
 #include <Common/RemoteHostFilter.h>
@@ -81,6 +78,7 @@
 #include <Access/Authentication.h>
 #include <Coordination/MetaStoreDispatcher.h>
 #include <Core/SettingsUtil.h>
+#include <KafkaLog/KafkaWALPool.h>
 #include <base/getFQDNOrHostName.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -2979,15 +2977,9 @@ ReadSettings Context::getReadSettings() const
 /// proton: starts.
 bool Context::isDistributedEnv() const
 {
-    if (getSettingsRef().disable_distributed)
-    {
-        /// distributed mode has been disabled
-        return false;
-    }
-
-    Poco::Util::AbstractConfiguration::Keys sys_dwal_keys;
-    getConfigRef().keys("cluster_settings.streaming_storage", sys_dwal_keys);
-    return !sys_dwal_keys.empty();
+    /// FIXME， change this logic in future
+    /// if no kafka logstore is enabled，for now， enforce single instance env
+    return klog::KafkaWALPool::instance(shared_from_this()).enabled();
 }
 
 ThreadPool & Context::getPartCommitPool() const
@@ -3002,19 +2994,15 @@ ThreadPool & Context::getPartCommitPool() const
 void Context::setupNodeIdentity()
 {
     if (!node_identity.empty() && !channel_id.empty())
-    {
         return;
-    }
 
+    this_host = getFQDNOrHostName();
     auto id = getConfigRef().getString("cluster_settings.node_identity", "");
     if (!id.empty())
-    {
         node_identity = id;
-    }
     else
-    {
-        node_identity = getFQDNOrHostName();
-    }
+        node_identity = this_host;
+
     channel_id = std::to_string(CityHash_v1_0_2::CityHash64WithSeed(node_identity.data(), node_identity.size(), 123));
 }
 

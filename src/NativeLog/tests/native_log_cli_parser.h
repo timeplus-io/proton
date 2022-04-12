@@ -5,44 +5,43 @@
 
 namespace nlog
 {
-struct TopicArgs
+struct StreamArgs
 {
     std::string command = "list";
     std::string ns;
-    std::string name;
-    uint32_t partitions;
+    std::string stream;
+    int32_t shards;
     bool compacted;
 };
 
 struct ProduceArgs
 {
     std::string ns;
-    std::string topic;
+    std::string stream;
     int64_t num_records;
-    int64_t record_size;
     int64_t record_batch_size;
     int64_t concurrency;
-    bool validate_offsets = false;
+    bool validate_sns = false;
 };
 
 struct ConsumeArgs
 {
     std::string ns;
-    std::string topic;
+    std::string stream;
     /// earliest: -2
     /// latest: -1
-    int64_t start_offset;
+    int64_t start_sn;
     int64_t num_records;
     int64_t buf_size;
     bool single_thread = false;
-    bool validate_offsets = false;
+    bool validate_sns = false;
 };
 
 struct TrimArgs
 {
     std::string ns;
-    std::string topic;
-    int64_t to_offset;
+    std::string stream;
+    int64_t to_sn;
 };
 
 struct NativeLogArgs
@@ -52,7 +51,7 @@ struct NativeLogArgs
 
     std::string command = "consume";
 
-    std::optional<TopicArgs> topic_args;
+    std::optional<StreamArgs> stream_args;
     std::optional<ProduceArgs> produce_args;
     std::optional<ConsumeArgs> consume_args;
     std::optional<TrimArgs> trim_args;
@@ -63,8 +62,8 @@ struct NativeLogArgs
             return consume_args.has_value();
         else if (command == "produce")
             return produce_args.has_value();
-        else if (command == "topic")
-            return topic_args.has_value();
+        else if (command == "stream")
+            return stream_args.has_value();
         else if (command == "trim")
             return trim_args.has_value();
         else

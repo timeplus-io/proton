@@ -8,6 +8,6 @@ class ContextPtr;
 
 namespace DB
 {
-String getCreateColumnDefination(const Poco::JSON::Object::Ptr & payload);
+String getCreateColumnDefinition(const Poco::JSON::Object::Ptr & payload);
 String getUpdateColumnDefination(const Poco::JSON::Object::Ptr & payload, const String & database, const String & table, String & column);
 }

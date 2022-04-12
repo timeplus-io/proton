@@ -23,7 +23,6 @@
 #include <Common/DNSResolver.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
-#include <Common/ShellCommand.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <base/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
@@ -82,14 +81,22 @@
 #include "Common/config_version.h"
 
 /// proton: starts
-#include <Core/SettingsUtil.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
 #include <DistributedMetadata/TaskStatusService.h>
-#include <DistributedWALClient/KafkaWALPool.h>
+#include <KafkaLog/KafkaWALPool.h>
+#include <NativeLog/Server/NativeLog.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
+
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int UNSUPPORTED;
+}
+}
 /// proton: ends
 
 #if defined(OS_LINUX)
@@ -268,8 +275,14 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 ///     -> Task
 void initDistributedMetadataServices(DB::ContextMutablePtr & global_context)
 {
-    auto & pool = DWAL::KafkaWALPool::instance(global_context);
+    auto & native_log = nlog::NativeLog::instance(global_context);
+    native_log.startup();
+
+    auto & pool = klog::KafkaWALPool::instance(global_context);
     pool.startup();
+
+    if (native_log.enabled() && pool.enabled())
+        throw DB::Exception("Both external Kafka log and internal native log are enabled. This is not a supported configuration", DB::ErrorCodes::UNSUPPORTED);
 
     auto & catalog_service = DB::CatalogService::instance(global_context);
     catalog_service.startup();
@@ -1905,7 +1918,6 @@ void Server::createServers(
                     context(), createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"), server_pool, socket, http_params));
         });
     }
-
 }
 
 void Server::updateServers(

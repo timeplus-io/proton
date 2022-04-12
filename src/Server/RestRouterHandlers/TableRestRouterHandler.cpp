@@ -3,6 +3,7 @@
 #include "SchemaValidator.h"
 
 #include <DataTypes/DataTypeNullable.h>
+#include <DistributedMetadata/queryStreams.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -96,14 +97,27 @@ bool TableRestRouterHandler::validatePatch(const Poco::JSON::Object::Ptr & paylo
 std::pair<String, Int32> TableRestRouterHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
     if (!DatabaseCatalog::instance().tryGetDatabase(database))
-    {
         return {
             jsonErrorResponse(fmt::format("Databases {} does not exist.", database), ErrorCodes::UNKNOWN_DATABASE),
             HTTPResponse::HTTP_BAD_REQUEST};
-    }
 
-    const auto & catalog_service = CatalogService::instance(query_context);
-    const auto & tables = catalog_service.findTableByDB(database);
+    CatalogService::TablePtrs tables;
+    if (!CatalogService::instance(query_context).enabled())
+    {
+        auto node_identity{query_context->getNodeIdentity()};
+        auto this_host{query_context->getHostFQDN()};
+        queryStreams(query_context, [&](Block && block) {
+            tables.reserve(block.rows());
+            for (size_t row = 0; row < block.rows(); ++row)
+                tables.push_back(std::make_shared<CatalogService::Table>(node_identity, this_host, block, row));
+        });
+    }
+    else
+    {
+        const auto & catalog_service = CatalogService::instance(query_context);
+        auto database_tables{catalog_service.findTableByDB(database)};
+        tables.swap(database_tables);
+    }
 
     Poco::JSON::Object resp;
     buildTablesJSON(resp, tables);
@@ -123,29 +137,21 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
     /// may already happen in other nodes and broadcast to the action node, in this case, we will
     /// report table exist failure but we should not
     if (isDistributedDDL() && CatalogService::instance(query_context).tableExists(database, table))
-    {
         return {
             jsonErrorResponse(fmt::format("Stream {}.{} already exists.", database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
             HTTPResponse::HTTP_BAD_REQUEST};
-    }
 
     const auto & shard = getQueryParameter("shard");
     const auto & synchronous_ddl = getQueryParameter("synchronous_ddl", "1");
     const auto & query = getCreationSQL(payload, shard);
 
     if (synchronous_ddl == "1")
-    {
         query_context->setSetting("synchronous_ddl", true);
-    }
     else
-    {
         query_context->setSetting("synchronous_ddl", false);
-    }
 
     if (query.empty())
-    {
         return {"", HTTPResponse::HTTP_BAD_REQUEST};
-    }
 
     setupDistributedQueryParameters({}, payload);
 
@@ -249,19 +255,11 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
 
 String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & payload) const
 {
-    if (query_context->isDistributedEnv())
-    {
-        if (getQueryParameter("distributed") != "false")
-        {
-            const auto & shards = getStringValueFrom(payload, "shards", "1");
-            const auto & replication_factor = getStringValueFrom(payload, "replication_factor", "1");
-            const auto & shard_by_expression = getStringValueFrom(payload, "shard_by_expression", "rand()");
+    const auto & shards = getStringValueFrom(payload, "shards", "1");
+    const auto & replication_factor = getStringValueFrom(payload, "replication_factor", "1");
+    const auto & shard_by_expression = getStringValueFrom(payload, "shard_by_expression", "rand()");
 
-            return fmt::format("Stream({}, {}, {})", shards, replication_factor, shard_by_expression);
-        }
-    }
-
-    return "MergeTree()";
+    return fmt::format("Stream({}, {}, {})", shards, replication_factor, shard_by_expression);
 }
 
 String TableRestRouterHandler::getPartitionExpr(const Poco::JSON::Object::Ptr & payload, const String & default_granularity)
@@ -279,27 +277,23 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
 {
     const auto & time_col = getStringValueFrom(payload, RESERVED_EVENT_TIME_API_NAME, RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
-    String uuid = payload->has("uuid") ? " UUID '" + payload->get("uuid").toString() + "'" : "";
-    create_segments.push_back("CREATE STREAM " + database + ".`" + payload->get("name").toString() + "`" + uuid);
-    create_segments.push_back("(");
-    create_segments.push_back(getColumnsDefinition(payload));
-    create_segments.push_back(")");
-    create_segments.push_back("ENGINE = " + getEngineExpr(payload));
-    create_segments.push_back("PARTITION BY " + getPartitionExpr(payload, getDefaultPartitionGranularity()));
-    create_segments.push_back("ORDER BY (" + getOrderByExpr(payload, time_col, getDefaultOrderByGranularity()) + ")");
+    create_segments.push_back(fmt::format(
+        "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
+        database,
+        payload->get("name").toString(),
+        getColumnsDefinition(payload),
+        getEngineExpr(payload),
+        getPartitionExpr(payload, getDefaultPartitionGranularity()),
+        getOrderByExpr(payload, time_col, getDefaultOrderByGranularity())));
 
     if (payload->has("ttl_expression"))
-    {
         /// FIXME  Enforce time based TTL only
-        create_segments.push_back("TTL " + payload->get("ttl_expression").toString());
-    }
+        create_segments.push_back(fmt::format("TTL {}", payload->get("ttl_expression").toString()));
 
-    create_segments.push_back("SETTINGS subtype='" + subtype() + "'");
+    create_segments.push_back(fmt::format("SETTINGS subtype='{}'", subtype()));
 
     if (!shard.empty())
-    {
-        create_segments.push_back(", shard=" + shard);
-    }
+        create_segments.push_back(fmt::format(", shard={}", shard));
 
     getAndValidateStorageSetting(
         [this](const auto & key) -> String {

@@ -2,7 +2,7 @@
 
 #include "LogSegment.h"
 
-#include <NativeLog/Common/TopicShard.h>
+#include <NativeLog/Common/StreamShard.h>
 
 #include <map>
 #include <memory>
@@ -13,49 +13,49 @@
 
 namespace nlog
 {
-/// Index by base offset of a Segment and it is multi-thread safe
+/// Index by base sn of a Segment and it is multi-thread safe
 class LogSegments final : private boost::noncopyable
 {
 public:
-    explicit LogSegments(const TopicShard & topic_shard_);
+    explicit LogSegments(const StreamShard & stream_shard_);
 
     void add(LogSegmentPtr segment);
 
-    void remove(int64_t offset);
+    void remove(int64_t sn);
 
-    LogSegmentPtr get(int64_t offset) const;
+    LogSegmentPtr get(int64_t sn) const;
 
-    bool contains(int64_t offset) const;
+    bool contains(int64_t sn) const;
 
-    /// @return The log segment associated with the smallest offset if it exists
+    /// @return The log segment associated with the smallest sn if it exists
     LogSegmentPtr firstSegment() const;
 
-    /// @return The log segment associated with the greatest offset if it exists
+    /// @return The log segment associated with the greatest sn if it exists
     LogSegmentPtr lastSegment() const;
 
     LogSegmentPtr activeSegment() const { return lastSegment(); }
 
-    /// smallest > offset
-    /// @return The log segment with the smallest offset strictly greater
-    /// than the given offset if it exists
-    LogSegmentPtr higherSegment(int64_t offset) const;
+    /// smallest > sn
+    /// @return The log segment with the smallest sn strictly greater
+    /// than the given sn if it exists
+    LogSegmentPtr higherSegment(int64_t sn) const;
 
-    /// greatest < offset
-    /// @return The log segment with the greatest offset strictly less than
-    // the given offset if it exists
-    LogSegmentPtr lowerSegment(int64_t offset) const;
+    /// greatest < sn
+    /// @return The log segment with the greatest sn strictly less than
+    // the given sn if it exists
+    LogSegmentPtr lowerSegment(int64_t sn) const;
 
-    /// greatest offset <= offset
-    /// @return The log segment with the greatest offset less than or equal to the
-    /// given offset if it exists
-    LogSegmentPtr floorSegment(int64_t offset) const;
+    /// greatest sn <= sn
+    /// @return The log segment with the greatest sn less than or equal to the
+    /// given sn if it exists
+    LogSegmentPtr floorSegment(int64_t sn) const;
 
-    /// <= offset
-    /// @return A list of segments which have base offset less or equal to the
-    /// given offset if exists
-    std::vector<LogSegmentPtr> lowerEqualSegments(int64_t offset) const;
+    /// <= sn
+    /// @return A list of segments which have base sn less or equal to the
+    /// given sn if exists
+    std::vector<LogSegmentPtr> lowerEqualSegments(int64_t sn) const;
 
-    std::vector<int64_t> baseOffsets() const;
+    std::vector<int64_t> baseSequences() const;
 
     /// @return a list of segments beginning with the segment that includes `from`
     ///         and ending with the segment that includes up to `to - 1` or the end of the log
@@ -64,7 +64,7 @@ public:
 
     std::vector<LogSegmentPtr> values();
 
-    void apply(std::function<void(LogSegmentPtr &)> func);
+    void apply(std::function<bool(LogSegmentPtr &)> func);
 
     void close();
 
@@ -77,7 +77,7 @@ public:
     size_t size() const;
 
 private:
-    TopicShard topic_shard;
+    StreamShard stream_shard;
 
     mutable std::shared_mutex mlock;
     std::map<int64_t, LogSegmentPtr> segments;

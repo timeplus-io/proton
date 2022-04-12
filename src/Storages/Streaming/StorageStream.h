@@ -1,19 +1,20 @@
 #pragma once
 
-#include "StreamCallbackData.h"
 #include "IngestingBlocks.h"
+#include "StreamCallbackData.h"
 #include "StreamingStoreSourceMultiplexer.h"
 
 #include <base/ClockUtils.h>
 #include <base/shared_ptr_helper.h>
 #include <pcg_random.hpp>
 
-#include <DistributedWALClient/KafkaWAL.h>
-#include <DistributedWALClient/KafkaWALConsumerMultiplexer.h>
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <KafkaLog/KafkaWAL.h>
+#include <KafkaLog/KafkaWALConsumerMultiplexer.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
+#include <Common/ProtonCommon.h>
 #include <Common/ThreadPool.h>
 
 
@@ -121,7 +122,10 @@ public:
 
     CancellationCode killMutation(const String & mutation_id) override;
 
+    void preDrop() override;
+
     void drop() override;
+
     void truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr, TableExclusiveLockHolder &) override;
 
     void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
@@ -200,7 +204,6 @@ public:
 
     const String & getShardingKeyColumnName() const { return sharding_key_column_name; }
 
-    String getTopic() const { return topic; }
     Int32 getShards() const { return shards; }
     Int32 getReplicationFactor() const { return replication_factor; }
 
@@ -210,12 +213,29 @@ public:
     Int32 currentShard() const { return shard; }
     void getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
     {
-        ingesting_blocks.getStatuses(block_ids, statuses);
+        if (kafka)
+            kafka->ingesting_blocks.getStatuses(block_ids, statuses);
     }
 
-    UInt64 nextBlockId() const { return ingesting_blocks.nextId(); }
+    UInt64 nextBlockId() const
+    {
+        if (kafka)
+            return kafka->ingesting_blocks.nextId();
 
-    DWAL::RecordSN lastSN() const;
+        return 0;
+    }
+
+    String logstoreType() const
+    {
+        if (kafka)
+            return LOGSTORE_KAFKA;
+
+        return LOGSTORE_NATIVE_LOG;
+    }
+
+    bool isLogstoreKafka() const { return kafka != nullptr; }
+
+    nlog::RecordSN lastSN() const;
 
     String streamingStorageClusterId() const;
 
@@ -239,8 +259,11 @@ protected:
         bool has_force_restore_data_flag_);
 
 private:
+    void initLog();
+    void initKafkaLog();
+    void initNativeLog();
+    void deinitNativeLog();
     bool requireDistributedQuery(ContextPtr context_) const;
-    void initWal();
     std::vector<Int64> getOffsets(const String & seek_to) const;
 
 private:
@@ -260,27 +283,26 @@ private:
         ~WriteCallbackData() { --storage->outstanding_blocks; }
     };
 
-    void appendAsync(const DWAL::Record & record, UInt64 block_id, UInt64 sub_block_id);
+    void appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id);
 
-    void writeCallback(const DWAL::AppendResult & result, UInt64 block_id, UInt64 sub_block_id);
+    void writeCallback(const klog::AppendResult & result, UInt64 block_id, UInt64 sub_block_id);
 
-    static void writeCallback(const DWAL::AppendResult & result, void * data);
+    static void writeCallback(const klog::AppendResult & result, void * data);
 
-    DWAL::RecordSN snLoaded() const;
-    void backgroundPoll();
+    nlog::RecordSN snLoaded() const;
     void mergeBlocks(Block & lhs, Block & rhs);
-    bool dedupBlock(const DWAL::RecordPtr & record);
+    bool dedupBlock(const nlog::RecordPtr & record);
     void addIdempotentKey(const String & key);
     void buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_);
 
-    void commit(DWAL::RecordPtrs records, SequenceRanges missing_sequence_ranges);
+    void commit(nlog::RecordPtrs records, SequenceRanges missing_sequence_ranges);
 
-    using SequencePair = std::pair<DWAL::RecordSN, DWAL::RecordSN>;
+    using SequencePair = std::pair<nlog::RecordSN, nlog::RecordSN>;
 
     void doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges);
     void commitSN();
-    void commitSNLocal(DWAL::RecordSN commit_sn);
-    void commitSNRemote(DWAL::RecordSN commit_sn);
+    void commitSNLocal(nlog::RecordSN commit_sn);
+    void commitSNRemote(nlog::RecordSN commit_sn);
 
     void finalCommit();
     void periodicallyCommit();
@@ -289,18 +311,23 @@ private:
     void progressSequencesWithoutLock(const SequencePair & seq);
     Int64 maxCommittedSN() const;
 
-    static void consumeCallback(DWAL::RecordPtrs records, DWAL::ConsumeCallbackData * data);
+    static void consumeCallback(nlog::RecordPtrs records, klog::ConsumeCallbackData * data);
+
+    /// Dedicate thread consumption
+    void backgroundPollKafka();
 
     /// Shared mode consumption
-    void addSubscription();
-    void removeSubscription();
+    void addSubscriptionKafka();
+    void removeSubscriptionKafka();
 
+    void backgroundPollNativeLog();
     void cacheVirtualColumnNamesAndTypes();
+
+    std::vector<Int64> sequencesForTimestamps(Int64 ts, bool append_time = false) const;
 
 private:
     Int32 replication_factor;
     Int32 shards;
-    String topic;
     ExpressionActionsPtr sharding_key_expr;
     bool rand_sharding_key = false;
 
@@ -317,17 +344,39 @@ private:
     NamesAndTypesList virtual_column_names_and_types;
 
     /// Cached ctx for reuse
-    DWAL::KafkaWALContext dwal_append_ctx;
-    DWAL::KafkaWALContext dwal_consume_ctx;
+    struct KafkaLog
+    {
+        KafkaLog(const String & topic_, Int32 shards_, Int32 replication_factor_, Int64 timeout_ms_, Poco::Logger * log_)
+            : append_ctx(topic_, shards_, replication_factor_)
+            , consume_ctx(topic_, shards_, replication_factor_)
+            , ingesting_blocks(timeout_ms_, log_)
+        {
+        }
 
-    /// For Produce and dedicated consumption
-    DWAL::KafkaWALPtr dwal;
+        ~KafkaLog() { shutdown(); }
 
-    /// For shared consumption
-    DWAL::KafkaWALConsumerMultiplexerPtr multiplexer;
-    std::weak_ptr<DWAL::KafkaWALConsumerMultiplexer::CallbackContext> shared_subscription_ctx;
+        void shutdown()
+        {
+            if (log)
+                log.reset();
+        }
 
-    IngestingBlocks ingesting_blocks;
+        String topic() const { return append_ctx.topic; }
+
+        klog::KafkaWALContext append_ctx;
+        klog::KafkaWALContext consume_ctx;
+
+        /// For Produce and dedicated consumption
+        klog::KafkaWALPtr log;
+
+        /// For shared consumption
+        klog::KafkaWALConsumerMultiplexerPtr multiplexer;
+        std::weak_ptr<klog::KafkaWALConsumerMultiplexer::CallbackContext> shared_subscription_ctx;
+
+        IngestingBlocks ingesting_blocks;
+    };
+
+    std::unique_ptr<KafkaLog> kafka;
 
     /// Local checkpoint threshold timer
     Int64 last_commit_ts = MonotonicSeconds::now();
@@ -339,9 +388,9 @@ private:
     ThreadPool & part_commit_pool;
 
     mutable std::mutex sns_mutex;
-    DWAL::RecordSN last_sn = -1; /// To be committed to DWAL
-    DWAL::RecordSN prev_sn = -1; /// Committed to DWAL
-    DWAL::RecordSN local_sn = -1; /// Committed to `committed_sn.txt`
+    nlog::RecordSN last_sn = -1; /// To be committed to DWAL
+    nlog::RecordSN prev_sn = -1; /// Committed to DWAL
+    nlog::RecordSN local_sn = -1; /// Committed to `committed_sn.txt`
     std::set<SequencePair> local_committed_sns; /// Committed to `Part` folder
     std::deque<SequencePair> outstanding_sns;
 

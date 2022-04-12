@@ -94,13 +94,15 @@ LogManager::LogManager(
     const LogCompactorConfig & compactor_config_,
     const LogManagerConfig & log_manager_config_,
     std::shared_ptr<DB::NLOG::BackgroundSchedulePool> scheduler_,
-    std::shared_ptr<ThreadPool> adhoc_scheduler_)
+    std::shared_ptr<ThreadPool> adhoc_scheduler_,
+    TailCachePtr cache_)
     : root_dirs(root_dirs_)
     , default_config(std::move(default_config_))
     , compactor_config(compactor_config_)
     , log_manager_config(log_manager_config_)
     , scheduler(std::move(scheduler_))
     , adhoc_scheduler(std::move(adhoc_scheduler_))
+    , cache(std::move(cache_))
     , logger(&Poco::Logger::get("LogManager"))
 {
     createAndValidateLogDirs(initial_offline_dirs_);
@@ -125,11 +127,11 @@ LogManager::~LogManager()
         dir_lock->unlock();
 }
 
-void LogManager::startup(const std::unordered_map<std::string, std::vector<Topic>> & topics)
+void LogManager::startup(const std::unordered_map<std::string, std::vector<Stream>> & streams)
 {
     /// Make a copy of config since it can be changed
     auto config{default_config};
-    startupWithConfigOverrides(config, fetchTopicConfigOverrides(config, topics));
+    startupWithConfigOverrides(config, fetchStreamConfigOverrides(config, streams));
 }
 
 void LogManager::shutdown()
@@ -173,15 +175,15 @@ void LogManager::shutdown()
     {
         dir_pool.second->wait();
 
-        /// Only checkpoint recovery offset changed logs
-        checkpointRecoveryOffsetsInDir(dir_pool.first, getLogs(dir_pool.first, "", [](const auto & topic_shard_log) {
-                                           return topic_shard_log.second->needCheckpointRecoveryPoint();
-                                       }));
+        /// Only checkpoint recovery sn changed logs
+        checkpointRecoverySequencesInDir(dir_pool.first, getLogs(dir_pool.first, "", [](const auto & stream_shard_log) {
+                                             return stream_shard_log.second->needCheckpointRecoveryPoint();
+                                         }));
 
-        /// Only checkpoint start offset changed logs
-        checkpointLogStartOffsetsInDir(dir_pool.first, getLogs(dir_pool.first, "", [](const auto & topic_shard_log) {
-                                           return topic_shard_log.second->needCheckpointStartOffset();
-                                       }));
+        /// Only checkpoint start sn changed logs
+        checkpointLogStartSequencesInDir(dir_pool.first, getLogs(dir_pool.first, "", [](const auto & stream_shard_log) {
+                                             return stream_shard_log.second->needCheckpointStartSN();
+                                         }));
 
         /// Mark that the shutdown was clean by creating marker file
         auto clean_shutdown_file = dir_pool.first / CLEAN_SHUTDOWN_FILE;
@@ -202,14 +204,14 @@ void LogManager::startupWithConfigOverrides(LogConfigPtr default_config_, const 
         /// Schedule the cleanup task to delete old logs
         log_retention_task = scheduler->createTask(LOGGER_NAME, [this]() { cleanupLogs(); });
         log_flush_task = scheduler->createTask(LOGGER_NAME, [this]() { flushDirtyLogs(); });
-        log_recovery_point_checkpoint_task = scheduler->createTask(LOGGER_NAME, [this]() { checkpointLogRecoveryOffsets(); });
-        log_start_offset_checkpoint_task = scheduler->createTask(LOGGER_NAME, [this]() { checkpointLogStartOffsets(); });
+        log_recovery_point_checkpoint_task = scheduler->createTask(LOGGER_NAME, [this]() { checkpointLogRecoverySequences(); });
+        log_start_sn_checkpoint_task = scheduler->createTask(LOGGER_NAME, [this]() { checkpointLogStartSequences(); });
         log_delete_task = scheduler->createTask(LOGGER_NAME, [this]() { removeLogs(); });
 
         log_retention_task->scheduleAfter(INITIAL_TASK_DELAY_MS);
         log_flush_task->scheduleAfter(INITIAL_TASK_DELAY_MS);
         log_recovery_point_checkpoint_task->scheduleAfter(INITIAL_TASK_DELAY_MS);
-        log_start_offset_checkpoint_task->scheduleAfter(INITIAL_TASK_DELAY_MS);
+        log_start_sn_checkpoint_task->scheduleAfter(INITIAL_TASK_DELAY_MS);
         log_delete_task->scheduleAfter(INITIAL_TASK_DELAY_MS);
     }
 
@@ -221,55 +223,51 @@ void LogManager::startupWithConfigOverrides(LogConfigPtr default_config_, const 
     }
 }
 
-LogManager::TwoLevelUnorderedMap<std::string, TopicShard, int64_t> LogManager::readRecoveryOffsetCheckpoints(const fs::path & root_dir)
+LogManager::TwoLevelUnorderedMap<std::string, StreamShard, int64_t> LogManager::readRecoverySNCheckpoints(const fs::path & dir)
 {
-    auto iter = checkpoints.find(root_dir);
+    auto iter = checkpoints.find(dir);
     if (iter != checkpoints.end())
     {
         try
         {
-            return iter->second->readLogRecoveryPointOffsets();
+            return iter->second->readLogRecoveryPointSequences();
         }
         catch (...)
         {
             LOG_WARNING(
-                logger,
-                "Error occurred while reading recovery-point-offsets for directory {}, resetting the recovery offset to 0",
-                root_dir.c_str());
+                logger, "Error occurred while reading recovery-point-sns for directory {}, resetting the recovery sn to 0", dir.c_str());
         }
     }
     else
         LOG_WARNING(
             logger,
-            "Didn't find log root_dir occurred while reading recovery-point-offsets for directory {}, resetting the recovery offset to "
+            "Didn't find log root_dir occurred while reading recovery-point-sns for directory {}, resetting the recovery sn to "
             "0",
-            root_dir.c_str());
+            dir.c_str());
 
     return {};
 }
 
-LogManager::TwoLevelUnorderedMap<std::string, TopicShard, int64_t> LogManager::readStartOffsetCheckpoints(const fs::path & root_dir)
+LogManager::TwoLevelUnorderedMap<std::string, StreamShard, int64_t> LogManager::readStartSequenceCheckpoints(const fs::path & dir)
 {
-    auto iter = checkpoints.find(root_dir);
+    auto iter = checkpoints.find(dir);
     if (iter != checkpoints.end())
     {
         try
         {
-            return iter->second->readLogStartOffsets();
+            return iter->second->readLogStarSequences();
         }
         catch (...)
         {
             LOG_WARNING(
-                logger,
-                "Error occurred while reading log-start-offsets for directory {}, resetting the log start offset to 0",
-                root_dir.c_str());
+                logger, "Error occurred while reading log-start-sns for directory {}, resetting the log start sn to 0", dir.c_str());
         }
     }
     else
         LOG_WARNING(
             logger,
-            "Didn't find log root_dir occurred while reading log-start-offsets for directory {}, resetting the log start offset to 0",
-            root_dir.c_str());
+            "Didn't find log root_dir occurred while reading log-start-sns for directory {}, resetting the log start sn to 0",
+            dir.c_str());
 
     return {};
 }
@@ -289,7 +287,7 @@ void LogManager::loadLogs(LogConfigPtr default_config_, const LogConfigMap & log
     std::vector<std::shared_ptr<ThreadPool>> thread_pools;
     int32_t total_logs = 0;
 
-    /// For each top log directories, load all topics in each of them
+    /// For each top log directories, load all streams in each of them
     for (const auto & dir : all_live_log_dirs)
     {
         try
@@ -314,18 +312,15 @@ void LogManager::loadLogs(LogConfigPtr default_config_, const LogConfigMap & log
 ///  | --- <namespace1>
 ///  | --- <namespace2>
 ///  | --- <namespace3>
-///            | --- <topic1-shard1>
-///            | --- <topic2-shard2>
-///            | --- <topic3-shard3>
+///            | --- <stream1-shard1>
+///            | --- <stream2-shard2>
+///            | --- <stream3-shard3>
 ///                      | --- <segment1>
 ///                      | --- <segment2>
 ///                      | --- <segment3>
 ///                      | --- <segment3.index>
 std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
-    const fs::path & root_log_dir,
-    LogConfigPtr default_config_,
-    const LogConfigMap & log_config_overrides,
-    int32_t & total_logs)
+    const fs::path & root_log_dir, LogConfigPtr default_config_, const LogConfigMap & log_config_overrides, int32_t & total_logs)
 {
     bool had_clean_shutdown = false;
     auto clean_shutdown_file = root_log_dir / CLEAN_SHUTDOWN_FILE;
@@ -341,9 +336,9 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
     else
         LOG_INFO(logger, "Attempting recovery for all logs in {} since no clean shutdown file was found", root_log_dir.c_str());
 
-    /// FIXME live query recovery / log start offsets directly
-    auto recovery_offsets = readRecoveryOffsetCheckpoints(root_log_dir);
-    auto log_start_offsets = readStartOffsetCheckpoints(root_log_dir);
+    /// FIXME live query recovery / log start sns directly
+    auto recovery_sns = readRecoverySNCheckpoints(root_log_dir);
+    auto log_start_sns = readStartSequenceCheckpoints(root_log_dir);
 
     auto pool = std::make_shared<ThreadPool>(
         log_manager_config.recovery_threads_per_data_dir, log_manager_config.recovery_threads_per_data_dir, 10000);
@@ -359,63 +354,65 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
             continue;
 
         auto ns_config_iter = log_config_overrides.find(ns);
-        auto ns_recovery_point_iter = recovery_offsets.find(ns);
-        auto ns_start_offset_iter = log_start_offsets.find(ns);
+        auto ns_recovery_point_iter = recovery_sns.find(ns);
+        auto ns_start_sn_iter = log_start_sns.find(ns);
 
-        for (const auto & topic_shard_dir_entry : fs::directory_iterator{ns_dir_entry.path()})
+        for (const auto & stream_shard_dir_entry : fs::directory_iterator{ns_dir_entry.path()})
         {
             /// Skip any non-directory files
-            if (!topic_shard_dir_entry.is_directory())
+            if (!stream_shard_dir_entry.is_directory())
                 continue;
 
-            /// More error handling for non topic-shard dir
-            auto topic_shard = Log::topicShardFrom(topic_shard_dir_entry.path());
-            if (topic_shard.topic == Log::METADATA_TOPIC())
-                continue;
+            /// More error handling for non stream-shard dir
+            auto stream_shard = Log::streamShardFrom(stream_shard_dir_entry.path());
+            /// if (stream_shard.stream == Log::METADATA_STREAM())
+            ///     continue;
 
             /// Make a copy of it since the following pool schedule needs a copy
-            auto topic_shard_dir(topic_shard_dir_entry.path());
+            auto stream_shard_dir(stream_shard_dir_entry.path());
 
             /// Config overrides
             auto config{default_config_};
-            TopicID topic_id;
             if (ns_config_iter != log_config_overrides.end())
             {
-                Topic topic{topic_shard.topic, {}};
-                auto iter = ns_config_iter->second.find(topic);
+                auto iter = ns_config_iter->second.find(stream_shard.stream);
                 if (iter != ns_config_iter->second.end())
                 {
-                    topic_id = iter->first.id;
+                    /// File system dir name doesn't contain stream name
+                    /// update it here
+                    stream_shard.stream.name = iter->first.name;
                     config = iter->second;
                 }
+                else
+                    LOG_ERROR(logger, "Failed to find log config for stream_shard={}", stream_shard.string());
             }
 
-            /// Recovery point offset
+            /// Recovery point sn
             int64_t recovery_point = 0;
-            if (ns_recovery_point_iter != recovery_offsets.end())
+            if (ns_recovery_point_iter != recovery_sns.end())
             {
-                auto iter = ns_recovery_point_iter->second.find(topic_shard);
+                auto iter = ns_recovery_point_iter->second.find(stream_shard);
                 if (iter != ns_recovery_point_iter->second.end())
                     recovery_point = iter->second;
             }
 
-            /// Start offset
-            int64_t log_start_offset = 0;
-            if (ns_start_offset_iter != log_start_offsets.end())
+            /// Start sn
+            int64_t log_start_sn = 0;
+            if (ns_start_sn_iter != log_start_sns.end())
             {
-                auto iter = ns_start_offset_iter->second.find(topic_shard);
-                if (iter != ns_start_offset_iter->second.end())
-                    log_start_offset = iter->second;
+                auto iter = ns_start_sn_iter->second.find(stream_shard);
+                if (iter != ns_start_sn_iter->second.end())
+                    log_start_sn = iter->second;
             }
 
             total_logs += 1;
             pool->scheduleOrThrow([=, this]() {
                 LOG_INFO(
                     logger,
-                    "Loading log in {} in namespace {} with log_start_offset={} recovery_point_offset={}",
-                    topic_shard_dir.c_str(),
+                    "Loading log in {} in namespace {} with log_start_sn={} recovery_point_sn={}",
+                    stream_shard_dir.c_str(),
                     ns,
-                    log_start_offset,
+                    log_start_sn,
                     recovery_point);
 
                 LogPtr log;
@@ -423,19 +420,19 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
 
                 try
                 {
-                    log = loadLog(ns, topic_id, topic_shard_dir, config, had_clean_shutdown, log_start_offset, recovery_point);
+                    log = loadLog(ns, stream_shard, stream_shard_dir, config, had_clean_shutdown, log_start_sn, recovery_point);
                 }
                 catch (...)
                 {
-                    /// FIXME, is it safe to exclude the root log dir if one topic-shard failed to load
-                    DB::tryLogCurrentException(logger, fmt::format("Error while loading log dir {}", topic_shard_dir.c_str()));
+                    /// FIXME, is it safe to exclude the root log dir if one stream-shard failed to load
+                    DB::tryLogCurrentException(logger, fmt::format("Error while loading log dir {}", stream_shard_dir.c_str()));
                 }
                 auto elapsed = DB::MonotonicMilliseconds::now() - start_ms;
 
                 LOG_INFO(
                     logger,
                     "Completed load log in {} in namespace {} with {} segments in {}ms",
-                    topic_shard_dir.c_str(),
+                    stream_shard_dir.c_str(),
                     ns,
                     log->numberOfSegments(),
                     elapsed);
@@ -447,22 +444,15 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
 
 LogPtr LogManager::loadLog(
     const std::string & ns,
-    const TopicID & topic_id,
+    const StreamShard & stream_shard,
     const fs::path & log_dir,
     LogConfigPtr default_config_,
     bool had_clean_shutdown,
-    int64_t log_start_offset,
+    int64_t log_start_sn,
     int64_t recovery_point)
 {
-    auto log = Log::create(
-        log_dir,
-        default_config_,
-        topic_id,
-        had_clean_shutdown,
-        log_start_offset,
-        recovery_point,
-        scheduler,
-        adhoc_scheduler);
+    auto log
+        = Log::create(stream_shard, log_dir, default_config_, had_clean_shutdown, log_start_sn, recovery_point, scheduler, adhoc_scheduler, cache);
 
     if (log_dir.extension().string() == Log::DELETE_DIR_SUFFIX())
     {
@@ -470,12 +460,11 @@ LogPtr LogManager::loadLog(
     }
     else
     {
-        auto topic_shard{Log::topicShardFrom(log_dir)};
         bool inserted = true;
         if (log->isFuture())
-            inserted = insertToTwoLevelConcurrentHashMap(future_logs, ns, topic_shard, log);
+            inserted = insertToTwoLevelConcurrentHashMap(future_logs, ns, stream_shard, log);
         else
-            inserted = insertToTwoLevelConcurrentHashMap(current_logs, ns, topic_shard, log);
+            inserted = insertToTwoLevelConcurrentHashMap(current_logs, ns, stream_shard, log);
 
         if (!inserted)
         {
@@ -488,7 +477,7 @@ LogPtr LogManager::loadLog(
                     "replacing current replica with future replica. Recover broker from this failure by manually deleting one of the two "
                     "directories for this shard. It is recommended to delete the shard in the log directory that is known to have failed "
                     "recently",
-                    topic_shard.string(),
+                    stream_shard.string(),
                     log_dir.string());
         }
     }
@@ -496,35 +485,34 @@ LogPtr LogManager::loadLog(
 }
 
 LogManager::LogConfigMap
-LogManager::fetchTopicConfigOverrides(LogConfigPtr config, const std::unordered_map<std::string, std::vector<Topic>> & topics)
+LogManager::fetchStreamConfigOverrides(LogConfigPtr config, const std::unordered_map<std::string, std::vector<Stream>> & streams)
 {
     LogConfigMap results;
-    results.reserve(topics.size());
+    results.reserve(streams.size());
 
     /// FIXME, override
-    for (const auto & ns_topics : topics)
-        for (const auto & topic : ns_topics.second)
-            results[ns_topics.first].emplace(topic, config);
+    for (const auto & ns_streams : streams)
+        for (const auto & stream : ns_streams.second)
+            results[ns_streams.first].emplace(stream, config);
 
     return results;
 }
 
-LogPtr LogManager::getOrCreateLog(
-    const std::string & ns, const TopicShard & topic_shard, bool is_new, bool is_future, const TopicID & topic_id)
+LogPtr LogManager::getOrCreateLog(const std::string & ns, const StreamShard & stream_shard, bool is_new, bool is_future)
 {
     std::lock_guard<std::mutex> guard{log_creation_or_deletion_lock};
 
-    auto log = getLog(ns, topic_shard, is_future);
+    auto log = getLog(ns, stream_shard, is_future);
     if (log)
         return log;
 
     if (!is_new && !offlineLogDirs().empty())
         throw DB::Exception(
-            DB::ErrorCodes::LOG_DIR_UNAVAILABLE, "Cannot create log for {} because log directories are offline", topic_shard.string());
+            DB::ErrorCodes::LOG_DIR_UNAVAILABLE, "Cannot create log for {} because log directories are offline", stream_shard.string());
 
     /// Create the log if it has not already been created in another thread
     fs::path log_dir;
-    auto exist = getFromTwoLevelConcurrentHashMap(preferred_log_dirs, ns, topic_shard, log_dir);
+    auto exist = getFromTwoLevelConcurrentHashMap(preferred_log_dirs, ns, stream_shard, log_dir);
     if (is_future)
     {
         if (!exist)
@@ -532,16 +520,16 @@ LogPtr LogManager::getOrCreateLog(
             throw DB::Exception(
                 DB::ErrorCodes::LOG_DIR_UNAVAILABLE,
                 "Cannot create the future log for {} without having a preferred log directory",
-                topic_shard.string());
+                stream_shard.string());
         }
         else
         {
-            log = getLog(ns, topic_shard);
+            log = getLog(ns, stream_shard);
             if (log && log->parentDir() == log_dir)
                 throw DB::Exception(
                     DB::ErrorCodes::LOG_ALREADY_EXISTS,
                     "Cannot create the future log for {} int the current log directory of this shard",
-                    topic_shard.string());
+                    stream_shard.string());
         }
     }
 
@@ -550,141 +538,142 @@ LogPtr LogManager::getOrCreateLog(
 
     std::string log_dir_name;
     if (is_future)
-        log_dir_name = Log::logFutureDirName(topic_shard);
+        log_dir_name = Log::logFutureDirName(stream_shard);
     else
-        log_dir_name = Log::logDirName(topic_shard);
+        log_dir_name = Log::logDirName(stream_shard);
 
     log_dir = createLogDirectory(log_dir, ns, log_dir_name);
 
-    auto config = fetchLogConfig(ns, topic_shard.topic);
+    auto config = fetchLogConfig(ns, stream_shard.stream);
     log = Log::create(
+        stream_shard,
         log_dir,
         config,
-        topic_id,
         /*has_clean_shutdown*/ true,
-        /*log_start_offset*/ 0,
+        /*log_start_sn*/ 0,
         /*recovery_point*/ 0,
         scheduler,
-        adhoc_scheduler);
+        adhoc_scheduler,
+        cache);
 
     bool result = false;
     if (is_future)
-        result = insertToTwoLevelConcurrentHashMap(future_logs, ns, topic_shard, log);
+        result = insertToTwoLevelConcurrentHashMap(future_logs, ns, stream_shard, log);
     else
-        result = insertToTwoLevelConcurrentHashMap(current_logs, ns, topic_shard, log);
+        result = insertToTwoLevelConcurrentHashMap(current_logs, ns, stream_shard, log);
 
     assert(result);
     (void)result;
 
-    LOG_INFO(logger, "Created log for shard={} in {} with properties={}", topic_shard.string(), log_dir.string(), config->string());
+    LOG_INFO(logger, "Created log for shard={} in {} with properties={}", stream_shard.string(), log_dir.string(), config->string());
 
     /// Removed the preferred log dir since it has already been satisfied
-    eraseFromTwoLevelConcurrentHashMap(preferred_log_dirs, ns, topic_shard);
+    eraseFromTwoLevelConcurrentHashMap(preferred_log_dirs, ns, stream_shard);
     return log;
 }
 
 /// Get the log if it exists, otherwise return nullptr
-LogPtr LogManager::getLog(const std::string & ns, const TopicShard & topic_shard, bool is_future)
+LogPtr LogManager::getLog(const std::string & ns, const StreamShard & stream_shard, bool is_future)
 {
     LogPtr res;
     if (is_future)
-        getFromTwoLevelConcurrentHashMap(future_logs, ns, topic_shard, res);
+        getFromTwoLevelConcurrentHashMap(future_logs, ns, stream_shard, res);
     else
-        getFromTwoLevelConcurrentHashMap(current_logs, ns, topic_shard, res);
+        getFromTwoLevelConcurrentHashMap(current_logs, ns, stream_shard, res);
     return res;
 }
 
-void LogManager::trim(const std::string & ns, const std::vector<TopicShardOffset> & shard_offsets, bool is_future)
+void LogManager::trim(const std::string & ns, const std::vector<StreamShardSequence> & shard_sns, bool is_future)
 {
     std::unordered_set<fs::path> trimmed;
 
-    for (const auto & tso : shard_offsets)
+    for (const auto & tso : shard_sns)
     {
         LogPtr log;
         if (is_future)
-            log = getLog(ns, tso.topic_shard, is_future);
+            log = getLog(ns, tso.stream_shard, is_future);
         else
-            log = getLog(ns, tso.topic_shard, is_future);
+            log = getLog(ns, tso.stream_shard, is_future);
 
         if (!log)
             continue;
 
         /// May need to abort and pause the compacting of the log, and resume after truncation is done
-        auto need_stop_compactor = tso.offset < log->activeSegment()->baseOffset();
+        auto need_stop_compactor = tso.sn < log->activeSegment()->baseSequence();
         if (need_stop_compactor && !is_future)
-            abortAndPauseCompaction(tso.topic_shard);
+            abortAndPauseCompaction(tso.stream_shard);
 
         try
         {
-            if (log->trim(tso.offset))
+            if (log->trim(tso.sn))
                 trimmed.insert(log->rootDir());
 
             if (need_stop_compactor && !is_future)
-                maybeTrimCompactorCheckpointToActiveSegmentBaseOffset(log, tso.topic_shard);
+                maybeTrimCompactorCheckpointToActiveSegmentBaseSN(log, tso.stream_shard);
         }
         catch (...)
         {
         }
 
         if (need_stop_compactor && !is_future)
-            resumeCompaction(tso.topic_shard);
+            resumeCompaction(tso.stream_shard);
     }
 
     for (const auto & root_dir : trimmed)
-        checkpointRecoveryOffsetsInDir(root_dir, getLogs(root_dir, ns, [](const auto & topic_shard_log) {
-                                           return topic_shard_log.second->needCheckpointRecoveryPoint();
-                                       }));
+        checkpointRecoverySequencesInDir(root_dir, getLogs(root_dir, ns, [](const auto & stream_shard_log) {
+                                             return stream_shard_log.second->needCheckpointRecoveryPoint();
+                                         }));
 }
 
 /// Abort and pause cleaning of the provided shard and log a message about it
-void LogManager::abortAndPauseCompaction(const TopicShard & topic_shard)
+void LogManager::abortAndPauseCompaction(const StreamShard & stream_shard)
 {
     if (compactor)
     {
-        compactor->abortAndPause(topic_shard);
-        LOG_INFO(logger, "The compacting for shard {} is aborted and paused", topic_shard.string());
+        compactor->abortAndPause(stream_shard);
+        LOG_INFO(logger, "The compacting for shard {} is aborted and paused", stream_shard.string());
     }
 }
 
-/// Truncate the compactor's checkpoint to the based offset of the active segment of
+/// Truncate the compactor's checkpoint to the based sns of the active segment of
 /// the provided log
-void LogManager::maybeTrimCompactorCheckpointToActiveSegmentBaseOffset(LogPtr log, const TopicShard & topic_shard)
+void LogManager::maybeTrimCompactorCheckpointToActiveSegmentBaseSN(LogPtr log, const StreamShard & stream_shard)
 {
     if (compactor)
-        compactor->maybeTruncateCheckpoint(log->parentDir(), topic_shard, log->activeSegment()->baseOffset());
+        compactor->maybeTruncateCheckpoint(log->parentDir(), stream_shard, log->activeSegment()->baseSequence());
 }
 
-void LogManager::resumeCompaction(const TopicShard & topic_shard)
+void LogManager::resumeCompaction(const StreamShard & stream_shard)
 {
     if (compactor)
     {
-        compactor->resume({topic_shard});
-        LOG_INFO(logger, "Compacting for shard {} is resumed", topic_shard.string());
+        compactor->resume({stream_shard});
+        LOG_INFO(logger, "Compacting for shard {} is resumed", stream_shard.string());
     }
 }
 
 /// log_dir shall be an absolute path
-void LogManager::maybeUpdatePreferredLogDir(const std::string & ns, const TopicShard & topic_shard, const fs::path & log_dir)
+void LogManager::maybeUpdatePreferredLogDir(const std::string & ns, const StreamShard & stream_shard, const fs::path & log_dir)
 {
     /// Don't cache the preferred log directory if either the current log or the future log
     /// for this shard exists in the specified log_dir
     for (auto is_future : {false, true})
     {
-        auto log = getLog(ns, topic_shard, is_future);
+        auto log = getLog(ns, stream_shard, is_future);
         if (log && log->parentDir() == log_dir)
             return;
     }
 
-    ConcurrentHashMapPtr<TopicShard, fs::path> topic_dirs;
-    preferred_log_dirs.at(ns, topic_dirs);
-    if (topic_dirs)
+    ConcurrentHashMapPtr<StreamShard, fs::path> stream_dirs;
+    preferred_log_dirs.at(ns, stream_dirs);
+    if (stream_dirs)
     {
-        topic_dirs->insertOrAssign(topic_shard, log_dir);
+        stream_dirs->insertOrAssign(stream_shard, log_dir);
     }
     else
     {
-        auto [topic_dirs_map, _] = preferred_log_dirs.tryEmplace(ns, std::make_shared<ConcurrentHashMap<TopicShard, fs::path>>());
-        topic_dirs_map->insertOrAssign(topic_shard, log_dir);
+        auto [stream_dirs_map, _] = preferred_log_dirs.tryEmplace(ns, std::make_shared<ConcurrentHashMap<StreamShard, fs::path>>());
+        stream_dirs_map->insertOrAssign(stream_shard, log_dir);
     }
 }
 
@@ -835,6 +824,7 @@ void LogManager::initCheckpoints(const std::vector<fs::path> & live_root_dirs)
     {
         auto ckpt_dir{root_dir};
         ckpt_dir /= CKPT_DIR_NAME;
+
         checkpoints.emplace(root_dir, std::make_shared<Checkpoints>(ckpt_dir, logger));
     }
 }
@@ -861,19 +851,16 @@ fs::path LogManager::createLogDirectory(const fs::path & log_dir, const std::str
     }
     else
         throw DB::Exception(
-            DB::ErrorCodes::LOG_DIR_UNAVAILABLE,
-            "Cannot create log {} because log directory {} is offline",
-            log_dir_name,
-            log_dir.c_str());
+            DB::ErrorCodes::LOG_DIR_UNAVAILABLE, "Cannot create log {} because log directory {} is offline", log_dir_name, log_dir.c_str());
 }
 
-LogConfigPtr LogManager::fetchLogConfig(const std::string & ns, const std::string & topic)
+LogConfigPtr LogManager::fetchLogConfig(const std::string & ns, const Stream & stream)
 {
     LogConfigPtr config{default_config};
-    (void)topic;
+    (void)stream;
     (void)ns;
     /// FIXME, overrides
-    /// std::vector<LogConfig> configs = fetchTopicConfigOverrides(ns, config, {topic});
+    /// std::vector<LogConfig> configs = fetchStreamConfigOverrides(ns, config, {stream});
     return config;
 }
 
@@ -896,13 +883,13 @@ std::vector<fs::path> LogManager::offlineLogDirs() const
 }
 
 std::unordered_map<std::string, std::vector<LogPtr>> LogManager::getLogs(
-    const fs::path & root_dir, const std::string & ns, std::function<bool(const std::pair<TopicShard, LogPtr> &)> predicate) const
+    const fs::path & root_dir, const std::string & ns, std::function<bool(const std::pair<StreamShard, LogPtr> &)> predicate) const
 {
     assert(!root_dir.empty());
     std::unordered_map<std::string, std::vector<LogPtr>> results;
 
     /// Step 1: filter according to namespace
-    std::unordered_map<std::string, std::vector<ConcurrentHashMapPtr<TopicShard, LogPtr>>> logs;
+    std::unordered_map<std::string, std::vector<ConcurrentHashMapPtr<StreamShard, LogPtr>>> logs;
     current_logs.apply([&](const auto & kv) {
         if (!ns.empty())
         {
@@ -917,14 +904,14 @@ std::unordered_map<std::string, std::vector<LogPtr>> LogManager::getLogs(
     for (const auto & ns_logs : logs)
     {
         for (const auto & shard_logs : ns_logs.second)
-            shard_logs->apply([&](const auto & topic_shard_log) {
-                if (topic_shard_log.second->rootDir() != root_dir)
+            shard_logs->apply([&](const auto & stream_shard_log) {
+                if (stream_shard_log.second->rootDir() != root_dir)
                     return;
 
-                if (predicate && !predicate(topic_shard_log))
+                if (predicate && !predicate(stream_shard_log))
                     return;
 
-                results[ns_logs.first].push_back(topic_shard_log.second);
+                results[ns_logs.first].push_back(stream_shard_log.second);
             });
     }
 
@@ -951,8 +938,8 @@ void LogManager::flushDirtyLogs()
 
     for (auto & [ns, ns_logs] : all_current_logs)
     {
-        auto topic_logs{ns_logs->items()};
-        for (auto & [topic_shard, log] : topic_logs)
+        auto stream_logs{ns_logs->items()};
+        for (auto & [stream_shard, log] : stream_logs)
         {
             const auto & config = log->config();
             try
@@ -960,85 +947,84 @@ void LogManager::flushDirtyLogs()
                 auto elapsed = DB::UTCMilliseconds::now() - log->lastFlushed();
                 LOG_DEBUG(
                     logger,
-                    "Checking if flush is needed on {} in namespace {}, flush interval {}, last flushed {}, time since last flush {}",
-                    topic_shard.string(),
+                    "Checking if flush is needed on {} in namespace {}, flush interval {}, last flushed {}, {} ms passed since last flush",
+                    stream_shard.string(),
                     ns,
-                    config.flush_ms,
+                    config.flush_interval_ms,
                     log->lastFlushed(),
                     elapsed);
 
-                if (elapsed >= config.flush_ms)
+                if (elapsed >= config.flush_interval_ms)
                     log->flush();
             }
             catch (...)
             {
-                DB::tryLogCurrentException(logger, fmt::format("Failed to flush topic shard {}", topic_shard.string()));
+                DB::tryLogCurrentException(logger, fmt::format("Failed to flush stream shard {}", stream_shard.string()));
             }
         }
     }
 
     if (!stopped.test())
-        log_flush_task->scheduleAfter(log_manager_config.flush_recovery_offset_checkpoint_ms);
+        log_flush_task->scheduleAfter(log_manager_config.flush_recovery_sn_checkpoint_ms);
 }
 
 /// Write out the current recovery point for all logs to a text file in the log directory
 /// to avoid recovering the whole log on startup
-void LogManager::checkpointLogRecoveryOffsets()
+void LogManager::checkpointLogRecoverySequences()
 {
-    LOG_INFO(logger, "Beginning checkpoint log recovery offsets...");
+    LOG_INFO(logger, "Beginning checkpoint log recovery sns...");
 
     auto all_live_log_dirs{liveLogDirs()};
     for (const auto & log_dir : all_live_log_dirs)
-        /// Only checkpoint recovery offset changed logs
-        checkpointRecoveryOffsetsInDir(log_dir, getLogs(log_dir, "", [](const auto & topic_shard_log) {
-                                           return topic_shard_log.second->needCheckpointRecoveryPoint();
-                                       }));
+        /// Only checkpoint recovery sn changed logs
+        checkpointRecoverySequencesInDir(log_dir, getLogs(log_dir, "", [](const auto & stream_shard_log) {
+                                             return stream_shard_log.second->needCheckpointRecoveryPoint();
+                                         }));
 
     /// We will need make sure all exceptions are handled, otherwise the reschedule will not be called.
 
     if (!stopped.test())
-        log_recovery_point_checkpoint_task->scheduleAfter(log_manager_config.flush_recovery_offset_checkpoint_ms);
+        log_recovery_point_checkpoint_task->scheduleAfter(log_manager_config.flush_recovery_sn_checkpoint_ms);
 }
 
-/// Write out the current log start offset for all logs to a text file in the log directory
+/// Write out the current log start sn for all logs to a text file in the log directory
 /// to avoid exposing data that have been deleted by `DeleteRecordsRequest`.
-void LogManager::checkpointLogStartOffsets()
+void LogManager::checkpointLogStartSequences()
 {
-    LOG_INFO(logger, "Beginning checkpoint log start offsets...");
+    LOG_INFO(logger, "Beginning checkpoint log start sns...");
 
     auto all_live_log_dirs{liveLogDirs()};
     for (const auto & log_dir : all_live_log_dirs)
-        /// Only checkpoint start offset changed logs
-        checkpointLogStartOffsetsInDir(log_dir, getLogs(log_dir, "", [](const auto & topic_shard_log) {
-                                           return topic_shard_log.second->needCheckpointStartOffset();
-                                       }));
+        /// Only checkpoint start sn changed logs
+        checkpointLogStartSequencesInDir(
+            log_dir, getLogs(log_dir, "", [](const auto & stream_shard_log) { return stream_shard_log.second->needCheckpointStartSN(); }));
 
     /// We will need make sure all exceptions are handled, otherwise the reschedule will not be called.
     if (!stopped.test())
-        log_start_offset_checkpoint_task->scheduleAfter(log_manager_config.flush_start_offset_checkpoint_ms);
+        log_start_sn_checkpoint_task->scheduleAfter(log_manager_config.flush_start_sn_checkpoint_ms);
 }
 
-/// Checkpoint recovery offsets for all the provided logs
-void LogManager::checkpointRecoveryOffsetsInDir(
-    const fs::path & log_dir, const std::unordered_map<std::string, std::vector<LogPtr>> & logs_to_checkpoint)
+/// Checkpoint recovery sns for all the provided logs
+void LogManager::checkpointRecoverySequencesInDir(
+    const fs::path & root_dir, const std::unordered_map<std::string, std::vector<LogPtr>> & logs_to_checkpoint)
 {
-    std::unordered_map<std::string, std::vector<TopicShardOffset>> offsets;
-    offsets.reserve(logs_to_checkpoint.size());
+    std::unordered_map<std::string, std::vector<StreamShardSequence>> sns;
+    sns.reserve(logs_to_checkpoint.size());
 
     for (const auto & ns_logs : logs_to_checkpoint)
         for (const auto & log : ns_logs.second)
         {
             auto recovery_point = log->recoveryPoint();
-            offsets[ns_logs.first].emplace_back(log->topicShard(), recovery_point);
+            sns[ns_logs.first].emplace_back(log->streamShard(), recovery_point);
             log->beginCheckpointRecoveryPoint(recovery_point);
         }
 
-    auto iter = checkpoints.find(log_dir);
+    auto iter = checkpoints.find(root_dir);
     assert(iter != checkpoints.end());
 
     try
     {
-        iter->second->updateLogRecoveryPointOffsets(offsets);
+        iter->second->updateLogRecoveryPointSequences(sns);
 
         /// Update the cache to reflect that we already checkpoint the recovery points in persistent store
         for (const auto & ns_logs : logs_to_checkpoint)
@@ -1046,44 +1032,43 @@ void LogManager::checkpointRecoveryOffsetsInDir(
             {
                 log->endCheckpointRecoveryPoint();
             }
-
     }
     catch (...)
     {
-        DB::tryLogCurrentException(logger, fmt::format("Failed to checkpoint recovery offsets in dir {}", log_dir.c_str()));
+        DB::tryLogCurrentException(logger, fmt::format("Failed to checkpoint recovery sns in dir {}", root_dir.c_str()));
     }
 }
 
-/// Checkpoint log start offsets for all the provided logs in the provided directory
-void LogManager::checkpointLogStartOffsetsInDir(
-    const fs::path & log_dir, const std::unordered_map<std::string, std::vector<LogPtr>> & logs_to_checkpoint)
+/// Checkpoint log start sns for all the provided logs in the provided directory
+void LogManager::checkpointLogStartSequencesInDir(
+    const fs::path & root_dir, const std::unordered_map<std::string, std::vector<LogPtr>> & logs_to_checkpoint)
 {
-    std::unordered_map<std::string, std::vector<TopicShardOffset>> offsets;
-    offsets.reserve(logs_to_checkpoint.size());
+    std::unordered_map<std::string, std::vector<StreamShardSequence>> sns;
+    sns.reserve(logs_to_checkpoint.size());
 
     for (const auto & ns_logs : logs_to_checkpoint)
         for (const auto & log : ns_logs.second)
         {
-            auto log_start_offset = log->logStartOffset();
-            offsets[ns_logs.first].emplace_back(log->topicShard(), log_start_offset);
-            log->beginCheckpointStartOffset(log_start_offset);
+            auto log_start_sn = log->logStartSequence();
+            sns[ns_logs.first].emplace_back(log->streamShard(), log_start_sn);
+            log->beginCheckpointStartSequence(log_start_sn);
         }
 
-    auto iter = checkpoints.find(log_dir);
+    auto iter = checkpoints.find(root_dir);
     assert(iter != checkpoints.end());
 
     try
     {
-        iter->second->updateLogStartOffsets(offsets);
+        iter->second->updateLogStartSequences(sns);
 
-        /// Update the cache to reflect that we already checkpoint the start offsets in persistent store
+        /// Update the cache to reflect that we already checkpoint the start sns in persistent store
         for (const auto & ns_logs : logs_to_checkpoint)
             for (const auto & log : ns_logs.second)
-                log->endCheckpointStartOffset();
+                log->endCheckpointStartSequence();
     }
     catch (...)
     {
-        DB::tryLogCurrentException(logger, fmt::format("Failed to checkpoint log start offsets in dir {}", log_dir.c_str()));
+        DB::tryLogCurrentException(logger, fmt::format("Failed to checkpoint log start sns in dir {}", root_dir.c_str()));
     }
 }
 
@@ -1125,13 +1110,13 @@ void LogManager::removeLogs()
             try
             {
                 res.first->remove();
-                LOG_INFO(logger, "Deleted log for {} in {}", res.first->topicShard().string(), res.first->logDir().c_str());
+                LOG_INFO(logger, "Deleted log for {} in {}", res.first->streamShard().string(), res.first->logDir().c_str());
             }
             catch (...)
             {
                 DB::tryLogCurrentException(
                     logger,
-                    fmt::format("Exception while deleting {} in dir {}", res.first->topicShard().string(), res.first->logDir().c_str()));
+                    fmt::format("Exception while deleting {} in dir {}", res.first->streamShard().string(), res.first->logDir().c_str()));
             }
         }
     }
@@ -1141,32 +1126,33 @@ void LogManager::removeLogs()
         log_delete_task->scheduleAfter(next_delay_ms);
 }
 
-void LogManager::remove(const std::string & ns, const std::vector<TopicShard> & topic_shards)
+void LogManager::remove(const std::string & ns, const std::vector<StreamShard> & stream_shards)
 {
     std::unordered_set<fs::path> log_dirs_to_remove;
 
-    for (const auto & topic_shard : topic_shards)
+    for (const auto & stream_shard : stream_shards)
     {
+        cache->remove(stream_shard);
         try
         {
-            auto log = getLog(ns, topic_shard);
+            auto log = getLog(ns, stream_shard);
             if (log)
             {
                 log_dirs_to_remove.insert(log->rootDir());
-                remove(ns, topic_shard, /*is_future*/ false, /*checkpoint*/ false);
+                remove(ns, stream_shard, /*is_future*/ false, /*checkpoint*/ false);
             }
-            else if (log = getLog(ns, topic_shard, true); log)
+            else if (log = getLog(ns, stream_shard, true); log)
             {
                 log_dirs_to_remove.insert(log->rootDir());
-                remove(ns, topic_shard, /*is_future*/ true, /*checkpoint*/ false);
+                remove(ns, stream_shard, /*is_future*/ true, /*checkpoint*/ false);
             }
             else
-                LOG_WARNING(logger, "Shard={} in namespace={} which is going to be removed is not found", topic_shard.string(), ns);
+                LOG_WARNING(logger, "Shard={} in namespace={} which is going to be removed is not found", stream_shard.string(), ns);
         }
         catch (...)
         {
             /// FIXME, accept an exception handler in `remove` ?
-            DB::tryLogCurrentException(logger, "Exception happened while remove topic shards");
+            DB::tryLogCurrentException(logger, "Exception happened while remove stream shards");
             throw;
         }
     }
@@ -1176,11 +1162,11 @@ void LogManager::remove(const std::string & ns, const std::vector<TopicShard> & 
         if (compactor)
             compactor->updateCheckpoints(root_dir);
 
-        removeOffsetCheckpoints(root_dir, ns, topic_shards[0].topic);
+        removeSequenceCheckpoints(root_dir, ns, stream_shards[0].stream);
     }
 }
 
-LogPtr LogManager::remove(const std::string & ns, const TopicShard & topic_shard, bool is_future, bool checkpoint)
+LogPtr LogManager::remove(const std::string & ns, const StreamShard & stream_shard, bool is_future, bool checkpoint)
 {
     LogPtr log;
     {
@@ -1189,8 +1175,8 @@ LogPtr LogManager::remove(const std::string & ns, const TopicShard & topic_shard
         if (is_future)
             logs = &future_logs;
 
-        if (getFromTwoLevelConcurrentHashMap(*logs, ns, topic_shard, log))
-            eraseFromTwoLevelConcurrentHashMap(*logs, ns, topic_shard);
+        if (getFromTwoLevelConcurrentHashMap(*logs, ns, stream_shard, log))
+            eraseFromTwoLevelConcurrentHashMap(*logs, ns, stream_shard);
     }
 
     if (log)
@@ -1201,18 +1187,23 @@ LogPtr LogManager::remove(const std::string & ns, const TopicShard & topic_shard
         /// before actually deleting it
         if (compactor && !is_future)
         {
-            compactor->abort(topic_shard);
+            compactor->abort(stream_shard);
             if (checkpoint)
-                compactor->updateCheckpoints(root_dir, topic_shard);
+                compactor->updateCheckpoints(root_dir, stream_shard);
         }
 
-        log->renameDir(Log::logDeleteDirName(topic_shard));
+        log->renameDir(Log::logDeleteDirName(stream_shard));
 
         if (checkpoint)
-            removeOffsetCheckpointsSingleTopicShard(root_dir, ns, topic_shard);
+            removeSequenceCheckpoints(root_dir, ns, stream_shard);
 
         addLogToBeDeleted(log);
-        LOG_INFO(logger, "Log for shard={} in namespace={} is renamed to {} and it scheduled for deletion", topic_shard.string(), ns, log->logDir().c_str());
+        LOG_INFO(
+            logger,
+            "Log for shard={} in namespace={} is renamed to {} and it scheduled for deletion",
+            stream_shard.string(),
+            ns,
+            log->logDir().c_str());
     }
     else
     {
@@ -1220,22 +1211,22 @@ LogPtr LogManager::remove(const std::string & ns, const TopicShard & topic_shard
             throw DB::Exception(
                 DB::ErrorCodes::LOG_NOT_EXISTS,
                 "Failed to remove log for {} because it may be in one of the offline directories",
-                topic_shard.string());
+                stream_shard.string());
     }
     return log;
 }
 
-void LogManager::removeOffsetCheckpoints(const fs::path & root_dir, const std::string & ns, const std::string & topic)
+void LogManager::removeSequenceCheckpoints(const fs::path & root_dir, const std::string & ns, const Stream & stream)
 {
     auto iter = checkpoints.find(root_dir);
     assert(iter != checkpoints.end());
-    iter->second->removeLogOffsets(ns, topic);
+    iter->second->removeLogSequences(ns, stream);
 }
 
-void LogManager::removeOffsetCheckpointsSingleTopicShard(const fs::path & root_dir, const std::string & ns, const TopicShard & topic_shard)
+void LogManager::removeSequenceCheckpoints(const fs::path & root_dir, const std::string & ns, const StreamShard & stream_shard)
 {
     auto iter = checkpoints.find(root_dir);
     assert(iter != checkpoints.end());
-    iter->second->removeLogOffsets(ns, topic_shard);
+    iter->second->removeLogSequences(ns, stream_shard);
 }
 }

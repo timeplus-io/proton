@@ -129,8 +129,8 @@ StorageID TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPt
         /// tumble(table(devices), ...)
         auto query_context = context->getQueryContext();
         const auto & function_storage = query_context->executeTableFunction(arg);
-        if (auto * streaming_storage = function_storage->as<ProxyStream>())
-            streaming = streaming_storage->isStreaming();
+        if (auto * stream_storage = function_storage->as<ProxyStream>())
+            streaming = stream_storage->isStreaming();
         return function_storage->getStorageID();
     }
     else if (auto * identifier = arg->as<ASTIdentifier>())

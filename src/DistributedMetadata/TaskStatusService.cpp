@@ -3,13 +3,13 @@
 
 #include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DistributedWALClient/KafkaWALCommon.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/BlockUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/executeSelectQuery.h>
+#include <KafkaLog/KafkaWALCommon.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
 #include <Common/DateLUT.h>
@@ -96,11 +96,11 @@ namespace
         return DB::buildBlock(string_cols, int64_cols);
     }
 
-    DWAL::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)
+    nlog::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)
     {
         std::vector<TaskStatusService::TaskStatusPtr> tasks = {task};
         auto block = buildBlock(tasks);
-        return DWAL::Record(DWAL::OpCode::ADD_DATA_BLOCK, std::move(block), DWAL::NO_SCHEMA);
+        return nlog::Record(nlog::OpCode::ADD_DATA_BLOCK, std::move(block), nlog::NO_SCHEMA);
     }
 
     /// Escape input string to make it legal to `INSERT INTO`
@@ -144,7 +144,8 @@ MetadataService::ConfigSettings TaskStatusService::configSettings() const
 
 Int32 TaskStatusService::append(TaskStatusPtr task)
 {
-    const auto & result = appendRecord(buildRecord(task));
+    nlog::Record record(buildRecord(task));
+    const auto & result = appendRecord(record);
     if (result.err != ErrorCodes::OK)
     {
         LOG_ERROR(log, "Failed to commit task {}", task->id);
@@ -153,7 +154,7 @@ Int32 TaskStatusService::append(TaskStatusPtr task)
     return 0;
 }
 
-void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
+void TaskStatusService::processRecords(const nlog::RecordPtrs & records)
 {
     /// Consume records and build in-memory indexes
     std::vector<TaskStatusPtr> tasks;
@@ -161,7 +162,7 @@ void TaskStatusService::processRecords(const DWAL::RecordPtrs & records)
     for (const auto & record : records)
     {
         assert(!record->hasSchema());
-        assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
+        assert(record->opcode() == nlog::OpCode::ADD_DATA_BLOCK);
 
         auto task = buildTaskStatusFromRecord(record);
         if (task)
@@ -265,16 +266,16 @@ bool TaskStatusService::tableExists()
 
     ///std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     /// Try topic name
-    ///auto result = dwal->describe(DWAL::escapeDWALName("system", "tasks"), dwal_append_ctx);
+    ///auto result = dwal->describe(DWAL::escapeTopicName("system", "tasks"), dwal_append_ctx);
     ///table_exists = (result.err == ErrorCodes::OK);
     ///return table_exists;
     return false;
 }
 
-TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const
+TaskStatusService::TaskStatusPtr TaskStatusService::buildTaskStatusFromRecord(const nlog::RecordPtr & record) const
 {
     std::vector<TaskStatusService::TaskStatusPtr> tasks;
-    buildTaskStatusFromBlock(record->block, tasks);
+    buildTaskStatusFromBlock(record->getBlock(), tasks);
     if (tasks.empty())
         return nullptr;
 
@@ -327,9 +328,8 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInMemory(const Strin
 {
     std::shared_lock guard(indexes_lock);
     if (auto task = indexed_by_id.find(id); task != indexed_by_id.end())
-    {
         return task->second;
-    }
+
     return nullptr;
 }
 
@@ -374,22 +374,16 @@ void TaskStatusService::findByUserInMemory(const String & user, std::vector<Task
     std::shared_lock guard(indexes_lock);
     auto user_map_iter = indexed_by_user.find(user);
     if (user_map_iter == indexed_by_user.end())
-    {
         return;
-    }
 
     for (auto it = user_map_iter->second.begin(); it != user_map_iter->second.end(); ++it)
-    {
         res.push_back(it->second);
-    }
 }
 
 void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskStatusService::TaskStatusPtr> & res)
 {
     if (!tableExists())
-    {
         return;
-    }
 
     assert(!user.empty());
     CurrentThread::detachQueryIfNotDetached();
@@ -408,6 +402,12 @@ void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskS
 
 void TaskStatusService::createTaskTableIfNotExists()
 {
+    if (!dwal)
+    {
+        LOG_INFO(log, "Kafka logstore is not enabled, ignore tasks stream creation");
+        return;
+    }
+
     if (!tableExists())
     {
         for (int i = 0; i < RETRY_TIMES; ++i)
@@ -447,7 +447,7 @@ void TaskStatusService::doCleanupCachedTask()
         return;
 
     /// Remove finished task
-    for(const auto & task_ptr : finished_tasks)
+    for (const auto & task_ptr : finished_tasks)
         cleanupTaskByIdUnlocked(task_ptr->id);
 
     finished_tasks.clear();
@@ -570,7 +570,7 @@ bool TaskStatusService::persistentTaskStatuses(std::vector<TaskStatusPtr> tasks)
             last_modified));
     }
 
-    query += boost::algorithm::join(values,  ", ");
+    query += boost::algorithm::join(values, ", ");
 
     LOG_INFO(log, "Persistent {} tasks. ", tasks.size());
     ReadBufferFromString in(query);

@@ -1,7 +1,7 @@
 #include "StreamingStoreSourceMultiplexer.h"
 #include "StorageStream.h"
 
-#include <DistributedWALClient/KafkaWALPool.h>
+#include <KafkaLog/KafkaWALPool.h>
 #include <Storages/IStorage.h>
 #include <base/ClockUtils.h>
 
@@ -25,8 +25,8 @@ StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
     auto distributed = storage->as<StorageStream>();
     assert(distributed);
 
-    auto consumer = DWAL::KafkaWALPool::instance(global_context).getOrCreateStreaming(distributed->streamingStorageClusterId());
-    reader = std::make_shared<StreamingBlockReader>(storage, shard, -1 /*latest*/, std::vector<uint16_t>{}, std::move(consumer), log);
+    auto consumer = klog::KafkaWALPool::instance(global_context).getOrCreateStreaming(distributed->streamingStorageClusterId());
+    reader = std::make_shared<StreamingBlockReaderKafka>(storage, shard, -1 /*latest*/, std::vector<uint16_t>{}, std::move(consumer), log);
 
     poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
 }
@@ -110,7 +110,7 @@ void StreamingStoreSourceMultiplexer::doShutdown()
     fanOut({});
 }
 
-void StreamingStoreSourceMultiplexer::fanOut(DWAL::RecordPtrs records)
+void StreamingStoreSourceMultiplexer::fanOut(nlog::RecordPtrs records)
 {
     std::vector<StreamingStoreSourceChannelPtr> fanout_channels;
 

@@ -138,6 +138,8 @@ void DatabaseAtomic::dropTable(ContextPtr local_context, const String & table_na
     if (table->storesDataOnDisk())
         tryRemoveSymlink(table_name);
 
+    table->preDrop();
+
     if (table->dropTableImmediately())
         table->drop();
 

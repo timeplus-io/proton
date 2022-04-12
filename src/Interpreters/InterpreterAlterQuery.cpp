@@ -258,7 +258,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         /// Schema: (payload, database, table, timestamp, query_id, user)
         Block block = buildBlock(string_cols, int32_cols, uint64_cols);
         setupColumnIfNotSet(ctx, query);
-        DWAL::OpCode op_code;
+        nlog::OpCode op_code;
         op_code = ctx->getQueryParameters().contains("_payload") ? getAlterTableParamOpCode(ctx->getQueryParameters())
                                                                 : getOpCodeFromQuery(query);
         appendDDLBlock(

@@ -1,4 +1,4 @@
-add_executable (native_log native_log.cpp native_log_cli_parser.cpp)
+add_executable (native_log native_log.cpp native_log_cli_parser.cpp create_record.cpp)
 
 target_link_libraries (native_log PRIVATE nlog loggers)
 

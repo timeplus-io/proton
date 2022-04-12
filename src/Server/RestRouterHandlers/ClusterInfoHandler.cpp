@@ -9,6 +9,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int RESOURCE_NOT_INITED;
+    extern const int UNSUPPORTED;
 }
 
 namespace
@@ -46,11 +47,12 @@ namespace
 
 std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
 {
+    if (!CatalogService::instance(query_context).enabled())
+        throw Exception(ErrorCodes::UNSUPPORTED, "Cluster info REST is not supported in current setup");
+
     auto placement_nodes = CatalogService::instance(query_context).nodes("placement");
     if (placement_nodes.empty())
-    {
         return {jsonErrorResponse("Internal server error", ErrorCodes::RESOURCE_NOT_INITED), HTTPResponse::HTTP_INTERNAL_SERVER_ERROR};
-    }
 
     const auto & identity = query_context->getNodeIdentity();
     for (const auto & node : placement_nodes)

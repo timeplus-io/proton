@@ -1,6 +1,7 @@
 #include "PingHandler.h"
 
 #include <Core/Block.h>
+#include <NativeLog/Server/NativeLog.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
 #include <DistributedMetadata/PlacementService.h>
@@ -38,10 +39,10 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
     else if (status == "ping")
     {
         /// FIXME : introduce more sophisticated health calculation in future.
-        if (CatalogService::instance(query_context).ready() &&
+        if (nlog::NativeLog::instance(query_context).enabled() || (CatalogService::instance(query_context).ready() &&
             PlacementService::instance(query_context).ready() &&
             TaskStatusService::instance(query_context).ready() &&
-            DDLService::instance(query_context).ready())
+            DDLService::instance(query_context).ready()))
             return {"{\"status\":\"UP\"}", HTTPResponse::HTTP_OK};
         else
             return {"{\"status\":\"Initializing\"}", HTTPResponse::HTTP_NOT_FOUND};

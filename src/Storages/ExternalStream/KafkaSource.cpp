@@ -1,10 +1,10 @@
 #include "KafkaSource.h"
 #include "Kafka.h"
 
-#include <DistributedWALClient/KafkaWALPool.h>
 #include <Formats/FormatFactory.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Interpreters/Context.h>
+#include <KafkaLog/KafkaWALPool.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
@@ -247,7 +247,7 @@ void KafkaSource::initConsumer(const Kafka * kafka)
 
     consume_ctx.enforce_offset = true;
 
-    consumer = DWAL::KafkaWALPool::instance(query_context->getGlobalContext()).getOrCreateStreamingExternal(kafka->brokers());
+    consumer = klog::KafkaWALPool::instance(query_context->getGlobalContext()).getOrCreateStreamingExternal(kafka->brokers());
     consumer->initTopicHandle(consume_ctx);
 
     if (query_context->getSettingsRef().record_consume_batch_count != 0)

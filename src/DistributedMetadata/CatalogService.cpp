@@ -1,9 +1,9 @@
 #include "CatalogService.h"
+#include "queryStreams.h"
 
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
-#include <Interpreters/executeSelectQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -48,8 +48,11 @@ namespace
         std::smatch pattern_match;
 
         auto m = std::regex_search(str, pattern_match, pattern);
-        assert(m);
-        (void)m;
+        /// assert(m);
+        /// (void)m;
+        /// FIXME, without ddl/placement service (nativelog case), we will not assign shard number
+        if (!m)
+            return 0;
 
         return std::stoi(pattern_match.str(1));
     }
@@ -81,9 +84,7 @@ MetadataService::ConfigSettings CatalogService::configSettings() const
 void CatalogService::broadcast()
 {
     if (!global_context->isDistributedEnv())
-    {
         return;
-    }
 
     try
     {
@@ -99,24 +100,11 @@ void CatalogService::doBroadcast()
 {
     assert(dwal);
 
-    /// Default max_block_size is 65505 (rows) which shall be bigger enough for a block to contain
-    /// all tables on a single node
-
-    /// We include "system.tables" and / or "system.tasks" tables in the resulting block on purpose .
-    /// It is to avoid an empty block if there are no production tables in the system, which will cause
-    /// consistency problem in CatalogService (like the last deleted table does not get deleted from CatalogService)
-    String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
-                  "primary_key, sampling_key, storage_policy";
-    String query = fmt::format(
-        "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system') OR (database = 'system' AND (name = 'tables' OR "
-        "name = 'tasks')))",
-        cols);
-
     auto query_context = Context::createCopy(global_context);
     query_context->makeQueryContext();
     /// CurrentThread::QueryScope query_scope{query_context};
 
-    executeNonInsertQuery(query, query_context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+    queryStreams(query_context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         append(std::move(block));
         assert(!block);
     });
@@ -124,18 +112,18 @@ void CatalogService::doBroadcast()
 
 void CatalogService::append(Block && block)
 {
-    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(block), DWAL::NO_SCHEMA};
-    record.partition_key = 0;
+    nlog::Record record{nlog::OpCode::ADD_DATA_BLOCK, std::move(block), nlog::NO_SCHEMA};
+    record.setShard(0);
     setupRecordHeaders(record, "1");
 
     const auto & result = appendRecord(record);
     if (result.err != ErrorCodes::OK)
     {
-        LOG_ERROR(log, "Failed to appended {} tables to DWAL", record.block.rows());
+        LOG_ERROR(log, "Failed to appended {} tables to DWAL", record.getBlock().rows());
         return;
     }
 
-    LOG_INFO(log, "Appended {} stream definitions in one block", record.block.rows());
+    LOG_INFO(log, "Appended {} stream definitions in one block", record.getBlock().rows());
 }
 
 std::vector<String> CatalogService::databases() const
@@ -145,9 +133,7 @@ std::vector<String> CatalogService::databases() const
     {
         std::shared_lock guard{catalog_rwlock};
         for (const auto & p : indexed_by_name)
-        {
             dbs.insert(p.first.first);
-        }
     }
 
     return std::vector<String>{dbs.begin(), dbs.end()};
@@ -160,12 +146,9 @@ CatalogService::TablePtrs CatalogService::tables() const
     std::shared_lock guard{catalog_rwlock};
 
     for (const auto & p : indexed_by_name)
-    {
         for (const auto & pp : p.second)
-        {
             results.push_back(pp.second);
-        }
-    }
+
     return results;
 }
 
@@ -179,9 +162,7 @@ CatalogService::TablePtrs CatalogService::findTableByNode(const String & node_id
     if (iter != indexed_by_node.end())
     {
         for (const auto & p : iter->second)
-        {
             results.push_back(p.second);
-        }
     }
     return results;
 }
@@ -196,15 +177,11 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
         std::shared_lock guard{catalog_rwlock};
         auto iter = indexed_by_name.find(database_table);
         if (iter == indexed_by_name.end() || iter->second.empty())
-        {
             return nullptr;
-        }
 
         /// Only support create virtual table storage for `Stream`
         if (iter->second.begin()->second->engine != "Stream")
-        {
             return nullptr;
-        }
 
         uuid = iter->second.begin()->second->uuid;
         assert(uuid != UUIDHelpers::Nil);
@@ -263,9 +240,7 @@ bool CatalogService::setTableStorageByName(const String & database, const String
         std::shared_lock guard{catalog_rwlock};
         auto iter = indexed_by_name.find(database_table);
         if (iter == indexed_by_name.end() || iter->second.empty())
-        {
             return false;
-        }
     }
 
     {
@@ -284,9 +259,8 @@ std::pair<CatalogService::TablePtr, StoragePtr> CatalogService::findTableStorage
     {
         auto storage_iter = storages.find(std::make_pair(iter->second->database, iter->second->name));
         if (storage_iter != storages.end())
-        {
             return {iter->second, storage_iter->second};
-        }
+
         return {iter->second, nullptr};
     }
     return {};
@@ -300,18 +274,16 @@ std::pair<CatalogService::TablePtr, StoragePtr> CatalogService::findTableStorage
         std::shared_lock guard{catalog_rwlock};
         auto iter = indexed_by_name.find(database_table);
         if (iter == indexed_by_name.end() || iter->second.empty())
-        {
             return {};
-        }
+
         table_p = iter->second.begin()->second;
     }
 
     std::shared_lock storage_guard{storage_rwlock};
     auto storage_iter = storages.find(database_table);
     if (storage_iter != storages.end())
-    {
         return {table_p, storage_iter->second};
-    }
+
     return {table_p, nullptr};
 }
 
@@ -331,9 +303,7 @@ CatalogService::TablePtrs CatalogService::findTableByName(const String & databas
     if (iter != indexed_by_name.end())
     {
         for (const auto & p : iter->second)
-        {
             results.push_back(p.second);
-        }
     }
     return results;
 }
@@ -349,9 +319,7 @@ CatalogService::TablePtrs CatalogService::findTableByDB(const String & database)
         if (p.first.first == database)
         {
             for (const auto & pp : p.second)
-            {
                 results.push_back(pp.second);
-            }
         }
     }
 
@@ -380,9 +348,7 @@ std::pair<bool, bool> CatalogService::columnExists(const String & database, cons
     {
         const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
         if (col_decl.name == column)
-        {
             return {true, true};
-        }
     }
 
     return {true, false};
@@ -399,9 +365,7 @@ String CatalogService::getColumnType(const String & database, const String & tab
     {
         const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
         if (col_decl.name == column)
-        {
             return queryToString(col_decl.type);
-        }
     }
 
     throw Exception("Could not found the column : " + column + " in stream : " + table, ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
@@ -413,9 +377,7 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
 
     auto iter = indexed_by_node.find(node->identity);
     if (iter == indexed_by_node.end())
-    {
         return;
-    }
 
     for (const auto & p : iter->second)
     {
@@ -430,9 +392,7 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
         (void)removed;
 
         if (iter_by_name->second.empty())
-        {
             indexed_by_name.erase(iter_by_name);
-        }
 
         {
             std::unique_lock storage_guard{storage_rwlock};
@@ -455,9 +415,7 @@ std::vector<NodePtr> CatalogService::nodes(const String & role) const
         for (const auto & idem_node : table_nodes)
         {
             if (idem_node.second->roles.find(role) != String::npos)
-            {
                 result.push_back(idem_node.second);
-            }
         }
     }
     return result;
@@ -469,9 +427,8 @@ NodePtr CatalogService::nodeByIdentity(const String & identity) const
 
     auto iter = table_nodes.find(identity);
     if (iter != table_nodes.end())
-    {
         return iter->second;
-    }
+
     return nullptr;
 }
 
@@ -482,9 +439,7 @@ NodePtr CatalogService::nodeByChannel(const String & channel) const
     for (const auto & node : table_nodes)
     {
         if (node.second->channel == channel)
-        {
             return node.second;
-        }
     }
 
     return nullptr;
@@ -499,9 +454,7 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
 
         auto iter = table_clusters.find(key);
         if (iter != table_clusters.end())
-        {
             return iter->second;
-        }
     }
 
     TablePtrs remote_tables{findTableByName(database, table)};
@@ -587,51 +540,7 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
 
     for (size_t row = 0; row < block.rows(); ++row)
     {
-        TablePtr table = std::make_shared<Table>(node->identity, node->host);
-        std::unordered_map<String, void *> kvp = {
-            {"database", &table->database},
-            {"name", &table->name},
-            {"engine", &table->engine},
-            {"uuid", &table->uuid},
-            {"dependencies_table", &table->dependencies_table},
-            {"create_table_query", &table->create_table_query},
-            {"engine_full", &table->engine_full},
-            {"partition_key", &table->partition_key},
-            {"sorting_key", &table->sorting_key},
-            {"primary_key", &table->primary_key},
-            {"sampling_key", &table->sampling_key},
-            {"storage_policy", &table->storage_policy},
-        };
-
-        for (const auto & col : block)
-        {
-            auto it = kvp.find(col.name);
-            if (it != kvp.end())
-            {
-                if (col.name == "dependencies_table")
-                {
-                    /// String array
-                    WriteBufferFromOwnString buffer;
-                    col.type->getDefaultSerialization()->serializeText(*col.column, row, buffer, FormatSettings{});
-                    *static_cast<String *>(it->second) = buffer.str();
-                }
-                else if (col.name == "uuid")
-                {
-                    *static_cast<UUID *>(it->second) = static_cast<const ColumnUInt128 *>(col.column.get())->getElement(row);
-                }
-                else
-                {
-                    /// String
-                    *static_cast<String *>(it->second) = col.column->getDataAt(row).toString();
-                }
-            }
-        }
-
-        if (table->engine == "Stream")
-        {
-            table->shard = searchIntValueByRegex(PARSE_SHARD_REGEX, table->engine_full);
-        }
-
+        TablePtr table = std::make_shared<Table>(node->identity, node->host, block, row);
         DatabaseTableShard key = std::make_pair(table->database, std::make_pair(table->name, table->shard));
         snapshot.emplace(std::move(key), std::move(table));
 
@@ -647,9 +556,7 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
 void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode snapshot)
 {
     if (snapshot.empty())
-    {
         return deleteCatalogForNode(node);
-    }
 
     std::unique_lock guard{catalog_rwlock};
 
@@ -660,9 +567,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
         for (const auto & p : snapshot)
         {
             if (p.second->engine == "View" && p.second->uuid == UUIDHelpers::Nil)
-            {
                 continue;
-            }
 
 
             indexed_by_name[std::make_pair(p.second->database, p.second->name)].emplace(
@@ -704,9 +609,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             (void)removed;
 
             if (iter_by_name->second.empty())
-            {
                 indexed_by_name.erase(iter_by_name);
-            }
 
             {
                 std::unique_lock storage_guard{storage_rwlock};
@@ -735,16 +638,12 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             /// An existing table
             auto node_shard_iter = iter_by_name->second.find(node_shard);
             if (node_shard_iter != iter_by_name->second.end() && node_shard_iter->second->uuid != p.second->uuid)
-            {
                 /// If uuid changed (table with same name got deleted and recreatd), delete it from indexed_by_id
                 uuid = node_shard_iter->second->uuid;
-            }
 
             /// if table definition changed , delete the storage
             if (node_shard_iter != iter_by_name->second.end() && *node_shard_iter->second != *p.second)
-            {
                 deleteTableStorageByName(p.second->database, p.second->name);
-            }
 
             iter_by_name->second.insert_or_assign(std::move(node_shard), p.second);
         }
@@ -766,12 +665,12 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
     indexed_by_node[node->identity].swap(snapshot);
 }
 
-void CatalogService::processRecords(const DWAL::RecordPtrs & records)
+void CatalogService::processRecords(const nlog::RecordPtrs & records)
 {
     for (const auto & record : records)
     {
         assert(!record->hasSchema());
-        assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
+        assert(record->opcode() == nlog::OpCode::ADD_DATA_BLOCK);
 
         if (!record->hasIdempotentKey())
         {
@@ -779,21 +678,26 @@ void CatalogService::processRecords(const DWAL::RecordPtrs & records)
             continue;
         }
 
-        auto iter = record->headers.find("_version");
-        if (iter == record->headers.end() || iter->second != "1")
+        if (!record->hasHeader("_version"))
         {
             LOG_ERROR(log, "Invalid version or missing version");
             continue;
         }
 
-        auto node = std::make_shared<Node>(record->idempotentKey(), record->headers);
+        if (record->getHeader("_version") != "1")
+        {
+            LOG_ERROR(log, "Invalid version={} in catalog record", record->getHeader("_version"));
+            continue;
+        }
+
+        auto node = std::make_shared<Node>(record->idempotentKey(), record->getHeaders());
         if (!node->isValid())
         {
             LOG_WARNING(log, "Invalid catalog block, invalid headers={}", node->string());
             continue;
         }
 
-        mergeCatalog(node, buildCatalog(node, record->block));
+        mergeCatalog(node, buildCatalog(node, record->getBlock()));
     }
 }
 
@@ -807,6 +711,53 @@ std::pair<Int32, Int32> CatalogService::shardAndReplicationFactor(const String &
     return {
         searchIntValueByRegex(PARSE_REPLICATION_REGEX, tables[0]->engine_full),
         searchIntValueByRegex(PARSE_SHARDS_REGEX, tables[0]->engine_full)};
+}
+
+
+CatalogService::Table::Table(const String & node_identity_, const String & host_, const Block & block, size_t row)
+    : node_identity(node_identity_), host(host_)
+{
+    std::unordered_map<String, void *> kvp = {
+        {"database", &database},
+        {"name", &name},
+        {"engine", &engine},
+        {"uuid", &uuid},
+        {"dependencies_table", &dependencies_table},
+        {"create_table_query", &create_table_query},
+        {"engine_full", &engine_full},
+        {"partition_key", &partition_key},
+        {"sorting_key", &sorting_key},
+        {"primary_key", &primary_key},
+        {"sampling_key", &sampling_key},
+        {"storage_policy", &storage_policy},
+    };
+
+    for (const auto & col : block)
+    {
+        auto it = kvp.find(col.name);
+        if (it != kvp.end())
+        {
+            if (col.name == "dependencies_table")
+            {
+                /// String array
+                WriteBufferFromOwnString buffer;
+                col.type->getDefaultSerialization()->serializeText(*col.column, row, buffer, FormatSettings{});
+                *static_cast<String *>(it->second) = buffer.str();
+            }
+            else if (col.name == "uuid")
+            {
+                *static_cast<UUID *>(it->second) = static_cast<const ColumnUInt128 *>(col.column.get())->getElement(row);
+            }
+            else
+            {
+                /// String
+                *static_cast<String *>(it->second) = col.column->getDataAt(row).toString();
+            }
+        }
+    }
+
+    if (engine == "Stream")
+        shard = searchIntValueByRegex(PARSE_SHARD_REGEX, engine_full);
 }
 
 }

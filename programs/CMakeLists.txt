@@ -20,7 +20,7 @@ option (ENABLE_PROTON_BENCHMARK "Queries benchmarking mode" ${ENABLE_PROTON_ALL}
 option (ENABLE_PROTON_FORMAT "Queries pretty-printer and formatter with syntax highlighting"
     ${ENABLE_PROTON_ALL})
 
-option (ENABLE_PROTON_DWAL_BENCHMARK "Distributed write ahead log benchmark" ${ENABLE_PROTON_ALL})
+option (ENABLE_PROTON_KLOG_BENCHMARK "Kafka write ahead log benchmark" ${ENABLE_PROTON_ALL})
 
 option (ENABLE_PROTON_KEEPER "proton alternative to ZooKeeper" ${ENABLE_PROTON_ALL})
 
@@ -100,10 +100,10 @@ else()
 endif()
 # proton: ends.
 
-if (ENABLE_PROTON_DWAL_BENCHMARK)
-    message(STATUS "proton dwal-benchmark: ON")
+if (ENABLE_PROTON_KLOG_BENCHMARK)
+    message(STATUS "proton klog-benchmark: ON")
 else()
-    message(STATUS "proton dwal-benchmark: OFF")
+    message(STATUS "proton klog-benchmark: OFF")
 endif()
 
 if(NOT (USE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
@@ -168,7 +168,7 @@ add_subdirectory (benchmark)
 add_subdirectory (format)
 add_subdirectory (install)
 add_subdirectory (bash-completion)
-add_subdirectory (distributed-wal)
+add_subdirectory (klog)
 
 if (ENABLE_PROTON_KEEPER)
     add_subdirectory (keeper)
@@ -191,7 +191,7 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_KEEPER_SOURCES}
     ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES}
     ${CLICKHOUSE_STATIC_FILES_DISK_UPLOADER_SOURCES}
-    ${CLICKHOUSE_DWAL_BENCHMARK_SOURCES})
+    ${CLICKHOUSE_KLOG_BENCHMARK_SOURCES})
 
     target_link_libraries(clickhouse-lib
       ${CLICKHOUSE_SERVER_LINK}
@@ -227,7 +227,7 @@ if (PROTON_SPLIT_BINARY)
         proton-compressor
         proton-format
         proton-git-import
-        proton-dwal-benchmark
+        proton-klog-benchmark
     )
 
     if (ENABLE_PROTON_KEEPER)
@@ -283,8 +283,8 @@ else ()
     if (ENABLE_PROTON_INSTALL)
         clickhouse_target_link_split_lib(proton install)
     endif ()
-    if (ENABLE_PROTON_DWAL_BENCHMARK)
-        clickhouse_target_link_split_lib(proton dwal-benchmark)
+    if (ENABLE_PROTON_KLOG_BENCHMARK)
+        clickhouse_target_link_split_lib(proton klog-benchmark)
     endif ()
 
     set (PROTON_BUNDLE)
@@ -325,10 +325,10 @@ else ()
         list(APPEND PROTON_BUNDLE proton-metastore)
     endif ()
     # proton: ends.
-    if (ENABLE_PROTON_DWAL_BENCHMARK)
-        add_custom_target (proton-dwal-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-dwal-benchmark DEPENDS proton)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/proton-dwal-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-        list(APPEND PROTON_BUNDLE proton-dwal-benchmark)
+    if (ENABLE_PROTON_KLOG_BENCHMARK)
+        add_custom_target (proton-klog-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-klog-benchmark DEPENDS proton)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/proton-klog-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+        list(APPEND PROTON_BUNDLE proton-klog-benchmark)
     endif ()
 
     install (TARGETS proton RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)

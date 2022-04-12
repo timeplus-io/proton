@@ -10,7 +10,7 @@ namespace ErrorCodes
 {
     extern const int CANNOT_READ_FILE;
     extern const int INVALID_STATE;
-    extern const int INVALID_OFFSET;
+    extern const int INVALID_SEQUENCE;
 }
 }
 
@@ -20,11 +20,11 @@ std::pair<int64_t, int64_t> LogLoader::load(
     const fs::path & log_dir,
     const LogConfig & log_config,
     bool had_clean_shutdown,
-    int64_t log_start_offset,
+    int64_t log_start_sn,
     int64_t recovery_point,
     Poco::Logger * logger,
     LogSegmentsPtr segments,
-    LogOffsetMetadata & log_offset_meta_)
+    LogSequenceMetadata & log_sn_meta_)
 {
     /// First pass: go through the files in the log directory and remove any temporary files
     /// and find any interrupted swap operations
@@ -33,11 +33,11 @@ std::pair<int64_t, int64_t> LogLoader::load(
     /// The remaining valid swap files must come from compaction or segment split operation. We can simply
     /// rename them to regular segment files. But, before renaming, we should figure out which segments
     /// are compacted / split and delete these segment files: this is done by calculating min/maxSwapFileOffset
-    auto [min_swap_file_offset, max_swap_file_offset] = minMaxSwapFileOffsets(swap_files, log_config, logger);
+    auto [min_swap_file_sn, max_swap_file_sn] = minMaxSwapFileOffsets(swap_files, log_config, logger);
 
     /// Second pass: delete segments that are between minSwapFileOffset and maxSwapFileOffset. As discussed above,
     /// these segments are compacted or split out but haven't been renamed to .delete before shutting down the broker
-    removeSegmentFilesBetween(log_dir, min_swap_file_offset, max_swap_file_offset, logger);
+    removeSegmentFilesBetween(log_dir, min_swap_file_sn, max_swap_file_sn, logger);
 
     /// Third pass: rename all swap file
     for (const auto & filepath : swap_files)
@@ -50,41 +50,41 @@ std::pair<int64_t, int64_t> LogLoader::load(
     /// Fourth pass: load all the log and index files.
     loadSegmentFiles(log_dir, log_config, segments, logger);
 
-    /// Calculate new recovery point ond new next offset
-    int64_t new_recovery_point = 0, new_next_offset = 0;
+    /// Calculate new recovery point ond new next sn
+    int64_t new_recovery_point = 0, new_next_sn = 0;
     if (!log_dir.filename().string().ends_with(Log::DELETE_DIR_SUFFIX()))
     {
-        std::tie(new_recovery_point, new_next_offset) = recoverLog(
+        std::tie(new_recovery_point, new_next_sn) = recoverLog(
             log_dir,
             log_config,
             segments,
             had_clean_shutdown,
-            log_start_offset,
+            log_start_sn,
             recovery_point,
             logger);
     }
     else
     {
         if (segments->empty())
-            segments->add(std::make_shared<LogSegment>(log_dir, /*base_offset*/ 0, log_config, logger));
+            segments->add(std::make_shared<LogSegment>(log_dir, /*base_sn*/ 0, log_config, logger));
     }
 
-    auto new_log_start_offset = std::max(log_start_offset, segments->firstSegment()->baseOffset());
+    auto new_log_start_sn = std::max(log_start_sn, segments->firstSegment()->baseSequence());
 
-    /// Calculate returned log offset meta
+    /// Calculate returned log sn meta
     auto active_segment = segments->lastSegment();
-    log_offset_meta_.message_offset = new_next_offset;
-    log_offset_meta_.segment_base_offset = active_segment->baseOffset();
-    log_offset_meta_.file_position = active_segment->size();
+    log_sn_meta_.record_sn = new_next_sn;
+    log_sn_meta_.segment_base_sn = active_segment->baseSequence();
+    log_sn_meta_.file_position = active_segment->size();
 
-    return {new_log_start_offset, new_recovery_point};
+    return {new_log_start_sn, new_recovery_point};
 }
 
 std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::path & log_dir)
 {
     std::vector<fs::path> swap_files;
     std::vector<fs::path> cleaned_files;
-    int64_t min_cleaned_file_offset = std::numeric_limits<int64_t>::max();
+    int64_t min_cleaned_file_sn = std::numeric_limits<int64_t>::max();
 
     for (const auto & dir_entry : fs::directory_iterator{log_dir})
     {
@@ -103,7 +103,7 @@ std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::pa
             }
             else if (filename.ends_with(Log::CLEANED_FILE_SUFFIX()))
             {
-                min_cleaned_file_offset = std::min(Log::offsetFromFileName(filename), min_cleaned_file_offset);
+                min_cleaned_file_sn = std::min(Log::snFromFileName(filename), min_cleaned_file_sn);
                 cleaned_files.push_back(dir_entry.path());
             }
             else if (filename.ends_with(Log::SWAP_FILE_SUFFIX()))
@@ -113,12 +113,12 @@ std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::pa
         }
     }
 
-    /// Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset.
+    /// Delete all .swap files whose base sn is greater than the minimum .cleaned segment sn.
     /// Such .swap files could be part of an incomplete split operation that could not complete.
     std::vector<fs::path> valid_swap_files;
     for (auto & file : swap_files)
     {
-        if (Log::offsetFromFileName(file.filename().string()) >= min_cleaned_file_offset)
+        if (Log::snFromFileName(file.filename().string()) >= min_cleaned_file_sn)
         {
             /// Delete invalid swap file
             bool res = fs::remove(file);
@@ -145,30 +145,30 @@ std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::pa
 std::pair<int64_t, int64_t>
 LogLoader::minMaxSwapFileOffsets(const std::vector<fs::path> & swap_files, const LogConfig & log_config, Poco::Logger * logger)
 {
-    int64_t min_swap_file_offset = std::numeric_limits<int64_t>::max();
-    int64_t max_swap_file_offset = std::numeric_limits<int64_t>::min();
+    int64_t min_swap_file_sn = std::numeric_limits<int64_t>::max();
+    int64_t max_swap_file_sn = std::numeric_limits<int64_t>::min();
     for (const auto & file : swap_files)
     {
         auto filename = file.filename().replace_extension().string();
         /// replaceSuffix(filename, SWAP_FILE_SUFFIX, "");
         if (Log::isLogFile(filename))
         {
-            auto base_offset = Log::offsetFromFileName(filename);
+            auto base_sn = Log::snFromFileName(filename);
             auto segment
-                = std::make_shared<LogSegment>(file.parent_path(), base_offset, log_config, logger, false, false, Log::SWAP_FILE_SUFFIX());
+                = std::make_shared<LogSegment>(file.parent_path(), base_sn, log_config, logger, false, false, Log::SWAP_FILE_SUFFIX());
             LOG_INFO(
                 logger,
                 "Found log file {} from interrupted swap operation, which is recoverable from {} files by renaming",
                 file.c_str(),
                 Log::SWAP_FILE_SUFFIX());
-            min_swap_file_offset = std::min(segment->baseOffset(), min_swap_file_offset);
-            max_swap_file_offset = std::max(segment->readNextOffset(), max_swap_file_offset);
+            min_swap_file_sn = std::min(segment->baseSequence(), min_swap_file_sn);
+            max_swap_file_sn = std::max(segment->readNextSequence(), max_swap_file_sn);
         }
     }
-    return {min_swap_file_offset, max_swap_file_offset};
+    return {min_swap_file_sn, max_swap_file_sn};
 }
 
-void LogLoader::removeSegmentFilesBetween(const fs::path & log_dir, int64_t min_offset, int64_t max_offset, Poco::Logger * logger)
+void LogLoader::removeSegmentFilesBetween(const fs::path & log_dir, int64_t min_sn, int64_t max_sn, Poco::Logger * logger)
 {
     for (const auto & dir_entry : fs::directory_iterator{log_dir})
     {
@@ -179,8 +179,8 @@ void LogLoader::removeSegmentFilesBetween(const fs::path & log_dir, int64_t min_
             if (!filename.ends_with(Log::SWAP_FILE_SUFFIX()))
             {
                 /// FIXME, more robust error handling, like a filename which we don't recognizes
-                auto offset = Log::offsetFromFileName(filename);
-                if (offset >= min_offset && offset < max_offset)
+                auto sn = Log::snFromFileName(filename);
+                if (sn >= min_sn & sn < max_sn)
                 {
                     LOG_INFO(logger, "Deleting segment files {} that is compacted but has not been deleted yet", filepath.c_str());
                     auto res = fs::remove(filepath);
@@ -208,8 +208,8 @@ void LogLoader::loadSegmentFiles(const fs::path & log_dir, const LogConfig & log
         if (Log::isIndexFile(filename))
         {
             /// If it is an index file, make sure it has a corresponding .log file
-            auto offset = Log::offsetFromFileName(filename);
-            auto log_file = Log::logFile(log_dir, offset);
+            auto sn = Log::snFromFileName(filename);
+            auto log_file = Log::logFile(log_dir, sn);
             if (!fs::exists(log_file))
             {
                 LOG_WARNING(logger, "Found an orphaned index file {} with no corresponding log file", log_file.c_str());
@@ -221,8 +221,8 @@ void LogLoader::loadSegmentFiles(const fs::path & log_dir, const LogConfig & log
         else if (Log::isLogFile(filename))
         {
             /// Load the log segment
-            auto base_offset = Log::offsetFromFileName(filename);
-            auto segment = std::make_shared<LogSegment>(log_dir, base_offset, log_config, logger, /*file_already_exists*/ true);
+            auto base_sn = Log::snFromFileName(filename);
+            auto segment = std::make_shared<LogSegment>(log_dir, base_sn, log_config, logger, /*file_already_exists*/ true);
             assert(segment);
             auto success = segment->sanityCheck();
             if (!success)
@@ -247,11 +247,11 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
     const LogConfig & log_config,
     LogSegmentsPtr segments,
     bool had_clean_shutdown,
-    int64_t log_start_offset,
+    int64_t log_start_sn,
     int64_t recovery_point,
     Poco::Logger * logger)
 {
-    /// Return the log end offset if valid
+    /// Return the log end sn if valid
     if (!had_clean_shutdown)
     {
         auto unflushed = segments->values(recovery_point, std::numeric_limits<int64_t>::max());
@@ -268,9 +268,9 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
             }
             catch (const DB::Exception & e)
             {
-                if (e.code() == DB::ErrorCodes::INVALID_OFFSET)
+                if (e.code() == DB::ErrorCodes::INVALID_SEQUENCE)
                     /// LOG
-                    truncated_bytes = (*iter)->trim((*iter)->baseOffset());
+                    truncated_bytes = (*iter)->trim((*iter)->baseSequence());
             }
 
             if (truncated_bytes > 0)
@@ -284,13 +284,13 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
     }
 
     /// Delete segments if its log start is greater than log end
-    std::optional<int64_t> log_end_offset_op;
+    std::optional<int64_t> log_end_sn_op;
     if (!segments->empty())
     {
-        auto log_end_offset = segments->lastSegment()->readNextOffset();
-        if (log_end_offset >= log_start_offset)
+        auto log_end_sn = segments->lastSegment()->readNextSequence();
+        if (log_end_sn >= log_start_sn)
         {
-            log_end_offset_op = log_end_offset;
+            log_end_sn_op = log_end_sn;
         }
         else
         {
@@ -300,29 +300,29 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
     }
 
     if (segments->empty())
-        /// No existing segments, create a new mutable segment beginning at log_start_offset
-        segments->add(std::make_shared<LogSegment>(log_dir, log_start_offset, log_config, logger, false, log_config.preallocate));
+        /// No existing segments, create a new mutable segment beginning at log_start_sn
+        segments->add(std::make_shared<LogSegment>(log_dir, log_start_sn, log_config, logger, false, log_config.preallocate));
 
     /// Update the recovery point if there was a clean shutdown and did not perform any changes to
     /// the segment. Otherwise, we just ensure that the recovery point is not ahead of the log end
-    /// offset. To ensure correctness and to make it easier to reason about, it's best to only advance
+    /// sn. To ensure correctness and to make it easier to reason about, it's best to only advance
     /// the recovery point when the log is flushed. If we advanced the recovery point here, we could
     /// skip recovery for unflushed segments if the broker crashed after we checkpoint the recovery point
     /// and before we flush the segment
 
-    if (had_clean_shutdown && log_end_offset_op.has_value())
+    if (had_clean_shutdown && log_end_sn_op.has_value())
     {
-        return {log_end_offset_op.value(), log_end_offset_op.value()};
+        return {log_end_sn_op.value(), log_end_sn_op.value()};
     }
     else
     {
-        int64_t log_end_offset = 0;
-        if (log_end_offset_op.has_value())
-            log_end_offset = log_end_offset_op.value();
+        int64_t log_end_sn = 0;
+        if (log_end_sn_op.has_value())
+            log_end_sn = log_end_sn_op.value();
         else
-            log_end_offset = segments->lastSegment()->readNextOffset();
+            log_end_sn = segments->lastSegment()->readNextSequence();
 
-        return {std::min(recovery_point, log_end_offset), log_end_offset};
+        return {std::min(recovery_point, log_end_sn), log_end_sn};
     }
 }
 

@@ -186,49 +186,49 @@ TEST(DDLHelper, getJSONFromAlterQuery)
     EXPECT_EQ(queryToJSON(R"###(ALTER STREAM tests DROP COLUMN id1)###"), ignoreEmptyChars(R"###({"name": "id1"})###"));
 }
 
-DWAL::OpCode getOpCodeFromSQL(const String & query)
+nlog::OpCode getOpCodeFromSQL(const String & query)
 {
     auto ast = queryToAST(query);
     if (const auto * alter = ast->as<ASTAlterQuery>())
         return getOpCodeFromQuery(*alter);
 
-    return DWAL::OpCode::MAX_OPS_CODE;
+    return nlog::OpCode::MAX_OPS_CODE;
 }
 
 TEST(DDLHelper, getOpCodeFromQuery)
 {
     /// modify ttl
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), DWAL::OpCode::ALTER_TABLE);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), nlog::OpCode::ALTER_TABLE);
 
     /// add column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id uint32 DEFAULT 20)###"), DWAL::OpCode::CREATE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id uint32 DEFAULT 20)###"), nlog::OpCode::CREATE_COLUMN);
 
     /// modify column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64)###"), DWAL::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64)###"), nlog::OpCode::ALTER_COLUMN);
 
     /// rename column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), DWAL::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), nlog::OpCode::ALTER_COLUMN);
 
     /// drop column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests DROP COLUMN id1)###"), DWAL::OpCode::DELETE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests DROP COLUMN id1)###"), nlog::OpCode::DELETE_COLUMN);
 }
 
 TEST(DDLHelper, getAlterTableParamOpCode)
 {
     /// modify ttl
-    EXPECT_EQ(getAlterTableParamOpCode({{"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), DWAL::OpCode::ALTER_TABLE);
+    EXPECT_EQ(getAlterTableParamOpCode({{"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::ALTER_TABLE);
 
     /// add column
     EXPECT_EQ(
-        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), DWAL::OpCode::CREATE_COLUMN);
+        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::CREATE_COLUMN);
 
     /// modify column
     EXPECT_EQ(
-        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_PATCH}}), DWAL::OpCode::ALTER_COLUMN);
+        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_PATCH}}), nlog::OpCode::ALTER_COLUMN);
 
     /// drop column
     EXPECT_EQ(
-        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), DWAL::OpCode::DELETE_COLUMN);
+        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), nlog::OpCode::DELETE_COLUMN);
 }
 
 TEST(DDLHelper, prepareCreateQueryForStream)

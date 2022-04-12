@@ -2,6 +2,10 @@
 #include "LogLoader.h"
 #include "Loglet.h"
 
+#include <NativeLog/Cache/TailCache.h>
+#include <NativeLog/Common/LogSequenceMetadata.h>
+#include <NativeLog/Common/StreamShard.h>
+#include <NativeLog/Record/Record.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -14,80 +18,89 @@ namespace ErrorCodes
     extern const int TOO_LARGE_RECORD;
     extern const int TOO_LARGE_RECORD_BATCH;
     extern const int DATA_CORRUPTION;
-    extern const int OFFSET_OUT_OF_RANGE;
+    extern const int SEQUENCE_OUT_OF_RANGE;
 }
 }
 
 namespace nlog
 {
 LogPtr Log::create(
+    const StreamShard & stream_shard,
     const fs::path & log_dir,
     LogConfigPtr log_config,
-    const TopicID & topic_id,
     bool had_clean_shutdown,
-    int64_t log_start_offset,
+    int64_t log_start_sn,
     int64_t recovery_point,
     std::shared_ptr<DB::NLOG::BackgroundSchedulePool> scheduler,
-    std::shared_ptr<ThreadPool> adhoc_scheduler)
+    std::shared_ptr<ThreadPool> adhoc_scheduler,
+    TailCachePtr cache_)
 {
     /// Create the log directory if it doesn't exist
     fs::create_directories(log_dir);
 
     auto logger = &Poco::Logger::get("Log");
 
-    auto topic_shard = Log::topicShardFrom(log_dir);
-    auto segments = std::make_shared<LogSegments>(topic_shard);
+    auto segments = std::make_shared<LogSegments>(stream_shard);
 
-    LogOffsetMetadata next_offset_meta;
-    auto [new_start_offset, new_recovery_point]
-        = LogLoader::load(log_dir, *log_config, had_clean_shutdown, log_start_offset, recovery_point, logger, segments, next_offset_meta);
+    LogSequenceMetadata next_sn_meta;
+    auto [new_start_sn, new_recovery_point]
+        = LogLoader::load(log_dir, *log_config, had_clean_shutdown, log_start_sn, recovery_point, logger, segments, next_sn_meta);
 
-    auto loglet
-        = std::make_shared<Loglet>(log_dir, log_config, new_recovery_point, next_offset_meta, segments, scheduler, adhoc_scheduler, logger);
+    auto loglet = std::make_shared<Loglet>(
+        stream_shard, log_dir, log_config, new_recovery_point, next_sn_meta, segments, scheduler, adhoc_scheduler, logger);
 
-    return std::make_shared<Log>(new_start_offset, loglet, topic_id, logger);
+    return std::make_shared<Log>(new_start_sn, std::move(loglet), std::move(cache_), logger);
 }
 
-Log::Log(int64_t log_start_offset_, LogletPtr loglet_, const TopicID & topic_id_, Poco::Logger * logger_)
-    : log_start_offset(log_start_offset_)
-    , log_start_offset_checkpoint(log_start_offset_)
+Log::Log(int64_t log_start_sn_, LogletPtr loglet_, TailCachePtr cache_, Poco::Logger * logger_)
+    : log_start_sn(log_start_sn_)
+    , log_start_sn_checkpoint(log_start_sn_)
     , loglet(std::move(loglet_))
-    , topic_id(std::move(topic_id_))
-    , high_watermark_metadata(log_start_offset_)
+    , cache(std::move(cache_))
+    , high_watermark_metadata(log_start_sn_)
     , logger(logger_)
 {
     if (!logger)
         logger = &Poco::Logger::get("Log");
 
-    updateLogStartOffset(log_start_offset);
-    maybeIncrementFirstUnstableOffset();
+    updateLogStartSequence(log_start_sn);
+    maybeIncrementFirstUnstableSequence();
 }
 
-LogAppendInfo Log::append(MemoryRecords & records)
+LogAppendDescription Log::append(RecordPtr & record)
 {
-    auto append_info = analyzeAndValidateRecords(records);
+    auto append_info = analyzeAndValidateRecord(*record);
+
+    auto byte_vec{record->serialize()};
+    checkSize(byte_vec.size());
+    append_info.valid_bytes = byte_vec.size();
 
     /// Hold the lock and insert them to the log
     {
-        std::lock_guard guard{lmutex};
-        validateAndAssignOffsets(records, append_info);
+        std::unique_lock lock{lmutex};
+        assignSequence(record, byte_vec, append_info);
 
-        auto segment = maybeRoll(records.sizeInBytes(), append_info);
+        auto segment = maybeRoll(byte_vec.size(), append_info);
 
-        LogOffsetMetadata metadata{append_info.first_offset.message_offset, segment->baseOffset(), segment->size()};
+        LogSequenceMetadata metadata{append_info.seq_metadata.record_sn, segment->baseSequence(), segment->size()};
 
-        /// Append the records, and increment the loglet end offset immediately after the append
-        loglet->append(append_info.last_offset, append_info.max_timestamp, append_info.offset_of_max_timestamp, records);
+        /// Append the records, and increment the loglet end sn immediately after the append
+        loglet->append(byte_vec, append_info);
 
-        /// Update the high watermark in case it has gotten ahead of the log end offset following a truncation
-        /// or if a new segment has been rolled and the offset metadata needs to be updated
-        if (highWatermark() >= logEndOffset())
-            updateHighWatermarkMetadataWithoutLock(loglet->logEndOffsetMetadata());
+        /// Update the high watermark in case it has gotten ahead of the log end sn following a truncation
+        /// or if a new segment has been rolled and the sn metadata needs to be updated
+        if (highWatermark() >= logEndSequence())
+            updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
 
-        maybeIncrementFirstUnstableOffsetWithoutLock();
+        maybeIncrementFirstUnstableSequenceWithoutLock();
+
+        /// We will need hold the lmutex lock to update the cache since cache is a deque which requires sequence order
+        cache->put(loglet->streamShard(), record);
     }
 
-    if (loglet->unflushedRecords() >= config().flush_interval)
+    log_end_sn_cv.notify_all();
+
+    if (loglet->unflushedRecords() >= config().flush_interval_records)
         flush();
 
     return append_info;
@@ -100,221 +113,179 @@ LogAppendInfo Log::append(MemoryRecords & records)
 ///   create time if the first message does not have a timestamp
 /// - The index is full
 /// @return The currently active segment after (perhaps) rolling to a new segment
-LogSegmentPtr Log::maybeRoll(uint32_t records_size, LogAppendInfo & append_info)
+LogSegmentPtr Log::maybeRoll(uint32_t records_size, const LogAppendDescription & append_info)
 {
-    /// FIXME
+    const auto & conf = config();
     auto segment = loglet->activeSegment();
-    if (segment->shouldRoll(config(), records_size))
+    if (segment->shouldRoll(conf, records_size))
     {
-        LOG_INFO(logger, "Rolling new log segment segment_size={} segment_size_threshold={}", segment->size(), config().segment_size);
+        LOG_INFO(logger, "Rolling new log segment segment_size={} segment_size_threshold={}", segment->size(), conf.segment_size);
 
-        return rollWithoutLock(append_info.first_offset.message_offset);
+        return rollWithoutLock(append_info.seq_metadata.record_sn);
     }
     return segment;
 }
 
-/// Roll the local log over to a new active segment starting with the expected_next_offset when provided
-/// or loglet.logEndOffset otherwise.
+/// Roll the local log over to a new active segment starting with the expected_next_sn when provided
+/// or loglet.logEndSequence otherwise.
 /// @return The newly rolled segment
-LogSegmentPtr Log::rollWithoutLock(std::optional<int64_t> expected_next_offset)
+LogSegmentPtr Log::rollWithoutLock(std::optional<int64_t> expected_next_sn)
 {
-    auto new_segment = loglet->roll(expected_next_offset);
+    auto new_segment = loglet->roll(expected_next_sn);
 
-    if (highWatermark() >= logEndOffset())
-        updateHighWatermarkMetadataWithoutLock(loglet->logEndOffsetMetadata());
+    if (highWatermark() >= logEndSequence())
+        updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
 
-    auto base_offset = new_segment->baseOffset();
+    auto base_sn = new_segment->baseSequence();
 
-    /// Schedule an async flush of the old segment
-    adhocScheduler()->scheduleOrThrow([base_offset, this] { flush(base_offset); });
+    /// Schedule an async flush of the old segment.
+    /// Flush can be slow and adhoc pool may be used up, we will need wait
+    bool scheduled = false;
+    while (!scheduled)
+    {
+        /// FIXME, for same log-segment, we shall avoid duplicate sync. If adhocScheduler is running out of thread slot
+        /// we shall register a timer to schedule the flush later in future.
+        scheduled = adhocScheduler()->trySchedule([base_sn, this] { flush(base_sn); }, 10, 50000);
+        if (!scheduled)
+            LOG_WARNING(logger, "adhoc pool is full, waiting for free thread slots");
+    }
+
     return new_segment;
 }
 
-/// Update the offsets for this record batch and do further validation on records including
-/// - Record for compacted topics must have keys
-/// - Inner record must have monotonically increasing offsets starting from 0
-/// - Validate / override timestamps of the records
-/// FIXME, codec, move this to sequencer ?
-void Log::validateAndAssignOffsets(MemoryRecords & batch, LogAppendInfo & append_info)
+/// Update the sns for this record batch
+void Log::assignSequence(RecordPtr & record, ByteVector & byte_vec, LogAppendDescription & append_info)
 {
-    auto initial_offset = logEndOffset();
-    append_info.first_offset = initial_offset;
+    auto initial_sn = logEndSequence();
+    append_info.seq_metadata = initial_sn;
+    record->setSN(initial_sn);
 
-    auto & records = batch.mutableRecords();
-    auto compact = config().compact();
-
-    int64_t max_batch_timestamp = -1;
-    int32_t offset_of_max_batch_timestamp = -1;
-
-    for (int32_t i = 0, n = records.size(); i < n; ++i)
-    {
-        const auto & record = *records.Get(i);
-        validateRecord(record, i, compact, append_info);
-        auto timestamp = record.timestamp();
-        if (timestamp > max_batch_timestamp)
-        {
-            max_batch_timestamp = timestamp;
-            offset_of_max_batch_timestamp = initial_offset;
-        }
-        ++initial_offset;
-    }
-
-    //    std::for_each(records ->begin(), records->end(), [this, compact, &append_info, &index](auto * record){
-    //        validateRecord(*record, index, compact, append_info);
-    //        ++index;
-    //    });
-
-    processRecordErrors(append_info.record_errors);
-
-    if (max_batch_timestamp > append_info.max_timestamp)
-    {
-        append_info.max_timestamp = max_batch_timestamp;
-        append_info.offset_of_max_timestamp = offset_of_max_batch_timestamp;
-    }
-
-    /// Setup base offset for this batch
-    batch.setBaseOffset(initial_offset - 1);
-    /// FIXME leader epoch
-    batch.setShardLeaderEpoch(0);
-    batch.setMaxTimestamp(max_batch_timestamp);
     auto now = DB::UTCMilliseconds::now();
-    batch.setAppendTimestamp(now);
-    append_info.last_offset = initial_offset - 1;
+    record->setAppendTime(now);
     append_info.append_timestamp = now;
+
+    /// We will need fix the sequence number and append timestamp in the serialization
+    record->deltaSerialize(byte_vec);
 }
 
-void Log::processRecordErrors(const std::vector<RecordError> & record_errors)
+void Log::checkSize(int64_t record_size)
 {
-    if (!record_errors.empty())
-        /// FIXME
-        throw DB::Exception(DB::ErrorCodes::INVALID_RECORD, "Invalid records found");
-}
+    const auto & conf = config();
+    if (record_size > conf.max_record_size)
+        /// FIXME Stream stats
+        throw DB::Exception(
+            DB::ErrorCodes::TOO_LARGE_RECORD,
+            "The record batch size in append to shard {} is {} bytes which exceeds the maximum configured value of {}",
+            streamShard().string(),
+            record_size,
+            config().max_record_size);
 
-void Log::validateRecord(const Record & record, size_t index, bool compact, LogAppendInfo & append_info)
-{
-    /// Validate offset delta
-    if (record.offset_delta() != index)
-    {
-        append_info.record_errors.emplace_back(
-            index,
-            fmt::format("Record offset {0} in record batch is not assigned correctly. Expected {0}, got {1}", index, record.offset_delta()));
-        return;
-    }
-
-    /// Validate key
-    if (compact && record.key() == nullptr)
-    {
-        append_info.record_errors.emplace_back(
-            index, "Compacted topic cannot accept message without key in topic shard " + topicShard().string());
-        return;
-    }
-
-    /// Validate timestamp
+    if (record_size > conf.segment_size)
+        throw DB::Exception(
+            DB::ErrorCodes::TOO_LARGE_RECORD_BATCH,
+            "Record batch size is {} bytes in append to shard {}, which exceeds the maximum configured segment size of {}",
+            record_size,
+            streamShard().string(),
+            config().segment_size);
 }
 
 ///  Validate the following
 /// - CRC
 /// - Message size
 /// FIXME, move to Sequencer ?
-LogAppendInfo Log::analyzeAndValidateRecords(MemoryRecords & batch)
+LogAppendDescription Log::analyzeAndValidateRecord(Record & record)
 {
     /// if (origin == PaxosLeader && record_batch.shard_leader_epoch() != leader_epoch)
     ///    throw DB::Exception(DB::ErrorCodes::INVALID_RECORD, "Append from Paxos leader did not set the batch epoch correctly");
 
-    if (batch.baseOffset() != 0)
-        throw DB::Exception(
-            DB::ErrorCodes::INVALID_RECORD,
-            "The base offset of the record batch in the append to shard {} should be 0, but it is {}",
-            topicShard().string(), batch.baseOffset());
-
-    auto batch_size = batch.sizeInBytes();
-    if (batch_size > config().max_message_size)
-        /// FIXME Topic stats
-        throw DB::Exception(
-            DB::ErrorCodes::TOO_LARGE_RECORD,
-            "The record batch size in append to shard {} is {} bytes which exceeds the maximum configured value of {}",
-            topicShard().string(),
-            batch_size,
-            config().max_message_size);
-
-    if (batch_size > config().segment_size)
-        throw DB::Exception(
-            DB::ErrorCodes::TOO_LARGE_RECORD_BATCH,
-            "Record batch size is {} bytes in append to shard {}, which exceeds the maximum configured segment size of {}",
-            batch_size,
-            topicShard().string(),
-            config().segment_size);
-
     /// Check CRC
-    if (!batch.isValid())
+    if (!record.isValid())
         /// FIXME Stats
-        throw DB::Exception(DB::ErrorCodes::DATA_CORRUPTION, "Record is corrupt in topic shard {}", topicShard().string());
+        throw DB::Exception(DB::ErrorCodes::DATA_CORRUPTION, "Record is corrupt in stream shard {}", streamShard().string());
 
     /// Record version check
-    if (batch.version() != RecordVersion::V1)
+    if (record.version() != Record::Version::V0)
         throw DB::Exception(
-            DB::ErrorCodes::BAD_VERSION, "Bad record batch version. Expected {} but got {}", RecordVersion::V1, batch.version());
+            DB::ErrorCodes::BAD_VERSION, "Bad record batch version. Expected {} but got {}", Record::Version::V0, record.version());
 
     /// Message codec
-    LogAppendInfo append_info;
-    append_info.first_offset = LogOffsetMetadata(batch.baseOffset());
-    append_info.last_offset = batch.lastOffset();
-    append_info.last_leader_epoch = batch.shardLeaderEpoch();
-    append_info.max_timestamp = batch.maxTimestamp();
-    append_info.offset_of_max_timestamp = batch.baseOffset();
-    append_info.append_timestamp = -1;
-    append_info.log_start_offset = log_start_offset;
-    append_info.valid_bytes = batch.sizeInBytes();
+    LogAppendDescription append_info;
+    append_info.log_start_sn = log_start_sn;
+
+    /// Assign timestamps
+    auto [min_event_time, max_event_time] = record.minMaxEventTime();
+    append_info.max_event_timestamp = max_event_time;
+    append_info.min_event_timestamp = max_event_time;
+
+    /// Validate key
+    if (config().compact() && record.getKey().empty())
+    {
+        append_info.error_message = "Compacted stream cannot accept message without key in stream shard " + streamShard().string();
+        append_info.error_code = DB::ErrorCodes::INVALID_RECORD;
+        throw DB::Exception(DB::ErrorCodes::INVALID_RECORD, "Compacted stream cannot accept message without key in stream shard {}", streamShard().string());
+    }
 
     return append_info;
 }
 
-FetchDataInfo Log::read(int64_t offset, int32_t max_length, FetchIsolation)
+FetchDataDescription Log::fetch(int64_t sn, int32_t max_length, int64_t max_wait_ms, std::optional<int64_t> position, FetchIsolation)
 {
-    int64_t start_offset = offset;
-    if (offset == EARLIEST_OFFSET)
-        start_offset = log_start_offset;
-    else if (offset == LATEST_OFFSET)
-        start_offset = logEndOffset();
+    assert(max_wait_ms >= 0);
 
-    assert(offset >= 0);
+    auto end_sn{loglet->logEndSequence()};
 
-    return loglet->read(start_offset, max_length);
+    if (sn == EARLIEST_SN)
+        sn = log_start_sn;
+    else if (sn == LATEST_SN)
+        sn = end_sn;
+
+    assert(sn >= 0);
+
+    if (sn == end_sn)
+    {
+        std::unique_lock lock(lmutex);
+        auto log_end_sn_changed = [this, end_sn] { return loglet->logEndSequence() > end_sn; };
+        log_end_sn_cv.wait_for(lock, std::chrono::milliseconds(max_wait_ms), log_end_sn_changed);
+    }
+
+    return loglet->fetch(sn, max_length, position);
 }
 
-bool Log::trim(int64_t target_offset)
+bool Log::trim(int64_t target_sn)
 {
-    if (target_offset < 0)
+    if (target_sn < 0)
         throw DB::Exception(
-            DB::ErrorCodes::BAD_ARGUMENTS,
-            "Cannot truncate shard {} to a negative offset {}",
-            loglet->topicShard().string(),
-            target_offset);
+            DB::ErrorCodes::BAD_ARGUMENTS, "Cannot truncate shard {} to a negative sn {}", loglet->streamShard().string(), target_sn);
 
-    auto log_end_offset = loglet->logEndOffset();
-    if (target_offset >= log_end_offset)
+    auto log_end_sn = loglet->logEndSequence();
+    if (target_sn >= log_end_sn)
     {
-        LOG_INFO(logger, "Truncating to {} has no effect as the largest offset in the log is {}", target_offset, log_end_offset);
+        LOG_INFO(logger, "Truncating to {} has no effect as the largest sn in the log is {}", target_sn, log_end_sn);
         return false;
     }
     else
     {
-        LOG_INFO(logger, "Truncating to offset {}", target_offset);
+        LOG_INFO(logger, "Truncating to sn {}", target_sn);
 
-        std::lock_guard guard{lmutex};
+        std::unique_lock lock{lmutex};
 
-        if (loglet->firstSegment()->baseOffset() > target_offset)
+        if (loglet->firstSegment()->baseSequence() > target_sn)
         {
-            trimFullyAndStartAt(target_offset);
+            trimFullyAndStartAt(target_sn);
         }
         else
         {
-            auto deleted_segments = loglet->trim(target_offset);
-            if (highWatermark() >= log_end_offset)
-                updateHighWatermark(loglet->logEndOffsetMetadata(), true);
+            auto deleted_segments = loglet->trim(target_sn);
+            if (highWatermark() >= log_end_sn)
+                updateHighWatermark(loglet->logEndSequenceMetadata(), true);
         }
         return true;
     }
+}
+
+int64_t Log::sequenceForTimestamp(int64_t ts, bool append_time) const
+{
+    return loglet->sequenceForTimestamp(ts, append_time);
 }
 
 void Log::close()
@@ -323,49 +294,51 @@ void Log::close()
         /// Already closed
         return;
 
-    LOG_INFO(logger, "Closing shard={} in directory={}", topicShard().string(), parentDir().c_str());
+    LOG_INFO(logger, "Closing shard={} in directory={}", streamShard().string(), parentDir().c_str());
 
-    std::lock_guard guard{lmutex};
+    std::unique_lock lock{lmutex};
     loglet->close();
 }
 
-void Log::flush(int64_t offset)
+void Log::flush(int64_t sn)
 {
-    if (offset > loglet->recoveryPoint())
+    if (sn > loglet->recoveryPoint())
     {
+        auto now = DB::MonotonicMilliseconds::now();
+        loglet->flush(sn);
+
         LOG_DEBUG(
             logger,
-            "Flushing log up to offset={} for shard={} in directory={} with unflushed={} records since last_flushed={}ms",
-            offset,
-            loglet->topicShard().string(),
-            loglet->parentDir().c_str(),
+            "Flushed {} records which make log flushed up to sn={} for shard={} in directory={} since last_flushed={} ms. Took {} us",
             loglet->unflushedRecords(),
-            loglet->lastFlushed());
+            sn,
+            loglet->streamShard().string(),
+            loglet->parentDir().c_str(),
+            loglet->lastFlushed(),
+            DB::MonotonicMilliseconds::now() - now);
 
-        loglet->flush(offset);
-
-        std::lock_guard guard{lmutex};
-        loglet->markFlushed(offset);
+        std::unique_lock lock{lmutex};
+        loglet->markFlushed(sn);
     }
 }
 
-std::optional<LogOffsetMetadata> Log::maybeIncrementHighWatermark(const LogOffsetMetadata & new_high_watermark)
+std::optional<LogSequenceMetadata> Log::maybeIncrementHighWatermark(const LogSequenceMetadata & new_high_watermark)
 {
-    if (new_high_watermark.message_offset > logEndOffset())
+    if (new_high_watermark.record_sn > logEndSequence())
         throw DB::Exception(
             DB::ErrorCodes::BAD_ARGUMENTS,
-            "High watermark {} update exceeds current log end offset {}",
-            new_high_watermark.message_offset,
-            logEndOffset());
+            "High watermark {} update exceeds current log end sn {}",
+            new_high_watermark.record_sn,
+            logEndSequence());
 
-    std::lock_guard guard{lmutex};
+    std::unique_lock lock{lmutex};
 
     auto old_high_watermark = fetchHighWatermarkMetadataWithoutLock();
 
     /// Ensure that the high watermark increases monotonically. We also update the high watermark when
-    /// the new offset metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
-    if (old_high_watermark.message_offset < new_high_watermark.message_offset
-        || (old_high_watermark.message_offset == new_high_watermark.message_offset && old_high_watermark.onOldSegment(new_high_watermark)))
+    /// the new sn metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
+    if (old_high_watermark.record_sn < new_high_watermark.record_sn
+        || (old_high_watermark.record_sn == new_high_watermark.record_sn && old_high_watermark.onOldSegment(new_high_watermark)))
     {
         updateHighWatermarkMetadataWithoutLock(new_high_watermark);
         return old_high_watermark;
@@ -373,26 +346,26 @@ std::optional<LogOffsetMetadata> Log::maybeIncrementHighWatermark(const LogOffse
     return {};
 }
 
-LogOffsetMetadata Log::fetchHighWatermarkMetadata()
+LogSequenceMetadata Log::fetchHighWatermarkMetadata()
 {
-    std::lock_guard guard{lmutex};
+    std::unique_lock lock{lmutex};
     return fetchHighWatermarkMetadataWithoutLock();
 }
 
-LogOffsetMetadata Log::fetchHighWatermarkMetadataWithoutLock()
+LogSequenceMetadata Log::fetchHighWatermarkMetadataWithoutLock()
 {
-    if (high_watermark_metadata.messageOffsetOnly())
+    if (high_watermark_metadata.sequenceOnly())
     {
-        auto offset_metadata = convertToOffsetMetadataOrThrow(highWatermark());
-        updateHighWatermarkMetadataWithoutLock(offset_metadata);
-        return offset_metadata;
+        auto sn_metadata = convertToSequenceMetadataOrThrow(highWatermark());
+        updateHighWatermarkMetadataWithoutLock(sn_metadata);
+        return sn_metadata;
     }
     return high_watermark_metadata;
 }
 
 void Log::remove()
 {
-    std::lock_guard guard{lmutex};
+    std::unique_lock lock{lmutex};
 
     /// producer_expire_check.cancel();
     auto deleted_segments = loglet->removeAllSegments();
@@ -401,7 +374,7 @@ void Log::remove()
 
 void Log::renameDir(const std::string & name)
 {
-    std::lock_guard guard{lmutex};
+    std::unique_lock guard{lmutex};
 
     if (loglet->renameDir(name))
     {
@@ -409,36 +382,36 @@ void Log::renameDir(const std::string & name)
     }
 }
 
-void Log::trimFullyAndStartAt(int64_t new_offset)
+void Log::trimFullyAndStartAt(int64_t new_sn)
 {
-    (void)new_offset;
+    (void)new_sn;
 }
 
-void Log::updateLogStartOffset(int64_t offset)
+void Log::updateLogStartSequence(int64_t log_start_sn_)
 {
-    log_start_offset = offset;
+    log_start_sn = log_start_sn_;
 
-    if (highWatermark() < offset)
-        updateHighWatermark(offset);
+    if (highWatermark() < log_start_sn_)
+        updateHighWatermark(log_start_sn_);
 
-    if (loglet->recoveryPoint() < offset)
-        loglet->updateRecoveryPoint(offset);
+    if (loglet->recoveryPoint() < log_start_sn_)
+        loglet->updateRecoveryPoint(log_start_sn_);
 }
 
 int64_t Log::updateHighWatermark(int64_t hw)
 {
-    return updateHighWatermark(LogOffsetMetadata{hw});
+    return updateHighWatermark(LogSequenceMetadata{hw});
 }
 
-int64_t Log::updateHighWatermark(const LogOffsetMetadata & high_watermark_metadata_, bool with_lock)
+int64_t Log::updateHighWatermark(const LogSequenceMetadata & high_watermark_metadata_, bool with_lock)
 {
-    auto end_offset_metadata{loglet->logEndOffsetMetadata()};
+    auto end_sn_metadata{loglet->logEndSequenceMetadata()};
 
-    LogOffsetMetadata new_high_watermark_metadata{0};
-    if (new_high_watermark_metadata.message_offset < log_start_offset)
-        new_high_watermark_metadata = LogOffsetMetadata{log_start_offset};
-    else if (new_high_watermark_metadata.message_offset >= end_offset_metadata.message_offset)
-        new_high_watermark_metadata = end_offset_metadata;
+    LogSequenceMetadata new_high_watermark_metadata{0};
+    if (new_high_watermark_metadata.record_sn < log_start_sn)
+        new_high_watermark_metadata = LogSequenceMetadata{log_start_sn};
+    else if (new_high_watermark_metadata.record_sn >= end_sn_metadata.record_sn)
+        new_high_watermark_metadata = end_sn_metadata;
     else
         new_high_watermark_metadata = high_watermark_metadata_;
 
@@ -447,58 +420,58 @@ int64_t Log::updateHighWatermark(const LogOffsetMetadata & high_watermark_metada
     else
         updateHighWatermarkMetadata(new_high_watermark_metadata);
 
-    return new_high_watermark_metadata.message_offset;
+    return new_high_watermark_metadata.record_sn;
 }
 
-void Log::updateHighWatermarkMetadata(const LogOffsetMetadata & new_high_watermark_metadata)
+void Log::updateHighWatermarkMetadata(const LogSequenceMetadata & new_high_watermark_metadata)
 {
-    std::lock_guard guard{lmutex};
+    std::unique_lock guard{lmutex};
     updateHighWatermarkMetadataWithoutLock(new_high_watermark_metadata);
 }
 
-void Log::updateHighWatermarkMetadataWithoutLock(const LogOffsetMetadata & new_high_watermark_metadata)
+void Log::updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata)
 {
-    if (new_high_watermark_metadata.message_offset < 0)
-        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "High watermark offset should be non-negative");
+    if (new_high_watermark_metadata.record_sn < 0)
+        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "High watermark sn should be non-negative");
 
-    if (new_high_watermark_metadata.message_offset < high_watermark_metadata.message_offset)
+    if (new_high_watermark_metadata.record_sn < high_watermark_metadata.record_sn)
         LOG_WARNING(
             logger,
             "Non-monotonic update of high watermark from {} to {}",
-            high_watermark_metadata.message_offset,
-            new_high_watermark_metadata.message_offset);
+            high_watermark_metadata.record_sn,
+            new_high_watermark_metadata.record_sn);
 
     high_watermark_metadata = new_high_watermark_metadata;
-    maybeIncrementFirstUnstableOffsetWithoutLock();
+    maybeIncrementFirstUnstableSequenceWithoutLock();
 
-    LOG_TRACE(logger, "Setting high watermark {}", new_high_watermark_metadata.message_offset);
+    LOG_TRACE(logger, "Setting high watermark {}", new_high_watermark_metadata.record_sn);
 }
 
-void Log::maybeIncrementFirstUnstableOffset()
+void Log::maybeIncrementFirstUnstableSequence()
 {
-    std::lock_guard guard{lmutex};
-    maybeIncrementFirstUnstableOffsetWithoutLock();
+    std::unique_lock guard{lmutex};
+    maybeIncrementFirstUnstableSequenceWithoutLock();
 }
 
-void Log::maybeIncrementFirstUnstableOffsetWithoutLock()
+void Log::maybeIncrementFirstUnstableSequenceWithoutLock()
 {
     /// FIXME
 }
 
-void Log::checkLogStartOffset(int64_t offset) const
+void Log::checkLogStartSequence(int64_t sn) const
 {
-    if (unlikely(offset < logStartOffset()))
+    if (unlikely(sn < logStartSequence()))
         throw DB::Exception(
-            DB::ErrorCodes::OFFSET_OUT_OF_RANGE,
-            "Received request for offset {} for shard {}, but we only have segments starting from offset {}",
-            offset,
-            topicShard().string(),
-            logEndOffset());
+            DB::ErrorCodes::SEQUENCE_OUT_OF_RANGE,
+            "Received request for sn {} for shard {}, but we only have segments starting from sn {}",
+            sn,
+            streamShard().string(),
+            logEndSequence());
 }
 
-LogOffsetMetadata Log::convertToOffsetMetadataOrThrow(int64_t offset) const
+LogSequenceMetadata Log::convertToSequenceMetadataOrThrow(int64_t sn) const
 {
-    checkLogStartOffset(offset);
-    return loglet->convertToOffsetMetadataOrThrow(offset);
+    checkLogStartSequence(sn);
+    return loglet->convertToSequenceMetadataOrThrow(sn);
 }
 }

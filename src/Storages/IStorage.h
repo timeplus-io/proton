@@ -623,6 +623,8 @@ public:
     /// Needed for integration engines, when there must be no delay for calling drop() method.
     virtual bool dropTableImmediately() { return false; }
 
+    virtual void preDrop() { }
+
 private:
     /// Lock required for alter queries (lockForAlter).
     /// Allows to execute only one simultaneous alter query.

@@ -48,7 +48,7 @@ public:
     bool ready() const override { return started.test() && table_exists; }
 
 private:
-    void processRecords(const DWAL::RecordPtrs & records) override;
+    void processRecords(const nlog::RecordPtrs & records) override;
 
     String role() const override { return "task"; }
     ConfigSettings configSettings() const override;
@@ -59,7 +59,7 @@ private:
     void findByUserInMemory(const String & user, std::vector<TaskStatusPtr> & res);
     void findByUserInTable(const String & user, std::vector<TaskStatusPtr> & res);
 
-    TaskStatusPtr buildTaskStatusFromRecord(const DWAL::RecordPtr & record) const;
+    TaskStatusPtr buildTaskStatusFromRecord(const nlog::RecordPtr & record) const;
 
     void buildTaskStatusFromBlock(const Block & block, std::vector<TaskStatusPtr> & res) const;
 

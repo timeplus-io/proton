@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DistributedWALClient/Record.h>
 #include <Interpreters/Context_fwd.h>
+#include <NativeLog/Record/Record.h>
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Storages/StorageInMemoryMetadata.h>
 

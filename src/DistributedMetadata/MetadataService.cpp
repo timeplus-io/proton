@@ -1,8 +1,7 @@
 #include "MetadataService.h"
 
-#include <DistributedWALClient/KafkaWALPool.h>
 #include <Interpreters/Context.h>
-#include <base/getFQDNOrHostName.h>
+#include <KafkaLog/KafkaWALPool.h>
 #include <base/logger_useful.h>
 #include <Common/setThreadName.h>
 
@@ -35,7 +34,6 @@ namespace
     const String LOG_ROLL_PERIOD_KEY = "log_roll_period";
     const String COMPRESSION_KEY = "client_side_compression";
 
-    const String THIS_HOST = getFQDNOrHostName();
     constexpr Int32 DWAL_MAX_RETRIES = 3;
 }
 
@@ -43,7 +41,7 @@ MetadataService::MetadataService(const ContextMutablePtr & global_context_, cons
     : global_context(global_context_)
     , dwal_append_ctx("")
     , dwal_consume_ctx("")
-    , dwal(DWAL::KafkaWALPool::instance(global_context_).getMeta())
+    , dwal(klog::KafkaWALPool::instance(global_context_).getMeta())
     , log(&Poco::Logger::get(service_name))
 {
 }
@@ -73,24 +71,24 @@ void MetadataService::shutdown()
 }
 
 
-std::vector<DWAL::KafkaWALClusterPtr> MetadataService::clusters()
+std::vector<klog::KafkaWALClusterPtr> MetadataService::clusters()
 {
-    return DWAL::KafkaWALPool::instance(global_context).clusters(dwal_append_ctx);
+    return klog::KafkaWALPool::instance(global_context).clusters(dwal_append_ctx);
 }
 
-void MetadataService::setupRecordHeaders(DWAL::Record & record, const String & version) const
+void MetadataService::setupRecordHeaders(nlog::Record & record, const String & version) const
 {
-    record.headers["_https_port"] = std::to_string(https_port);
-    record.headers["_http_port"] = std::to_string(http_port);
-    record.headers["_tcp_port"] = std::to_string(tcp_port);
-    record.headers["_tcp_port_secure"] = std::to_string(tcp_port_secure);
+    record.addHeader("_https_port", std::to_string(https_port));
+    record.addHeader("_http_port", std::to_string(http_port));
+    record.addHeader("_tcp_port", std::to_string(tcp_port));
+    record.addHeader("_tcp_port_secure", std::to_string(tcp_port_secure));
 
-    record.headers["_node_roles"] = node_roles;
-    record.headers["_host"] = THIS_HOST;
-    record.headers["_channel"] = global_context->getChannel();
+    record.addHeader("_node_roles", node_roles);
+    record.addHeader("_host", global_context->getHostFQDN());
+    record.addHeader("_channel", global_context->getChannel());
 
     record.setIdempotentKey(global_context->getNodeIdentity());
-    record.headers["_version"] = version;
+    record.addHeader("_version", version);
 }
 
 void MetadataService::initPorts()
@@ -101,7 +99,7 @@ void MetadataService::initPorts()
     tcp_port = global_context->getConfigRef().getInt("tcp_port", -1);
 }
 
-void MetadataService::doDeleteDWal(const DWAL::KafkaWALContext & ctx) const
+void MetadataService::doDeleteDWal(const klog::KafkaWALContext & ctx) const
 {
     int retries = 0;
     while (retries++ < DWAL_MAX_RETRIES)
@@ -126,7 +124,7 @@ void MetadataService::doDeleteDWal(const DWAL::KafkaWALContext & ctx) const
     }
 }
 
-void MetadataService::waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) const
+void MetadataService::waitUntilDWalReady(const klog::KafkaWALContext & ctx) const
 {
     while (1)
     {
@@ -143,7 +141,7 @@ void MetadataService::waitUntilDWalReady(const DWAL::KafkaWALContext & ctx) cons
 }
 
 /// Try indefinitely to create dwal
-void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
+void MetadataService::doCreateDWal(const klog::KafkaWALContext & ctx) const
 {
     if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
     {
@@ -174,7 +172,8 @@ void MetadataService::doCreateDWal(const DWAL::KafkaWALContext & ctx) const
         else if (err == ErrorCodes::INVALID_REPLICATION_FACTOR)
         {
             throw Exception(
-                "Underlying streaming store " + ctx.topic + " create failed due to invalid replication factor.", ErrorCodes::INVALID_REPLICATION_FACTOR);
+                "Underlying streaming store " + ctx.topic + " create failed due to invalid replication factor.",
+                ErrorCodes::INVALID_REPLICATION_FACTOR);
         }
         else
         {
@@ -266,14 +265,12 @@ void MetadataService::startup()
     String topic = config.getString(conf.key_prefix + NAME_KEY, conf.default_name);
     auto replication_factor = config.getInt(conf.key_prefix + REPLICATION_FACTOR_KEY, 1);
 
-    DWAL::KafkaWALContext kctx{topic, 1, replication_factor, cleanupPolicy()};
+    klog::KafkaWALContext kctx{topic, 1, replication_factor, cleanupPolicy()};
     /// Topic settings
     kctx.retention_ms = config.getInt(conf.key_prefix + DATA_RETENTION_KEY, conf.default_data_retention);
     if (kctx.retention_ms > 0)
-    {
         /// Hour based in config
         kctx.retention_ms *= 3600 * 1000;
-    }
 
     /// Compact topics
     if (kctx.cleanup_policy == "compact")
@@ -326,9 +323,7 @@ void MetadataService::startup()
     }
 
     if (!node_roles.empty())
-    {
         node_roles.pop_back();
-    }
 
     initPorts();
 

@@ -86,7 +86,7 @@ add_headers_and_sources(dbms Disks/IO)
 
 if (TARGET ch_contrib::rdkafka)
     add_headers_and_sources(dbms Storages/ExternalStream)
-    add_headers_and_sources(dbms DistributedWALClient)
+    add_headers_and_sources(dbms KafkaLog)
 else()
     message(FATAL "rdkafka is not enabled which is required")
 endif()
@@ -262,7 +262,7 @@ add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPla
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
 
 if (TARGET ch_contrib::rdkafka)
-    add_object_library(clickhouse_distributed_write_ahead_log DistributedWALClient)
+    add_object_library(clickhouse_distributed_write_ahead_log KafkaLog)
 endif ()
 
 # proton: end
@@ -275,6 +275,11 @@ if (USE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
     if (TARGET ch_contrib::jemalloc)
         target_link_libraries (dbms PRIVATE ch_contrib::jemalloc)
     endif()
+
+    if (ENABLE_NATIVE_LOG)
+        target_link_libraries (dbms PUBLIC nlog)
+    endif()
+
     set (all_modules dbms)
 else()
     add_library (dbms SHARED ${dbms_headers} ${dbms_sources})
@@ -283,6 +288,11 @@ else()
     if (TARGET ch_contrib::jemalloc)
         target_link_libraries (clickhouse_interpreters PRIVATE ch_contrib::jemalloc)
     endif()
+
+    if (ENABLE_NATIVE_LOG)
+        target_link_libraries (dbms PUBLIC nlog)
+    endif()
+
     list (APPEND all_modules dbms)
     # force all split libs to be linked
     if (OS_DARWIN)
@@ -400,13 +410,6 @@ dbms_target_link_libraries (
         boost::system
         clickhouse_common_io
 )
-
-if (ENABLE_NATIVE_LOG)
-    dbms_target_link_libraries (
-       PUBLIC
-            nlog
-    )
-endif()
 
 dbms_target_link_libraries (
     PUBLIC

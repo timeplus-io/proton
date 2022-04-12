@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamingBlockReader.h"
+#include "StreamingBlockReaderKafka.h"
 #include "StreamingStoreSourceChannel.h"
 
 namespace DB
@@ -34,14 +34,14 @@ public:
 
 private:
     void backgroundPoll();
-    void fanOut(DWAL::RecordPtrs records);
+    void fanOut(nlog::RecordPtrs records);
     void doShutdown();
 
 private:
     UInt32 id;
     Int32 shard;
     std::shared_ptr<IStorage> storage;
-    std::shared_ptr<StreamingBlockReader> reader;
+    std::shared_ptr<StreamingBlockReaderKafka> reader;
 
     std::unique_ptr<ThreadPool> poller;
     std::atomic<bool> shutdown = false;

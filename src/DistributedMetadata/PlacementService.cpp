@@ -127,13 +127,13 @@ void PlacementService::preShutdown()
         broadcast_task->deactivate();
 }
 
-void PlacementService::processRecords(const DWAL::RecordPtrs & records)
+void PlacementService::processRecords(const nlog::RecordPtrs & records)
 {
     /// Node metrics schema: node, disk_free
     for (const auto & record : records)
     {
         assert(!record->hasSchema());
-        assert(record->op_code == DWAL::OpCode::ADD_DATA_BLOCK);
+        assert(record->opcode() == nlog::OpCode::ADD_DATA_BLOCK);
 
         if (!record->hasIdempotentKey())
         {
@@ -141,33 +141,41 @@ void PlacementService::processRecords(const DWAL::RecordPtrs & records)
             continue;
         }
 
-        if (record->headers["_version"] == "1")
+        if (!record->hasHeader("_version"))
         {
-            mergeMetrics(record->idempotentKey(), record);
+            LOG_ERROR(log, "Invalid metric record, missing _version key");
+            continue;
+        }
+
+        if (record->getHeader("_version") == "1")
+        {
+            mergeMetrics(record->idempotentKey(), *record);
         }
         else
         {
-            LOG_ERROR(log, "Cannot handle version={}", record->headers["_version"]);
+            LOG_ERROR(log, "Invalid version={} in metric record", record->getHeader("_version"));
         }
     }
 }
 
-void PlacementService::mergeMetrics(const String & node_identity, const DWAL::RecordPtr & record)
+void PlacementService::mergeMetrics(const String & node_identity, const nlog::Record & record)
 {
-    NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node_identity, record->headers);
+    NodeMetricsPtr node_metrics = std::make_shared<NodeMetrics>(node_identity, record.getHeaders());
     if (!node_metrics->isValid() || node_metrics->node.channel.empty())
     {
         LOG_ERROR(log, "Invalid metric record: {}", node_metrics->node.string());
         return;
     }
 
-    DiskSpace disk_space;
-    disk_space.reserve(record->block.rows());
+    const auto & block = record.getBlock();
 
-    for (size_t row = 0; row < record->block.rows(); ++row)
+    DiskSpace disk_space;
+    disk_space.reserve(block.rows());
+
+    for (size_t row = 0, rows = block.rows(); row < rows; ++row)
     {
-        const auto & policy_name = record->block.getByName("policy_name").column->getDataAt(row);
-        const auto space = record->block.getByName("disk_space").column->get64(row);
+        const auto & policy_name = block.getByName("policy_name").column->getDataAt(row);
+        const auto space = block.getByName("disk_space").column->get64(row);
         LOG_TRACE(log, "Receive disk space data from {}. Storage policy={}, Disk size={}GB", node_identity, policy_name, space);
         disk_space.emplace(policy_name, space);
     }
@@ -193,9 +201,7 @@ void PlacementService::mergeMetrics(const String & node_identity, const DWAL::Re
     }
 
     if (staled)
-    {
         LOG_INFO(log, "Node identity={} host={} recovered from staleness", node_metrics->node.identity, node_metrics->node.host);
-    }
 }
 
 void PlacementService::scheduleBroadcast()
@@ -250,8 +256,8 @@ void PlacementService::doBroadcast()
     ColumnWithTypeAndName disk_space_col_with_type{std::move(disk_space_col), uint64_type, "disk_space"};
     disk_block.insert(disk_space_col_with_type);
 
-    DWAL::Record record{DWAL::OpCode::ADD_DATA_BLOCK, std::move(disk_block), DWAL::NO_SCHEMA};
-    record.partition_key = 0;
+    nlog::Record record{nlog::OpCode::ADD_DATA_BLOCK, std::move(disk_block), nlog::NO_SCHEMA};
+    record.setShard(0);
     setupRecordHeaders(record, "1");
 
     const String table_count_query = "SELECT count(*) as table_counts FROM system.tables WHERE database != 'system'";
@@ -260,10 +266,10 @@ void PlacementService::doBroadcast()
     context->makeQueryContext();
     executeNonInsertQuery(table_count_query, context, [&record](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         const auto & table_counts_col = block.findByName("table_counts")->column;
-        record.headers["_tables"] = std::to_string(table_counts_col->getUInt(0));
+        record.addHeader("_tables", std::to_string(table_counts_col->getUInt(0)));
     });
 
-    record.headers["_broadcast_time"] = std::to_string(UTCMilliseconds::now());
+    record.addHeader("_broadcast_time", std::to_string(UTCMilliseconds::now()));
 
     const auto & result = appendRecord(record);
     if (result.err != ErrorCodes::OK)

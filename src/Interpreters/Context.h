@@ -240,6 +240,7 @@ private:
     std::optional<MergeTreeReadTaskCallback> merge_tree_read_task_callback;
 
     /// proton: starts
+    String this_host;
     String node_identity;
     String channel_id;
     String query_status_poll_id;
@@ -570,6 +571,7 @@ public:
     UInt64 getBlockBaseId() const { return block_base_id; }
     /// Parse poll id and return `host` in ID, throws if poll_id is invalid or validations didn't pass
     std::vector<String> parseQueryStatusPollId(const String & poll_id) const;
+    String getHostFQDN() const { return this_host; }
     String getNodeIdentity() const { return node_identity; }
     String getChannel() const { return channel_id; }
     String getConfigPath() const { return config_path; }

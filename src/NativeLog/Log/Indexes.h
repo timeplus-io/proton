@@ -15,62 +15,78 @@ class Logger;
 namespace nlog
 {
 /// `indexes` contain
-/// - offset to physical file position mapping index
-/// - physical file position to offset mapping index
-/// - event time to offset mapping index
-/// - append time to offset mapping index
+/// - sn to physical file position mapping index
+/// - physical file position to sn mapping index
+/// - event time to sn mapping index
+/// - append time to sn mapping index
 class Indexes final : private boost::noncopyable
 {
 public:
-    Indexes(const fs::path & index_dir, int64_t base_offset, Poco::Logger * logger_);
+    Indexes(const fs::path & index_dir, int64_t base_sn, Poco::Logger * logger_);
     ~Indexes();
 
-    TimestampOffset lastIndexedAppendTimeOffset();
+    TimestampSequence lastIndexedAppendTimeSequence() const;
 
-    TimestampOffset lastIndexedEventTimeOffset();
+    TimestampSequence lastIndexedEventTimeSequence() const;
 
-    OffsetPosition lastIndexedOffsetPosition();
+    SequencePosition lastIndexedSequencePosition() const;
 
-    PositionOffset lastIndexedPositionOffset();
+    PositionSequence lastIndexedPositionSequence() const;
 
-    /// Find the largest offset less than or equal to the given offset
-    /// @param offset The offset to lookup
-    /// @return The offset found and the corresponding position for this offset.
-    /// If the target offset is smaller than the least entry in the index (or the index is empty)
-    /// OffsetPotion(base_offset, 0) is returned
-    OffsetPosition lowerBoundOffsetPosition(int64_t offset);
+    /// Find the largest sn less than or equal to the given sn
+    /// @param sn The sn to lookup
+    /// @return The sn found and the corresponding position for this sn.
+    ///         If the target sn is smaller than the least entry in the index (or the index is empty)
+    ///         SequencePosition(base_sn, 0) is returned
+    SequencePosition lowerBoundPositionForSequence(int64_t sn) const;
 
-    /// Index the logical offset to physical offset mapping, append timestamp to logical offset mapping and
-    /// event timestamp to logical offset mapping in one go atomically
+    /// Find the largest sn which has position great or equal to the given position
+    /// @param position The physical position to lookup
+    /// @return The position found. If the given position pass the end of segment, {-1, -1} will be returned
+    PositionSequence upperBoundSequenceForPosition(int64_t position) const;
+
+    /// Find the largest sn less than or equal to the given sn
+    /// @param ts The timestamp to lookup
+    /// @param append_time ts is append time if true otherwise event time
+    /// @return The sn found and the corresponding timestamp for this ts.
+    TimestampSequence lowerBoundSequenceForTimestamp(int64_t ts, bool append_time) const;
+
+    /// Index the logical sn to physical sn mapping, append timestamp to logical sn mapping and
+    /// event timestamp to logical sn mapping in one go atomically
     void index(
-        int64_t largest_offset,
+        int64_t largest_sn,
         int64_t physical_position,
-        const TimestampOffset & max_etimestamp_offset,
-        const TimestampOffset & max_atimestamp_offset);
+        const TimestampSequence & max_etimestamp_sn,
+        const TimestampSequence & max_atimestamp_sn);
 
-    /// Index append timestamp to logical offset mapping and
-    /// event timestamp to logical offset mapping in one go atomically to index
-    void index(const TimestampOffset & max_etimestamp_offset, const TimestampOffset & max_atimestamp_offset);
+    /// Index append timestamp to logical sn mapping and
+    /// event timestamp to logical sn mapping in one go atomically to index
+    void index(const TimestampSequence & max_etimestamp_sn, const TimestampSequence & max_atimestamp_sn);
 
-    /// Flush in-memory offset mappings to persistent store to make it crash consistent
+    /// Flush in-memory sn mappings to persistent store to make it crash consistent
     void sync();
 
+    void close();
+
 private:
-    IndexEntry lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const;
-    IndexEntry lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
-    void index(const TimestampOffset & max_etimestamp_offset, const TimestampOffset & max_atimestamp_offset, rocksdb::WriteBatch & batch);
+    inline IndexEntry lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const;
+    inline IndexEntry lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
+    inline IndexEntry upperBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
+    inline void index(const TimestampSequence & max_etimestamp_sn, const TimestampSequence & max_atimestamp_sn, rocksdb::WriteBatch & batch);
 
 private:
     std::unique_ptr<rocksdb::DB> indexes;
-    rocksdb::ColumnFamilyHandle * offset_position_cf_handle;
-    rocksdb::ColumnFamilyHandle * position_offset_cf_handle;
-    rocksdb::ColumnFamilyHandle * etime_offset_cf_handle;
-    rocksdb::ColumnFamilyHandle * atime_offset_cf_handle;
+    rocksdb::ColumnFamilyHandle * sn_position_cf_handle;
+    rocksdb::ColumnFamilyHandle * position_sn_cf_handle;
+    rocksdb::ColumnFamilyHandle * etime_sn_cf_handle;
+    rocksdb::ColumnFamilyHandle * atime_sn_cf_handle;
 
-    int64_t base_offset;
+    int64_t base_sn;
 
-    TimestampOffset last_indexed_etimestamp;
-    TimestampOffset last_indexed_atimestamp;
+    TimestampSequence last_indexed_etimestamp;
+    TimestampSequence last_indexed_atimestamp;
+
+    std::atomic_flag closed = ATOMIC_FLAG_INIT;
 
     Poco::Logger * logger;
 };

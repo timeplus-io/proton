@@ -43,9 +43,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
             continue;
 
         if (table->engine_full.find("subtype = 'rawstore'") == String::npos)
-        {
             continue;
-        }
 
         const auto & query_ptr = parseQuery(table->create_table_query, query_context);
         const auto & create = query_ptr->as<const ASTCreateQuery &>();
@@ -57,9 +55,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
         table_mapping_json.set("partition_by_expression", table->partition_key);
 
         if (create.storage->ttl_table)
-        {
             table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
-        }
 
         buildTablePlacements(table_mapping_json, table->name);
         tables_mapping_json.add(table_mapping_json);
@@ -72,9 +68,7 @@ void RawstoreTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, 
 bool RawstoreTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
     if (!validateSchema(create_schema, payload, error_msg))
-    {
         return false;
-    }
 
     return TableRestRouterHandler::validatePost(payload, error_msg);
 }

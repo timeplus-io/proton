@@ -161,17 +161,15 @@ struct Settings;
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
     M(Int64, shard, -1, "Current shard number", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
-    M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
-    M(String, streaming_storage, "kafka", "Backend streaming storage for write ahead log implementation", 0) \
-    M(String, streaming_storage_cluster_id, "", "Backend streaming storage cluster id", 0) \
-    M(String, streaming_storage_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \
-    M(String, streaming_storage_subscription_mode, "shared", "Mode of subscribing / polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \
-    M(Int64, streaming_storage_request_required_acks, 1, "Waited ack during data ingestion to the backend write-ahead log", 0) \
-    M(Int64, streaming_storage_request_timeout_ms, 30000, "Time out value for an ingest request to the backend write-ahead log", 0) \
-    M(Int64, streaming_storage_retention_bytes, -1, "When this threshold reaches, streaming storage deletes old data", 0) \
-    M(Int64, streaming_storage_retention_ms, -1, "when this threshold reaches, streaming storage delete old data", 0) \
-    M(Int64, streaming_storage_flush_messages, -1, "Tell streaming storage to call fsync per flush messages", 0) \
-    M(Int64, streaming_storage_flush_ms, -1, "Tell streaming storage to call fsync every flush_ms interval", 0) \
+    M(String, logstore_cluster_id, "", "Backend streaming storage cluster id", 0) \
+    M(String, logstore_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \
+    M(String, logstore_subscription_mode, "shared", "Mode of subscribing / polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \
+    M(Int64, logstore_request_required_acks, 1, "Waited ack during data ingestion to the backend write-ahead log", 0) \
+    M(Int64, logstore_request_timeout_ms, 30000, "Time out value for an ingest request to the backend write-ahead log", 0) \
+    M(Int64, logstore_retention_bytes, -1, "When this threshold reaches, streaming storage deletes old data", 0) \
+    M(Int64, logstore_retention_ms, -1, "when this threshold reaches, streaming storage delete old data", 0) \
+    M(Int64, logstore_flush_messages, -1, "Tell streaming storage to call fsync per flush messages", 0) \
+    M(Int64, logstore_flush_ms, -1, "Tell streaming storage to call fsync every flush_ms interval", 0) \
     M(Int64, distributed_flush_threshold_ms, 1000, "Time threshold for streaming storage to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_count, 1000000, "Row count threshold for streaming storage to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for streaming storage to flush consumed data from write-ahead log", 0) \
@@ -182,6 +180,8 @@ struct Settings;
     M(UInt64, default_replicas, 1, "Default replicas number for Stream", 0) \
     M(String, default_sharding_expr, "rand()", "Default sharding method of Stream", 0) \
     M(String, distributed_ingest_mode, "async", "Data ingestion mode for Stream", 0) \
+    M(String, logstore, "nativelog", "Backend streaming storage for write ahead log implementation", 1) \
+    M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
 // End of CONFIGURABLE_STREAM_SETTINGS
 
 #define LIST_STREAM_SETTINGS(M) \

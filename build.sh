@@ -1,5 +1,6 @@
 #!/bin/bash
 
+#Release, RelWithDebInfo, Debug
 build_type="$1"
 build_type="${build_type:=Release}"
 
@@ -8,7 +9,7 @@ cmake .. \
     -DENABLE_PROTON_ALL=OFF \
     -DENABLE_PROTON_SERVER=ON \
     -DENABLE_PROTON_CLIENT=ON \
-    -DENABLE_PROTON_DWAL_BENCHMARK=ON \
+    -DENABLE_PROTON_KLOG_BENCHMARK=ON \
     -DENABLE_PROTON_INSTALL=ON \
     -DENABLE_PROTON_METASTORE=ON \
     -DUSE_STATIC_LIBRARIES=ON \

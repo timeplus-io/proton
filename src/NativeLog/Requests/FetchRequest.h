@@ -1,24 +1,39 @@
 #pragma once
 
+#include "CommonRequest.h"
+
+#include <NativeLog/Common/StreamShard.h>
+
+#include <vector>
+
 namespace nlog
 {
-struct FetchRequest
+/// Fetch data from a list of shards of (different) streams
+struct FetchRequest : public CommonRequest
 {
-    struct TopicPartitionOffset
+public:
+    struct FetchDescription
     {
-        TopicPartitionOffset(const std::string & topic_, int32_t partition_, int64_t offset_, int64_t max_size_ = 4 * 1024 * 1024)
-            : topic(topic_), partition(partition_), offset(offset_), max_size(max_size_)
+        FetchDescription(std::string stream_, const StreamID & stream_id, int32_t shard_, int64_t start_sn_, int64_t max_wait_ms_ = 500, int64_t fetch_max_size_ = 8 * 1024 * 1024)
+            : stream_shard(std::move(stream_), stream_id, shard_), sn(start_sn_), max_wait_ms(max_wait_ms_), max_size(fetch_max_size_)
         {
         }
 
-        std::string topic;
-        int32_t partition;
+        StreamShard stream_shard;
         /// -1 latest
         /// -2 earliest
-        int64_t offset;
+        int64_t sn;
+        int64_t position = -1;
+        int64_t max_wait_ms;
         int64_t max_size;
     };
 
-    std::vector<TopicPartitionOffset> offsets;
+public:
+    explicit FetchRequest(std::vector<FetchDescription> fetch_descs_, int32_t api_version_ = 0)
+        : CommonRequest(api_version_), fetch_descs(std::move(fetch_descs_))
+    {
+    }
+
+    std::vector<FetchDescription> fetch_descs;
 };
 }

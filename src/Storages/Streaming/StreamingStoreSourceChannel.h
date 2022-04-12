@@ -2,7 +2,7 @@
 
 #include "StreamingStoreSourceBase.h"
 
-#include <DistributedWALClient/Record.h>
+#include <NativeLog/Record/Record.h>
 #include <Common/ConcurrentBoundedQueue.h>
 
 namespace DB
@@ -24,7 +24,7 @@ public:
 
     UInt32 getID() const { return id; }
 
-    void add(DWAL::RecordPtrs records);
+    void add(nlog::RecordPtrs records);
 
 private:
     void readAndProcess() override;
@@ -36,7 +36,7 @@ private:
     std::shared_ptr<StreamingStoreSourceMultiplexer> multiplexer;
 
     /// FIXME, use another lock-free one?
-    ConcurrentBoundedQueue<DWAL::RecordPtrs> records_queue;
+    ConcurrentBoundedQueue<nlog::RecordPtrs> records_queue;
 };
 
 using StreamingStoreSourceChannelPtr = std::shared_ptr<StreamingStoreSourceChannel>;

@@ -54,7 +54,7 @@ int mainMetaStore(int argc, char ** argv);
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_DWAL_BENCHMARK
-int mainDWal(int argc, char ** argv);
+int mainKLog(int argc, char ** argv);
 #endif
 #if ENABLE_PROTON_INSTALL
 int mainInstall(int argc, char ** argv);
@@ -114,7 +114,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_DWAL_BENCHMARK
-    {"dwal-benchmark", mainDWal},
+    {"klog-benchmark", mainKLog},
 #endif
 #if ENABLE_PROTON_INSTALL
     {"install", mainInstall},

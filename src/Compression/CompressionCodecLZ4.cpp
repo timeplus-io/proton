@@ -7,11 +7,8 @@
 #include <Compression/LZ4_decompress_faster.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
-#include <IO/BufferWithOwnMemory.h>
 
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 

@@ -1,9 +1,10 @@
 
+#include "record.h"
+
 #include <flatbuffers/flatbuffers.h>
 
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
-#include <NativeLog/Schemas/Record.h>
 #include <base/ClockUtils.h>
 
 #include <algorithm>
@@ -14,12 +15,12 @@ std::vector<int8_t> HEADER_VALUE_TEMPLATE = {'v', 'a', 'l', 'u', 'e'};
 std::vector<int8_t> KEY_DATA_TEMPLATE = {'a', 'b', 'c', 'd', 'e', 'f'};
 std::vector<int8_t> VALUE_DATA_TEMPLATE = {'i', 'j', 'k', 'l', 'm', 'n'};
 
-flatbuffers::Offset<nlog::Record> createRecord(flatbuffers::FlatBufferBuilder & fbb, int8_t batch_delta, int8_t record_delta)
+flatbuffers::Offset<nlog::fbs::Record> createRecord(flatbuffers::FlatBufferBuilder & fbb, int8_t batch_delta, int8_t record_delta)
 {
     /// Build header
     std::vector<int8_t> head_value{HEADER_VALUE_TEMPLATE};
     std::for_each(head_value.begin(), head_value.end(), [batch_delta, record_delta](auto & k) { k += batch_delta + record_delta; });
-    auto header = nlog::CreateRecordHeader(
+    auto header = nlog::fbs::CreateRecordHeader(
         fbb,
         fbb.CreateString(HEADER_KEY_TEMPLATE + std::to_string(batch_delta) + std::to_string(record_delta)),
         fbb.CreateVector(head_value));
@@ -31,7 +32,7 @@ flatbuffers::Offset<nlog::Record> createRecord(flatbuffers::FlatBufferBuilder & 
     std::vector<int8_t> value_data{VALUE_DATA_TEMPLATE};
     std::for_each(value_data.begin(), value_data.end(), [batch_delta, record_delta](auto & k) { k += batch_delta + record_delta; });
 
-    return nlog::CreateRecord(
+    return nlog::fbs::CreateRecord(
         fbb,
         DB::UTCMilliseconds::now(),
         0 + batch_delta + record_delta,
@@ -40,13 +41,13 @@ flatbuffers::Offset<nlog::Record> createRecord(flatbuffers::FlatBufferBuilder & 
         fbb.CreateVector(std::vector<decltype(header)>{header}));
 }
 
-flatbuffers::Offset<nlog::RecordBatch> createBatch(flatbuffers::FlatBufferBuilder & fbb, int8_t batch_delta)
+flatbuffers::Offset<nlog::fbs::RecordBatch> createBatch(flatbuffers::FlatBufferBuilder & fbb, int8_t batch_delta)
 {
     auto record1 = createRecord(fbb, batch_delta, 0);
     auto record2 = createRecord(fbb, batch_delta, 1);
 
     /// Build record batch
-    return nlog::CreateRecordBatch(
+    return nlog::fbs::CreateRecordBatch(
         fbb,
         123 + batch_delta,
         2 + batch_delta,
@@ -62,7 +63,7 @@ flatbuffers::Offset<nlog::RecordBatch> createBatch(flatbuffers::FlatBufferBuilde
         fbb.CreateVector(std::vector<decltype(record1)>{record1, record2}));
 }
 
-void validateBatch(const nlog::RecordBatch * batch, int8_t batch_delta)
+void validateBatch(const nlog::fbs::RecordBatch * batch, int8_t batch_delta)
 {
     assert(batch->crc() == 123ul + batch_delta);
     assert(batch->flags() == 2ul + batch_delta);
@@ -127,7 +128,7 @@ void streamingFlatRecords()
         {
             flatbuffers::FlatBufferBuilder fbb;
             auto batch = createBatch(fbb, 0);
-            nlog::FinishSizePrefixedRecordBatchBuffer(fbb, batch);
+            nlog::fbs::FinishSizePrefixedRecordBatchBuffer(fbb, batch);
             std::cout << "Batch 0 size: " << fbb.GetSize() << std::endl;
             wbuf.write(reinterpret_cast<const char *>(fbb.GetBufferPointer()), fbb.GetSize());
         }
@@ -135,7 +136,7 @@ void streamingFlatRecords()
         {
             flatbuffers::FlatBufferBuilder fbb;
             auto batch = createBatch(fbb, 1);
-            nlog::FinishSizePrefixedRecordBatchBuffer(fbb, batch);
+            nlog::fbs::FinishSizePrefixedRecordBatchBuffer(fbb, batch);
             std::cout << "Batch 1 size: " << fbb.GetSize() << std::endl;
             wbuf.write(reinterpret_cast<const char *>(fbb.GetBufferPointer()), fbb.GetSize());
         }
@@ -210,7 +211,7 @@ void streamingFlatRecords()
                 continue;
         }
 
-        auto batch = nlog::GetSizePrefixedRecordBatch(data.data() + consumed);
+        auto batch = nlog::fbs::GetSizePrefixedRecordBatch(data.data() + consumed);
         unconsumed -= (batch_size + sizeof(flatbuffers::uoffset_t));
         consumed += (batch_size + sizeof(flatbuffers::uoffset_t));
         validateBatch(batch, batch_index);

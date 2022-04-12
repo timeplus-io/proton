@@ -1,15 +1,16 @@
 #include "MetaStore.h"
-#include "NamespaceKey.h"
 
-#include <NativeLog/Schemas/MemoryTopicMetadata.h>
+#include <NativeLog/Requests/StreamDescription.h>
+#include <NativeLog/Rocks/NamespaceKey.h>
+#include <NativeLog/Rocks/mapRocksStatus.h>
 
-#include <Common/Exception.h>
 #include <base/logger_useful.h>
+#include <Common/Exception.h>
 
 #include <rocksdb/db.h>
-#include <rocksdb/table.h>
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/slice_transform.h>
+#include <rocksdb/table.h>
 
 namespace DB
 {
@@ -23,54 +24,38 @@ namespace ErrorCodes
 
 namespace nlog
 {
-
 namespace
 {
+    rocksdb::Options getRocksDBOptions()
+    {
+        rocksdb::Options db_options;
+        db_options.create_if_missing = true;
+        /// db_options.max_total_wal_size = 1024;
+        /// db_options.IncreaseParallelism();
+        /// db_options.OptimizeLevelStyleCompaction();
 
-rocksdb::Options getRocksDBOptions()
-{
-    rocksdb::Options db_options;
-    db_options.create_if_missing = true;
-    /// db_options.max_total_wal_size = 1024;
-    /// db_options.IncreaseParallelism();
-    /// db_options.OptimizeLevelStyleCompaction();
-
-    rocksdb::BlockBasedTableOptions table_options;
-    table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
-    db_options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
-    db_options.prefix_extractor.reset(new NamespaceTransform());
-    return db_options;
+        rocksdb::BlockBasedTableOptions table_options;
+        table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+        db_options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
+        db_options.prefix_extractor.reset(new NamespaceTransform());
+        return db_options;
+    }
 }
 
-TopicInfo getTopicInfoFrom(const MemoryTopicMetadata & topic)
-{
-    TopicInfo topic_info;
-    topic_info.version = topic.version();
-    topic_info.create_timestamp = topic.createTimestamp();
-    topic_info.last_modify_timestamp = topic.lastModifyTimestamp();
-    topic_info.ns = topic.ns().str();
-    topic_info.name = topic.name().str();
-    topic_info.id = topic.id();
-    topic_info.partitions = topic.partitions();
-    topic_info.replicas = topic.replicas();
-    topic_info.compacted = topic.compacted();
-    return topic_info;
-}
-}
-
-MetaStore::MetaStore(const MetaStoreConfig & config_)
-    : config(config_), logger(&Poco::Logger::get("metastore"))
+MetaStore::MetaStore(const MetaStoreConfig & config_) : config(config_), logger(&Poco::Logger::get("metastore"))
 {
     if (!fs::exists(config.meta_dir))
         fs::create_directories(config.meta_dir);
 
-    /// Topics metadata resides in default column family. If necessary create other column family for other metadata
+    /// Streams metadata resides in default column family. If necessary create other column family for other metadata
     rocksdb::DB * db = nullptr;
     auto status = rocksdb::DB::Open(getRocksDBOptions(), config.meta_dir, &db);
     if (!status.ok())
         throw DB::Exception(DB::ErrorCodes::CANNOT_OPEN_DATABASE, "Failed to open metadb {}", status.ToString());
 
     metadb.reset(db);
+
+    LOG_INFO(logger, "Init metastore in dir={}", config.meta_dir.string());
 }
 
 MetaStore::~MetaStore()
@@ -92,90 +77,135 @@ void MetaStore::shutdown()
         LOG_ERROR(logger, "Failed to close metadb {}", status.ToString());
 }
 
-CreateTopicResponse MetaStore::createTopic(const std::string & ns, const CreateTopicRequest & req)
+CreateStreamResponse MetaStore::createStream(const std::string & ns, const CreateStreamRequest & req)
 {
     assert(!ns.empty());
-    assert(!req.name.empty());
+    assert(!req.stream.empty());
 
-    auto key = namespaceKey(ns, req.name);
-    auto topic{MemoryTopicMetadata::buildFrom(ns, req)};
-    auto value = topic.data();
+    auto key = namespaceKey(ns, req.stream);
+    auto desc = StreamDescription::from(ns, req);
+    auto data{desc.serialize()};
     std::string rvalue;
 
-    std::lock_guard guard{mlock};
+    std::scoped_lock guard{mlock};
+
     auto status = metadb->Get(rocksdb::ReadOptions{}, key, &rvalue);
     if (!status.IsNotFound())
-        /// topic already exists
-        throw DB::Exception(DB::ErrorCodes::RESOURCE_ALREADY_EXISTS, "topic {} in namespace {} already exists", req.name, ns);
+        /// stream already exists
+        throw DB::Exception(DB::ErrorCodes::RESOURCE_ALREADY_EXISTS, "Stream {} in namespace {} already exists", req.stream, ns);
 
-    status = metadb->Put(rocksdb::WriteOptions{}, key, rocksdb::Slice(value.data(), value.size()));
+    status = metadb->Put(rocksdb::WriteOptions{}, key, rocksdb::Slice(data.data(), data.size()));
     if (!status.ok())
     {
-        LOG_ERROR(logger, "Failed to create topic={}", key);
-        throw DB::Exception(DB::ErrorCodes::INSERT_KEY_VALUE_FAILED, "Failed to create topic={}", req.name);
+        LOG_ERROR(logger, "Failed to create stream={} error={}", key, status.ToString());
+        throw DB::Exception(DB::ErrorCodes::INSERT_KEY_VALUE_FAILED, "Failed to create stream={}, error={}", req.stream, status.ToString());
     }
 
-    CreateTopicResponse response(CreateTopicResponse::from(req));
-    response.topic_info.version = topic.version();
-    response.topic_info.id = topic.id();
-    response.topic_info.ns = ns;
-    response.topic_info.create_timestamp = topic.createTimestamp();
-    response.topic_info.last_modify_timestamp = topic.lastModifyTimestamp();
-
-    return response;
+    return CreateStreamResponse::from(desc.id, ns, desc.version, desc.create_timestamp_ms, desc.last_modify_timestamp_ms, req, 0);
 }
 
-DeleteTopicResponse MetaStore::deleteTopic(const std::string & ns, const DeleteTopicRequest & req)
+DeleteStreamResponse MetaStore::deleteStream(const std::string & ns, const DeleteStreamRequest & req)
 {
     assert(!ns.empty());
-    assert(!req.name.empty());
+    assert(!req.stream.empty());
 
-    auto key = namespaceKey(ns, req.name);
+    DeleteStreamResponse response(0);
+
+    auto key = namespaceKey(ns, req.stream);
+
+    /// std::scoped_lock guard{mlock};
+
     auto status = metadb->Delete(rocksdb::WriteOptions(), key);
-    if (!status.ok() && !status.IsNotFound())
+    if (!status.ok())
     {
-        LOG_ERROR(logger, "Failed to delete topic={}", key);
-        throw DB::Exception(DB::ErrorCodes::INSERT_KEY_VALUE_FAILED, "Failed to delete topic={} in namespace={}", req.name, ns);
+        LOG_ERROR(logger, "Failed to delete stream={}", key);
+        response.error_message = status.ToString();
+        response.error_code = mapRocksStatus(status);
     }
 
-    DeleteTopicResponse response;
-    response.error.error_message = status.ToString();
     return response;
 }
 
-ListTopicsResponse MetaStore::listTopics(const std::string & ns, const ListTopicsRequest & req) const
+ListStreamsResponse MetaStore::getStream(const std::string & ns, const ListStreamsRequest & req) const
 {
-    rocksdb::ReadOptions options;
-    std::unique_ptr<rocksdb::Iterator> iter;
-    if (ns.empty())
-    {
+    assert(!ns.empty() && !req.stream.empty());
 
-        iter.reset(metadb->NewIterator(rocksdb::ReadOptions{}));
-        iter->SeekToFirst();
+    std::string rvalue;
+    auto key = namespaceKey(ns, req.stream);
+
+    ListStreamsResponse response(0);
+
+    auto status = metadb->Get(rocksdb::ReadOptions{}, key, &rvalue);
+    if (status.ok())
+    {
+        /// assert(iter->key().starts_with(key));
+        response.streams.push_back(StreamDescription::deserialize(rvalue.data(), rvalue.size()));
     }
     else
     {
-        /// options.total_order_seek = true;
-        options.auto_prefix_mode = true;
-        options.prefix_same_as_start = true;
-
-        iter.reset(metadb->NewIterator(options));
-        auto key = namespaceKey(ns, req.topic);
-        iter->Seek(key);
-    }
-
-    ListTopicsResponse response;
-    while(iter->Valid())
-    {
-        /// assert(iter->key().starts_with(key));
-
-        const auto & value = iter->value();
-        MemoryTopicMetadata topic{std::span<char>(const_cast<char*>(value.data()), value.size())};
-
-        response.topics.push_back(getTopicInfoFrom(topic));
-        iter->Next();
+        response.error_code = mapRocksStatus(status);
+        response.error_message = status.ToString();
     }
 
     return response;
 }
+
+ListStreamsResponse MetaStore::listAllStreams() const
+{
+    rocksdb::ReadOptions options;
+    std::unique_ptr<rocksdb::Iterator> iter{metadb->NewIterator(rocksdb::ReadOptions{})};
+
+    iter->SeekToFirst();
+
+    ListStreamsResponse response(0);
+    while (iter->Valid())
+    {
+        const auto & value = iter->value();
+        response.streams.push_back(StreamDescription::deserialize(value.data(), value.size()));
+        iter->Next();
+    }
+    return response;
+}
+
+ListStreamsResponse MetaStore::listStreamsInNamespace(const std::string & ns) const
+{
+    rocksdb::ReadOptions options;
+    /// options.total_order_seek = true;
+    options.auto_prefix_mode = true;
+    options.prefix_same_as_start = true;
+
+    std::unique_ptr<rocksdb::Iterator> iter{metadb->NewIterator(options)};
+
+    auto prefix = namespaceKey(ns);
+    iter->Seek(prefix);
+
+    ListStreamsResponse response(0);
+    while (iter->Valid())
+    {
+        if (iter->key().starts_with(prefix))
+        {
+            const auto & value = iter->value();
+            response.streams.push_back(StreamDescription::deserialize(value.data(), value.size()));
+            iter->Next();
+        }
+        else
+            break;
+    }
+
+    return response;
+}
+
+ListStreamsResponse MetaStore::listStreams(const std::string & ns, const ListStreamsRequest & req) const
+{
+    /// std::scoped_lock guard{mlock};
+
+    if (!ns.empty() && !req.stream.empty())
+        return getStream(ns, req);
+
+    if (ns.empty())
+        return listAllStreams();
+
+    return listStreamsInNamespace(ns);
+}
+
 }

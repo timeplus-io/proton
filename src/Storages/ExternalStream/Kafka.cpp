@@ -3,7 +3,7 @@
 #include "KafkaSource.h"
 
 #include <DataTypes/DataTypesNumber.h>
-#include <DistributedWALClient/KafkaWALPool.h>
+#include <KafkaLog/KafkaWALPool.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <base/logger_useful.h>
@@ -37,7 +37,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     cacheVirtualColumnNamesAndTypes();
 
     /// Check if topic exists
-    auto consumer = DWAL::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value);
+    auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value);
     auto result = consumer->describe(settings->topic.value);
     if (result.err != ErrorCodes::OK)
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);

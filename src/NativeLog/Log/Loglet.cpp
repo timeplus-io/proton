@@ -1,5 +1,6 @@
 #include "Log.h"
 
+#include <NativeLog/Record/Record.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
 #include <Common/Exception.h>
@@ -9,11 +10,10 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    const extern int OFFSET_OUT_OF_RANGE;
+    const extern int SEQUENCE_OUT_OF_RANGE;
     const extern int BAD_FILE_NAME;
     const extern int FILE_CANNOT_READ;
     const extern int INVALID_STATE;
-    const extern int INVALID_OFFSET;
     const extern int LOG_DIR_UNAVAILABLE;
 }
 }
@@ -21,10 +21,11 @@ namespace ErrorCodes
 namespace nlog
 {
 Loglet::Loglet(
+    const StreamShard & stream_shard_,
     const fs::path & log_dir_,
     LogConfigPtr log_config_,
     int64_t recovery_point_,
-    const LogOffsetMetadata & next_offset_meta_,
+    const LogSequenceMetadata & next_sn_meta_,
     LogSegmentsPtr segments_,
     std::shared_ptr<DB::NLOG::BackgroundSchedulePool> scheduler_,
     std::shared_ptr<ThreadPool> adhoc_scheduler_,
@@ -32,11 +33,11 @@ Loglet::Loglet(
     : log_dir(log_dir_)
     , parent_dir(log_dir.parent_path())
     , root_dir(parent_dir.parent_path())
-    , topic_shard(topicShardFrom(log_dir_))
+    , stream_shard(stream_shard_)
     , log_config(std::move(log_config_))
     , recovery_point(recovery_point_)
     , recovery_point_checkpoint(recovery_point_)
-    , next_offset_meta(next_offset_meta_)
+    , next_sn_meta(next_sn_meta_)
     , segments(std::move(segments_))
     , scheduler(std::move(scheduler_))
     , adhoc_scheduler(std::move(adhoc_scheduler_))
@@ -49,81 +50,146 @@ Loglet::Loglet(
 
     LOG_INFO(
         logger,
-        "Log shard={} in dir={} starts with recovery_point={}, next_offset_meta: {}",
-        topic_shard.string(),
+        "Log shard={} in dir={} starts with recovery_point={}, next_sn_meta: {}",
+        stream_shard.string(),
         log_dir.c_str(),
         recovery_point,
-        next_offset_meta.string());
+        next_sn_meta.string());
 }
 
-FetchDataInfo Loglet::read(int64_t offset, int64_t max_size) const
+FetchDataDescription Loglet::fetch(int64_t sn, int64_t max_size, std::optional<int64_t> position) const
 {
-    int64_t end_offset = next_offset_meta.message_offset;
+    auto next_sn{next_sn_meta};
+    if (sn == next_sn.record_sn)
+        /// If client request sn at log end, return its sn back and empty records
+        /// which basically indicates client to wait
+        return {{sn}, {}};
 
-    auto segment = segments->floorSegment(offset);
+    auto segment = segments->floorSegment(sn);
+    if (!segment)
+        throw DB::Exception(DB::ErrorCodes::SEQUENCE_OUT_OF_RANGE, "Data at sequence {} doesn't exist or gets pruned", sn);
 
-    if (offset > end_offset || !segment)
-        throw DB::Exception(DB::ErrorCodes::OFFSET_OUT_OF_RANGE, "Offset {} is out of range", offset);
-
-    /// Do the read on the segment with a base offset less than the target offset
-    /// bug if that segment doesn't contain any messages with an offset greater than that
+    /// Do the read on the segment with a base sn less than the target sn
+    /// bug if that segment doesn't contain any messages with an sn greater than that
     /// continue to read from successive segments until we get some messages or we reach the end of the log
     while (segment)
     {
-        auto fetch_info = segment->read(offset, max_size);
+        auto fetch_info = segment->read(sn, max_size, position);
         if (fetch_info.records)
             return fetch_info;
         else
-            segment = segments->higherSegment(segment->baseOffset());
+            segment = segments->higherSegment(segment->baseSequence());
     }
 
-    return {next_offset_meta, {}};
+    return {next_sn, {}};
 }
 
-void Loglet::append(int64_t last_offset, int64_t largest_timestamp, int64_t offset_of_max_timestamp, MemoryRecords & records)
+void Loglet::append(const ByteVector & record, const LogAppendDescription & append_info)
 {
     auto active = segments->activeSegment();
     assert(active);
-    active->append(last_offset, largest_timestamp, offset_of_max_timestamp, records);
+    active->append(record, append_info);
 
-    updateLogEndOffset(last_offset + 1, active->baseOffset(), active->size());
+    updateLogEndSequence(append_info.seq_metadata.record_sn + 1, active->baseSequence(), active->size());
 }
 
-LogSegmentPtr Loglet::roll(std::optional<int64_t> expected_next_offset)
+int64_t Loglet::sequenceForTimestamp(int64_t ts, bool append_time) const
+{
+    LogSegmentPtr prev_segment;
+    LogSegmentPtr target_segment;
+    TimestampSequence ts_seq_res{-1, -1};
+
+    segments->apply([ts, append_time, &ts_seq_res, &prev_segment, &target_segment](LogSegmentPtr & segment) {
+        auto ts_seq{segment->getIndexes().lowerBoundSequenceForTimestamp(ts, append_time)};
+        if (ts_seq.isInvalid())
+        {
+            /// All timestamps in index are smaller than ts
+            /// or index is empty. Remember this segment
+            prev_segment = segment;
+            return false;
+        }
+        else
+        {
+            TimestampSequence max_etime_sn{segment->maxEventTimestampSequence()};
+            TimestampSequence max_atime_sn{segment->maxAppendTimestampSequence()};
+            if ((append_time && max_atime_sn.key < ts) || max_etime_sn.key < ts)
+            {
+                prev_segment = segment;
+                return false;
+            }
+            else
+            {
+                /// We find a low bound sn
+                target_segment = segment;
+                ts_seq_res = ts_seq;
+                return true;
+            }
+        }
+    });
+
+    if (ts_seq_res.isInvalid())
+    {
+        if (prev_segment)
+        {
+            if (append_time)
+            {
+                TimestampSequence max_atime_sn{prev_segment->maxAppendTimestampSequence()};
+                if (max_atime_sn.key < ts)
+                    return max_atime_sn.value + 1;
+                else
+                    return prev_segment->baseSequence();
+            }
+            else
+            {
+                TimestampSequence max_etime_sn{prev_segment->maxEventTimestampSequence()};
+                if (max_etime_sn.key < ts)
+                    return max_etime_sn.value + 1;
+                else
+                    return prev_segment->baseSequence();
+            }
+        }
+    }
+    else
+        return ts_seq_res.value;
+
+    return LATEST_SN;
+}
+
+LogSegmentPtr Loglet::roll(std::optional<int64_t> expected_next_sn)
 {
     auto start = DB::MonotonicMilliseconds::now();
 
-    auto new_offset = std::max(expected_next_offset.value_or(0), logEndOffset());
-    auto log_file = logFile(log_dir, new_offset);
+    auto new_sn = std::max(expected_next_sn.value_or(0), logEndSequence());
+    auto log_file = logFile(log_dir, new_sn);
     auto active_segment = segments->activeSegment();
 
-    /// Segment with the same base offset shall not already exist
-    assert(!segments->contains(new_offset));
-    /// new_offset shall have larger offset the active segment's base offset
-    assert(active_segment == nullptr || new_offset > active_segment->baseOffset());
+    /// Segment with the same base sn shall not already exist
+    assert(!segments->contains(new_sn));
+    /// new_sn shall have larger sn the active segment's base sn
+    assert(active_segment == nullptr || new_sn > active_segment->baseSequence());
 
     if (active_segment)
         active_segment->turnInactive();
 
-    auto new_segment = std::make_shared<LogSegment>(log_dir, new_offset, config(), logger);
+    auto new_segment = std::make_shared<LogSegment>(log_dir, new_sn, config(), logger);
     segments->add(new_segment);
 
-    /// We need to update the segment base offset and append position data of the metadata when
-    /// log rolls. The next offset should not change
-    updateLogEndOffset(next_offset_meta.message_offset, new_segment->baseOffset(), new_segment->size());
+    /// We need to update the segment base sn and append position data of the metadata when
+    /// log rolls. The next sn should not change
+    updateLogEndSequence(next_sn_meta.record_sn, new_segment->baseSequence(), new_segment->size());
 
-    LOG_INFO(logger, "Rolled new log segment at offset {} in {}ms", new_offset, DB::MonotonicMilliseconds::now() - start);
+    LOG_INFO(logger, "Rolled new log segment at sn={} in {} ms", new_sn, DB::MonotonicMilliseconds::now() - start);
     return new_segment;
 }
 
-void Loglet::flush(int64_t offset)
+void Loglet::flush(int64_t sn)
 {
-    auto segments_to_flush = segments->values(recovery_point, offset);
+    auto segments_to_flush = segments->values(recovery_point, sn);
     bool flush_dir = false;
     for (auto & segment : segments_to_flush)
     {
         segment->flush();
-        if (segment->baseOffset() >= recovery_point)
+        if (segment->baseSequence() >= recovery_point)
             flush_dir = true;
     }
 
@@ -136,76 +202,83 @@ void Loglet::close()
     segments->close();
 }
 
-std::vector<LogSegmentPtr> Loglet::trim(int64_t target_offset)
+std::vector<LogSegmentPtr> Loglet::trim(int64_t target_sn)
 {
-    auto segments_to_delete = segments->lowerEqualSegments(target_offset);
+    auto segments_to_delete = segments->lowerEqualSegments(target_sn);
     removeSegments(segments_to_delete, true);
     auto active = segments->activeSegment();
     assert(active);
-    active->trim(target_offset);
-    updateLogEndOffset(target_offset, active->baseOffset(), active->size());
+    active->trim(target_sn);
+    updateLogEndSequence(target_sn, active->baseSequence(), active->size());
     return segments_to_delete;
 }
 
-fs::path Loglet::logFile(const fs::path & dir, int64_t offset, const std::string & suffix)
+fs::path Loglet::logFile(const fs::path & dir, int64_t sn, const std::string & suffix)
 {
-    auto log_file = dir / filenamePrefixFromOffset(offset);
+    auto log_file = dir / filenamePrefixFromOffset(sn);
     log_file += (LOG_FILE_SUFFIX + suffix);
     return log_file;
 }
 
-fs::path Loglet::indexFileDir(const fs::path & dir, int64_t offset, const std::string & suffix)
+fs::path Loglet::indexFileDir(const fs::path & dir, int64_t sn, const std::string & suffix)
 {
-    auto index_file = dir / filenamePrefixFromOffset(offset);
+    auto index_file = dir / filenamePrefixFromOffset(sn);
     index_file += (INDEX_FILE_SUFFIX + suffix);
     return index_file;
 }
 
-std::string Loglet::logDeleteDirName(const TopicShard & topic_shard_)
+std::string Loglet::logDirName(const StreamShard & stream_shard_)
 {
-    auto suffix = fmt::format("-{}.{}{}", topic_shard_.shard, uuidStringWithoutHyphen(), DELETE_DIR_SUFFIX);
-    if (topic_shard_.topic.size() + suffix.size() <= 255)
-        return topic_shard_.topic + suffix;
-    else
-        return topic_shard_.topic.substr(0, 255 - suffix.size()) + suffix;
+    return fmt::format("{}.{}", DB::toString(stream_shard_.stream.id), stream_shard_.shard);
 }
 
-/// Parse log dir to extract topic name and shard ID
-/// There are 3 cases
-/// - topic-shard
-/// - topic-shard.uuid-delete
-/// - topic-shard.uuid-future
-/// `uuid` above doesn't contain hyphen
-TopicShard Loglet::topicShardFrom(const fs::path & log_dir_)
+std::string Loglet::logDirNameWithSuffix(const StreamShard & stream_shard_, const std::string & suffix)
 {
-    auto topic_shard_str = log_dir_.filename().string();
-    auto throw_ex = [&topic_shard_str]() {
+    return fmt::format("{}{}", logDirName(stream_shard_), suffix);
+}
+
+/// Parse log dir to extract stream name and shard ID
+/// There are 3 cases
+/// - stream_uuid.shard
+/// - stream_uuid.shard.delete
+/// - stream_uuid.shard.future
+StreamShard Loglet::streamShardFrom(const fs::path & log_dir_)
+{
+    auto stream_shard_str = log_dir_.filename().string();
+    auto throw_ex = [&stream_shard_str]() {
         throw DB::Exception(
             DB::ErrorCodes::BAD_FILE_NAME,
-            "Found directory {} is not in form of topic-partition or topic-partition.unique_id-delete",
-            topic_shard_str);
+            "Found directory {} is not in form of stream_uuid.shard or stream_uuid.shard.delete or stream_uuid.shard.future",
+            stream_shard_str);
     };
 
-    if (topic_shard_str.empty() || topic_shard_str.find('-') == std::string::npos)
+    if (stream_shard_str.empty() || stream_shard_str.find('.') == std::string::npos)
         throw_ex();
 
     re2::RE2 * pat = nullptr;
-    TopicShard topic_shard_;
-    if (topic_shard_str.ends_with(DELETE_DIR_SUFFIX))
+    /// StreamShard stream_shard_;
+    if (stream_shard_str.ends_with(DELETE_DIR_SUFFIX))
         pat = &DELETE_DIR_PATTERN;
-    else if (topic_shard_str.ends_with(FUTURE_DIR_SUFFIX))
+    else if (stream_shard_str.ends_with(FUTURE_DIR_SUFFIX))
         pat = &FUTURE_DIR_PATTERN;
     else
         pat = &LOG_DIR_PATTERN;
 
     int32_t num_captures = pat->NumberOfCapturingGroups() + 1;
     re2::StringPiece matches[num_captures];
-    if (pat->Match(topic_shard_str, 0, topic_shard_str.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches, num_captures))
+    if (pat->Match(stream_shard_str, 0, stream_shard_str.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches, num_captures))
     {
-        topic_shard_.topic = matches[1].ToString();
+        DB::UUID stream_id = DB::UUIDHelpers::Nil;
+        auto id{matches[1].ToString()};
+        DB::ReadBufferFromMemory buf(id.data(), id.size());
+        auto success = DB::tryReadUUIDText(stream_id, buf);
+        if (!success)
+            throw_ex();
+
         /// Note for string_view, indexing beyond the very end throws exception, we will add one char more, hence matches[2].size() + 1
-        topic_shard_.shard = DB::parseIntStrict<int32_t>(std::string_view(matches[2].data(), matches[2].size() + 1), 0, matches[2].size());
-        return topic_shard_;
+        auto shard{DB::parseIntStrict<int32_t>(std::string_view(matches[2].data(), matches[2].size() + 1), 0, matches[2].size())};
+        /// FIXME stream name
+        return StreamShard{"", stream_id, shard};
     }
     else
         throw_ex();
@@ -214,13 +287,13 @@ TopicShard Loglet::topicShardFrom(const fs::path & log_dir_)
 }
 
 LeaderEpochFileCachePtr
-Loglet::createLeaderEpochCache(const fs::path & log_dir, const TopicShard & topic_shard, LogDirFailureChannelPtr log_dir_failure_channel)
+Loglet::createLeaderEpochCache(const fs::path & log_dir, const StreamShard & stream_shard, LogDirFailureChannelPtr log_dir_failure_channel)
 {
     auto checkpoint = std::make_shared<LeaderEpochCheckpointFile>(log_dir, std::move(log_dir_failure_channel));
-    return std::make_shared<LeaderEpochFileCache>(topic_shard, checkpoint);
+    return std::make_shared<LeaderEpochFileCache>(stream_shard, checkpoint);
 }
 
-int64_t Loglet::offsetFromFileName(const std::string & filename)
+int64_t Loglet::sequenceFromFileName(const std::string & filename)
 {
     auto pos = filename.find('.');
     assert(pos != std::string::npos);
@@ -249,6 +322,9 @@ void Loglet::removeEmptyDir()
 
 bool Loglet::renameDir(const std::string & name)
 {
+    if (segments)
+        segments->close();
+
     auto new_log_dir{parent_dir};
     new_log_dir /= name;
     fs::rename(log_dir, new_log_dir);
@@ -262,23 +338,23 @@ bool Loglet::renameDir(const std::string & name)
     return false;
 }
 
-void Loglet::updateLogEndOffset(int64_t end_offset, int64_t segment_base_offset, int64_t segment_pos)
+void Loglet::updateLogEndSequence(int64_t end_offset, int64_t segment_base_offset, int64_t segment_pos)
 {
-    next_offset_meta.message_offset = end_offset;
-    next_offset_meta.segment_base_offset = segment_base_offset;
-    next_offset_meta.file_position = segment_pos;
+    next_sn_meta.record_sn = end_offset;
+    next_sn_meta.segment_base_sn = segment_base_offset;
+    next_sn_meta.file_position = segment_pos;
 
-    /// In case recovery point is already beyond log end offset,
+    /// In case recovery point is already beyond log end sn,
     /// reset it
     if (recovery_point > end_offset)
         updateRecoveryPoint(end_offset);
 }
 
-void Loglet::markFlushed(int64_t offset)
+void Loglet::markFlushed(int64_t sn)
 {
-    if (offset > recovery_point)
+    if (sn > recovery_point)
     {
-        updateRecoveryPoint(offset);
+        updateRecoveryPoint(sn);
         last_flushed_ms = DB::UTCMilliseconds::now();
     }
 }
@@ -286,7 +362,7 @@ void Loglet::markFlushed(int64_t offset)
 void Loglet::removeSegments(const std::vector<LogSegmentPtr> & segments_to_delete, bool async)
 {
     for (const auto & segment : segments_to_delete)
-        segments->remove(segment->baseOffset());
+        segments->remove(segment->baseSequence());
 
     removeAllSegmentFiles(segments_to_delete, async);
 }
@@ -314,13 +390,13 @@ void Loglet::removeAllSegmentFiles(const std::vector<LogSegmentPtr> & segments_t
     }
 }
 
-/// Given a message offset, find its corresponding offset metadata in the log
-/// If the message offset is out of range, throw an exception
-LogOffsetMetadata Loglet::convertToOffsetMetadataOrThrow(int64_t offset) const
+/// Given a message sn, find its corresponding sn metadata in the log
+/// If the message sn is out of range, throw an exception
+LogSequenceMetadata Loglet::convertToSequenceMetadataOrThrow(int64_t sn) const
 {
-    /// auto fetch_data_info = read(offset, 1);
-    /// return fetch_data_info.fetch_offset_metadata;
+    /// auto fetch_data_info = read(sn, 1);
+    /// return fetch_data_info.fetch_sn_metadata;
     /// FIXME
-    return {offset};
+    return {sn};
 }
 }

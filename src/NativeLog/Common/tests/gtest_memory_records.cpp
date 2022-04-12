@@ -1,3 +1,4 @@
+#if 0
 #include <NativeLog/Schemas/MemoryRecords.h>
 
 #include <gtest/gtest.h>
@@ -83,3 +84,4 @@ TEST(MemoryRecords, serde)
         EXPECT_EQ(records.maxTimestamp(), 123457);
     }
 }
+#endif

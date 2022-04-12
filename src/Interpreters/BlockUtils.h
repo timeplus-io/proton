@@ -3,7 +3,7 @@
 #include "Context_fwd.h"
 
 #include <Core/Block.h>
-#include <DistributedWALClient/OpCodes.h>
+#include <NativeLog/Record/OpCodes.h>
 
 namespace DB
 {
@@ -17,5 +17,5 @@ Block buildBlock(
     const std::vector<std::pair<String, std::vector<Int64>>> & int64_cols);
 
 void appendDDLBlock(
-    Block && block, ContextPtr context, const std::vector<String> & parameter_names, DWAL::OpCode opCode, const Poco::Logger * log);
+    Block && block, ContextPtr context, const std::vector<String> & parameter_names, nlog::OpCode opCode, const Poco::Logger * log);
 }
