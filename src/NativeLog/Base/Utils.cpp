@@ -39,10 +39,17 @@ void flushFile(const fs::path & file, bool include_meta)
         DB::throwFromErrnoWithPath(fmt::format("Cannot flush file {}", file.c_str()), file.string(), DB::ErrorCodes::CANNOT_OPEN_FILE);
 
     int res = 0;
+
     if (include_meta)
         res = ::fsync(fd);
     else
+    {
+#if defined(OS_DARWIN)
+        res = ::fsync(fd);
+#else
         res = ::fdatasync(fd);
+#endif
+    }
 
     if (res < 0)
         DB::throwFromErrnoWithPath(fmt::format("Cannot flush file {}", file.c_str()), file.string(), DB::ErrorCodes::CANNOT_FLUSH_FILE);
@@ -54,7 +61,13 @@ void flushFile(int32_t fd, bool include_meta)
     if (include_meta)
         res = ::fsync(fd);
     else
+    {
+#if defined(OS_DARWIN)
+        res = ::fsync(fd);
+#else
         res = ::fdatasync(fd);
+#endif
+    }
 
     if (res < 0)
         throw DB::Exception(DB::ErrorCodes::CANNOT_FLUSH_FILE, fmt::format("Cannot flush file descriptor {}", fd));
