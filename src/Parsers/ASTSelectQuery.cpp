@@ -79,18 +79,25 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
     frame.need_parens = false;
     frame.expression_list_prepend_whitespace = true;
 
-    std::string indent_str = s.one_line ? "" : std::string(4 * frame.indent, ' ');
+    /// proton: starts
+    std::string indent_str = s.one_line ? "" : std::string(2 * (frame.indent), ' ');
+    std::string next_indent_str = std::string(2 * (frame.indent+1), ' ');
+    /// proton: ends
 
     if (with())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << "WITH" << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << "WITH " << (s.hilite ? hilite_none : "");
+        /// proton: ends
         s.one_line
             ? with()->formatImpl(s, state, frame)
             : with()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
         s.ostr << s.nl_or_ws;
     }
 
-    s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << "SELECT" << (distinct ? " DISTINCT" : "") << (s.hilite ? hilite_none : "");
+    /// proton: starts
+    s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << "SELECT" << (distinct ? " DISTINCT" : "") << "\n" + next_indent_str << (s.hilite ? hilite_none : "");
+    /// proton: ends
 
     s.one_line
         ? select()->formatImpl(s, state, frame)
@@ -103,25 +110,33 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (tables())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FROM" << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FROM\n" << (s.hilite ? hilite_none : "");
+        /// proton: ends
         tables()->formatImpl(s, state, frame);
     }
 
     if (prewhere())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PREWHERE " << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PREWHERE\n" + next_indent_str << (s.hilite ? hilite_none : "");
+        /// proton: ends
         prewhere()->formatImpl(s, state, frame);
     }
 
     if (where())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "WHERE " << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "WHERE\n" + next_indent_str << (s.hilite ? hilite_none : "");
+        /// proton: ends
         where()->formatImpl(s, state, frame);
     }
 
     if (groupBy())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY" << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "GROUP BY\n" + next_indent_str << (s.hilite ? hilite_none : "");
+        /// proton: ends
         s.one_line
             ? groupBy()->formatImpl(s, state, frame)
             : groupBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
@@ -138,7 +153,9 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (having())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "HAVING " << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "HAVING\n" + next_indent_str << (s.hilite ? hilite_none : "");
+        /// proton: ends
         having()->formatImpl(s, state, frame);
     }
 
@@ -151,7 +168,9 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (orderBy())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ORDER BY" << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ORDER BY\n" + next_indent_str << (s.hilite ? hilite_none : "");
+        /// proton: ends
         s.one_line
             ? orderBy()->formatImpl(s, state, frame)
             : orderBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
@@ -200,7 +219,9 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
 
     if (settings())
     {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SETTINGS " << (s.hilite ? hilite_none : "");
+        /// proton: starts
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SETTINGS\n" + next_indent_str << (s.hilite ? hilite_none : "");
+        /// proton: ends
         settings()->formatImpl(s, state, frame);
     }
 }

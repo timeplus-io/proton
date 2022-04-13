@@ -20,7 +20,7 @@
         {
             "id": 0,
             "tags": [
-                "sqlformat"
+                "sqlformat", "change"
             ],
             "name": "sqlformat",
             "description": "send a sqlformat request",

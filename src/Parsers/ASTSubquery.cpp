@@ -42,7 +42,9 @@ void ASTSubquery::formatImplWithoutAlias(const FormatSettings & settings, Format
         return;
     }
 
-    std::string indent_str = settings.one_line ? "" : std::string(4u * frame.indent, ' ');
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(2u * frame.indent, ' ');
+    /// proton: ends
     std::string nl_or_nothing = settings.one_line ? "" : "\n";
 
     settings.ostr << "(" << nl_or_nothing;

@@ -105,22 +105,29 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     frame.current_select = this;
-    std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(2 * (frame.indent + 1), ' ');
+    /// proton: ends
 
     if (database_and_table_name)
     {
+        /// proton: starts
         settings.ostr << " ";
         database_and_table_name->formatImpl(settings, state, frame);
+        /// proton: ends
     }
     else if (table_function)
     {
+        /// proton: starts
         settings.ostr << " ";
+        /// proton: ends
         table_function->formatImpl(settings, state, frame);
     }
     else if (subquery)
     {
-        settings.ostr << settings.nl_or_ws << indent_str;
+        /// proton: starts
         subquery->formatImpl(settings, state, frame);
+        /// proton: ends
     }
 
     if (final)
@@ -148,7 +155,9 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, FormatState &, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "");
-    std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' ');
+    /// proton: ends
 
     if (kind != Kind::Comma)
     {
@@ -280,7 +289,9 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 
 void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' ');
+    /// proton: ends
 
     for (const auto & child : children)
         child->formatImpl(settings, state, frame);
