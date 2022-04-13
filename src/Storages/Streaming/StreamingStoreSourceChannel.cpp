@@ -55,7 +55,9 @@ void StreamingStoreSourceChannel::readAndProcess()
             {
                 /// We can't move the column to columns
                 /// since the records can be shared among multiple threads
-                columns.push_back(block.getByPosition(pos).column);
+                /// We need a deep copy
+                auto col{block.getByPosition(pos).column};
+                columns.push_back(col->cloneResized(col->size()));
             }
             else
             {

@@ -365,7 +365,7 @@ inline void collectMissingSequenceRanges(
     }
     else
     {
-        /// 1) Hanlde missing sequence range before prev_range
+        /// 1) Handle missing sequence range before prev_range
         collectMissingSequenceRangeBefore(prev_range, prev_index, next_expecting_sn, log, missing_ranges);
 
         /// 2) Handle missing parts in prev_range

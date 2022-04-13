@@ -14,14 +14,13 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
 
 namespace nlog
 {
 ByteVector Record::serialize() const
 {
-    ByteVector data{static_cast<size_t>(ballparkSize() * 1.1)};
+    ByteVector data{static_cast<size_t>(ballparkSize() * 1.05)};
     /// Do an initial resize to avoid resize during the serialization
     data.resize(data.capacity());
 
@@ -281,7 +280,7 @@ uint32_t Record::ballparkSize() const
 
     size_t metadata_size = commonMetadataBytes() + sizeof(column_positions[0]) * column_positions.size();
 
-    metadata_size += sizeof(headers.size());
+    metadata_size += sizeof(headers.size()) + sizeof(key.size()) + key.size();
     for (const auto & kv : headers)
     {
         metadata_size += sizeof(kv.first.size());

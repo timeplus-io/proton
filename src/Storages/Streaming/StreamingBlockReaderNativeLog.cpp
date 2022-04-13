@@ -88,6 +88,7 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
 
                 /// Update the next file position for next sn
                 fetch_desc.position = fetched_desc.data.records->endPosition();
+
                 return records;
             }
             else
@@ -123,12 +124,15 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
 
         const auto & rb = record->getBlock();
         auto rows = rb.rows();
+
         for (const auto & column_name : column_names)
         {
             auto * col_with_type = rb.findByName(column_name);
             if (col_with_type)
             {
-                block.insert(*col_with_type);
+                /// We will need deep copy
+                block.insert(ColumnWithTypeAndName{
+                    col_with_type->column->cloneResized(col_with_type->column->size()), col_with_type->type, col_with_type->name});
             }
             else
             {

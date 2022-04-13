@@ -82,12 +82,12 @@ void MergeTreeSink::consume(Chunk chunk)
 inline bool MergeTreeSink::ignorePartBlock(Int32 parts, Int32 part_index) const
 {
     if (missing_seq_ranges.empty())
-    {
         return false;
-    }
 
     const auto & last_seq_range = missing_seq_ranges.back();
-    assert(parts == last_seq_range.parts);
+    if (last_seq_range.parts < 0)
+        /// All parts are not committed last time
+        return false;
 
     if (parts != last_seq_range.parts)
     {

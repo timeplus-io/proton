@@ -23,7 +23,7 @@ namespace
         std::vector<char> key;
 
         /// '/' + namespace + '/' + stream_id + '/' + shard
-        key.resize(ns.size() + 1 + sizeof(stream_shard.stream.id) + 1 + sizeof(int32_t) + 2);
+        key.resize(1 + ns.size() + 1 + sizeof(stream_shard.stream.id) + 1 + sizeof(int32_t));
 
         DB::WriteBufferFromVector<std::vector<char>> wbuf(key);
 
@@ -44,9 +44,6 @@ namespace
 
         /// Write shard binary
         DB::writeIntBinary(stream_shard.shard, wbuf);
-
-        /// We don't need call wbuf.finalize since we know exactly the layout
-        // of our buffer, so there will be no garbage at the end
 
         return key;
     }
@@ -171,14 +168,15 @@ Checkpoints::readSequences(rocksdb::ColumnFamilyHandle * cf_handle) const
         std::string ns(start_pos, pos - start_pos);
         start_pos = pos + 1;
 
-        /// Stream ID
-        pos = std::find(start_pos, end_pos, '/');
-        assert(pos != end_pos);
+        assert(static_cast<size_t>(end_pos - start_pos) == sizeof(StreamID) + 1 + sizeof(int32_t));
 
+        /// Stream ID
         StreamID stream_id = DB::UUIDHelpers::Nil;
         ::memcpy(&stream_id, start_pos, sizeof(stream_id));
 
-        start_pos = pos + 1;
+        start_pos += sizeof(stream_id) + 1;
+
+        assert(*(start_pos - 1) == '/');
 
         /// Shard
         assert(end_pos - start_pos == sizeof(int32_t));
