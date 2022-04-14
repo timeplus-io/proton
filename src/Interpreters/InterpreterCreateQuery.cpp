@@ -1161,7 +1161,16 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
         database = DatabaseCatalog::instance().getDatabase(create.getDatabase());
         assertOrSetUUID(create, database);
 
-        String storage_name = create.is_dictionary ? "Dictionary" : "Table";
+        /// proton : starts.
+        String storage_name;
+        if (create.is_dictionary)
+            storage_name = "Dictionary";
+        else if (create.is_ordinary_view || create.is_materialized_view)
+            storage_name = "View";
+        else
+            storage_name = "Stream";
+        /// proton : ends.
+
         auto storage_already_exists_error_code = create.is_dictionary ? ErrorCodes::DICTIONARY_ALREADY_EXISTS : ErrorCodes::STREAM_ALREADY_EXISTS;
 
         /// Table can be created before or it can be created concurrently in another thread, while we were waiting in DDLGuard.
