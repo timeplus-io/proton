@@ -1498,7 +1498,7 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
                 f"table_list is [], table {table_name} does not exit, drop table {table_name} bypass"
             )
     else:
-        raise Exception(f"table list rest acces failed,requests.get({table_ddl_url}) status code={res.status_code}")
+        raise Exception(f"table list rest access failed,requests.get({table_ddl_url}) status code={res.status_code}, res_json = {res.json()}")
 
 
 def table_exist_py(pyclient, table_name):
@@ -1541,8 +1541,8 @@ def table_exist(table_ddl_url, table_name):
             logger.debug("table_list is [] table_name = {table_name} does not exist.")
             return False
     else:
-        logger.debug(f"table list rest acces failed, requests.get({table_ddl_url}), status code={res.status_code}")
-        raise Exception(f"table list rest acces failed, requests.get({table_ddl_url}), status code={res.status_code}")
+        logger.debug(f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code},res_json = {res.json()}")
+        raise Exception(f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code}, res_json = {res.json()}")
 
 
 def create_table_rest(table_ddl_url, table_schema, retry=3):

@@ -16,11 +16,15 @@
         }
     },
     "commments": "test_rests covering the steam query smoke cases.",
+
+   
+
+
     "tests": [
         {
             "id": 0,
             "tags": [
-                "sqlformat", "change"
+                "sqlformat"
             ],
             "name": "sqlformat",
             "description": "send a sqlformat request",
@@ -45,7 +49,7 @@
                 {
                     "query_id": "401",
                     "expected_results": {
-                        "query": "SELECT\n    a.id,\n    b.type,\n    max(a.value),\n    window_start AS joined_w_start,\n    window_end AS joined_w_end\nFROM hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n    a.id,\n    b.type,\n    window_start,\n    window_end",
+                        "query": "SELECT\n  a.id, b.type, max(a.value), window_start AS joined_w_start, window_end AS joined_w_end\nFROM\n hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE\n  (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n  a.id, b.type, window_start, window_end",
                         "request_id": "any_value"
                     }
                 }
@@ -53,6 +57,75 @@
         },
         {
             "id": 1,
+            "tags": [
+                "sqlformat"
+            ],
+            "name": "sqlformat",
+            "description": "send a sqlformat request of subquery",
+            "steps": [
+                {
+                    "statements": [
+                        {
+                            "client": "rest",
+                            "rest_type": "raw",
+                            "query_type": "table",
+                            "query_id": "401",
+                            "query_url": "/proton/v1/sqlformat",
+                            "http_method": "POST",
+                            "data": {
+                                "query": "with transformed as (select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp from test_session) select top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location from session(transformed, transformed_timestamp, 2s, id, location) group by __tp_session_id, window_start, window_end, id, location"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id": "401",
+                    "expected_results": {
+                        "query": "WITH transformed AS\n  (\n    SELECT\n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM\n test_session\n  )\nSELECT\n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM\n session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY\n  __tp_session_id, window_start, window_end, id, location",
+                        "request_id": "any_value"
+                    }
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "tags": [
+                "sqlformat",
+                "bug"
+            ],
+            "name": "sqlformat",
+            "description": "send a sqlformat request of insert into",
+            "steps": [
+                {
+                    "statements": [
+                        {
+                            "client": "rest",
+                            "rest_type": "raw",
+                            "query_type": "table",
+                            "query_id": "401",
+                            "query_url": "/proton/v1/sqlformat",
+                            "http_method": "POST",
+                            "data": {
+                                "query": "insert into test_session_d (id, type) values ('dev1', 'roof') ('dev2', 'field') ('dev3', 'window') ('dev4', 'wall') ('dev5', 'roof') ('dev6', 'window') ('dev7', 'wall') ('dev8', 'floor')"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id": "401",
+                    "expected_results": {
+                        "query": "WITH transformed AS\n  (\n    SELECT\n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM\n test_session\n  )\nSELECT\n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM\n session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY\n  __tp_session_id, window_start, window_end, id, location",
+                        "request_id": "any_value"
+                    }
+                }
+            ]
+        },                
+        {
+            "id": 3,
             "tags": [
                 "http_snap_shot"
             ],
