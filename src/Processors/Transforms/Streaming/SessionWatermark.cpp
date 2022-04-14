@@ -17,6 +17,8 @@ SessionWatermark::SessionWatermark(WatermarkSettings && watermark_settings_, boo
     : HopTumbleBaseWatermark(std::move(watermark_settings_), proc_time_, log_)
 {
     method_chosen = chooseBlockCacheMethod();
+    session_map.keys_size = watermark_settings.window_desc->keys.size();
+    session_map.key_sizes = key_sizes;
     session_map.init(method_chosen);
 }
 

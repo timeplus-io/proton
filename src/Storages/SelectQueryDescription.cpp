@@ -64,24 +64,29 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
     else if (auto table_expression = extractTableExpression(query, 0))
     {
         /// table_functoin
-        auto * ast_func = table_expression->as<ASTFunction>();
-        if (ast_func && (isTableFunctionTumble(ast_func) || isTableFunctionHop(ast_func) || isTableFunctionHist(ast_func)))
+        if (auto * ast_func = table_expression->as<ASTFunction>())
         {
-            assert(ast_func->arguments);
-            table_expression = ast_func->arguments->children.at(0);
-
-            /// table name
-            if (auto identifier = table_expression->as<ASTIdentifier>())
+            if (isTableFunctionSession(ast_func))
+                throw Exception(
+                    "Session window is not supported for MATERIALIZED VIEW", ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);
+            if ((isTableFunctionTumble(ast_func) || isTableFunctionHop(ast_func) || isTableFunctionHist(ast_func)))
             {
-                auto table = identifier->createTable();
-                if (!table)
-                    return StorageID::createEmpty();
+                assert(ast_func->arguments);
+                table_expression = ast_func->arguments->children.at(0);
 
-                auto storage_id = table->getTableId();
-                if (storage_id.database_name.empty())
-                    storage_id.database_name = context->getCurrentDatabase();
+                /// table name
+                if (auto identifier = table_expression->as<ASTIdentifier>())
+                {
+                    auto table = identifier->createTable();
+                    if (!table)
+                        return StorageID::createEmpty();
 
-                return storage_id;
+                    auto storage_id = table->getTableId();
+                    if (storage_id.database_name.empty())
+                        storage_id.database_name = context->getCurrentDatabase();
+
+                    return storage_id;
+                }
             }
         }
 
