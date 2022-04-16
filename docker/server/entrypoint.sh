@@ -247,6 +247,41 @@ if [ -n "$MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO" ]; then
     fi
 fi
 
+if [ "$STREAM_STORAGE_TYPE" = "kafka" ]; then
+    sed -i"" "/kafka:/{n;s/enabled: false/enabled: true/g}" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to enable kafka log.'
+        exit 1
+    fi
+
+    sed -i"" "/nativelog:/{n;s/enabled: true/enabled: false/g}" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to disable native log.'
+        exit 1
+    fi
+elif [ "$STREAM_STORAGE_TYPE" = "nativelog" ]; then
+    sed -i"" "/kafka:/{n;s/enabled: true/enabled: false/g}" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to disable kafka log.'
+        exit 1
+    fi
+
+    sed -i"" "/nativelog:/{n;s/enabled: false/enabled: true/g}" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to enable native log.'
+        exit 1
+    fi
+fi
+
+if [ -n "$ENABLE_LOG_STREAM" ]; then
+    # Replace `_tp_enable_log_stream_expr: false` in config.yaml with customized one
+    sed -i"" "s/_tp_enable_log_stream_expr: false/_tp_enable_log_stream_expr: $ENABLE_LOG_STREAM/g" "$PROTON_CONFIG"
+    if [[ $? -ne 0 ]]; then
+        echo >&2 'Failed to setup _tp_enable_log_stream_expr.'
+        exit 1
+    fi
+fi
+
 # if no args passed to `docker run` or first argument start with `--`, then the user is passing proton-server arguments
 if [[ $# -lt 1 ]] || [[ "$1" == "--"* ]]; then
     # Watchdog is launched by default, but does not send SIGINT to the main process,
