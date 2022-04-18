@@ -422,6 +422,8 @@ NativeLogArgs parseArgs(int argc, char ** argv)
 
     po::options_description global = createOptionsDescription("Global options", getTerminalWidth());
     auto cmds = global.add_options();
+    /// cmds("data_dir", value<std::string>()->default_value("/var/log/proton/nativelog/log"), "Log data directory");
+    /// cmds("meta_dir", value<std::string>()->default_value("/var/log/proton/nativelog/meta"), "Log metadata directory");
     cmds("command", value<std::string>()->default_value("help"), "<stream|produce|consume|trim> subcommand to execute");
     cmds("subargs", value<std::vector<std::string>>(), "Arguments for subcommand");
 

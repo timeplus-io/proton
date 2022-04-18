@@ -1,7 +1,7 @@
 #pragma once
 
-#include "StorageExternalStreamImpl.h"
-#include "ExternalStreamSettings.h"
+#include <Storages/ExternalStream/ExternalStreamSettings.h>
+#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 
 namespace DB
 {
@@ -14,7 +14,7 @@ public:
     Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_);
     ~Kafka() override = default;
 
-    void startup() override;
+    void startup() override { }
     void shutdown() override { }
     bool supportsSubcolumns() const override { return true; }
     NamesAndTypesList getVirtuals() const override;

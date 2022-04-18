@@ -913,9 +913,10 @@ settings:
         query_mode: streaming               # Default query mode. table or streaming
         query_resource_group: "dedicated"   # Default resource group. dedicated or shared
         enable_light_ingest: true           # Light ingest is inserting partial columns of a table
+        _tp_enable_log_stream_expr: false   # Log system analytic
         synchronous_ddl: true               # If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.
         asterisk_include_reserved_columns: true # Show reserved columns on SELECT query.
-        async_ingest_block_timeout_ms: 120000 # Max duration for a block to commit before it is considered expired during async ingestion
+        async_ingest_block_timeout_ms: 12000    # Max duration for a block to commit before it is considered expired during async ingestion
         aysnc_ingest_max_outstanding_blocks: 10000 # Max outstanding blocks to be committed per stream during async ingestion
         part_commit_pool_size: 8 # Total shared thread pool size for building and committing parts for Stream
         max_idempotent_ids: 1000 # Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion

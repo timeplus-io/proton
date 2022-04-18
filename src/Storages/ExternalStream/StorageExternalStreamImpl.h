@@ -5,7 +5,7 @@
 namespace DB
 {
 /// Base class of StorageExternalStreamImpl
-class StorageExternalStreamImpl
+class StorageExternalStreamImpl: public std::enable_shared_from_this<StorageExternalStreamImpl>
 {
 public:
     virtual ~StorageExternalStreamImpl() = default;

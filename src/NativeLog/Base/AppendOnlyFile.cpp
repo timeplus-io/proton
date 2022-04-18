@@ -45,9 +45,9 @@ AppendOnlyFile::AppendOnlyFile(const fs::path & filename_, bool file_already_exi
 
     if (fd == -1)
         DB::throwFromErrnoWithPath(
-            "Cannot open file " + filename.string(),
+            "Cannot open file ",
             filename.string(),
-            errno == ENOENT ? DB::ErrorCodes::FILE_DOESNT_EXIST : DB::ErrorCodes::CANNOT_OPEN_FILE);
+            errno == ENOENT ? DB::ErrorCodes::FILE_DOESNT_EXIST : DB::ErrorCodes::CANNOT_OPEN_FILE, errno);
 }
 
 AppendOnlyFile::~AppendOnlyFile()
@@ -75,7 +75,7 @@ int64_t AppendOnlyFile::append(const char * data, uint64_t bytes_to_write)
         {
             if (errno != EINTR)
                 DB::throwFromErrnoWithPath(
-                    "Cannot write to file " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
+                    "Cannot write to file ", filename.string(), DB::ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR, errno);
 
         }
     }
@@ -109,7 +109,7 @@ int64_t AppendOnlyFile::read(char * dst, uint64_t bytes_to_read, uint64_t offset
         {
             if (errno != EINTR)
                 DB::throwFromErrnoWithPath(
-                    "Cannot read from file " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+                    "Cannot read from file", filename.string(), DB::ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR, errno);
         }
     }
 
@@ -142,7 +142,7 @@ int64_t AppendOnlyFile::size() const
     struct stat buf;
     int res = fstat(fd, &buf);
     if (-1 == res)
-        DB::throwFromErrnoWithPath("Cannot execute fstat " + filename.string(), filename.string(), DB::ErrorCodes::CANNOT_FSTAT);
+        DB::throwFromErrnoWithPath("Cannot execute fstat ", filename.string(), DB::ErrorCodes::CANNOT_FSTAT, errno);
 
     return buf.st_size;
 }

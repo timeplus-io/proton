@@ -223,7 +223,7 @@ void LogManager::startupWithConfigOverrides(LogConfigPtr default_config_, const 
     }
 }
 
-LogManager::TwoLevelUnorderedMap<std::string, StreamShard, int64_t> LogManager::readRecoverySNCheckpoints(const fs::path & dir)
+LogManager::TwoLevelUnorderedMap<std::string, StreamShard, int64_t> LogManager::readRecoverySequenceCheckpoints(const fs::path & dir)
 {
     auto iter = checkpoints.find(dir);
     if (iter != checkpoints.end())
@@ -337,7 +337,7 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
         LOG_INFO(logger, "Attempting recovery for all logs in {} since no clean shutdown file was found", root_log_dir.c_str());
 
     /// FIXME live query recovery / log start sns directly
-    auto recovery_sns = readRecoverySNCheckpoints(root_log_dir);
+    auto recovery_sns = readRecoverySequenceCheckpoints(root_log_dir);
     auto log_start_sns = readStartSequenceCheckpoints(root_log_dir);
 
     auto pool = std::make_shared<ThreadPool>(

@@ -18,12 +18,10 @@ namespace ErrorCodes
 
 TableFunctionHist::TableFunctionHist(const String & name_) : TableFunctionProxyBase(name_)
 {
-    /// proton: starts
     help_message = fmt::format(
         "Function '{}' requires only 1 parameter"
         "<name of the stream>, it should be a stream storage",
         name);
-    /// proton: ends
 }
 
 void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr context)
@@ -41,7 +39,7 @@ void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr conte
     storage_id = resolveStorageID(args[0], context);
 
     /// Calculate column description
-    init(context, func_ast, "", nullptr);
+    init(context, func_ast, functionNamePrefix(), nullptr);
 }
 
 void TableFunctionHist::init(

@@ -18,12 +18,12 @@ namespace DB
 class Kafka;
 class StreamingFormatExecutor;
 
-class KafkaSource : public SourceWithProgress
+class KafkaSource final : public SourceWithProgress
 {
 public:
     KafkaSource(
         Kafka * kafka,
-        const Block & header,
+        const Block & header_,
         const StorageMetadataPtr & metadata_snapshot_,
         ContextPtr query_context_,
         Int32 shard,

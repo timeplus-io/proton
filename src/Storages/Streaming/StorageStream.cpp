@@ -3,13 +3,13 @@
 #include "StreamingBlockReaderKafka.h"
 #include "StreamingBlockReaderNativeLog.h"
 #include "StreamingStoreSource.h"
+#include "parseSeekTo.h"
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnDecimal.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <Functions/IFunction.h>
-#include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -32,7 +32,6 @@
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <base/logger_useful.h>
-#include <Common/parseIntStrict.h>
 #include <Common/randomSeed.h>
 #include <Common/setThreadName.h>
 #include <Common/timeScale.h>
@@ -1924,97 +1923,14 @@ void StorageStream::deinitNativeLog()
 
 std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
 {
-    /// -1 latest, -2 earliest
-    if (seek_to == "latest")
+    auto utc_ms = parseSeekTo(seek_to, true);
+
+    if (utc_ms == nlog::LATEST_SN || utc_ms == nlog::EARLIEST_SN)
     {
-        return std::vector<Int64>(shards, nlog::LATEST_SN);
-    }
-    else if (seek_to == "earliest")
-    {
-        return std::vector<Int64>(shards, nlog::EARLIEST_SN);
+        return std::vector<Int64>(shards, utc_ms);
     }
     else
     {
-        /// -1h
-        /// ISO8601
-        /// Streaming store broker timestamp in milliseconds
-        if (seek_to.empty())
-            throw Exception("Empty seek_to", ErrorCodes::BAD_ARGUMENTS);
-
-        Int64 multiplier = 0;
-        bool is_month = false, is_quarter = false, is_year = false;
-        switch (seek_to.back())
-        {
-            case 's':
-                multiplier = 1000;
-                break;
-            case 'm':
-                multiplier = 60 * 1000;
-                break;
-            case 'h':
-                multiplier = 60 * 60 * 1000;
-                break;
-            case 'd':
-                multiplier = 24 * 60 * 60 * 1000;
-                break;
-            case 'M':
-                multiplier = 1000;
-                is_month = true;
-                break;
-            case 'q':
-                multiplier = 1000;
-                is_quarter = true;
-                break;
-            case 'y':
-                multiplier = 1000;
-                is_year = true;
-                break;
-        }
-
-        Int64 utc_ms = 0;
-        if (multiplier > 0)
-        {
-            auto relative_time = parseIntStrict<Int32>(seek_to, 0, seek_to.size() - 1);
-            if (relative_time > 0)
-                throw Exception("Relative seek time shall be negative", ErrorCodes::BAD_ARGUMENTS);
-
-            if (is_month)
-            {
-                utc_ms = UTCMilliseconds::now();
-                utc_ms = DateLUT::instance("UTC").addMonths(utc_ms / multiplier, relative_time) * multiplier + (utc_ms % multiplier);
-            }
-            else if (is_quarter)
-            {
-                utc_ms = UTCMilliseconds::now();
-                utc_ms = DateLUT::instance("UTC").addQuarters(utc_ms / multiplier, relative_time) * multiplier + (utc_ms % multiplier);
-            }
-            else if (is_year)
-            {
-                utc_ms = UTCMilliseconds::now();
-                utc_ms = DateLUT::instance("UTC").addYears(utc_ms / multiplier, relative_time) * multiplier + (utc_ms % multiplier);
-            }
-            else
-                utc_ms = UTCMilliseconds::now() + relative_time * multiplier;
-        }
-        else
-        {
-            DateTime64 res;
-            ReadBufferFromString in(seek_to);
-            try
-            {
-                parseDateTime64BestEffort(res, 3, in, DateLUT::instance(), DateLUT::instance("UTC"));
-            }
-            catch (...)
-            {
-                throw Exception(
-                    "Invalid seek timestamp, ISO8601 format or relative time are supported. Example: 2020-01-01T01:12:45Z or "
-                    "2020-01-01T01:12:45.123+08:00 or -10s or -6m or -2h or -1d",
-                    ErrorCodes::BAD_ARGUMENTS);
-            }
-
-            utc_ms = res;
-        }
-
         if (kafka)
             return kafka->log->offsetsForTimestamps(kafka->topic(), utc_ms, shards);
         else

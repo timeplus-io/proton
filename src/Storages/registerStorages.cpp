@@ -35,9 +35,11 @@ void registerStorageCOS(StorageFactory & factory);
 void registerStorageEmbeddedRocksDB(StorageFactory & factory);
 #endif
 
-#if USE_FILELOG
-void registerStorageFileLog(StorageFactory & factory);
-#endif
+/// proton: starts
+/// #if USE_FILELOG
+/// void registerStorageFileLog(StorageFactory & factory);
+/// #endif
+/// proton: ends
 
 void registerStorages()
 {
@@ -67,9 +69,11 @@ void registerStorages()
     registerStorageCOS(factory);
     #endif
 
-    #if USE_FILELOG
-    registerStorageFileLog(factory);
-    #endif
+    /// proton: starts
+    /// #if USE_FILELOG
+    /// registerStorageFileLog(factory);
+    /// #endif
+    /// proton: ends
 
     #if USE_ROCKSDB
     registerStorageEmbeddedRocksDB(factory);

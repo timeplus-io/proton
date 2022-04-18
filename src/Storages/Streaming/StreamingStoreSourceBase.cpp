@@ -91,7 +91,7 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
         }
         else if (column.name == RESERVED_CONSUME_TIME)
         {
-            virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.consume_time; };
+            virtual_time_columns_calc[pos] = [](const BlockInfo &) { return UTCMilliseconds::now(); };
             column_positions[pos] = pos + total_physical_columns_in_schema;
             virtual_col_type = column.type;
         }

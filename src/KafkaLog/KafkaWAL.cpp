@@ -689,35 +689,6 @@ KafkaWALClusterPtr KafkaWAL::cluster(const KafkaWALContext & ctx) const
 /// https://cwiki.apache.org/confluence/display/KAFKA/KIP-33+-+Add+a+time+based+log+index
 std::vector<int64_t> KafkaWAL::offsetsForTimestamps(const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms) const
 {
-    using RdKafkaTopicPartitionListPtr = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;
-    RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(shards), rd_kafka_topic_partition_list_destroy};
-
-    for (int32_t i = 0; i < shards; ++i)
-    {
-        memset(&offsets->elems[i], 0, sizeof(offsets->elems[i]));
-
-        /// We will need duplicate the topic string since destroy function will free it
-        offsets->elems[i].topic = strdup(topic.c_str());
-        offsets->elems[i].partition = i;
-        offsets->elems[i].offset = timestamp;
-    }
-
-    offsets->cnt = shards;
-
-    auto err = rd_kafka_offsets_for_times(producer_handle.get(), offsets.get(), timeout_ms);
-    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        throw DB::Exception("Failed to fetch offsets for timestamps", mapErrorCode(err));
-
-    std::vector<int64_t> results{shards};
-
-    for (int32_t i = 0; i < shards; ++i)
-    {
-        if (offsets->elems[i].err != RD_KAFKA_RESP_ERR_NO_ERROR)
-            throw DB::Exception("Failed to fetch offsets for timestamps", mapErrorCode(err));
-
-        results[offsets->elems[i].partition] = offsets->elems[i].offset;
-    }
-
-    return results;
+    return getOffsetsForTimestamps(producer_handle.get(), topic, timestamp, shards, timeout_ms);
 }
 }

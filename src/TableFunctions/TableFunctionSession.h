@@ -14,5 +14,7 @@ private:
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
     DataTypePtr getElementType(const DataTypeTuple * tuple) const override;
     void handleResultType(const ColumnWithTypeAndName & type_and_name) override;
+    ASTs checkAndExtractArguments(ASTFunction * node) const override;
+    String functionNamePrefix() const override;
 };
 }

@@ -23,6 +23,14 @@ public:
 protected:
     StorageID resolveStorageID(const ASTPtr & arg, ContextPtr context);
 
+    void doParseArguments(const ASTPtr & func_ast, ContextPtr context, const String & help_msg);
+
+    virtual void postArgs(ASTs &) const { }
+
+    virtual String functionNamePrefix() const = 0;
+
+    virtual ASTs checkAndExtractArguments(ASTFunction *) const { return {}; }
+
 protected:
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;

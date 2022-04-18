@@ -86,7 +86,7 @@ Pipe ProxyStream::read(
 void ProxyStream::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageMetadataPtr & /*metadata_snapshot*/,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -142,7 +142,15 @@ void ProxyStream::read(
             max_block_size,
             num_streams);
     else if (auto * external_stream = storage->as<StorageExternalStream>())
-        return external_stream->read(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+        return external_stream->read(
+            query_plan,
+            updated_column_names,
+            underlying_storage_metadata_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            num_streams);
 
     auto * distributed = storage->as<StorageStream>();
     assert(distributed);

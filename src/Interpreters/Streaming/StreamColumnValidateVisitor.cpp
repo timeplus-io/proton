@@ -37,16 +37,19 @@ void StreamColumnValidateMatcher::visit(ASTColumnDeclaration & column, StreamCol
 {
     if (!column.name.compare(RESERVED_EVENT_TIME))
     {
-        auto * func = column.type->as<ASTFunction>();
-        if (data.is_stream && (!func || func->name.compare("datetime64")))
-        {
-            throw Exception(
-                ErrorCodes::ILLEGAL_COLUMN, "The type of {} column must be datetime64, but got {}", RESERVED_EVENT_TIME, func->name);
-        }
-        else
+        /// FIXME, ALIAS column check. column.default_specifier = "ALIAS", type of default_expression
+        if (!column.type)
         {
             data.found_time = true;
+            return;
         }
+
+        auto * func = column.type->as<ASTFunction>();
+        if (data.is_stream && (!func || func->name.compare("datetime64")))
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN, "The type of {} column must be datetime64, but got {}", RESERVED_EVENT_TIME, func->name);
+        else
+            data.found_time = true;
     }
 }
 

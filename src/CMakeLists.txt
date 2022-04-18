@@ -84,13 +84,6 @@ list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_dele
 
 add_headers_and_sources(dbms Disks/IO)
 
-if (TARGET ch_contrib::rdkafka)
-    add_headers_and_sources(dbms Storages/ExternalStream)
-    add_headers_and_sources(dbms KafkaLog)
-else()
-    message(FATAL "rdkafka is not enabled which is required")
-endif()
-
 if (USE_LIBPQXX)
     add_headers_and_sources(dbms Core/PostgreSQL)
 endif()
@@ -110,11 +103,13 @@ endif()
 
 add_headers_and_sources(dbms Storages/Cache)
 
-if (OS_LINUX)
-    add_headers_and_sources(dbms Storages/FileLog)
-else()
-    message(STATUS "StorageFileLog is only supported on Linux")
-endif ()
+# proton: start
+#if (OS_LINUX)
+#    add_headers_and_sources(dbms Storages/FileLog)
+#else()
+#    message(STATUS "StorageFileLog is only supported on Linux")
+#endif ()
+# proton: ends
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
@@ -257,10 +252,14 @@ endif()
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
 
+# lib external_stream (deps on) -> klog -> nlog -> clickhouse_common_io
 if (TARGET ch_contrib::rdkafka)
-    add_object_library(clickhouse_distributed_write_ahead_log KafkaLog)
-endif ()
+    add_subdirectory(KafkaLog)
+else()
+    message(FATAL "rdkafka is not enabled which is required")
+endif()
 
+add_subdirectory(Storages/ExternalStream)
 # proton: end
 
 set (DBMS_COMMON_LIBRARIES)
@@ -276,6 +275,9 @@ if (USE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
         target_link_libraries (dbms PUBLIC nlog)
     endif()
 
+    target_link_libraries (dbms PRIVATE klog)
+    target_link_libraries (dbms PRIVATE external_stream)
+
     set (all_modules dbms)
 else()
     add_library (dbms SHARED ${dbms_headers} ${dbms_sources})
@@ -288,6 +290,9 @@ else()
     if (ENABLE_NATIVE_LOG)
         target_link_libraries (dbms PUBLIC nlog)
     endif()
+
+    target_link_libraries (dbms PRIVATE klog)
+    target_link_libraries (dbms PRIVATE external_stream)
 
     list (APPEND all_modules dbms)
     # force all split libs to be linked

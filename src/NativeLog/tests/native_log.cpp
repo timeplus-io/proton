@@ -401,8 +401,8 @@ int main(int argc, char ** argv)
 
     auto * logger = &Poco::Logger::get("native_log");
 
-    nl_args.log_root_directory = "/root/native_log/log";
-    nl_args.meta_root_directory = "/root/native_log/meta";
+    nl_args.log_root_directory = "/var/lib/proton/nativelog/log";
+    nl_args.meta_root_directory = "/var/lib/proton/nativelog/meta";
 
     try
     {

@@ -4,13 +4,16 @@
 #include "StorageExternalStreamImpl.h"
 
 /// External stream storages
-#include "Kafka.h"
+#include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/ExternalStream/Log/FileLog.h>
 
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/StorageFactory.h>
+
+#include <re2/re2.h>
 
 namespace DB
 {
@@ -23,10 +26,12 @@ namespace ErrorCodes
 namespace
 {
     std::unique_ptr<StorageExternalStreamImpl>
-    createExternalStream(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings)
+    createExternalStream(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context)
     {
         if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
             return std::make_unique<Kafka>(storage, std::move(settings));
+        if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
+            return std::make_unique<FileLog>(storage, std::move(settings));
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
     }
@@ -99,7 +104,7 @@ StorageExternalStream::StorageExternalStream(
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_));
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_);
     external_stream.swap(stream);
 }
 

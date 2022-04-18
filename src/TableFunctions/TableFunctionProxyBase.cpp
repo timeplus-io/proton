@@ -20,6 +20,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+}
+
 namespace
 {
     StreamingFunctionDescriptionPtr
@@ -197,10 +202,8 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         }
         else
         {
-            if (storage->isView())
-                throw Exception("tumble/hop functions can't be applied to views", ErrorCodes::BAD_ARGUMENTS);
-
-            if (storage->getName() != "Stream" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
+            const auto & storage_name = storage->getName();
+            if (storage_name != "Stream" && storage_name != "MaterializedView" && storage_name != "ExternalStream")
                 throw Exception("tumble/hop functions can't be applied to this stream", ErrorCodes::BAD_ARGUMENTS);
 
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
@@ -262,5 +265,73 @@ void TableFunctionProxyBase::handleResultType(const ColumnWithTypeAndName & type
 ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /* context */) const
 {
     return columns;
+}
+
+void TableFunctionProxyBase::doParseArguments(const ASTPtr & func_ast, ContextPtr context, const String & help_msg)
+{
+    if (func_ast->children.size() != 1)
+        throw Exception(help_msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+    auto streaming_func_ast = func_ast->clone();
+    auto * node = streaming_func_ast->as<ASTFunction>();
+    assert(node);
+
+    auto args = checkAndExtractArguments(node);
+
+    /// First argument is expected to be table
+    storage_id = resolveStorageID(args[0], context);
+
+    /// The rest of the arguments are streaming window arguments
+    /// Change the name to call the internal streaming window functions
+    auto func_name = boost::to_upper_copy(node->name);
+    node->name = "__" + func_name;
+    node->alias = STREAMING_WINDOW_FUNC_ALIAS;
+
+    /// Prune the arguments to fit the internal window function
+    args.erase(args.begin());
+
+    ASTPtr timestamp_expr_ast;
+
+    //// [timestamp_column_expr]
+    /// The following logic is adding system default time column to tumble function if user doesn't specify one
+    if (args[0])
+    {
+        if (auto func_node = args[0]->as<ASTFunction>(); func_node)
+        {
+            /// time column is a transformed one, for example, tumble(table, toDateTime32(t), INTERVAL 5 SECOND)
+            func_node->alias = STREAMING_TIMESTAMP_ALIAS;
+            timestamp_expr_ast = args[0];
+        }
+    }
+    else
+    {
+        /// We like to validate if the RESERVED_EVENT_TIME is an alias column
+        if (!subquery)
+        {
+            auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+            assert(storage);
+            auto metadata{storage->getInMemoryMetadataPtr()};
+            if (metadata->columns.has(RESERVED_EVENT_TIME))
+            {
+                const auto & col_desc = metadata->columns.get(RESERVED_EVENT_TIME);
+                if (col_desc.default_desc.kind == ColumnDefaultKind::Alias)
+                {
+                    args[0] = col_desc.default_desc.expression;
+                    args[0]->setAlias(STREAMING_TIMESTAMP_ALIAS);
+                    timestamp_expr_ast = args[0];
+                }
+            }
+        }
+
+        if (!timestamp_expr_ast)
+            args[0] = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+    }
+
+    postArgs(args);
+
+    node->arguments->children.swap(args);
+
+    /// Calculate column description
+    init(context, std::move(streaming_func_ast), functionNamePrefix(), std::move(timestamp_expr_ast));
 }
 }

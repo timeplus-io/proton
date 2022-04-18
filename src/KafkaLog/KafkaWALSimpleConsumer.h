@@ -60,6 +60,8 @@ public:
 
     DescribeResult describe(const String & name) const;
 
+    std::vector<int64_t> offsetsForTimestamps(const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms=5000) const;
+
 private:
     /// Poll consume errors
     void backgroundPoll() const;

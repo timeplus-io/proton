@@ -1,11 +1,12 @@
 #include "Kafka.h"
-#include "ExternalStreamTypes.h"
 #include "KafkaSource.h"
 
 #include <DataTypes/DataTypesNumber.h>
-#include <KafkaLog/KafkaWALPool.h>
 #include <Interpreters/Context.h>
+#include <KafkaLog/KafkaWALPool.h>
+#include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
+#include <Storages/Streaming/parseSeekTo.h>
 #include <base/logger_useful.h>
 #include <Common/ProtonCommon.h>
 
@@ -27,10 +28,10 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
 
     if (settings->brokers.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `brokers` setting", settings->type.value);
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `brokers` setting for {} external stream", settings->type.value);
 
     if (settings->topic.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting", settings->type.value);
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
 
     calculateDataFormat(storage);
 
@@ -43,10 +44,6 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
 
     shards = result.partitions;
-}
-
-void Kafka::startup()
-{
 }
 
 Pipe Kafka::read(
@@ -89,11 +86,7 @@ Pipe Kafka::read(
             pipes.emplace_back(std::make_shared<KafkaSource>(this, header, metadata_snapshot, context, i, offsets[i], max_block_size, log));
     }
 
-    LOG_INFO(
-        log,
-        "Starting reading {} streams by seeking to {} in dedicated resource group",
-        pipes.size(),
-        settings_ref.seek_to.value);
+    LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), settings_ref.seek_to.value);
 
     return Pipe::unitePipes(std::move(pipes));
 }
@@ -114,13 +107,16 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
 
 std::vector<Int64> Kafka::getOffsets(const String & seek_to) const
 {
+    auto utc_ms = parseSeekTo(seek_to, true);
+
     /// -1 latest, -2 earliest
-    if (seek_to == "latest")
-        return std::vector<Int64>(shards, -1);
-    else if (seek_to == "earliest")
-        return std::vector<Int64>(shards, -2);
+    if (utc_ms == nlog::LATEST_SN || utc_ms == nlog::EARLIEST_SN)
+        return std::vector<Int64>(shards, utc_ms);
     else
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "External Kafka stream only supports seek to 'latest' and 'earliest'");
+    {
+        auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value);
+        return consumer->offsetsForTimestamps(settings->topic.value, utc_ms, shards);
+    }
 }
 
 void Kafka::calculateDataFormat(const IStorage * storage)

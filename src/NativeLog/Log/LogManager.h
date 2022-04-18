@@ -146,7 +146,7 @@ private:
         const std::string & ns = "",
         std::function<bool(const std::pair<StreamShard, LogPtr> &)> predicate = {}) const;
 
-    TwoLevelUnorderedMap<std::string, StreamShard, int64_t> readRecoverySNCheckpoints(const fs::path & dir);
+    TwoLevelUnorderedMap<std::string, StreamShard, int64_t> readRecoverySequenceCheckpoints(const fs::path & dir);
     TwoLevelUnorderedMap<std::string, StreamShard, int64_t> readStartSequenceCheckpoints(const fs::path & dir);
 
     void addLogToBeDeleted(LogPtr log) { logs_to_be_deleted.emplace(log, DB::MonotonicMilliseconds::now()); }

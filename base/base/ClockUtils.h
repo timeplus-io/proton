@@ -4,6 +4,8 @@
 
 #include <chrono>
 
+#include <time.h>
+
 namespace DB
 {
 template<typename Clock, typename TimeScale>
@@ -36,5 +38,14 @@ using MonotonicSeconds = MonotonicClock<std::chrono::seconds>;
 using MonotonicMilliseconds = MonotonicClock<std::chrono::milliseconds>;
 using MonotonicMicroseconds = MonotonicClock<std::chrono::microseconds>;
 using MonotonicNanoseconds = MonotonicClock<std::chrono::nanoseconds>;
+
+inline Int64 local_now_ms()
+{
+    timespec spec{};
+    if (clock_gettime(CLOCK_REALTIME, &spec))
+        return UTCMilliseconds::now();
+
+    return spec.tv_sec * 1000 + spec.tv_nsec / 1000000;
+}
 
 }
