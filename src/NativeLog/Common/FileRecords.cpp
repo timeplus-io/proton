@@ -126,7 +126,7 @@ RecordPtrs FileRecords::deserialize(std::vector<char> & read_buf, const SchemaCo
 
     /// When FileRecords are sliced, it guarantees [start_pos, end_pos) contains complete number of records
     /// We don't want to read pass end_pos
-    auto max_to_read = std::min(end_offset - start_offset + 1, read_buf.size());
+    auto max_to_read = std::min<uint64_t>(end_offset - start_offset + 1, read_buf.size());
 
     /// Initial read
     auto n = file->read(read_buf.data(), max_to_read, start_offset);
@@ -156,7 +156,7 @@ RecordPtrs FileRecords::deserialize(std::vector<char> & read_buf, const SchemaCo
             read_buf.resize(read_buf.size() * 2);
 
         /// Read more data. We don't want read passed end_pos
-        max_to_read = std::min(end_offset - current_file_offset + 1, read_buf.size() - next_consuming_pos - unconsumed);
+        max_to_read = std::min<uint64_t>(end_offset - current_file_offset + 1, read_buf.size() - next_consuming_pos - unconsumed);
 
         auto r = file->read(read_buf.data() + next_consuming_pos + unconsumed, max_to_read, current_file_offset);
         if (r <= 0)
