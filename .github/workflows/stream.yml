@@ -39,7 +39,7 @@ jobs:
         export PROTON_VERSION=testing-$GITHUB_SHA
         env
         pip3 install -r helpers/requirements.txt
-        python3 ci_runner.py --debug
+        python3 ci_runner.py --debug --settings=redp,nativelog
 
         echo "upload cache-address.tar.gz"
         tar -zcf ./cache-address.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -47,7 +47,7 @@ jobs:
         aws s3 cp --no-progress ./cache-address.tar.gz s3://tp-internal/proton/
 
         echo "check test result"
-        cat $GITHUB_WORKSPACE/tests/stream/.status | grep OK
+        cat $GITHUB_WORKSPACE/tests/stream/.status | grep FAILED | (($?==0))
 
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

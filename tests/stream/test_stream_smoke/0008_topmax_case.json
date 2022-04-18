@@ -25,7 +25,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_topmax"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_topmax (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},
                     {"client":"python","query_id":"901", "query_end_timer":5, "query_type": "stream", "query":"select top_k(int,3,true) from test_topmax limit 2"},                    
-                    {"client":"python", "query_type": "table", "wait":1,"query":
+                    {"client":"python", "query_type": "table", "wait":3,"query":
                         "insert into test_topmax (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234561, '{@string1}', 12341.123, 123451.123, to_date('2022-03-21'), to_datetime('2022-03-24 17:17:11'), 'a', ('a', 0), '192.168.168.161', '2a02:aa08:e000:3100::21', {'key1':111}, null ,'2020-01-01 11:11:11')
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a2', -1234561, 1234562, '{@string2}', 12342.123, 123452.123, to_date('2022-03-22'), to_datetime('2022-03-24 17:17:12'), 'b', ('b', 1), '192.168.168.162', '2a02:aa08:e000:3100::22', {'key2':112}, '2020-01-01 11:11:12','2020-01-01 11:11:12')
@@ -90,7 +90,7 @@
                     {"client":"python", "query_type": "table", "query":"drop stream if exists test_topmax"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream if not exists test_topmax (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},
                     {"client":"python","query_id":"901", "query_end_timer":5, "query_type": "stream", "query":"select array_join(top_k((int, map),3,true)) from test_topmax limit 2"},                    
-                    {"client":"python", "query_type": "table", "wait":1,"query":
+                    {"client":"python", "query_type": "table", "wait":3,"query":
                         "insert into test_topmax (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234561, '{@string1}', 12341.123, 123451.123, to_date('2022-03-21'), to_datetime('2022-03-24 17:17:11'), 'a', ('a', 0), '192.168.168.161', '2a02:aa08:e000:3100::21', {'key1':111}, null ,'2020-01-01 11:11:11')
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a2', -1234561, 1234562, '{@string2}', 12342.123, 123452.123, to_date('2022-03-22'), to_datetime('2022-03-24 17:17:12'), 'b', ('b', 1), '192.168.168.162', '2a02:aa08:e000:3100::22', {'key2':112}, '2020-01-01 11:11:12','2020-01-01 11:11:12')
@@ -175,7 +175,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_topmax"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_topmax (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},                    
                     {"client":"python","query_id":"901", "query_end_timer":5, "query_type": "stream", "query":"select top_k(ipv4, 2, true) from session(test_topmax, timestamp, 2s, int) where ipv4=cast('192.168.168.161','ipv4') group by __tp_session_id"},                    
-                    {"client":"python", "query_type": "table", "wait":1,"query":
+                    {"client":"python", "query_type": "table", "wait":3,"query":
                         "insert into test_topmax (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234561, '{@string1}', 12341.123, 123451.123, to_date('2022-03-21'), to_datetime('2022-03-24 17:17:11'), 'a', ('a', 0), '192.168.168.161', '2a02:aa08:e000:3100::21', {'key1':111}, null ,'2020-01-01 11:11:11')
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a2', -1234561, 1234562, '{@string2}', 12342.123, 123452.123, to_date('2022-03-22'), to_datetime('2022-03-24 17:17:12'), 'b', ('b', 1), '192.168.168.162', '2a02:aa08:e000:3100::22', {'key2':112}, '2020-01-01 11:11:12','2020-01-01 11:11:12')
@@ -244,7 +244,7 @@
             ]
         },
         {
-            "id": 5,
+            "id": 6,
             "tags": ["topmax", "todo"],
             "name": "top on json",
             "description": "create a table t_lowcard with low_cardinality type and ingest, query, but of proton-python-driver",
@@ -262,7 +262,7 @@
             ]
         },
         {
-            "id": 6,
+            "id": 7,
             "tags": ["topmax", "todo"],
             "name": "top on float output in order",
             "description": "create a table t_lowcard with low_cardinality type and ingest, query, but of proton-python-driver",
@@ -289,7 +289,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_topmax"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_topmax (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},                    
                     {"client":"python","query_id":"901", "query_end_timer":5, "query_type": "stream", "query":"select max_k(ipv4, 2), window_start, window_end from session(test_topmax, timestamp, 2s, uuid) group by __tp_session_id, uuid, window_start, window_end"},                    
-                    {"client":"python", "query_type": "table", "wait":1,"query":
+                    {"client":"python", "query_type": "table", "wait":3,"query":
                         "insert into test_topmax (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234561, '{@string1}', 12341.123, 123451.123, to_date('2022-03-21'), to_datetime('2022-03-24 17:17:11'), 'a', ('a', 0), '192.168.168.161', '2a02:aa08:e000:3100::21', {'key1':111}, null ,'2020-01-01 11:11:11')
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234562, '{@string2}', 12342.123, 123452.123, to_date('2022-03-22'), to_datetime('2022-03-24 17:17:12'), 'b', ('b', 1), '192.168.168.162', '2a02:aa08:e000:3100::22', {'key2':112}, '2020-01-01 11:11:12','2020-01-01 11:11:12')
@@ -331,7 +331,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_topmax"},
                     {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_topmax (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},                    
                     {"client":"python","query_id":"901", "query_end_timer":5, "query_type": "stream", "query":"select uuid, max_k(ipv4,2) from tumble(test_topmax, timestamp, 2s) where uuid = '4c6a2a19-4f9f-456f-b076-c43ef97255d1' group by uuid, window_end"},                    
-                    {"client":"python", "query_type": "table", "wait":1,"query":
+                    {"client":"python", "query_type": "table", "wait":3,"query":
                         "insert into test_topmax (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234561, '{@string1}', 12341.123, 123451.123, to_date('2022-03-21'), to_datetime('2022-03-24 17:17:11'), 'a', ('a', 0), '192.168.168.161', '2a02:aa08:e000:3100::21', {'key1':111}, null ,'2020-01-01 11:11:11')
                         ('4c6a2a19-4f9f-456f-b076-c43ef97255a1', -1234561, 1234562, '{@string2}', 12342.123, 123452.123, to_date('2022-03-22'), to_datetime('2022-03-24 17:17:12'), 'b', ('b', 1), '192.168.168.162', '2a02:aa08:e000:3100::22', {'key2':112}, '2020-01-01 11:11:12','2020-01-01 11:11:12')

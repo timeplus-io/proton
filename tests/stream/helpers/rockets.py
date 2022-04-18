@@ -49,6 +49,7 @@ import multiprocessing as mp
 from clickhouse_driver import Client
 from clickhouse_driver import errors
 from requests.api import request
+from helpers.utils import compose_up
 
 
 cur_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -165,6 +166,8 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     test_suite_set_dict = {}
     test_suites_selected_sets = [] # a list of tuple of (test_suite, test_result_queue)
     test_suite_query_reulst_queue_list = [] # a list of map of test_sutie_name and test_suite_query_result_queue
+    proton_setting = os.getenv("PROTON_SETTING", "default")
+
     root_logger = logging.getLogger()
     logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
     if root_logger.level != None and root_logger.level == 20:
@@ -175,13 +178,15 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     config = rockets_env_var_get()
     if config == None:
         with open(config_file) as f:
-            config = json.load(f)
+            configs = json.load(f)
         logger.debug(f"rockets_context: config reading from config files: {config}")
+        config = configs.get(proton_setting)
+        logger.debug(f"setting = {proton_setting},config = {config}")       
 
     if config == None:
         raise Exception("No config env vars nor config file")
-    # proton_server = config.get("proton_server")
-    # proton_server_native_port = config.get("proton_server_native_port")
+    
+    
     res_scan_tests_file_path = scan_tests_file_path(tests_file_path)
     # logger.debug(f"res_scan_tests_file_path = {res_scan_tests_file_path}")
     test_suite_names_selected = res_scan_tests_file_path.get(
@@ -411,7 +416,8 @@ def query_run_exec(statement_2_run, config):
     query_result_list = []
     query_results = {}
     rest_request = ""
-    command = f'docker exec proton-server proton-client -u {user} --password {password} --query="{query}"'
+    proton_server_container_name = config.get("proton_server_container_name")
+    command = f'docker exec {proton_server_container_name} proton-client -u {user} --password {password} --query="{query}"'
     logger.debug(f"command = {command}")
     try: 
         if depends_on_stream != None:
@@ -1620,7 +1626,7 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
     # time.sleep(1) # wait the table creation completed
     return res
 
-
+'''
 def compose_up(compose_file_path):
     logger.debug(f"compose_up: compose_file_path = {compose_file_path}")
     try:
@@ -1630,7 +1636,7 @@ def compose_up(compose_file_path):
         return True
     except (subprocess.CalledProcessError) as Error:
         return False
-
+'''
 
 def env_health_check(health_check_url):
     try:
@@ -1780,6 +1786,9 @@ def env_setup(
     health_url = rest_setting.get("health_check_url")
     logger.debug(f"env_setup: health_url = {health_url}")
     tables_cleaned = []
+    env_docker_compose_res = True # todo: remove this return value due to compose_up is done in ci_runner starting phase
+
+    '''
     if ci_mode == "local":
         env_docker_compose_res = True
         logger.info(f"Bypass docker compose up.")
@@ -1787,6 +1796,8 @@ def env_setup(
         env_docker_compose_res = compose_up(env_compose_file)
         logger.info(f"env_setup: docker compose up...")
     logger.debug(f"env_setup: env_docker_compose_res: {env_docker_compose_res}")
+    
+    
     env_health_check_res = env_health_check(health_url)
     logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
     if env_docker_compose_res:
@@ -1801,6 +1812,20 @@ def env_setup(
             raise Exception("Env health check failure.")
     else:
         raise Exception("Env docker compose up failure.")
+    '''
+    env_health_check_res = env_health_check(health_url)
+    logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
+    retry = 10
+    while env_health_check_res == False and retry > 0:
+        time.sleep(2)
+        env_health_check_res = env_health_check(health_url)
+        logger.debug(f"env_setup: retry = {retry}")
+        retry -= 1
+
+    if env_health_check_res == False:
+        raise Exception("Env health check failure.")
+
+
     if ci_mode == "github":
         time.sleep(
             10

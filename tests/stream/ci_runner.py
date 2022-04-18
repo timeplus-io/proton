@@ -1,6 +1,8 @@
 import os, sys, logging, subprocess, time, datetime, json, csv, argparse, getopt
 from helpers.s3_helper import S3Helper
 from helpers.compress_files import compress_file_fast
+from helpers.utils import compose_up
+import multiprocessing as mp
 import pytest
 
 logger = logging.getLogger(__name__)
@@ -12,10 +14,10 @@ PROTON_PYTHON_DIRVER_S3_OBJ_NAME = "proton/proton-python-driver/clickhouse-drive
 PROTON_PYTHON_DRIVER_FILE_NAME ="clickhouse-driver-0.2.4.tar.gz"
 PROTON_PYTHON_DRIVER_NANME = "clickhouse-driver"
 
-proton_log_in_container = "proton-server:/var/log/proton-server/proton-server.log"
-proton_err_log_in_container = (
-    "proton-server:/var/log/proton-server/proton-server.err.log"
-)
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+config_file_path = f"{cur_dir}/test_stream_smoke/configs/config.json"
+
+docker_compose_file_path = f"{cur_dir}/test_stream_smoke/configs/docker-compose.yaml"
 
 
 def compress_logs(self, dir, relpaths, result_path):
@@ -24,13 +26,13 @@ def compress_logs(self, dir, relpaths, result_path):
     )  # STYLE_CHECK_ALLOW_SUBPROCESS_CHECK_CALL
 
 
-def container_file_download(dir="./", *files_in_container):
+def container_file_download(dir="./", setting="default", *files_in_container):
     if len(files_in_container) != 0:
         files_downloaded = []
         for file in files_in_container:
             try:
-                file_name = file.rsplit("/", 1)[1]
-                cmd = f"docker cp {file} {dir}/"
+                file_name = f"{setting}-"+file.rsplit("/", 1)[1]
+                cmd = f"docker cp {file} {dir}/{file_name}"
                 logging.info(f"Copying {file}, command = {cmd}")
                 subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
                 files_downloaded.append(f"{dir}/{file_name}")
@@ -84,14 +86,8 @@ def upload_proton_logs(
     return proton_log_url
 
 
-def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", commit_sha="0", logging_level = "INFO"):
-    timestamp = str(datetime.datetime.now())
-    report_file_name = f"report_{timestamp}.html"
-    report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
-    proton_log_folder = f"{local_all_results_folder_path}/proton"
-    pytest_logging_level_set = f"--log-cli-level={logging_level}"
+def proton_python_driver_install():
     s3_helper = S3Helper("https://s3.amazonaws.com")
-
     command = "pip3 list | grep clickhouse-driver"
     ret = ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=600)
     if PROTON_PYTHON_DRIVER_NANME not in ret.stdout:
@@ -101,27 +97,49 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
         ret = ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=600)
         logger.debug(f"ret of subprocess.run({command}) = {ret}")
     else:
-        logger.debug(f"{PROTON_PYTHON_DRIVER_NANME} exists bypass s3 download and install")
+        logger.debug(f"{PROTON_PYTHON_DRIVER_NANME} exists bypass s3 download and install")    
 
-    retcode = pytest.main(
-        ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]
-    )
+def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", commit_sha="0", setting="default", logging_level = "INFO"):
+    timestamp = str(datetime.datetime.now())
+    report_file_name = f"report_{setting}_{timestamp}.html"
+    report_file_path = f"{local_all_results_folder_path}/{report_file_name}"
+    proton_log_folder = f"{local_all_results_folder_path}/proton"
+    pytest_logging_level_set = f"--log-cli-level={logging_level}"
+    s3_helper = S3Helper("https://s3.amazonaws.com")
+        
+    if setting == "default":
+        os.environ["PROTON_SETTING"] = "default"
+        proton_log_in_container = "proton-server:/var/log/proton-server/proton-server.log"
+        proton_err_log_in_container = "proton-server:/var/log/proton-server/proton-server.err.log"
+        retcode = pytest.main(
+            ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]
+        )
+        
+    else:
+        os.environ["PROTON_SETTING"] = setting
+        print(f'os.environ["PROTON_SETTING] = {setting}')        
+        proton_log_in_container = f"proton-{setting}:/var/log/proton-server/proton-server.log"
+        proton_err_log_in_container = f"proton-{setting}:/var/log/proton-server/proton-server.err.log"        
+        retcode = pytest.main(
+            ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]
+        )
 
-    with open(".status", "w") as status_result:
-        status_result.write(str(retcode))
-
+    
+    with open(".status", "a+") as status_result:
+        status_result.writelines(f"{setting}:"+str(retcode)+"\n")
+    
+    #todo: download proton-logs based on setting
+     
     downloaded_log_files_paths = container_file_download(
         local_all_results_folder_path,
         proton_log_in_container,
         proton_err_log_in_container,
     )
-
-
-
+   
     logging.debug(
         f"ci_runner: downloaded_log_files_paths = {downloaded_log_files_paths}"
     )
-
+    
     if run_mode == 'github':
         pr_number = os.getenv("GITHUB_REF_NAME", pr_number)
         commit_sha = os.getenv("GITHUB_SHA", commit_sha)
@@ -158,9 +176,12 @@ if __name__ == "__main__":
     logging_level = "INFO"
     os.environ["PROTON_TEST_IDS"] = "all"
     test_suites = "all"
+    settings = []
+
+    proton_python_driver_install()
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "test_suites=", "loop=", "id="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "settings=", "test_suites=", "loop=", "id="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
         print(f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3")
@@ -173,6 +194,13 @@ if __name__ == "__main__":
         
         if name in ("--debug"):
             logging_level = "DEBUG"
+        
+        if name in ("--settings"):
+            if value == None or value == '':
+                print(f"usage: python3 ci_runner.py --settings=native,redp")
+                sys.exit(1)
+            else:
+                settings = value.split(",")
         
         if name in ("--test_suites"):
             os.environ["PROTON_TEST_SUITES"] = value
@@ -195,9 +223,39 @@ if __name__ == "__main__":
         logger.setLevel(logging.DEBUG)
 
     i = 0
-    while i < loop:
+
+    logger.debug(f"settings = {settings}")
+
+    
+    if run_mode == "local":
+        env_docker_compose_res = True
+        logger.info(f"Bypass docker compose up.")
+    else:
+        env_docker_compose_res = compose_up(docker_compose_file_path)
+        logger.info(f"docker compose up...")
+    logger.debug(f"env_docker_compose_res: {env_docker_compose_res}")
+
+    if not env_docker_compose_res:
+        raise Exception("Env docker compose up failure.")            
+
+    if settings == []:
         ci_runner(cur_dir, run_mode, logging_level = logging_level)
-        i += 1
+    else:
+        procs = []
+        for setting in settings:
+            args = (cur_dir,run_mode,"0","0",setting,logging_level)
+            proc = mp.Process(target = ci_runner, args = args)
+            proc.start()
+            logger.debug(f"args = {args}, ci_runner proc starts...")
+            procs.append(proc)
+            time.sleep(5)
+        for proc in procs:
+            proc.join()
+
+
+    #while i < loop:
+    #    ci_runner(cur_dir, run_mode, logging_level = logging_level)
+    #    i += 1
 
 
 
