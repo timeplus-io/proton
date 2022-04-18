@@ -1,5 +1,4 @@
 #include "KafkaWALCommon.h"
-#include "KafkaWALContext.h"
 #include "KafkaWALStats.h"
 
 #include <base/ClockUtils.h>
@@ -182,7 +181,6 @@ nlog::RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const nlog::SchemaCon
 {
     assert(msg != nullptr);
 
-    auto consume_time = DB::UTCMilliseconds::now();
     nlog::RecordPtr record = nlog::Record::deserialize(static_cast<const char *>(msg->payload), msg->len, schema_ctx);
 
     if (unlikely(!record))
@@ -192,23 +190,8 @@ nlog::RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const nlog::SchemaCon
     record->setShard(msg->partition);
     /// Override append time
     record->setAppendTime(rd_kafka_message_timestamp(msg, nullptr));
-    record->setConsumeTime(consume_time);
     if (copy_topic)
         record->setStream(rd_kafka_topic_name(msg->rkt));
-
-    rd_kafka_headers_t * hdrs = nullptr;
-    if (rd_kafka_message_headers(msg, &hdrs) == RD_KAFKA_RESP_ERR_NO_ERROR)
-    {
-        const void * value = nullptr;
-        size_t size = 0;
-
-        /// We only honor tp related headers for now
-        rd_kafka_header_get_last(hdrs, nlog::Record::INGEST_TIME_KEY.c_str(), &value, &size);
-
-        /// We add one more byte to the size to workaround the boundary issue in string_view
-        record->setIngestTime(
-            DB::parseIntStrict<int64_t>(std::string_view(static_cast<const char *>(value), size + 1), 0, size));
-    }
 
     return record;
 }
@@ -250,11 +233,13 @@ DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::
     return {.err = DB::ErrorCodes::RESOURCE_NOT_FOUND};
 }
 
-std::vector<int64_t> getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms)
+std::vector<int64_t>
+getOffsetsForTimestamps(struct rd_kafka_s * rd_handle, const std::string & topic, int64_t timestamp, int32_t shards, int32_t timeout_ms)
 {
     assert(rd_handle);
 
-    using RdKafkaTopicPartitionListPtr = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;
+    using RdKafkaTopicPartitionListPtr
+        = std::unique_ptr<rd_kafka_topic_partition_list_t, decltype(rd_kafka_topic_partition_list_destroy) *>;
     RdKafkaTopicPartitionListPtr offsets{rd_kafka_topic_partition_list_new(shards), rd_kafka_topic_partition_list_destroy};
 
     for (int32_t i = 0; i < shards; ++i)

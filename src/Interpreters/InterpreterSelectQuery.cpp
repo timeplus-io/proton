@@ -596,8 +596,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             }
 
             if (last_tail && last_interval_bs.num_units > 0 && isStreaming())
-                if (std::find(required_columns.begin(), required_columns.end(), RESERVED_EVENT_TIME) == required_columns.end())
-                    required_columns.push_back(RESERVED_EVENT_TIME);
+                if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_EVENT_TIME) == required_columns.end())
+                    required_columns.push_back(ProtonConsts::RESERVED_EVENT_TIME);
             /// proton: ends
 
             /// Fix source_header for filter actions.
@@ -622,8 +622,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         result_header = getSampleBlockImpl();
         /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header
         /// depending on the query stage
-        if (result_header.findByName(STREAMING_TIMESTAMP_ALIAS))
-            result_header.erase(STREAMING_TIMESTAMP_ALIAS);
+        if (result_header.findByName(ProtonConsts::STREAMING_TIMESTAMP_ALIAS))
+            result_header.erase(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
     };
 
     /// proton: starts. Add timestamp column and '__tp_session_id' to group by
@@ -636,7 +636,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         {
             const auto time_col_name = desc->argument_names[0];
             group_exprs.emplace_back(std::make_shared<ASTIdentifier>(time_col_name));
-            group_exprs.emplace_back(std::make_shared<ASTIdentifier>(STREAMING_SESSION_ID));
+            group_exprs.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_SESSION_ID));
         }
 
     }
@@ -2781,7 +2781,7 @@ void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const Base
     if (!isStreaming())
         return;
 
-    auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_bs_, RESERVED_EVENT_TIME);
+    auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_bs_, ProtonConsts::RESERVED_EVENT_TIME);
 
     proc_filter_step->setStepDescription("ProcessTimeFilter");
     query_plan.addStep(std::move(proc_filter_step));
@@ -2820,7 +2820,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         time_col_pos = header_before_aggregation.getPositionByName(desc->argument_names[0]);
 
         /// add STREAMING_SESSION_ID key into group by keys at the beginning
-        keys.insert(keys.begin(), header_before_aggregation.getPositionByName(STREAMING_SESSION_ID));
+        keys.insert(keys.begin(), header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_ID));
     }
 
     auto window_type = windowType();
@@ -2829,23 +2829,23 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because StreamingAggregator automatically add three session related columns.
         /// Also ignore STREAMING_SESSION_ID, as it has already been added in group by keys.
         if (window_type == WindowType::SESSION
-            && (key.name == STREAMING_WINDOW_START || key.name == STREAMING_WINDOW_END || key.name == STREAMING_SESSION_ID
+            && (key.name == ProtonConsts::STREAMING_WINDOW_START || key.name == ProtonConsts::STREAMING_WINDOW_END || key.name == ProtonConsts::STREAMING_SESSION_ID
                 || key.name == time_col_name))
             continue;
 
-        if ((key.name == STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
+        if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = StreamingAggregator::Params::GroupBy::WINDOW_END;
         }
         else if (
-            (key.name == STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
+            (key.name == ProtonConsts::STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
             && (streaming_group_by != StreamingAggregator::Params::GroupBy::WINDOW_END))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = StreamingAggregator::Params::GroupBy::WINDOW_START;
         }
-        else if (window_type == WindowType::SESSION && key.name == STREAMING_SESSION_ID)
+        else if (window_type == WindowType::SESSION && key.name == ProtonConsts::STREAMING_SESSION_ID)
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
         }
@@ -3040,7 +3040,7 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
             if (proxy->hasStreamingFunc() && proxy->windowType() != WindowType::SESSION)
             {
                 bool has_win_col = false;
-                for (const auto & window_col : STREAMING_WINDOW_COLUMN_NAMES)
+                for (const auto & window_col : ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES)
                 {
                     if (std::find(required_columns.begin(), required_columns.end(), window_col) != required_columns.end())
                     {
@@ -3095,7 +3095,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
         {
             /// insert _tp_session_id column for session window
             auto data_type = std::make_shared<DataTypeUInt32>();
-            output_header.insert(0, {data_type, STREAMING_SESSION_ID});
+            output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
         }
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, proc_time, log));
@@ -3127,7 +3127,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
         {
             /// insert _tp_session_id column for session window
             auto data_type = std::make_shared<DataTypeUInt32>();
-            output_header.insert(0, {data_type, STREAMING_SESSION_ID});
+            output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
         }
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));

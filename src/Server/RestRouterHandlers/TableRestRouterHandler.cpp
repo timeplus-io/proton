@@ -48,10 +48,10 @@ std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema
     = {{"required", {}}, {"optional", {{"ttl_expression", "string"}}}};
 
 std::map<String, String> TableRestRouterHandler::granularity_func_mapping
-    = {{"M", "to_YYYYMM(`" + RESERVED_EVENT_TIME + "`)"},
-       {"D", "to_YYYYMMDD(`" + RESERVED_EVENT_TIME + "`)"},
-       {"H", "to_start_of_hour(`" + RESERVED_EVENT_TIME + "`)"},
-       {"m", "to_start_of_minute(`" + RESERVED_EVENT_TIME + "`)"}};
+    = {{"M", "to_YYYYMM(`" + ProtonConsts::RESERVED_EVENT_TIME + "`)"},
+       {"D", "to_YYYYMMDD(`" + ProtonConsts::RESERVED_EVENT_TIME + "`)"},
+       {"H", "to_start_of_hour(`" + ProtonConsts::RESERVED_EVENT_TIME + "`)"},
+       {"m", "to_start_of_minute(`" + ProtonConsts::RESERVED_EVENT_TIME + "`)"}};
 
 bool TableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
@@ -275,7 +275,7 @@ String TableRestRouterHandler::getStringValueFrom(const Poco::JSON::Object::Ptr 
 
 String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard) const
 {
-    const auto & time_col = getStringValueFrom(payload, RESERVED_EVENT_TIME_API_NAME, RESERVED_EVENT_TIME);
+    const auto & time_col = getStringValueFrom(payload, ProtonConsts::RESERVED_EVENT_TIME_API_NAME, ProtonConsts::RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
     create_segments.push_back(fmt::format(
         "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",

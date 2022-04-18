@@ -49,7 +49,7 @@ void TableFunctionHop::postArgs(ASTs & args) const
 
 String TableFunctionHop::functionNamePrefix() const
 {
-    return HOP_FUNC_NAME + "(";
+    return ProtonConsts::HOP_FUNC_NAME + "(";
 }
 
 DataTypePtr TableFunctionHop::getElementType(const DataTypeTuple * tuple) const

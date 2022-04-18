@@ -127,8 +127,6 @@ void StreamSink::consume(Chunk chunk)
     /// proton: FIXME. Once we MVCC schema, each block will be bound to a schema version, for now, it is 0.
     UInt16 schema_version = 0;
     const auto & idem_key = query_context->getIdempotentKey();
-    auto ingest_time = query_context->getIngestTime();
-
     auto record = std::make_shared<nlog::Record>(nlog::OpCode::ADD_DATA_BLOCK, Block{}, schema_version);
     record->setColumnPositions(column_positions);
 
@@ -139,9 +137,6 @@ void StreamSink::consume(Chunk chunk)
 
         if (!idem_key.empty())
             record->setIdempotentKey(idem_key);
-
-        if (ingest_time > 0)
-            record->setIngestTime(ingest_time);
 
         if (native_log)
             appendToNativeLog(record, ingest_mode);

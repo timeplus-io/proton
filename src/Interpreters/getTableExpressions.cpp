@@ -121,7 +121,7 @@ static void removeReservedColumns(NamesAndTypesList & columns)
 {
     for (auto it = columns.begin(); it != columns.end();)
     {
-        if (std::find(RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), it->name) != RESERVED_COLUMN_NAMES.end())
+        if (std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), it->name) != ProtonConsts::RESERVED_COLUMN_NAMES.end())
             it = columns.erase(it);
         else
             ++it;
@@ -163,14 +163,10 @@ TablesWithColumns getDatabaseAndTablesWithColumns(
         table.addHiddenColumns(virtuals);
 
         if (include_alias_cols)
-        {
             table.addAliasColumns(aliases);
-        }
 
         if (include_materialized_cols)
-        {
             table.addMaterializedColumns(materialized);
-        }
     }
 
     return tables_with_columns;

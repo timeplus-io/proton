@@ -99,8 +99,6 @@ public:
         setBlockFormat();
     }
 
-    void setIngestTime(int64_t ingest_time) { headers[INGEST_TIME_KEY] = std::to_string(ingest_time); }
-
     bool empty() const { return block.rows() == 0; }
 
     void setStream(std::string stream_) { stream = std::move(stream_); }
@@ -143,7 +141,6 @@ public:
 
     int64_t getAppendTime() const { return block.info.append_time; }
     void setAppendTime(int64_t append_time) { block.info.append_time = append_time; }
-    void setConsumeTime(int64_t consume_time) { block.info.consume_time = consume_time; }
 
     std::pair<int64_t, int64_t> minMaxEventTime() const;
 
@@ -175,7 +172,6 @@ public:
     /// We like to make the keys as short as possible
     /// since they are bound to each batch
     inline const static std::string IDEMPOTENT_KEY = "__tp_id";
-    inline const static std::string INGEST_TIME_KEY = "__tp_it";
 
 private:
     /// [0-7]

@@ -274,24 +274,19 @@ void KafkaSource::calculateColumnPositions()
 {
     for (size_t pos = 0; const auto & column : header)
     {
-        if (column.name == RESERVED_APPEND_TIME)
+        if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
         {
             virtual_time_columns_calc[pos]
                 = [](const rd_kafka_message_t * kmessage) { return rd_kafka_message_timestamp(kmessage, nullptr); };
             /// We are assuming all virtual timestamp columns have the same data type
             virtual_col_type = column.type;
         }
-        else if (column.name == RESERVED_CONSUME_TIME)
+        else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
         {
             virtual_time_columns_calc[pos] = [](const rd_kafka_message_t *) { return UTCMilliseconds::now(); };
             virtual_col_type = column.type;
         }
-        else if (column.name == RESERVED_PROCESS_TIME)
-        {
-            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t *) { return UTCMilliseconds::now(); };
-            virtual_col_type = column.type;
-        }
-        else if (column.name == RESERVED_EVENT_TIME)
+        else if (column.name == ProtonConsts::RESERVED_EVENT_TIME)
         {
             /// If Kafka message header contains `_tp_time`, honor it
             virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 {
@@ -302,7 +297,8 @@ void KafkaSource::calculateColumnPositions()
                     const void * value = nullptr;
                     size_t size = 0;
 
-                    if (rd_kafka_header_get_last(hdrs, RESERVED_EVENT_TIME.c_str(), &value, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
+                    if (rd_kafka_header_get_last(hdrs, ProtonConsts::RESERVED_EVENT_TIME.c_str(), &value, &size)
+                        == RD_KAFKA_RESP_ERR_NO_ERROR)
                     {
                         try
                         {

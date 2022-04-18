@@ -20,44 +20,34 @@ bool AddTimeVisitorMatcher::containTimeField(ASTPtr & node, ContextPtr & context
 
     auto * table_identifier_node = node->as<ASTTableIdentifier>();
     if (!table_identifier_node)
-    {
         return false;
-    }
 
     auto table_id = context->resolveStorageID(StorageID(*table_identifier_node));
     auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
     auto table = db->tryGetTable(table_id.table_name, context);
 
     if (!table)
-    {
         return false;
-    }
 
     auto metadata = table->getInMemoryMetadataPtr();
     const auto & col_desc = metadata->getColumns();
-    return col_desc.has(RESERVED_EVENT_TIME) && col_desc.get(RESERVED_EVENT_TIME).type->getTypeId() == TypeIndex::DateTime64;
+    return col_desc.has(ProtonConsts::RESERVED_EVENT_TIME) && col_desc.get(ProtonConsts::RESERVED_EVENT_TIME).type->getTypeId() == TypeIndex::DateTime64;
 }
 
 void AddTimeVisitorMatcher::visitSelectQuery(ASTPtr & ast, ContextPtr & context)
 {
     if (!ast->as<ASTSelectQuery>())
-    {
         return;
-    }
 
     ASTSelectQuery * select = ast->as<ASTSelectQuery>();
     ASTPtr tables = select->tables();
 
     if (tables->children.empty())
-    {
         return;
-    }
 
     ASTPtr node = tables->children[0];
     if (!node->as<ASTTablesInSelectQueryElement>())
-    {
         return;
-    }
 
     ASTTablesInSelectQueryElement * first_table = node->as<ASTTablesInSelectQueryElement>();
     ASTTableExpression * table_expression = first_table->table_expression->as<ASTTableExpression>();
@@ -70,13 +60,9 @@ void AddTimeVisitorMatcher::visitSelectQuery(ASTPtr & ast, ContextPtr & context)
     {
         ASTPtr subquery = table_expression->subquery->children[0];
         if (subquery->as<ASTSelectWithUnionQuery>())
-        {
             visitSelectWithUnionQuery(subquery, context);
-        }
         else if (subquery->as<ASTSelectQuery>())
-        {
             visitSelectQuery(subquery, context);
-        }
     }
 }
 
@@ -84,9 +70,7 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
 {
     ParserExpressionWithOptionalAlias elem_parser(false);
     if (!containTimeField(table_name, context))
-    {
         return;
-    }
 
     /// Merge time picker predicates into the where subtree of this select node
     /// BE Careful: where_statement may be null, when the sql doesn't contain where expression
@@ -99,7 +83,7 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
             context->getTimeParam().getStart(),
             context->getSettingsRef().max_query_size,
             context->getSettingsRef().max_parser_depth);
-        new_node = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME), new_node);
+        new_node = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME), new_node);
     }
 
     if (!context->getTimeParam().getEnd().empty())
@@ -109,7 +93,7 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
             context->getTimeParam().getEnd(),
             context->getSettingsRef().max_query_size,
             context->getSettingsRef().max_parser_depth);
-        less = makeASTFunction("less", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME), less);
+        less = makeASTFunction("less", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME), less);
         new_node = new_node ? makeASTFunction("and", less, new_node) : less;
     }
 
@@ -120,35 +104,23 @@ void AddTimeVisitorMatcher::insertTimeParamTime(ASTSelectQuery * select, ASTPtr 
 void AddTimeVisitorMatcher::visitSelectWithUnionQuery(ASTPtr & ast, ContextPtr & context)
 {
     if (!ast->as<ASTSelectWithUnionQuery>())
-    {
         return;
-    }
 
     const ASTSelectWithUnionQuery * un = ast->as<ASTSelectWithUnionQuery>();
     if (un->list_of_selects->children.empty())
-    {
         return;
-    }
 
     for (auto & child : un->list_of_selects->children)
-    {
         if (child->as<ASTSelectQuery>())
-        {
             visitSelectQuery(un->list_of_selects->children[0], context);
-        }
-    }
 }
 
 void AddTimeVisitorMatcher::visit(ASTPtr & ast, ContextPtr context)
 {
     if (ast->as<ASTSelectQuery>())
-    {
         visitSelectQuery(ast, context);
-    }
     else if (ast->as<ASTSelectWithUnionQuery>())
-    {
         visitSelectWithUnionQuery(ast, context);
-    }
 }
 
 }

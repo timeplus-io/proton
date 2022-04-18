@@ -76,26 +76,14 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
     /// fast processing in readAndProcess since we don't need index by column name any more
     for (size_t pos = 0; const auto & column : header)
     {
-        if (column.name == RESERVED_APPEND_TIME)
+        if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
         {
             virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.append_time; };
             column_positions[pos] = pos + total_physical_columns_in_schema;
             /// We are assuming all virtual timestamp columns have the same data type
             virtual_col_type = column.type;
         }
-        else if (column.name == RESERVED_INGEST_TIME)
-        {
-            virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.ingest_time; };
-            column_positions[pos] = pos + total_physical_columns_in_schema;
-            virtual_col_type = column.type;
-        }
-        else if (column.name == RESERVED_CONSUME_TIME)
-        {
-            virtual_time_columns_calc[pos] = [](const BlockInfo &) { return UTCMilliseconds::now(); };
-            column_positions[pos] = pos + total_physical_columns_in_schema;
-            virtual_col_type = column.type;
-        }
-        else if (column.name == RESERVED_PROCESS_TIME)
+        else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
         {
             virtual_time_columns_calc[pos] = [](const BlockInfo &) { return UTCMilliseconds::now(); };
             column_positions[pos] = pos + total_physical_columns_in_schema;
@@ -113,6 +101,6 @@ void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, co
 
     /// Clients like to read virtual columns only, add `_tp_time`, then we know how many rows
     if (physical_column_positions_to_read.empty())
-        physical_column_positions_to_read.push_back(schema.getPositionByName(RESERVED_EVENT_TIME));
+        physical_column_positions_to_read.push_back(schema.getPositionByName(ProtonConsts::RESERVED_EVENT_TIME));
 }
 }

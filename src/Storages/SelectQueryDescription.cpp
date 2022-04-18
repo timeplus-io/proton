@@ -69,7 +69,7 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
             if (isTableFunctionSession(ast_func))
                 throw Exception(
                     "Session window is not supported for MATERIALIZED VIEW", ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);
-            if ((isTableFunctionTumble(ast_func) || isTableFunctionHop(ast_func) || isTableFunctionHist(ast_func)))
+            if ((isTableFunctionTumble(ast_func) || isTableFunctionHop(ast_func) || isTableFunctionTable(ast_func)))
             {
                 assert(ast_func->arguments);
                 table_expression = ast_func->arguments->children.at(0);

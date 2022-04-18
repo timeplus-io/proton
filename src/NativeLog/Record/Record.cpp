@@ -223,7 +223,7 @@ void Record::deserializeInSchemaDataV0(Record & record, DB::ReadBuffer & rb, con
 
 std::pair<int64_t, int64_t> Record::minMaxEventTime() const
 {
-    auto * ts_col = block.findByName(DB::RESERVED_EVENT_TIME);
+    auto * ts_col = block.findByName(DB::ProtonConsts::RESERVED_EVENT_TIME);
     if (!ts_col)
         return {0, 0};
 

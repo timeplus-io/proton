@@ -156,7 +156,7 @@ void TimestampTransform::calculateColumns(const Block & input_header, const Bloc
     size_t pos = 0;
     for (const auto & col_with_type : output_header)
     {
-        if (col_with_type.name == STREAMING_TIMESTAMP_ALIAS)
+        if (col_with_type.name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS)
         {
             timestamp_col_pos = pos;
             timestamp_col_data_type = col_with_type.type;

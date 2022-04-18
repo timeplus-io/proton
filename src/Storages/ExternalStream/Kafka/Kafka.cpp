@@ -78,7 +78,7 @@ Pipe Kafka::read(
         if (!column_names.empty())
             header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), storage_id);
         else
-            header = metadata_snapshot->getSampleBlockForColumns({RESERVED_APPEND_TIME}, getVirtuals(), storage_id);
+            header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_APPEND_TIME}, getVirtuals(), storage_id);
 
         auto offsets = getOffsets(settings_ref.seek_to.value);
 
@@ -98,11 +98,9 @@ NamesAndTypesList Kafka::getVirtuals() const
 
 void Kafka::cacheVirtualColumnNamesAndTypes()
 {
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_EVENT_TIME, std::make_shared<DataTypeInt64>()));
-    /// virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
 }
 
 std::vector<Int64> Kafka::getOffsets(const String & seek_to) const

@@ -71,33 +71,36 @@ RawStoreInputFormat::RawStoreInputFormat(
         time_extraction_regex = std::make_unique<re2::RE2>(time_extraction_rule);
 
         if (!time_extraction_regex->ok())
-        {
             throw Exception(
-                "Cannot compile re2: " + time_extraction_rule + " for http handling rule, error: " + time_extraction_regex->error()
-                    + ". Look at https://github.com/google/re2/wiki/Syntax for reference.",
-                ErrorCodes::CANNOT_COMPILE_REGEXP);
-        }
+                ErrorCodes::CANNOT_COMPILE_REGEXP,
+                "Cannot compile re2: {} for http handling rule, error: {}. Look at https://github.com/google/re2/wiki/Syntax for "
+                "reference.",
+                time_extraction_rule,
+                time_extraction_regex->error());
 
         const std::map<std::string, int> & grp_to_idx = time_extraction_regex->NamedCapturingGroups();
 
-        auto it = grp_to_idx.find(RESERVED_EVENT_TIME);
+        auto it = grp_to_idx.find(ProtonConsts::RESERVED_EVENT_TIME);
         if (it != grp_to_idx.end())
             time_group_idx = it->second;
         else
             throw Exception(
-                "No '" + RESERVED_EVENT_TIME + "' group defined in 'time_extraction_rule': " + time_extraction_rule,
-                ErrorCodes::UNRECOGNIZED_ARGUMENTS);
+                ErrorCodes::UNRECOGNIZED_ARGUMENTS,
+                "No '{}' group defined in 'time_extraction_rule': {}",
+                ProtonConsts::RESERVED_EVENT_TIME,
+                time_extraction_rule);
     }
     else if (time_extraction_type == "json_path" && time_extraction_rule.empty())
         throw Exception("'time_extraction_rule' is empty", ErrorCodes::UNRECOGNIZED_ARGUMENTS);
 
     prev_positions.resize(num_columns);
     raw_col_idx = columnIndex("_raw", 0);
-    time_col_idx = columnIndex(RESERVED_EVENT_TIME, 0);
+    time_col_idx = columnIndex(ProtonConsts::RESERVED_EVENT_TIME, 0);
     if (raw_col_idx == UNKNOWN_FIELD || time_col_idx == UNKNOWN_FIELD)
         throw Exception(
-            "It is suitable for RawStoreFormat, either '_raw' or '" + RESERVED_EVENT_TIME + "' is missing",
-            ErrorCodes::UNRECOGNIZED_ARGUMENTS);
+            ErrorCodes::UNRECOGNIZED_ARGUMENTS,
+            "It is suitable for RawStoreFormat, either '_raw' or '{}' is missing",
+            ProtonConsts::RESERVED_EVENT_TIME);
 }
 
 inline const String & RawStoreInputFormat::columnName(size_t i) const

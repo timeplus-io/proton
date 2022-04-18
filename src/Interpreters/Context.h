@@ -247,7 +247,6 @@ private:
     String idempotent_key;
     String config_path;
     UInt64 block_base_id = 0;
-    Int64 ingest_time = 0;
     IngestMode ingest_mode = IngestMode::None;
     bool distributed_ddl_operation = false;
     /// proton: ends
@@ -577,7 +576,6 @@ public:
     String getConfigPath() const { return config_path; }
     const String & getIdempotentKey() const { return idempotent_key; }
     IngestMode getIngestMode() const { return ingest_mode; }
-    Int64 getIngestTime() const { return ingest_time; }
     /// If proton is a distributed deployment
     bool isDistributedEnv() const;
     bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
@@ -599,7 +597,6 @@ public:
     void setupQueryStatusPollId(UInt64 block_base_id_);
     void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
     void setIngestMode(IngestMode ingest_mode_) { ingest_mode = ingest_mode_; }
-    void setIngestTime(Int64 ingest_time_) { ingest_time = ingest_time_; }
     void setConfigPath(const String & config_path_) { config_path = config_path_; }
     /// Kinda hacky
     void setDistributedDDLOperation(bool distributed) { distributed_ddl_operation = distributed; }

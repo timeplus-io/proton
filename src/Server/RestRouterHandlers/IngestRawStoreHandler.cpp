@@ -37,14 +37,6 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
             return {jsonErrorResponse("No support ingest mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
-    if (hasQueryParameter("ingest_time"))
-    {
-        auto ingest_time = std::stoll(getQueryParameter("ingest_time"));
-        query_context->setIngestTime(ingest_time);
-    }
-    else
-        query_context->setIngestTime(UTCMilliseconds::now());
-
     query_context->setSetting("output_format_parallel_formatting", false);
     query_context->setSetting("date_time_input_format", String{"best_effort"});
 

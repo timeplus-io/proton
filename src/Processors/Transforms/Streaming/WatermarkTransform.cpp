@@ -49,7 +49,7 @@ void WatermarkTransform::initWatermark(
     ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
 {
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
-    if (watermark_settings.func_name == TUMBLE_FUNC_NAME)
+    if (watermark_settings.func_name == ProtonConsts::TUMBLE_FUNC_NAME)
     {
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
@@ -57,7 +57,7 @@ void WatermarkTransform::initWatermark(
 
         watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), proc_time, log);
     }
-    else if (watermark_settings.func_name == HOP_FUNC_NAME)
+    else if (watermark_settings.func_name == ProtonConsts::HOP_FUNC_NAME)
     {
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
@@ -65,7 +65,7 @@ void WatermarkTransform::initWatermark(
 
         watermark = std::make_shared<HopWatermark>(std::move(watermark_settings), proc_time, log);
     }
-    else if (watermark_settings.func_name == SESSION_FUNC_NAME)
+    else if (watermark_settings.func_name == ProtonConsts::SESSION_FUNC_NAME)
     {
         if (watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)

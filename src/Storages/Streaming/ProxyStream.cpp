@@ -98,8 +98,8 @@ void ProxyStream::read(
     updated_column_names.reserve(column_names.size());
     for (const auto & column_name : column_names)
     {
-        if (column_name == STREAMING_WINDOW_START || column_name == STREAMING_WINDOW_END || column_name == STREAMING_TIMESTAMP_ALIAS
-            || column_name == STREAMING_SESSION_ID)
+        if (column_name == ProtonConsts::STREAMING_WINDOW_START || column_name == ProtonConsts::STREAMING_WINDOW_END || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS
+            || column_name == ProtonConsts::STREAMING_SESSION_ID)
             continue;
 
         updated_column_names.push_back(column_name);
@@ -198,7 +198,7 @@ Names ProxyStream::getAdditionalRequiredColumns() const
 
     if (streaming_func_desc)
         for (const auto & name : streaming_func_desc->input_columns)
-            if (name != STREAMING_TIMESTAMP_ALIAS)
+            if (name != ProtonConsts::STREAMING_TIMESTAMP_ALIAS)
                 /// We remove the internal dependent __tp_ts column
                 required.push_back(name);
 

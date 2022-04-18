@@ -41,7 +41,7 @@ void TableFunctionTumble::postArgs(ASTs & args) const
 
 String TableFunctionTumble::functionNamePrefix() const
 {
-    return TUMBLE_FUNC_NAME + "(";
+    return ProtonConsts::TUMBLE_FUNC_NAME + "(";
 }
 
 DataTypePtr TableFunctionTumble::getElementType(const DataTypeTuple * tuple) const

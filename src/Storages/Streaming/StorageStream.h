@@ -228,9 +228,9 @@ public:
     String logstoreType() const
     {
         if (kafka)
-            return LOGSTORE_KAFKA;
+            return ProtonConsts::LOGSTORE_KAFKA;
 
-        return LOGSTORE_NATIVE_LOG;
+        return ProtonConsts::LOGSTORE_NATIVE_LOG;
     }
 
     bool isLogstoreKafka() const { return kafka != nullptr; }

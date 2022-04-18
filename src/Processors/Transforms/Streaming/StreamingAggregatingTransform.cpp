@@ -1095,9 +1095,9 @@ void StreamingAggregatingTransform::mergeTwoLevelSessionWindow(
 
     Block merged_block;
     Block header = first->aggregator->getHeader(true, false).cloneEmpty();
-    auto window_start_col = header.getByName(STREAMING_WINDOW_START);
+    auto window_start_col = header.getByName(ProtonConsts::STREAMING_WINDOW_START);
     auto window_start_col_ptr = IColumn::mutate(window_start_col.column);
-    auto window_end_col = header.getByName(STREAMING_WINDOW_END);
+    auto window_end_col = header.getByName(ProtonConsts::STREAMING_WINDOW_END);
     auto window_end_col_ptr = IColumn::mutate(window_end_col.column);
 
     size_t index = data->size() == 1 ? 0 : 1;

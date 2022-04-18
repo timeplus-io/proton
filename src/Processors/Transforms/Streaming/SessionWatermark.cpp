@@ -47,7 +47,7 @@ void SessionWatermark::doProcess(Block & block)
     APPLY_FOR_CACHE_VARIANTS(M)
 #undef M
 
-    block.insert(0, {std::move(col), data_type, STREAMING_SESSION_ID});
+    block.insert(0, {std::move(col), data_type, ProtonConsts::STREAMING_SESSION_ID});
 }
 
 void SessionWatermark::handleIdlenessWatermark(Block & block)
@@ -59,7 +59,7 @@ void SessionWatermark::handleIdlenessWatermark(Block & block)
         auto data_type = std::make_shared<DataTypeUInt32>();
         col = data_type->createColumn();
         col->reserve(rows);
-        block.insert(0, {data_type, STREAMING_SESSION_ID});
+        block.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
     }
     /// TODO: add watermark
 }

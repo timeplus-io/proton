@@ -61,11 +61,11 @@ namespace
 WindowType toWindowType(const String & func_name)
 {
     WindowType type = WindowType::NONE;
-    if (func_name == HOP_FUNC_NAME)
+    if (func_name == ProtonConsts::HOP_FUNC_NAME)
         type = WindowType::HOP;
-    else if (func_name == TUMBLE_FUNC_NAME)
+    else if (func_name == ProtonConsts::TUMBLE_FUNC_NAME)
         type = WindowType::TUMBLE;
-    else if (func_name == SESSION_FUNC_NAME)
+    else if (func_name == ProtonConsts::SESSION_FUNC_NAME)
         type = WindowType::SESSION;
 
     return type;
@@ -74,25 +74,25 @@ WindowType toWindowType(const String & func_name)
 ALWAYS_INLINE bool isTableFunctionTumble(const ASTFunction * ast)
 {
     assert(ast);
-    return !strcasecmp("TUMBLE", ast->name.c_str());
+    return !strcasecmp("tumble", ast->name.c_str());
 }
 
 ALWAYS_INLINE bool isTableFunctionHop(const ASTFunction * ast)
 {
     assert(ast);
-    return !strcasecmp("HOP", ast->name.c_str());
+    return !strcasecmp("hop", ast->name.c_str());
 }
 
 ALWAYS_INLINE bool isTableFunctionSession(const ASTFunction * ast)
 {
     assert(ast);
-    return !strcasecmp("SESSION", ast->name.c_str());
+    return !strcasecmp("session", ast->name.c_str());
 }
 
-ALWAYS_INLINE bool isTableFunctionHist(const ASTFunction * ast)
+ALWAYS_INLINE bool isTableFunctionTable(const ASTFunction * ast)
 {
     assert(ast);
-    return !strcasecmp("HIST", ast->name.c_str());
+    return !strcasecmp("table", ast->name.c_str());
 }
 
 ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
@@ -276,7 +276,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         }
         else if (isIntervalAST(args[1]))
         {
-            time_expr = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+            time_expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
             session_interval = args[1];
             has_time_column = false;
         }

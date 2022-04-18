@@ -144,12 +144,11 @@ void prepareColumns(ASTCreateQuery & create)
     const ASTs & column_asts = create.columns_list->columns->children;
     auto new_columns = std::make_shared<ASTExpressionList>();
 
-    Field event_time_default = DEFAULT_EVENT_TIME;
+    Field event_time_default = ProtonConsts::DEFAULT_EVENT_TIME;
 
     if (create.storage->settings && !create.storage->settings->changes.empty())
-    {
         create.storage->settings->changes.tryGet("event_time_column", event_time_default);
-    }
+
     String expr;
     event_time_default.tryGet<String>(expr);
 
@@ -162,10 +161,10 @@ void prepareColumns(ASTCreateQuery & create)
 
         /// Skip reserved internal columns
         if (column.name.starts_with("_tp_")
-            || std::find(STREAMING_WINDOW_COLUMN_NAMES.begin(), STREAMING_WINDOW_COLUMN_NAMES.end(), column.name)
-                != STREAMING_WINDOW_COLUMN_NAMES.end())
+            || std::find(ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.begin(), ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end(), column.name)
+                != ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end())
         {
-            if (RESERVED_EVENT_TIME == column.name)
+            if (ProtonConsts::RESERVED_EVENT_TIME == column.name)
             {
                 has_event_time = true;
                 auto type_name = tryGetFunctionName(column.type);
@@ -173,10 +172,10 @@ void prepareColumns(ASTCreateQuery & create)
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
-                        RESERVED_EVENT_TIME,
+                        ProtonConsts::RESERVED_EVENT_TIME,
                         column.type->getID());
             }
-            else if (RESERVED_INDEX_TIME == column.name)
+            else if (ProtonConsts::RESERVED_INDEX_TIME == column.name)
             {
                 has_index_time = true;
                 auto type_name = tryGetFunctionName(column.type);
@@ -184,10 +183,10 @@ void prepareColumns(ASTCreateQuery & create)
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
-                        RESERVED_INDEX_TIME,
+                        ProtonConsts::RESERVED_INDEX_TIME,
                         column.type->getID());
             }
-            else if (RESERVED_EVENT_SEQUENCE_ID == column.name)
+            else if (ProtonConsts::RESERVED_EVENT_SEQUENCE_ID == column.name)
             {
                 has_sequence_id = true;
                 auto type_name = tryGetFunctionName(column.type);
@@ -195,7 +194,7 @@ void prepareColumns(ASTCreateQuery & create)
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'int64 ' but actual type '{}'.",
-                        RESERVED_EVENT_SEQUENCE_ID,
+                        ProtonConsts::RESERVED_EVENT_SEQUENCE_ID,
                         column.type->getID());
             }
             else
@@ -208,7 +207,7 @@ void prepareColumns(ASTCreateQuery & create)
     if (!has_event_time)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
-        col_tp_time->name = RESERVED_EVENT_TIME;
+        col_tp_time->name = ProtonConsts::RESERVED_EVENT_TIME;
         col_tp_time->type
             = makeASTFunction("datetime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         col_tp_time->default_specifier = "DEFAULT";
@@ -225,7 +224,7 @@ void prepareColumns(ASTCreateQuery & create)
     if (!has_index_time)
     {
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
-        col_tp_time->name = RESERVED_INDEX_TIME;
+        col_tp_time->name = ProtonConsts::RESERVED_INDEX_TIME;
         col_tp_time->type
             = makeASTFunction("datetime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         /// index time is the timestamp indexed to historical store. Don't specify a default value expression here to save disk space in streaming store
@@ -270,10 +269,10 @@ void prepareColumns(ASTCreateQuery & create)
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
 {
     /// FIXME: raw table might have different order by and partition by
-    auto new_order_by = makeASTFunction("to_start_of_hour", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
+    auto new_order_by = makeASTFunction("to_start_of_hour", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME));
     create.storage->set(create.storage->order_by, new_order_by);
 
-    auto new_partition_by = makeASTFunction("to_YYYYMMDD", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME));
+    auto new_partition_by = makeASTFunction("to_YYYYMMDD", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME));
     create.storage->set(create.storage->partition_by, new_partition_by);
 }
 

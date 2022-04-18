@@ -77,7 +77,7 @@ Block prepareData(Int32 batch_size)
         time_col_inner->insertValue(1612286044.256326 + i);
     }
 
-    ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, RESERVED_EVENT_TIME);
+    ColumnWithTypeAndName time_col_with_type(std::move(time_col), datetime64_type, ProtonConsts::RESERVED_EVENT_TIME);
     block.insert(time_col_with_type);
 
     return block;

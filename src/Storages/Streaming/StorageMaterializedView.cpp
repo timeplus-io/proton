@@ -195,7 +195,7 @@ StorageMaterializedView::StorageMaterializedView(
     , WithMutableContext(local_context->getGlobalContext())
     , log(&Poco::Logger::get("StorageMaterializedView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
     , is_attach(attach_)
-    , virtual_columns({{RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
+    , virtual_columns({{ProtonConsts::RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -344,7 +344,7 @@ void StorageMaterializedView::read(
     if (!column_names.empty())
         header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
     else
-        header = metadata_snapshot->getSampleBlockForColumns({RESERVED_VIEW_VERSION}, getVirtuals(), getStorageID());
+        header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_VIEW_VERSION}, getVirtuals(), getStorageID());
 
     if (query_info.syntax_analyzer_result->streaming)
     {
@@ -449,7 +449,7 @@ void StorageMaterializedView::checkValid() const
 NamesAndTypesList StorageMaterializedView::getVirtuals() const
 {
     if (is_global_aggr_query)
-        return NamesAndTypesList{NameAndTypePair(RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>())};
+        return NamesAndTypesList{NameAndTypePair(ProtonConsts::RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>())};
     else
         return {};
 }
@@ -465,7 +465,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
     if (!is_attach)
     {
         /// Create inner target table query
-        ///   create table <inner_target_table_id> (view_properties[, RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
+        ///   create table <inner_target_table_id> (view_properties[, ProtonConsts::RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
         /// FIXME: In future, add order clause or remove engine ?
         auto manual_create_query = std::make_shared<ASTCreateQuery>();
         manual_create_query->setDatabase(target_table_id.getDatabaseName());

@@ -27,7 +27,7 @@ const String SESSION_HELP_MESSAGE = "Function 'session' requires at least 3 para
 
 bool isTableFunctionTumble(const ASTFunction * ast);
 bool isTableFunctionHop(const ASTFunction * ast);
-bool isTableFunctionHist(const ASTFunction * ast);
+bool isTableFunctionTable(const ASTFunction * ast);
 bool isTableFunctionSession(const ASTFunction * ast);
 
 /// Note: the extracted arguments is whole (include omitted parameters represented by an empty ASTPtr)

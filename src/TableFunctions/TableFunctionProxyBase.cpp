@@ -35,7 +35,7 @@ namespace
 
         for (const auto & action : actions)
         {
-            if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(SESSION_FUNC_NAME))
+            if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(ProtonConsts::SESSION_FUNC_NAME))
             {
                 Names argument_names;
                 argument_names.reserve(action.node->children.size());
@@ -220,16 +220,16 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
 
         /// Check the resulting type. It shall be a datetime / datetime64.
         const auto & time_column = timestamp_func_desc->expr->getSampleBlock().getByPosition(0);
-        assert(time_column.name == STREAMING_TIMESTAMP_ALIAS);
+        assert(time_column.name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
         if (!isDateTime(time_column.type) && !isDateTime64(time_column.type))
             throw Exception("The resulting type of time column expression shall be datetime or datetime64", ErrorCodes::BAD_ARGUMENTS);
 
         auto * node = streaming_func_ast->as<ASTFunction>();
         /// We need rewrite streaming function ast to depend on the time expression resulting column directly
         /// The following ast / expression analysis for streaming func will pick up this rewritten timestamp expr ast
-        node->arguments->children[0] = std::make_shared<ASTIdentifier>(STREAMING_TIMESTAMP_ALIAS);
+        node->arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
 
-        ColumnDescription time_column_desc(STREAMING_TIMESTAMP_ALIAS, time_column.type);
+        ColumnDescription time_column_desc(ProtonConsts::STREAMING_TIMESTAMP_ALIAS, time_column.type);
         columns.add(time_column_desc);
     }
 
@@ -255,10 +255,10 @@ void TableFunctionProxyBase::handleResultType(const ColumnWithTypeAndName & type
     /// If streaming table function is used, we will need project `wstart, wend` columns to metadata
     DataTypePtr element_type = getElementType(tuple_result_type);
 
-    ColumnDescription wstart(STREAMING_WINDOW_START, element_type);
+    ColumnDescription wstart(ProtonConsts::STREAMING_WINDOW_START, element_type);
     columns.add(wstart);
 
-    ColumnDescription wend(STREAMING_WINDOW_END, element_type);
+    ColumnDescription wend(ProtonConsts::STREAMING_WINDOW_END, element_type);
     columns.add(wend);
 }
 
@@ -285,7 +285,7 @@ void TableFunctionProxyBase::doParseArguments(const ASTPtr & func_ast, ContextPt
     /// Change the name to call the internal streaming window functions
     auto func_name = boost::to_upper_copy(node->name);
     node->name = "__" + func_name;
-    node->alias = STREAMING_WINDOW_FUNC_ALIAS;
+    node->alias = ProtonConsts::STREAMING_WINDOW_FUNC_ALIAS;
 
     /// Prune the arguments to fit the internal window function
     args.erase(args.begin());
@@ -299,7 +299,7 @@ void TableFunctionProxyBase::doParseArguments(const ASTPtr & func_ast, ContextPt
         if (auto func_node = args[0]->as<ASTFunction>(); func_node)
         {
             /// time column is a transformed one, for example, tumble(table, toDateTime32(t), INTERVAL 5 SECOND)
-            func_node->alias = STREAMING_TIMESTAMP_ALIAS;
+            func_node->alias = ProtonConsts::STREAMING_TIMESTAMP_ALIAS;
             timestamp_expr_ast = args[0];
         }
     }
@@ -311,20 +311,20 @@ void TableFunctionProxyBase::doParseArguments(const ASTPtr & func_ast, ContextPt
             auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
             assert(storage);
             auto metadata{storage->getInMemoryMetadataPtr()};
-            if (metadata->columns.has(RESERVED_EVENT_TIME))
+            if (metadata->columns.has(ProtonConsts::RESERVED_EVENT_TIME))
             {
-                const auto & col_desc = metadata->columns.get(RESERVED_EVENT_TIME);
+                const auto & col_desc = metadata->columns.get(ProtonConsts::RESERVED_EVENT_TIME);
                 if (col_desc.default_desc.kind == ColumnDefaultKind::Alias)
                 {
                     args[0] = col_desc.default_desc.expression;
-                    args[0]->setAlias(STREAMING_TIMESTAMP_ALIAS);
+                    args[0]->setAlias(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
                     timestamp_expr_ast = args[0];
                 }
             }
         }
 
         if (!timestamp_expr_ast)
-            args[0] = std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME);
+            args[0] = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
     }
 
     postArgs(args);

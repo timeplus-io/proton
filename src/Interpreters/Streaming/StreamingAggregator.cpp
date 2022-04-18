@@ -152,18 +152,18 @@ Block StreamingAggregator::Params::getHeader(
         if (is_datetime64)
         {
             auto data_type_end = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
-            res.insert(1, {data_type_end, STREAMING_WINDOW_END});
+            res.insert(1, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
 
             auto data_type_start = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
-            res.insert(1, {data_type_start, STREAMING_WINDOW_START});
+            res.insert(1, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
         }
         else
         {
             auto data_type_end = std::make_shared<DataTypeDateTime>(String{"UTC"});
-            res.insert(1, {data_type_end, STREAMING_WINDOW_END});
+            res.insert(1, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
 
             auto data_type_start = std::make_shared<DataTypeDateTime>(String{"UTC"});
-            res.insert(1, {data_type_start, STREAMING_WINDOW_START});
+            res.insert(1, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
         }
     }
 

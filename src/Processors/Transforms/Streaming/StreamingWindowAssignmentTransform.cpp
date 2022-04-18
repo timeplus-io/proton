@@ -110,18 +110,12 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     assert(col_tuple);
 
     /// Insert window_begin and window_end
-    if (func_name == TUMBLE_FUNC_NAME)
-    {
+    if (func_name == ProtonConsts::TUMBLE_FUNC_NAME)
         assignTumbleWindow(result, col_tuple);
-    }
-    else if (func_name == HOP_FUNC_NAME)
-    {
+    else if (func_name == ProtonConsts::HOP_FUNC_NAME)
         assignHopWindow(result, col_tuple);
-    }
     else
-    {
         throw Exception(func_name + " is not supported", ErrorCodes::NOT_IMPLEMENTED);
-    }
 
     chunk.setColumns(result.getColumns(), result.rows());
 }
@@ -162,18 +156,13 @@ void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_he
     size_t pos = 0;
     for (const auto & col_with_type : output_header)
     {
-        if (col_with_type.name == STREAMING_WINDOW_START)
-        {
+        if (col_with_type.name == ProtonConsts::STREAMING_WINDOW_START)
             wstart_pos = pos;
-        }
-        else if (col_with_type.name == STREAMING_WINDOW_END)
-        {
+        else if (col_with_type.name == ProtonConsts::STREAMING_WINDOW_END)
             wend_pos = pos;
-        }
         else
-        {
             input_column_positions.push_back(input_header.getPositionByName(col_with_type.name));
-        }
+
         ++pos;
     }
 
@@ -187,6 +176,7 @@ void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_he
     {
         if (std::find(input_begin, input_end, col_with_type.name) != input_end)
             expr_column_positions.push_back(pos);
+
         ++pos;
     }
 }

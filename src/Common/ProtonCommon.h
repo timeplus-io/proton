@@ -6,6 +6,8 @@
 
 namespace DB
 {
+namespace ProtonConsts
+{
 /// Reserved column names / aliases for streaming processing
 const String STREAMING_WINDOW_START = "window_start";
 const String STREAMING_WINDOW_END = "window_end";
@@ -27,7 +29,6 @@ const String RESERVED_EVENT_TIME = "_tp_time";
 const String RESERVED_PROCESS_TIME = "_tp_process_time";
 const String RESERVED_APPEND_TIME = "_tp_append_time";
 const String RESERVED_INGEST_TIME = "_tp_ingest_time";
-const String RESERVED_CONSUME_TIME = "_tp_consume_time";
 const String RESERVED_EMIT_TIME = "_tp_emit_time";
 const String RESERVED_INDEX_TIME = "_tp_index_time";
 const String RESERVED_EVENT_SEQUENCE_ID = "_tp_sn";
@@ -44,4 +45,5 @@ const UInt64 DEFAULT_DDL_TIMEOUT_MS = 2000;
 
 /// Default settings for session window
 const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeout_interval of session window
+}
 }

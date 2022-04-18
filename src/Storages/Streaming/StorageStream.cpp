@@ -215,7 +215,7 @@ namespace
 
     inline void assignSequenceID(nlog::RecordPtr & record)
     {
-        auto * col = record->getBlock().findByName(RESERVED_EVENT_SEQUENCE_ID);
+        auto * col = record->getBlock().findByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
         if (!col)
             return;
 
@@ -393,7 +393,7 @@ void StorageStream::readConcat(
     if (!column_names.empty())
         header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
     else
-        header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
+        header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
 
     auto create_streaming_source = [this, header, metadata_snapshot, context_](Int64 & max_sn_in_parts) {
         auto committed = storage->committedSN();
@@ -467,7 +467,7 @@ void StorageStream::readStreaming(
             if (!column_names.empty())
                 pipes.emplace_back(source_multiplexers->createChannel(shard, column_names, metadata_snapshot, context_));
             else
-                pipes.emplace_back(source_multiplexers->createChannel(shard, {RESERVED_EVENT_TIME}, metadata_snapshot, context_));
+                pipes.emplace_back(source_multiplexers->createChannel(shard, {ProtonConsts::RESERVED_EVENT_TIME}, metadata_snapshot, context_));
         }
     }
     else
@@ -480,7 +480,7 @@ void StorageStream::readStreaming(
         if (!column_names.empty())
             header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
         else
-            header = metadata_snapshot->getSampleBlockForColumns({RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
+            header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
 
         auto offsets = getOffsets(settings_ref.seek_to.value);
 
@@ -1420,7 +1420,7 @@ void StorageStream::doCommit(
                 merge_tree_sink->onStart();
 
                 /// Reset index time here
-                assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(RESERVED_INDEX_TIME)));
+                assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(ProtonConsts::RESERVED_INDEX_TIME)));
 
                 merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                 break;
@@ -1805,9 +1805,9 @@ void StorageStream::initLog()
 
     const auto & logstore = ssettings->logstore.value;
 
-    if (logstore == LOGSTORE_NATIVE_LOG || nlog::NativeLog::instance(getContext()).enabled())
+    if (logstore == ProtonConsts::LOGSTORE_NATIVE_LOG || nlog::NativeLog::instance(getContext()).enabled())
         initNativeLog();
-    else if (logstore == LOGSTORE_KAFKA || klog::KafkaWALPool::instance(getContext()).enabled())
+    else if (logstore == ProtonConsts::LOGSTORE_KAFKA || klog::KafkaWALPool::instance(getContext()).enabled())
         initKafkaLog();
     else
         throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "Logstore type {} is not supported", logstore);
@@ -1959,9 +1959,8 @@ std::vector<Int64> StorageStream::sequencesForTimestamps(Int64 ts, bool append_t
 
 void StorageStream::cacheVirtualColumnNamesAndTypes()
 {
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_CONSUME_TIME, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
 }
 }

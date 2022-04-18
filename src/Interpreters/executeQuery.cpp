@@ -501,11 +501,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             else
                 query_end = end;
 
-            /// proton: starts
-            if (context->getIngestTime() <= 0)
-                context->setIngestTime(UTCMilliseconds::now());
-            /// proton: ends
-
             insert_query->tail = istr;
         }
         else

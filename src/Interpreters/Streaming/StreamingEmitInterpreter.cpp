@@ -237,7 +237,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     ASTPtr new_groupby = select_query.groupBy() ? select_query.groupBy()->clone() : std::make_shared<ASTExpressionList>();
     auto new_groupby_list = new_groupby->as<ASTExpressionList>();
     assert(new_groupby_list);
-    new_groupby_list->children.push_back(std::make_shared<ASTIdentifier>(STREAMING_WINDOW_END));
+    new_groupby_list->children.push_back(std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_WINDOW_END));
 
     select_query.setExpression(ASTSelectQuery::Expression::TABLES, std::move(new_table));
     select_query.setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(new_groupby));
@@ -299,7 +299,7 @@ void StreamingEmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery &
 {
     auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(3), std::make_shared<ASTLiteral>("UTC"));
     auto minus = makeASTFunction("minus", now, last_interval);
-    auto greater = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>(RESERVED_EVENT_TIME), minus);
+    auto greater = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME), minus);
 
     auto where = select_query.where();
     if (!where)

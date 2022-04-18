@@ -34,7 +34,7 @@ ASTs TableFunctionSession::checkAndExtractArguments(ASTFunction * node) const
 
 String TableFunctionSession::functionNamePrefix() const
 {
-    return SESSION_FUNC_NAME + "(";
+    return ProtonConsts::SESSION_FUNC_NAME + "(";
 }
 
 DataTypePtr TableFunctionSession::getElementType(const DataTypeTuple * tuple) const
@@ -53,17 +53,17 @@ void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_a
         DataTypePtr element_type = getElementType(tuple_result_type);
 
 
-        ColumnDescription wstart(STREAMING_WINDOW_START, element_type);
+        ColumnDescription wstart(ProtonConsts::STREAMING_WINDOW_START, element_type);
         columns.add(wstart);
 
-        ColumnDescription wend(STREAMING_WINDOW_END, element_type);
+        ColumnDescription wend(ProtonConsts::STREAMING_WINDOW_END, element_type);
         columns.add(wend);
     }
 
     {
         DataTypePtr element_type = std::make_shared<DataTypeUInt32>();
 
-        ColumnDescription session_id(STREAMING_SESSION_ID, std::move(element_type));
+        ColumnDescription session_id(ProtonConsts::STREAMING_SESSION_ID, std::move(element_type));
         columns.add(session_id);
     }
 }

@@ -16,7 +16,7 @@ std::map<String, std::map<String, String>> TabularTableRestRouterHandler::create
     = {{"required", {{"name", "string"}, {"columns", "array"}}},
        {"optional",
         {{"shards", "int"},
-         {RESERVED_EVENT_TIME_API_NAME, "string"},
+         {ProtonConsts::RESERVED_EVENT_TIME_API_NAME, "string"},
          {"replication_factor", "int"},
          {"order_by_expression", "string"},
          {"order_by_granularity", "string"},
@@ -93,16 +93,16 @@ bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr &
         if (!isDistributedDDL())
             continue;
 
-        if (std::find(RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), col_ptr->get("name").toString())
-            != RESERVED_COLUMN_NAMES.end())
+        if (std::find(ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), col_ptr->get("name").toString())
+            != ProtonConsts::RESERVED_COLUMN_NAMES.end())
         {
             error_msg = "Column '" + col_ptr->get("name").toString() + "' is reserved.";
             return false;
         }
 
         if (std::find(
-                RESERVED_COLUMN_NAMES.begin(), RESERVED_COLUMN_NAMES.end(), col.extract<Poco::JSON::Object::Ptr>()->get("name").toString())
-            != RESERVED_COLUMN_NAMES.end())
+                ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), col.extract<Poco::JSON::Object::Ptr>()->get("name").toString())
+            != ProtonConsts::RESERVED_COLUMN_NAMES.end())
         {
             error_msg = "Column '" + col.extract<Poco::JSON::Object::Ptr>()->get("name").toString() + "' is reserved.";
             return false;
@@ -138,26 +138,26 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
         columns_definition.push_back(getCreateColumnDefinition(col_json));
 
         auto name{col_json->get("name").toString()};
-        if (name == RESERVED_EVENT_TIME)
+        if (name == ProtonConsts::RESERVED_EVENT_TIME)
             has_event_time = true;
-        else if (name == RESERVED_INDEX_TIME)
+        else if (name == ProtonConsts::RESERVED_INDEX_TIME)
             has_index_time = true;
     }
 
     if (!has_event_time)
     {
-        if (payload->has(RESERVED_EVENT_TIME_API_NAME))
+        if (payload->has(ProtonConsts::RESERVED_EVENT_TIME_API_NAME))
             /// FIXME: validate the result type of RESERVED_EVENT_TIME_API_NAME expression
             columns_definition.push_back(fmt::format(
-                "`{}` datetime64(3, 'UTC') DEFAULT {}", RESERVED_EVENT_TIME, payload->get(RESERVED_EVENT_TIME_API_NAME).toString()));
+                "`{}` datetime64(3, 'UTC') DEFAULT {}", ProtonConsts::RESERVED_EVENT_TIME, payload->get(ProtonConsts::RESERVED_EVENT_TIME_API_NAME).toString()));
         else
             columns_definition.push_back(
-                fmt::format("`{}` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)", RESERVED_EVENT_TIME));
+                fmt::format("`{}` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_EVENT_TIME));
     }
 
     if (!has_index_time)
         /// RESERVED_INDEX_TIME will need recalculate when the block gets indexed to historical store
-        columns_definition.push_back(fmt::format("`{}` datetime64(3, 'UTC') CODEC (DoubleDelta, LZ4)", RESERVED_INDEX_TIME));
+        columns_definition.push_back(fmt::format("`{}` datetime64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_INDEX_TIME));
 
     /// RESERVED_EVENT_SEQUENCE_ID will be recalculate when the block gets indexed to historical store
     /// columns_definition.push_back("`" + RESERVED_EVENT_SEQUENCE_ID + "` Int64 CODEC (Delta, LZ4)");

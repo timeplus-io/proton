@@ -692,7 +692,7 @@ public:
                 time_col_is_datetime64 = isDateTime64(window_desc->argument_types[0]);
                 auto * func_ast = window_desc->func_ast->as<ASTFunction>();
                 extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), window_interval, kind);
-                session_size = window_interval * SESSION_SIZE_MULTIPLIER;
+                session_size = window_interval * ProtonConsts::SESSION_SIZE_MULTIPLIER;
                 if (time_col_is_datetime64)
                     time_scale = checkAndGetDataType<DataTypeDateTime64>(window_desc->argument_types[0].get())->getScale();
             }
