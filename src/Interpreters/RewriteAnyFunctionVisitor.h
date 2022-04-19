@@ -10,7 +10,7 @@ namespace DB
 
 class ASTFunction;
 
-/// Rewrite 'any' and 'anyLast' functions pushing them inside original function.
+/// Rewrite 'any' and 'any_last' functions pushing them inside original function.
 /// any(f(x, y, g(z))) -> f(any(x), any(y), g(any(z)))
 class RewriteAnyFunctionMatcher
 {

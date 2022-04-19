@@ -31,14 +31,20 @@ void registerAggregateFunctionsAny(AggregateFunctionFactory & factory)
     AggregateFunctionProperties properties = { .returns_default_when_only_null = false, .is_order_dependent = true };
 
     factory.registerFunction("any", { createAggregateFunctionAny, properties });
-    factory.registerFunction("anyLast", { createAggregateFunctionAnyLast, properties });
-    factory.registerFunction("anyHeavy", { createAggregateFunctionAnyHeavy, properties });
+    factory.registerFunction("any_last", { createAggregateFunctionAnyLast, properties });
+    factory.registerFunction("any_heavy", { createAggregateFunctionAnyHeavy, properties });
 
     // Synonyms for use as window functions.
     factory.registerFunction("first_value",
         { createAggregateFunctionAny, properties },
         AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("last_value",
+        { createAggregateFunctionAnyLast, properties },
+        AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("earliest",
+        { createAggregateFunctionAny, properties },
+        AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("latest",
         { createAggregateFunctionAnyLast, properties },
         AggregateFunctionFactory::CaseInsensitive);
 }

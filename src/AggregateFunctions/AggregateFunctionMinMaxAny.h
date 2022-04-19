@@ -32,7 +32,7 @@ namespace ErrorCodes
 }
 
 /** Aggregate functions that store one of passed values.
-  * For example: min, max, any, anyLast.
+  * For example: min, max, any, any_last.
   */
 
 
@@ -867,7 +867,7 @@ public:
 };
 
 
-/** What is the difference between the aggregate functions min, max, any, anyLast
+/** What is the difference between the aggregate functions min, max, any, any_last
   *  (the condition that the stored value is replaced by a new one,
   *   as well as, of course, the name).
   */
@@ -961,7 +961,7 @@ struct AggregateFunctionAnyLastData : Data
     bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena) { return this->changeEveryTime(column, row_num, arena); }
     bool changeIfBetter(const Self & to, Arena * arena)                        { return this->changeEveryTime(to, arena); }
 
-    static const char * name() { return "anyLast"; }
+    static const char * name() { return "any_last"; }
 
 #if USE_EMBEDDED_COMPILER
 
@@ -1106,7 +1106,7 @@ struct AggregateFunctionAnyHeavyData : Data
         readBinary(counter, buf);
     }
 
-    static const char * name() { return "anyHeavy"; }
+    static const char * name() { return "any_heavy"; }
 
 #if USE_EMBEDDED_COMPILER
 

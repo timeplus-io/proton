@@ -31,7 +31,7 @@ struct AggregatingSortedAlgorithm::AggregateDescription
 /// Stores information for aggregation of SimpleAggregateFunction columns
 struct AggregatingSortedAlgorithm::SimpleAggregateDescription
 {
-    /// An aggregate function 'anyLast', 'sum'...
+    /// An aggregate function 'any_last', 'sum'...
     AggregateFunctionPtr function;
     IAggregateFunction::AddFunc add_function = nullptr;
 

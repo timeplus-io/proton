@@ -2,7 +2,6 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <Columns/ColumnMap.h>
@@ -32,14 +31,15 @@ namespace
 {
 
 // map_cast(x, y, ...) is a function that allows you to make key-value pair
+// map_cast([keys], [values])
 class FunctionMap : public IFunction
 {
 public:
     static constexpr auto name = "map_cast";
 
-    static FunctionPtr create(ContextPtr)
+    static FunctionPtr create(ContextPtr ctx_)
     {
-        return std::make_shared<FunctionMap>();
+        return std::make_shared<FunctionMap>(std::move(ctx_));
     }
 
     String getName() const override
@@ -73,6 +73,19 @@ public:
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                 "Function {} requires even number of arguments, but {} given", getName(), arguments.size());
 
+        if (arguments.size() == 2)
+        {
+            if ((isArray(arguments[0]) && !isArray(arguments[1])) || (!isArray(arguments[0]) && isArray(arguments[1])))
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function {} requires 2 array of arguments", getName());
+
+            if (isArray(arguments[0]) && isArray(arguments[1]))
+            {
+                const auto & key_type = checkAndGetDataType<DataTypeArray>(arguments[0].get())->getNestedType();
+                const auto & value_type = checkAndGetDataType<DataTypeArray>(arguments[1].get())->getNestedType();
+                return std::make_shared<DataTypeMap>(key_type, value_type);
+            }
+        }
+
         DataTypes keys, values;
         for (size_t i = 0; i < arguments.size(); i += 2)
         {
@@ -90,8 +103,11 @@ public:
     {
         size_t num_elements = arguments.size();
 
-        if (num_elements == 0)
+        if (num_elements == 0 || input_rows_count == 0)
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
+
+        if (num_elements == 2 && isArray(arguments[0].type))
+            return executeImplArray(arguments, result_type, input_rows_count);
 
         const auto & result_type_map = static_cast<const DataTypeMap &>(*result_type);
         const DataTypePtr & key_type = result_type_map.getKeyType();
@@ -142,6 +158,106 @@ public:
 
         return ColumnMap::create(nested_column);
     }
+
+    ColumnPtr executeImplArray(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
+    {
+        assert (isArray(arguments[1].type));
+
+        const auto & result_type_map = static_cast<const DataTypeMap &>(*result_type);
+        const DataTypePtr & key_type = result_type_map.getKeyType();
+        const DataTypePtr & value_type = result_type_map.getValueType();
+
+        /// const auto & key_type = checkAndGetDataType<DataTypeArray>(arguments[0].type.get())->getNestedType();
+        /// const auto & value_type = checkAndGetDataType<DataTypeArray>(arguments[1].type.get())->getNestedType();
+
+        auto index_type = std::make_shared<DataTypeUInt64>();
+        ColumnWithTypeAndName index_type_and_name{index_type->createColumnConst(1, 0), index_type, ""};
+        ColumnsWithTypeAndName key_args{arguments[0], index_type_and_name};
+        ColumnsWithTypeAndName val_args{arguments[1], std::move(index_type_and_name)};
+
+        auto array_length_builder = FunctionFactory::instance().get("length", ctx);
+        auto array_length = array_length_builder->build({arguments[0]});
+
+        auto key_arr_len = array_length->execute(key_args, index_type_and_name.type, input_rows_count, false);
+        auto val_arr_len = array_length->execute(val_args, index_type_and_name.type, input_rows_count, false);
+
+        auto * key_arr_len_vec = checkAndGetColumn<ColumnUInt64>(key_arr_len.get());
+        auto * val_arr_len_vec = checkAndGetColumn<ColumnUInt64>(val_arr_len.get());
+        assert(key_arr_len_vec->size() == val_arr_len_vec->size() && key_arr_len_vec->size() == input_rows_count);
+
+        /// Validate key array size, and value array size, each array shall have the same size
+        auto first_array_len = key_arr_len_vec->operator[](0);
+        UInt64 array_len = first_array_len.get<UInt64>();
+        for (size_t k = 0, size = key_arr_len_vec->size(); k < size; ++k)
+        {
+            if (key_arr_len_vec->operator[](k) != first_array_len)
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Function {} requires 2 array of arguments with the same length. Found key array at index={} have different length={}, expected={}",
+                    getName(), k, key_arr_len_vec->operator[](k).get<UInt64>(), array_len);
+
+            if (val_arr_len_vec->operator[](k) != first_array_len)
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Function {} requires 2 array of arguments with the same length. Found value array at index={} have different length={}, expected={}",
+                    getName(), k, key_arr_len_vec->operator[](k).get<UInt64>(), array_len);
+        }
+
+        /// Loop key / value array to build a map
+        Columns columns_holder(array_len * 2);
+        ColumnRawPtrs column_ptrs(columns_holder.size());
+
+        auto array_element_builder = FunctionFactory::instance().get("array_element", ctx);
+        auto array_element = array_element_builder->build(key_args);
+
+        /// Collect each array's element to key / value columns
+        for (size_t i = 0, size = columns_holder.size(); i < size; i += 2)
+        {
+            key_args[1].column = key_args[1].type->createColumnConst(1,  i / 2 + 1);
+            columns_holder[i] = array_element->execute(key_args, key_type, input_rows_count, false);
+
+            val_args[1].column = key_args[1].column;
+            columns_holder[i + 1] = array_element->execute(val_args, value_type, input_rows_count, false);
+
+            column_ptrs[i] = columns_holder[i].get();
+            column_ptrs[i + 1] = columns_holder[i + 1].get();
+        }
+
+        /// Create and fill the result map.
+
+        MutableColumnPtr keys_data = key_type->createColumn();
+        MutableColumnPtr values_data = value_type->createColumn();
+        MutableColumnPtr offsets = DataTypeNumber<IColumn::Offset>().createColumn();
+
+        size_t total_elements = input_rows_count * array_len;
+        keys_data->reserve(total_elements);
+        values_data->reserve(total_elements);
+        offsets->reserve(input_rows_count);
+
+        IColumn::Offset current_offset = 0;
+        for (size_t i = 0; i < input_rows_count; ++i)
+        {
+            for (size_t j = 0; j < array_len * 2; j += 2)
+            {
+                keys_data->insertFrom(*column_ptrs[j], i);
+                values_data->insertFrom(*column_ptrs[j + 1], i);
+            }
+
+            current_offset += array_len;
+            offsets->insert(current_offset);
+        }
+
+        auto nested_column = ColumnArray::create(
+            ColumnTuple::create(Columns{std::move(keys_data), std::move(values_data)}),
+            std::move(offsets));
+
+        return ColumnMap::create(nested_column);
+    }
+
+    explicit FunctionMap(ContextPtr ctx_) : ctx(std::move(ctx_)) { }
+
+private:
+    ContextPtr ctx;
 };
 
 

@@ -92,7 +92,7 @@ public:
         /// Check if function is min/max/any
         auto * function_node = ast->as<ASTFunction>();
         if (function_node && (function_node->name == "min" || function_node->name == "max" ||
-                              function_node->name == "any" || function_node->name == "anyLast"))
+                              function_node->name == "any" || function_node->name == "any_last"))
         {
             KeepAggregateFunctionVisitor::Data keep_data{data.group_by_keys, false};
             if (function_node->arguments) KeepAggregateFunctionVisitor(keep_data).visit(function_node->arguments);
