@@ -26,15 +26,14 @@ jobs:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-045a86d6d301ab637
       submodules: 'true'
+      sanitizer: ${{ github.event.inputs.sanitizer }}
+      tag: ${{ github.event.inputs.tag }}
       command: |
         cd $GITHUB_WORKSPACE
 
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
-        
-        # update version
-        ./release --version patch
         
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
@@ -66,6 +65,3 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-    env:
-      SANITIZER: ${{ github.event.inputs.sanitizer }}
-      TAG: ${{ github.event.inputs.tag }}

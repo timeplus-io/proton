@@ -25,6 +25,14 @@ on:
         type: string
         required: true
         default: 'sleep 60s'
+      sanitizer:
+        required: false
+        type: string
+        default: 'address'
+      tag:
+        required: false
+        type: string
+        default: 'sanitizer'
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -75,6 +83,9 @@ jobs:
     name: Execute Command
     needs: start-runner # required to start the main job when the runner is ready
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    env:
+      SANITIZER: ${{ inputs.sanitizer }}
+      TAG: ${{ inputs.tag }}
     steps:
       - name: Configure AWS credentials from Test account
         uses: aws-actions/configure-aws-credentials@v1
