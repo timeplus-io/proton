@@ -236,17 +236,24 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
     /// NOTE: replica will be lost if server crashes before the following rename
     /// TODO better detection and recovery
 
+    /// proton starts:
+    auto old_table_id = table->getStorageID();
+
     if (exchange)
+    {
         renameExchange(old_metadata_path, new_metadata_path);
+    }
     else
+    {
+        table->preRename({old_table_id.getDatabaseName(), to_table_name, old_table_id.uuid});
         renameNoReplace(old_metadata_path, new_metadata_path);
+    }
+    /// proton: ends
 
     /// After metadata was successfully moved, the following methods should not throw (if them do, it's a logical error)
     table_data_path = detach(*this, table_name, table->storesDataOnDisk());
     if (exchange)
         other_table_data_path = detach(other_db, to_table_name, other_table->storesDataOnDisk());
-
-    auto old_table_id = table->getStorageID();
 
     table->renameInMemory({other_db.database_name, to_table_name, old_table_id.uuid});
     if (exchange)

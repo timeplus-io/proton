@@ -22,8 +22,6 @@ struct KafkaWALContext;
 
 int32_t mapErrorCode(rd_kafka_resp_err_t err, bool retriable = false);
 
-/// Escape namespace `ns` and `name` to dwal's restrict char set
-std::string escapeTopicName(const std::string & ns, const std::string & name);
 
 using KConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
 using KTopicConfPtr = std::unique_ptr<rd_kafka_topic_conf_t, decltype(rd_kafka_topic_conf_destroy) *>;

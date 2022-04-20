@@ -172,9 +172,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 
         /// proton: start
         if (alterTableDistributed(alter))
-        {
             return {};
-        }
         /// proton: end
 
         table->alter(alter_commands, getContext(), alter_lock);
@@ -188,9 +186,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
 {
     auto ctx = getContext();
     if (!ctx->isDistributedEnv())
-    {
         return false;
-    }
 
     const String & database = query.getDatabase().empty() ? ctx->getCurrentDatabase() : query.getDatabase();
     String payload;
@@ -226,10 +222,8 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
             /// proton: ends
 
         if (tables[0]->engine != "Stream")
-        {
             /// FIXME: We only support `Stream` table engine for now
             return false;
-        }
 
         assert(!ctx->getCurrentQueryId().empty());
 
@@ -244,6 +238,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
             = {{"payload", payload},
                {"database", query.getDatabase()},
                {"table", query.getTable()},
+               {"uuid", toString(tables[0]->uuid)},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};
 

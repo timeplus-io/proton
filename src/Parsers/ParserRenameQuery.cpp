@@ -39,11 +39,13 @@ static bool parseDatabaseAndTable(
 
 bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserKeyword s_rename_table("RENAME TABLE");
-    ParserKeyword s_exchange_tables("EXCHANGE TABLES");
-    ParserKeyword s_rename_dictionary("RENAME DICTIONARY");
-    ParserKeyword s_exchange_dictionaries("EXCHANGE DICTIONARIES");
-    ParserKeyword s_rename_database("RENAME DATABASE");
+    /// proton: starts
+    ParserKeyword s_rename_table("RENAME STREAM");
+    /// ParserKeyword s_exchange_tables("EXCHANGE TABLES");
+    /// ParserKeyword s_rename_dictionary("RENAME DICTIONARY");
+    /// ParserKeyword s_exchange_dictionaries("EXCHANGE DICTIONARIES");
+    /// ParserKeyword s_rename_database("RENAME DATABASE");
+    /// proton: ends
     ParserKeyword s_if_exists("IF EXISTS");
     ParserKeyword s_to("TO");
     ParserKeyword s_and("AND");
@@ -54,6 +56,8 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (s_rename_table.ignore(pos, expected))
         ;
+    /// proton : starts
+#if 0
     else if (s_exchange_tables.ignore(pos, expected))
         exchange = true;
     else if (s_rename_dictionary.ignore(pos, expected))
@@ -93,6 +97,8 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         node = query;
         return true;
     }
+#endif
+/// proton: ends
     else
         return false;
 

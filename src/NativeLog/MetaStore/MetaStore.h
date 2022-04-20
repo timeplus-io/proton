@@ -8,6 +8,8 @@
 #include <NativeLog/Requests/DeleteStreamResponse.h>
 #include <NativeLog/Requests/ListStreamsRequest.h>
 #include <NativeLog/Requests/ListStreamsResponse.h>
+#include <NativeLog/Requests/RenameStreamRequest.h>
+#include <NativeLog/Requests/RenameStreamResponse.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -25,7 +27,6 @@ class DB;
 
 namespace nlog
 {
-
 class MetaStore final : private boost::noncopyable
 {
 public:
@@ -44,6 +45,9 @@ public:
     /// information from MetaStore
     /// return nothing on success, otherwise throw an exception
     DeleteStreamResponse deleteStream(const std::string & ns, const DeleteStreamRequest & req);
+
+    /// `renameStream` rename a stream name to a different one
+    RenameStreamResponse renameStream(const std::string & ns, const RenameStreamRequest & req);
 
     /// Collect stream metadata from metastore
     /// If stream name and namespace is not empty, return stream metadata only for that stream

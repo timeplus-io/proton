@@ -4,6 +4,7 @@
 #include <NativeLog/Rocks/NamespaceKey.h>
 #include <NativeLog/Rocks/mapRocksStatus.h>
 
+#include <base/ClockUtils.h>
 #include <base/logger_useful.h>
 #include <Common/Exception.h>
 
@@ -19,6 +20,7 @@ namespace ErrorCodes
     const extern int CANNOT_OPEN_DATABASE;
     const extern int INSERT_KEY_VALUE_FAILED;
     const extern int RESOURCE_ALREADY_EXISTS;
+    const extern int RESOURCE_NOT_FOUND;
 }
 }
 
@@ -89,16 +91,26 @@ CreateStreamResponse MetaStore::createStream(const std::string & ns, const Creat
 
     std::scoped_lock guard{mlock};
 
+    /// Rocks don't have conditional put
     auto status = metadb->Get(rocksdb::ReadOptions{}, key, &rvalue);
     if (!status.IsNotFound())
-        /// stream already exists
-        throw DB::Exception(DB::ErrorCodes::RESOURCE_ALREADY_EXISTS, "Stream {} in namespace {} already exists", req.stream, ns);
+    {
+        LOG_ERROR(logger, "Failed to create stream={} error={}", key, status.ToString());
+
+        auto response{CreateStreamResponse::from(desc.id, ns, desc.version, 0, 0, req, 0)};
+        response.error_code = DB::ErrorCodes::RESOURCE_ALREADY_EXISTS;
+        response.error_message = "Stream already exists";
+        return response;
+    }
 
     status = metadb->Put(rocksdb::WriteOptions{}, key, rocksdb::Slice(data.data(), data.size()));
     if (!status.ok())
     {
         LOG_ERROR(logger, "Failed to create stream={} error={}", key, status.ToString());
-        throw DB::Exception(DB::ErrorCodes::INSERT_KEY_VALUE_FAILED, "Failed to create stream={}, error={}", req.stream, status.ToString());
+        auto response{CreateStreamResponse::from(desc.id, ns, desc.version, 0, 0, req, 0)};
+        response.error_code = DB::ErrorCodes::RESOURCE_ALREADY_EXISTS;
+        response.error_message = "Stream already exists";
+        return response;
     }
 
     return CreateStreamResponse::from(desc.id, ns, desc.version, desc.create_timestamp_ms, desc.last_modify_timestamp_ms, req, 0);
@@ -206,6 +218,56 @@ ListStreamsResponse MetaStore::listStreams(const std::string & ns, const ListStr
         return listAllStreams();
 
     return listStreamsInNamespace(ns);
+}
+
+RenameStreamResponse MetaStore::renameStream(const std::string & ns, const RenameStreamRequest & req)
+{
+    RenameStreamResponse response(req.api_version);
+    if (req.new_stream == req.stream)
+        return response;
+
+    if (req.stream.empty() || req.new_stream.empty())
+    {
+        response.error_code = DB::ErrorCodes::BAD_ARGUMENTS;
+        response.error_message = "Bad request. Empty stream name";
+        return response;
+    }
+
+    auto existing_key = namespaceKey(ns, req.stream);
+    auto new_key = namespaceKey(ns, req.new_stream);
+    assert(existing_key != new_key);
+
+    std::string rvalue;
+
+    std::scoped_lock guard{mlock};
+
+    auto status = metadb->Get(rocksdb::ReadOptions{}, existing_key, &rvalue);
+    if (!status.ok())
+    {
+        response.error_code = mapRocksStatus(status);
+        response.error_message = "Failed to rename stream";
+        return response;
+    }
+
+    auto desc{StreamDescription::deserialize(rvalue.data(), rvalue.size())};
+    desc.stream = req.new_stream;
+    desc.last_modify_timestamp_ms = DB::UTCMilliseconds::now();
+    auto data{desc.serialize()};
+
+    /// We will need do a delete and then do an insert
+    rocksdb::WriteBatch batch;
+
+    batch.Delete(existing_key);
+    batch.Put(new_key, rocksdb::Slice(data.data(), data.size()));
+    status = metadb->Write(rocksdb::WriteOptions{}, &batch);
+    if (status.ok())
+        return response;
+
+    LOG_ERROR(logger, "Failed to rename stream, error={}", status.ToString());
+
+    response.error_code = mapRocksStatus(status);
+    response.error_message = "Failed to rename stream";
+    return response;
 }
 
 }

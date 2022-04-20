@@ -126,6 +126,8 @@ public:
 
     void drop() override;
 
+    void preRename(const StorageID & new_table_id) override;
+
     void truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr, TableExclusiveLockHolder &) override;
 
     void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;

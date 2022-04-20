@@ -623,7 +623,11 @@ public:
     /// Needed for integration engines, when there must be no delay for calling drop() method.
     virtual bool dropTableImmediately() { return false; }
 
+    /// proton: starts
     virtual void preDrop() { }
+
+    virtual void preRename(const StorageID & /*new_table_id*/) { }
+    /// proton: ends
 
 private:
     /// Lock required for alter queries (lockForAlter).

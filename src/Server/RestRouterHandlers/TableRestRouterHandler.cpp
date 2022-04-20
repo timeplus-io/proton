@@ -142,8 +142,9 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
             HTTPResponse::HTTP_BAD_REQUEST};
 
     const auto & shard = getQueryParameter("shard");
+    const auto & uuid = getQueryParameter("uuid");
     const auto & synchronous_ddl = getQueryParameter("synchronous_ddl", "1");
-    const auto & query = getCreationSQL(payload, shard);
+    const auto & query = getCreationSQL(payload, shard, uuid);
 
     if (synchronous_ddl == "1")
         query_context->setSetting("synchronous_ddl", true);
@@ -273,18 +274,33 @@ String TableRestRouterHandler::getStringValueFrom(const Poco::JSON::Object::Ptr 
     return payload->has(key) ? payload->get(key).toString() : default_value;
 }
 
-String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard) const
+String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard, const String & uuid) const
 {
     const auto & time_col = getStringValueFrom(payload, ProtonConsts::RESERVED_EVENT_TIME_API_NAME, ProtonConsts::RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
-    create_segments.push_back(fmt::format(
-        "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
-        database,
-        payload->get("name").toString(),
-        getColumnsDefinition(payload),
-        getEngineExpr(payload),
-        getPartitionExpr(payload, getDefaultPartitionGranularity()),
-        getOrderByExpr(payload, time_col, getDefaultOrderByGranularity())));
+    if (uuid.empty())
+    {
+        create_segments.push_back(fmt::format(
+            "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
+            database,
+            payload->get("name").toString(),
+            getColumnsDefinition(payload),
+            getEngineExpr(payload),
+            getPartitionExpr(payload, getDefaultPartitionGranularity()),
+            getOrderByExpr(payload, time_col, getDefaultOrderByGranularity())));
+    }
+    else
+    {
+        create_segments.push_back(fmt::format(
+            "CREATE STREAM `{}`.`{}` UUID '{}' ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
+            database,
+            payload->get("name").toString(),
+            uuid,
+            getColumnsDefinition(payload),
+            getEngineExpr(payload),
+            getPartitionExpr(payload, getDefaultPartitionGranularity()),
+            getOrderByExpr(payload, time_col, getDefaultOrderByGranularity())));
+    }
 
     if (payload->has("ttl_expression"))
         /// FIXME  Enforce time based TTL only

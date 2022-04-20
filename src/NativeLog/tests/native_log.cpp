@@ -75,6 +75,8 @@ private:
             handleStreamDeleteCommand();
         else if (nl_args.stream_args->command == "list")
             handleStreamListCommand();
+        else if (nl_args.stream_args->command == "rename")
+            handleStreamRenameCommand();
         else
         {
             LOG_ERROR(logger, "Unsupported stream command {}", nl_args.stream_args->command);
@@ -103,6 +105,14 @@ private:
         auto response = server->listStreams(nl_args.stream_args->ns, request);
         for (const auto & stream_desc : response.streams)
             LOG_INFO(logger, "\n\n\nStream : {}\n\n\n", stream_desc.string());
+    }
+
+    void handleStreamRenameCommand()
+    {
+        nlog::RenameStreamRequest request(nl_args.stream_args->stream, nl_args.stream_args->new_stream);
+        auto response = server->renameStream(nl_args.stream_args->ns, request);
+        if (!response.hasError())
+            LOG_INFO(logger, "\n\n\nRename stream from {} to {} successfully\n\n\n", request.stream, request.new_stream);
     }
 
     void handleProduceCommand()

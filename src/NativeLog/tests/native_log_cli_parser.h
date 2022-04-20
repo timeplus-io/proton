@@ -10,6 +10,7 @@ struct StreamArgs
     std::string command = "list";
     std::string ns;
     std::string stream;
+    std::string new_stream;
     int32_t shards;
     bool compacted;
 };

@@ -744,6 +744,21 @@ void StorageStream::drop()
         storage->drop();
 }
 
+void StorageStream::preRename(const StorageID & new_table_id)
+{
+    if (!kafka)
+    {
+        auto & native_log = nlog::NativeLog::instance(getContext());
+        assert(native_log.enabled());
+
+        const auto & storage_id = getStorageID();
+        nlog::RenameStreamRequest request(storage_id.getTableName(), new_table_id.getTableName());
+        auto response{native_log.renameStream(storage_id.getDatabaseName(), request)};
+        if (response.hasError())
+            throw DB::Exception(response.error_code, "Failed to rename stream, error={}", response.error_message);
+    }
+}
+
 void StorageStream::truncate(
     const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
 {
@@ -1815,11 +1830,14 @@ void StorageStream::initLog()
 
 void StorageStream::initKafkaLog()
 {
+    if (!klog::KafkaWALPool::instance(getContext()).enabled())
+        return;
+
     auto ssettings = storage_settings.get();
 
     const auto & storage_id = getStorageID();
     auto kafka_log = std::make_unique<KafkaLog>(
-        klog::escapeTopicName(storage_id.getDatabaseName(), storage_id.getTableName()),
+        toString(storage_id.uuid),
         shards,
         replication_factor,
         getContext()->getSettingsRef().async_ingest_block_timeout_ms,

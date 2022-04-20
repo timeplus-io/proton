@@ -180,7 +180,7 @@ struct Settings;
     M(UInt64, default_replicas, 1, "Default replicas number for Stream", 0) \
     M(String, default_sharding_expr, "rand()", "Default sharding method of Stream", 0) \
     M(String, distributed_ingest_mode, "async", "Data ingestion mode for Stream", 0) \
-    M(String, logstore, "nativelog", "Backend streaming storage for write ahead log implementation", 1) \
+    M(String, logstore, "", "Backend streaming storage for write ahead log implementation", 1) \
     M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
 // End of CONFIGURABLE_STREAM_SETTINGS
 

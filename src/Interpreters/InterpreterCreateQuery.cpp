@@ -930,10 +930,13 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     auto query = queryToString(create);
     LOG_INFO(log, "Creating stream query={} query_id={}", query, ctx->getCurrentQueryId());
 
+    auto uuid = create.uuid == UUIDHelpers::Nil ? UUIDHelpers::generateV4() : create.uuid;
+
     std::vector<std::pair<String, String>> string_cols
         = {{"payload", payload},
            {"database", current_database},
            {"table", create.getTable()},
+           {"uuid", toString(uuid)},
            {"query_id", ctx->getCurrentQueryId()},
            {"user", ctx->getUserName()}};
 

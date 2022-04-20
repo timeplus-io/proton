@@ -217,7 +217,7 @@ void DDLService::succeedDDL(const String & query_id, const String & user, const 
     updateDDLStatus(query_id, user, TaskStatusService::TaskStatus::SUCCEEDED, query, "", "");
 }
 
-void DDLService::failDDL(const String & query_id, const String & user, const String & query, const String reason) const
+void DDLService::failDDL(const String & query_id, const String & user, const String & query, const String & reason) const
 {
     updateDDLStatus(query_id, user, TaskStatusService::TaskStatus::FAILED, query, "", reason);
 }
@@ -276,6 +276,7 @@ void DDLService::doDDLOnHosts(
     const String & method,
     const String & query_id,
     const String & user,
+    const String & uuid,
     CallBack finished_callback) const
 {
     std::vector<String> failed_hosts;
@@ -285,6 +286,10 @@ void DDLService::doDDLOnHosts(
         try
         {
             uri.addQueryParameter("distributed_ddl", "false");
+
+            if (!uuid.empty())
+                uri.addQueryParameter("uuid", uuid);
+
             auto err = doDDL(payload, uri, method, query_id, user);
             if (err != ErrorCodes::OK)
                 failed_hosts.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), err, ErrorCodes::getName(err)));
@@ -312,14 +317,14 @@ void DDLService::createTable(nlog::Record & record)
 {
     const Block & block = record.getBlock();
     assert(block.has("query_id"));
-    if (!validateSchema(block, {"payload", "database", "table", "shards", "replication_factor", "query_id", "user", "timestamp"}))
+    if (!validateSchema(block, {"payload", "database", "table", "uuid", "shards", "replication_factor", "query_id", "user", "timestamp"}))
         return;
 
-    String database = block.getByName("database").column->getDataAt(0).toString();
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
     String user = block.getByName("user").column->getDataAt(0).toString();
     String payload = block.getByName("payload").column->getDataAt(0).toString();
     String table = block.getByName("table").column->getDataAt(0).toString();
+    String uuid = block.getByName("uuid").column->getDataAt(0).toString();
     Int32 shards = block.getByName("shards").column->getInt(0);
     Int32 replication_factor = block.getByName("replication_factor").column->getInt(0);
 
@@ -338,7 +343,7 @@ void DDLService::createTable(nlog::Record & record)
         /// Create a DWAL for this table.
         try
         {
-            createDWAL(database, table, shards, replication_factor, url_parameters);
+            createDWAL(uuid, shards, replication_factor, url_parameters);
         }
         catch (const Exception & e)
         {
@@ -367,7 +372,7 @@ void DDLService::createTable(nlog::Record & record)
             }
         }
         /// Create table on each target host according to placement
-        doDDLOnHosts(target_hosts, payload, Poco::Net::HTTPRequest::HTTP_POST, query_id, user);
+        doDDLOnHosts(target_hosts, payload, Poco::Net::HTTPRequest::HTTP_POST, query_id, user, uuid);
     }
     else
     {
@@ -416,11 +421,12 @@ void DDLService::mutateTable(nlog::Record & record, const String & method, CallB
     Block & block = record.getBlock();
     assert(block.has("query_id"));
 
-    if (!validateSchema(block, {"payload", "database", "table", "timestamp", "query_id", "user"}))
+    if (!validateSchema(block, {"payload", "database", "table", "uuid", "timestamp", "query_id", "user"}))
         return;
 
     String database = block.getByName("database").column->getDataAt(0).toString();
     String table = block.getByName("table").column->getDataAt(0).toString();
+    String uuid = block.getByName("uuid").column->getDataAt(0).toString();
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
     String user = block.getByName("user").column->getDataAt(0).toString();
     String payload = block.getByName("payload").column->getDataAt(0).toString();
@@ -454,7 +460,7 @@ void DDLService::mutateTable(nlog::Record & record, const String & method, CallB
         return;
     }
 
-    doDDLOnHosts(target_hosts, payload, method, query_id, user, std::move(finished_callback));
+    doDDLOnHosts(target_hosts, payload, method, query_id, user, uuid, std::move(finished_callback));
 }
 
 void DDLService::mutateDatabase(nlog::Record & record, const String & method) const
@@ -562,11 +568,10 @@ void DDLService::processRecords(const nlog::RecordPtrs & records)
             case nlog::OpCode::DELETE_TABLE: {
                 Block & block = record->getBlock();
                 /// We need delete table DWAL after done delete operation
-                if (block.has("database") && block.has("table"))
+                if (block.has("database") && block.has("table") && block.has("uuid"))
                 {
-                    String database = block.getByName("database").column->getDataAt(0).toString();
-                    String table = block.getByName("table").column->getDataAt(0).toString();
-                    auto finished_callback = [this, topic_ = klog::escapeTopicName(database, table)]() {
+                    String uuid = block.getByName("uuid").column->getDataAt(0).toString();
+                    auto finished_callback = [this, topic_ = std::move(uuid)]() {
                         klog::KafkaWALContext ctx{topic_};
                         this->doDeleteDWal(ctx);
                     };
@@ -629,9 +634,9 @@ DDLService::getTargetURIs(nlog::Record & record, const String & database, const 
 }
 
 void DDLService::createDWAL(
-    const String & database, const String & table, Int32 shards, Int32 replication_factor, const String * url_parameters) const
+    const String & uuid, Int32 shards, Int32 replication_factor, const String * url_parameters) const
 {
-    klog::KafkaWALContext ctx{klog::escapeTopicName(database, table), shards, replication_factor, "delete"};
+    klog::KafkaWALContext ctx{uuid, shards, replication_factor, "delete"};
 
     /// Parse these settings from url parameters
     /// logstore_retention_bytes,
@@ -647,21 +652,13 @@ void DDLService::createDWAL(
         for (const auto & kv : params)
         {
             if (kv.first == "logstore_retention_bytes")
-            {
                 ctx.retention_bytes = std::stoll(kv.second);
-            }
             else if (kv.first == "logstore_retention_ms")
-            {
                 ctx.retention_ms = std::stoll(kv.second);
-            }
             else if (kv.first == "logstore_flush_messages")
-            {
                 ctx.flush_messages = std::stoll(kv.second);
-            }
             else if (kv.first == "logstore_flush_ms")
-            {
                 ctx.flush_ms = std::stoll(kv.second);
-            }
         }
     }
 

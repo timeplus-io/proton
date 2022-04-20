@@ -136,6 +136,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
             = {{"payload", payload},
                {"database", database},
                {"table", query.getTable()},
+               {"uuid", toString(tables[0]->uuid)},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};
 
@@ -163,25 +164,19 @@ bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
 {
     auto ctx = getContext();
     if (!ctx->isDistributedEnv())
-    {
         return false;
-    }
 
     if (!ctx->getQueryParameters().contains("_payload"))
-    {
         /// FIXME:
         /// Build json payload here from SQL statement
         /// context.setDistributedDDLOperation(true);
         return false;
-    }
 
     if (ctx->isDistributedDDLOperation())
     {
         const auto & database = DatabaseCatalog::instance().tryGetDatabase(query.getDatabase());
         if (!database)
-        {
             throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Databases {} does not exist.", query.getDatabase());
-        }
 
         /// Check Access
         if (query.kind == ASTDropQuery::Kind::Truncate)

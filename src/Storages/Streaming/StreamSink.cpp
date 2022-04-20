@@ -43,7 +43,6 @@ StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metada
             column_positions.push_back(full_header.getPositionByName(col.name));
     }
 
-
     if (!storage.kafka)
     {
         native_log = &nlog::NativeLog::instance(query_context);

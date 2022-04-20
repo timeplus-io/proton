@@ -12,6 +12,8 @@
 #include <NativeLog/Requests/FetchResponse.h>
 #include <NativeLog/Requests/ListStreamsRequest.h>
 #include <NativeLog/Requests/ListStreamsResponse.h>
+#include <NativeLog/Requests/RenameStreamRequest.h>
+#include <NativeLog/Requests/RenameStreamResponse.h>
 #include <NativeLog/Requests/TranslateTimestampsRequest.h>
 #include <NativeLog/Requests/TranslateTimestampsResponse.h>
 #include <NativeLog/Requests/TruncateRequest.h>
@@ -49,6 +51,7 @@ public:
     CreateStreamResponse createStream(const std::string & ns, const CreateStreamRequest & request);
     DeleteStreamResponse deleteStream(const std::string & ns, const DeleteStreamRequest & request);
     ListStreamsResponse listStreams(const std::string & ns, const ListStreamsRequest & request);
+    RenameStreamResponse renameStream(const std::string & ns, const RenameStreamRequest & request);
 
     /// Data APIs
     AppendResponse append(const std::string & ns, AppendRequest & request);

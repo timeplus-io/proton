@@ -203,10 +203,7 @@ NativeLog::~NativeLog()
 void NativeLog::startup()
 {
     if (!scheduler)
-    {
-        LOG_ERROR(logger, "Not enabled");
         return;
-    }
 
     if (inited.test_and_set())
     {
@@ -320,6 +317,11 @@ DeleteStreamResponse NativeLog::deleteStream(const std::string & ns, const Delet
 ListStreamsResponse NativeLog::listStreams(const std::string & ns, const ListStreamsRequest & request)
 {
     return meta_store->listStreams(ns, request);
+}
+
+RenameStreamResponse NativeLog::renameStream(const std::string & ns, const RenameStreamRequest & request)
+{
+    return meta_store->renameStream(ns, request);
 }
 
 AppendResponse NativeLog::append(const std::string & ns, AppendRequest & request)

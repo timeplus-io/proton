@@ -23,12 +23,12 @@ StreamingBlockReaderKafka::StreamingBlockReaderKafka(
     : storage(std::move(storage_))
     , header(storage->getInMemoryMetadataPtr()->getSampleBlock())
     , consumer(std::move(consumer_))
-    , consume_ctx(klog::escapeTopicName(storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName()), shard_, offset)
+    , consume_ctx(toString(storage->getStorageID().uuid), shard_, offset)
     , log(log_)
 {
-    if (offset == -1)
+    if (offset == nlog::LATEST_SN)
         consume_ctx.auto_offset_reset = "latest";
-    else if (offset == -2)
+    else if (offset == nlog::EARLIEST_SN)
         consume_ctx.auto_offset_reset = "earliest";
 
     consume_ctx.enforce_offset = true;

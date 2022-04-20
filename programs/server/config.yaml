@@ -926,7 +926,7 @@ settings:
         default_replicas: 1
         default_sharding_expr: "rand()"
         distributed_ingest_mode: "async"    # Data ingestion mode for Stream
-        logstore: "kafka"
+        logstore: ""
         storage_type: "hybrid"
 
 cluster_settings:

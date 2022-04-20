@@ -53,11 +53,6 @@ std::string escapeName(const std::string & s)
 
 namespace klog
 {
-std::string escapeTopicName(const std::string & ns, const std::string & name)
-{
-    return fmt::format("{}.{}", DB::escapeName(ns), DB::escapeName(name));
-}
-
 int32_t mapErrorCode(rd_kafka_resp_err_t err, bool retriable)
 {
     if (retriable)

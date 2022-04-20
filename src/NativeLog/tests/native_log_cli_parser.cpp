@@ -65,6 +65,64 @@ namespace
         return nl_args;
     }
 
+    NativeLogArgs parseStreamRenameArgs(po::parsed_options & cmd_parsed, const char * progname)
+    {
+        using boost::program_options::value;
+
+        po::options_description desc = createOptionsDescription("rename options", getTerminalWidth());
+
+        /// native_log stream rename --namespace <namespace> --name <stream-name> --new-name <new-stream-name>
+        auto options = desc.add_options();
+        options("help", "help message");
+        options("namespace", value<std::string>(), "namespace of the stream");
+        options("name", value<std::string>(), "stream name");
+        options("new-name", value<std::string>(), "new stream name");
+
+        std::vector<std::string> opts = po::collect_unrecognized(cmd_parsed.options, po::include_positional);
+        opts.erase(opts.begin());
+
+        /// Parse list args
+        po::variables_map option_map;
+        try
+        {
+            po::store(po::command_line_parser(opts).options(desc).run(), option_map);
+        }
+        catch (...)
+        {
+            std::cerr << DB::getCurrentExceptionMessage(false, true) << std::endl;
+            printUsage(progname, desc);
+            return {};
+        }
+
+        if (option_map.contains("help"))
+        {
+            printUsage(progname, desc);
+            return {};
+        }
+
+        /// Non empty values for keys
+        for (const auto & key : {"namespace", "name", "new-name"})
+        {
+            if (!option_map.contains(key) || option_map[key].as<std::string>().empty())
+            {
+                std::cerr << "Missing or having empty value for --" << key << std::endl;
+                printUsage(progname, desc);
+                return {};
+            }
+        }
+
+        StreamArgs args;
+        args.command = "rename";
+        args.ns = option_map["namespace"].as<std::string>();
+        args.stream = option_map["name"].as<std::string>();
+        args.new_stream = option_map["new-name"].as<std::string>();
+
+        NativeLogArgs nl_args;
+        nl_args.command = "stream";
+        nl_args.stream_args = args;
+        return nl_args;
+    }
+
     NativeLogArgs parseStreamCreateArgs(po::parsed_options & cmd_parsed, const char * progname)
     {
         using boost::program_options::value;
@@ -188,7 +246,7 @@ namespace
 
         po::options_description desc = createOptionsDescription("stream options", getTerminalWidth());
         auto cmds = desc.add_options();
-        cmds("subcommand", value<std::string>()->default_value("help"), "<list|create|delete> subcommand to execute");
+        cmds("subcommand", value<std::string>()->default_value("help"), "<create|delete|list|rename> subcommand to execute");
         cmds("subargs", value<std::vector<std::string>>(), "Arguments for subcommand of stream");
 
         po::positional_options_description pos;
@@ -208,6 +266,10 @@ namespace
         if (stream_subcmd == "list")
         {
             return parseStreamListArgs(stream_subcmd_parsed, progname);
+        }
+        else if (stream_subcmd == "rename")
+        {
+            return parseStreamRenameArgs(stream_subcmd_parsed, progname);
         }
         else if (stream_subcmd == "create")
         {

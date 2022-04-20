@@ -68,6 +68,7 @@
 #include <DistributedMetadata/CatalogService.h>
 
 /// proton: starts
+#include <Parsers/ASTRenameQuery.h>
 #include <Parsers/parseQueryPipe.h>
 #include <Storages/Streaming/StorageStream.h>
 /// proton: ends
@@ -102,22 +103,16 @@ namespace
 void broadcastCatalogIfNecessary(const ASTPtr & ast, ContextPtr & context)
 {
     if (!context->isDistributedEnv() || context->isDistributedDDLOperation())
-    {
         return;
-    }
 
     if (auto * create = ast->as<ASTCreateQuery>())
     {
         if (!create->getDatabase().empty() || !create->getTable().empty())
-        {
             CatalogService::instance(context->getGlobalContext()).broadcast();
-        }
     }
 
-    if (ast->as<ASTDropQuery>() || ast->as<ASTAlterQuery>())
-    {
+    if (ast->as<ASTDropQuery>() || ast->as<ASTAlterQuery>() || ast->as<ASTRenameQuery>())
         CatalogService::instance(context->getGlobalContext()).broadcast();
-    }
 }
 /// proton: ends
 }
