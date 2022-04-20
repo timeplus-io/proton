@@ -15,7 +15,9 @@ bool ParserDescribeTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 {
     ParserKeyword s_describe("DESCRIBE");
     ParserKeyword s_desc("DESC");
-    ParserKeyword s_table("TABLE");
+    /// proton : starts.
+    ParserKeyword s_table("STREAM");
+    /// proton : ends.
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier name_p;
 
