@@ -1,12 +1,13 @@
-#include "parseSeekTo.h"
+#include "storageUtil.h"
 
-#include <IO/ReadBufferFromString.h>
-#include <IO/parseDateTimeBestEffort.h>
-#include <base/ClockUtils.h>
 #include <Common/DateLUT.h>
 #include <Common/Exception.h>
 #include <Common/parseIntStrict.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/parseDateTimeBestEffort.h>
 #include <NativeLog/Record/Record.h>
+#include <Storages/IStorage.h>
+#include <base/ClockUtils.h>
 
 namespace DB
 {
@@ -109,5 +110,11 @@ int64_t parseSeekTo(const String & seek_to, bool utc)
     }
 
     return now_ms;
+}
+
+bool supportStreamingQuery(const StoragePtr & storage)
+{
+    const auto & name = storage->getName();
+    return (name == "ProxyStream" || name == "Stream" || name == "View" || name == "MaterializedView" || name == "ExternalStream");
 }
 }

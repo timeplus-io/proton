@@ -6,6 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/IStorage.h>
+#include <Storages/Streaming/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -47,8 +48,8 @@ void TableFunctionHist::init(
 {
     streaming = false;
     auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    if (storage->getName() != "Stream" && storage->getName() != "MaterializedView" && storage->getName() != "Kafka")
-        throw Exception("Storage engine is not stream or MaterializedView or Kafka", ErrorCodes::BAD_ARGUMENTS);
+    if (!supportStreamingQuery(storage))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to '{}'", storage->getName());
 
     underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
     columns = underlying_storage_metadata_snapshot->getColumns();

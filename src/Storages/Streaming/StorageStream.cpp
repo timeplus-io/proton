@@ -3,7 +3,7 @@
 #include "StreamingBlockReaderKafka.h"
 #include "StreamingBlockReaderNativeLog.h"
 #include "StreamingStoreSource.h"
-#include "parseSeekTo.h"
+#include "storageUtil.h"
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnDecimal.h>

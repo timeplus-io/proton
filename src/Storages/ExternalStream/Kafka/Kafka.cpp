@@ -6,7 +6,7 @@
 #include <KafkaLog/KafkaWALPool.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
-#include <Storages/Streaming/parseSeekTo.h>
+#include <Storages/Streaming/storageUtil.h>
 #include <base/logger_useful.h>
 #include <Common/ProtonCommon.h>
 

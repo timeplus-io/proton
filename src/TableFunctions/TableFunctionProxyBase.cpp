@@ -13,6 +13,7 @@
 #include <Parsers/ExpressionElementParsers.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/ProxyStream.h>
+#include <Storages/Streaming/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -185,6 +186,9 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
     else
     {
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        if (!supportStreamingQuery(storage))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "tumble/hop functions can't be applied to '{}'", storage->getName());
+
         if (storage->as<StorageView>())
         {
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
@@ -202,10 +206,6 @@ void TableFunctionProxyBase::init(ContextPtr context, ASTPtr streaming_func_ast,
         }
         else
         {
-            const auto & storage_name = storage->getName();
-            if (storage_name != "Stream" && storage_name != "MaterializedView" && storage_name != "ExternalStream")
-                throw Exception("tumble/hop functions can't be applied to this stream", ErrorCodes::BAD_ARGUMENTS);
-
             underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
             columns = underlying_storage_metadata_snapshot->getColumns();
         }

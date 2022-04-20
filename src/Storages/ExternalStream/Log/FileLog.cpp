@@ -7,7 +7,7 @@
 #include <NativeLog/Record/Record.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
-#include <Storages/Streaming/parseSeekTo.h>
+#include <Storages/Streaming/storageUtil.h>
 
 #include <boost/algorithm/string.hpp>
 #include <re2/re2.h>
