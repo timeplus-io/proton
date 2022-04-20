@@ -328,9 +328,13 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextPtr 
     /// Update performance counters before logging to query_log
     CurrentThread::finalizePerformanceCounters();
 
-    if (settings.log_queries && elem.type >= settings.log_queries_min_type && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
+    /// proton : starts.
+    bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.query_log_insert) || !ast->as<ASTInsertQuery>());
+    auto log_queries = settings.log_queries && log_insert_queries;
+    if (log_queries && elem.type >= settings.log_queries_min_type && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
         if (auto query_log = context->getQueryLog())
             query_log->add(elem);
+    /// proton : ends
 
     if (auto opentelemetry_span_log = context->getOpenTelemetrySpanLog();
         context->query_trace_context.trace_id != UUID()
@@ -778,7 +782,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             elem.client_info = client_info;
 
-            bool log_queries = settings.log_queries && !internal;
+            /// proton : starts.
+            bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.query_log_insert) || !ast->as<ASTInsertQuery>());
+            bool log_queries = settings.log_queries && !internal && log_insert_queries;
+            /// proton : ends.
 
             /// Log into system table start of query execution, if need.
             if (log_queries)
