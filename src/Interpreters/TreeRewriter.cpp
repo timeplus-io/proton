@@ -44,7 +44,9 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
 /// proton: starts.
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/StorageView.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
@@ -1140,6 +1142,12 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         {
             if (proxy->isStreaming())
                 streaming = true;
+        }
+        else if (storage->as<StorageView>())
+        {
+            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+            InterpreterSelectWithUnionQuery interpreter_subquery(select, context, SelectQueryOptions().subquery().analyze());
+            streaming = interpreter_subquery.isStreaming();
         }
         else if (storage->as<StorageStream>())
             streaming = true;

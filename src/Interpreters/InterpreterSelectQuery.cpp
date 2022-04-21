@@ -2171,11 +2171,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// Supports: TableFunction, Stream, MaterializedView
         if (auto * proxy_stream = storage->as<ProxyStream>())
             buildStreamingProcessingQueryPlan(query_plan, proxy_stream);
-        else if (auto * stream = storage->as<StorageStream>())
-            buildStreamingProcessingQueryPlan(query_plan);
-        else if (auto * materialized_view = storage->as<StorageMaterializedView>())
-            buildStreamingProcessingQueryPlan(query_plan);
-        else if (auto * external_stream = storage->as<StorageExternalStream>())
+        else
             buildStreamingProcessingQueryPlan(query_plan);
         /// proton: ends
     }

@@ -5,7 +5,9 @@
 
 /// External stream storages
 #include <Storages/ExternalStream/Kafka/Kafka.h>
+#ifdef OS_LINUX
 #include <Storages/ExternalStream/Log/FileLog.h>
+#endif
 
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -30,9 +32,13 @@ namespace
     {
         if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
             return std::make_unique<Kafka>(storage, std::move(settings));
+
+        (void)context;
+#ifdef OS_LINUX
         if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
             return std::make_unique<FileLog>(storage, std::move(settings));
         else
+#endif
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
     }
 }
