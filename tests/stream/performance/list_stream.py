@@ -45,8 +45,8 @@ def drop_and_create():
 if __name__ == "__main__":
     
     procs = []
-    for i in range(5):
-        proc = mp.Process(target=list_stream, args=(i,40,))
+    for i in range(40):
+        proc = mp.Process(target=list_stream, args=(i,200,))
         proc.start()
         procs.append(proc)
     

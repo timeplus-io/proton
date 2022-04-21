@@ -1378,11 +1378,11 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             f"input_batch_rest: input_url = {input_url}, input_rest_body = {input_rest_body}"
         )
 
-        retry = 500
+        retry = 200
         while not table_exist(table_ddl_url, table_name):
             time.sleep(0.05)
             logger.debug(
-                f"table_name = {table_name} for input does not exit, wait for 0.05s"
+                f"table_name = {table_name} for input does not exit, wait for 1s"
             )
             retry -= 1
         if retry > 0:

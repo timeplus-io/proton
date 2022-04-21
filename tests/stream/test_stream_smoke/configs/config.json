@@ -20,26 +20,26 @@
     "proton_server_container_name":"proton-server",
 
 
-    "default": {
-    "rest_setting": {
-        "host_url":"http://localhost:3218",
-        "http_snapshot_url":"http://localhost:8123",
-        "table_ddl_url": "http://localhost:3218/proton/v1/ddl/streams",
-        "ingest_url": "http://localhost:3218/proton/v1/ingest/streams",
-        "query_url": "http://localhost:3218/proton/v1/search",
-        "health_check_url": "http://localhost:3218/proton/ping",
-        "info_url": "http://localhost:3218/proton/info",
-        "params": {
-            "headers": {
-                "Content-Type": "application/json"
+"default": {
+        "rest_setting": {
+            "host_url":"http://localhost:13218",
+            "http_snapshot_url":"http://localhost:18123",
+            "table_ddl_url": "http://localhost:13218/proton/v1/ddl/streams",
+            "ingest_url": "http://localhost:13218/proton/v1/ingest/streams",
+            "query_url": "http://localhost:13218/proton/v1/search",
+            "health_check_url": "http://localhost:13218/proton/ping",
+            "info_url": "http://localhost:13218/proton/info",
+            "params": {
+                "headers": {
+                    "Content-Type": "application/json"
+                }
             }
-        }
-    },
-    "proton_server": "localhost",
-    "proton_server_native_port": "8463",
-    "proton_admin": {"name":"proton", "password":"proton@t+"},
-    "proton_server_container_name":"proton-server"
-},
+        },
+        "proton_server": "localhost",
+        "proton_server_native_port": "18463",
+        "proton_admin": {"name":"proton", "password":"proton@t+"},
+        "proton_server_container_name":"proton-native"
+},    
 "redp": {
     "rest_setting": {
         "host_url":"http://localhost:3218",

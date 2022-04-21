@@ -1583,8 +1583,46 @@
                 ]}]
         },
 
+
         {
             "id": 48,
+            "tags": ["view"],
+            "name": "global sum based on tail join table view",
+            "description": "global sum based on tail join table view",
+            "steps":[
+                {"statements": [
+                    {"client":"python","query_id":"601", "query_type": "stream", "terminate":"manual", "query":"select type, count(value) from test_stream_only_join_v group by type limit 5 emit periodic 5s"}]},
+                {"inputs": [
+                    {"table_name":"test_stream_only","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
+                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
+                    {"table_name":"test_stream_only", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
+                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
+                    {"table_name":"test_stream_only", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
+                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
+                    {"table_name":"test_stream_only", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
+                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
+                ]},
+                {"statements": [
+                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":601}, "query_type": "table", "query":"kill query where query_id = '601'"}
+                ]
+                }                
+            ],
+
+            "expected_results": [{"query_id":"601", "expected_results":
+                [["roof", 2],
+                ["field", 2],
+                ["floor", 3],
+                ["window", 3],
+                ["wall", 2]
+                ]}]
+        },        
+
+        {
+            "id": 49,
             "tags": ["settings", "query_mode","bug"],
             "name": "query_mode='table'",
             "description": "query_mode='table'",
@@ -1618,7 +1656,7 @@
 
 
         {
-            "id": 49,
+            "id": 50,
             "tags": ["settings", "asterisk_include_reserved_columns","bug"],
             "name": "asterisk_include_reserved_columns = false",
             "description": "asterisk_include_reserved_columns = false",
@@ -1648,7 +1686,7 @@
         },
 
         {
-            "id": 50,
+            "id": 51,
             "tags": ["seek to"],
             "name": "seek to earliest",
             "description": "seek to earliest, no command could clear stream storage so not stable, so use test_stream_only_seek table created during setup to avoid stream storage impact, will introduce topic clean function in test_stream_only automation later",
@@ -1678,7 +1716,7 @@
         },
 
         {
-            "id": 51,
+            "id": 52,
             "tags": ["seek to", "to reproduce", "native_not_support"],
             "name": "seek to ago interval",
             "description": "seek to ago interval",
@@ -1703,7 +1741,7 @@
         },
 
         {
-            "id": 52,
+            "id": 53,
             "tags": ["seek to", "bug"],
             "name": "seek to specific time",
             "description": "seek to specific time",
