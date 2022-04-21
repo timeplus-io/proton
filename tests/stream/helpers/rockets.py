@@ -2133,10 +2133,11 @@ def test_suite_run(config, test_suite_run_ctl_queue,test_suite_result_done_queue
                         client, table_ddl_url, table_schemas, test_case
                     )
                     logger.info(
-                        f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
-                    )
-                    logger.info(
                         f"tables: {tables_recreated} are dropted and recreated."
+                    )
+
+                    logger.info(
+                        f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name}, test_id = {test_id} starts......"
                     )
 
                     for step in steps:

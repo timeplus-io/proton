@@ -1,5 +1,5 @@
 {
-    "test_suite_name": "materialized_view",
+    "test_suite_name": "view",
     "commments":
         "test_mvs covering the steam query smoke cases.",
     "test_suite_config": {
@@ -371,6 +371,84 @@
                 ["dev1", "123.3","2020-02-02 20:01:00", "2020-02-02 20:01:05"],
                 ["dev2", "117.3", "2020-02-02 20:01:00", "2020-02-02 20:01:05"],
                 ["dev8", "67", "2020-02-02 20:01:00", "2020-02-02 20:01:05"]
+                ]}
+            ]
+        },
+        {
+            "id": 71,
+            "tags": ["view","global aggregation"],
+            "name": "table tail from materialized view as global aggregation by sum and group by id w/by 5s periodic",
+            "description": "create materialized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_sum_view"},
+                    {"client":"python","query_id":"300", "query_type": "table", "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id limit 4 emit periodic 5s"},
+                    {"client":"python", "query_id":"301", "query_type": "stream", "terminate":"manual", "query":"select * from test_v_stream_sum_view"}]},                    
+
+                {"inputs": [
+                    {"table_name":"test_mv","depends_on_stream":"test_v_stream_sum_view", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
+                    {"table_name":"test_mv", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]},
+                    {"table_name":"test_mv", "data": [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]},
+                    {"table_name":"test_mv", "data": [["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
+                ]},
+                {"statements": [
+                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"},                    
+                    {"client":"python", "wait": 2, "query_type": "table", "query":"drop view if exists test_v_stream_sum_view"}
+                ]
+                }
+            ],
+
+            "expected_results": [{"query_id":"301", "expected_results":[
+                ["dev2", "273.3"],
+                ["dev8", "288"],
+                ["dev1", "123.3"],
+                ["dev3", "123.3"]]}
+            ]
+        },
+        {
+            "id": 72,
+            "tags": ["view","tumble window", "bug"],
+            "name": "streaming tail from materialized view as 5s tumble window aggregation by sum and group by id",
+            "description": "create materialized view as materialized view as 5s tumble window aggregation by lag and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, but now due to where with lag is wrong ",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_tumble_v"},
+                    {"client":"python", "query_type": "table", "query":"create view test_v_stream_tumble_v as select id, value, lag(id) as last_id, lag(value) as last_value, to_datetime(window_start, 'UTC') as win_start, to_datetime(window_end, 'UTC') as win_end from tumble(test_mv, interval 5 second) where last_value < value group by id, value, window_start, window_end"},
+                    {"client":"python", "query_id":"301", "query_type": "stream", "terminate":"manual", "query":"select id, count() from test_v_stream_tumble_v group by id limit 3"}]},
+                {"inputs": [
+                    {"table_name":"test_mv", "wait":1, "depends_on":"301", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00+00:00"],
+                    ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01+00:00"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:02+00:00"]]},
+                    {"table_name":"test_mv", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03+00:00"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02+00:00"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08+00:00"]]},
+                    {"table_name":"test_mv", "data": [["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00+00:00"],
+                    ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01+00:00"],
+                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05+00:00"]]},
+                    {"table_name":"test_mv", "data": [["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03+00:00"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02+00:00"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08+00:00"]]}
+                ]},
+                {"statements": [
+                    {"client":"python", "wait": 2, "run_mode":"table", "depends":{"query_id":301}, "query_type": "table", "query":"kill query where query_id = '301'"},
+                    {"client":"python",  "query_type": "table", "query":"drop view if exists test_v_stream_tumble_v"}
+
+                ]
+                }
+            ],
+
+            "expected_results": [{"query_id":"301", "expected_results":[
+                ["dev1", 1],
+                ["dev2", 1],
+                ["dev8", 1]
                 ]}
             ]
         }

@@ -1,17 +1,17 @@
 version: "3.7"
 services:
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-nativelog}
+    image: timeplus/proton:${PROTON_VERSION:-prestage}
     pull_policy: always
     container_name: proton-native
     volumes:
-      - ./proton/log:/var/log/proton-server
+      - ./proton/log:/var/log/proton-native
     ports:
-      - "3218:3218" # HTTP Streaming
-      - "8123:8123" # HTTP Snapshot
-      - "8463:8463" # TCP Streaming
-      - "5432:5432" # Postgres Snapshot
-      - "7587:7587" # TCP Snapshot
+      - "13218:3218" # HTTP Streaming
+      - "18123:8123" # HTTP Snapshot
+      - "18463:8463" # TCP Streaming
+      - "15432:5432" # Postgres Snapshot
+      - "17587:7587" # TCP Snapshot
     deploy:
       replicas: 1
       restart_policy:
@@ -19,7 +19,7 @@ services:
     # `proton` depends on STREAM_STORAGE_BROKERS env variable
     # to discover stream store
     environment:
-      - STREAM_STORAGE_BROKERS=stream-store:9092
+      - STREAM_STORAGE_BROKERS=stream-store:19092
       - MAX_CONCURRENT_QUERIES=100        # Default: 100
       - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
       - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100

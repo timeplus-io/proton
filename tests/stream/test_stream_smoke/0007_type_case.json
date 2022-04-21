@@ -15,7 +15,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists test_type"},
-                    {"client":"python", "query_type": "table", "query":"create stream test_type (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream test_type (uuid uuid, int int, uint uint8, string string, float float, decimal decimal32(3), date date, datetime datetime, enum enum('a'=1, 'b'=2, 'z'=26), tuple tuple(s string, i int), ipv4 ipv4, ipv6 ipv6, map map(string, int), nullable nullable(datetime64), timestamp datetime64(3) default now64(3))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into test_type (uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable, timestamp) values ('4c6a2a19-4f9f-456f-b076-c43ef97255a7', -1234567, 1234567, '{@string}', 12345.123, 123456.123, to_date('2022-03-24'), to_datetime('2022-03-24 17:17:17'), 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1':111}, null ,'2020-01-01 11:11:11')"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select uuid, int, uint, string, float, decimal, date, datetime, enum, tuple, ipv4, ipv6, map, nullable from test_type settings seek_to = 'earliest'"}
                     ]}
@@ -33,7 +33,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_uint"},
-                    {"client":"python", "query_type": "table", "query":"create stream t_uint (uint uint)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create stream t_uint (uint uint)"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_uint (uint) values (123456)"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select  uint from t_uint settings seek_to = 'earliest'"}
                     ]}
@@ -51,7 +51,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_decimal"},
-                    {"client":"python", "query_type": "table", "query":"create stream t_decimal (decimal decimal(3))"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create stream t_decimal (decimal decimal(3))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_uint (decimal) values (1234.123)"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select decimal from t_decimal settings seek_to = 'earliest'"}
                     ]}
@@ -69,7 +69,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_bool"},
-                    {"client":"python", "query_type": "table", "query":"create stream t_bool (bool bool)"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool (bool bool)"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_bool (bool) values (true)"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select bool from t_bool settings seek_to = 'earliest'"}
                     ]}
@@ -87,7 +87,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_fixeds"},
-                    {"client":"python", "query_type": "table", "query":"create stream t_fixeds (fixeds fixed_string(32))"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_fixeds (fixeds fixed_string(32))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_fixeds (fixeds) values ('{@fixed_string32}')"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select fixeds from t_fixeds settings seek_to = 'earliest'"}
                     ]}
@@ -105,7 +105,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_lowcard"},
-                    {"client":"python", "query_type": "table", "query":"create stream t_lowcard (lowcard low_cardinality(string))"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lowcard (lowcard low_cardinality(string))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_lowcard (lowcard) values ('{@lowcardinalitystring}')"},
                     {"client":"python","query_id":"801", "query_end_timer":2, "query_type": "stream", "query":"select lowcard from t_lowcard settings seek_to = 'earliest'"}
                     ]}
