@@ -50,12 +50,12 @@ namespace
                 context,
                 force_restore);
 
-            database.attachTable(context, table_name, table, database.getTableDataPath(query));
-
-            /// proton: starts.
+            /// proton: starts. issue-739, first change the in memory create query to avoid race
             const auto & new_create_query = parseCreateQueryFromAST(&query, database_name, table_name);
             table->setInMemoryCreateQuery(new_create_query);
             /// proton: ends.
+
+            database.attachTable(context, table_name, table, database.getTableDataPath(query));
         }
         catch (Exception & e)
         {

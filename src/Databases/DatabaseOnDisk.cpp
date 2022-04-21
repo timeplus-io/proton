@@ -192,14 +192,15 @@ void DatabaseOnDisk::createTable(
 
     if (create.attach_short_syntax)
     {
+        /// proton: starts. issue-739, first change the in memory create query to avoid race
+        const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
+        table->setInMemoryCreateQuery(new_create_query);
+        /// proton: ends.
+
         /// Metadata already exists, table was detached
         removeDetachedPermanentlyFlag(local_context, table_name, table_metadata_path, true);
         attachTable(local_context, table_name, table, getTableDataPath(create));
 
-        /// proton: starts.
-        const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
-        table->setInMemoryCreateQuery(new_create_query);
-        /// proton: ends.
         return;
     }
 
@@ -237,14 +238,14 @@ void DatabaseOnDisk::createTable(
         out.close();
     }
 
-    commitCreateTable(create, table, table_metadata_tmp_path, table_metadata_path, local_context);
-
-    removeDetachedPermanentlyFlag(local_context, table_name, table_metadata_path, false);
-
-    /// proton: starts.
+    /// proton: starts. issue-739, first change the in memory create query to avoid race
     const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
     table->setInMemoryCreateQuery(new_create_query);
     /// proton: ends.
+
+    commitCreateTable(create, table, table_metadata_tmp_path, table_metadata_path, local_context);
+
+    removeDetachedPermanentlyFlag(local_context, table_name, table_metadata_path, false);
 }
 
 /// If the table was detached permanently we will have a flag file with

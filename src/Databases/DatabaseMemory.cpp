@@ -31,12 +31,14 @@ void DatabaseMemory::createTable(
     const ASTPtr & query)
 {
     std::unique_lock lock{mutex};
-    attachTableUnlocked(table_name, table, lock);
-    create_queries.emplace(table_name, query);
-    /// proton: starts.
+
+    /// proton: starts. issue-739, first change the in memory create query to avoid race
     const auto & new_create_query = parseCreateQueryFromAST(query, database_name, table_name);
     table->setInMemoryCreateQuery(new_create_query);
     /// proton: ends.
+
+    attachTableUnlocked(table_name, table, lock);
+    create_queries.emplace(table_name, query);
 }
 
 void DatabaseMemory::dropTable(
