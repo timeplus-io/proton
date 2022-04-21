@@ -103,7 +103,7 @@ public:
     {
         size_t num_elements = arguments.size();
 
-        if (num_elements == 0 || input_rows_count == 0)
+        if (num_elements == 0)
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
 
         if (num_elements == 2 && isArray(arguments[0].type))
