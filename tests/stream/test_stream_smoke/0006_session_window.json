@@ -179,7 +179,7 @@
             "description": "3 unique stream session window based id and location, session window interval 1s, input data in 2 batches and triggle 2 batch emits, where clause filter events",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select count(), window_start, window_end, __tp_session_id, id from session(test_session, timestamp, 1s, id) where id !='dev4' group by __tp_session_id, window_start, window_end, id"}
+                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select emit_version() as emit_version, count(), window_start, window_end, __tp_session_id, id from session(test_session, timestamp, 1s, id) where id !='dev4' group by __tp_session_id, window_start, window_end, id"}
                 ]},
                 {"inputs": [
                     {"table_name":"test_session", "depends_on":"701", "wait":2, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:00+00:00"]]},
@@ -198,8 +198,8 @@
             ],
             "expected_results": [{"query_id" : 701, "expected_results":
                 [
-                    ["3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "341031629", "dev2"],
-                    ["3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "1084008069", "dev3"]
+                    ["0", "3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "341031629", "dev2"],
+                    ["1", "3", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:02+00:00", "1084008069", "dev3"]
                 ]}
             ]
         },        

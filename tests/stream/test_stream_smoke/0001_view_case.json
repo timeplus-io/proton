@@ -266,7 +266,7 @@
                     {"client":"python","query_id":"300","wait":1, "query_type": "table", "query":"create materialized view if not exists test_mv_stream_tumble_v as select id, sum(value) as sum_value, window_start as s, window_end as e from tumble(test_mv, timestamp, interval 5 second) group by id, window_start, window_end"}
                 ]},
                 {"inputs": [
-                    {"table_name":"test_mv","depends_on_stream":"test_mv_stream_tumble_v", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    {"table_name":"test_mv","depends_on_stream":"test_mv_stream_tumble_v", "wait":3, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:02"]]},
                     {"table_name":"test_mv", "data": [["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
@@ -417,7 +417,7 @@
             "id": 72,
             "tags": ["view","tumble window", "bug"],
             "name": "streaming tail from materialized view as 5s tumble window aggregation by sum and group by id",
-            "description": "create materialized view as materialized view as 5s tumble window aggregation by lag and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, but now due to where with lag is wrong ",
+            "description": "create materialized view as materialized view as 5s tumble window aggregation by lag and group by id, select id, sum_value from mv, timestamp designated as event_time_column when creating table, bug due to where with lag where is wrong ",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_tumble_v"},

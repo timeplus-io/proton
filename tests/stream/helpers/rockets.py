@@ -276,26 +276,7 @@ def tuple_2_list(tuple):
     return _list
 
 
-def query_id_exist_py(py_client, query_id, query_exist_check_sql=None):
-    logger = mp.get_logger()
 
-    if query_exist_check_sql == None:
-        query_exist_check_sql = "select query_id from system.processes"
-    try:
-        # logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to be called.")
-        res_check_query_id = py_client.execute(query_exist_check_sql)
-        logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to was called.")
-        logger.debug(f"res_check_query_id = {res_check_query_id}")
-        if res_check_query_id != None and isinstance(res_check_query_id, list):
-            for element in res_check_query_id:
-                if query_id in element:
-                    return True
-            return False
-        else:
-            return False
-    except (BaseException) as error:
-        logger.debug(f"exception, error = {error}")
-    return False
 
 
 def kill_query(proton_client, query_2_kill, logging_level="INFO"):
@@ -468,7 +449,7 @@ def query_run_exec(statement_2_run, config):
             "query_result": f"error_code:{error.code}",
         }
         logger.debug(
-            "query_run_py: db exception, none-cancel query_results: {}".format(
+            "db exception, none-cancel query_results: {}".format(
                 query_results
             )
         )
@@ -507,6 +488,7 @@ def query_run_rest(rest_setting, statement_2_run):
         args = statement_2_run.get("args")
         body = statement_2_run.get("body")
         params = statement_2_run.get("params")
+        depends_on = statement_2_run.get("depends_on")
         
         if depends_on_stream != None:
             logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
@@ -520,6 +502,15 @@ def query_run_rest(rest_setting, statement_2_run):
                 logger.debug(f"depends_on_stream does not exist, raise exception")
                 raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")         
         # if params == None: params = rest_setting.get("params")
+
+        if depends_on != None:
+            depends_on_exists = False
+            depends_on_exists = query_exist(depends_on, client = pyclient)
+            if not depends_on_exists:
+                logger.debug(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception")
+                raise Exception(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception")         
+            
+
         if rest_type == "raw":
             url = host_url + query_url
         else:
@@ -576,7 +567,7 @@ def query_run_rest(rest_setting, statement_2_run):
             "query_result": f"error_code:{error.code}",
         }
         logger.debug(
-            "query_run_py: db exception, none-cancel query_results: {}".format(
+            "db exception, none-cancel query_results: {}".format(
                 query_results
             )
         )
@@ -643,6 +634,7 @@ def query_run_py(
         iter_wait = statement_2_run.get("iter_wait") #for some slow table query like test_id=61 in materialized_view
         run_mode = statement_2_run.get("run_mode")
         depends_on_stream = statement_2_run.get("depends_on_stream")
+        depends_on = statement_2_run.get("depends_on")
         query_start_time_str = str(datetime.datetime.now())
         query_end_time_str = str(datetime.datetime.now())
         element_json_str = ""
@@ -672,6 +664,14 @@ def query_run_py(
                 logger.debug(
                     f"check depends_on_stream, depends_on_stream={depends_on_stream} found."
                 )
+        
+        if depends_on != None:
+            depends_on_exists = False
+            depends_on_exists = query_exist(depends_on, client = pyclient)
+            if not depends_on_exists:
+                logger.debug(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception")
+                raise Exception(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception") 
+        
 
         query_result_iter = pyclient.execute_iter(
             query, with_column_types=True, query_id=query_id, settings=settings
@@ -923,7 +923,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                             )
                             retry = 500
                             while (
-                                not query_id_exist_py(client, query_id)
+                                not query_id_exists_py(client, query_id)
                                 and process.exitcode == None
                                 and retry > 0
                             ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
@@ -1253,6 +1253,29 @@ def input_walk_through_pyclient(proton_client, inputs, table_schema):
     return input_results
 
 
+
+def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
+    logger = mp.get_logger()
+
+    if query_exist_check_sql == None:
+        query_exist_check_sql = "select query_id from system.processes"
+    try:
+        # logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to be called.")
+        res_check_query_id = py_client.execute(query_exist_check_sql)
+        logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to was called.")
+        logger.debug(f"res_check_query_id = {res_check_query_id}")
+        if res_check_query_id != None and isinstance(res_check_query_id, list):
+            for element in res_check_query_id:
+                if query_id in element:
+                    return True
+            return False
+        else:
+            return False
+    except (BaseException) as error:
+        logger.debug(f"exception, error = {error}")
+    return False
+
+
 def query_id_exists_rest(query_url, query_id, query_body=None):
     try:
         query_body = json.dumps({"query": "select query_id from system.processes"})
@@ -1275,6 +1298,53 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
         logger.info(f"exception, error = {error}")
         return False
 
+
+def query_exist(query_id, query_url = None, client = None): #todo: adopt query_id_exists_py and query_id_exists_rest
+    logger = mp.get_logger()
+    query_id_list = []
+    depends_on_exists = False
+    if client == None:
+        query_body = json.dumps({"query": "select query_id from system.processes"})
+        res = requests.post(query_url, data=query_body)
+        res_json = res.json()
+        query_id_list = res_json.get("data")
+        logger.debug(f"query_id_list from rest api: {query_id_list}")
+    else:
+        query_list_sql = "select query_id from system.processes"
+        query_id_list = client.execute(query_list_sql)
+        logger.debug(f"query_id_list from pyclient: {query_id_list}")
+    try:
+        if query_id_list != None and len(query_id_list) > 0:
+            retry = 200
+            
+            while retry > 0 and depends_on_exists != True:
+                for element in query_id_list:
+                    if query_id in element:
+                        depends_on_exists = True
+                        logger.debug(
+                            f"depends_on = {query_id}, element in query_id_list = {element}, matched, depends_on found in query_id_list."
+                        )
+                        return True
+                time.sleep(0.05)
+                retry -= 1
+                if client == None:
+                    query_body = json.dumps(
+                        {"query": "select query_id from system.processes"}
+                    )
+                    res = requests.post(query_url, data=query_body)
+                    res_json = res.json()
+                    query_id_list = res_json.get("data")
+                    logger.debug(f"query_id_list: {query_id_list}")
+                else:
+                    query_list_sql = "select query_id from system.processes"
+                    query_id_list = client.execute(query_list_sql)
+                    logger.debug(f"query_id_list from pyclient: {query_id_list}")                    
+            return False
+        else:
+            return False 
+    except (BaseException) as error:
+        logger.debug(f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}")
+        raise Exception(f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}")       
 
 def input_batch_rest(rest_setting, input_batch, table_schema):
     # todo: complete the input by rest
@@ -1314,13 +1384,18 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             if retry >0:
                 logger.debug(f"depends_on_stream exists.")
             else:
-                logger.debug(f"depends_on_stream does not exist, raise exception")
+                logger.debug(f"depends_on_stream = {depends_on_stream} does not exist, raise exception")
                 raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")             
 
         depends_on = input_batch.get("depends_on")
         depends_on_exists = False
 
         if depends_on != None:
+            depends_on_exists = query_exist(depends_on, query_url)
+            if not depends_on_exists:
+                logger.debug(f"depends_on = {depends_on} for input does not exist, raise exception")
+                raise Exception(f"depends_on = {depends_on} for input not found") 
+            '''
             query_body = json.dumps({"query": "select query_id from system.processes"})
             res = requests.post(query_url, data=query_body)
             res_json = res.json()
@@ -1345,7 +1420,7 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
                     res_json = res.json()
                     query_id_list = res_json.get("data")
                     logger.debug(f"query_id_list: {query_id_list}")
-
+            '''
         if wait != None:
             logger.debug(f"wait for {wait}s to start inputs.")
             wait = int(wait)

@@ -135,7 +135,71 @@
             "expected_results": [{"query_id":"801", "expected_results":[
                 ["['id2', 'id1']", "[1000, 300]", "{'id2': 1000, 'id1': 300}", "650"]]}
             ]
-        }                                                                                                                                     
+        },
+        {
+            "id": 7,
+            "tags": ["func"],
+            "name": "to_float on filed out of map",
+            "description": "create a table t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_float_map"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_float_map (id string, value_str string)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_float_map (id, value_str) values ('a', '100.1')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_float_map (id, value_str) values ('b', '200.1')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_float_map (id, value_str) values ('c', '300.1')"},
+                    {"client":"python","query_id":"801", "query_type": "table", "wait":2, "query":" select group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from table(t_float_map) group by id)"}                                       
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["['b', 'c', 'a']", "['200.1', '300.1', '100.1']", "{'b': '200.1', 'c': '300.1', 'a': '100.1'}", "100.1", 100.1]]}
+            ]
+        },
+        {
+            "id": 8,
+            "tags": ["func"],
+            "name": "to_float on filed out of map with emit version",
+            "description": "create a table t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists float_map_view"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists t_float_map"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_float_map (id string, value_str string)"},
+                    {"client":"python", "query_type": "stream", "query_id": "801","wait":1, "query_end_timer": 8, "query":"select emit_version(), group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from t_float_map group by id) limit 2"},
+                    {"client":"python", "query_type": "table", "wait":1,"depends_on":"801", "query":"insert into t_float_map (id, value_str) values ('a', '100.1') ('b', '200.1') ('c', '300.1')"}   
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["0", "['b', 'c', 'a']", "['200.1', '300.1', '100.1']", "{'b': '200.1', 'c': '300.1', 'a': '100.1'}", "100.1", 100.1],
+                ["1", "['b', 'c', 'a']", "['200.1', '300.1', '100.1']", "{'b': '200.1', 'c': '300.1', 'a': '100.1'}", "100.1", 100.1]
+                
+                ]}
+            ]
+        },
+        {
+            "id": 9,
+            "tags": ["func", "bug", "todo"],
+            "name": "to_float on filed out of map with emit version as view",
+            "description": "create a table t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_float_map"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_float_map (id string, value_str string)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create view if not exists emit_version_view as select emit_version(), group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from t_float_map group by id)"},
+                    {"client":"python", "query_type": "stream","wait":1, "query_id": "801", "query_end_timer": 3, "query":"select * from emit_version_view limit 2"},
+                    {"client":"python", "query_type": "table", "wait":1,"depends_on":"801", "query":"insert into t_float_map (id, value_str) values ('a', '100.1') ('b', '200.1') ('c', '300.1')"}   
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["0", "['b', 'c', 'a']", "['200.1', '300.1', '100.1']", "{'b': '200.1', 'c': '300.1', 'a': '100.1'}", "100.1", 100.1],
+                ["1", "['b', 'c', 'a']", "['200.1', '300.1', '100.1']", "{'b': '200.1', 'c': '300.1', 'a': '100.1'}", "100.1", 100.1]
+                ]}
+            ]
+        }                                                                                                                                                                 
     ]
 }
 

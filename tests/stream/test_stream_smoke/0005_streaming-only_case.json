@@ -1070,7 +1070,7 @@
 
                 {
                 "statements": [
-                    {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test_stream_only) select id, max(value) from transformed group by id limit 6 emit periodic 5s"}]},
+                    {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":8, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test_stream_only) select id, max(value) from transformed group by id limit 6 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],

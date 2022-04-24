@@ -325,11 +325,11 @@
         {
             "id": 8,
             "tags": ["tumble window"],
-            "name": "stream tumble w/inputs across multiple windows for window start alignment - #101",
+            "name": "stream tumble w/inputs across multiple windows for window start alignment, with emit_version() - #101",
             "description": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 2,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 3,"query":"select emit_version() as emit_version, window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:50"]]},
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:51"]]},
@@ -338,9 +338,9 @@
                 ]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
-                [["2020-02-02 20:00:48", "2020-02-02 20:00:51", 1],
-                ["2020-02-02 20:00:51", "2020-02-02 20:00:54", 1],
-                ["2020-02-02 20:00:54", "2020-02-02 20:00:57", 1]]}
+                [["0", "2020-02-02 20:00:48", "2020-02-02 20:00:51", 1],
+                ["1", "2020-02-02 20:00:51", "2020-02-02 20:00:54", 1],
+                ["2", "2020-02-02 20:00:54", "2020-02-02 20:00:57", 1]]}
             ]
         },
         {
@@ -389,11 +389,11 @@
         {
             "id": 11,
             "tags": ["hopping window"],
-            "name": "stream hopping window max(value) aggregate group by id, window_start, window_end",
+            "name": "stream hopping window max(value) aggregate group by id, window_start, window_end, with emit_version()",
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps": [
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer": 1,"query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer": 1,"query":"select emit_version(), id, max(value), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
@@ -408,13 +408,13 @@
                     ]}
                 ]}
             ],
-            "expected_results": [{"query_id":"101", "expected_results":[["dev1", "57.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
-                ["dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                ["dev6", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                ["dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                ["dev6", "69", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
-                ["dev2", "58.3", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]]}
-                    ]
+            "expected_results": [{"query_id":"101", "expected_results":[["0", "dev1", "57.3", "2020-02-02 19:59:57", "2020-02-02 20:00:02"],
+                ["1", "dev2", "58.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                ["1", "dev6", "66", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                ["1", "dev1", "57.3", "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
+                ["2", "dev6", "69", "2020-02-02 20:00:03", "2020-02-02 20:00:08"],
+                ["2", "dev2", "58.3", "2020-02-02 20:00:03", "2020-02-02 20:00:08"]]}
+                ]
         },
 
         {
@@ -868,7 +868,7 @@
             "description": "global stream aggregation join table",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":8, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -1069,7 +1069,7 @@
 
                 {
                 "statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id limit 7 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id limit 6 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
