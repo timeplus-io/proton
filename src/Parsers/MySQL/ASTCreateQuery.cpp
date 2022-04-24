@@ -41,7 +41,7 @@ ASTPtr ASTCreateQuery::clone() const
     return res;
 }
 
-bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr table;
     ASTPtr like_table;

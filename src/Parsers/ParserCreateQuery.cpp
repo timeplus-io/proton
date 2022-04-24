@@ -44,7 +44,7 @@ ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
 }
 }
 
-bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserToken open(TokenType::OpeningRoundBracket);
     ParserToken close(TokenType::ClosingRoundBracket);
@@ -78,30 +78,30 @@ bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserIdentifierWithParameters::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserIdentifierWithParameters::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserFunction().parse(pos, node, expected);
 }
 
-bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserNameTypePair>(), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
-bool ParserColumnDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserColumnDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserColumnDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
-bool ParserNameList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserNameList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserCompoundIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
-bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_type("TYPE");
     ParserKeyword s_granularity("GRANULARITY");
@@ -144,7 +144,7 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
-bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_check("CHECK");
     ParserKeyword s_assume("ASSUME");
@@ -180,7 +180,7 @@ bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
 }
 
 
-bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier name_p;
     ParserProjectionSelectQuery query_p;
@@ -210,7 +210,7 @@ bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
 }
 
 
-bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_index("INDEX");
     ParserKeyword s_constraint("CONSTRAINT");
@@ -255,25 +255,25 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     return true;
 }
 
-bool ParserIndexDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserIndexDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserIndexDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
-bool ParserConstraintDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserConstraintDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserConstraintDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
-bool ParserProjectionDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserProjectionDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserProjectionDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
-bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr list;
     if (!ParserList(
@@ -330,7 +330,7 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
 }
 
 
-bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_engine("ENGINE");
     ParserToken s_eq(TokenType::Equals);
@@ -443,7 +443,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
@@ -490,29 +490,26 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     if (s_create.ignore(pos, expected))
     {
-        if (s_or_replace.ignore(pos, expected))
-            replace = or_replace = true;
+        if (s_or_replace.ignore(pos, expected, false))
+           replace = or_replace = true;
     }
     else if (s_attach.ignore(pos, expected))
         attach = true;
-    else if (s_replace.ignore(pos, expected))
+    else if (s_replace.ignore(pos, expected, false))
         replace = true;
     else
         return false;
 
-
-    if (!replace && !or_replace && s_temporary.ignore(pos, expected))
+    if (!replace && !or_replace && s_temporary.ignore(pos, expected, false))
     {
         is_temporary = true;
     }
 
-    /// proton: starts
     if (s_external.ignore(pos, expected))
         is_external = true;
 
     if (!s_stream.ignore(pos, expected))
         return false;
-    /// proton: ends
 
     if (!replace && !or_replace && s_if_not_exists.ignore(pos, expected))
         if_not_exists = true;
@@ -676,7 +673,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
-bool ParserTableOverrideDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTableOverrideDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_table_override("TABLE OVERRIDE");
     ParserIdentifier table_name_p;
@@ -788,7 +785,7 @@ bool ParserTableOverrideDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     return true;
 }
 
-bool ParserTableOverridesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTableOverridesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserTableOverrideDeclaration table_override_p;
     ParserToken s_comma(TokenType::Comma);
@@ -814,7 +811,7 @@ bool ParserTableOverridesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Ex
     return true;
 }
 
-bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
@@ -843,7 +840,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
             return false;
     }
 
-    if (!s_database.ignore(pos, expected))
+    if (!s_database.ignore(pos, expected, false))
         return false;
 
     if (s_if_not_exists.ignore(pos, expected))
@@ -895,7 +892,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     return true;
 }
 
-bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
@@ -937,10 +934,11 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     }
 
     /// VIEW
-    if (s_or_replace.ignore(pos, expected))
+    if (s_or_replace.ignore(pos, expected, false))
     {
         replace_view = true;
     }
+
 
     if (!s_view.ignore(pos, expected))
         return false;
@@ -956,7 +954,6 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
             return false;
     }
-
 
     if (ParserKeyword{"TO INNER UUID"}.ignore(pos, expected))
     {
@@ -1027,7 +1024,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
 }
 
-bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
@@ -1056,7 +1053,7 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 
     if (s_create.ignore(pos, expected))
     {
-        if (s_or_replace.ignore(pos, expected))
+        if (s_or_replace.ignore(pos, expected, false))
         {
             replace = true;
             or_replace = true;
@@ -1064,12 +1061,12 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
     }
     else if (s_attach.ignore(pos, expected))
         attach = true;
-    else if (s_replace.ignore(pos, expected))
+    else if (s_replace.ignore(pos, expected, false))
         replace = true;
     else
         return false;
 
-    if (!s_dictionary.ignore(pos, expected))
+    if (!s_dictionary.ignore(pos, expected, false))
         return false;
 
     if (s_if_not_exists.ignore(pos, expected))
@@ -1130,7 +1127,7 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 }
 
 
-bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserCreateTableQuery table_p;
     ParserCreateDatabaseQuery database_p;

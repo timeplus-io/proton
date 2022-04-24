@@ -11,7 +11,7 @@
 namespace DB
 {
 
-bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTExplainQuery::ExplainKind kind;
 

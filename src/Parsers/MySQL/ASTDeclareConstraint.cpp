@@ -25,7 +25,7 @@ ASTPtr ASTDeclareConstraint::clone() const
     return res;
 }
 
-bool ParserDeclareConstraint::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareConstraint::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     bool enforced = true;
     ASTPtr constraint_symbol;

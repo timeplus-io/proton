@@ -302,7 +302,6 @@ ASTPtr tryParseQuery(
     if (!token_iterator->isEnd()
         && token_iterator->type != TokenType::Semicolon)
     {
-        expected.add(last_token.begin, "end of query");
         out_error_message = getSyntaxErrorMessage(query_begin, all_queries_end,
             last_token, expected, hilite, query_description);
         return nullptr;

@@ -9,7 +9,7 @@
 namespace DB
 {
 
-bool ParserCheckQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCheckQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_check_table("CHECK TABLE");
     ParserKeyword s_partition("PARTITION");

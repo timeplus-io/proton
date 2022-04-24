@@ -107,7 +107,7 @@ static inline bool parsePartitionExpression(IParser::Pos & pos, std::string & ty
     return true;
 }
 
-bool ParserDeclarePartitionOptions::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclarePartitionOptions::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     String partition_type;
     ASTPtr partition_numbers;

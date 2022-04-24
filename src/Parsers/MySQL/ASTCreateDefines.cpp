@@ -19,7 +19,7 @@ protected:
     const char * getName() const override { return "stream property (column, index, constraint)"; }
     /// proton: ends
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override
     {
         MySQLParser::ParserDeclareIndex p_declare_index;
         MySQLParser::ParserDeclareColumn p_declare_column;
@@ -55,7 +55,7 @@ ASTPtr ASTCreateDefines::clone() const
     return res;
 }
 
-bool ParserCreateDefines::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateDefines::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr create_defines;
     ParserList create_defines_parser(std::make_unique<ParserCreateDefine>(), std::make_unique<ParserToken>(TokenType::Comma), false);

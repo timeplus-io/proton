@@ -11,7 +11,7 @@
 namespace DB
 {
 
-bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_function("FUNCTION");
@@ -32,7 +32,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     if (!s_create.ignore(pos, expected))
         return false;
 
-    if (s_or_replace.ignore(pos, expected))
+    if (s_or_replace.ignore(pos, expected, false))
         or_replace = true;
 
     if (!s_function.ignore(pos, expected))

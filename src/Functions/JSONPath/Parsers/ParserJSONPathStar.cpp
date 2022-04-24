@@ -4,7 +4,7 @@
 
 namespace DB
 {
-bool ParserJSONPathStar::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserJSONPathStar::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::OpeningSquareBracket)
     {
@@ -18,7 +18,8 @@ bool ParserJSONPathStar::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ++pos;
     if (pos->type != TokenType::ClosingSquareBracket)
     {
-        expected.add(pos, "Closing square bracket");
+        if (hint)
+            expected.add(pos, "Closing square bracket");
         return false;
     }
     ++pos;

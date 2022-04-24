@@ -15,7 +15,7 @@ namespace DB
 {
 
 
-bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_show("SHOW");
     ParserKeyword s_temporary("TEMPORARY");
@@ -48,7 +48,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (!s_show.ignore(pos, expected))
         return false;
 
-    if (s_databases.ignore(pos, expected))
+    if (s_databases.ignore(pos, expected, false))
     {
         query->databases = true;
 
@@ -129,14 +129,14 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     }
     else
     {
-        if (s_temporary.ignore(pos))
+        if (s_temporary.ignore(pos, false))
             query->temporary = true;
 
         /// proton: starts
         if (!s_tables.ignore(pos, expected) && !s_streams.ignore(pos, expected))
         /// proton: ends
         {
-            if (s_dictionaries.ignore(pos, expected))
+            if (s_dictionaries.ignore(pos, expected, false))
                 query->dictionaries = true;
             else
                 return false;

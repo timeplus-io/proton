@@ -144,7 +144,7 @@ namespace
 }
 
 
-bool ParserRowPolicyName::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserRowPolicyName::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::vector<RowPolicyName> full_names;
     String cluster;
@@ -160,7 +160,7 @@ bool ParserRowPolicyName::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
 }
 
 
-bool ParserRowPolicyNames::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserRowPolicyNames::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::vector<RowPolicyName> full_names;
     size_t num_added_names_last_time = 0;

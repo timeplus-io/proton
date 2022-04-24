@@ -12,7 +12,7 @@ class ParserUserNameWithHost : public IParserBase
 {
 protected:
     const char * getName() const override { return "UserNameWithHost"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 
@@ -20,7 +20,7 @@ class ParserUserNamesWithHost : public IParserBase
 {
 protected:
     const char * getName() const override { return "UserNamesWithHost"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 }

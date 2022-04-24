@@ -19,7 +19,7 @@ struct ParserBoolOption : public IParserBase
 protected:
     const char * getName() const override { return "bool option with default"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override
     {
         if constexpr (allow_default)
         {
@@ -44,7 +44,7 @@ protected:
     const char * getName() const override { return "stream space name"; }
     /// proton: ends
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override
     {
         ParserIdentifier p_identifier;
 
@@ -64,7 +64,7 @@ protected:
     }
 };
 
-bool ParserDeclareTableOptions::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareTableOptions::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserDeclareOptions{
         {

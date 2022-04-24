@@ -11,7 +11,7 @@ namespace DB
 {
 
 
-bool ParserDescribeTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDescribeTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_describe("DESCRIBE");
     ParserKeyword s_desc("DESC");

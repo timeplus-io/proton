@@ -15,7 +15,7 @@ namespace DB
  * @param expected stuff for logging
  * @return was parse successful
  */
-bool ParserJSONPathQuery::parseImpl(Pos & pos, ASTPtr & query, Expected & expected)
+bool ParserJSONPathQuery::parseImpl(Pos & pos, ASTPtr & query, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     query = std::make_shared<ASTJSONPathQuery>();
     ParserJSONPathMemberAccess parser_jsonpath_member_access;

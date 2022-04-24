@@ -40,7 +40,7 @@ namespace
 }
 
 
-bool ParserUserNameWithHost::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserUserNameWithHost::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::shared_ptr<ASTUserNameWithHost> res;
     if (!parseUserNameWithHost(pos, expected, res))
@@ -51,7 +51,7 @@ bool ParserUserNameWithHost::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 }
 
 
-bool ParserUserNamesWithHost::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserUserNamesWithHost::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::vector<std::shared_ptr<ASTUserNameWithHost>> names;
 

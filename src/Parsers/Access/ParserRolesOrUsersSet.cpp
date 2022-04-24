@@ -112,7 +112,7 @@ namespace
 }
 
 
-bool ParserRolesOrUsersSet::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserRolesOrUsersSet::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     bool all = false;
     Strings names;

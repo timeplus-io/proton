@@ -11,7 +11,7 @@ namespace DB
 namespace MySQLParser
 {
 
-bool ParserDeclareSubPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareSubPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"SUBPARTITION"}.ignore(pos, expected))
         return false;

@@ -78,7 +78,7 @@ static bool parseQueryWithOnCluster(std::shared_ptr<ASTSystemQuery> & res, IPars
     return true;
 }
 
-bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"SYSTEM"}.ignore(pos, expected))
         return false;

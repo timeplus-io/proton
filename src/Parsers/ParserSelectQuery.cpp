@@ -29,7 +29,7 @@ namespace ErrorCodes
 }
 
 
-bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto select_query = std::make_shared<ASTSelectQuery>();
     node = select_query;
@@ -185,7 +185,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// proton: ends
 
     /// PREWHERE expr
-    if (s_prewhere.ignore(pos, expected))
+    if (s_prewhere.ignore(pos, expected, false))
     {
         if (!exp_elem.parse(pos, prewhere_expression, expected))
             return false;
@@ -273,7 +273,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!exp_elem.parse(pos, limit_length, expected))
             return false;
 
-        if (s_comma.ignore(pos, expected))
+        if (s_comma.ignore(pos, expected, false))
         {
             limit_offset = limit_length;
             if (!exp_elem.parse(pos, limit_length, expected))
@@ -285,7 +285,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                 select_query->limit_with_ties = true;
             }
         }
-        else if (s_offset.ignore(pos, expected))
+        else if (s_offset.ignore(pos, expected, false))
         {
             if (!exp_elem.parse(pos, limit_offset, expected))
                 return false;
@@ -322,7 +322,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (top_length && limit_length)
             throw Exception("Can not use TOP and LIMIT together", ErrorCodes::TOP_AND_LIMIT_TOGETHER);
     }
-    else if (s_offset.ignore(pos, expected))
+    else if (s_offset.ignore(pos, expected, false))
     {
         /// OFFSET offset_row_count {ROW | ROWS} FETCH {FIRST | NEXT} fetch_row_count {ROW | ROWS} {ONLY | WITH TIES}
         bool offset_with_fetch_maybe = false;
@@ -407,13 +407,13 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!exp_elem.parse(pos, limit_length, expected))
             return false;
 
-        if (s_comma.ignore(pos, expected))
+        if (s_comma.ignore(pos, expected, false))
         {
             limit_offset = limit_length;
             if (!exp_elem.parse(pos, limit_length, expected))
                 return false;
         }
-        else if (s_offset.ignore(pos, expected))
+        else if (s_offset.ignore(pos, expected, false))
         {
             if (!exp_elem.parse(pos, limit_offset, expected))
                 return false;

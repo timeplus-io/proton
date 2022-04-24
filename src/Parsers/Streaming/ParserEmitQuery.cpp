@@ -11,7 +11,7 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
 }
 
-bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     /// EMIT [STREAM]
     ///         - [PERIODIC INTERVAL '3' SECONDS]

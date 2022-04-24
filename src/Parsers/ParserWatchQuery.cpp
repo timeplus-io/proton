@@ -18,7 +18,7 @@ limitations under the License. */
 namespace DB
 {
 
-bool ParserWatchQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserWatchQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_watch("WATCH");
     ParserToken s_dot(TokenType::Dot);

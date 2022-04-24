@@ -13,7 +13,7 @@ class ParserQueryWithOutput : public IParserBase
 protected:
     const char * end;
     const char * getName() const override { return "Query with output"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 public:
     ParserQueryWithOutput(const char * end_) : end(end_) {}
 };

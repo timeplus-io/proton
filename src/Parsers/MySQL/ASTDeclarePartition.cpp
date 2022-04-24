@@ -44,7 +44,7 @@ ASTPtr ASTDeclarePartition::clone() const
     return res;
 }
 
-bool ParserDeclarePartition::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclarePartition::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"PARTITION"}.ignore(pos, expected))
         return false;

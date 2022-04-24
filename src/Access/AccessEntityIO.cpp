@@ -48,7 +48,7 @@ namespace
     protected:
         const char * getName() const override { return "ATTACH access entity query"; }
 
-        bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+        bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override
         {
             ParserCreateUserQuery create_user_p;
             ParserCreateRoleQuery create_role_p;

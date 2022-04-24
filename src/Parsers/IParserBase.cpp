@@ -3,14 +3,14 @@
 
 namespace DB
 {
-
-bool IParserBase::parse(Pos & pos, ASTPtr & node, Expected & expected)
+bool IParserBase::parse(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
-    expected.add(pos, getName());
+    if (hint)
+        expected.add(pos, getName());
 
     return wrapParseImpl(pos, IncreaseDepthTag{}, [&]
     {
-        bool res = parseImpl(pos, node, expected);
+        bool res = parseImpl(pos, node, expected, hint);
         if (!res)
             node = nullptr;
         return res;

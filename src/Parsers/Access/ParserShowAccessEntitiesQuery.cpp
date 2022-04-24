@@ -15,8 +15,11 @@ namespace
         for (auto i : collections::range(AccessEntityType::MAX))
         {
             const auto & type_info = AccessEntityTypeInfo::get(i);
-            if (ParserKeyword{type_info.plural_name.c_str()}.ignore(pos, expected)
-                || (!type_info.plural_alias.empty() && ParserKeyword{type_info.plural_alias.c_str()}.ignore(pos, expected)))
+
+            bool hint = !(i == AccessEntityType::SETTINGS_PROFILE || i == AccessEntityType::ROW_POLICY);
+
+            if (ParserKeyword{type_info.plural_name.c_str()}.ignore(pos, expected, hint)
+                || (!type_info.plural_alias.empty() && ParserKeyword{type_info.plural_alias.c_str()}.ignore(pos, expected, hint)))
             {
                 type = i;
                 return true;
@@ -36,7 +39,7 @@ namespace
 }
 
 
-bool ParserShowAccessEntitiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserShowAccessEntitiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"SHOW"}.ignore(pos, expected))
         return false;

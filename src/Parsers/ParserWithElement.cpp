@@ -10,7 +10,7 @@
 
 namespace DB
 {
-bool ParserWithElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserWithElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier s_ident;
     ParserKeyword s_as("AS");

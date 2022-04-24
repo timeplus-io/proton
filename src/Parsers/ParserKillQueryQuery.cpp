@@ -9,7 +9,7 @@ namespace DB
 {
 
 
-bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     String cluster_str;
     auto query = std::make_shared<ASTKillQueryQuery>();

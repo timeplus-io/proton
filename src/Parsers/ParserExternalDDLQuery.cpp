@@ -6,7 +6,7 @@
 
 namespace DB
 {
-bool ParserExternalDDLQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserExternalDDLQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserFunction p_function;
     ParserKeyword s_external("EXTERNAL DDL FROM");

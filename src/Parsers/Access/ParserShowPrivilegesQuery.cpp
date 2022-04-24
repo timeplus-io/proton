@@ -6,7 +6,7 @@
 namespace DB
 {
 
-bool ParserShowPrivilegesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserShowPrivilegesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto query = std::make_shared<ASTShowPrivilegesQuery>();
 

@@ -41,7 +41,7 @@ class ParserDeclareIndex : public IParserBase
 protected:
     const char * getName() const override { return "index declaration"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 }

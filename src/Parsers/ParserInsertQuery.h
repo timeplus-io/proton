@@ -28,7 +28,7 @@ private:
     const char * end;
 
     const char * getName() const override { return "INSERT query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 public:
     explicit ParserInsertQuery(const char * end_) : end(end_) {}
 };
@@ -39,7 +39,7 @@ class ParserInsertElement : public IParserBase
 {
 protected:
     const char * getName() const override { return "insert element"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 }

@@ -60,7 +60,7 @@ namespace
 }
 
 
-bool ParserShowCreateAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserShowCreateAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"SHOW CREATE"}.ignore(pos, expected))
         return false;
@@ -109,7 +109,7 @@ bool ParserShowCreateAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
             ASTPtr ast;
             String database, table_name;
             bool any_database, any_table;
-            if (ParserRowPolicyNames{}.parse(pos, ast, expected))
+            if (ParserRowPolicyNames{}.parse(pos, ast, expected, false))
                 row_policy_names = typeid_cast<std::shared_ptr<ASTRowPolicyNames>>(ast);
             else if (parseOnDBAndTableName(pos, expected, database, any_database, table_name, any_table))
             {
@@ -118,7 +118,7 @@ bool ParserShowCreateAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
                 else
                     database_and_table_name.emplace(database, table_name);
             }
-            else if (parseIdentifierOrStringLiteral(pos, expected, short_name))
+            else if (parseIdentifierOrStringLiteral(pos, expected, short_name, false))
             {
             }
             else if (plural)
@@ -129,7 +129,7 @@ bool ParserShowCreateAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
         }
         case AccessEntityType::SETTINGS_PROFILE:
         {
-            if (parseIdentifiersOrStringLiterals(pos, expected, names))
+            if (parseIdentifiersOrStringLiterals(pos, expected, names, false))
             {
             }
             else if (plural)

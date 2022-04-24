@@ -43,7 +43,7 @@ bool ParserSetQuery::parseNameValuePair(SettingChange & change, IParser::Pos & p
 }
 
 
-bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserToken s_comma(TokenType::Comma);
 
@@ -59,7 +59,7 @@ bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     while (true)
     {
-        if (!changes.empty() && !s_comma.ignore(pos))
+        if (!changes.empty() && !s_comma.ignore(pos, false))
             break;
 
         changes.push_back(SettingChange{});

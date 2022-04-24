@@ -92,27 +92,27 @@ public:
       *  or what this parser parse if parsing was successful.
       * The string to which the [begin, end) range is included may be not 0-terminated.
       */
-    virtual bool parse(Pos & pos, ASTPtr & node, Expected & expected) = 0;
+    virtual bool parse(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint=true) = 0;
 
-    bool ignore(Pos & pos, Expected & expected)  // -V1071
+    bool ignore(Pos & pos, Expected & expected, bool hint=true)  // -V1071
     {
         ASTPtr ignore_node;
-        return parse(pos, ignore_node, expected);
+        return parse(pos, ignore_node, expected, hint);
     }
 
-    bool ignore(Pos & pos)  // -V1071
+    bool ignore(Pos & pos, bool hint=true)  // -V1071
     {
         Expected expected;
-        return ignore(pos, expected);
+        return ignore(pos, expected, hint);
     }
 
     /** The same, but do not move the position and do not write the result to node.
       */
-    bool check(Pos & pos, Expected & expected)
+    bool check(Pos & pos, Expected & expected, bool hint=true)
     {
         Pos begin = pos;
         ASTPtr node;
-        if (!parse(pos, node, expected))
+        if (!parse(pos, node, expected, hint))
         {
             pos = begin;
             return false;

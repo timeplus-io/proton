@@ -23,7 +23,7 @@ namespace ErrorCodes
 }
 
 
-bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     /// Create parsers
     ParserKeyword s_insert_into("INSERT INTO");
@@ -276,7 +276,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-bool ParserInsertElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserInsertElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserColumnsMatcher().parse(pos, node, expected)
         || ParserQualifiedAsterisk().parse(pos, node, expected)

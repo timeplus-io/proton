@@ -28,7 +28,7 @@ ASTPtr ASTAlterQuery::clone() const
     return res;
 }
 
-bool ParserAlterQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAlterQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr table;
     ASTPtr command_list;

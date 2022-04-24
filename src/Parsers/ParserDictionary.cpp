@@ -18,7 +18,7 @@ namespace DB
 {
 
 
-bool ParserDictionaryLifetime::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionaryLifetime::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserLiteral literal_p;
     ParserKeyValuePairsList key_value_pairs_p;
@@ -76,7 +76,7 @@ bool ParserDictionaryLifetime::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 }
 
 
-bool ParserDictionaryRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionaryRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyValuePairsList key_value_pairs_p;
     ASTPtr ast_range;
@@ -110,7 +110,7 @@ bool ParserDictionaryRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     return true;
 }
 
-bool ParserDictionaryLayout::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionaryLayout::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserFunctionWithKeyValueArguments key_value_func_p(/* brackets_can_be_omitted = */ true);
     ASTPtr ast_func;
@@ -137,7 +137,7 @@ bool ParserDictionaryLayout::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
-bool ParserDictionarySettings::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionarySettings::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserToken s_comma(TokenType::Comma);
 
@@ -145,7 +145,7 @@ bool ParserDictionarySettings::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 
     while (true)
     {
-        if (!changes.empty() && !s_comma.ignore(pos))
+        if (!changes.empty() && !s_comma.ignore(pos, false))
             break;
 
         changes.push_back(SettingChange{});
@@ -163,7 +163,7 @@ bool ParserDictionarySettings::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 }
 
 
-bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword primary_key_keyword("PRIMARY KEY");
     ParserKeyword source_keyword("SOURCE");

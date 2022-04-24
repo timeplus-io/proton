@@ -17,7 +17,7 @@
 namespace DB
 {
 
-bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto command = std::make_shared<ASTAlterCommand>();
     node = command;
@@ -811,7 +811,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 }
 
 
-bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto command_list = std::make_shared<ASTExpressionList>();
     node = command_list;
@@ -827,13 +827,13 @@ bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
         command_list->children.push_back(command);
     }
-    while (s_comma.ignore(pos, expected));
+    while (s_comma.ignore(pos, expected, false));
 
     return true;
 }
 
 
-bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto query = std::make_shared<ASTAlterQuery>();
     node = query;

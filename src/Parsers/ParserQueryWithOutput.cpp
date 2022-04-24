@@ -29,7 +29,7 @@
 namespace DB
 {
 
-bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserShowTablesQuery show_tables_p;
     ParserSelectWithUnionQuery select_p;
@@ -81,7 +81,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     auto & query_with_output = dynamic_cast<ASTQueryWithOutput &>(*query);
 
     ParserKeyword s_into_outfile("INTO OUTFILE");
-    if (s_into_outfile.ignore(pos, expected))
+    if (s_into_outfile.ignore(pos, expected, false))
     {
         ParserStringLiteral out_file_p;
         if (!out_file_p.parse(pos, query_with_output.out_file, expected))

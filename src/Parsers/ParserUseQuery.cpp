@@ -8,7 +8,7 @@
 namespace DB
 {
 
-bool ParserUseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserUseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_use("USE");
     ParserIdentifier name_p;

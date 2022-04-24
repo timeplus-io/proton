@@ -23,7 +23,7 @@ class ParserDataTypeArgument : public IParserBase
 {
 private:
     const char * getName() const override { return "data type argument"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override
     {
         ParserNestedTable nested_parser;
         ParserDataType data_type_parser;
@@ -43,7 +43,7 @@ private:
 
 }
 
-bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserNestedTable nested;
     if (nested.parse(pos, node, expected))

@@ -36,7 +36,7 @@ class ParserAlterQuery : public IParserBase
 {
 protected:
     const char * getName() const  override{ return "ALTER query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 
@@ -44,7 +44,7 @@ class ParserAlterCommandList : public IParserBase
 {
 protected:
     const char * getName() const  override{ return "a list of ALTER commands"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
 public:
     ASTAlterQuery::AlterObjectType alter_object;
@@ -58,7 +58,7 @@ class ParserAlterCommand : public IParserBase
 {
 protected:
     const char * getName() const  override{ return "ALTER command"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
 public:
     ASTAlterQuery::AlterObjectType alter_object;

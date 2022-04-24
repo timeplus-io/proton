@@ -8,7 +8,7 @@ namespace DB
 /**
  * Entry parser for JSONPath
  */
-bool ParserJSONPath::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserJSONPath::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto ast_jsonpath = std::make_shared<ASTJSONPath>();
     ParserJSONPathQuery parser_jsonpath_query;

@@ -91,7 +91,6 @@ ASTPtr tryParseQueryBase(
         && token_iterator->type != TokenType::Semicolon
         && !(insert && insert->data))
     {
-        expected.add(pos, "end of query");
         error_message = getSyntaxErrorMessage(pos, end, last_token, expected, hilite, desc);
         return nullptr;
     }

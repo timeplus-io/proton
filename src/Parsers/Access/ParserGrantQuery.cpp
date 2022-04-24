@@ -228,7 +228,7 @@ namespace
 }
 
 
-bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (attach_mode && !ParserKeyword{"ATTACH"}.ignore(pos, expected))
         return false;

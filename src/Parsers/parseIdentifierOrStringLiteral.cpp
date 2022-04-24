@@ -9,12 +9,12 @@
 
 namespace DB
 {
-bool parseIdentifierOrStringLiteral(IParser::Pos & pos, Expected & expected, String & result)
+bool parseIdentifierOrStringLiteral(IParser::Pos & pos, Expected & expected, String & result, [[ maybe_unused ]] bool hint)
 {
     return IParserBase::wrapParseImpl(pos, [&]
     {
         ASTPtr ast;
-        if (ParserIdentifier().parse(pos, ast, expected))
+        if (ParserIdentifier().parse(pos, ast, expected, hint))
         {
             result = getIdentifierName(ast);
             return true;
@@ -31,14 +31,14 @@ bool parseIdentifierOrStringLiteral(IParser::Pos & pos, Expected & expected, Str
 }
 
 
-bool parseIdentifiersOrStringLiterals(IParser::Pos & pos, Expected & expected, Strings & result)
+bool parseIdentifiersOrStringLiterals(IParser::Pos & pos, Expected & expected, Strings & result, [[ maybe_unused ]] bool hint)
 {
     Strings res;
 
     auto parse_single_id_or_literal = [&]
     {
         String str;
-        if (!parseIdentifierOrStringLiteral(pos, expected, str))
+        if (!parseIdentifierOrStringLiteral(pos, expected, str, hint))
             return false;
 
         res.emplace_back(std::move(str));

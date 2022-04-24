@@ -37,7 +37,7 @@ static bool parseDatabaseAndTable(
 }
 
 
-bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     /// proton: starts
     ParserKeyword s_rename_table("RENAME STREAM");
@@ -108,7 +108,7 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     while (true)
     {
-        if (!elements.empty() && !s_comma.ignore(pos))
+        if (!elements.empty() && !s_comma.ignore(pos, false))
             break;
 
         ASTRenameQuery::Element& ref = elements.emplace_back();

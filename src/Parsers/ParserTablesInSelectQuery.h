@@ -14,7 +14,7 @@ class ParserTablesInSelectQuery : public IParserBase
 {
 protected:
     const char * getName() const override { return "table, table function, subquery or list of joined tables"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 
@@ -25,7 +25,7 @@ public:
 
 protected:
     const char * getName() const override { return "table, table function, subquery or list of joined tables"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
 private:
     bool is_first;
@@ -38,7 +38,7 @@ class ParserTableExpression : public IParserBase
 {
 protected:
     const char * getName() const override { return "table or subquery or table function"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 
@@ -46,7 +46,7 @@ class ParserArrayJoin : public IParserBase
 {
 protected:
     const char * getName() const override { return "array join"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 

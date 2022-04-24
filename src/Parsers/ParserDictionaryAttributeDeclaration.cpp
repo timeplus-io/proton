@@ -8,7 +8,7 @@
 namespace DB
 {
 
-bool ParserDictionaryAttributeDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionaryAttributeDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier name_parser;
     ParserDataType type_parser;
@@ -108,7 +108,7 @@ bool ParserDictionaryAttributeDeclaration::parseImpl(Pos & pos, ASTPtr & node, E
 }
 
 
-bool ParserDictionaryAttributeDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDictionaryAttributeDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserDictionaryAttributeDeclaration>(),
         std::make_unique<ParserToken>(TokenType::Comma), false)

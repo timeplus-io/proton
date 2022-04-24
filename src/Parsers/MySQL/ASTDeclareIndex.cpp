@@ -17,7 +17,7 @@ struct ParserIndexColumn : public IParserBase
 protected:
     const char * getName() const override { return "index column"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override
     {
         ParserExpression p_expression;
 
@@ -164,7 +164,7 @@ static inline bool parseDeclareConstraintIndex(IParser::Pos & pos, String & inde
     return true;
 }
 
-bool ParserDeclareIndex::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareIndex::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     String index_name;
     String index_type;

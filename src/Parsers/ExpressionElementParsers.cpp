@@ -53,7 +53,7 @@ namespace ErrorCodes
 }
 
 
-bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr contents_node;
     ParserExpressionList contents(false);
@@ -79,7 +79,7 @@ bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr contents_node;
     ParserExpressionList contents(false);
@@ -107,7 +107,8 @@ bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
     /// Empty expression in parentheses is not allowed.
     if (expr_list.children.empty())
     {
-        expected.add(pos, "non-empty parenthesized list of expressions");
+        if (hint)
+            expected.add(pos, "non-empty parenthesized list of expressions");
         return false;
     }
 
@@ -136,7 +137,7 @@ bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 }
 
 
-bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr select_node;
     ParserSelectWithUnionQuery select;
@@ -158,7 +159,7 @@ bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     /// Identifier in backquotes or in double quotes
     if (pos->type == TokenType::QuotedIdentifier)
@@ -189,7 +190,8 @@ bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         ++pos;
         if (pos->type != TokenType::BareWord)
         {
-            expected.add(pos, "substitution name (identifier)");
+            if (hint)
+                expected.add(pos, "substitution name (identifier)");
             return false;
         }
 
@@ -198,7 +200,8 @@ bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (pos->type != TokenType::Colon)
         {
-            expected.add(pos, "colon between name and type");
+            if (hint)
+                expected.add(pos, "colon between name and type");
             return false;
         }
 
@@ -206,7 +209,8 @@ bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (pos->type != TokenType::BareWord)
         {
-            expected.add(pos, "substitution type (identifier)");
+            if (hint)
+                expected.add(pos, "substitution type (identifier)");
             return false;
         }
 
@@ -215,13 +219,15 @@ bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (type != "Identifier")
         {
-            expected.add(pos, "substitution type (identifier)");
+            if (hint)
+                expected.add(pos, "substitution type (identifier)");
             return false;
         }
 
         if (pos->type != TokenType::ClosingCurlyBrace)
         {
-            expected.add(pos, "closing curly brace");
+            if (hint)
+                expected.add(pos, "closing curly brace");
             return false;
         }
         ++pos;
@@ -233,7 +239,7 @@ bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr id_list;
     if (!ParserList(std::make_unique<ParserIdentifier>(allow_query_parameter), std::make_unique<ParserToken>(TokenType::Dot), false)
@@ -315,7 +321,7 @@ namespace
                     return true;
                 }
             }
-            else if (ParserToken(TokenType::Comma).ignore(pos, expected))
+            else if (ParserToken(TokenType::Comma).ignore(pos, expected, false))
             {
                 if (ParserExpression().parse(pos, type_node, expected))
                 {
@@ -666,7 +672,7 @@ namespace
 }
 
 
-bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier id_parser;
 
@@ -880,7 +886,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-bool ParserTableFunctionView::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTableFunctionView::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier id_parser;
     ParserKeyword view("VIEW");
@@ -923,7 +929,7 @@ bool ParserTableFunctionView::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     return true;
 }
 
-bool ParserFilterClause::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserFilterClause::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     assert(node);
     ASTFunction & function = dynamic_cast<ASTFunction &>(*node);
@@ -957,7 +963,7 @@ bool ParserFilterClause::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     return true;
 }
 
-bool ParserWindowReference::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserWindowReference::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     assert(node);
     ASTFunction & function = dynamic_cast<ASTFunction &>(*node);
@@ -1158,7 +1164,7 @@ static bool parseWindowDefinitionParts(IParser::Pos & pos,
     return tryParseFrameDefinition(&node, pos, expected);
 }
 
-bool ParserWindowDefinition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserWindowDefinition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto result = std::make_shared<ASTWindowDefinition>();
 
@@ -1207,7 +1213,7 @@ bool ParserWindowDefinition::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
-bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto result = std::make_shared<ASTExpressionList>();
 
@@ -1239,7 +1245,8 @@ bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         // If the list countinues, there should be a comma.
         ParserToken parser_comma(TokenType::Comma);
-        if (!parser_comma.ignore(pos))
+
+        if (!parser_comma.ignore(pos, false))
         {
             break;
         }
@@ -1249,13 +1256,13 @@ bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-bool ParserCodecDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCodecDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserList(std::make_unique<ParserIdentifierWithOptionalParameters>(),
         std::make_unique<ParserToken>(TokenType::Comma), false).parse(pos, node, expected);
 }
 
-bool ParserCodec::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCodec::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserCodecDeclarationList codecs;
     ASTPtr expr_list_args;
@@ -1287,7 +1294,7 @@ static bool isOneOf(TokenType token)
     return ((token == tokens) || ...);
 }
 
-bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     /// Parse numbers (including decimals), strings, arrays and tuples of them.
 
@@ -1370,7 +1377,8 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         return false;
 
     ASTPtr type_ast;
-    if (ParserToken(TokenType::DoubleColon).ignore(pos, expected)
+
+    if (ParserToken(TokenType::DoubleColon).ignore(pos, expected, false)
         && ParserDataType().parse(pos, type_ast, expected))
     {
         String s;
@@ -1393,7 +1401,7 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 }
 
 
-bool ParserNull::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserNull::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword nested_parser("NULL");
     if (nested_parser.parse(pos, node, expected))
@@ -1406,7 +1414,7 @@ bool ParserNull::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserBool::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserBool::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (ParserKeyword("true").parse(pos, node, expected))
     {
@@ -1442,7 +1450,7 @@ static bool parseNumber(char * buffer, size_t size, bool negative, int base, Fie
     return false;
 }
 
-bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     Pos literal_begin = pos;
     bool negative = false;
@@ -1467,7 +1475,8 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (pos->size() > MAX_LENGTH_OF_NUMBER)
     {
-        expected.add(pos, "number");
+        if (hint)
+            expected.add(pos, "number");
         return false;
     }
 
@@ -1497,7 +1506,8 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             }
         }
 
-        expected.add(pos, "number");
+        if (hint)
+            expected.add(pos, "number");
         return false;
     }
 
@@ -1522,7 +1532,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserUnsignedInteger::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserUnsignedInteger::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     Field res;
 
@@ -1533,7 +1543,8 @@ bool ParserUnsignedInteger::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ReadBufferFromMemory in(pos->begin, pos->size());
     if (!tryReadIntText(x, in) || in.count() != pos->size())
     {
-        expected.add(pos, "unsigned integer");
+        if (hint)
+            expected.add(pos, "unsigned integer");
         return false;
     }
 
@@ -1546,7 +1557,7 @@ bool ParserUnsignedInteger::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 }
 
 
-bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::StringLiteral && pos->type != TokenType::HereDoc)
         return false;
@@ -1563,13 +1574,15 @@ bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
         }
         catch (const Exception &)
         {
-            expected.add(pos, "string literal");
+            if (hint)
+                expected.add(pos, "string literal");
             return false;
         }
 
         if (in.count() != pos->size())
         {
-            expected.add(pos, "string literal");
+            if (hint)
+                expected.add(pos, "string literal");
             return false;
         }
     }
@@ -1589,7 +1602,7 @@ bool ParserStringLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
 }
 
 template <typename Collection>
-bool ParserCollectionOfLiterals<Collection>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCollectionOfLiterals<Collection>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != opening_bracket)
         return false;
@@ -1629,7 +1642,8 @@ bool ParserCollectionOfLiterals<Collection>::parseImpl(Pos & pos, ASTPtr & node,
             }
             else
             {
-                expected.add(pos, "comma or closing bracket");
+                if (hint)
+                    expected.add(pos, "comma or closing bracket");
                 return false;
             }
         }
@@ -1641,15 +1655,16 @@ bool ParserCollectionOfLiterals<Collection>::parseImpl(Pos & pos, ASTPtr & node,
         arr.push_back(literal_node->as<ASTLiteral &>().value);
     }
 
-    expected.add(pos, getTokenName(closing_bracket));
+    if (hint)
+        expected.add(pos, getTokenName(closing_bracket));
     return false;
 }
 
-template bool ParserCollectionOfLiterals<Array>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-template bool ParserCollectionOfLiterals<Tuple>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-template bool ParserCollectionOfLiterals<Map>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+template bool ParserCollectionOfLiterals<Array>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint);
+template bool ParserCollectionOfLiterals<Tuple>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint);
+template bool ParserCollectionOfLiterals<Map>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint);
 
-bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserNull null_p;
     ParserNumber num_p;
@@ -1716,7 +1731,7 @@ const char * ParserAlias::restricted_keywords[] =
     nullptr
 };
 
-bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_as("AS");
     ParserIdentifier id_p;
@@ -1746,7 +1761,7 @@ bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserColumnsMatcher::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserColumnsMatcher::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword columns("COLUMNS");
     ParserList columns_p(std::make_unique<ParserCompoundIdentifier>(false, true), std::make_unique<ParserToken>(TokenType::Comma), false);
@@ -1791,7 +1806,7 @@ bool ParserColumnsMatcher::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
 }
 
 
-bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword apply("APPLY");
     ParserKeyword except("EXCEPT");
@@ -1995,7 +2010,7 @@ bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 }
 
 
-bool ParserAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type == TokenType::Asterisk)
     {
@@ -2014,7 +2029,7 @@ bool ParserAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-bool ParserQualifiedAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserQualifiedAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserCompoundIdentifier(true, true).parse(pos, node, expected))
         return false;
@@ -2040,7 +2055,7 @@ bool ParserQualifiedAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
 }
 
 
-bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::OpeningCurlyBrace)
         return false;
@@ -2049,7 +2064,8 @@ bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     if (pos->type != TokenType::BareWord)
     {
-        expected.add(pos, "substitution name (identifier)");
+        if (hint)
+            expected.add(pos, "substitution name (identifier)");
         return false;
     }
 
@@ -2058,7 +2074,8 @@ bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     if (pos->type != TokenType::Colon)
     {
-        expected.add(pos, "colon between name and type");
+        if (hint)
+            expected.add(pos, "colon between name and type");
         return false;
     }
 
@@ -2068,7 +2085,8 @@ bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserDataType type_parser;
     if (!type_parser.ignore(pos, expected))
     {
-        expected.add(pos, "substitution type");
+        if (hint)
+            expected.add(pos, "substitution type");
         return false;
     }
 
@@ -2076,7 +2094,8 @@ bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     if (pos->type != TokenType::ClosingCurlyBrace)
     {
-        expected.add(pos, "closing curly brace");
+        if (hint)
+            expected.add(pos, "closing curly brace");
         return false;
     }
 
@@ -2086,7 +2105,7 @@ bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 }
 
 
-bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::DoubleAt)
         return false;
@@ -2095,7 +2114,8 @@ bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
     if (pos->type != TokenType::BareWord)
     {
-        expected.add(pos, "variable name");
+        if (hint)
+            expected.add(pos, "variable name");
         return false;
     }
 
@@ -2109,7 +2129,8 @@ bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
         if (pos->type != TokenType::BareWord)
         {
-            expected.add(pos, "variable name");
+            if (hint)
+                expected.add(pos, "variable name");
             return false;
         }
         name = String(pos->begin, pos->end);
@@ -2132,7 +2153,7 @@ bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 }
 
 
-bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     return ParserSubquery().parse(pos, node, expected)
         || ParserCastOperator().parse(pos, node, expected)
@@ -2152,7 +2173,7 @@ bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
 }
 
 
-bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!elem_parser->parse(pos, node, expected))
         return false;
@@ -2183,7 +2204,7 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
                 allow_alias_without_as_keyword_now = false;
 
     ASTPtr alias_node;
-    if (ParserAlias(allow_alias_without_as_keyword_now).parse(pos, alias_node, expected))
+    if (ParserAlias(allow_alias_without_as_keyword_now).parse(pos, alias_node, expected, false))
     {
         /// FIXME: try to prettify this cast using `as<>()`
         if (auto * ast_with_alias = dynamic_cast<ASTWithAlias *>(node.get()))
@@ -2192,7 +2213,8 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         }
         else
         {
-            expected.add(pos, "alias cannot be here");
+            if (hint)
+                expected.add(pos, "alias cannot be here");
             return false;
         }
     }
@@ -2201,7 +2223,7 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
 }
 
 
-bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserExpressionWithOptionalAlias elem_p(false);
     ParserKeyword ascending("ASCENDING");
@@ -2289,7 +2311,7 @@ bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     return true;
 }
 
-bool ParserFunctionWithKeyValueArguments::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserFunctionWithKeyValueArguments::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier id_parser;
     ParserKeyValuePairsList pairs_list_parser;
@@ -2331,7 +2353,7 @@ bool ParserFunctionWithKeyValueArguments::parseImpl(Pos & pos, ASTPtr & node, Ex
     return true;
 }
 
-bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_to_disk("TO DISK");
     ParserKeyword s_to_volume("TO VOLUME");
@@ -2442,7 +2464,7 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
-bool ParserIdentifierWithOptionalParameters::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserIdentifierWithOptionalParameters::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier non_parametric;
     ParserIdentifierWithParameters parametric;
@@ -2467,7 +2489,7 @@ bool ParserIdentifierWithOptionalParameters::parseImpl(Pos & pos, ASTPtr & node,
     return false;
 }
 
-bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto assignment = std::make_shared<ASTAssignment>();
     node = assignment;

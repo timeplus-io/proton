@@ -10,7 +10,7 @@ namespace DB
 {
 
 
-bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_exists("EXISTS");
     ParserKeyword s_temporary("TEMPORARY");

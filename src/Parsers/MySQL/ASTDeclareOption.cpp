@@ -13,7 +13,7 @@ namespace MySQLParser
 {
 
 template <bool recursive>
-bool ParserDeclareOptionImpl<recursive>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareOptionImpl<recursive>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::unordered_map<String, ASTPtr> changes;
     std::unordered_map<String, std::shared_ptr<IParser>> usage_parsers_cached;
@@ -83,19 +83,19 @@ ASTPtr ASTDeclareOptions::clone() const
     return res;
 }
 
-bool ParserAlwaysTrue::parseImpl(IParser::Pos & /*pos*/, ASTPtr & node, Expected & /*expected*/)
+bool ParserAlwaysTrue::parseImpl(IParser::Pos & /*pos*/, ASTPtr & node, Expected & /*expected*/, [[ maybe_unused ]] bool hint)
 {
     node = std::make_shared<ASTLiteral>(Field(UInt64(1)));
     return true;
 }
 
-bool ParserAlwaysFalse::parseImpl(IParser::Pos & /*pos*/, ASTPtr & node, Expected & /*expected*/)
+bool ParserAlwaysFalse::parseImpl(IParser::Pos & /*pos*/, ASTPtr & node, Expected & /*expected*/, [[ maybe_unused ]] bool hint)
 {
     node = std::make_shared<ASTLiteral>(Field(UInt64(0)));
     return true;
 }
 
-bool ParserCharsetOrCollateName::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCharsetOrCollateName::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserIdentifier p_identifier;
     ParserStringLiteral p_string_literal;

@@ -15,12 +15,12 @@ namespace
 {
     bool parseProfileKeyword(IParserBase::Pos & pos, Expected & expected, bool use_inherit_keyword)
     {
-        if (ParserKeyword{"PROFILE"}.ignore(pos, expected))
+        if (ParserKeyword{"PROFILE"}.ignore(pos, expected, false))
             return true;
 
         if (use_inherit_keyword && ParserKeyword{"INHERIT"}.ignore(pos, expected))
         {
-            ParserKeyword{"PROFILE"}.ignore(pos, expected);
+            ParserKeyword{"PROFILE"}.ignore(pos, expected, false);
             return true;
         }
 
@@ -204,7 +204,7 @@ namespace
 }
 
 
-bool ParserSettingsProfileElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSettingsProfileElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::shared_ptr<ASTSettingsProfileElement> res;
     if (!parseSettingsProfileElement(pos, expected, id_mode, use_inherit_keyword, false, res))
@@ -215,7 +215,7 @@ bool ParserSettingsProfileElement::parseImpl(Pos & pos, ASTPtr & node, Expected 
 }
 
 
-bool ParserSettingsProfileElements::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSettingsProfileElements::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     std::vector<std::shared_ptr<ASTSettingsProfileElement>> elements;
 

@@ -67,7 +67,7 @@ static inline bool parseColumnDeclareOptions(IParser::Pos & pos, ASTPtr & node, 
     return p_non_generate_options.parse(pos, node, expected);
 }
 
-bool ParserDeclareColumn::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareColumn::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr column_name;
     ASTPtr column_data_type;

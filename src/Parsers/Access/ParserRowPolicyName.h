@@ -16,7 +16,7 @@ public:
 
 protected:
     const char * getName() const override { return "RowPolicyName"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
 private:
     bool allow_on_cluster = false;
@@ -37,7 +37,7 @@ public:
 
 protected:
     const char * getName() const override { return "SettingsProfileElements"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
 private:
     bool allow_on_cluster = false;

@@ -7,7 +7,7 @@
 namespace DB
 {
 
-bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCase::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_case{"CASE"};
     ParserKeyword s_when{"WHEN"};

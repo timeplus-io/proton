@@ -12,7 +12,7 @@
 
 namespace DB
 {
-bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");

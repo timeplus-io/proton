@@ -36,7 +36,7 @@ protected:
 class ParserCreateDefines : public IParserBase
 {
 protected:
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
     const char * getName() const override { return "table property list (column, index, constraint)"; }
 };

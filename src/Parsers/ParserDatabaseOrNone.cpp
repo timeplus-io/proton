@@ -5,7 +5,7 @@
 
 namespace DB
 {
-bool ParserDatabaseOrNone::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDatabaseOrNone::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto result = std::make_shared<ASTDatabaseOrNone>();
     node = result;

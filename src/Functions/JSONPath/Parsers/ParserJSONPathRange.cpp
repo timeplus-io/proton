@@ -20,7 +20,7 @@ namespace ErrorCodes
  * @param expected stuff for logging
  * @return was parse successful
  */
-bool ParserJSONPathRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserJSONPathRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
 
     if (pos->type != TokenType::OpeningSquareBracket)

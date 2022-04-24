@@ -48,7 +48,7 @@ class ParserAlwaysTrue : public IParserBase
 public:
     const char * getName() const override { return "always true"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 class ParserAlwaysFalse : public IParserBase
@@ -56,7 +56,7 @@ class ParserAlwaysFalse : public IParserBase
 public:
     const char * getName() const override { return "always false"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 /// identifier, string literal, binary keyword
@@ -65,7 +65,7 @@ struct ParserCharsetOrCollateName : public IParserBase
 protected:
     const char * getName() const override { return "charset or collate name"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected &) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected &, [[ maybe_unused ]] bool) override;
 };
 
 template <bool recursive>
@@ -76,7 +76,7 @@ protected:
 
     const char * getName() const override { return "option declaration"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 public:
     ParserDeclareOptionImpl(const std::vector<OptionDescribe> & options_collection_) : options_collection(options_collection_) {}
 };

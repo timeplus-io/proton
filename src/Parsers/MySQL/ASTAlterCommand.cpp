@@ -360,7 +360,7 @@ static inline bool parseModifyCommand(IParser::Pos & pos, ASTPtr & node, Expecte
     return true;
 }
 
-bool ParserAlterCommand::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserAlterCommand::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword k_add("ADD");
     ParserKeyword k_drop("DROP");

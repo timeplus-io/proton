@@ -46,7 +46,7 @@ namespace
 }
 
 
-bool ParserSetRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserSetRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     using Kind = ASTSetRoleQuery::Kind;
     Kind kind;

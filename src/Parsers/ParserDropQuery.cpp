@@ -36,7 +36,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     bool no_delay = false;
     bool permanently = false;
 
-    if (s_database.ignore(pos, expected))
+    if (s_database.ignore(pos, expected, false))
     {
         if (s_if_exists.ignore(pos, expected))
             if_exists = true;
@@ -48,9 +48,9 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     {
         if (s_view.ignore(pos, expected))
             is_view = true;
-        else if (s_dictionary.ignore(pos, expected))
+        else if (s_dictionary.ignore(pos, expected, false))
             is_dictionary = true;
-        else if (s_temporary.ignore(pos, expected))
+        else if (s_temporary.ignore(pos, expected, false))
             temporary = true;
 
         /// for TRUNCATE queries TABLE keyword is assumed as default and can be skipped
@@ -116,7 +116,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
 
 }
 
-bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_drop("DROP");
     ParserKeyword s_detach("DETACH");

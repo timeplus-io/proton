@@ -14,7 +14,7 @@ namespace DB
  * @param expected stuff for logging
  * @return was parse successful
  */
-bool ParserJSONPathMemberAccess::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserJSONPathMemberAccess::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::Dot)
         return false;

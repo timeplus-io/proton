@@ -35,10 +35,10 @@ public:
         return res;
     }
 
-    bool parse(Pos & pos, ASTPtr & node, Expected & expected) override;  // -V1071
+    bool parse(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint=true) override;  // -V1071
 
 protected:
-    virtual bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) = 0;
+    virtual bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint=true) = 0;
 };
 
 }

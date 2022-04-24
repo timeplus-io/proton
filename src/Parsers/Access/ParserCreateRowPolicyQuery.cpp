@@ -201,19 +201,19 @@ namespace
 }
 
 
-bool ParserCreateRowPolicyQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateRowPolicyQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     bool alter = false;
     if (attach_mode)
     {
-        if (!ParserKeyword{"ATTACH POLICY"}.ignore(pos, expected) && !ParserKeyword{"ATTACH ROW POLICY"}.ignore(pos, expected))
+        if (!ParserKeyword{"ATTACH POLICY"}.ignore(pos, expected, false) && !ParserKeyword{"ATTACH ROW POLICY"}.ignore(pos, expected, false))
             return false;
     }
     else
     {
-        if (ParserKeyword{"ALTER POLICY"}.ignore(pos, expected) || ParserKeyword{"ALTER ROW POLICY"}.ignore(pos, expected))
+        if (ParserKeyword{"ALTER POLICY"}.ignore(pos, expected, false) || ParserKeyword{"ALTER ROW POLICY"}.ignore(pos, expected, false))
             alter = true;
-        else if (!ParserKeyword{"CREATE POLICY"}.ignore(pos, expected) && !ParserKeyword{"CREATE ROW POLICY"}.ignore(pos, expected))
+        else if (!ParserKeyword{"CREATE POLICY"}.ignore(pos, expected, false) && !ParserKeyword{"CREATE ROW POLICY"}.ignore(pos, expected, false))
             return false;
     }
 
@@ -229,7 +229,7 @@ bool ParserCreateRowPolicyQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     {
         if (ParserKeyword{"IF NOT EXISTS"}.ignore(pos, expected))
             if_not_exists = true;
-        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected))
+        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected, false))
             or_replace = true;
     }
 

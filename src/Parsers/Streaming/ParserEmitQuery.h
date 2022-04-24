@@ -19,7 +19,7 @@ public:
 
 private:
     const char * getName() const override { return "Emit query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 
 private:
     bool parse_only_internals;

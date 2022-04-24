@@ -9,7 +9,7 @@
 namespace DB
 {
 
-bool ParserOptimizeQueryColumnsSpecification::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserOptimizeQueryColumnsSpecification::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     // Do not allow APPLY and REPLACE transformers.
     // Since we use Columns Transformers only to get list of columns,
@@ -22,7 +22,7 @@ bool ParserOptimizeQueryColumnsSpecification::parseImpl(Pos & pos, ASTPtr & node
 }
 
 
-bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_optimize_table("OPTIMIZE TABLE");
     ParserKeyword s_partition("PARTITION");

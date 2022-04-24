@@ -8,7 +8,7 @@
 
 namespace DB
 {
-bool ParserShowGrantsQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserShowGrantsQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"SHOW GRANTS"}.ignore(pos, expected))
         return false;

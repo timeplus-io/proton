@@ -12,11 +12,12 @@ namespace DB
  * @param expected stuff for logging
  * @return was parse successful
  */
-bool ParserJSONPathRoot::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserJSONPathRoot::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::DollarSign)
     {
-        expected.add(pos, "dollar sign (start of jsonpath)");
+        if (hint)
+            expected.add(pos, "dollar sign (start of jsonpath)");
         return false;
     }
     node = std::make_shared<ASTJSONPathRoot>();

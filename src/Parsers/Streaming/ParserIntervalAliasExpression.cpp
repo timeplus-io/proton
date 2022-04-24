@@ -9,7 +9,7 @@
 
 namespace DB
 {
-bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!pos.isValid())
         return false;

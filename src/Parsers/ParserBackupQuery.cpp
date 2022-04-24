@@ -194,7 +194,7 @@ namespace
 }
 
 
-bool ParserBackupQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserBackupQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     Kind kind;
     if (ParserKeyword{"BACKUP"}.ignore(pos, expected))

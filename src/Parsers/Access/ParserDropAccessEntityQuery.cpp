@@ -17,8 +17,11 @@ namespace
         for (auto i : collections::range(AccessEntityType::MAX))
         {
             const auto & type_info = AccessEntityTypeInfo::get(i);
-            if (ParserKeyword{type_info.name.c_str()}.ignore(pos, expected)
-                || (!type_info.alias.empty() && ParserKeyword{type_info.alias.c_str()}.ignore(pos, expected)))
+
+            bool hint = !(i == AccessEntityType::SETTINGS_PROFILE || i == AccessEntityType::ROW_POLICY);
+
+            if (ParserKeyword{type_info.name.c_str()}.ignore(pos, expected, hint)
+                || (!type_info.alias.empty() && ParserKeyword{type_info.alias.c_str()}.ignore(pos, expected, hint)))
             {
                 type = i;
                 return true;
@@ -38,7 +41,7 @@ namespace
 }
 
 
-bool ParserDropAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDropAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (!ParserKeyword{"DROP"}.ignore(pos, expected))
         return false;

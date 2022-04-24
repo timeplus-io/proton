@@ -7,7 +7,7 @@
 namespace DB
 {
 
-bool ParserDropFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDropFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_drop("DROP");
     ParserKeyword s_function("FUNCTION");

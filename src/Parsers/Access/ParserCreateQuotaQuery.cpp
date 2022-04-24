@@ -241,7 +241,7 @@ namespace
 }
 
 
-bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     bool alter = false;
     if (attach_mode)
@@ -269,7 +269,7 @@ bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     {
         if (ParserKeyword{"IF NOT EXISTS"}.ignore(pos, expected))
             if_not_exists = true;
-        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected))
+        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected, false))
             or_replace = true;
     }
 

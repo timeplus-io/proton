@@ -43,7 +43,7 @@ ASTPtr ASTDeclareReference::clone() const
     return res;
 }
 
-bool ParserDeclareReference::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserDeclareReference::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr table_name;
     ASTPtr expression;

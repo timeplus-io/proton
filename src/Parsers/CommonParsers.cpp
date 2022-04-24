@@ -4,7 +4,7 @@
 namespace DB
 {
 
-bool ParserKeyword::parseImpl(Pos & pos, [[maybe_unused]] ASTPtr & node, Expected & expected)
+bool ParserKeyword::parseImpl(Pos & pos, [[maybe_unused]] ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     if (pos->type != TokenType::BareWord)
         return false;
@@ -13,7 +13,8 @@ bool ParserKeyword::parseImpl(Pos & pos, [[maybe_unused]] ASTPtr & node, Expecte
 
     while (true)
     {
-        expected.add(pos, current_word);
+        if (hint)
+            expected.add(pos, current_word);
 
         if (pos->type != TokenType::BareWord)
             return false;

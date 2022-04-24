@@ -24,7 +24,7 @@ public:
 protected:
     constexpr const char * getName() const override { return s.data(); }
 
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
 
@@ -37,11 +37,12 @@ public:
 protected:
     const char * getName() const override { return "token"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & /*node*/, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & /*node*/, Expected & expected, [[ maybe_unused ]] bool hint) override
     {
         if (pos->type != token_type)
         {
-            expected.add(pos, getTokenName(token_type));
+            if (hint)
+                expected.add(pos, getTokenName(token_type));
             return false;
         }
         ++pos;
@@ -56,7 +57,7 @@ class ParserNothing : public IParserBase
 public:
     const char * getName() const override { return "nothing"; }
 
-    bool parseImpl(Pos & /*pos*/, ASTPtr & /*node*/, Expected & /*expected*/) override { return true; }
+    bool parseImpl(Pos & /*pos*/, ASTPtr & /*node*/, Expected & /*expected*/, [[ maybe_unused ]] bool hint) override { return true; }
 };
 
 }

@@ -10,7 +10,7 @@
 
 namespace DB
 {
-bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto select_query = std::make_shared<ASTProjectionSelectQuery>();
     node = select_query;

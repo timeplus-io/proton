@@ -321,7 +321,7 @@ namespace
 }
 
 
-bool ParserCreateUserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateUserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     bool alter = false;
     if (attach_mode)
@@ -349,7 +349,7 @@ bool ParserCreateUserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     {
         if (ParserKeyword{"IF NOT EXISTS"}.ignore(pos, expected))
             if_not_exists = true;
-        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected))
+        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected, false))
             or_replace = true;
     }
 

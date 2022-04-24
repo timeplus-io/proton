@@ -72,19 +72,19 @@ namespace
 }
 
 
-bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     bool alter = false;
     if (attach_mode)
     {
-        if (!ParserKeyword{"ATTACH SETTINGS PROFILE"}.ignore(pos, expected) && !ParserKeyword{"ATTACH PROFILE"}.ignore(pos, expected))
+        if (!ParserKeyword{"ATTACH SETTINGS PROFILE"}.ignore(pos, expected, false) && !ParserKeyword{"ATTACH PROFILE"}.ignore(pos, expected, false))
             return false;
     }
     else
     {
-        if (ParserKeyword{"ALTER SETTINGS PROFILE"}.ignore(pos, expected) || ParserKeyword{"ALTER PROFILE"}.ignore(pos, expected))
+        if (ParserKeyword{"ALTER SETTINGS PROFILE"}.ignore(pos, expected, false) || ParserKeyword{"ALTER PROFILE"}.ignore(pos, expected, false))
             alter = true;
-        else if (!ParserKeyword{"CREATE SETTINGS PROFILE"}.ignore(pos, expected) && !ParserKeyword{"CREATE PROFILE"}.ignore(pos, expected))
+        else if (!ParserKeyword{"CREATE SETTINGS PROFILE"}.ignore(pos, expected, false) && !ParserKeyword{"CREATE PROFILE"}.ignore(pos, expected, false))
             return false;
     }
 
@@ -100,7 +100,7 @@ bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
     {
         if (ParserKeyword{"IF NOT EXISTS"}.ignore(pos, expected))
             if_not_exists = true;
-        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected))
+        else if (ParserKeyword{"OR REPLACE"}.ignore(pos, expected, false))
             or_replace = true;
     }
 

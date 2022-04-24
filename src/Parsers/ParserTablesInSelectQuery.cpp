@@ -13,7 +13,7 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
 }
 
-bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto res = std::make_shared<ASTTableExpression>();
 
@@ -63,7 +63,7 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 }
 
 
-bool ParserArrayJoin::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserArrayJoin::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto res = std::make_shared<ASTArrayJoin>();
 
@@ -118,7 +118,7 @@ void ParserTablesInSelectQueryElement::parseJoinStrictness(Pos & pos, ASTTableJo
         table_join.strictness = ASTTableJoin::Strictness::Anti;
 }
 
-bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto res = std::make_shared<ASTTablesInSelectQueryElement>();
 
@@ -253,7 +253,7 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
 }
 
 
-bool ParserTablesInSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+bool ParserTablesInSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     auto res = std::make_shared<ASTTablesInSelectQuery>();
 

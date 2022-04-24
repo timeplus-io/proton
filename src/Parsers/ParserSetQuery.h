@@ -19,7 +19,7 @@ public:
     static bool parseNameValuePair(SettingChange & change, IParser::Pos & pos, Expected & expected);
 protected:
     const char * getName() const override { return "SET query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
     /// Parse the list `name = value` pairs, without SET.
     bool parse_only_internals;
 };
