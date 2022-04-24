@@ -11,8 +11,6 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
-#include <Storages/Streaming/StorageMaterializedView.h>
-#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -120,33 +118,50 @@ namespace ErrorCodes
     extern const int WINDOW_COLUMN_NOT_REFERENCED;
     extern const int INVALID_STREAMING_FUNC_DESC;
     extern const int MISSING_GROUP_BY;
+    extern const int UNSUPPORTED;
     /// proton: ends
 }
 
 /// proton: starts.
 namespace
 {
-    struct RenameFunctionForStreamingData
+    struct StreamingFunctionData
     {
         using TypeToVisit = ASTFunction;
 
+        StreamingFunctionData(bool streaming_)
+            : streaming(streaming_) { }
+
         void visit(ASTFunction & func, ASTPtr)
         {
-            auto iter = func_map.find(func.name);
-            if (iter != func_map.end())
-                func.name = iter->second;
+            if (func.name == "emit_version")
+            {
+                emit_version = true;
+                return;
+            }
+
+            if (streaming)
+            {
+                auto iter = func_map.find(func.name);
+                if (iter != func_map.end())
+                    func.name = iter->second;
+            }
         }
 
+        bool emit_version = false;
+
     private:
+        bool streaming;
+
         static std::unordered_map<String, String> func_map;
     };
 
-    std::unordered_map<String, String> RenameFunctionForStreamingData::func_map =  {
+    std::unordered_map<String, String> StreamingFunctionData::func_map =  {
         {"neighbor", "__streaming_neighbor"},
         {"now64", "__streaming_now64"},
         {"now", "__streaming_now"},
     };
-    using RenameFunctionForStreamingVisitor = InDepthNodeVisitor<OneTypeMatcher<RenameFunctionForStreamingData>, false>;
+    using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData>, false>;
 }
 /// proton: ends.
 
@@ -475,10 +490,19 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         context->setDistributed(syntax_analyzer_result->is_remote_storage);
 
         /// proton: starts. Use streaming version of the functions
-        if (isStreaming())
+        bool streaming = isStreaming();
+        StreamingFunctionVisitor::Data func_data(streaming);
+        StreamingFunctionVisitor(func_data).visit(query_ptr);
+
+        if (func_data.emit_version)
         {
-            RenameFunctionForStreamingVisitor::Data func_data;
-            RenameFunctionForStreamingVisitor(func_data).visit(query_ptr);
+            /// emit_version() shall be used along with aggregation only
+            if (streaming && syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
+                throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used along with streaming aggregations");
+            else if (!streaming)
+                throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used in streaming query");
+
+            emit_version = true;
         }
         /// proton: ends.
 
@@ -790,7 +814,7 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
         && options.to_stage > QueryProcessingStage::WithMergeableState;
 
     analysis_result = ExpressionAnalysisResult(
-        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header);
+        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version);
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -2803,7 +2827,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     StreamingAggregator::Params::GroupBy streaming_group_by = StreamingAggregator::Params::GroupBy::OTHER;
     size_t time_col_pos = 0;
     String time_col_name;
-    if (windowType() == WindowType::SESSION)
+    auto window_type = windowType();
+    if (window_type == WindowType::SESSION)
     {
         streaming_group_by = StreamingAggregator::Params::GroupBy::SESSION;
         auto desc = getStreamingFunctionDescription();
@@ -2819,7 +2844,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         keys.insert(keys.begin(), header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_ID));
     }
 
-    auto window_type = windowType();
     for (const auto & key : query_analyzer->aggregationKeys())
     {
         /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because StreamingAggregator automatically add three session related columns.
@@ -2890,7 +2914,13 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
     auto aggregating_step = std::make_unique<StreamingAggregatingStep>(
-        query_plan.getCurrentDataStream(), params, final, merge_threads, temporary_data_merge_threads, storage_has_evenly_distributed_read);
+        query_plan.getCurrentDataStream(),
+        params,
+        final,
+        merge_threads,
+        temporary_data_merge_threads,
+        storage_has_evenly_distributed_read,
+        emit_version);
 
     query_plan.addStep(std::move(aggregating_step));
 }
@@ -2901,7 +2931,7 @@ bool InterpreterSelectQuery::isStreaming() const
         return false;
 
     if (query_info.syntax_analyzer_result->streaming)
-        return query_info.syntax_analyzer_result->streaming;
+        return true;
 
     if (interpreter_subquery)
         return interpreter_subquery->isStreaming();

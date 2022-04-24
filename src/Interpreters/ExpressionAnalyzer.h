@@ -262,7 +262,8 @@ struct ExpressionAnalysisResult
         bool second_stage,
         bool only_types,
         const FilterDAGInfoPtr & filter_info,
-        const Block & source_header);
+        const Block & source_header,
+        bool emit_version);
 
     /// Filter for row-level security.
     bool hasFilter() const { return filter_info.get(); }

@@ -24,6 +24,8 @@ const String SESSION_FUNC_NAME = "__session";
 /// Reserved column names / aliases for streaming view
 const String RESERVED_VIEW_VERSION = "__tp_version";
 
+const String RESERVED_EMIT_VERSION = "emit_version()";
+
 /// Reserved column names / aliases for proton system
 const String RESERVED_EVENT_TIME = "_tp_time";
 const String RESERVED_PROCESS_TIME = "_tp_process_time";

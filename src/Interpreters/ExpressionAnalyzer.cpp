@@ -57,6 +57,10 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Parsers/formatAST.h>
 
+/// proton: starts
+#include <Common/ProtonCommon.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -1583,7 +1587,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
         bool second_stage_,
         bool only_types,
         const FilterDAGInfoPtr & filter_info_,
-        const Block & source_header)
+        const Block & source_header,
+        bool emit_version)
     : first_stage(first_stage_)
     , second_stage(second_stage_)
     , need_aggregate(query_analyzer.hasAggregation())
@@ -1708,6 +1713,18 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             before_aggregation = chain.getLastActions();
 
             finalize_chain(chain);
+
+            /// proton: starts.
+            if (emit_version)
+            {
+                /// This is a very special case for `emit_version()` which is runtime calculated virtual column.
+                /// Here we are manually fixing the ActionsDAG to produce `emit_version()` column to downstream pipe.
+                /// ActionsDAG: source_header -> ... -> Aggregation -> Aggregation Output + manually inserted `emit_version()` column
+                /// During execution, we need patch the Aggregation Pipe as well to produce `emit_version()` column to match the ActionsDAG
+                ExpressionActionsChain::Step & step = chain.lastStep(query_analyzer.aggregated_columns);
+                step.actions()->addColumn({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
+            }
+            /// proton: ends
 
             if (query_analyzer.appendHaving(chain, only_types || !second_stage))
             {

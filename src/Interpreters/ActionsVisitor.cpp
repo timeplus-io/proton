@@ -42,6 +42,11 @@
 #include <Interpreters/UserDefinedExecutableFunctionFactory.h>
 
 
+/// proton: starts
+#include <DataTypes/DataTypeFactory.h>
+#include <Common/ProtonCommon.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -515,6 +520,20 @@ size_t ScopeStack::getColumnLevel(const std::string & name)
     throw Exception("Unknown identifier: " + name, ErrorCodes::UNKNOWN_IDENTIFIER);
 }
 
+/// proton: starts
+void ScopeStack::addInput(std::string name, DataTypePtr type)
+{
+    const auto & node = stack[0].actions_dag->addInput(std::move(name), type);
+    stack[0].index->addNode(&node);
+
+    for (size_t j = 1; j < stack.size(); ++j)
+    {
+        const auto & input = stack[j].actions_dag->addInput({node.column, node.result_type, node.result_name});
+        stack[j].index->addNode(&input);
+    }
+}
+/// proton: ends
+
 void ScopeStack::addColumn(ColumnWithTypeAndName column)
 {
     const auto & node = stack[0].actions_dag->addColumn(std::move(column));
@@ -795,6 +814,18 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
 
         return;
     }
+
+    /// proton: starts. Translate emit_version() function to _tp_version column
+    if (node.name == "emit_version")
+    {
+        if (!node.arguments->children.empty())
+            throw Exception("emit_version requires can't have argument", ErrorCodes::TYPE_MISMATCH);
+
+        data.addInput(ProtonConsts::RESERVED_EMIT_VERSION, DataTypeFactory::instance().get("int64"));
+
+        return;
+    }
+    /// proton: ends
 
     SetPtr prepared_set;
     if (checkFunctionIsInOrGlobalInOperator(node))

@@ -218,6 +218,7 @@ private:
     Names required_columns_after_streaming_window;
     bool last_tail = false;
     BaseScaleInterval last_interval_bs;
+    bool emit_version = false;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

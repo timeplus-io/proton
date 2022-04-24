@@ -27,10 +27,11 @@ StreamingAggregatingStep::StreamingAggregatingStep(
     bool final_,
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
-    bool storage_has_evenly_distributed_read_)
+    bool storage_has_evenly_distributed_read_,
+    bool emit_version_)
     : ITransformingStep(
         input_stream_,
-        params_.getHeader(final_, params_.group_by == StreamingAggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64),
+        params_.getHeader(final_, params_.group_by == StreamingAggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
         getTraits(),
         false)
     , params(std::move(params_))
@@ -38,6 +39,7 @@ StreamingAggregatingStep::StreamingAggregatingStep(
     , merge_threads(merge_threads_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , storage_has_evenly_distributed_read(storage_has_evenly_distributed_read_)
+    , emit_version(emit_version_)
 {
 }
 
@@ -59,7 +61,7 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
-    auto transform_params = std::make_shared<StreamingAggregatingTransformParams>(std::move(params), final);
+    auto transform_params = std::make_shared<StreamingAggregatingTransformParams>(std::move(params), final, emit_version);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)

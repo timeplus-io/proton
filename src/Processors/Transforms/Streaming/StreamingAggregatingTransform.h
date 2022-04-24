@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Compression/CompressedReadBuffer.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Streaming/StreamingAggregator.h>
 #include <Processors/IAccumulatingTransform.h>
@@ -25,18 +26,23 @@ struct StreamingAggregatingTransformParams
     StreamingAggregator & aggregator;
     bool final;
     bool only_merge = false;
+    bool emit_version = false;
+    DataTypePtr version_type;
 
-    StreamingAggregatingTransformParams(const StreamingAggregator::Params & params_, bool final_)
+    StreamingAggregatingTransformParams(const StreamingAggregator::Params & params_, bool final_, bool emit_version_)
         : params(params_)
         , aggregator_list_ptr(std::make_shared<StreamingAggregatorList>())
         , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
         , final(final_)
+        , emit_version(emit_version_)
     {
+        if (emit_version)
+            version_type = DataTypeFactory::instance().get("int64");
     }
 
-    Block getHeader() const { return aggregator.getHeader(final); }
+    Block getHeader() const { return aggregator.getHeader(final, false, emit_version); }
 
-    Block getCustomHeader(bool final_) const { return aggregator.getHeader(final_); }
+    /// Block getCustomHeader(bool final_) const { return aggregator.getHeader(final_); }
 };
 
 struct WatermarkBound
@@ -53,6 +59,7 @@ struct ManyStreamingAggregatedData
     std::vector<WatermarkBound> watermarks;
     std::atomic<UInt32> num_finished = 0;
     std::atomic<UInt32> finalizations = 0;
+    std::atomic<Int64> version = 0;
 
     std::condition_variable finalized;
     std::mutex finalizing_mutex;
@@ -97,7 +104,7 @@ private:
     void consume(Chunk chunk);
     void consumeForSession(Columns & columns);
     bool executeOrMergeColumns(Columns & columns);
-    bool needsFinalization(const Chunk & chunk) const;
+    inline bool needsFinalization(const Chunk & chunk) const;
     void finalize(ChunkInfoPtr chunk_info);
     void finalizeSession(std::vector<size_t> & sessions, Block & merged_block);
     void doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
@@ -106,12 +113,13 @@ private:
     void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
     void mergeTwoLevelStreamingWindow(
         ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
-    void mergeTwoLevelSessionWindow(
-        ManyStreamingAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & merged_block);
+    void
+    mergeTwoLevelSessionWindow(ManyStreamingAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & merged_block);
     void removeBuckets();
     void removeBucketsOfSessions(std::vector<size_t> & sessions);
     void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
     IProcessor::Status preparePushToOutput();
+    inline void emitVersion(Block & block);
 
 private:
     /// To read the data that was flushed into the temporary data file.

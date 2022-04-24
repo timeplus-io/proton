@@ -715,12 +715,13 @@ public:
             const AggregateDescriptions & aggregates,
             bool final,
             bool is_session_window = false,
-            bool is_datetime64 = false);
+            bool is_datetime64 = false,
+            bool emit_version = false);
 
 
-        Block getHeader(bool final, bool is_session_window, bool is_datetime64 = false) const
+        Block getHeader(bool final, bool is_session_window, bool is_datetime64 = false, bool emit_version = false) const
         {
-            return getHeader(src_header, intermediate_header, keys, aggregates, final, is_session_window, is_datetime64);
+            return getHeader(src_header, intermediate_header, keys, aggregates, final, is_session_window, is_datetime64, emit_version);
         }
         /// proton: ends
 
@@ -798,7 +799,7 @@ public:
 
     /// Get data structure of the result.
     /// proton: starts
-    Block getHeader(bool final, bool ignore_session_columns = false) const;
+    Block getHeader(bool final, bool ignore_session_columns = false, bool emit_version = false) const;
     /// proton: ends
 
 private:

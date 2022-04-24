@@ -28,6 +28,7 @@
 #include <Columns/ColumnDecimal.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
@@ -93,9 +94,9 @@ void StreamingAggregatedDataVariants::convertToTwoLevel()
     }
 }
 
-Block StreamingAggregator::getHeader(bool final, bool ignore_session_columns) const
+Block StreamingAggregator::getHeader(bool final, bool ignore_session_columns, bool emit_version) const
 {
-    return params.getHeader(final, ignore_session_columns ? false : params.group_by == Params::GroupBy::SESSION, params.time_col_is_datetime64);
+    return params.getHeader(final, ignore_session_columns ? false : params.group_by == Params::GroupBy::SESSION, params.time_col_is_datetime64, emit_version);
 }
 
 Block StreamingAggregator::Params::getHeader(
@@ -105,7 +106,8 @@ Block StreamingAggregator::Params::getHeader(
     const AggregateDescriptions & aggregates,
     bool final,
     bool is_session_window,
-    bool is_datetime64)
+    bool is_datetime64,
+    bool emit_version)
 {
     Block res;
 
@@ -166,6 +168,10 @@ Block StreamingAggregator::Params::getHeader(
             res.insert(1, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
         }
     }
+
+    /// Insert version
+    if (emit_version)
+        res.insert({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
 
     return materializeBlock(res);
 }

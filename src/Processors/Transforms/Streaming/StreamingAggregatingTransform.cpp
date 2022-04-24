@@ -8,6 +8,7 @@
 
 /// proton: starts. Added by proton
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Interpreters/Streaming/SessionMap.h>
 #include <Common/ProtonCommon.h>
@@ -404,8 +405,10 @@ private:
     }
 };
 
-StreamingAggregatingTransform::StreamingAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_)
-    : StreamingAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyStreamingAggregatedData>(1), 0, 1, 1)
+StreamingAggregatingTransform::StreamingAggregatingTransform(
+    Block header, StreamingAggregatingTransformParamsPtr params_)
+    : StreamingAggregatingTransform(
+        std::move(header), std::move(params_), std::make_unique<ManyStreamingAggregatedData>(1), 0, 1, 1)
 {
 }
 
@@ -550,37 +553,27 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
     if (num_rows > 0)
     {
         Columns columns = chunk.detachColumns();
-        /// proton: starts. for session window
-        if(params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
-        {
+        if (params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
             return consumeForSession(columns);
-        }
-        /// proton: ends.
 
         src_rows += num_rows;
         src_bytes += chunk.bytes();
         if (params->only_merge)
         {
-            /// proton: starts
             auto block = getInputs().front().getHeader().cloneWithColumns(columns);
-            /// proton: ends
             block = materializeBlock(block);
             if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
                 is_consume_finished = true;
         }
         else
         {
-            /// proton: starts
             if (!params->aggregator.executeOnBlock(columns, num_rows, variants, key_columns, aggregate_columns, no_more_keys))
-            /// proton: ends
                 is_consume_finished = true;
         }
     }
 
     if (needsFinalization(chunk) && params->params.group_by != StreamingAggregator::Params::GroupBy::SESSION)
-    {
         finalize(chunk.getChunkInfo());
-    }
 }
 
 bool StreamingAggregatingTransform::executeOrMergeColumns(Columns & columns)
@@ -592,9 +585,7 @@ bool StreamingAggregatingTransform::executeOrMergeColumns(Columns & columns)
 
     if (params->only_merge)
     {
-        /// proton: starts
         auto block = getInputs().front().getHeader().cloneWithColumns(columns);
-        /// proton: ends
         block = materializeBlock(block);
         return params->aggregator.mergeOnBlock(block, variants, no_more_keys);
     }
@@ -802,11 +793,7 @@ void StreamingAggregatingTransform::initGenerate()
 bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
 {
     const auto & chunk_info = chunk.getChunkInfo();
-    if (chunk_info && chunk_info->ctx.hasWatermark() != 0)
-    {
-        return true;
-    }
-    return false;
+    return (chunk_info && chunk_info->ctx.hasWatermark() != 0);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
@@ -996,8 +983,17 @@ void StreamingAggregatingTransform::initialize(ManyStreamingAggregatedDataVarian
         auto block = params->aggregator.prepareBlockAndFillWithoutKey(
             *first, params->final, first->type != StreamingAggregatedDataVariants::Type::without_key);
 
+        if (params->emit_version)
+            emitVersion(block);
+
         setCurrentChunk(convertToChunk(block), chunk_info);
     }
+}
+
+void StreamingAggregatingTransform::emitVersion(Block & block)
+{
+    Int64 version = many_data->version++;
+    block.insert({params->version_type->createColumnConst(block.rows(), version)->convertToFullColumnIfConst(), params->version_type, ProtonConsts::RESERVED_EMIT_VERSION});
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
@@ -1007,9 +1003,7 @@ void StreamingAggregatingTransform::mergeSingleLevel(
     StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
     if (first->type == StreamingAggregatedDataVariants::Type::without_key)
-    {
         return;
-    }
 
 #define M(NAME) \
     else if (first->type == StreamingAggregatedDataVariants::Type::NAME) \
@@ -1024,6 +1018,9 @@ void StreamingAggregatingTransform::mergeSingleLevel(
     auto block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
     /// Tell other variants to clean up memory arena
     many_data->arena_watermark = watermark;
+
+    if (params->emit_version)
+        emitVersion(block);
 
     setCurrentChunk(convertToChunk(block), chunk_info);
 }
@@ -1060,6 +1057,9 @@ void StreamingAggregatingTransform::mergeTwoLevelStreamingWindow(
             Block block = params->aggregator.mergeAndConvertOneBucketToBlock(*data, arena, params->final, bucket, &is_cancelled);
             if (is_cancelled)
                 return;
+
+            if (params->emit_version)
+                emitVersion(block);
 
             if (merged_block)
             {
@@ -1158,6 +1158,9 @@ void StreamingAggregatingTransform::mergeTwoLevelSessionWindow(
                         window_end_col_ptr->insert(info.win_end);
                     }
                 }
+
+                if (params->emit_version)
+                    emitVersion(merged_block);
             }
         }
     }
@@ -1169,7 +1172,7 @@ void StreamingAggregatingTransform::mergeTwoLevelSessionWindow(
         merged_block.insert(1, {std::move(window_start_col_ptr), window_start_col.type, window_start_col.name});
     }
 
-    if (final_block.rows()>0)
+    if (final_block.rows() > 0)
     {
         assertBlocksHaveEqualStructure(merged_block, final_block, "merging buckets for streaming two level hashtable");
         for (size_t i = 0, size = final_block.columns(); i < size; ++i)
@@ -1179,7 +1182,8 @@ void StreamingAggregatingTransform::mergeTwoLevelSessionWindow(
             mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
             final_block.getByPosition(i).column = std::move(mutable_column);
         }
-    } else
+    }
+    else
         final_block = std::move(merged_block);
 }
 

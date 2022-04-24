@@ -86,6 +86,10 @@ struct ScopeStack : WithContext
 
     size_t getColumnLevel(const std::string & name);
 
+    /// proton: starts
+    void addInput(std::string name, DataTypePtr type);
+    /// proton: ends
+
     void addColumn(ColumnWithTypeAndName column);
     void addAlias(const std::string & name, std::string alias);
     void addArrayJoin(const std::string & source_name, std::string result_name);
@@ -151,6 +155,13 @@ public:
         {
             actions_stack.addColumn(std::move(column));
         }
+
+        /// proton: starts
+        void addInput(String name, DataTypePtr data_type)
+        {
+            actions_stack.addInput(std::move(name), std::move(data_type));
+        }
+        /// proton: ends
 
         void addAlias(const std::string & name, std::string alias)
         {
