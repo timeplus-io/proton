@@ -1,0 +1,31 @@
+name: UDFDockerImage
+
+on:
+  workflow_dispatch:
+    # Inputs the workflow accepts.
+    inputs:
+      tag:
+        # Friendly description to be shown in the UI instead of 'name'
+        description: "Proton UDF Docker Image Tag"
+        # Default value if no value is explicitly provided
+        default: "timeplus/proton:udf"
+        # Input has to be provided for the workflow to run
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: ./docker/udf
+          push: true
+          tags: ${{github.event.inputs.tag}}:$(date +%s)
