@@ -172,6 +172,7 @@ private:
 
     /// proton: starts
     void executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_) const;
+    void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;

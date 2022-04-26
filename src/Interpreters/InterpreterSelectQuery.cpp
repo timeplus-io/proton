@@ -6,6 +6,7 @@
 #include <Interpreters/Streaming/StreamingEmitInterpreter.h>
 #include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
+#include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
@@ -2523,6 +2524,9 @@ void InterpreterSelectQuery::executeOrderOptimized(QueryPlan & query_plan, Input
 
 void InterpreterSelectQuery::executeOrder(QueryPlan & query_plan, InputOrderInfoPtr input_sorting_info)
 {
+    if (isStreaming())
+        return executeStreamingOrder(query_plan);
+
     auto & query = getSelectQuery();
     SortDescription output_order_descr = getSortDescription(query, context);
     UInt64 limit = getLimitForSorting(query, context);
@@ -2807,6 +2811,31 @@ void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const Base
     query_plan.addStep(std::move(proc_filter_step));
 }
 
+void InterpreterSelectQuery::executeStreamingOrder(QueryPlan & query_plan)
+{
+    const Settings & settings = context->getSettingsRef();
+
+    auto & query = getSelectQuery();
+    SortDescription output_order_descr = getSortDescription(query, context);
+    UInt64 limit = getLimitForSorting(query, context);
+
+    /// Merge the sorted blocks.
+    auto sorting_step = std::make_unique<StreamingSortingStep>(
+        query_plan.getCurrentDataStream(),
+        output_order_descr,
+        settings.max_block_size,
+        limit,
+        SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode),
+        settings.max_bytes_before_remerge_sort,
+        settings.remerge_sort_lowered_memory_bytes_ratio,
+        settings.max_bytes_before_external_sort,
+        context->getTemporaryVolume(),
+        settings.min_free_disk_space_for_temporary_data);
+
+    sorting_step->setStepDescription("Streaming Sorting for ORDER BY");
+    query_plan.addStep(std::move(sorting_step));
+}
+
 void InterpreterSelectQuery::executeStreamingAggregation(
     QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final)
 {
@@ -3043,9 +3072,6 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 {
     if (isStreaming())
     {
-        if (analysis_result.has_order_by)
-            throw Exception("Streaming query doesn't support ORDER BY", ErrorCodes::NOT_IMPLEMENTED);
-
         if (analysis_result.hasLimitBy())
             throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
 
