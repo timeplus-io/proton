@@ -151,18 +151,29 @@ namespace
 
         bool emit_version = false;
 
+        static bool ignoreSubquery(const ASTPtr & /*node*/, const ASTPtr & child)
+        {
+            /// Don't go to FROM, JOIN, UNION since they are already handled recursively
+            if (child->as<ASTTableExpression>() ||
+                child->as<ASTSelectQuery>())
+                return false;
+
+            return true;
+        }
+
     private:
         bool streaming;
 
         static std::unordered_map<String, String> func_map;
     };
 
+
     std::unordered_map<String, String> StreamingFunctionData::func_map =  {
         {"neighbor", "__streaming_neighbor"},
         {"now64", "__streaming_now64"},
         {"now", "__streaming_now"},
     };
-    using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData>, false>;
+    using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
 }
 /// proton: ends.
 
