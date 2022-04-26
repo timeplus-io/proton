@@ -28,4 +28,4 @@ jobs:
         with:
           context: ./docker/udf
           push: true
-          tags: ${{github.event.inputs.tag}}:$(date +%s)
+          tags: ${{github.event.inputs.tag}}
