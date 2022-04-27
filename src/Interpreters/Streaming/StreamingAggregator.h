@@ -808,13 +808,15 @@ private:
     friend class ConvertingAggregatedToChunksTransform;
     friend class ConvertingAggregatedToChunksSource;
     friend class AggregatingInOrderTransform;
+
     /// proton: starts
     friend class StreamingConvertingAggregatedToChunksTransform;
     friend class StreamingConvertingAggregatedToChunksSource;
     friend class StreamingAggregatingTransform;
-    /// proton: ends
+    friend class SessionAggregatingTransform;
+    friend class GlobalAggregatingTransform;
+    friend class TumbleHopAggregatingTransform;
 
-    /// proton: starts
     SessionHashMap session_map;
     std::vector<size_t> sessions_to_emit;
     Int64 max_event_ts = 0;

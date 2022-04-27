@@ -1,5 +1,5 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
-#include <Processors/Transforms/AggregatingTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/FilterDescription.h>

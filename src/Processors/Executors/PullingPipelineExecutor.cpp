@@ -2,7 +2,7 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/Formats/PullingOutputFormat.h>
 #include <QueryPipeline/QueryPipeline.h>
-#include <Processors/Transforms/AggregatingTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 #include <Processors/Sources/NullSource.h>
 
 namespace DB

@@ -3,6 +3,7 @@
 #include <Core/SortDescription.h>
 #include <Interpreters/Aggregator.h>
 #include <Processors/ISimpleTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
 

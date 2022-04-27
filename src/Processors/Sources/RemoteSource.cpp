@@ -1,7 +1,7 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <QueryPipeline/RemoteQueryExecutor.h>
 #include <QueryPipeline/RemoteQueryExecutorReadContext.h>
-#include <Processors/Transforms/AggregatingTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 namespace DB

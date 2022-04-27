@@ -1,6 +1,6 @@
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
-#include <Processors/Transforms/AggregatingTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
 {

@@ -1,13 +1,11 @@
 #pragma once
 
-#include <Compression/CompressedReadBuffer.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Streaming/StreamingAggregator.h>
-#include <Processors/IAccumulatingTransform.h>
+/// #include <Processors/IAccumulatingTransform.h>
+#include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
+#include <DataTypes/DataTypeFactory.h>
 
-/// proton: starts. Add by proton
 namespace DB
 {
 using StreamingAggregatorList = std::list<StreamingAggregator>;
@@ -41,8 +39,6 @@ struct StreamingAggregatingTransformParams
     }
 
     Block getHeader() const { return aggregator.getHeader(final, false, emit_version); }
-
-    /// Block getCustomHeader(bool final_) const { return aggregator.getHeader(final_); }
 };
 
 struct WatermarkBound
@@ -79,10 +75,10 @@ using StreamingAggregatingTransformParamsPtr = std::shared_ptr<StreamingAggregat
   * It aggregate streams of blocks in memory and finalize (project) intermediate
   * results periodically or on demand
   */
-class StreamingAggregatingTransform final : public IProcessor
+class StreamingAggregatingTransform : public IProcessor
 {
 public:
-    StreamingAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_);
+    StreamingAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_, const String & log_name);
 
     /// For Parallel aggregating.
     StreamingAggregatingTransform(
@@ -91,42 +87,35 @@ public:
         ManyStreamingAggregatedDataPtr many_data,
         size_t current_variant,
         size_t max_threads,
-        size_t temporary_data_merge_threads);
+        size_t temporary_data_merge_threads,
+        const String & log_name);
 
     ~StreamingAggregatingTransform() override;
 
-    String getName() const override { return "StreamingAggregatingTransform"; }
     Status prepare() override;
     void work() override;
     Processors expandPipeline() override;
 
 private:
-    void consume(Chunk chunk);
-    void consumeForSession(Columns & columns);
-    bool executeOrMergeColumns(Columns & columns);
-    inline bool needsFinalization(const Chunk & chunk) const;
-    void finalize(ChunkInfoPtr chunk_info);
-    void finalizeSession(std::vector<size_t> & sessions, Block & merged_block);
-    void doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
-    void initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
-    void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
-    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
-    void mergeTwoLevelStreamingWindow(
-        ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
-    void
-    mergeTwoLevelSessionWindow(ManyStreamingAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & merged_block);
-    void removeBuckets();
-    void removeBucketsOfSessions(std::vector<size_t> & sessions);
-    void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
-    IProcessor::Status preparePushToOutput();
-    inline void emitVersion(Block & block);
+    virtual void consume(Chunk chunk);
 
-private:
+    inline bool needsFinalization(const Chunk & chunk) const;
+    virtual void finalize(ChunkInfoPtr) { }
+
+    inline IProcessor::Status preparePushToOutput();
+    void initGenerate();
+
+protected:
+    void emitVersion(Block & block);
+    bool executeOrMergeColumns(Columns & columns);
+    void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
+
+protected:
     /// To read the data that was flushed into the temporary data file.
     Processors processors;
 
     StreamingAggregatingTransformParamsPtr params;
-    Poco::Logger * log = &Poco::Logger::get("StreamingAggregatingTransform");
+    Poco::Logger * log;
 
     ColumnRawPtrs key_columns;
     Aggregator::AggregateColumns aggregate_columns;
@@ -157,8 +146,6 @@ private:
 
     Chunk current_chunk;
     bool read_current_chunk = false;
-
-    void initGenerate();
 
     /// Aggregated result which is pushed to downstream output
     Chunk current_chunk_aggregated;

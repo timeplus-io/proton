@@ -1,10 +1,13 @@
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/Formats/LazyOutputFormat.h>
-#include <Processors/Transforms/AggregatingTransform.h>
+#include <Processors/Transforms/convertToChunk.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/QueryPipeline.h>
 #include <Common/setThreadName.h>
+#include <Common/ThreadPool.h>
+
+#include <Poco/Event.h>
 
 namespace DB
 {

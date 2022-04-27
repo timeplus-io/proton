@@ -3131,7 +3131,7 @@ void StreamingAggregator::removeBucketsOfSession(StreamingAggregatedDataVariants
 
 void StreamingAggregator::clearInfoOfEmitSessions()
 {
-    const_cast<SessionHashMap &>(session_map).removeSessionInfo(sessions_to_emit);
+    session_map.removeSessionInfo(sessions_to_emit);
     sessions_to_emit.clear();
 }
 

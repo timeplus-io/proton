@@ -1,9 +1,11 @@
-#include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
+#include "StreamingAggregatingStep.h"
+
+#include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/TumbleHopAggregatingTransform.h>
+
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
-/// proton: starts
-#include <Processors/Transforms/Streaming/StreamingAggregatingTransform.h>
-/// proton: ends
 
 namespace DB
 {
@@ -31,7 +33,8 @@ StreamingAggregatingStep::StreamingAggregatingStep(
     bool emit_version_)
     : ITransformingStep(
         input_stream_,
-        params_.getHeader(final_, params_.group_by == StreamingAggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
+        params_.getHeader(
+            final_, params_.group_by == StreamingAggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
         getTraits(),
         false)
     , params(std::move(params_))
@@ -74,8 +77,16 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
 
         size_t counter = 0;
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<StreamingAggregatingTransform>(
-                header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_START
+                || transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_END)
+                return std::make_shared<TumbleHopAggregatingTransform>(
+                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            else if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
+                return std::make_shared<SessionAggregatingTransform>(
+                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
+            else
+                return std::make_shared<GlobalAggregatingTransform>(
+                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
         });
 
         pipeline.resize(1);
@@ -87,7 +98,13 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
         pipeline.resize(1);
 
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<StreamingAggregatingTransform>(header, transform_params);
+            if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_START
+                || transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_END)
+                return std::make_shared<TumbleHopAggregatingTransform>(header, transform_params);
+            else if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
+                return std::make_shared<SessionAggregatingTransform>(header, transform_params);
+            else
+                return std::make_shared<GlobalAggregatingTransform>(header, transform_params);
         });
 
         aggregating = collector.detachProcessors(0);
