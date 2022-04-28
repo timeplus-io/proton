@@ -135,9 +135,7 @@ def scan_tests_file_path(tests_file_path):
                 test_suite_name = test_suite.get("test_suite_name")
                 test_suite_tag = test_suite.get("tag")
                 if test_suite_name == None or test_suite_tag == "skip":
-                    logger.debug(
-                        f"test_suite_name is vacant or test_suite_tag == skip and ignore this json file"
-                    )
+                    logger.debug(f"test_suite_name is vacant or test_suite_tag == skip and ignore this json file")
                     pass
                 else:
                     logger.debug(
@@ -161,16 +159,13 @@ def scan_tests_file_path(tests_file_path):
         "test_suites_selected": test_suites_selected,
     }
 
-
 def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=None):
     test_suites = []
     test_suite_names_selected = []
     test_suites_selected = []
     test_suite_set_dict = {}
-    test_suites_selected_sets = []  # a list of tuple of (test_suite, test_result_queue)
-    test_suite_query_reulst_queue_list = (
-        []
-    )  # a list of map of test_sutie_name and test_suite_query_result_queue
+    test_suites_selected_sets = [] # a list of tuple of (test_suite, test_result_queue)
+    test_suite_query_reulst_queue_list = [] # a list of map of test_sutie_name and test_suite_query_result_queue
     proton_setting = os.getenv("PROTON_SETTING", "default")
 
     root_logger = logging.getLogger()
@@ -186,52 +181,52 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
             configs = json.load(f)
         logger.debug(f"rockets_context: config reading from config files: {config}")
         config = configs.get(proton_setting)
-        logger.debug(f"setting = {proton_setting},config = {config}")
+        logger.debug(f"setting = {proton_setting},config = {config}")       
 
     if config == None:
         raise Exception("No config env vars nor config file")
-
+    
+    
     res_scan_tests_file_path = scan_tests_file_path(tests_file_path)
     # logger.debug(f"res_scan_tests_file_path = {res_scan_tests_file_path}")
     test_suite_names_selected = res_scan_tests_file_path.get(
         "test_suite_names_selected"
     )
     test_suites_selected = res_scan_tests_file_path.get("test_suites_selected")
-    logger.debug(f"test_suite_names_selected = {test_suite_names_selected}")
+    logger.debug(f"test_suite_names_selected = {test_suite_names_selected}") 
 
-    test_suite_run_ctl_queue = (
-        mp.JoinableQueue()
-    )  # queue for rockets_run and test_sute_runner ctrl communication
-    test_suite_result_done_queue = (
-        mp.JoinableQueue()
-    )  # queue for rockets_run get test_suite_result_summary that complete query_results_done test_suite_runner
+    test_suite_run_ctl_queue = mp.JoinableQueue() # queue for rockets_run and test_sute_runner ctrl communication
+    test_suite_result_done_queue = mp.JoinableQueue() # queue for rockets_run get test_suite_result_summary that complete query_results_done test_suite_runner 
 
     for suite in test_suites_selected:
 
         test_suite_name = suite.get("test_suite_name")
 
+
         query_results_queue = mp.JoinableQueue()
         test_suite_query_reulst_queue_list.append(
-            {test_suite_name: query_results_queue}
+            {
+                test_suite_name: query_results_queue
+            }
         )
-
-        # test_suite_run_ctl_queue = mp.JoinableQueue()
-        # test_suite_result_queue = mp.JoinableQueue()
-        # query_result_queue = mp.Queue() # create result queue for each test_sute_run and query_execute pair
+        
+        #test_suite_run_ctl_queue = mp.JoinableQueue()
+        #test_suite_result_queue = mp.JoinableQueue()
+        #query_result_queue = mp.Queue() # create result queue for each test_sute_run and query_execute pair
         alive = mp.Value("b", True)
 
         test_suite_set_dict = {
-            "test_suite_name": test_suite_name,
+            "test_suite_name":test_suite_name,
             "test_suite": suite,
             "test_suite_run_ctl_queue": test_suite_run_ctl_queue,
             "test_suite_result_done_queue": test_suite_result_done_queue,
-            # "query_exe_parent_conn": query_exe_parent_conn,
-            # "query_exe_child_conn": query_exe_child_conn,
+            #"query_exe_parent_conn": query_exe_parent_conn,
+            #"query_exe_child_conn": query_exe_child_conn,
             "query_results_queue": query_results_queue,
             "alive": alive,
-            "logging_level": logging_level,
+            "logging_level": logging_level
         }
-
+        
         test_suites_selected_sets.append(test_suite_set_dict)
 
     # tests = test_suite.get("tests")
@@ -240,18 +235,20 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     # query_exe_queue = mp.Queue() #control path queue for query statements, rockets_run pushes statements into the queue.
     # query_results_queue = (
     #    mp.Queue()
-    # )  # data path queue for query results, query_execute and threads created by query_execute process pushed query results into this queue.
+    #)  # data path queue for query results, query_execute and threads created by query_execute process pushed query results into this queue.
 
     # query_exe_client = mp.Process(target=query_execute_new, args=(config, query_exe_queue, query_results_queue))
+    
+
 
     rockets_context = {
         "config": config,
         "test_suite_run_ctl_queue": test_suite_run_ctl_queue,
         "test_suite_result_done_queue": test_suite_result_done_queue,
-        "test_suite_query_result_queue_list": test_suite_query_reulst_queue_list,
+        "test_suite_query_result_queue_list": test_suite_query_reulst_queue_list, 
         "test_suite_names_selected": test_suite_names_selected,
         "test_suites_selected_sets": test_suites_selected_sets,
-        "docker_compose_file": docker_compose_file,
+        "docker_compose_file": docker_compose_file
     }
     """
     rockets_context = {
@@ -267,6 +264,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     return rockets_context
 
 
+
 def tuple_2_list(tuple):
     # transfer tuple to jason string
     _list = []
@@ -276,6 +274,9 @@ def tuple_2_list(tuple):
         else:
             _list.append(str(element))
     return _list
+
+
+
 
 
 def kill_query(proton_client, query_2_kill, logging_level="INFO"):
@@ -307,9 +308,7 @@ def kill_query(proton_client, query_2_kill, logging_level="INFO"):
         time.sleep(0.2)
         kill_res = proton_client.execute(kill_sql)
         logger.debug(f"kill_query: kill_res = {kill_res} was called")
-    logger.info(
-        f"kill query_id = {query_2_kill}, kill_sql = {kill_sql} cmd executed and success."
-    )
+    logger.info(f"kill query_id = {query_2_kill}, kill_sql = {kill_sql} cmd executed and success.")
 
 
 def request_rest(
@@ -370,21 +369,12 @@ def is_json(string):
     except (ValueError) as error:
         return False
 
-
 def exec_command(command, timeout=2):
     logger = mp.get_logger()
-    ret = subprocess.run(
-        command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-        timeout=timeout,
-    )
+    ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=timeout)
     logger.debug(f"ret of subprocess.run({command}) = {ret}")
 
     return ret.returncode
-
 
 def query_run_exec(statement_2_run, config):
     logger = mp.get_logger()
@@ -410,11 +400,11 @@ def query_run_exec(statement_2_run, config):
     proton_server_container_name = config.get("proton_server_container_name")
     command = f'docker exec {proton_server_container_name} proton-client -u {user} --password {password} --query="{query}"'
     logger.debug(f"command = {command}")
-    try:
+    try: 
         if depends_on_stream != None:
             proton_server = config.get("proton_server")
             proton_server_native_port = config.get("proton_server_native_port")
-            settings = {"max_block_size": 100000}
+            settings = {"max_block_size": 100000}            
             logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
             retry = 500
             pyclient = Client(
@@ -423,19 +413,18 @@ def query_run_exec(statement_2_run, config):
             while not table_exist_py(pyclient, depends_on_stream):
                 time.sleep(0.01)
                 retry -= 1
-            if retry > 0:
+            if retry >0:
                 logger.debug(f"depends_on_stream exists.")
             else:
                 logger.debug(f"depends_on_stream does not exist, raise exception")
-                raise Exception(
-                    f"depends_on_stream = {depends_on_stream} for input not found"
-                )
-
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")             
+        
+    
         query_result_str = exec_command(command)
         query_end_time_str = str(datetime.datetime.now())
         query_results = {
             "query_id": query_id,
-            "query_client": query_client,
+            "query_client":query_client,
             "query": query,
             "rest_request": rest_request,
             "query_type": query_type,
@@ -444,13 +433,13 @@ def query_run_exec(statement_2_run, config):
             "query_end": query_end_time_str,
             "query_result_column_types": query_result_column_types,
             "query_result": query_result_str,
-        }
-    except (BaseException) as error:
+        }        
+    except(BaseException) as error:
         logger.debug(f"exception, error = {error}")
         query_end_time_str = str(datetime.datetime.now())
         query_results = {
             "query_id": query_id,
-            "query_client": query_client,
+            "query_client":query_client,
             "query": query,
             "rest_request": rest_request,
             "query_type": query_type,
@@ -460,12 +449,13 @@ def query_run_exec(statement_2_run, config):
             "query_result": f"error_code:{error.code}",
         }
         logger.debug(
-            "db exception, none-cancel query_results: {}".format(query_results)
+            "db exception, none-cancel query_results: {}".format(
+                query_results
+            )
         )
     finally:
         logger.debug(f"query_results = {query_results}")
         return query_results
-
 
 def query_run_rest(rest_setting, statement_2_run):
     logger = mp.get_logger()
@@ -499,32 +489,27 @@ def query_run_rest(rest_setting, statement_2_run):
         body = statement_2_run.get("body")
         params = statement_2_run.get("params")
         depends_on = statement_2_run.get("depends_on")
-
+        
         if depends_on_stream != None:
             logger.debug(f"depends_on_stream = {depends_on_stream}, checking...")
             retry = 500
             while not table_exist(table_ddl_url, depends_on_stream):
                 time.sleep(0.01)
                 retry -= 1
-            if retry > 0:
+            if retry >0:
                 logger.debug(f"depends_on_stream exists.")
             else:
                 logger.debug(f"depends_on_stream does not exist, raise exception")
-                raise Exception(
-                    f"depends_on_stream = {depends_on_stream} for input not found"
-                )
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")         
         # if params == None: params = rest_setting.get("params")
 
         if depends_on != None:
             depends_on_exists = False
             depends_on_exists = query_exists(depends_on, query_url)
             if not depends_on_exists:
-                logger.debug(
-                    f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
-                )
-                raise Exception(
-                    f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
-                )
+                logger.debug(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception")
+                raise Exception(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception")         
+            
 
         if rest_type == "raw":
             url = host_url + query_url
@@ -582,7 +567,9 @@ def query_run_rest(rest_setting, statement_2_run):
             "query_result": f"error_code:{error.code}",
         }
         logger.debug(
-            "db exception, none-cancel query_results: {}".format(query_results)
+            "db exception, none-cancel query_results: {}".format(
+                query_results
+            )
         )
     finally:
         logger.debug(f"query_results = {query_results}")
@@ -644,9 +631,7 @@ def query_run_py(
         query = statement_2_run.get("query")
         query_id = str(statement_2_run.get("query_id"))
         query_type = statement_2_run.get("query_type")
-        iter_wait = statement_2_run.get(
-            "iter_wait"
-        )  # for some slow table query like test_id=61 in materialized_view
+        iter_wait = statement_2_run.get("iter_wait") #for some slow table query like test_id=61 in materialized_view
         run_mode = statement_2_run.get("run_mode")
         depends_on_stream = statement_2_run.get("depends_on_stream")
         depends_on = statement_2_run.get("depends_on")
@@ -674,24 +659,19 @@ def query_run_py(
                 logger.debug(
                     f"check depends_on_stream 500 times and depends_on_stream={depends_on_stream} does not exist"
                 )
-                raise Exception(
-                    f"depends_on_stream = {depends_on_stream} for input not found"
-                )
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")                
             else:
                 logger.debug(
                     f"check depends_on_stream, depends_on_stream={depends_on_stream} found."
                 )
-
+        
         if depends_on != None:
             depends_on_exists = False
-            depends_on_exists = query_exists(depends_on, client=pyclient)
+            depends_on_exists = query_exists(depends_on, client = pyclient)
             if not depends_on_exists:
-                logger.debug(
-                    f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
-                )
-                raise Exception(
-                    f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
-                )
+                logger.debug(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception")
+                raise Exception(f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception") 
+        
 
         query_result_iter = pyclient.execute_iter(
             query, with_column_types=True, query_id=query_id, settings=settings
@@ -701,14 +681,10 @@ def query_run_py(
             f"query_run_py: query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
         )
 
-        if (query_type != None and query_type == "table") and (iter_wait != None):
+        if (query_type != None and query_type == 'table') and (iter_wait != None):
             iter_wait = int(iter_wait)
-            time.sleep(
-                iter_wait
-            )  # sleep for materialized_view test_id = 61, the execute_iter is async way, if too quick to start to iter, wait for 1s until query is setup, need to observe
-            logger.debug(
-                f"query_type = {query_type}, sleep for iter_wait = {iter_wait}s"
-            )
+            time.sleep(iter_wait) # sleep for materialized_view test_id = 61, the execute_iter is async way, if too quick to start to iter, wait for 1s until query is setup, need to observe
+            logger.debug(f"query_type = {query_type}, sleep for iter_wait = {iter_wait}s")
         i = 0
         for element in query_result_iter:
             logger.debug(
@@ -1007,7 +983,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                 query_client = statement_2_run.get("client")
                 query_type = statement_2_run.get("query_type")
                 user_name = statement_2_run.get("user")
-                password = statement_2_run.get("password")
+                password = statement_2_run.get("password")                
                 terminate = statement_2_run.get("terminate")
                 if terminate == "auto":
                     auto_terminate_queries.append(statement_2_run)
@@ -1062,11 +1038,9 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         query_results = query_run_rest(rest_setting, statement_2_run)
                         logger.debug(f"query_id = {query_id}, query_run_rest is called")
                     elif query_client != None and query_client == "exec":
-                        logger.debug(
-                            f"query_run_exec run local for query_id = {query_id}..."
-                        )
+                        logger.debug(f"query_run_exec run local for query_id = {query_id}...")
                         query_results = query_run_exec(statement_2_run, config)
-                        logger.debug(f"query_id = {query_id}, query_run_exec is called")
+                        logger.debug(f"query_id = {query_id}, query_run_exec is called")                        
                     else:
                         logger.debug(
                             f"query_execute: query_run_py run local for query_id = {query_id}..."
@@ -1083,15 +1057,8 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         logger.debug(f"query_id = {query_id}, to call query_run_py")
 
                         if user_name != None and password != None:
-                            statement_client = Client(
-                                host=proton_server,
-                                port=proton_server_native_port,
-                                user=user_name,
-                                password=password,
-                            )
-                            logger.debug(
-                                f"statement_client=Client(host={proton_server}, port={proton_server_native_port}, user={user_name}, password={password})"
-                            )
+                            statement_client = Client(host=proton_server, port=proton_server_native_port, user = user_name, password = password)
+                            logger.debug(f"statement_client=Client(host={proton_server}, port={proton_server_native_port}, user={user_name}, password={password})")
                         else:
                             statement_client = client
                             logger.debug(f"statement_client=client")
@@ -1150,10 +1117,10 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                 message_2_send = "case_result_done"
                 # query_exe_queue.put(message_2_send)
                 child_conn.send(message_2_send)
-                query_run_count -= 1
+                query_run_count -= 1                  
             query_run_count = query_run_count - 1
         finally:
-            print()  # todo: some logic here for handling.
+            print()  # todo: some logic here for handling.              
 
             # if query_proc != None:
             #    query_procs.append(
@@ -1286,6 +1253,7 @@ def input_walk_through_pyclient(proton_client, inputs, table_schema):
     return input_results
 
 
+
 def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
     logger = mp.get_logger()
     query_id = str(query_id)
@@ -1337,9 +1305,7 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
         return False
 
 
-def query_exists(
-    query_id, query_url=None, client=None
-):  # todo: adopt query_id_exists_py and query_id_exists_rest
+def query_exists(query_id, query_url = None, client = None): #todo: adopt query_id_exists_py and query_id_exists_rest
     logger = mp.get_logger()
     query_id_list = []
     query_exists = False
@@ -1350,28 +1316,20 @@ def query_exists(
             try:
                 query_exists = query_id_exists_rest(query_url, query_id)
             except (BaseException) as error:
-                logger.debug(
-                    f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}"
-                )
-                raise Exception(
-                    f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}"
-                )
+                logger.debug(f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}")
+                raise Exception(f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}")   
         else:
             try:
                 query_exists = query_id_exists_py(client, query_id)
             except (BaseException) as error:
-                logger.debug(
-                    f"query_exist exception, query_id = {query_id}, error = {error}"
-                )
-                raise Exception(
-                    f"query_exist exception, query_id = {query_id}, error = {error}"
-                )
+                logger.debug(f"query_exist exception, query_id = {query_id}, error = {error}")
+                raise Exception(f"query_exist exception, query_id = {query_id}, error = {error}")       
         if query_exists:
             return True
         else:
             time.sleep(0.05)
             retry -= 1
-
+    
     if query_exists:
         return True
     else:
@@ -1413,15 +1371,11 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             while not table_exist(table_ddl_url, depends_on_stream):
                 time.sleep(0.01)
                 retry -= 1
-            if retry > 0:
+            if retry >0:
                 logger.debug(f"depends_on_stream exists.")
             else:
-                logger.debug(
-                    f"depends_on_stream = {depends_on_stream} does not exist, raise exception"
-                )
-                raise Exception(
-                    f"depends_on_stream = {depends_on_stream} for input not found"
-                )
+                logger.debug(f"depends_on_stream = {depends_on_stream} does not exist, raise exception")
+                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")             
 
         depends_on = input_batch.get("depends_on")
         depends_on_exists = False
@@ -1430,11 +1384,9 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             logger.debug(f"depends_on = {depends_on}, checking...")
             depends_on_exists = query_exists(depends_on, query_url)
             if not depends_on_exists:
-                logger.debug(
-                    f"depends_on = {depends_on} for input does not exist, raise exception"
-                )
-                raise Exception(f"depends_on = {depends_on} for input not found")
-            """
+                logger.debug(f"depends_on = {depends_on} for input does not exist, raise exception")
+                raise Exception(f"depends_on = {depends_on} for input not found") 
+            '''
             query_body = json.dumps({"query": "select query_id from system.processes"})
             res = requests.post(query_url, data=query_body)
             res_json = res.json()
@@ -1459,7 +1411,7 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
                     res_json = res.json()
                     query_id_list = res_json.get("data")
                     logger.debug(f"query_id_list: {query_id_list}")
-            """
+            '''
         if wait != None:
             logger.debug(f"wait for {wait}s to start inputs.")
             wait = int(wait)
@@ -1514,10 +1466,12 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             f"input_batch_rest: response of requests.post of input_url = {input_url}, data = {input_rest_body} request res = {res}"
         )
 
+      
         assert res.status_code == 200
         input_batch_record["input_batch"] = input_rest_body_data
         input_batch_record["timestamp"] = str(datetime.datetime.now())
         logger.debug(f"input_batch done succesfully...")
+        
 
         """
         if res.status_code != 200:
@@ -1551,16 +1505,14 @@ def input_walk_through_rest(
     sleep_after_inputs=1.5,  # todo: remove all the sleep (current stable set wait_before_inputs=1, sleep_after_inputs=1.5)
 ):
     logger = mp.get_logger()
-    logger.debug(
-        f"running here, rest_setting = {rest_setting}, table_schemas = {table_schemas}"
-    )
+    logger.debug(f"running here, rest_setting = {rest_setting}, table_schemas = {table_schemas}")
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
     logger.debug(f"running here.")
     time.sleep(wait_before_inputs)
     input_url = rest_setting.get("ingest_url")
     inputs_record = []
-
+    
     try:
         for batch in inputs:
             table_name = batch.get("table_name")
@@ -1621,9 +1573,7 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
                 f"table_list is [], table {table_name} does not exit, drop table {table_name} bypass"
             )
     else:
-        raise Exception(
-            f"table list rest access failed,requests.get({table_ddl_url}) status code={res.status_code}, res_json = {res.json()}"
-        )
+        raise Exception(f"table list rest access failed,requests.get({table_ddl_url}) status code={res.status_code}, res_json = {res.json()}")
 
 
 def table_exist_py(pyclient, table_name):
@@ -1641,9 +1591,7 @@ def table_exist_py(pyclient, table_name):
 
 def table_exist(table_ddl_url, table_name):
     logger = mp.get_logger()
-    pyclient = Client(
-        "localhost", port=8463
-    )  # use table_exist_py as an backup in case rest is broken
+    pyclient = Client('localhost', port=8463) # use table_exist_py as an backup in case rest is broken
     logger.debug(
         f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}"
     )
@@ -1664,16 +1612,12 @@ def table_exist(table_ddl_url, table_name):
             return False
         else:
             if table_exist_py(pyclient, table_name):
-                return True
+                return True            
             logger.debug("table_list is [] table_name = {table_name} does not exist.")
             return False
     else:
-        logger.debug(
-            f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code},res_json = {res.json()}"
-        )
-        raise Exception(
-            f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code}, res_json = {res.json()}"
-        )
+        logger.debug(f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code},res_json = {res.json()}")
+        raise Exception(f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code}, res_json = {res.json()}")
 
 
 def create_table_rest(table_ddl_url, table_schema, retry=3):
@@ -1751,8 +1695,7 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
     # time.sleep(1) # wait the table creation completed
     return res
 
-
-"""
+'''
 def compose_up(compose_file_path):
     logger.debug(f"compose_up: compose_file_path = {compose_file_path}")
     try:
@@ -1762,8 +1705,7 @@ def compose_up(compose_file_path):
         return True
     except (subprocess.CalledProcessError) as Error:
         return False
-"""
-
+'''
 
 def env_health_check(health_check_url):
     try:
@@ -1851,7 +1793,7 @@ def table_exist_py(pyclient, table_name):
 
 def test_suite_env_setup(client, rest_setting, test_suite_config):
     logger = mp.get_logger()
-
+    
     if test_suite_config == None:
         return []
     tables_setup = []
@@ -1871,15 +1813,11 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
         else:
             if table_type == "table":
                 drop_table_res = drop_table_if_exist_rest(table_ddl_url, table_name)
-                logger.debug(
-                    f"drop_table_if_exist_rest({table_ddl_url}, {table_name}) = {drop_table_res}"
-                )
+                logger.debug(f"drop_table_if_exist_rest({table_ddl_url}, {table_name}) = {drop_table_res}")
                 tables_setup.append(table_name)
             elif table_type == "view":
                 drop_view_res = drop_view_if_exist_py(client, table_name)
-                logger.debug(
-                    f"drop_view_if_exist_py(clieent, {table_name}) = {drop_view_res}"
-                )
+                logger.debug(f"drop_view_if_exist_py(clieent, {table_name}) = {drop_view_res}")
                 tables_setup.append(table_name)
 
     for table_schema in table_schemas:
@@ -1917,9 +1855,9 @@ def env_setup(
     health_url = rest_setting.get("health_check_url")
     logger.debug(f"env_setup: health_url = {health_url}")
     tables_cleaned = []
-    env_docker_compose_res = True  # todo: remove this return value due to compose_up is done in ci_runner starting phase
+    env_docker_compose_res = True # todo: remove this return value due to compose_up is done in ci_runner starting phase
 
-    """
+    '''
     if ci_mode == "local":
         env_docker_compose_res = True
         logger.info(f"Bypass docker compose up.")
@@ -1943,7 +1881,7 @@ def env_setup(
             raise Exception("Env health check failure.")
     else:
         raise Exception("Env docker compose up failure.")
-    """
+    '''
     env_health_check_res = env_health_check(health_url)
     logger.info(f"env_setup: env_health_check_res: {env_health_check_res}")
     retry = 10
@@ -1956,12 +1894,13 @@ def env_setup(
     if env_health_check_res == False:
         raise Exception("Env health check failure.")
 
+
     if ci_mode == "github":
         time.sleep(
             10
         )  # health check rest is not accurate, wait after docker compsoe up under github mode, remove later when it's fixed.
 
-    # clean_all_res = clean_all() #todl: drop all the streams and views
+    #clean_all_res = clean_all() #todl: drop all the streams and views
 
     return {
         "env_docker_compose_res": env_docker_compose_res,
@@ -2150,9 +2089,7 @@ def test_case_collect(test_suite, tests_2_run, test_ids_set):
     return test_run_list
 
 
-def test_suite_run(
-    config, test_suite_run_ctl_queue, test_suite_result_done_queue, test_suite_set_dict
-):
+def test_suite_run(config, test_suite_run_ctl_queue,test_suite_result_done_queue, test_suite_set_dict):
     logger = mp.get_logger()
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
@@ -2162,25 +2099,26 @@ def test_suite_run(
 
     logger.debug(
         f"query_execute starts, logging_level = {logging_level}, logger.handlers = {logger.handlers}"
-    )
+    )    
     # run the test suite in a standlone process
     test_suite_name = test_suite_set_dict.get("test_suite_name")
     logger.info(f"test_suite: {test_suite_name} running starts......")
     test_suite = test_suite_set_dict.get("test_suite")
     query_results_queue = test_suite_set_dict.get("query_results_queue")
-    # q_exec_client = test_suite_set_dict.get("query_exe_client")
+    #q_exec_client = test_suite_set_dict.get("query_exe_client")
 
     (
-        query_conn,  # query_exe_parent_conn
-        q_exec_client_conn,  # query_exe_child_conn
-    ) = mp.Pipe(
-        True
+        query_conn, #query_exe_parent_conn
+        q_exec_client_conn, #query_exe_child_conn
+    ) = (
+        mp.Pipe(True)
     )  # create the pipe for inter-process conn of each test_suite_run and query_execute pair, control path
 
-    # query_conn = test_suite_set_dict.get("query_exe_parent_conn")
-    # q_exec_client_conn = test_suite_set_dict.get("query_exe_child_conn")
+    #query_conn = test_suite_set_dict.get("query_exe_parent_conn")
+    #q_exec_client_conn = test_suite_set_dict.get("query_exe_child_conn")
     alive = test_suite_set_dict.get("alive")
-
+    
+        
     query_exe_client = mp.Process(
         target=query_execute,
         args=(
@@ -2191,6 +2129,7 @@ def test_suite_run(
             logging_level,
         ),
     )  # Create query_exe_client process
+
 
     query_results_queue = test_suite_set_dict.get("query_results_queue")
     logger.debug(f"alive.value = {alive.value}")
@@ -2276,13 +2215,13 @@ def test_suite_run(
 
                         if "statements" in step:
                             step_statements = step.get("statements")
-                            logger.debug(
-                                f"test_suite_name = {test_suite_name}, step_statements = {step_statements}"
-                            )
+                            logger.debug(f"test_suite_name = {test_suite_name}, step_statements = {step_statements}")
                             query_walk_through_res = query_walk_through(
                                 step_statements, query_conn
                             )
-                            statement_result_from_query_execute = query_walk_through_res
+                            statement_result_from_query_execute = (
+                                query_walk_through_res
+                            )
                             logger.debug(
                                 f"query_walk_through_res = {query_walk_through_res}"
                             )
@@ -2326,6 +2265,9 @@ def test_suite_run(
                     )
                     assert message_recv == "case_result_done"
 
+
+
+
                     while (
                         not query_results_queue.empty()
                     ):  # collect all the query_results from queue after "case_result_done" received
@@ -2357,18 +2299,19 @@ def test_suite_run(
             finally:
                 test_suite_run_ctl_queue.get()
                 test_suite_run_ctl_queue.task_done()
-
+             
             logger.info(
                 f"test_suite_name = {test_suite_name} running ends, test_sets = {test_sets}......"
             )
         test_suite_result_summary = {
             "test_suite_name": test_suite_name,
-            "test_run_list_len": test_run_list_len,
-            "test_sets": test_sets,
+            "test_run_list_len":test_run_list_len,
+            "test_sets": test_sets
         }
 
         test_suite_result_done_queue.put(test_suite_result_summary)
         test_suite_result_done_queue.join()
+
 
     TESTS_QUERY_RESULTS = test_sets
     query_conn.send("tear_down")
@@ -2408,6 +2351,7 @@ def test_suite_run(
         f"table drop {count} times, total time spent = {time_spent_drop}ms, avg_time_spent_create = { avg_time_spent_drop}"
     )
 
+
     return (test_run_list_len_total, test_sets)
 
 
@@ -2429,15 +2373,13 @@ def rockets_run(test_context):
     test_suites_selected_sets = test_context.get("test_suites_selected_sets")
     test_suite_run_ctl_queue = test_context.get("test_suite_run_ctl_queue")
     test_suite_result_done_queue = test_context.get("test_suite_result_done_queue")
-    test_suite_query_reulst_queue_list = test_context.get(
-        "test_suite_query_reulst_queue_list"
-    )
+    test_suite_query_reulst_queue_list = test_context.get("test_suite_query_reulst_queue_list")
     rest_setting = config.get("rest_setting")
     if test_suites_selected_sets != None and len(test_suites_selected_sets) != 0:
         env_setup_res = env_setup(rest_setting, docker_compose_file, proton_ci_mode)
         logger.info(f"rockets_run env_etup done, env_setup_res = {env_setup_res}")
     else:
-        sys.exit(1)
+        sys.exit(1) 
 
     test_suite_runners = []
     test_sets = []
@@ -2445,27 +2387,18 @@ def rockets_run(test_context):
     for test_suite_set_dict in test_suites_selected_sets:
         test_suite_name = test_suite_set_dict.get("test_suite_name")
         test_suite_run_ctl_queue.put("run a test suite")
-
-        test_suite_runner = mp.Process(
-            target=test_suite_run,
-            args=(
-                config,
-                test_suite_run_ctl_queue,
-                test_suite_result_done_queue,
-                test_suite_set_dict,
-            ),
-        )
-        time.sleep(
-            random.randint(1, 10)
-        )  # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159
+ 
+        test_suite_runner = mp.Process(target=test_suite_run, args=(config, test_suite_run_ctl_queue, test_suite_result_done_queue, test_suite_set_dict))
+        time.sleep(random.randint(1,10)) # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159
         test_suite_runner.start()
         test_suite_runners.append(
             {
-                "test_suite_name": test_suite_name,
+                "test_suite_name":test_suite_name,
                 "test_suite_runner": test_suite_runner,
+                
             }
         )
-
+    
     try:
         test_suite_run_ctl_queue.join()
         test_suite_result_collect_done = 0
@@ -2476,27 +2409,23 @@ def rockets_run(test_context):
             test_run_list_len_recvd = test_suite_result_summary.get("test_run_list_len")
             test_sets_recvd = test_suite_result_summary.get("test_sets")
 
-            logger.debug(
-                f"test_suite: {test_suite_name_recvd}, test_suite_summary is received, len(test_sets_recvd)={len(test_sets_recvd)}, test_run_list_len_recvd = {test_run_list_len_recvd}"
-            )
+            logger.debug(f"test_suite: {test_suite_name_recvd}, test_suite_summary is received, len(test_sets_recvd)={len(test_sets_recvd)}, test_run_list_len_recvd = {test_run_list_len_recvd}")
             test_run_list_len_total += test_run_list_len_recvd
             test_sets.extend(test_sets_recvd)
-            logger.debug(
-                f"test_suite: {test_suite_name} result received, len(test_sets) after test_sets.extend(test_sets_recvd) = {len(test_sets)}"
-            )
+            logger.debug(f"test_suite: {test_suite_name} result received, len(test_sets) after test_sets.extend(test_sets_recvd) = {len(test_sets)}")
             test_suite_result_done_queue.task_done()
             test_suite_result_collect_done += 1
             time.sleep(random.random())
 
-    except (BaseException) as error:
-        logger.debug(f"exception, error = {error}")
+    except(BaseException) as error:
+        logger.debug(f"exception, error = {error}")    
+        
 
     for test_suite_runner_dict in test_suite_runners:
         test_suite_runner_dict["test_suite_runner"].join()
-    logger.debug(
-        f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}"
-    )
+    logger.debug(f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}")
     return (test_run_list_len_total, test_sets)
+
 
 
 if __name__ == "__main__":

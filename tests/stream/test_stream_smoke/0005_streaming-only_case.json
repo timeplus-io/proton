@@ -1591,9 +1591,9 @@
             "description": "global sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"601", "query_type": "stream", "terminate":"manual", "query":"select type, count(value) from test_stream_only_join_v group by type limit 5 emit periodic 5s"}]},
+                    {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":7, "query":"select type, count(value) from test_stream_only_join_v group by type limit 5 emit periodic 5s"}]},
                 {"inputs": [
-                    {"table_name":"test_stream_only","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
+                    {"table_name":"test_stream_only","depends_on":"601","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
                     ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
                     {"table_name":"test_stream_only", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
@@ -1605,11 +1605,7 @@
                     {"table_name":"test_stream_only", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
-                ]},
-                {"statements": [
-                    {"client":"python", "wait": 7, "run_mode":"table", "depends":{"query_id":601}, "query_type": "table", "query":"kill query where query_id = '601'"}
-                ]
-                }                
+                ]}               
             ],
 
             "expected_results": [{"query_id":"601", "expected_results":
@@ -1796,7 +1792,7 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "depends":{"query_id":601}, "query_type": "batch", "query":"kill query where query_id = '601'"},
+                    {"client":"python", "wait": 5, "depends_on":601, "query_type": "batch", "query":"kill query where query_id = '601'"},
                     {"client":"python", "wait": 1, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_only_stream_sum_view"}
                 ]
                 }
