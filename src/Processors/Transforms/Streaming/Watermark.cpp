@@ -62,6 +62,14 @@ namespace
         }
         else
             watermark_settings.mode = WatermarkSettings::EmitMode::NONE;
+
+        if (emit->timeout_interval)
+        {
+            extractInterval(
+                emit->timeout_interval->as<ASTFunction>(),
+                watermark_settings.emit_timeout_interval,
+                watermark_settings.emit_timeout_interval_kind);
+        }
     }
 }
 

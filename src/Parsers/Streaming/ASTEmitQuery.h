@@ -21,6 +21,8 @@ public:
     ASTPtr delay_interval;
     /// [LAST <last-x>]
     ASTPtr last_interval;
+    /// [TIMEOUT INTERVAL 5 SECOND]
+    ASTPtr timeout_interval;
 
     String getID(char) const override { return "Emit"; }
 

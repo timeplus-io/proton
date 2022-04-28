@@ -331,6 +331,9 @@ void StreamingEmitInterpreter::checkEmitAST(ASTPtr & query)
 
     if (emit->last_interval)
         checkIntervalAST(emit->last_interval, "Invalid EMIT LAST interval");
+
+    if (emit->timeout_interval)
+        checkIntervalAST(emit->timeout_interval, "Invalid EMIT TIMEOUT interval");
 }
 
 }

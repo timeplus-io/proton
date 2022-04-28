@@ -41,6 +41,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
     ASTPtr periodic_interval;
     ASTPtr delay_interval;
     ASTPtr last_interval;
+    ASTPtr timeout_interval;
 
     ParserIntervalOperatorExpression interval_alias_p;
     do
@@ -91,6 +92,15 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
                     throw Exception("Expect 'PROCTIME' after 'ON' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
             }
         }
+        else if (ParserKeyword("TIMEOUT").ignore(pos, expected))
+        {
+            /// [TIMEOUT INTERVAL '5' SECONDS]
+            if (timeout_interval)
+                throw Exception("Can not use repeat 'TIMEOUT' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
+
+            if (!interval_alias_p.parse(pos, timeout_interval, expected))
+                return false;
+        }
     } while (ParserKeyword("AND").ignore(pos, expected));
 
     auto query = std::make_shared<ASTEmitQuery>();
@@ -100,6 +110,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
     query->periodic_interval = periodic_interval;
     query->delay_interval = delay_interval;
     query->last_interval = last_interval;
+    query->timeout_interval = timeout_interval;
 
     node = query;
 

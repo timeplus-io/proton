@@ -54,5 +54,7 @@ protected:
     String time_col_name;
 
     const DateLUTImpl * timezone = nullptr;
+
+    bool has_event_in_window = false;
 };
 }

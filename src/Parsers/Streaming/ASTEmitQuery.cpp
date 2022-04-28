@@ -40,6 +40,13 @@ void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, Form
         if (proc_time)
             format.ostr << (format.hilite ? hilite_keyword : "") << " ON PROCTIME" << (format.hilite ? hilite_none : "");
     }
+
+    if (timeout_interval)
+    {
+        format.ostr << (format.hilite ? hilite_keyword : "") << (elems ? " AND " : "") << "TIMEOUT " << (format.hilite ? hilite_none : "");
+        timeout_interval->format(format);
+        ++elems;
+    }
 }
 
 void ASTEmitQuery::updateTreeHashImpl(SipHash & hash_state) const
@@ -56,6 +63,9 @@ void ASTEmitQuery::updateTreeHashImpl(SipHash & hash_state) const
     
     if (last_interval)
         last_interval->updateTreeHashImpl(hash_state);
+
+    if (timeout_interval)
+        timeout_interval->updateTreeHashImpl(hash_state);
 
     IAST::updateTreeHashImpl(hash_state);
 }

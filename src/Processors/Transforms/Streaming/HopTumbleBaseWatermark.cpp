@@ -33,7 +33,7 @@ namespace
         {
             if (time_vec[i] > max_event_ts)
                 max_event_ts = time_vec[i];
-            else if (time_vec[i] < last_project_watermark_ts)
+            if (time_vec[i] < last_project_watermark_ts)
             {
                 filt[i] = 0;
                 late_events_in_block += 1;
@@ -139,6 +139,7 @@ void HopTumbleBaseWatermark::doProcess(Block & block)
 
     if (block.rows())
     {
+        has_event_in_window = true;
         last_event_seen_ts = UTCSeconds::now();
         assignWatermark(block);
     }
@@ -323,6 +324,35 @@ void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
         else
         {
             if (UTCSeconds::now() >= watermark_ts)
+            {
+                block.info.watermark = watermark_ts;
+                last_projected_watermark_ts = watermark_ts;
+
+                block.info.watermark_lower_bound = addTime(block.info.watermark, window_interval_kind, -1 * window_interval, *timezone);
+                watermark_ts = addTime(watermark_ts, window_interval_kind, interval, *timezone);
+            }
+        }
+    }
+
+    if (has_event_in_window && watermark_settings.emit_timeout_interval != 0 && last_event_seen_ts != 0)
+    {
+        auto now = UTCSeconds::now();
+        if (addTime(now, watermark_settings.emit_timeout_interval_kind, -1 * watermark_settings.emit_timeout_interval, *timezone) > last_event_seen_ts)
+        {
+            has_event_in_window = false;
+            last_event_seen_ts = now;
+
+            auto interval = getProgressingInterval();
+
+            if (scale != 0)
+            {
+                block.info.watermark = watermark_ts;
+                last_projected_watermark_ts = watermark_ts;
+
+                block.info.watermark_lower_bound = addTimeWithAutoScale(block.info.watermark, window_interval_kind, -1 * window_interval);
+                watermark_ts = addTimeWithAutoScale(watermark_ts, window_interval_kind, interval);
+            }
+            else
             {
                 block.info.watermark = watermark_ts;
                 last_projected_watermark_ts = watermark_ts;

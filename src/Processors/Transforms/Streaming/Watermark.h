@@ -46,6 +46,9 @@ public:
     bool streaming = false;
     bool global_aggr = false;
 
+    Int64 emit_timeout_interval = 0;
+    IntervalKind::Kind emit_timeout_interval_kind = IntervalKind::Second;
+
     /// privates
     StreamingFunctionDescriptionPtr window_desc;
 
