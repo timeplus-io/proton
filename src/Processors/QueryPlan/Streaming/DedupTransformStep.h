@@ -6,23 +6,21 @@
 
 namespace DB
 {
-class TimestampTransformStep final : public ITransformingStep
+class DedupTransformStep final : public ITransformingStep
 {
 public:
-    TimestampTransformStep(
+    DedupTransformStep(
         const DataStream & input_stream_,
         Block output_header,
-        StreamingFunctionDescriptionPtr timestamp_func_desc_,
-        bool backfill_);
+        StreamingFunctionDescriptionPtr  dedup_func_desc_);
 
-    ~TimestampTransformStep() override = default;
+    ~DedupTransformStep() override = default;
 
-    String getName() const override { return "TimestampTransformStep"; }
+    String getName() const override { return "DedupTransformStep"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    StreamingFunctionDescriptionPtr timestamp_func_desc;
-    bool backfill;
+    StreamingFunctionDescriptionPtr dedup_func_desc;
 };
 }

@@ -1,9 +1,7 @@
 #include "TableFunctionTumble.h"
 
 #include <DataTypes/DataTypeTuple.h>
-#include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -16,7 +14,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
-TableFunctionTumble::TableFunctionTumble(const String & name_) : TableFunctionProxyBase(name_)
+TableFunctionTumble::TableFunctionTumble(const String & name_) : TableFunctionWindow(name_)
 {
 }
 

@@ -15,7 +15,7 @@ DB::ITransformingStep::Traits getTraits()
             .preserves_sorting = true,
         },
         {
-            .preserves_number_of_rows = true,
+            .preserves_number_of_rows = false,
         }};
 }
 }

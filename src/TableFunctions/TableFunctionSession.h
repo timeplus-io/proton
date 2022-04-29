@@ -1,10 +1,10 @@
 #pragma once
 
-#include "TableFunctionProxyBase.h"
+#include "TableFunctionWindow.h"
 
 namespace DB
 {
-class TableFunctionSession final : public TableFunctionProxyBase
+class TableFunctionSession final : public TableFunctionWindow
 {
 public:
     explicit TableFunctionSession(const String & name_);

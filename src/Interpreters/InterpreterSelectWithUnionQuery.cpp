@@ -290,11 +290,11 @@ bool InterpreterSelectWithUnionQuery::hasGlobalAggregation() const
     return false;
 }
 
-bool InterpreterSelectWithUnionQuery::hasStreamingFunc() const
+bool InterpreterSelectWithUnionQuery::hasStreamingWindowFunc() const
 {
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->hasStreamingFunc())
+        if (interpreter->hasStreamingWindowFunc())
             return true;
     }
     return false;

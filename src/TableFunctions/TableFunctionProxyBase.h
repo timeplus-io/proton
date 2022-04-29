@@ -5,13 +5,10 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 namespace DB
 {
-class DataTypeTuple;
-
 class TableFunctionProxyBase : public ITableFunction
 {
 public:
@@ -20,24 +17,18 @@ public:
 
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
 
-protected:
-    StorageID resolveStorageID(const ASTPtr & arg, ContextPtr context);
-
-    void doParseArguments(const ASTPtr & func_ast, ContextPtr context, const String & help_msg);
-
-    virtual void postArgs(ASTs &) const { }
-
-    virtual String functionNamePrefix() const = 0;
-
-    virtual ASTs checkAndExtractArguments(ASTFunction *) const { return {}; }
+    virtual StoragePtr calculateColumnDescriptions(ContextPtr context);
 
 protected:
+    void resolveStorageID(const ASTPtr & arg, ContextPtr context);
+
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
-    virtual void init(ContextPtr context, ASTPtr streaming_func_ast, const String & func_name_prefix, ASTPtr timestamp_expr_ast);
-    virtual void handleResultType(const ColumnWithTypeAndName & type_and_name);
-    virtual DataTypePtr getElementType(const DataTypeTuple * tuple) const = 0;
 
+private:
+    void validateProxyChain() const;
+
+protected:
     String name;
 
     StreamingFunctionDescriptionPtr streaming_func_desc;
@@ -51,6 +42,9 @@ protected:
     StorageID storage_id = StorageID::createEmpty();
     StorageMetadataPtr underlying_storage_metadata_snapshot;
     ColumnsDescription columns;
+
+    /// Nested ProxyStorage for nested table function: tumble(dedup(...))
+    StoragePtr nested_proxy_storage;
 
     bool streaming = true;
 };

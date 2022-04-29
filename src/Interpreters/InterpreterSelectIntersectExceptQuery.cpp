@@ -178,11 +178,11 @@ bool InterpreterSelectIntersectExceptQuery::hasGlobalAggregation() const
     return false;
 }
 
-bool InterpreterSelectIntersectExceptQuery::hasStreamingFunc() const
+bool InterpreterSelectIntersectExceptQuery::hasStreamingWindowFunc() const
 {
     for (const auto & interpreter : nested_interpreters)
     {
-        if (interpreter->hasStreamingFunc())
+        if (interpreter->hasStreamingWindowFunc())
             return true;
     }
     return false;

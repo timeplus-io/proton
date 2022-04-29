@@ -677,8 +677,8 @@ ColumnPtr FunctionWindow<type>::executeImpl(
 
 void registerFunctionsStreamingWindow(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionTumble>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionHop>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionSession>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionTumble>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionHop>(FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionSession>(FunctionFactory::CaseSensitive);
 }
 }

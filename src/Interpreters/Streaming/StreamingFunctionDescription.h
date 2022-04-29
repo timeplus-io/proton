@@ -19,7 +19,7 @@ struct StreamingFunctionDescription
         DataTypes argument_types_,
         ExpressionActionsPtr expr_,
         Names input_columns_,
-        ColumnNumbers keys_,
+        ColumnNumbers keys_ = {},
         bool is_now = false)
         : func_ast(std::move(func_ast_))
         , type(type_)
@@ -48,5 +48,6 @@ struct StreamingFunctionDescription
 };
 
 using StreamingFunctionDescriptionPtr = std::shared_ptr<StreamingFunctionDescription>;
+using StreamingFunctionDescriptionPtrs = std::vector<StreamingFunctionDescriptionPtr>;
 
 }

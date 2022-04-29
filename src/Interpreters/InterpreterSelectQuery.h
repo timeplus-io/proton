@@ -110,7 +110,7 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
-    bool hasStreamingFunc() const override;
+    bool hasStreamingWindowFunc() const override;
     WindowType windowType() const;
     StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const;
     bool hasGlobalAggregation() const override;
@@ -177,7 +177,6 @@ private:
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
-    void buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyStream * proxy_stream) const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     /// proton: ends
 

@@ -1,6 +1,4 @@
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -279,12 +277,12 @@ namespace
     class NeighborOverloadResolver : public IFunctionOverloadResolver
     {
     public:
-        static FunctionOverloadResolverPtr create(ContextPtr context)
+        static FunctionOverloadResolverPtr create(ContextPtr)
         {
-            return std::make_unique<NeighborOverloadResolver>(context);
+            return std::make_unique<NeighborOverloadResolver>();
         }
 
-        explicit NeighborOverloadResolver(ContextPtr context_) : context(context_) { }
+        NeighborOverloadResolver() { }
 
         String getName() const override { return Name::name; }
         size_t getNumberOfArguments() const override { return 0; }
@@ -311,9 +309,6 @@ namespace
         }
 
         DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return checkAndGetReturnType<Name>(arguments); }
-
-    private:
-        ContextPtr context;
     };
 }
 

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "TableFunctionProxyBase.h"
+#include "TableFunctionWindow.h"
 
 namespace DB
 {
-class TableFunctionTumble final : public TableFunctionProxyBase
+class TableFunctionTumble final : public TableFunctionWindow
 {
 public:
     explicit TableFunctionTumble(const String & name_);

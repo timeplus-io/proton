@@ -34,7 +34,7 @@ public:
     bool hasAggregation() const override;
     bool isStreaming() const override;
     bool hasGlobalAggregation() const override;
-    bool hasStreamingFunc() const override;
+    bool hasStreamingWindowFunc() const override;
     /// proton: ends
 
 private:

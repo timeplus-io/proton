@@ -33,6 +33,7 @@ void registerTableFunctions()
     registerTableFunctionTumble(factory);
     registerTableFunctionHist(factory);
     registerTableFunctionSession(factory);
+    registerTableFunctionDedup(factory);
     /// proton: ends
 }
 

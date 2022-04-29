@@ -1,6 +1,6 @@
-#include "ProcessTimeFilterStep.h"
+#include "DedupTransformStep.h"
 
-#include <Processors/Transforms/Streaming/ProcessTimeFilter.h>
+#include <Processors/Transforms/Streaming/DedupTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace
@@ -22,20 +22,19 @@ DB::ITransformingStep::Traits getTraits()
 
 namespace DB
 {
-ProcessTimeFilterStep::ProcessTimeFilterStep(
+DedupTransformStep::DedupTransformStep(
     const DataStream & input_stream_,
-    BaseScaleInterval interval_bs_,
-    const String & column_name_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits())
-    , interval_bs(interval_bs_)
-    , column_name(column_name_)
+    Block output_header,
+    StreamingFunctionDescriptionPtr dedup_func_desc_)
+    : ITransformingStep(input_stream_, std::move(output_header), getTraits())
+    , dedup_func_desc(std::move(dedup_func_desc_))
 {
 }
 
-void ProcessTimeFilterStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
+void DedupTransformStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<ProcessTimeFilter>(column_name, interval_bs, header);
+        return std::make_shared<DedupTransform>(header, getOutputStream().header, dedup_func_desc);
     });
 }
 }

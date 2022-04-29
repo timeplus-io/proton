@@ -5,7 +5,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -17,7 +16,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
-TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionProxyBase(name_)
+TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionWindow(name_)
 {
 }
 

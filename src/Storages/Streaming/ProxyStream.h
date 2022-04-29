@@ -47,35 +47,40 @@ public:
 
     Names getAdditionalRequiredColumns() const;
 
-    Names getRequiredColumnsForStreamingFunction() const { return streaming_func_desc->input_columns; }
     StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
-
-    Names getRequiredColumnsForTimestampExpr() const
-    {
-        if (timestamp_func_desc)
-            return timestamp_func_desc->input_columns;
-        return {};
-    }
-    StreamingFunctionDescriptionPtr getTimestampFunctionDescription() const { return timestamp_func_desc; }
-
-    const StoragePtr & getInnerStorage() const { return storage; }
 
     /// Whether it reads data from streaming store or historical store
     bool isStreaming() const { return streaming; }
 
-    /// Whether has streaming func itself, i.e. tumble(...) or hop(...)
-    bool hasStreamingFunc() const { return streaming_func_desc != nullptr; }
+    /// Whether has streaming func itself, i.e. tumble(...) or hop(...) or session(...)
+    bool hasStreamingWindowFunc() const { return streaming_func_desc != nullptr && streaming_func_desc->type != WindowType::NONE; }
 
     /// Return WindowType::NONE, if it has no window func
-    WindowType windowType() const
-    {
-        return streaming_func_desc != nullptr ? streaming_func_desc->type : WindowType::NONE;
-    }
+    WindowType windowType() const { return streaming_func_desc != nullptr ? streaming_func_desc->type : WindowType::NONE; }
 
     /// Whether has GlobalAggregation in subquery
     bool hasGlobalAggregation() const { return has_global_aggr; }
 
     bool supportsSubcolumns() const override { return storage && storage->supportsSubcolumns(); }
+
+    void buildStreamingProcessingQueryPlan(
+        QueryPlan & query_plan,
+        const Names & required_columns_after_streaming_window,
+        const SelectQueryInfo & select_info,
+        const StorageMetadataPtr & metadata_snapshot,
+        const ContextPtr & context_,
+        bool need_watermark) const;
+
+private:
+    void validateProxyChain() const;
+
+    bool
+    processTimestampStep(QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const ContextPtr & context_) const;
+
+    void processWatermarkStep(QueryPlan & query_plan, const SelectQueryInfo & query_info, bool proc_time) const;
+
+    void processWindowAssignmentStep(
+        QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageMetadataPtr & metadata_snapshot) const;
 
 private:
     ProxyStream(
@@ -85,12 +90,19 @@ private:
         ContextPtr context_,
         StreamingFunctionDescriptionPtr streaming_func_desc_,
         StreamingFunctionDescriptionPtr timestamp_func_desc_,
+        StoragePtr nested_proxy_storage_,
+        String internal_name_,
         ASTPtr subquery_ = nullptr,
         bool streaming_ = false);
 
     StorageMetadataPtr underlying_storage_metadata_snapshot;
     StreamingFunctionDescriptionPtr streaming_func_desc;
     StreamingFunctionDescriptionPtr timestamp_func_desc;
+    /// ProxyStream can wrap a ProxyStream
+    StoragePtr nested_proxy_storage;
+    String internal_name;
+
+    /// This is the underlying storage: either a view or a physical stream
     StoragePtr storage;
     ASTPtr subquery;
     bool has_global_aggr = false;

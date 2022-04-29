@@ -101,9 +101,8 @@ ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
 
     /// tumble(table, [timestamp_expr], win_interval, [timezone])
     if (func_ast->children.size() != 1)
-    {
         throw Exception(HOP_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    }
+
     const auto & args = func_ast->arguments->children;
     if (args.size() < 2)
         throw Exception(TUMBLE_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
@@ -171,16 +170,14 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
 
     /// hop(table, [timestamp_expr], hop_interval, win_interval, [timezone])
     if (func_ast->children.size() != 1)
-    {
         throw Exception(HOP_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    }
+
     const auto & args = func_ast->arguments->children;
     if (args.size() < 3)
         throw Exception(HOP_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
 
     if (args.size() > 5)
         throw Exception(HOP_HELP_MESSAGE, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
-
 
     ASTPtr table;
     ASTPtr time_expr;
@@ -247,16 +244,15 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionSession(func_ast));
 
-    ASTs asts;
     /// session(table, [timestamp_expr], timeout_interval, [key_column1, key_column2, ...])
     if (func_ast->children.size() != 1)
-    {
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-    }
+
     const auto & args = func_ast->arguments->children;
     if (args.size() < 3)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
 
+    ASTs asts;
     ASTPtr table;
     ASTPtr time_expr;
     ASTPtr session_interval;

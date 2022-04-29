@@ -17,7 +17,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
-TableFunctionSession::TableFunctionSession(const String & name_) : TableFunctionProxyBase(name_)
+TableFunctionSession::TableFunctionSession(const String & name_) : TableFunctionWindow(name_)
 {
 }
 

@@ -1,14 +1,10 @@
 #include "TableFunctionHist.h"
 
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/IStorage.h>
 #include <Storages/Streaming/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
-#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -20,9 +16,7 @@ namespace ErrorCodes
 TableFunctionHist::TableFunctionHist(const String & name_) : TableFunctionProxyBase(name_)
 {
     help_message = fmt::format(
-        "Function '{}' requires only 1 parameter"
-        "<name of the stream>, it should be a stream storage",
-        name);
+        "Function '{}' requires only 1 stream parameter", name);
 }
 
 void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr context)
@@ -37,14 +31,13 @@ void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr conte
         throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     /// First argument is expected to be table or table function
-    storage_id = resolveStorageID(args[0], context);
+    resolveStorageID(args[0], context);
 
     /// Calculate column description
-    init(context, func_ast, functionNamePrefix(), nullptr);
+    calculateColumnDescriptions(std::move(context));
 }
 
-void TableFunctionHist::init(
-    ContextPtr context, ASTPtr /*streaming_func_ast*/, const String & /*func_name_prefix*/, ASTPtr /*timestamp_expr_ast*/)
+StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
 {
     streaming = false;
     auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
@@ -53,15 +46,8 @@ void TableFunctionHist::init(
 
     underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
     columns = underlying_storage_metadata_snapshot->getColumns();
-}
 
-DataTypePtr TableFunctionHist::getElementType(const DataTypeTuple * tuple) const
-{
-    DataTypePtr element_type = tuple->getElements()[0];
-    assert(isArray(element_type));
-
-    const auto * array_type = checkAndGetDataType<DataTypeArray>(element_type.get());
-    return array_type->getNestedType();
+    return storage;
 }
 
 void registerTableFunctionHist(TableFunctionFactory & factory)

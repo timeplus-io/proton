@@ -7,7 +7,6 @@
 #include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/Streaming/ProxyStream.h>
@@ -674,7 +673,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             group_exprs.emplace_back(std::make_shared<ASTIdentifier>(time_col_name));
             group_exprs.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_SESSION_ID));
         }
-
     }
     /// proto: ends
 
@@ -2206,7 +2204,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// proton: starts. Streaming Window
         /// Supports: TableFunction, Stream, MaterializedView
         if (auto * proxy_stream = storage->as<ProxyStream>())
-            buildStreamingProcessingQueryPlan(query_plan, proxy_stream);
+            proxy_stream->buildStreamingProcessingQueryPlan(
+                query_plan, required_columns_after_streaming_window, query_info, metadata_snapshot, context, shouldApplyWatermark());
         else
             buildStreamingProcessingQueryPlan(query_plan);
         /// proton: ends
@@ -2979,7 +2978,7 @@ bool InterpreterSelectQuery::isStreaming() const
         return false;
 }
 
-bool InterpreterSelectQuery::hasStreamingFunc() const
+bool InterpreterSelectQuery::hasStreamingWindowFunc() const
 {
     if (!isStreaming())
         return false;
@@ -2988,7 +2987,7 @@ bool InterpreterSelectQuery::hasStreamingFunc() const
     {
         if (auto * proxy = storage->as<ProxyStream>())
         {
-            if (proxy->hasStreamingFunc())
+            if (proxy->hasStreamingWindowFunc())
                 return true;
         }
     }
@@ -3022,7 +3021,7 @@ WindowType InterpreterSelectQuery::windowType() const
 
 bool InterpreterSelectQuery::hasGlobalAggregation() const
 {
-    return isStreaming() && hasAggregation() && !hasStreamingFunc();
+    return isStreaming() && hasAggregation() && !hasStreamingWindowFunc();
 }
 
 bool InterpreterSelectQuery::shouldApplyWatermark() const
@@ -3030,7 +3029,7 @@ bool InterpreterSelectQuery::shouldApplyWatermark() const
     if (!isStreaming())
         return false;
 
-    if (hasStreamingFunc())
+    if (hasStreamingWindowFunc())
         return true;
 
     if (hasGlobalAggregation())
@@ -3057,7 +3056,7 @@ bool InterpreterSelectQuery::shouldKeepState() const
     if (!isStreaming())
         return false;
 
-    if (hasStreamingFunc())
+    if (hasStreamingWindowFunc())
         return true;
 
     if (hasGlobalAggregation())
@@ -3087,7 +3086,7 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
             throw Exception("Streaming query doesn't support LIMIT BY", ErrorCodes::NOT_IMPLEMENTED);
 
         /// Does not allow window func over a global aggregation
-        if (hasStreamingFunc())
+        if (hasStreamingWindowFunc())
         {
             /// nested query
             if (auto * proxy = storage->as<ProxyStream>())
@@ -3100,7 +3099,7 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
     {
         if (auto * proxy = storage->as<ProxyStream>())
         {
-            if (proxy->hasStreamingFunc() && proxy->windowType() != WindowType::SESSION)
+            if (proxy->windowType() == WindowType::TUMBLE || proxy->windowType() == WindowType::HOP)
             {
                 bool has_win_col = false;
                 for (const auto & window_col : ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES)
@@ -3121,66 +3120,6 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
     }
 }
 
-void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan, ProxyStream * proxy_stream) const
-{
-    bool proc_time = false;
-    auto timestamp_func_desc = proxy_stream->getTimestampFunctionDescription();
-    if (timestamp_func_desc)
-    {
-        proc_time = timestamp_func_desc->is_now_func;
-        auto output_header = query_plan.getCurrentDataStream().header;
-        /// Drop timestamp expr required columns if they are not required by downstream pipe
-        auto required_begin = required_columns_after_streaming_window.begin();
-        auto required_end = required_columns_after_streaming_window.end();
-        for (const auto & name : timestamp_func_desc->input_columns)
-            if (std::find(required_begin, required_end, name) == required_end)
-                output_header.erase(name);
-
-        /// Add transformed timestamp column required by downstream pipe
-        auto timestamp_col = timestamp_func_desc->expr->getSampleBlock().getByPosition(0);
-        assert(!output_header.findByName(timestamp_col.name));
-        timestamp_col.column = timestamp_col.type->createColumnConstWithDefaultValue(0);
-        output_header.insert(timestamp_col);
-
-        const auto & seek_to = context->getSettingsRef().seek_to.value;
-        bool backfill = !seek_to.empty() && seek_to != "latest" && seek_to != "earliest";
-
-        query_plan.addStep(std::make_unique<TimestampTransformStep>(
-            query_plan.getCurrentDataStream(), output_header, std::move(timestamp_func_desc), backfill));
-    }
-
-    auto stream_func_desc = proxy_stream->getStreamingFunctionDescription();
-
-    if (shouldApplyWatermark())
-    {
-        Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-        if (stream_func_desc && stream_func_desc->type == WindowType::SESSION)
-        {
-            /// insert _tp_session_id column for session window
-            auto data_type = std::make_shared<DataTypeUInt32>();
-            output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
-        }
-        query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, stream_func_desc, proc_time, log));
-    }
-
-    if (stream_func_desc && stream_func_desc->type != WindowType::SESSION)
-    {
-        Block output_header;
-        if (!proxy_stream->getInnerStorage())
-            output_header = metadata_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
-        else
-            /// Built from subquery
-            output_header = metadata_snapshot->getSampleBlockForColumns(
-                required_columns_after_streaming_window,
-                proxy_stream->getInnerStorage()->getVirtuals(),
-                proxy_stream->getInnerStorage()->getStorageID());
-
-        query_plan.addStep(
-            std::make_unique<StreamingWindowAssignmentStep>(query_plan.getCurrentDataStream(), std::move(output_header), stream_func_desc));
-    }
-}
-
 void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const
 {
     if (shouldApplyWatermark())
@@ -3192,6 +3131,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
             auto data_type = std::make_shared<DataTypeUInt32>();
             output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
         }
+
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
     }

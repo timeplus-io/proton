@@ -12,7 +12,6 @@ namespace ProtonConsts
 const String STREAMING_WINDOW_START = "window_start";
 const String STREAMING_WINDOW_END = "window_end";
 const std::vector<String> STREAMING_WINDOW_COLUMN_NAMES = {STREAMING_WINDOW_START, STREAMING_WINDOW_END};
-const String STREAMING_WINDOW_FUNC_ALIAS = "__tp_swin";
 const String STREAMING_TIMESTAMP_ALIAS = "__tp_ts";
 const String STREAMING_SESSION_ID = "__tp_session_id";
 
@@ -20,6 +19,7 @@ const String STREAMING_SESSION_ID = "__tp_session_id";
 const String TUMBLE_FUNC_NAME = "__tumble";
 const String HOP_FUNC_NAME = "__hop";
 const String SESSION_FUNC_NAME = "__session";
+const String DEDUP_FUNC_NAME = "__dedup";
 
 /// Reserved column names / aliases for streaming view
 const String RESERVED_VIEW_VERSION = "__tp_version";
