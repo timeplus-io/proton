@@ -97,6 +97,9 @@ void GlobalAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsP
         auto block = params->aggregator.prepareBlockAndFillWithoutKey(
             *first, params->final, first->type != StreamingAggregatedDataVariants::Type::without_key);
 
+        if (params->emit_version)
+            emitVersion(block);
+
         setCurrentChunk(convertToChunk(block), chunk_info);
     }
 }
