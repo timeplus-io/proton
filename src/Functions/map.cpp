@@ -167,6 +167,14 @@ public:
         const DataTypePtr & key_type = result_type_map.getKeyType();
         const DataTypePtr & value_type = result_type_map.getValueType();
 
+        if (input_rows_count == 0)
+        {
+            auto nested_column = ColumnArray::create(
+                ColumnTuple::create(Columns{key_type->createColumn(), value_type->createColumn()}),
+                DataTypeNumber<IColumn::Offset>().createColumn());
+            return ColumnMap::create(nested_column);
+        }
+
         /// const auto & key_type = checkAndGetDataType<DataTypeArray>(arguments[0].type.get())->getNestedType();
         /// const auto & value_type = checkAndGetDataType<DataTypeArray>(arguments[1].type.get())->getNestedType();
 

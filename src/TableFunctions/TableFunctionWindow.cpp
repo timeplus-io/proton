@@ -58,7 +58,7 @@ namespace
         __builtin_unreachable();
     }
 
-    StreamingFunctionDescriptionPtr createStreamingFunctionDescriptionForTumbleHop(
+    StreamingFunctionDescriptionPtr createStreamingFunctionDescriptionForOther(
         ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix)
     {
         const auto & actions = streaming_func_expr->getActions();
@@ -104,13 +104,12 @@ namespace
         auto streaming_func_expr = func_expr_analyzer.getActions(true);
 
         WindowType type = toWindowType(ast->as<ASTFunction>()->name);
-        assert(type != WindowType::NONE);
 
         if (type == WindowType::SESSION)
             return createStreamingFunctionDescriptionForSession(
                 std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);
         else
-            return createStreamingFunctionDescriptionForTumbleHop(
+            return createStreamingFunctionDescriptionForOther(
                 std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);
     }
 }
