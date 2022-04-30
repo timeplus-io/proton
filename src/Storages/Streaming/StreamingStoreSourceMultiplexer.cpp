@@ -132,11 +132,11 @@ void StreamingStoreSourceMultiplexer::fanOut(nlog::RecordPtrs records)
 }
 
 StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexer::createChannel(
-    const Names & column_names, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
+    const Names & column_names, const StorageSnapshotPtr & storage_snapshot, ContextPtr query_context)
 {
-    auto header{metadata_snapshot->getSampleBlockForColumns(column_names, storage->getVirtuals(), storage->getStorageID())};
+    auto header{storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false)};
     auto channel
-        = std::make_shared<StreamingStoreSourceChannel>(shared_from_this(), std::move(header), metadata_snapshot, std::move(query_context));
+        = std::make_shared<StreamingStoreSourceChannel>(shared_from_this(), std::move(header), storage_snapshot, std::move(query_context));
 
     std::lock_guard lock{channels_mutex};
     auto [_, inserted] = channels.emplace(channel->getID(), channel);
@@ -180,7 +180,7 @@ StreamingStoreSourceMultiplexers::StreamingStoreSourceMultiplexers(
 }
 
 StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
-    Int32 shard, const Names & column_names, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
+    Int32 shard, const Names & column_names, const StorageSnapshotPtr & storage_snapshot, ContextPtr query_context)
 {
     std::lock_guard lock{multiplexers_mutex};
 
@@ -226,14 +226,14 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
             iter->second.push_back(best_multiplexer);
         }
 
-        return best_multiplexer->createChannel(column_names, metadata_snapshot, query_context);
+        return best_multiplexer->createChannel(column_names, storage_snapshot, query_context);
     }
     else
     {
         /// All multiplexers are shutdown
         auto multiplexer{std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), shard, storage, global_context, log)};
         iter->second.push_back(multiplexer);
-        return multiplexer->createChannel(column_names, metadata_snapshot, query_context);
+        return multiplexer->createChannel(column_names, storage_snapshot, query_context);
     }
 }
 }

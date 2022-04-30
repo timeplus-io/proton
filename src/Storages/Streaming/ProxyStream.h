@@ -22,11 +22,11 @@ public:
     String getName() const override { return "ProxyStream"; }
 
     QueryProcessingStage::Enum
-    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
+    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const override;
 
     Pipe read(
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context_,
         QueryProcessingStage::Enum processed_stage,
@@ -36,7 +36,7 @@ public:
     void read(
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context_,
         QueryProcessingStage::Enum processed_stage,
@@ -62,12 +62,13 @@ public:
     bool hasGlobalAggregation() const { return has_global_aggr; }
 
     bool supportsSubcolumns() const override { return storage && storage->supportsSubcolumns(); }
+    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
 
     void buildStreamingProcessingQueryPlan(
         QueryPlan & query_plan,
         const Names & required_columns_after_streaming_window,
         const SelectQueryInfo & select_info,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         const ContextPtr & context_,
         bool need_watermark) const;
 
@@ -80,13 +81,13 @@ private:
     void processWatermarkStep(QueryPlan & query_plan, const SelectQueryInfo & query_info, bool proc_time) const;
 
     void processWindowAssignmentStep(
-        QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageMetadataPtr & metadata_snapshot) const;
+        QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageSnapshotPtr & storage_snapshot) const;
 
 private:
     ProxyStream(
         const StorageID & id_,
         const ColumnsDescription & columns_,
-        StorageMetadataPtr underlying_storage_metadata_snapshot_,
+        StorageSnapshotPtr underlying_storage_snapshot_,
         ContextPtr context_,
         StreamingFunctionDescriptionPtr streaming_func_desc_,
         StreamingFunctionDescriptionPtr timestamp_func_desc_,
@@ -95,7 +96,7 @@ private:
         ASTPtr subquery_ = nullptr,
         bool streaming_ = false);
 
-    StorageMetadataPtr underlying_storage_metadata_snapshot;
+    StorageSnapshotPtr underlying_storage_snapshot;
     StreamingFunctionDescriptionPtr streaming_func_desc;
     StreamingFunctionDescriptionPtr timestamp_func_desc;
     /// ProxyStream can wrap a ProxyStream

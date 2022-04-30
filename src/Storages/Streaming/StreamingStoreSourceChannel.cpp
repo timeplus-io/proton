@@ -1,14 +1,17 @@
 #include "StreamingStoreSourceChannel.h"
 #include "StreamingStoreSourceMultiplexer.h"
 
+#include <DataTypes/ObjectUtils.h>
+#include <Interpreters/inplaceBlockConversions.h>
+
 namespace DB
 {
 StreamingStoreSourceChannel::StreamingStoreSourceChannel(
     std::shared_ptr<StreamingStoreSourceMultiplexer> multiplexer_,
     Block header,
-    StorageMetadataPtr metadata_snapshot_,
+    StorageSnapshotPtr storage_snapshot_,
     ContextPtr query_context_)
-    : StreamingStoreSourceBase(header, metadata_snapshot_, std::move(query_context_))
+    : StreamingStoreSourceBase(header, std::move(storage_snapshot_), std::move(query_context_))
     , id(sequence_id++)
     , multiplexer(std::move(multiplexer_))
     , records_queue(1000)
@@ -41,17 +44,25 @@ void StreamingStoreSourceChannel::readAndProcess()
 
     for (auto & record : records)
     {
+        if (record->empty())
+            continue;
+
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
         Block & block = record->getBlock();
         auto rows = block.rows();
 
         /// Block in channel shall always contain full columns
-        assert(block.columns() == total_physical_columns_in_schema);
+        /// `virtual_columns_pos_begin` is also means total physical columns in schema
+        assert(block.columns() == virtual_columns_pos_begin);
 
-        for (auto pos : column_positions)
+        if (hasObjectColumns())
+            fillAndUpdateObjects(block);
+
+        /// Pos Range: [0, ..., virtual_columns_pos_begin, ..., subcolumns_pos_begin, ...)
+        for (size_t subcolumn_index = 0; auto pos : column_positions)
         {
-            if (pos < total_physical_columns_in_schema)
+            if (pos < virtual_columns_pos_begin)
             {
                 /// We can't move the column to columns
                 /// since the records can be shared among multiple threads
@@ -59,10 +70,16 @@ void StreamingStoreSourceChannel::readAndProcess()
                 auto col{block.getByPosition(pos).column};
                 columns.push_back(col->cloneResized(col->size()));
             }
+            else if (pos >= subcolumns_pos_begin)
+            {
+                /// It's a subcolumn, the parent (physical) column pos in schema is `pos - subcolumns_pos_begin`
+                columns.push_back(getSubcolumnFromblock(block, pos - subcolumns_pos_begin, subcolumns_to_read[subcolumn_index]));
+                ++subcolumn_index;
+            }
             else
             {
-                assert(virtual_time_columns_calc[pos - total_physical_columns_in_schema]);
-                auto ts = virtual_time_columns_calc[pos - total_physical_columns_in_schema](block.info);
+                assert(virtual_time_columns_calc[pos - virtual_columns_pos_begin]);
+                auto ts = virtual_time_columns_calc[pos - virtual_columns_pos_begin](block.info);
                 auto time_column = virtual_col_type->createColumnConst(rows, ts);
                 columns.push_back(std::move(time_column));
             }

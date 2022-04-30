@@ -24,14 +24,14 @@ namespace ErrorCodes
 KafkaSource::KafkaSource(
     Kafka * kafka,
     const Block & header_,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     ContextPtr query_context_,
     Int32 shard,
     Int64 offset,
     size_t max_block_size_,
     Poco::Logger * log_)
     : SourceWithProgress(header_)
-    , metadata_snapshot(metadata_snapshot_)
+    , storage_snapshot(storage_snapshot_)
     , query_context(std::move(query_context_))
     , max_block_size(max_block_size_)
     , log(log_)
@@ -325,7 +325,7 @@ void KafkaSource::calculateColumnPositions()
     /// Clients like to read virtual columns only, add the first physical column, then we know how many rows
     if (physical_header.columns() == 0)
     {
-        const auto & physical_columns = metadata_snapshot->getColumns().getOrdinary();
+        const auto & physical_columns = storage_snapshot->getColumns(GetColumnsOptions::Ordinary);
         const auto & physical_column = physical_columns.front();
         physical_header.insert({physical_column.type->createColumn(), physical_column.type, physical_column.name});
     }

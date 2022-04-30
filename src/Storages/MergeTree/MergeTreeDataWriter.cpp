@@ -10,6 +10,7 @@
 #include <IO/HashingWriteBuffer.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/ObjectUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
 #include <Processors/TTL/ITTLAlgorithm.h>
@@ -276,6 +277,17 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     BlockWithPartition & block_with_partition, const StorageMetadataPtr & metadata_snapshot, const SequenceInfoPtr & seq_info, ContextPtr context)
 {
     Block & block = block_with_partition.block;
+    auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
+    auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot);
+
+    /// We convert objects to tuples due to DataTypeObject doesn't support serialization with position independent encoding and more
+    if (!storage_snapshot->object_columns.get()->empty())
+    {
+        auto extended_storage_columns = storage_snapshot->getColumns(
+            GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects());
+
+        fillAndConvertObjectsToTuples(columns, block, extended_storage_columns);
+    }
 
     static const String TMP_PREFIX = "tmp_insert_";
 
@@ -352,7 +364,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     for (const auto & ttl_entry : move_ttl_entries)
         updateTTL(ttl_entry, move_ttl_infos, move_ttl_infos.moves_ttl[ttl_entry.result_column], block, false);
 
-    NamesAndTypesList columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
     ReservationPtr reservation = data.reserveSpacePreferringTTLRules(metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true);
     VolumePtr volume = data.getStoragePolicy()->getVolume(0);
 
@@ -425,7 +436,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     auto compression_codec = data.getContext()->chooseCompressionCodec(0, 0);
 
     const auto & index_factory = MergeTreeIndexFactory::instance();
-    MergedBlockOutputStream out(new_data_part, metadata_snapshot,columns,
+    MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns,
         index_factory.getMany(metadata_snapshot->getSecondaryIndices()), compression_codec);
 
     bool sync_on_insert = data_settings->fsync_after_insert;

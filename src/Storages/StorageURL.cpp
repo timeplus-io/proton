@@ -374,7 +374,7 @@ std::string IStorageURLBase::getReadMethod() const
 
 std::vector<std::pair<std::string, std::string>> IStorageURLBase::getReadURIParams(
     const Names & /*column_names*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
     const SelectQueryInfo & /*query_info*/,
     ContextPtr /*context*/,
     QueryProcessingStage::Enum & /*processed_stage*/,
@@ -397,16 +397,17 @@ std::function<void(std::ostream &)> IStorageURLBase::getReadPOSTDataCallback(
 
 Pipe IStorageURLBase::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
     unsigned num_streams)
 {
-    auto params = getReadURIParams(column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size);
+    auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
     bool with_globs = (uri.find('{') != std::string::npos && uri.find('}') != std::string::npos)
                     || uri.find('|') != std::string::npos;
+    auto metadata_snapshot = storage_snapshot->getMetadataForQuery();
 
     if (with_globs)
     {
@@ -435,7 +436,7 @@ Pipe IStorageURLBase::read(
                 format_name,
                 format_settings,
                 getName(),
-                getHeaderBlock(column_names, metadata_snapshot),
+                getHeaderBlock(column_names, storage_snapshot),
                 local_context,
                 metadata_snapshot->getColumns(),
                 max_block_size,
@@ -457,7 +458,7 @@ Pipe IStorageURLBase::read(
             format_name,
             format_settings,
             getName(),
-            getHeaderBlock(column_names, metadata_snapshot),
+            getHeaderBlock(column_names, storage_snapshot),
             local_context,
             metadata_snapshot->getColumns(),
             max_block_size,
@@ -469,14 +470,15 @@ Pipe IStorageURLBase::read(
 
 Pipe StorageURLWithFailover::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
     unsigned /*num_streams*/)
 {
-    auto params = getReadURIParams(column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size);
+    auto params = getReadURIParams(column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size);
+    auto metadata_snapshot = storage_snapshot->getMetadataForQuery();
 
     auto uri_info = std::make_shared<StorageURLSource::URIInfo>();
     uri_info->uri_list_to_read.emplace_back(uri_options);
@@ -489,7 +491,7 @@ Pipe StorageURLWithFailover::read(
         format_name,
         format_settings,
         getName(),
-        getHeaderBlock(column_names, metadata_snapshot),
+        getHeaderBlock(column_names, storage_snapshot),
         local_context,
         metadata_snapshot->getColumns(),
         max_block_size,

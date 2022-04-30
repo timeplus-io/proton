@@ -302,7 +302,7 @@ UInt64 StorageFileLog::getInode(const String & file_name)
 
 Pipe StorageFileLog::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & /* query_info */,
     ContextPtr local_context,
     QueryProcessingStage::Enum /* processed_stage */,
@@ -346,7 +346,7 @@ Pipe StorageFileLog::read(
     {
         pipes.emplace_back(std::make_shared<FileLogSource>(
             *this,
-            metadata_snapshot,
+            storage_snapshot,
             modified_context,
             column_names,
             getMaxBlockSize(),
@@ -666,6 +666,7 @@ bool StorageFileLog::streamToViews()
         throw Exception("Engine " + table_id.getNameForLogs() + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
         /// proton: ends
     auto metadata_snapshot = getInMemoryMetadataPtr();
+    auto storage_snapshot = getStorageSnapshot(metadata_snapshot);
 
     auto max_streams_number = std::min<UInt64>(filelog_settings->max_threads.value, file_infos.file_names.size());
     /// No files to parse
@@ -695,7 +696,7 @@ bool StorageFileLog::streamToViews()
     {
         pipes.emplace_back(std::make_shared<FileLogSource>(
             *this,
-            metadata_snapshot,
+            storage_snapshot,
             new_context,
             block_io.pipeline.getHeader().getNames(),
             getPollMaxBatchSize(),

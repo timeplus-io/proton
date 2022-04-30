@@ -47,11 +47,13 @@ public:
 
     bool supportsIndexForIn() const override;
 
+    bool supportsSubcolumns() const override;
+
     /// Here we inverted the implementation : Pipe read() -> void read
     /// which shall be the other way. Ref : IStorage default implementation
     Pipe read(
         const Names & column_names,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & /*storage_snapshot*/,
         SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
@@ -61,7 +63,7 @@ public:
     void read(
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const StorageSnapshotPtr & /*storage_snapshot*/,
         SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
@@ -72,13 +74,13 @@ public:
         QueryPlan & query_plan,
         SelectQueryInfo & query_info,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         ContextPtr context_);
 
     void readHistory(
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context_,
         QueryProcessingStage::Enum processed_stage,
@@ -89,7 +91,7 @@ public:
         QueryPlan & query_plan,
         SelectQueryInfo & query_info,
         Names column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size);
@@ -143,7 +145,9 @@ public:
     bool scheduleDataProcessingJob(BackgroundJobsAssignee & assignee) override;
 
     QueryProcessingStage::Enum getQueryProcessingStage(
-        ContextPtr, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo &) const override;
+        ContextPtr, QueryProcessingStage::Enum to_stage, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo &) const override;
+
+    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
 
 private:
     /// Partition helpers
@@ -180,20 +184,20 @@ private:
     QueryProcessingStage::Enum getQueryProcessingStageRemote(
         ContextPtr context,
         QueryProcessingStage::Enum to_stage,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info) const;
 
-    ClusterPtr getOptimizedCluster(ContextPtr context, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const;
+    ClusterPtr getOptimizedCluster(ContextPtr context, const StorageSnapshotPtr & storage_snapshot, const ASTPtr & query_ptr) const;
 
     ClusterPtr getCluster() const;
 
     ClusterPtr
-    skipUnusedShards(ClusterPtr cluster, const ASTPtr & query_ptr, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) const;
+    skipUnusedShards(ClusterPtr cluster, const ASTPtr & query_ptr, const StorageSnapshotPtr & storage_snapshot, ContextPtr context) const;
 
     void readRemote(
         QueryPlan & query_plan,
         const Names & column_names,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage);

@@ -84,7 +84,7 @@ FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> set
 
 Pipe FileLog::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & /*query_info*/,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -96,11 +96,12 @@ Pipe FileLog::read(
     Block header;
 
     if (!column_names.empty())
-        header = metadata_snapshot->getSampleBlockForColumns(column_names, {}, storage_id);
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
     {
-        auto physical_header{metadata_snapshot->getSampleBlockNonMaterialized()};
-        header.insert(physical_header.getByPosition(0));
+        auto physical_columns{storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::Ordinary))};
+        const auto & any_one_column = physical_columns.front();
+        header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
     }
 
     auto saved_start_timestamp = start_timestamp;

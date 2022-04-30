@@ -3,6 +3,8 @@
 #include "StreamingBlockReaderKafka.h"
 #include "StreamingStoreSourceChannel.h"
 
+#include <Storages/StorageSnapshot.h>
+
 namespace DB
 {
 /// The multiplexer fans out one streaming store reader to different streaming queries. This has
@@ -24,7 +26,7 @@ public:
     ~StreamingStoreSourceMultiplexer();
 
     StreamingStoreSourceChannelPtr
-    createChannel(const Names & column_names, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context);
+    createChannel(const Names & column_names, const StorageSnapshotPtr & storage_snapshot, ContextPtr query_context);
 
     void removeChannel(UInt32 channel_id);
 
@@ -71,7 +73,7 @@ public:
     StreamingStoreSourceMultiplexers(std::shared_ptr<IStorage> storage_, ContextPtr global_context_, Poco::Logger * log_);
 
     StreamingStoreSourceChannelPtr
-    createChannel(Int32 shard, const Names & column_names, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context);
+    createChannel(Int32 shard, const Names & column_names, const StorageSnapshotPtr & storage_snapshot, ContextPtr query_context);
 
 private:
     std::shared_ptr<IStorage> storage;

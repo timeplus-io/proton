@@ -4,7 +4,7 @@
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Processors/Sources/SourceWithProgress.h>
-#include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace Poco
 {
@@ -23,8 +23,8 @@ class KafkaSource final : public SourceWithProgress
 public:
     KafkaSource(
         Kafka * kafka,
-        const Block & header_,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const Block & header,
+        const StorageSnapshotPtr & storage_snapshot_,
         ContextPtr query_context_,
         Int32 shard,
         Int64 offset,
@@ -50,7 +50,7 @@ private:
     inline void readAndProcess();
 
 private:
-    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
     ContextPtr query_context;
     size_t max_block_size;
     Poco::Logger * log;

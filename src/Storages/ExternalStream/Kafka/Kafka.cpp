@@ -48,7 +48,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
 Pipe Kafka::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & /*query_info*/,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
@@ -76,14 +76,14 @@ Pipe Kafka::read(
         /// We will need add one
         Block header;
         if (!column_names.empty())
-            header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), storage_id);
+            header = storage_snapshot->getSampleBlockForColumns(column_names);
         else
-            header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_APPEND_TIME}, getVirtuals(), storage_id);
+            header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_APPEND_TIME});
 
         auto offsets = getOffsets(settings_ref.seek_to.value);
 
         for (Int32 i = 0; i < shards; ++i)
-            pipes.emplace_back(std::make_shared<KafkaSource>(this, header, metadata_snapshot, context, i, offsets[i], max_block_size, log));
+            pipes.emplace_back(std::make_shared<KafkaSource>(this, header, storage_snapshot, context, i, offsets[i], max_block_size, log));
     }
 
     LOG_INFO(log, "Starting reading {} streams by seeking to {} in dedicated resource group", pipes.size(), settings_ref.seek_to.value);
@@ -134,7 +134,8 @@ void Kafka::calculateDataFormat(const IStorage * storage)
     {
         /// no-op
     }
-    else if (type->getTypeId() == TypeIndex::Json)
+    /// FIXME: JSON logic
+    else if (type->getTypeId() == TypeIndex::Object)
         data_format = "JSONEachRow";
     else
         throw Exception(

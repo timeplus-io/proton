@@ -56,7 +56,7 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
     auto storage = TableFunctionProxyBase::calculateColumnDescriptions(context);
 
     auto syntax_analyzer_result = TreeRewriter(context).analyze(
-        dedup_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_metadata_snapshot : nullptr);
+        dedup_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
 
     ExpressionAnalyzer func_expr_analyzer(dedup_func_ast, syntax_analyzer_result, context);
 

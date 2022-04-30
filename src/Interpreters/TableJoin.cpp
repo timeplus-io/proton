@@ -515,7 +515,7 @@ bool TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const Rig
         try
         {
             /// TODO(vdimir): use getMostSubtype if possible
-            common_type = DB::getLeastSupertype({ltype->second, rtype->second});
+            common_type = DB::getLeastSupertype(DataTypes{ltype->second, rtype->second});
         }
         catch (DB::Exception & ex)
         {

@@ -6,6 +6,7 @@
 #include <Interpreters/StorageID.h>
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
@@ -40,7 +41,7 @@ protected:
 
     ASTPtr subquery;
     StorageID storage_id = StorageID::createEmpty();
-    StorageMetadataPtr underlying_storage_metadata_snapshot;
+    StorageSnapshotPtr underlying_storage_snapshot;
     ColumnsDescription columns;
 
     /// Nested ProxyStorage for nested table function: tumble(dedup(...))

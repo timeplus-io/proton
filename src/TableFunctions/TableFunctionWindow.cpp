@@ -190,7 +190,7 @@ void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, co
     if (timestamp_expr_ast)
     {
         auto syntax_analyzer_result = TreeRewriter(context).analyze(
-            timestamp_expr_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_metadata_snapshot : nullptr);
+            timestamp_expr_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
         timestamp_func_desc = createStreamingFunctionDescription(timestamp_expr_ast, std::move(syntax_analyzer_result), context, "");
 
         /// Check the resulting type. It shall be a datetime / datetime64.
@@ -209,7 +209,7 @@ void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, co
     }
 
     auto func_syntax_analyzer_result = TreeRewriter(context).analyze(
-        streaming_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_metadata_snapshot : nullptr);
+        streaming_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
     streaming_func_desc
         = createStreamingFunctionDescription(streaming_func_ast, std::move(func_syntax_analyzer_result), context, func_name_prefix);
 

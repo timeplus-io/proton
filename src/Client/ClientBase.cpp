@@ -1075,10 +1075,11 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
 
         try
         {
+            auto metadata = storage->getInMemoryMetadataPtr();
             sendDataFromPipe(
                 storage->read(
                         sample.getNames(),
-                        storage->getInMemoryMetadataPtr(),
+                        storage->getStorageSnapshot(metadata),
                         query_info,
                         global_context,
                         {},

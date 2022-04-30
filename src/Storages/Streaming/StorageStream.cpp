@@ -109,9 +109,9 @@ namespace
         ContextPtr context,
         const NamesAndTypesList & columns,
         ConstStoragePtr storage,
-        const StorageMetadataPtr & metadata_snapshot)
+        const StorageSnapshotPtr & storage_snapshot)
     {
-        auto syntax_result = TreeRewriter(context).analyze(node, columns, storage, metadata_snapshot);
+        auto syntax_result = TreeRewriter(context).analyze(node, columns, storage, storage_snapshot);
         Block block_with_constants = KeyCondition::getBlockWithConstants(node, syntax_result, context);
 
         InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(block_with_constants);
@@ -335,7 +335,7 @@ NamesAndTypesList StorageStream::getVirtualsHistory() const
 void StorageStream::readRemote(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage)
@@ -353,7 +353,7 @@ void StorageStream::readRemote(
     }
 
     bool has_virtual_shard_num_column = std::find(column_names.begin(), column_names.end(), "_shard_num") != column_names.end();
-    if (has_virtual_shard_num_column && !isVirtualColumn("_shard_num", metadata_snapshot))
+    if (has_virtual_shard_num_column && !isVirtualColumn("_shard_num", storage_snapshot->getMetadataForQuery()))
         has_virtual_shard_num_column = false;
 
     ClusterProxy::DistributedSelectStreamFactory select_stream_factory
@@ -379,7 +379,7 @@ void StorageStream::readConcat(
     QueryPlan & query_plan,
     SelectQueryInfo & query_info,
     Names column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size)
@@ -391,11 +391,11 @@ void StorageStream::readConcat(
     /// We will need add one
     Block header;
     if (!column_names.empty())
-        header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+        header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
     else
-        header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
 
-    auto create_streaming_source = [this, header, metadata_snapshot, context_](Int64 & max_sn_in_parts) {
+    auto create_streaming_source = [this, header, storage_snapshot, context_](Int64 & max_sn_in_parts) {
         auto committed = storage->committedSN();
         if (max_sn_in_parts < 0)
         {
@@ -403,7 +403,7 @@ void StorageStream::readConcat(
             auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
             LOG_INFO(log, "Fused read fallbacks to seek stream. shard={}", currentShard());
             return std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], log);
+                shared_from_this(), header, storage_snapshot, context_, currentShard(), offsets[currentShard()], log);
         }
         else if (committed < max_sn_in_parts)
         {
@@ -422,7 +422,7 @@ void StorageStream::readConcat(
             /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
             max_sn_in_parts = -1;
             return std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, metadata_snapshot, context_, currentShard(), offsets[currentShard()], log);
+                shared_from_this(), header, storage_snapshot, context_, currentShard(), offsets[currentShard()], log);
         }
         else
         {
@@ -433,14 +433,14 @@ void StorageStream::readConcat(
                 max_sn_in_parts,
                 committed);
             return std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, metadata_snapshot, context_, currentShard(), max_sn_in_parts + 1, log);
+                shared_from_this(), header, storage_snapshot, context_, currentShard(), max_sn_in_parts + 1, log);
         }
     };
 
     storage->readConcat(
         query_plan,
         column_names,
-        metadata_snapshot,
+        storage_snapshot,
         query_info,
         context_,
         processed_stage,
@@ -452,7 +452,7 @@ void StorageStream::readStreaming(
     QueryPlan & query_plan,
     SelectQueryInfo & /*query_info*/,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     ContextPtr context_)
 {
     Pipes pipes;
@@ -465,9 +465,9 @@ void StorageStream::readStreaming(
         for (Int32 i = 0; i < shards; ++i)
         {
             if (!column_names.empty())
-                pipes.emplace_back(source_multiplexers->createChannel(shard, column_names, metadata_snapshot, context_));
+                pipes.emplace_back(source_multiplexers->createChannel(shard, column_names, storage_snapshot, context_));
             else
-                pipes.emplace_back(source_multiplexers->createChannel(shard, {ProtonConsts::RESERVED_EVENT_TIME}, metadata_snapshot, context_));
+                pipes.emplace_back(source_multiplexers->createChannel(shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
         }
     }
     else
@@ -478,15 +478,15 @@ void StorageStream::readStreaming(
         /// We will need add one
         Block header;
         if (!column_names.empty())
-            header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+            header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
         else
-            header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, getVirtuals(), getStorageID());
+            header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
 
         auto offsets = getOffsets(settings_ref.seek_to.value);
 
         for (Int32 i = 0; i < shards; ++i)
             pipes.emplace_back(
-                std::make_shared<StreamingStoreSource>(shared_from_this(), header, metadata_snapshot, context_, i, offsets[i], log));
+                std::make_shared<StreamingStoreSource>(shared_from_this(), header, storage_snapshot, context_, i, offsets[i], log));
     }
 
     LOG_INFO(
@@ -502,7 +502,7 @@ void StorageStream::readStreaming(
 void StorageStream::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -517,19 +517,19 @@ void StorageStream::read(
         /// FIXME, to support seek_to='-1h'
         if (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value
             && !requireDistributedQuery(context_))
-            readConcat(query_plan, query_info, column_names, metadata_snapshot, std::move(context_), processed_stage, max_block_size);
+            readConcat(query_plan, query_info, column_names, storage_snapshot, std::move(context_), processed_stage, max_block_size);
         else
-            readStreaming(query_plan, query_info, column_names, metadata_snapshot, std::move(context_));
+            readStreaming(query_plan, query_info, column_names, storage_snapshot, std::move(context_));
     }
     else
         readHistory(
-            query_plan, column_names, metadata_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
+            query_plan, column_names, storage_snapshot, query_info, std::move(context_), processed_stage, max_block_size, num_streams);
 }
 
 void StorageStream::readHistory(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -539,17 +539,17 @@ void StorageStream::readHistory(
     if (requireDistributedQuery(context_))
     {
         /// This is a distributed query
-        readRemote(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage);
+        readRemote(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage);
     }
     else
     {
-        storage->read(query_plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+        storage->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     }
 }
 
 Pipe StorageStream::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -557,7 +557,7 @@ Pipe StorageStream::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
 }
 
@@ -703,6 +703,11 @@ bool StorageStream::supportsIndexForIn() const
     return true;
 }
 
+bool StorageStream::supportsSubcolumns() const
+{
+    return storage && storage->supportsSubcolumns();
+}
+
 std::optional<UInt64> StorageStream::totalRows(const Settings & settings) const
 {
     assert(storage);
@@ -832,7 +837,7 @@ bool StorageStream::scheduleDataProcessingJob(BackgroundJobsAssignee & assignee)
 QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
     if (query_info.syntax_analyzer_result->streaming)
@@ -841,12 +846,18 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     }
     else if (requireDistributedQuery(context_))
     {
-        return getQueryProcessingStageRemote(context_, to_stage, metadata_snapshot, query_info);
+        return getQueryProcessingStageRemote(context_, to_stage, storage_snapshot, query_info);
     }
     else
     {
-        return storage->getQueryProcessingStage(context_, to_stage, metadata_snapshot, query_info);
+        return storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
     }
+}
+
+StorageSnapshotPtr StorageStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+{
+    assert(storage);
+    return storage->getStorageSnapshot(metadata_snapshot);
 }
 
 void StorageStream::dropPartNoWaitNoThrow(const String & part_name)
@@ -926,7 +937,7 @@ ClusterPtr StorageStream::getCluster() const
 /// Returns a new cluster with fewer shards if constant folding for `sharding_key_expr` is possible
 /// using constraints from "PREWHERE" and "WHERE" conditions, otherwise returns `nullptr`
 ClusterPtr StorageStream::skipUnusedShards(
-    ClusterPtr cluster, const ASTPtr & query_ptr, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_) const
+    ClusterPtr cluster, const ASTPtr & query_ptr, const StorageSnapshotPtr & storage_snapshot, ContextPtr context_) const
 {
     const auto & select = query_ptr->as<ASTSelectQuery &>();
 
@@ -945,7 +956,12 @@ ClusterPtr StorageStream::skipUnusedShards(
         condition_ast = select.prewhere() ? select.prewhere()->clone() : select.where()->clone();
     }
 
-    replaceConstantExpressions(condition_ast, context_, metadata_snapshot->getColumns().getAll(), shared_from_this(), metadata_snapshot);
+    replaceConstantExpressions(
+        condition_ast,
+        context_,
+        storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns()),
+        shared_from_this(),
+        storage_snapshot);
 
     size_t limit = context_->getSettingsRef().optimize_skip_unused_shards_limit;
     if (!limit || limit > LONG_MAX)
@@ -990,7 +1006,7 @@ ClusterPtr StorageStream::skipUnusedShards(
 }
 
 ClusterPtr
-StorageStream::getOptimizedCluster(ContextPtr context_, const StorageMetadataPtr & metadata_snapshot, const ASTPtr & query_ptr) const
+StorageStream::getOptimizedCluster(ContextPtr context_, const StorageSnapshotPtr & storage_snapshot, const ASTPtr & query_ptr) const
 {
     ClusterPtr cluster = getCluster();
     const Settings & settings = context_->getSettingsRef();
@@ -999,7 +1015,7 @@ StorageStream::getOptimizedCluster(ContextPtr context_, const StorageMetadataPtr
 
     if (sharding_key_expr && sharding_key_is_usable)
     {
-        ClusterPtr optimized = skipUnusedShards(cluster, query_ptr, metadata_snapshot, context_);
+        ClusterPtr optimized = skipUnusedShards(cluster, query_ptr, storage_snapshot, context_);
         if (optimized)
         {
             return optimized;
@@ -1040,7 +1056,7 @@ StorageStream::getOptimizedCluster(ContextPtr context_, const StorageMetadataPtr
 QueryProcessingStage::Enum StorageStream::getQueryProcessingStageRemote(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
     const auto & settings = context_->getSettingsRef();
@@ -1051,7 +1067,7 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStageRemote(
     /// Always calculate optimized cluster here to avoid conditions during read()
     if (settings.optimize_skip_unused_shards && getClusterQueriedNodes(settings, cluster) > 1)
     {
-        ClusterPtr optimized_cluster = getOptimizedCluster(context_, metadata_snapshot, query_info.query);
+        ClusterPtr optimized_cluster = getOptimizedCluster(context_, storage_snapshot, query_info.query);
         if (optimized_cluster)
         {
             LOG_DEBUG(

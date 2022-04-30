@@ -13,7 +13,7 @@ public:
     StreamingStoreSource(
         std::shared_ptr<IStorage> storage_,
         const Block & header,
-        const StorageMetadataPtr & metadata_snapshot_,
+        const StorageSnapshotPtr & storage_snapshot_,
         ContextPtr context_,
         Int32 shard_,
         Int64 sn,

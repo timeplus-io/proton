@@ -1,5 +1,6 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeCustom.h>
+#include <DataTypes/typeIndexToTypeName.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTFunction.h>
@@ -25,6 +26,12 @@ namespace ErrorCodes
     extern const int DATA_TYPE_CANNOT_HAVE_ARGUMENTS;
 }
 
+/// proton: starts.
+DataTypePtr DataTypeFactory::get(TypeIndex type) const
+{
+    return get(typeIndexToTypeName(type));
+}
+/// proton: ends.
 
 DataTypePtr DataTypeFactory::get(const String & full_name) const
 {
@@ -56,7 +63,7 @@ DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
     if (const auto * lit = ast->as<ASTLiteral>())
     {
         if (lit->value.isNull())
-            return get("Null", {});
+            return get("null", {});
     }
 
     throw Exception("Unexpected AST element for data type.", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
@@ -66,10 +73,10 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
 {
     String family_name = getAliasToOrName(family_name_param);
 
-    if (endsWith(family_name, "WithDictionary"))
+    if (endsWith(family_name, "_with_dictionary"))
     {
         ASTPtr low_cardinality_params = std::make_shared<ASTExpressionList>();
-        String param_name = family_name.substr(0, family_name.size() - strlen("WithDictionary"));
+        String param_name = family_name.substr(0, family_name.size() - strlen("_with_dictionary"));
         if (parameters)
         {
             auto func = std::make_shared<ASTFunction>();
@@ -212,10 +219,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDomainSimpleAggregateFunction(*this);
     /// registerDataTypeDomainGeo(*this);
     registerDataTypeMap(*this);
-
-    /// proton: starts.
-    registerDataTypeJson(*this);
-    /// proton: ends.
+    registerDataTypeObject(*this);
 }
 
 DataTypeFactory & DataTypeFactory::instance()

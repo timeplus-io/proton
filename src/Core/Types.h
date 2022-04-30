@@ -87,9 +87,7 @@ enum class TypeIndex
     AggregateFunction,
     LowCardinality,
     Map,
-    /// proton: starts.
-    Json,
-    /// proton: ends.
+    Object,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop

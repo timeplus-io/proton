@@ -78,8 +78,8 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
 
         if (storage->as<StorageView>())
         {
-            underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
-            auto select = underlying_storage_metadata_snapshot->getSelectQuery().inner_query;
+            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
+            auto select = underlying_storage_snapshot->getMetadataForQuery()->getSelectQuery().inner_query;
             SelectQueryOptions options;
             auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, options);
             if (interpreter_subquery)
@@ -93,8 +93,8 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
         }
         else
         {
-            underlying_storage_metadata_snapshot = storage->getInMemoryMetadataPtr();
-            columns = underlying_storage_metadata_snapshot->getColumns();
+            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr());
+            columns = underlying_storage_snapshot->metadata->getColumns();
         }
     }
 
@@ -111,7 +111,7 @@ StoragePtr TableFunctionProxyBase::executeImpl(
     return ProxyStream::create(
         storage_id,
         columns,
-        underlying_storage_metadata_snapshot,
+        underlying_storage_snapshot,
         context,
         streaming_func_desc,
         timestamp_func_desc,

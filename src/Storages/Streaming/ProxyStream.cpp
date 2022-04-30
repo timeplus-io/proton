@@ -24,7 +24,7 @@ namespace DB
 ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
-    StorageMetadataPtr underlying_storage_metadata_snapshot_,
+    StorageSnapshotPtr underlying_storage_snapshot_,
     ContextPtr context_,
     StreamingFunctionDescriptionPtr streaming_func_desc_,
     StreamingFunctionDescriptionPtr timestamp_func_desc_,
@@ -34,7 +34,7 @@ ProxyStream::ProxyStream(
     bool streaming_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
-    , underlying_storage_metadata_snapshot(underlying_storage_metadata_snapshot_)
+    , underlying_storage_snapshot(underlying_storage_snapshot_)
     , streaming_func_desc(std::move(streaming_func_desc_))
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , nested_proxy_storage(nested_proxy_storage_)
@@ -72,11 +72,11 @@ ProxyStream::ProxyStream(
 QueryProcessingStage::Enum ProxyStream::getQueryProcessingStage(
     ContextPtr context_,
     QueryProcessingStage::Enum to_stage,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
     if (storage)
-        return storage->getQueryProcessingStage(context_, to_stage, metadata_snapshot, query_info);
+        return storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
     else
         /// When it is created by subquery not a table
         return QueryProcessingStage::FetchColumns;
@@ -84,7 +84,7 @@ QueryProcessingStage::Enum ProxyStream::getQueryProcessingStage(
 
 Pipe ProxyStream::read(
     const Names & column_names,
-    const StorageMetadataPtr & /* metadata_snapshot */,
+    const StorageSnapshotPtr & /* storage_snapshot */,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -92,14 +92,14 @@ Pipe ProxyStream::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, underlying_storage_metadata_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, underlying_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
 }
 
 void ProxyStream::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const StorageSnapshotPtr & /* storage_snapshot */,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -141,7 +141,7 @@ void ProxyStream::read(
         return view->read(
             query_plan,
             updated_column_names,
-            underlying_storage_metadata_snapshot,
+            underlying_storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -151,7 +151,7 @@ void ProxyStream::read(
         return materialized_view->read(
             query_plan,
             updated_column_names,
-            underlying_storage_metadata_snapshot,
+            underlying_storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -161,7 +161,7 @@ void ProxyStream::read(
         return external_stream->read(
             query_plan,
             updated_column_names,
-            underlying_storage_metadata_snapshot,
+            underlying_storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -171,7 +171,7 @@ void ProxyStream::read(
         return nested_proxy_storage->read(
             query_plan,
             updated_column_names,
-            underlying_storage_metadata_snapshot,
+            underlying_storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -182,12 +182,12 @@ void ProxyStream::read(
     assert(distributed);
 
     if (streaming && context_->getSettingsRef().query_mode.value != "table")
-        distributed->readStreaming(query_plan, query_info, updated_column_names, underlying_storage_metadata_snapshot, context_);
+        distributed->readStreaming(query_plan, query_info, updated_column_names, underlying_storage_snapshot, context_);
     else
         distributed->readHistory(
             query_plan,
             updated_column_names,
-            underlying_storage_metadata_snapshot,
+            underlying_storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -273,13 +273,13 @@ void ProxyStream::buildStreamingProcessingQueryPlan(
     QueryPlan & query_plan,
     const Names & required_columns_after_streaming_window,
     const SelectQueryInfo & query_info,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     const ContextPtr & context_,
     bool need_watermark) const
 {
     if (nested_proxy_storage)
         nested_proxy_storage->as<ProxyStream>()->buildStreamingProcessingQueryPlan(
-            query_plan, required_columns_after_streaming_window, query_info, metadata_snapshot, context_, need_watermark);
+            query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context_, need_watermark);
 
     if (!streaming_func_desc)
         return;
@@ -298,7 +298,7 @@ void ProxyStream::buildStreamingProcessingQueryPlan(
         if (need_watermark)
             processWatermarkStep(query_plan, query_info, proc_time);
 
-        processWindowAssignmentStep(query_plan, required_columns_after_streaming_window, metadata_snapshot);
+        processWindowAssignmentStep(query_plan, required_columns_after_streaming_window, storage_snapshot);
     }
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} function is not supported", internal_name);
@@ -358,20 +358,25 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
 }
 
 void ProxyStream::processWindowAssignmentStep(
-    QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageMetadataPtr & metadata_snapshot) const
+    QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageSnapshotPtr & storage_snapshot) const
 {
     if (streaming_func_desc->type == WindowType::TUMBLE || streaming_func_desc->type == WindowType::HOP)
     {
-        Block output_header;
-        if (!storage)
-            /// Built from subquery
-            output_header = metadata_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
-        else
-            output_header = metadata_snapshot->getSampleBlockForColumns(
-                required_columns_after_streaming_window, storage->getVirtuals(), storage->getStorageID());
+        Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
 
         query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
     }
+}
+
+StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+{
+    if (nested_proxy_storage)
+        return nested_proxy_storage->getStorageSnapshot(metadata_snapshot);
+
+    if (storage)
+        return storage->getStorageSnapshot(metadata_snapshot);
+
+    return IStorage::getStorageSnapshot(metadata_snapshot);
 }
 }

@@ -15,7 +15,7 @@ public:
     StreamingStoreSourceChannel(
         std::shared_ptr<StreamingStoreSourceMultiplexer> multiplexer_,
         Block header,
-        StorageMetadataPtr metadata_snapshot_,
+        StorageSnapshotPtr storage_snapshot_,
         ContextPtr query_context_);
 
     ~StreamingStoreSourceChannel() override;

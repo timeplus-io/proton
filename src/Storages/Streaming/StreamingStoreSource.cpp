@@ -4,6 +4,7 @@
 #include "StreamingBlockReaderNativeLog.h"
 
 #include <Interpreters/Context.h>
+#include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
 
@@ -12,12 +13,12 @@ namespace DB
 StreamingStoreSource::StreamingStoreSource(
     std::shared_ptr<IStorage> storage_,
     const Block & header,
-    const StorageMetadataPtr & metadata_snapshot_,
+    const StorageSnapshotPtr & storage_snapshot_,
     ContextPtr context_,
     Int32 shard_,
     Int64 sn,
     Poco::Logger * log_)
-    : StreamingStoreSourceBase(header, metadata_snapshot_, std::move(context_)), shard(shard_), log(log_)
+    : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_)), shard(shard_), log(log_)
 {
     if (query_context->getSettingsRef().record_consume_batch_count != 0)
         record_consume_batch_count = query_context->getSettingsRef().record_consume_batch_count;
@@ -72,6 +73,9 @@ void StreamingStoreSource::readAndProcess()
     auto pos_size = column_positions.size();
     for (auto & record : records)
     {
+        if (record->empty())
+            continue;
+
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
         Block & block = record->getBlock();
@@ -79,19 +83,30 @@ void StreamingStoreSource::readAndProcess()
 
         assert(pos_size >= block.columns());
 
-        for (size_t index = 0, physical_col_index = 0; index < pos_size; ++index)
+        if (hasObjectColumns())
+            fillAndUpdateObjects(block);
+
+        /// Pos Range: [0, ..., virtual_columns_pos_begin, ..., subcolumns_pos_begin, ...)
+        for (size_t index = 0, physical_col_index = 0, subcolumn_index = 0; index < pos_size; ++index)
         {
-            if (column_positions[index] < total_physical_columns_in_schema)
+            auto pos_in_schema = column_positions[index];
+            if (pos_in_schema < virtual_columns_pos_begin)
             {
                 /// At current result column index, it is expecting a physical column
-                columns.push_back(std::move(block.getByPosition(physical_col_index).column));
+                columns.push_back(block.getByPosition(physical_col_index).column);
                 ++physical_col_index;
+            }
+            else if (pos_in_schema >= subcolumns_pos_begin)
+            {
+                /// It's a subcolumn, the parent (physical) column pos in schema is `pos_in_schema - subcolumns_pos_begin`
+                columns.push_back(getSubcolumnFromblock(block, pos_in_schema - subcolumns_pos_begin, subcolumns_to_read[subcolumn_index]));
+                ++subcolumn_index;
             }
             else
             {
                 /// The current column to return is a virtual column which needs be calculated lively
-                assert(virtual_time_columns_calc[column_positions[index] - total_physical_columns_in_schema]);
-                auto ts = virtual_time_columns_calc[column_positions[index] - total_physical_columns_in_schema](block.info);
+                assert(virtual_time_columns_calc[pos_in_schema - virtual_columns_pos_begin]);
+                auto ts = virtual_time_columns_calc[pos_in_schema - virtual_columns_pos_begin](block.info);
                 auto time_column = virtual_col_type->createColumnConst(rows, ts);
                 columns.push_back(std::move(time_column));
             }

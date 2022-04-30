@@ -9,6 +9,7 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/getColumnFromBlock.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
@@ -308,7 +309,7 @@ void StorageMaterializedView::shutdown()
 
 Pipe StorageMaterializedView::read(
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -316,7 +317,7 @@ Pipe StorageMaterializedView::read(
     const unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
@@ -324,7 +325,7 @@ Pipe StorageMaterializedView::read(
 void StorageMaterializedView::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum processed_stage,
@@ -342,21 +343,22 @@ void StorageMaterializedView::read(
 
     Block header;
     if (!column_names.empty())
-        header = metadata_snapshot->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
-        header = metadata_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_VIEW_VERSION}, getVirtuals(), getStorageID());
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_VIEW_VERSION});
 
     if (query_info.syntax_analyzer_result->streaming)
     {
         auto storage = getTargetTable();
         auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
         auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
+        auto target_storage_snapshot = storage->getStorageSnapshot(target_metadata_snapshot);
 
         if (query_info.order_optimizer)
             query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
 
         auto pipe = storage->read(
-            column_names, target_metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+            column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
         /// Add valid check of the view
         /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.

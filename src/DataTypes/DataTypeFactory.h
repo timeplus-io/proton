@@ -31,6 +31,10 @@ private:
 public:
     static DataTypeFactory & instance();
 
+    /// proton: starts.
+    DataTypePtr get(TypeIndex type) const;
+    /// proton: ends.
+
     DataTypePtr get(const String & full_name) const;
     DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
     DataTypePtr get(const ASTPtr & ast) const;
@@ -88,9 +92,5 @@ void registerDataTypeDomainIPv4AndIPv6(DataTypeFactory & factory);
 void registerDataTypeDomainBool(DataTypeFactory & factory);
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory);
 void registerDataTypeDomainGeo(DataTypeFactory & factory);
-
-/// proton: starts.
-void registerDataTypeJson(DataTypeFactory & factory);
-/// proton: ends.
-
+void registerDataTypeObject(DataTypeFactory & factory);
 }

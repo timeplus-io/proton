@@ -91,6 +91,7 @@ void registerFunctionFile(FunctionFactory & factory);
 
 /// proton: starts.
 void registerFunctionStreamingNeighbor(FunctionFactory &);
+void registerFunctionToConcreteType(FunctionFactory &);
 /// proton: ends.
 
 #ifdef FUZZING_MODE
@@ -189,6 +190,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
 
     /// proton: starts.
     registerFunctionStreamingNeighbor(factory);
+    registerFunctionToConcreteType(factory);
     /// proton: ends.
 }
 
