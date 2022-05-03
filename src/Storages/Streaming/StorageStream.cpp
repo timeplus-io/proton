@@ -1669,8 +1669,11 @@ void StorageStream::backgroundPollNativeLog()
             if ((current_bytes_in_batch >= bytes_threshold) || (current_rows_in_batch >= rows_threshold)
                 || (MonotonicMilliseconds::now() - last_batch_commit >= interval_threshold))
             {
-                stream_commit.commit(std::move(batch));
-                batch.reserve(batch_size);
+                if (!batch.empty())
+                {
+                    stream_commit.commit(std::move(batch));
+                    batch.reserve(batch_size);
+                }
             }
         }
         catch (const DB::Exception & e)
