@@ -467,7 +467,8 @@ void StorageStream::readStreaming(
             if (!column_names.empty())
                 pipes.emplace_back(source_multiplexers->createChannel(shard, column_names, storage_snapshot, context_));
             else
-                pipes.emplace_back(source_multiplexers->createChannel(shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
+                pipes.emplace_back(
+                    source_multiplexers->createChannel(shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
         }
     }
     else
@@ -1619,16 +1620,34 @@ void StorageStream::backgroundPollNativeLog()
         shard,
         snLoaded(),
         ssettings->distributed_flush_threshold_ms.value,
-        ssettings->distributed_flush_threshold_count,
-        ssettings->distributed_flush_threshold_bytes,
+        ssettings->distributed_flush_threshold_count.value,
+        ssettings->distributed_flush_threshold_bytes.value,
         sequenceRangesToString(missing_sequence_ranges));
 
     StreamCallbackData stream_commit{this, missing_sequence_ranges};
 
     StreamingBlockReaderNativeLog block_reader(
-        shared_from_this(), shard, snLoaded(), /*max_wait_ms*/ 1000, /*read_buf_size*/ 16 * 1024 * 1024, &stream_commit, nlog::ALL_SCHEMA, {}, log);
+        shared_from_this(),
+        shard,
+        snLoaded(),
+        /*max_wait_ms*/ 1000,
+        /*read_buf_size*/ 4 * 1024 * 1024,
+        &stream_commit,
+        nlog::ALL_SCHEMA,
+        {},
+        log);
 
-    std::vector<char> read_buf(16 * 1024 * 1024 + 8 * 1024, '\0');
+    nlog::RecordPtrs batch;
+    size_t batch_size = 100;
+    batch.reserve(batch_size);
+
+    size_t rows_threshold = ssettings->distributed_flush_threshold_count.value;
+    size_t bytes_threshold = ssettings->distributed_flush_threshold_bytes.value;
+    Int64 interval_threshold = ssettings->distributed_flush_threshold_ms.value;
+
+    size_t current_bytes_in_batch = 0;
+    size_t current_rows_in_batch = 0;
+    auto last_batch_commit = MonotonicMilliseconds::now();
 
     while (!stopped.test())
     {
@@ -1640,8 +1659,19 @@ void StorageStream::backgroundPollNativeLog()
                 periodicallyCommit();
 
             auto records{block_reader.read()};
-            if (!records.empty())
-                stream_commit.commit(std::move(records));
+            for (auto & record : records)
+            {
+                current_bytes_in_batch += record->totalSerializedBytes();
+                current_rows_in_batch += record->getBlock().rows();
+                batch.push_back(std::move(record));
+            }
+
+            if ((current_bytes_in_batch >= bytes_threshold) || (current_rows_in_batch >= rows_threshold)
+                || (MonotonicMilliseconds::now() - last_batch_commit >= interval_threshold))
+            {
+                stream_commit.commit(std::move(batch));
+                batch.reserve(batch_size);
+            }
         }
         catch (const DB::Exception & e)
         {
@@ -1653,6 +1683,10 @@ void StorageStream::backgroundPollNativeLog()
             tryLogCurrentException(log, fmt::format("Failed to consume data for shard={}", shard));
         }
     }
+
+    /// Final batch
+    if (!batch.empty())
+        stream_commit.commit(std::move(batch));
 
     stream_commit.wait();
 
@@ -1853,11 +1887,7 @@ void StorageStream::initKafkaLog()
 
     const auto & storage_id = getStorageID();
     auto kafka_log = std::make_unique<KafkaLog>(
-        toString(storage_id.uuid),
-        shards,
-        replication_factor,
-        getContext()->getSettingsRef().async_ingest_block_timeout_ms,
-        log);
+        toString(storage_id.uuid), shards, replication_factor, getContext()->getSettingsRef().async_ingest_block_timeout_ms, log);
 
     kafka.swap(kafka_log);
 
@@ -1982,7 +2012,8 @@ std::vector<Int64> StorageStream::sequencesForTimestamps(Int64 ts, bool append_t
     for (Int32 i = 0; i < shards; ++i)
         shard_ids.push_back(i);
 
-    nlog::TranslateTimestampsRequest request{nlog::Stream{storage_id.getTableName(), storage_id.uuid}, std::move(shard_ids), ts, append_time};
+    nlog::TranslateTimestampsRequest request{
+        nlog::Stream{storage_id.getTableName(), storage_id.uuid}, std::move(shard_ids), ts, append_time};
     auto & native_log = nlog::NativeLog::instance(getContext());
     auto response{native_log.translateTimestamps(storage_id.getDatabaseName(), request)};
     if (response.hasError())
