@@ -57,11 +57,10 @@ Loglet::Loglet(
         next_sn_meta.string());
 }
 
-FetchDataDescription Loglet::fetch(int64_t sn, int64_t max_size, std::optional<int64_t> position) const
+FetchDataDescription Loglet::fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_meta, std::optional<uint64_t> position) const
 {
-    auto next_sn{next_sn_meta};
-    if (sn == next_sn.record_sn)
-        /// If client request sn at log end, return its sn back and empty records
+    if (sn >= max_sn_meta.record_sn)
+        /// If client request sn is the max ns meta, return its sn back and empty records
         /// which basically indicates client to wait
         return {{sn}, {}};
 
@@ -74,14 +73,27 @@ FetchDataDescription Loglet::fetch(int64_t sn, int64_t max_size, std::optional<i
     /// continue to read from successive segments until we get some messages or we reach the end of the log
     while (segment)
     {
-        auto fetch_info = segment->read(sn, max_size, position);
+        /// Use the max file position in the max sequence meta if it is on this segment;
+        /// otherwise use the segment size as the limit
+        auto max_position = max_sn_meta.segment_base_sn == segment->baseSequence() ? max_sn_meta.file_position : segment->size();
+        auto fetch_info = segment->read(sn, max_size, max_position, position);
         if (fetch_info.records)
+        {
+            /// The target segment to serve this fetch is inactive and we are reaching the end of it
+            /// set eof in the fetch info to tell caller
+            if ((max_sn_meta.segment_base_sn != segment->baseSequence()) && (fetch_info.records->endPosition() == segment->size()))
+                fetch_info.eof = true;
+
             return fetch_info;
+        }
         else
             segment = segments->higherSegment(segment->baseSequence());
     }
 
-    return {next_sn, {}};
+    /// We are beyond the end of the last segment with no data fetched although the start sequence is in range.
+    /// This can happen when all messages with sequence larger than start sequences have been deleted.
+    /// In this case, we will return an empty records with log end sequence metadata
+    return {logEndSequenceMetadata(), {}};
 }
 
 void Loglet::append(const ByteVector & record, const LogAppendDescription & append_info)
@@ -101,7 +113,7 @@ int64_t Loglet::sequenceForTimestamp(int64_t ts, bool append_time) const
 
     segments->apply([ts, append_time, &ts_seq_res, &prev_segment, &target_segment](LogSegmentPtr & segment) {
         auto ts_seq{segment->getIndexes().lowerBoundSequenceForTimestamp(ts, append_time)};
-        if (ts_seq.isInvalid())
+        if (!ts_seq.isValid())
         {
             /// All timestamps in index are smaller than ts
             /// or index is empty. Remember this segment
@@ -127,7 +139,7 @@ int64_t Loglet::sequenceForTimestamp(int64_t ts, bool append_time) const
         }
     });
 
-    if (ts_seq_res.isInvalid())
+    if (!ts_seq_res.isValid())
     {
         if (prev_segment)
         {
@@ -176,7 +188,7 @@ LogSegmentPtr Loglet::roll(std::optional<int64_t> expected_next_sn)
 
     /// We need to update the segment base sn and append position data of the metadata when
     /// log rolls. The next sn should not change
-    updateLogEndSequence(next_sn_meta.record_sn, new_segment->baseSequence(), new_segment->size());
+    updateLogEndSequence(logEndSequence(), new_segment->baseSequence(), new_segment->size());
 
     LOG_INFO(logger, "Rolled new log segment at sn={} in {} ms", new_sn, DB::MonotonicMilliseconds::now() - start);
     return new_segment;
@@ -338,16 +350,19 @@ bool Loglet::renameDir(const std::string & name)
     return false;
 }
 
-void Loglet::updateLogEndSequence(int64_t end_offset, int64_t segment_base_offset, int64_t segment_pos)
+void Loglet::updateLogEndSequence(int64_t end_sn, int64_t segment_base_sn, uint64_t segment_pos)
 {
-    next_sn_meta.record_sn = end_offset;
-    next_sn_meta.segment_base_sn = segment_base_offset;
-    next_sn_meta.file_position = segment_pos;
+    {
+        std::scoped_lock lock(next_sn_mutex);
+        next_sn_meta.record_sn = end_sn;
+        next_sn_meta.segment_base_sn = segment_base_sn;
+        next_sn_meta.file_position = segment_pos;
+    }
 
     /// In case recovery point is already beyond log end sn,
     /// reset it
-    if (recovery_point > end_offset)
-        updateRecoveryPoint(end_offset);
+    if (recovery_point > end_sn)
+        updateRecoveryPoint(end_sn);
 }
 
 void Loglet::markFlushed(int64_t sn)
@@ -394,9 +409,20 @@ void Loglet::removeAllSegmentFiles(const std::vector<LogSegmentPtr> & segments_t
 /// If the message sn is out of range, throw an exception
 LogSequenceMetadata Loglet::convertToSequenceMetadataOrThrow(int64_t sn) const
 {
-    /// auto fetch_data_info = read(sn, 1);
-    /// return fetch_data_info.fetch_sn_metadata;
-    /// FIXME
-    return {sn};
+    auto fetch_data_info{fetch(sn, 1, logEndSequenceMetadata(), {})};
+    return fetch_data_info.fetch_sn_metadata;
 }
+
+int64_t Loglet::logEndSequence() const
+{
+    std::scoped_lock lock(next_sn_mutex);
+    return next_sn_meta.record_sn;
+}
+
+LogSequenceMetadata Loglet::logEndSequenceMetadata() const
+{
+    std::scoped_lock lock(next_sn_mutex);
+    return next_sn_meta;
+}
+
 }

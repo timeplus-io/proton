@@ -19,15 +19,15 @@ struct LogSequenceMetadata
     int64_t record_sn;
     int64_t segment_base_sn;
     /// Physical position in segment file
-    int64_t file_position;
+    uint64_t file_position;
 
     static const int64_t UNKNOWN_SEQUENCE = -1;
-    static const int64_t UNKNOWN_FILE_POSITION = -1;
+    static const uint64_t UNKNOWN_FILE_POSITION = -1;
 
     LogSequenceMetadata() : record_sn(UNKNOWN_SEQUENCE) { }
 
     LogSequenceMetadata(
-        int64_t record_sn_, int64_t segment_base_sn_ = UNKNOWN_SEQUENCE, int64_t file_position_ = UNKNOWN_FILE_POSITION)
+        int64_t record_sn_, int64_t segment_base_sn_ = UNKNOWN_SEQUENCE, uint64_t file_position_ = UNKNOWN_FILE_POSITION)
         : record_sn(record_sn_), segment_base_sn(segment_base_sn_), file_position(file_position_)
     {
     }

@@ -57,13 +57,17 @@ public:
 
     /// Read messages from the log
     /// @param sn The sequence number to begin reading at. -1 means latest, -2 means earliest
-    /// @param max_length The maximum number of bytes to read
+    /// @param max_size The maximum number of bytes to read
     /// @param max_wait_ms The maximum time to wait in milliseconds for new records
     /// @param position File position for sn if set
     /// @param isolation The fetch isolation, which controls the maximum sn allowed to read
     /// @return The fetch data information including fetch starting sn metadata and message read
-    FetchDataDescription
-    fetch(int64_t sn, int32_t max_length, int64_t max_wait_ms, std::optional<int64_t> position, FetchIsolation isolation = FetchIsolation::FETCH_LOG_END);
+    FetchDataDescription fetch(
+        int64_t sn,
+        uint64_t max_size,
+        int64_t max_wait_ms,
+        std::optional<uint64_t> position,
+        FetchIsolation isolation = FetchIsolation::FETCH_LOG_END);
 
     /// Truncate to this log so that it ends with the greatest sn < target_sn
     /// @return True iff target_sn < log_end_sn
@@ -80,7 +84,17 @@ public:
     void close();
 
     /// Flush all local log segments
-    void flush() { flush(loglet->logEndSequence()); }
+    void flush()
+    {
+        auto end_meta = loglet->logEndSequenceMetadata();
+        flush(end_meta.record_sn);
+
+        {
+            std::scoped_lock lock{last_committed_mutex};
+            if (last_committed_metadata.record_sn < end_meta.record_sn)
+                last_committed_metadata = end_meta;
+        }
+    }
 
     /// Flush Loglet segments for all sns up to `sn - 1`
     /// @param sn The sequence number to flush up to (non-inclusive); the new recovery point
@@ -140,7 +154,7 @@ private:
     void maybeIncrementFirstUnstableSequence();
     void maybeIncrementFirstUnstableSequenceWithoutLock();
 
-    void checkLogStartSequence(int64_t sn) const;
+    inline void checkLogStartSequence(int64_t sn) const;
     LogSequenceMetadata convertToSequenceMetadataOrThrow(int64_t sn) const;
 
     int64_t highWatermark() const { return high_watermark_metadata.record_sn; }
@@ -157,9 +171,16 @@ private:
     int64_t updateHighWatermark(const LogSequenceMetadata & high_watermark_metadata_, bool with_lock = false);
 
     void updateHighWatermarkMetadata(const LogSequenceMetadata & new_high_watermark_metadata);
-    void updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata);
+    inline void updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata);
+
+    /// Get the sequence and metadata for the current high watermark. If sequence metadata is not
+    /// known, it will do a lookup in the index and cache the result
     LogSequenceMetadata fetchHighWatermarkMetadata();
-    LogSequenceMetadata fetchHighWatermarkMetadataWithoutLock();
+    inline LogSequenceMetadata fetchHighWatermarkMetadataWithoutLock();
+    LogSequenceMetadata fetchLastStableMetadata() const;
+    inline LogSequenceMetadata fetchLastStableMetadataWithoutLock() const;
+    inline LogSequenceMetadata maxSequenceMetadata(FetchIsolation isolation, bool with_committed_lock_held=false) const;
+    LogSequenceMetadata waitForMoreDataIfNeeded(int64_t & sn, int64_t max_wait_ms, FetchIsolation isolation) const;
 
 private:
     /// API calls forwarding to Loglet
@@ -225,7 +246,6 @@ private:
     /// - update producer_state_manager
     /// - leader epoch cache
     mutable std::mutex lmutex;
-    std::condition_variable log_end_sn_cv;
 
     LogletPtr loglet;
 
@@ -243,6 +263,14 @@ private:
     /// under consistent load). This is needed to prevent log start sn which is exposed in fetch
     /// responses from getting ahead of the high watermark.
     LogSequenceMetadata high_watermark_metadata;
+
+    mutable std::mutex log_end_mutex;
+    mutable std::condition_variable log_end_cv;
+
+    /// Last flushed
+    mutable std::mutex last_committed_mutex;
+    mutable std::condition_variable last_committed_cv;
+    LogSequenceMetadata last_committed_metadata;
 
     Poco::Logger * logger;
 };

@@ -58,6 +58,7 @@ Log::Log(int64_t log_start_sn_, LogletPtr loglet_, TailCachePtr cache_, Poco::Lo
     , loglet(std::move(loglet_))
     , cache(std::move(cache_))
     , high_watermark_metadata(log_start_sn_)
+    , last_committed_metadata(loglet->logEndSequenceMetadata())
     , logger(logger_)
 {
     if (!logger)
@@ -89,19 +90,22 @@ LogAppendDescription Log::append(RecordPtr & record)
 
         /// Update the high watermark in case it has gotten ahead of the log end sn following a truncation
         /// or if a new segment has been rolled and the sn metadata needs to be updated
-        if (highWatermark() >= logEndSequence())
-            updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
+        /// if (highWatermark() >= logEndSequence())
+        ///    updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
 
-        maybeIncrementFirstUnstableSequenceWithoutLock();
+        /// maybeIncrementFirstUnstableSequenceWithoutLock();
 
         /// We will need hold the lmutex lock to update the cache since cache is a deque which requires sequence order
         cache->put(loglet->streamShard(), record);
     }
 
-    log_end_sn_cv.notify_all();
-
     if (loglet->unflushedRecords() >= config().flush_interval_records)
+    {
         flush();
+        last_committed_cv.notify_all();
+    }
+
+    log_end_cv.notify_all();
 
     return append_info;
 }
@@ -228,27 +232,84 @@ LogAppendDescription Log::analyzeAndValidateRecord(Record & record)
     return append_info;
 }
 
-FetchDataDescription Log::fetch(int64_t sn, int32_t max_length, int64_t max_wait_ms, std::optional<int64_t> position, FetchIsolation)
+LogSequenceMetadata Log::maxSequenceMetadata(FetchIsolation isolation, bool with_committed_lock_held) const
 {
-    assert(max_wait_ms >= 0);
+    switch (isolation)
+    {
+        case FetchIsolation::FETCH_LOG_END:
+            /// Log end sn is basically dirty
+            return loglet->logEndSequenceMetadata();
+        /// case FetchIsolation::FETCH_HIGH_WATERMARK:
+        ///    return fetchHighWatermarkMetadata();
+        case FetchIsolation::FETCH_COMMITTED:
+            if (with_committed_lock_held)
+                return fetchLastStableMetadataWithoutLock();
+            else
+                return fetchLastStableMetadata();
+    }
+}
 
-    auto end_sn{loglet->logEndSequence()};
+LogSequenceMetadata Log::waitForMoreDataIfNeeded(int64_t & sn, int64_t max_wait_ms, FetchIsolation isolation) const
+{
+    LogSequenceMetadata max_sn_metadata = maxSequenceMetadata(isolation);
 
     if (sn == EARLIEST_SN)
         sn = log_start_sn;
     else if (sn == LATEST_SN)
-        sn = end_sn;
+        sn = max_sn_metadata.record_sn;
 
     assert(sn >= 0);
 
-    if (sn == end_sn)
+    if (sn != max_sn_metadata.record_sn)
+        return max_sn_metadata;
+
+    auto wait_for_sn_change = [&max_sn_metadata, max_wait_ms, isolation, this](std::mutex & m, std::condition_variable & cv) {
+        std::unique_lock lock(m);
+        auto max_log_sn_changed = [this, &max_sn_metadata, isolation] {
+            auto new_max_sn_metadata = maxSequenceMetadata(isolation, true);
+
+            bool sn_changed = new_max_sn_metadata.record_sn > max_sn_metadata.record_sn;
+            if (sn_changed)
+            {
+                /// max sequence metadata has changed, we can use the latest one to read more data
+                /// New max_sn_metadata can be on a new segment
+                if (new_max_sn_metadata.onSameSegment(max_sn_metadata))
+                    max_sn_metadata = new_max_sn_metadata;
+
+                return true;
+            }
+            return false;
+        };
+
+        cv.wait_for(lock, std::chrono::milliseconds(max_wait_ms), max_log_sn_changed);
+    };
+
+    switch (isolation)
     {
-        std::unique_lock lock(lmutex);
-        auto log_end_sn_changed = [this, end_sn] { return loglet->logEndSequence() > end_sn; };
-        log_end_sn_cv.wait_for(lock, std::chrono::milliseconds(max_wait_ms), log_end_sn_changed);
+        case FetchIsolation::FETCH_LOG_END:
+            /// Log end sn is basically dirty
+            wait_for_sn_change(log_end_mutex, log_end_cv);
+            break;
+        /// case FetchIsolation::FETCH_HIGH_WATERMARK:
+        ///    return fetchHighWatermarkMetadata();
+        case FetchIsolation::FETCH_COMMITTED:
+            wait_for_sn_change(last_committed_mutex, last_committed_cv);
+            break;
     }
 
-    return loglet->fetch(sn, max_length, position);
+    return max_sn_metadata;
+}
+
+FetchDataDescription Log::fetch(int64_t sn, uint64_t max_size, int64_t max_wait_ms, std::optional<uint64_t> position, FetchIsolation isolation)
+{
+    assert(max_wait_ms >= 0);
+
+    auto max_sn_metadata{waitForMoreDataIfNeeded(sn, max_wait_ms, isolation)};
+
+    /// LOG_INFO(logger, "fetch at sn={} max_sn_meta={}", sn, max_sn_metadata.string());
+
+    /// When we reach here, we either timed out or there are new records appended
+    return loglet->fetch(sn, max_size, max_sn_metadata, position);
 }
 
 bool Log::trim(int64_t target_sn)
@@ -361,6 +422,39 @@ LogSequenceMetadata Log::fetchHighWatermarkMetadataWithoutLock()
         return sn_metadata;
     }
     return high_watermark_metadata;
+}
+
+LogSequenceMetadata Log::fetchLastStableMetadata() const
+{
+    std::unique_lock lock{last_committed_mutex};
+    return fetchLastStableMetadataWithoutLock();
+}
+
+LogSequenceMetadata Log::fetchLastStableMetadataWithoutLock() const
+{
+    return last_committed_metadata;
+#if 0
+    /// Cache the current high watermark to avoid a concurrent
+    /// update invalidating the range check
+    auto high_watermark{fetchHighWatermarkMetadataWithoutLock()};
+
+    if (first_unstable_sn_metadata)
+    {
+        if (first_unstable_sn_metadata->record_sn < high_watermark.record_sn)
+        {
+            if (first_unstable_sn_metadata->sequenceOnly())
+            {
+                auto sn_meta = convertToSequenceMetadataOrThrow(first_unstable_sn_metadata->record_sn);
+                first_unstable_sn_metadata = sn_meta;
+                return sn_meta;
+            }
+            else
+                return *first_unstable_sn_metadata;
+        }
+    }
+
+    return high_watermark;
+#endif
 }
 
 void Log::remove()

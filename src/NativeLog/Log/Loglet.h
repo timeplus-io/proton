@@ -43,8 +43,9 @@ public:
         std::shared_ptr<ThreadPool> adhoc_scheduler_,
         Poco::Logger * logger_);
 
+    /// Read record data up to max_sn_meta indicates
     /// Return record read at sn
-    FetchDataDescription fetch(int64_t sn, int64_t max_size, std::optional<int64_t> position) const;
+    FetchDataDescription fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_meta, std::optional<uint64_t> position) const;
 
     /// @param target_sn The sn to truncate to, an upper bound on all sn in the log after
     ///        truncation is complete
@@ -140,13 +141,13 @@ private:
     LogSequenceMetadata convertToSequenceMetadataOrThrow(int64_t sn) const;
 
     /// The offset of the next message that will be appended to the log
-    int64_t logEndSequence() const { return next_sn_meta.record_sn; }
+    int64_t logEndSequence() const;
 
     int64_t unflushedRecords() const { return logEndSequence() - recoveryPoint(); }
 
-    LogSequenceMetadata logEndSequenceMetadata() const { return next_sn_meta; }
+    LogSequenceMetadata logEndSequenceMetadata() const;
 
-    void updateLogEndSequence(int64_t end_offset, int64_t segment_base_offset, int64_t segment_pos);
+    void updateLogEndSequence(int64_t end_sn, int64_t segment_base_sn, uint64_t segment_pos);
 
     void updateRecoveryPoint(int64_t new_recovery_point) { recovery_point = new_recovery_point; }
 
@@ -240,6 +241,7 @@ private:
     /// Last checkpointed recovery point. Used to avoid re-checkpointing
     std::atomic<int64_t> recovery_point_checkpoint;
 
+    mutable std::mutex next_sn_mutex;
     LogSequenceMetadata next_sn_meta;
 
     LogSegmentsPtr segments;

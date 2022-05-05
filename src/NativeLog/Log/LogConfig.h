@@ -13,7 +13,7 @@ namespace nlog
 struct LogConfig
 {
     static const int64_t DEFAULT_MAX_RECORD_SIZE = 10 * 1024 * 1024;
-    static const int64_t DEFAULT_SEGMENT_SIZE = 4ull * 1024 * 1024 * 1024;
+    static const int64_t DEFAULT_SEGMENT_SIZE = 1ull * 1024 * 1024 * 1024;
     static const int64_t DEFAULT_SEGMENT_MS = 24ull * 7 * 60 * 60 * 1000;
     static const int64_t DEFAULT_FLUSH_INTERVAL_RECORDS = 1000;
     static const int64_t DEFAULT_FLUSH_MS = 2 * 60 * 1000;

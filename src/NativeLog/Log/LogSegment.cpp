@@ -37,20 +37,26 @@ int64_t LogSegment::append(const ByteVector & record, const LogAppendDescription
     if (physical_position == 0)
         rolling_based_timestamp = append_info.max_event_timestamp;
 
-    LOG_TRACE(
-        logger,
-        "Appending {} bytes at end sn {} at file position {} with max event timestamp {}",
-        record.size(),
-        append_info.seq_metadata.record_sn,
-        physical_position,
-        append_info.max_event_timestamp);
+//    LOG_TRACE(
+//        logger,
+//        "Appending {} bytes at sn={} at file position {} with max event timestamp {}",
+//        record.size(),
+//        append_info.seq_metadata.record_sn,
+//        physical_position,
+//        append_info.max_event_timestamp);
 
     /// ensureSNInRange(largest_sn);
 
     /// Append the messages
     auto n = log->append(record);
 
-    LOG_TRACE(logger, "Appended {} bytes to {} at end sn {}", n, log->getFilename().c_str(), append_info.seq_metadata.record_sn);
+    LOG_TRACE(
+        logger,
+        "Appended {} bytes at sn={} at file_position={} with max_event_timestamp={}",
+        n,
+        append_info.seq_metadata.record_sn,
+        physical_position,
+        append_info.max_event_timestamp);
 
     /// Update the in memory max timestamp and corresponding sn.
     if (append_info.max_event_timestamp > max_etimestamp_and_sn_so_far.key)
@@ -69,34 +75,54 @@ int64_t LogSegment::append(const ByteVector & record, const LogAppendDescription
     return physical_position;
 }
 
-FetchDataDescription LogSegment::read(int64_t start_sn, int64_t max_size, std::optional<int64_t> position)
+FetchDataDescription LogSegment::read(int64_t start_sn, uint64_t max_size, uint64_t max_position, std::optional<uint64_t> position)
 {
     FileRecords::LogSequencePosition lsn{start_sn, 0, 1};
-    if (!position || *position < 0 || log->size() < static_cast<uint64_t>(*position))
+    if (!position || log->size() < *position)
     {
+        /// If position is invalid or beyond of the log size,
+        /// we will need translate the start_sn to a physical file position;
+        /// otherwise we can save this translation if client pass in a file position (we trust this is a good file position)
         lsn = translateSequence(start_sn);
-        if (!lsn.valid())
+        if (!lsn.isValid())
             return {};
     }
     else
+        /// Client passed a file position which is in range, use it. This is an optimization which saves a file position translation
         lsn.position = *position;
+
+    assert(lsn.position <= max_position);
 
     LogSequenceMetadata sn_metadata(start_sn, baseSequence(), lsn.position);
 
-    auto adjusted_max_size = std::max<uint64_t>(max_size, lsn.size);
+    auto adjusted_max_size = std::max(max_size, lsn.size);
     if (adjusted_max_size == 0)
         return {sn_metadata, {}};
 
-    /// We like to slide the log at record boundary
-    auto pos_seq{indexes.upperBoundSequenceForPosition(lsn.position + adjusted_max_size)};
-    if (pos_seq.key > 0)
+    auto max_to_fetch = max_position - lsn.position;
+    if (adjusted_max_size >= max_to_fetch)
     {
-        assert(static_cast<uint64_t>(pos_seq.key) > lsn.position + adjusted_max_size);
-        return {sn_metadata, log->slice(lsn.position, pos_seq.key - lsn.position)};
+        /// We will read beyond or at the max_position. If reading the single record at offset start_sn will exceed max_position
+        /// then we will need wait util bigger max_position
+        if (lsn.size > max_to_fetch)
+            return {sn_metadata, {}};
+
+        return {sn_metadata, log->slice(lsn.position, max_to_fetch)};
+    }
+    else
+    {
+        /// Within the max position
+        /// We like to slice the log at record boundary
+        auto pos_seq{indexes.upperBoundSequenceForPosition(lsn.position + adjusted_max_size)};
+        if (pos_seq.key > 0)
+        {
+            assert(static_cast<uint64_t>(pos_seq.key) >= lsn.position + adjusted_max_size);
+            return {sn_metadata, log->slice(lsn.position, pos_seq.key - lsn.position)};
+        }
     }
 
-    /// Slice to the end of file, use size=0
-    return {sn_metadata, log->slice(lsn.position, 0)};
+    /// Slice to max
+    return {sn_metadata, log->slice(lsn.position, max_to_fetch)};
 }
 
 /// trim to sn, returns bytes trimmed
@@ -113,7 +139,7 @@ int64_t LogSegment::readNextSequence()
     if (last_sn < 1)
         last_sn = 0;
 
-    auto fetched_data = read(last_sn, log->size(), last_indexed_sn_position.value);
+    auto fetched_data = read(last_sn, log->size(), log->size(), last_indexed_sn_position.value);
     if (!fetched_data.isValid() || fetched_data.records == nullptr)
         return base_sn;
 

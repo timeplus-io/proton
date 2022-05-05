@@ -33,7 +33,7 @@ int64_t FileRecords::append(const ByteVector & record)
 
 std::shared_ptr<FileRecords> FileRecords::slice(uint64_t position, uint64_t size_)
 {
-    assert(size_ >= 0);
+    assert(size_ != 0);
     auto available_bytes = availableBytes(position, size_);
 
     return std::make_shared<FileRecords>(file, start_pos + position, start_pos + position + available_bytes, true);
@@ -125,8 +125,11 @@ RecordPtrs FileRecords::deserialize(std::vector<char> & read_buf, const SchemaCo
     auto end_offset = end_pos;
 
     /// When FileRecords are sliced, it guarantees [start_pos, end_pos) contains complete number of records
-    /// We don't want to read pass end_pos
-    auto max_to_read = std::min<uint64_t>(end_offset - start_offset + 1, read_buf.size());
+    /// We don't want to read pass end_pos.
+    /// Note: it turns out it is important we need ensure the read range [start_pos, end_pos). If we read passed
+    /// the `end_pos`, very weird data corruption will happen. It's like consumer tries to read ahead of producer
+    /// or read something producer is producing but not finalizing. GITHUB issue-814
+    auto max_to_read = std::min<uint64_t>(end_offset - start_offset, read_buf.size());
 
     /// Initial read
     auto n = file->read(read_buf.data(), max_to_read, start_offset);

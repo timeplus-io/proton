@@ -64,7 +64,7 @@ public:
 
         LogSequencePosition(int64_t sequence_, uint64_t position_, uint64_t size_) : sequence(sequence_), position(position_), size(size_) { }
 
-        bool valid() const { return sequence >= 0; }
+        bool isValid() const { return sequence >= 0; }
     };
 
     /// Search forward for the file position of the last offset that is greater than or equal to the target offset

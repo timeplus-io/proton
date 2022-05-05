@@ -126,7 +126,7 @@ IndexEntry Indexes::lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) co
 SequencePosition Indexes::lowerBoundPositionForSequence(int64_t sn) const
 {
     auto entry = lowerBound(sn, sn_position_cf_handle);
-    if (!entry.isInvalid())
+    if (entry.isValid())
         return entry;
 
     return {base_sn, 0};

@@ -21,7 +21,7 @@ struct IndexEntry
         return *this;
     }
 
-    bool isInvalid() const { return key == -1 && value == -1; }
+    bool isValid() const { return key != -1 && value != -1; }
 
     int64_t key;
     int64_t value;

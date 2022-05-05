@@ -246,6 +246,9 @@ public:
 
     uint32_t totalSerializedBytes() const { return prefix_length + sizeof(prefix_length); }
 
+    /// FIXME
+    void setPrefixLength(uint32_t prefix_length_) { prefix_length = prefix_length_; }
+
     static constexpr size_t prefixLengthSize() { return sizeof(uint32_t); }
 
     static constexpr size_t commonMetadataBytes()

@@ -278,7 +278,7 @@ private:
                         if (fetch_data.data.records == nullptr)
                         {
                             /// No data, fetch next
-                            next_sns[fetch_data.stream_shard.shard] = fetch_data.data.fetch_offset_metadata.record_sn;
+                            next_sns[fetch_data.stream_shard.shard] = fetch_data.data.fetch_sn_metadata.record_sn;
                             ++empty_records;
                             continue;
                         }

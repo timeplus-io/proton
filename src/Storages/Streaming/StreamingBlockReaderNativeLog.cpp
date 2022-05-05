@@ -77,17 +77,25 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
         {
             if (fetched_desc.data.records)
             {
-                auto records{fetched_desc.data.records->deserialize(read_buf, schema_ctx)};
-                assert(!records.empty());
+//                LOG_INFO(
+//                    logger,
+//                    "fetched meta={} start_pos={} end_pos={}",
+//                    fetched_desc.data.fetch_sn_metadata.string(),
+//                    fetched_desc.data.records->startPosition(),
+//                    fetched_desc.data.records->endPosition());
 
-                if (read_buf.size() > static_cast<UInt64>(read_buf_size))
+                auto records{fetched_desc.data.records->deserialize(read_buf, schema_ctx)};
+                if (unlikely(records.empty()))
+                    return {};
+
+                if (unlikely(read_buf.size() > static_cast<UInt64>(read_buf_size)))
                     read_buf.resize(read_buf_size);
 
                 /// Update next sn
                 fetch_desc.sn = records.back()->getSN() + 1;
 
                 /// Update the next file position for next sn
-                fetch_desc.position = fetched_desc.data.records->endPosition();
+                fetch_desc.position = fetched_desc.data.eof ? 0 : fetched_desc.data.records->endPosition();
 
                 return records;
             }
@@ -95,8 +103,8 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
             {
                 /// Empty records, either there are new records, or its the first time tail new records
                 /// NativeLog server will return tail SN
-                if (fetch_desc.sn != fetched_desc.data.fetch_offset_metadata.record_sn)
-                    fetch_desc.sn = fetched_desc.data.fetch_offset_metadata.record_sn;
+                if (fetch_desc.sn != fetched_desc.data.fetch_sn_metadata.record_sn)
+                    fetch_desc.sn = fetched_desc.data.fetch_sn_metadata.record_sn;
             }
         }
         else if (fetched_desc.errcode == ErrorCodes::RESOURCE_NOT_FOUND)

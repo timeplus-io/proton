@@ -1673,6 +1673,11 @@ void StorageStream::backgroundPollNativeLog()
                 {
                     stream_commit.commit(std::move(batch));
                     batch.reserve(batch_size);
+
+                    /// Reset
+                    last_batch_commit = MonotonicMilliseconds::now();
+                    current_bytes_in_batch = 0;
+                    current_rows_in_batch = 0;
                 }
             }
         }

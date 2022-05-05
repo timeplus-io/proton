@@ -63,10 +63,11 @@ public:
     /// Read is multi-thread safe
     /// @param start_sn Logic record sn to read from
     /// @param max_size maximum size to read
+    /// @param max_position The max file position in the log which shall be exposed for read
     /// @param position File position for sn if set
     /// @return The fetched data and the sn metadata of the first message whose sn is >= start_sn
     /// or empty if the start_sn is larger than the largest sn in this log
-    FetchDataDescription read(int64_t start_sn, int64_t max_size, std::optional<int64_t> position);
+    FetchDataDescription read(int64_t start_sn, uint64_t max_size, uint64_t max_position, std::optional<uint64_t> position);
 
     /// Trim to sn, returns bytes trimmed
     int64_t trim(int64_t sn);
@@ -81,7 +82,7 @@ public:
     bool shouldRoll(const LogConfig & config, uint32_t records_size) const;
 
     /// Physical size in bytes
-    int64_t size() const { return log->size(); }
+    uint64_t size() const { return log->size(); }
 
     int64_t baseSequence() const { return base_sn; }
 
