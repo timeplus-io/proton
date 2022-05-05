@@ -198,6 +198,7 @@ set (clickhouse_aggregate_functions_sources
         AggregateFunctionSumCount.cpp
         AggregateFunctionTopK.cpp
         AggregateFunctionUniq.cpp
+        AggregateFunctionXirr.cpp
         registerAggregateFunctionsAlias.cpp
         registerAggregateFunctions.cpp
         UniqVariadicHash.cpp
