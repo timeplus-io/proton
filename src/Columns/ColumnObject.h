@@ -185,6 +185,11 @@ public:
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
 
+    /// proton: starts.
+    ColumnPtr permute(const Permutation &, size_t) const override;
+    ColumnPtr filter(const Filter &, ssize_t) const override;
+    /// proton: ends.
+
     /// All other methods throw exception.
 
     ColumnPtr decompress() const override { throwMustBeConcrete(); }
@@ -197,9 +202,7 @@ public:
     void updateHashWithValue(size_t, SipHash &) const override { throwMustBeConcrete(); }
     void updateWeakHash32(WeakHash32 &) const override { throwMustBeConcrete(); }
     void updateHashFast(SipHash &) const override { throwMustBeConcrete(); }
-    ColumnPtr filter(const Filter &, ssize_t) const override { throwMustBeConcrete(); }
     void expand(const Filter &, bool) override { throwMustBeConcrete(); }
-    ColumnPtr permute(const Permutation &, size_t) const override { throwMustBeConcrete(); }
     ColumnPtr index(const IColumn &, size_t) const override { throwMustBeConcrete(); }
     int compareAt(size_t, size_t, const IColumn &, int) const override { throwMustBeConcrete(); }
     void compareColumn(const IColumn &, size_t, PaddedPODArray<UInt64> *, PaddedPODArray<Int8> &, int, int) const override { throwMustBeConcrete(); }

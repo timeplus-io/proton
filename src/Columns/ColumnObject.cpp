@@ -518,15 +518,14 @@ size_t ColumnObject::size() const
 MutableColumnPtr ColumnObject::cloneResized(size_t new_size) const
 {
     auto res = ColumnObject::create(is_nullable);
+    for (const auto & entry : subcolumns)
+        res->addSubcolumn(entry->path, entry->data.data.back()->cloneEmpty());
 
     /// cloneResized with new_size == 0 is used for cloneEmpty().
     if (new_size == 0)
         return res;
 
     auto old_size = size();
-    for (const auto & entry : subcolumns)
-        res->addSubcolumn(entry->path, entry->data.data.back()->cloneEmpty());
-
     if (old_size == 0)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
             "ColumnObject doesn't support resize to non-zero length from zero length");
@@ -634,7 +633,7 @@ void ColumnObject::insertRangeFrom(const IColumn & src, size_t start, size_t len
 
     for (auto & entry : subcolumns)
     {
-        if (src_object.hasSubcolumn(entry->path))
+        if (src_object.hasSubcolumn(entry->path) && src_object.size())
             entry->data.insertRangeFrom(src_object.getSubcolumn(entry->path), start, length);
         else
             entry->data.insertManyDefaults(length);
@@ -798,4 +797,35 @@ void ColumnObject::finalize()
     checkObjectHasNoAmbiguosPaths(getKeys());
 }
 
+/// proton: starts.
+ColumnPtr ColumnObject::permute(const Permutation & perm, size_t limit) const
+{
+    if (!isFinalized())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot permute non-finalized ColumnObject");
+
+    auto res = ColumnObject::create(is_nullable);
+    for (auto & entry : subcolumns)
+    {
+        auto permuted_data = entry->data.data.back()->permute(perm, limit)->assumeMutable();
+        res->addSubcolumn(entry->path, std::move(permuted_data));
+    }
+
+    return res;
+}
+
+ColumnPtr ColumnObject::filter(const Filter & filt, ssize_t result_size_hint) const
+{
+    if (!isFinalized())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot filter non-finalized ColumnObject");
+
+    auto res = ColumnObject::create(is_nullable);
+    for (auto & entry : subcolumns)
+    {
+        auto filtered_data = entry->data.data.back()->filter(filt, result_size_hint)->assumeMutable();
+        res->addSubcolumn(entry->path, std::move(filtered_data));
+    }
+
+    return res;
+}
+/// proton: ends.
 }

@@ -103,8 +103,13 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
             size_t table_pos = *best_pos;
             if (data.unknownColumn(table_pos, identifier))
             {
-                String table_name = data.tables[table_pos].table.getQualifiedNamePrefix(false);
                 /// proton: starts
+                /// It may be a dynamic object elem.
+                /// Such as table 'event' with object column 'event', and it's possible that the subcolumn is 'event.type'.
+                if (data.hasColumn(identifier.name()))
+                    return;
+
+                String table_name = data.tables[table_pos].table.getQualifiedNamePrefix(false);
                 throw Exception("There's no column '" + identifier.name() + "' in stream '" + table_name + "'",
                                 ErrorCodes::UNKNOWN_IDENTIFIER);
                 /// proton: ends

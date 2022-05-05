@@ -171,14 +171,16 @@ void fillAndConvertObjectsToTuples(NamesAndTypesList & columns_list, Block & blo
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Column '{}' not found in storage", name_type.name);
 
         /// Fill missing elems into object column.
-        const auto * tuple_type = checkAndGetDataType<DataTypeTuple>(it->second.get());
-        assert(tuple_type);
-
-        for (const auto & name : tuple_type->getElementNames())
+        auto [paths, types] = flattenTuple(it->second);
+        assert(paths.size() == types.size());
+        for (size_t i = 0; i < paths.size(); ++i)
         {
-            PathInData path(name);
-            if (!subcolumns.findExact(path))
-                column_object.addSubcolumn(path, it->second->getSubcolumnType(name)->createColumn()->cloneResized(column_object.size()));
+            const auto & path = paths[i];
+            if (path.getPath() == ColumnObject::COLUMN_NAME_DUMMY)
+                continue;
+
+            if (!column_object.hasSubcolumn(path))
+                column_object.addSubcolumn(path, types[i]->createColumn()->cloneResized(block.rows()));
         }
 
         size_t subcolumn_size = subcolumns.size();
