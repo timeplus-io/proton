@@ -60,8 +60,9 @@ namespace
         const String & rewritten_query,
         const String & query_type,
         const QueryProfileMatcher::Data & query_profile,
-        const Block & sampleBlock,
-        const bool hasAggr,
+        const Block & sample_block,
+        bool has_aggr,
+        bool is_streaming,
         const std::set<std::tuple<String, String, bool, String, String>> & required_columns)
     {
         /// {
@@ -80,16 +81,18 @@ namespace
         ///    "has_table_join": true,
         ///    "has_union": true,
         ///    "has_subquery": true
+        ///    "is_streaming": true,
         /// }
 
         Poco::JSON::Object::Ptr result = new Poco::JSON::Object();
         result->set("original_query", original_query);
         result->set("rewritten_query", rewritten_query);
         result->set("query_type", query_type);
-        result->set("has_aggr", hasAggr);
+        result->set("has_aggr", has_aggr);
         result->set("has_table_join", query_profile.has_table_join);
         result->set("has_union", query_profile.has_union);
         result->set("has_subquery", query_profile.has_subquery);
+        result->set("is_streaming", is_streaming);
 
         /// Required columns
         int i = 0;
@@ -109,7 +112,7 @@ namespace
         /// Result columns
         i = 0;
         Poco::JSON::Array::Ptr result_columns_obj = new Poco::JSON::Array();
-        for (const auto & column_info : sampleBlock)
+        for (const auto & column_info : sample_block)
         {
             Poco::JSON::Object::Ptr column = new Poco::JSON::Object();
             column->set("column", column_info.name);
@@ -230,19 +233,21 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
 
         /// FIXME: CREATE STREAM ... AS SELECT ...
         /// FIXME: INSERT INTO STREAM ... SELECT ...
-        bool hasAggr = false;
+        bool has_aggr = false;
+        bool is_streaming = true;
         if (ast->as<ASTSelectWithUnionQuery>())
         {
             /// Interpreter will trigger ast analysis. One side effect is collecting
             /// required columns during the analysis process
             InterpreterSelectWithUnionQuery interpreter(ast, query_context, SelectQueryOptions());
-            hasAggr = interpreter.hasAggregation();
+            has_aggr = interpreter.hasAggregation();
             block = interpreter.getSampleBlock();
+            is_streaming = interpreter.isStreaming();
         }
 
         auto query_type = queryType(ast);
         return {
-            buildResponse(query, rewritten_query, query_type, profile, block, hasAggr, query_context->requiredColumns()),
+            buildResponse(query, rewritten_query, query_type, profile, block, has_aggr, is_streaming, query_context->requiredColumns()),
             HTTPResponse::HTTP_OK};
     }
     else
