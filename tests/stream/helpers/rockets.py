@@ -1591,7 +1591,6 @@ def table_exist_py(pyclient, table_name):
 
 def table_exist(table_ddl_url, table_name):
     logger = mp.get_logger()
-    pyclient = Client('localhost', port=8463) # use table_exist_py as an backup in case rest is broken
     logger.debug(
         f"table_exist: table_ddl_url = {table_ddl_url}, table_name = {table_name}"
     )
@@ -1611,6 +1610,7 @@ def table_exist(table_ddl_url, table_name):
             logger.debug(f"table_name = {table_name} does not exist")
             return False
         else:
+            pyclient = Client('localhost', port=8463) # use table_exist_py as an backup in case rest is broken, todo: remove this due to buggy in test runner in different machine than proton-server
             if table_exist_py(pyclient, table_name):
                 return True            
             logger.debug("table_list is [] table_name = {table_name} does not exist.")

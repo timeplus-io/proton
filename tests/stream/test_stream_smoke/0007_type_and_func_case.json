@@ -11,7 +11,7 @@
             "id": 0,
             "tags": ["type"],
             "name": "default type in one table and injest",
-            "description": "create a table test_type, 1 column for 1 type and ingest data with same or different column sequence of show create",
+            "description": "create a stream test_type, 1 column for 1 type and ingest data with same or different column sequence of show create",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists test_type"},
@@ -29,7 +29,7 @@
             "id": 1,
             "tags": ["type"],
             "name": "uint",
-            "description": "create a table t_unit with uint type and ingest, query",
+            "description": "create a stream t_unit with uint type and ingest, query",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_uint"},
@@ -47,7 +47,7 @@
             "id": 2,
             "tags": ["type", "bug"],
             "name": "decimal",
-            "description": "create a table t_decimal with decimal type and ingest, query",
+            "description": "create a stream t_decimal with decimal type and ingest, query",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_decimal"},
@@ -65,7 +65,7 @@
             "id": 3,
             "tags": ["type"],
             "name": "bool",
-            "description": "create a table t_bool with bool type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_bool with bool type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_bool"},
@@ -83,7 +83,7 @@
             "id": 4,
             "tags": ["type"],
             "name": "fixed_string",
-            "description": "create a table t_fixeds with fixed_string type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_fixeds with fixed_string type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_fixeds"},
@@ -101,7 +101,7 @@
             "id": 5,
             "tags": ["type", "bug"],
             "name": "low_cardinality",
-            "description": "create a table t_lowcard with low_cardinality type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_lowcard with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_lowcard"},
@@ -119,7 +119,7 @@
             "id": 6,
             "tags": ["func"],
             "name": "latest()",
-            "description": "create a table t_lowcard with low_cardinality type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_lowcard with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_latest"},
@@ -140,7 +140,7 @@
             "id": 7,
             "tags": ["func"],
             "name": "to_float on filed out of map",
-            "description": "create a table t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_float_map"},
@@ -161,7 +161,7 @@
             "id": 8,
             "tags": ["emit_version"],
             "name": "to_float on filed out of map with emit version",
-            "description": "create a table t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists float_map_view"},
@@ -183,7 +183,7 @@
             "id": 9,
             "tags": ["emit_version"],
             "name": "to_float on filed out of map with emit version as view",
-            "description": "create a table t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
+            "description": "create a stream t_float_map with low_cardinality type and ingest, query, but of proton-python-driver",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists float_map_view"},
@@ -205,7 +205,7 @@
             "id": 10,
             "tags": ["emit_version"],
             "name": "emit verion on global aggre w/o group by",
-            "description": "create a table t_timeout, and create a view as a tumble query with emit timeout and check emit by timeout ",
+            "description": "create a stream t_timeout, and create a view as a tumble query with emit timeout and check emit by timeout ",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop stream if exists t_emit_version"},
@@ -225,7 +225,7 @@
             "id": 11,
             "tags": ["timeout"],
             "name": "emit timeout on as view",
-            "description": "create a table t_timeout, and create a view as a tumble query with emit timeout and check emit by timeout ",
+            "description": "create a stream t_timeout, and create a view as a tumble query with emit timeout and check emit by timeout ",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists timeout_v"},
@@ -250,7 +250,7 @@
             "id": 12,
             "tags": ["dedup"],
             "name": "dedup on stream as view",
-            "description": "create a table t_dedup, and create a view with dedup, tumble on the view to check dedup",
+            "description": "create a stream t_dedup, and create a view with dedup, tumble on the view to check dedup",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists dedup_v"},
@@ -258,7 +258,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_dedup(id int, value int, time datetime64(3,'UTC'))"},
                     {"client":"python", "query_type": "table", "wait":1, "query":"create view if not exists dedup_v as select id, value, time, to_string(time) as time_string from dedup(t_dedup, id, value, to_string(time))"},
                     {"client":"python", "query_type": "stream","wait":1, "query_id": "801", "query_end_timer": 11, "query":"select emit_version(), id, count() from tumble(dedup_v, time, 5s) group by id, window_end"},
-                    {"client":"python", "query_type": "table", "wait":1,"depends_on":"801", "query":"insert into t_dedup(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:00') (2, 10, '2020-01-01 00:00:00')(3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"} 
+                    {"client":"python", "query_type": "table", "wait":2,"depends_on":"801", "query":"insert into t_dedup(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:00') (2, 10, '2020-01-01 00:00:00')(3, 10, '2020-01-01 00:00:00') (1, 10, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"} 
                     ]}
             ],
 
@@ -273,7 +273,7 @@
             "id": 13,
             "tags": ["dedup", "bug"],
             "name": "dedup on stream by calculated field as key as view",
-            "description": "create a table t_dedup, and create a view with dedup on key with calculated field and check dedup ",
+            "description": "create a stream t_dedup, and create a view with dedup on key with calculated alias field and check dedup ",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists dedup_v"},
@@ -296,7 +296,7 @@
             "id": 14,
             "tags": ["dedup"],
             "name": "dedup on table as view",
-            "description": "create a table t_dedup, and create a view with dedup on key with calculated field and check dedup ",
+            "description": "create a stream t_dedup, and create a view with dedup on key with func as to_string(time) and check dedup ",
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists dedup_v"},
@@ -315,7 +315,73 @@
                 ["1", 3]
                 ]}
             ]
-        }                                                                                                                                                                                                                                           
+        },
+        {
+            "id": 15,
+            "tags": ["xirr"],
+            "name": "xirr on table as view",
+            "description": "create a stream, and create a view with xirr check xirr",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists xirr_v"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_xirr"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_xirr(id int, income float, date date)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_xirr(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:01')(1, -1000, '2020-01-05 09:01:01')(1, 3100, '2020-01-18 09:01:01')(1, 100, '2020-03-09 09:01:01')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create view if not exists xirr_v as select id, count(), xirr(income, date, 0.1) as xirr from table(t_xirr) group by id"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, count(), avg(xirr) from xirr_v group by id"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", 1, 3.313433458588908]
+                ]}
+            ]
+        },
+        {
+            "id": 16,
+            "tags": ["xirr", "bug"],
+            "name": "xirr on table as view with calculated alias field as date",
+            "description": "create a stream, and create a view with xirr with a caculated alias date from to_date(date of datetime64) check xirr",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists xirr_v"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_xirr"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_xirr(id int, income float, date datetime64)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"insert into t_xirr(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:01')(1, -1000, '2020-01-05 09:01:01')(1, 3100, '2020-01-18 09:01:01')(1, 100, '2020-03-09 09:01:01')"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create view if not exists xirr_v as select id, count(), xirr(income, to_date(date), 0.1) as xirr from table(t_xirr) group by id"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, count(), avg(xirr) from xirr_v group by id"}
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", 1, 3.313433458588908]
+                ]}
+            ]
+        },
+        {
+            "id": 17,
+            "tags": ["xirr"],
+            "name": "xirr on stream as view",
+            "description": "create a stream, and create a view with xirr check xirr",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists xirr_v"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists t_xirr"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_xirr(id int, income float, date date)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create view if not exists xirr_v as select window_start, window_end, xirr(income, date) as xirr from tumble(t_xirr, to_datetime(date), interval 40 day) group by window_start, window_end"},
+                    {"client":"python", "query_type": "stream","depends_on_stream": "xirr_v", "wait":1, "query_id": "801", "query_end_timer": 5, "query":"select count(), avg(xirr) from xirr_v"},
+                    {"client":"python", "query_type": "table", "wait":3,"depends_on":"801", "query":"insert into t_xirr(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:01')(1, -1000, '2020-01-05 09:01:01')(1, 3100, '2020-01-18 09:01:01')(1, 100, '2020-03-09 09:01:01')"} 
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["1", 1.261261324646445]
+                ]}
+            ]
+        }                 
+                                                                                                                                                                                                                                                           
     ]
 }
 

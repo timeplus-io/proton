@@ -1,8 +1,8 @@
 pytest==6.2.5
 requests==2.26.0
 pytest-cases==3.6.5
-docker-compose==1.29.2
 unidiff==0.7.0
+docker-compose==1.29.2
 boto3==1.20.4
 pytest-html==3.1.1
 psycopg2-binary==2.9.3

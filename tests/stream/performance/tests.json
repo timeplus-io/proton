@@ -133,6 +133,34 @@
             "input_info_table": "input_info",
             "steps":[
                 {"statements": [
+                    {"client":"python","config_set": "setting_1","workers": 120, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 120, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 120, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 50, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
+
+                ]},
+                    
+
+                {"inputs": [
+                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":220, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                        
+                ]}
+
+            ]               
+        },
+        {
+            "id": 3,
+            "tags": ["latency"],
+            "name": "tail laterncy - proton",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
                     {"client":"python","config_set": "setting_1","workers": 80, "interval":2, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
                     {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 80, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
                     {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
@@ -151,10 +179,10 @@
                 ]}
 
             ]               
-        },
+        },        
 
         {
-            "id": 3,
+            "id": 4,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
@@ -185,7 +213,7 @@
 
         
         {
-            "id": 4,
+            "id": 5,
             "tags": ["latency"],
             "name": "tail laterncy - Materialize",
             "description": "tail query latency w/single source",
@@ -198,7 +226,7 @@
             ]               
         },
         {
-            "id": 5,
+            "id": 6,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
