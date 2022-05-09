@@ -34,7 +34,7 @@ StreamingStoreSource::StreamingStoreSource(
         auto consumer = kpool.getOrCreateStreaming(stream_storage->streamingStorageClusterId());
         assert(consumer);
         kafka_reader = std::make_unique<StreamingBlockReaderKafka>(
-            std::move(storage_), shard, sn, physical_column_positions_to_read, std::move(consumer), log);
+            std::move(storage_), shard, sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
     }
     else
     {
@@ -48,7 +48,7 @@ StreamingStoreSource::StreamingStoreSource(
             fetch_buffer_size,
             /*schema_provider*/ nullptr,
             /*schema_version*/ 0,
-            physical_column_positions_to_read,
+            columns_desc.physical_column_positions_to_read,
             log);
     }
 }
@@ -70,7 +70,6 @@ void StreamingStoreSource::readAndProcess()
     result_chunks.clear();
     result_chunks.reserve(records.size());
 
-    auto pos_size = column_positions.size();
     for (auto & record : records)
     {
         if (record->empty())
@@ -81,34 +80,35 @@ void StreamingStoreSource::readAndProcess()
         Block & block = record->getBlock();
         auto rows = block.rows();
 
-        assert(pos_size >= block.columns());
+        assert(columns_desc.positions.size() >= block.columns());
 
         if (hasObjectColumns())
             fillAndUpdateObjects(block);
 
-        /// Pos Range: [0, ..., virtual_columns_pos_begin, ..., subcolumns_pos_begin, ...)
-        for (size_t index = 0, physical_col_index = 0, subcolumn_index = 0; index < pos_size; ++index)
+        for (const auto & pos : columns_desc.positions)
         {
-            auto pos_in_schema = column_positions[index];
-            if (pos_in_schema < virtual_columns_pos_begin)
+            switch (pos.type())
             {
-                /// At current result column index, it is expecting a physical column
-                columns.push_back(block.getByPosition(physical_col_index).column);
-                ++physical_col_index;
-            }
-            else if (pos_in_schema >= subcolumns_pos_begin)
-            {
-                /// It's a subcolumn, the parent (physical) column pos in schema is `pos_in_schema - subcolumns_pos_begin`
-                columns.push_back(getSubcolumnFromblock(block, pos_in_schema - subcolumns_pos_begin, subcolumns_to_read[subcolumn_index]));
-                ++subcolumn_index;
-            }
-            else
-            {
-                /// The current column to return is a virtual column which needs be calculated lively
-                assert(virtual_time_columns_calc[pos_in_schema - virtual_columns_pos_begin]);
-                auto ts = virtual_time_columns_calc[pos_in_schema - virtual_columns_pos_begin](block.info);
-                auto time_column = virtual_col_type->createColumnConst(rows, ts);
-                columns.push_back(std::move(time_column));
+                case SourceColumnsDescription::ReadColumnType::PHYSICAL:
+                {
+                    columns.push_back(block.getByPosition(pos.physicalPosition()).column);
+                    break;
+                }
+                case SourceColumnsDescription::ReadColumnType::VIRTUAL:
+                {
+                    /// The current column to return is a virtual column which needs be calculated lively
+                    assert(columns_desc.virtual_time_columns_calc[pos.virtualPosition()]);
+                    auto ts = columns_desc.virtual_time_columns_calc[pos.virtualPosition()](block.info);
+                    auto time_column = columns_desc.virtual_col_type->createColumnConst(rows, ts);
+                    columns.push_back(std::move(time_column));
+                    break;
+                }
+                case SourceColumnsDescription::ReadColumnType::SUB:
+                {
+                    columns.push_back(getSubcolumnFromblock(
+                        block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()]));
+                    break;
+                }
             }
         }
 

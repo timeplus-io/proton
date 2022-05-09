@@ -1,8 +1,8 @@
 #include "StreamingStoreSourceBase.h"
 
-#include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
 #include <DataTypes/ObjectUtils.h>
+#include <base/ClockUtils.h>
 
 namespace DB
 {
@@ -12,30 +12,27 @@ namespace ErrorCodes
 }
 
 StreamingStoreSourceBase::StreamingStoreSourceBase(
-    const Block & header,
-    const StorageSnapshotPtr & storage_snapshot_,
-    ContextPtr query_context_)
+    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_)
     : SourceWithProgress(header)
     , storage_snapshot(storage_snapshot_->storage, storage_snapshot_->metadata, *(storage_snapshot_->object_columns.get()))
     , query_context(std::move(query_context_))
     , header_chunk(header.getColumns(), 0)
-    , column_positions(header.columns(), 0)
-    , virtual_time_columns_calc(header.columns(), nullptr)
+    , columns_desc(
+          storage_snapshot.getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), header.getNames()),
+          storage_snapshot.getMetadataForQuery()->getSampleBlock())
 {
-    /// FIXME, when we have multi-version of schema, the header and the schema may be mismatched
-    calculateColumnPositions(header, storage_snapshot_->getMetadataForQuery()->getSampleBlock());
-
-    /// Init current object descriprion and update current storage snapshot for streaming source
-    if (!physical_object_column_names_to_read.empty())
-        storage_snapshot.object_columns.set(std::make_unique<ColumnsDescription>(
-            storage_snapshot.object_columns.get()->getByNames(GetColumnsOptions::AllPhysical, physical_object_column_names_to_read)));
+    /// Init current object description and update current storage snapshot for streaming source
+    if (!columns_desc.physical_object_column_names_to_read.empty())
+        storage_snapshot.object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot.object_columns.get()->getByNames(
+            GetColumnsOptions::AllPhysical, columns_desc.physical_object_column_names_to_read)));
 
     iter = result_chunks.begin();
 
     last_flush_ms = MonotonicMilliseconds::now();
 }
 
-ColumnPtr StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const
+ColumnPtr
+StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const
 {
     assert(subcolumn_pair.isSubcolumn());
 
@@ -122,96 +119,4 @@ Chunk StreamingStoreSourceBase::generate()
     return std::move(*iter++);
 }
 
-void StreamingStoreSourceBase::calculateColumnPositions(const Block & header, const Block & schema)
-{
-    auto header_size = header.columns();
-    virtual_columns_pos_begin = schema.columns();
-    subcolumns_pos_begin = schema.columns() + header_size;
-
-    physical_column_positions_to_read.reserve(header_size);
-    physical_object_column_names_to_read.reserve(header_size);
-    subcolumns_to_read.reserve(header_size);
-    const auto & columns = storage_snapshot.getColumnsByNames(
-        GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), header.getNames());
-
-    /// Calculate column positions in schema
-    /// We assign normal physical column position, virtual column position and subcolumn position by using the following algorithm
-    /// 1) physical columns pos = 'pos in schema'
-    /// 2) virtual columns pos = 'pos in header' + schema.columns()
-    /// 3) subcolumns pos = 'parent column pos in schema' + schema.columns() + header.columns()
-    ///
-    /// For example, header contain 7 columns, schema have all 5 columns.
-    /// header: `virtual_col0, col1, col2, virtual_col3, col4, col3.sub_col5, virtual_col6`
-    /// schema: `col0, col1, col2, col3, col4`
-    ///
-    ///  Positions 1, 2, 4 in header are physical columns,
-    ///  Positions 0, 3, 6 in header are virtual columns,
-    ///  Positions 5 in header is subcolumn,
-    ///
-    ///  virtual_columns_pos_begin is 5
-    ///  subcolumns_pos_begin is 12 <- (5 + 7)
-    ///
-    /// column positions will look like below
-    /// [0 + 5, 1, 2, 3 + 5, 4, 3 + 12, 6 + 5]
-    ///
-    /// 'virtual_time_columns_calc' vector will look like
-    /// [lambda1, nullptr, nullptr, lambda2, nullptr, nullptr, lambda3]
-    ///
-    /// 'subcolumn_names_to_read' vector will look like
-    /// [sub_col5]
-    ///
-    /// We calculate these column positions and lambda vector for simplify the logic and
-    /// fast processing in readAndProcess since we don't need index by column name any more
-    ///
-    /// Summary of position ranges:
-    /// [0, ..., virtual_columns_pos_begin)                                   <= physical columns pos range
-    /// [virtual_columns_pos_begin, ..., subcolumns_pos_begin)                <= virtual columns pos range
-    /// [subcolumns_pos_begin, ..., subcolumns_pos_begin + header.columns())  <= subcolumns pos range
-
-    for (size_t pos = 0; const auto & column : columns)
-    {
-        if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
-        {
-            virtual_time_columns_calc[pos] = [](const BlockInfo & bi) { return bi.append_time; };
-            column_positions[pos] = pos + virtual_columns_pos_begin;
-            /// We are assuming all virtual timestamp columns have the same data type
-            virtual_col_type = column.type;
-        }
-        else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
-        {
-            virtual_time_columns_calc[pos] = [](const BlockInfo &) { return UTCMilliseconds::now(); };
-            column_positions[pos] = pos + virtual_columns_pos_begin;
-            virtual_col_type = column.type;
-        }
-        else
-        {
-            /// FIXME, schema version. For non virtual
-            auto name_in_storage = column.getNameInStorage();
-            auto column_pos = schema.getPositionByName(name_in_storage);
-            const auto & column_in_storage = schema.getByName(name_in_storage);
-            if (column.isSubcolumn())
-            {
-                column_positions[pos] = column_pos + subcolumns_pos_begin;
-                subcolumns_to_read.emplace_back(name_in_storage, column.getSubcolumnName(), column_in_storage.type, column.type);
-            }
-            else
-                column_positions[pos] = column_pos;
-
-            if (physical_column_positions_to_read.end()
-                == std::find(physical_column_positions_to_read.begin(), physical_column_positions_to_read.end(), column_pos))
-            {
-                physical_column_positions_to_read.push_back(column_pos);
-
-                if (isObject(column_in_storage.type))
-                    physical_object_column_names_to_read.push_back(name_in_storage);
-            }
-        }
-
-        ++pos;
-    }
-
-    /// Clients like to read virtual columns only, add `_tp_time`, then we know how many rows
-    if (physical_column_positions_to_read.empty())
-        physical_column_positions_to_read.push_back(schema.getPositionByName(ProtonConsts::RESERVED_EVENT_TIME));
-}
 }

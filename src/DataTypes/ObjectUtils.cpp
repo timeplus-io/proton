@@ -368,9 +368,9 @@ std::pair<ColumnPtr, DataTypePtr> createSubcolumnFromNode(const ColumnObject::Su
         tuple_paths.reserve(subcolumn_size);
         tuple_types.reserve(subcolumn_size);
         tuple_columns.reserve(subcolumn_size);
-        for (const auto & [_, subnode] : node.children)
+        for (const auto & [path , subnode] : node.children)
         {
-            tuple_paths.emplace_back(subnode->path);
+            tuple_paths.emplace_back(path);
             tuple_types.emplace_back(subnode->data.getLeastCommonType());
             tuple_columns.emplace_back(subnode->data.getFinalizedColumnPtr());
         }

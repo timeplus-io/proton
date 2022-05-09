@@ -53,35 +53,41 @@ void StreamingStoreSourceChannel::readAndProcess()
         auto rows = block.rows();
 
         /// Block in channel shall always contain full columns
-        /// `virtual_columns_pos_begin` is also means total physical columns in schema
-        assert(block.columns() == virtual_columns_pos_begin);
+        assert(block.columns() == columns_desc.positions.size());
 
         if (hasObjectColumns())
             fillAndUpdateObjects(block);
 
-        /// Pos Range: [0, ..., virtual_columns_pos_begin, ..., subcolumns_pos_begin, ...)
-        for (size_t subcolumn_index = 0; auto pos : column_positions)
+        for (const auto & pos : columns_desc.positions)
         {
-            if (pos < virtual_columns_pos_begin)
+            switch (pos.type())
             {
-                /// We can't move the column to columns
-                /// since the records can be shared among multiple threads
-                /// We need a deep copy
-                auto col{block.getByPosition(pos).column};
-                columns.push_back(col->cloneResized(col->size()));
-            }
-            else if (pos >= subcolumns_pos_begin)
-            {
-                /// It's a subcolumn, the parent (physical) column pos in schema is `pos - subcolumns_pos_begin`
-                columns.push_back(getSubcolumnFromblock(block, pos - subcolumns_pos_begin, subcolumns_to_read[subcolumn_index]));
-                ++subcolumn_index;
-            }
-            else
-            {
-                assert(virtual_time_columns_calc[pos - virtual_columns_pos_begin]);
-                auto ts = virtual_time_columns_calc[pos - virtual_columns_pos_begin](block.info);
-                auto time_column = virtual_col_type->createColumnConst(rows, ts);
-                columns.push_back(std::move(time_column));
+                case SourceColumnsDescription::ReadColumnType::PHYSICAL:
+                {
+                    /// We can't move the column to columns
+                    /// since the records can be shared among multiple threads
+                    /// We need a deep copy
+                    auto col{block.getByPosition(pos.physicalPosition()).column};
+                    columns.push_back(col->cloneResized(col->size()));
+                    break;
+                }
+                case SourceColumnsDescription::ReadColumnType::VIRTUAL:
+                {
+                    /// The current column to return is a virtual column which needs be calculated lively
+                    assert(columns_desc.virtual_time_columns_calc[pos.virtualPosition()]);
+                    auto ts = columns_desc.virtual_time_columns_calc[pos.virtualPosition()](block.info);
+                    auto time_column = columns_desc.virtual_col_type->createColumnConst(rows, ts);
+                    columns.push_back(std::move(time_column));
+                    break;
+                }
+                case SourceColumnsDescription::ReadColumnType::SUB:
+                {
+                    /// need a deep copy
+                    auto col{getSubcolumnFromblock(
+                        block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()])};
+                    columns.push_back(col->cloneResized(col->size()));
+                    break;
+                }
             }
         }
 
