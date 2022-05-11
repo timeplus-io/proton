@@ -1,0 +1,13 @@
+type,metrics,diff_latest_percent,diff_baseline_percent
+latency,middle_min,0,0
+latency,middle_max,0,0
+latency,middle_mean,0,0
+latency,middle_p90,0,0
+latency,large_min,0,0
+latency,large_max,0,0
+latency,large_mean,0,0
+latency,large_p90,0,0
+latency,xlarge_min,0,0
+latency,xlarge_max,0,0
+latency,xlarge_mean,0,0
+latency,xlarge_p90,0,0
