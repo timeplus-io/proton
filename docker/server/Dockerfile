@@ -112,7 +112,6 @@ RUN mkdir /docker-entrypoint-initdb.d
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 9000 8123 9009
 VOLUME /var/lib/proton
 
 ENV PROTON_CONFIG /etc/proton-server/config.yaml

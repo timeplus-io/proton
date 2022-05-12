@@ -29,8 +29,6 @@ RUN addgroup -S -g 101 clickhouse \
 # we need to allow "others" access to clickhouse folder, because docker container
 # can be started with arbitrary uid (openshift usecase)
 
-EXPOSE 9000 8123 9009
-
 VOLUME /var/lib/clickhouse \
        /var/log/clickhouse-server
 
