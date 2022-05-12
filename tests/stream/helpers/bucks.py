@@ -696,7 +696,7 @@ def clear_case_env(client, test, table_schemas, table_ddl_url):
 
 
 def data_prep_csv_2_list(
-    csv_file_path,
+    data_file_path,
     test_id,
     input_id,
     agent_id_pre_fix="agent_",
@@ -705,6 +705,8 @@ def data_prep_csv_2_list(
     perf_event_time_start="2021-06-29 21:37:00",
     time_incre_interval=1,
     batch_size=1,
+    data_set_file_format="csv",
+    json_column = "event"
 ):
 
     logger.debug(f"data_prep_csv_2_list: copies = {copies}")
@@ -719,12 +721,22 @@ def data_prep_csv_2_list(
         []
     )  # list of input_info to link the unique perf_row_id to input_record and query_resutl and etc. for perf analytics.
 
-    print(f"row_reader: csv_file_path = {csv_file_path}")
+    print(f"row_reader: data_file_path = {data_file_path}")
     perf_event_time = datetime.datetime.fromisoformat(perf_event_time_start)
 
-    with open(csv_file_path) as csv_file:
-        for line in csv.reader(csv_file):
+    if data_set_file_format == 'json':
+        #read json and read into data_set_seed a list of lines, for json format, only support one field
+        with open(data_file_path) as f:   
+            json_batch = json.load(f, strict=False)
+            line = [json_column] #for the json input, no header in json file, so put the json_column as header line, todo: optimize
             data_set_seed.append(line)
+            for item in json_batch:
+                line = [json.dumps(item)]
+                data_set_seed.append(line)         
+    else:
+        with open(data_file_path) as csv_file:
+            for line in csv.reader(csv_file):
+                data_set_seed.append(line)
     # logger.debug(f"{sys._getframe().f_code.co_name}: data_set_seed = {data_set_seed}")
     data_set_seed_rows = len(data_set_seed)
     seed_play_times = int(rows_2_play / int(data_set_seed_rows)) + 1
@@ -904,7 +916,8 @@ def batch_input_from_data_set_py(
                 for field in row:
                     # print("input_walk_through: field:", field)
                     if isinstance(field, str):
-                        field = field.replace('"', '//"')  # proton does
+                        field = field.replace("\\", "\\\\").replace("'","\\'")
+                        #field = field.replace('"', '//"')  # proton does
                     row_str = (
                         row_str + "'" + str(field) + "'" + ","
                     )  # python client does not support "", so put ' here
@@ -988,7 +1001,8 @@ def batch_input_from_data_set_rest(
             else:
                 for field in row:
                     if isinstance(field, str):
-                        field = field.replace('"', '//"')  # proton does
+                        field = field.replace("\\", "\\\\").replace("'","\\'")
+                        #field = field.replace('"', '//"')  # proton does
                         row_list.append(field)
                 _perf_row_id = str(uuid.uuid1())
                 row_list.append(_perf_row_id)
@@ -1152,6 +1166,8 @@ def input_walk_through(
     inputs_record = []
     data_set_abspath = None
     proc_workers = []
+    data_set_file_format = None
+    json_column = None #set the default json column to 'event'
 
     for source in inputs:
         table_name = source.get("table_name")
@@ -1163,6 +1179,8 @@ def input_walk_through(
         data_set_path = source.get("data_set_path")
         input_record_table = source.get("input_record_table")
         loop_times = source.get("loop_times")
+        data_set_file_format = source.get("data_set_file_format")
+        json_column = source.get("json_column")
 
         if data_set_path != None:
             data_set_abspath = (
@@ -1195,6 +1213,8 @@ def input_walk_through(
 
         logger.debug(f"input_id = {input_id}, client = {client}, workers = {workers}")
 
+
+        
         data_sets_for_workers = data_prep_csv_2_list(
             data_set_file_abspath,
             test_id,
@@ -1204,6 +1224,8 @@ def input_walk_through(
             perf_event_time_start="2021-06-29 21:37:00",
             time_incre_interval=ingest_interval,
             batch_size=batch_size,
+            data_set_file_format=data_set_file_format,
+            json_column = json_column
         )
 
         # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")
@@ -1314,8 +1336,8 @@ def env_setup(
         else:
             if table_type == "table":
                 create_table_rest(table_ddl_url, table_schema)
-            elif table_type == "view":
-                create_table_pyclient(client, table_schema)
+            #elif table_type == "view":
+            #    create_table_pyclient(client, table_schema)
 
     setup = test_suite_config.get("setup")
     logger.debug(f"env_setup: setup = {setup}")
@@ -1325,6 +1347,13 @@ def env_setup(
             setup_input_res = input_walk_through_rest(
                 rest_setting, setup_inputs, table_schemas
             )
+        setup_statements = setup.get("statements") #only support table rightnow todo: optimize logic
+        if setup_statements != None:
+            for statement in setup_statements:
+                query = statement.get("query")
+                if query is not None:
+                    client.execute(query)
+
 
     return
 

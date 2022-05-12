@@ -228,11 +228,12 @@ if __name__ == "__main__":
     query_column = None
     mode = 'input'
     proc = None
+    loop = 1
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","json_column=","query_column=", "interval="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","json_column=","query_column=", "interval=", "loop="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 json_input.py --json=github_issue.json --stream=github_issue --interval=1")
+        print(f"usage: python3 json_input.py --input_json_files=github_issue.json --stream=github_issue --json_column=event --interval=1 --loop=-1")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -255,14 +256,21 @@ if __name__ == "__main__":
             json_column = value 
 
         if name in ("--query_column"):
-            query_column = value       
+            query_column = value 
 
         if name in ("--interval"):
             if value.isdigit() == False:
                 print(f"usage: python3 json_input.py --interval=1")
                 sys.exit(1)
             else:
-                interval = int(value)
+                interval = int(value)              
+
+        if name in ("--loop"):
+            try:
+                loop = int(value)                 
+            except:
+                print(f"unknown input for loop, usage: python3 json_input.py --loop=-1")
+                sys.exit(1)
     
     print(f"input_json: input_json_files = {json_files}, stream = {stream}, json_column = {json_column}, query_column = {query_column}, mode = {mode} interval={interval}")
 
@@ -298,7 +306,14 @@ if __name__ == "__main__":
                 json_batch = json.load(f, strict=False)
             start_at = datetime.datetime.utcnow()
             logger.debug(f"start bach_json_input from {json_file} to {stream}")
-            res = batch_json_input(json_batch, stream, json_column, 0, interval)
+            if loop < 0:
+                while True:
+                    res = batch_json_input(json_batch, stream, json_column, 0, interval)
+            else:
+                i = 0
+                while i < loop:
+                    res = batch_json_input(json_batch, stream, json_column, 0, interval)
+                    i += 1
             end_at = datetime.datetime.utcnow()
             logger.debug(f"end batch_json_input of {json_file} to {stream}") 
             duration = end_at - start_at

@@ -5,6 +5,30 @@
         "proton_ci_mode": "local",
         "table_schemas":[
             {
+                "name": "event",
+                "type": "table",
+                "reset": "False",
+                "config": "setting_1",
+                "columns": [
+                    {
+                        "name": "event",
+                        "type": "json"
+                    },
+                    {
+                        "name": "perf_event_time",
+                        "type": "datetime64(3)",
+                        "default": "now64(3)"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "string"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "string"
+                    }                    
+            ]}, 
+            {
                 "name": "iris",
                 "type": "table",
                 "reset": "False",
@@ -60,7 +84,8 @@
                         "type": "string"
                     }
 
-                ]}
+            ]}           
+
 
         ],
         "setup": {
@@ -69,7 +94,14 @@
                 ["Iris-setosa", "setosa"],
                 ["Iris-versicolor", "versicolor"],
                 ["Iris-virginica", "virginica"]]
-                }
+                },
+                {"table_name":"event", "data": [
+                    ["{\"id\": \"21562085809\", \"type\": \"PushEvent\", \"actor\": {\"id\": 75677395, \"login\": \"malviyaindia\", \"display_login\": \"malviyaindia\", \"gravatar_id\": \"\", \"url\": \"https://api.github.com/users/malviyaindia\", \"avatar_url\": \"https://avatars.githubusercontent.com/u/75677395?\"}, \"repo\": {\"id\": 385258641, \"name\": \"malviyaindiaiom\", \"url\": \"https://api.github.com/repos/malviyaindia/iom\"}, \"payload\": {\"push_id\": 9766550002, \"size\": 1, \"distinct_size\": 1, \"ref\": \"refs/heads/main\", \"head\": \"22d8895aee80067947304e63a4fc4007b73ff0cb\", \"before\": \"d82e4899e4682e65af392d38abd0368a2c242842\", \"commits\": [{\"sha\": \"22d8895aee80067947304e63a4fc4007b73ff0cb\", \"author\": {\"email\": \"75677395+malviyaindia@users.noreply.github.com\", \"name\": \"Atul Malviya\"}, \"message\": \"Update index.html\", \"distinct\": true, \"url\": \"https://api.github.com/repos/malviyaindia/iom/commits/22d8895aee80067947304e63a4fc4007b73ff0cb\"}]}, \"public\": true, \"created_at\": \"2022-05-01T10:10:13Z\"}"]
+                ]
+                }                
+            ],
+            "statements":[
+                {"client":"python","config_set": "setting_1","workers": 1, "interval":1, "query_type": "table", "query":"insert into event(event) values('{\"id\": \"21562085809\", \"type\": \"PushEvent\", \"actor\": {\"id\": 75677395, \"login\": \"malviyaindia\", \"display_login\": \"malviyaindia\", \"gravatar_id\": \"\", \"url\": \"https://api.github.com/users/malviyaindia\", \"avatar_url\": \"https://avatars.githubusercontent.com/u/75677395?\"}, \"repo\": {\"id\": 385258641, \"name\": \"malviyaindiaiom\", \"url\": \"https://api.github.com/repos/malviyaindia/iom\"}, \"payload\": {\"push_id\": 9766550002, \"size\": 1, \"distinct_size\": 1, \"ref\": \"refs/heads/main\", \"head\": \"22d8895aee80067947304e63a4fc4007b73ff0cb\", \"before\": \"d82e4899e4682e65af392d38abd0368a2c242842\", \"commits\": [{\"sha\": \"22d8895aee80067947304e63a4fc4007b73ff0cb\", \"author\": {\"email\": \"75677395+malviyaindia@users.noreply.github.com\", \"name\": \"Atul Malviya\"}, \"message\": \"Update index.html\", \"distinct\": true, \"url\": \"https://api.github.com/repos/malviyaindia/iom/commits/22d8895aee80067947304e63a4fc4007b73ff0cb\"}]}, \"public\": true, \"created_at\": \"2022-05-01T10:10:13Z\"}')"}
             ]
         },
         "tests_2_run": {"ids_2_run": [2], "tags_2_run":[], "tags_2_skip":["bug", "todo", "to_support"]} 
@@ -123,11 +155,43 @@
 
             ]               
         },
-
         {
             "id": 2,
             "tags": ["latency"],
-            "name": "tail laterncy - proton",
+            "name": "longevity - proton, with easy json large volume",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 80, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists event_tumble_count_v$"},                    
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 80, "query_type": "table", "query":"create materialized view event_tumble_count_v$ as select window_start as ws, window_end as we, event.type, count() from tumble(event, 5s) group by event.type, window_start, window_end"},
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 50, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
+
+                ]},
+                    
+
+                {"inputs": [
+                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":110, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "event","input_id": 203, "workers":110, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "event", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
+
+                ]}
+
+            ]               
+        },
+        {
+            "id": 3,
+            "tags": ["latency"],
+            "name": "longevity - proton, no easy json large volume",
             "description": "tail query latency w/single source",
             "db_engine":"proton",
             "input_info_table": "input_info",
@@ -151,11 +215,12 @@
                 ]}
 
             ]               
-        },
+        },                
+
         {
-            "id": 3,
+            "id": 4,
             "tags": ["latency"],
-            "name": "tail laterncy - proton",
+            "name": "longevity - proton, no easy json middle volume",
             "description": "tail query latency w/single source",
             "db_engine":"proton",
             "input_info_table": "input_info",
@@ -182,7 +247,7 @@
         },        
 
         {
-            "id": 4,
+            "id": 5,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
@@ -213,7 +278,7 @@
 
         
         {
-            "id": 5,
+            "id": 6,
             "tags": ["latency"],
             "name": "tail laterncy - Materialize",
             "description": "tail query latency w/single source",
@@ -226,7 +291,7 @@
             ]               
         },
         {
-            "id": 6,
+            "id": 7,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
@@ -248,7 +313,63 @@
                 ]}
 
             ]               
-        }        
+        },
+        {
+            "id": 8,
+            "tags": ["latency"],
+            "name": "tail laterncy - proton",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python","config_set": "setting_1","workers": 120, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 120, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 120, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 50, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
+
+                ]},
+                    
+
+                {"inputs": [
+                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":110, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "event","input_id": 203, "workers":60, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "event", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "event","input_id": 205, "client":"rest", "workers":50, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "event", "table_schema_file":"table_schema.json -todo", 
+                    "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                                                 
+                ]}
+
+            ]               
+        },
+        {
+            "id": 9,
+            "tags": ["latency"],
+            "name": "longevity, debug json rest input, rest input of json obj is broken now",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python","config_set": "setting_1","workers": 1, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
+                    {"client":"python","config_set": "setting_1", "wait":2, "interval":5, "workers": 1, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
+                    {"client":"python","config_set": "setting_1", "wait": 2, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 1, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 2, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
+                ]},
+                    
+
+                {"inputs": [
+
+                    {"table_name": "event","input_id": 203, "client":"rest", "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "event", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                                                                                                                         
+                ]}
+
+            ]               
+        }                        
 
     ]
 }
