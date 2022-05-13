@@ -406,6 +406,8 @@ namespace DB
         std::unordered_map<String, std::shared_ptr<arrow::Array>> & dictionary_values)
     {
         const String column_type_name = column_type->getFamilyName();
+        String capital_type_name = column_type_name;
+        capital_type_name[0] = std::toupper(capital_type_name[0]);
 
         if (column_type->isNullable())
         {
@@ -481,7 +483,7 @@ namespace DB
                 throw Exception{ErrorCodes::LOGICAL_ERROR, "Cannot fill arrow array with decimal data with type {}", column_type_name};
         }
     #define DISPATCH(CPP_NUMERIC_TYPE, ARROW_BUILDER_TYPE) \
-        else if (#CPP_NUMERIC_TYPE == column_type_name) \
+        else if (#CPP_NUMERIC_TYPE == capital_type_name) \
         { \
             fillArrowArrayWithNumericColumnData<CPP_NUMERIC_TYPE, ARROW_BUILDER_TYPE>(column, null_bytemap, format_name, array_builder, start, end); \
         }
