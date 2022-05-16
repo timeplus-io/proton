@@ -178,6 +178,8 @@ private:
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
+    void handleEmitVersion();
+    void checkWindowSize();
     /// proton: ends
 
     enum class Modificator

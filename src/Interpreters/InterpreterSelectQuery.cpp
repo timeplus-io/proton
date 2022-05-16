@@ -503,20 +503,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         context->setDistributed(syntax_analyzer_result->is_remote_storage);
 
         /// proton: starts. Use streaming version of the functions
-        bool streaming = isStreaming();
-        StreamingFunctionVisitor::Data func_data(streaming);
-        StreamingFunctionVisitor(func_data).visit(query_ptr);
-
-        if (func_data.emit_version)
-        {
-            /// emit_version() shall be used along with aggregation only
-            if (streaming && syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
-                throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used along with streaming aggregations");
-            else if (!streaming)
-                throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used in streaming query");
-
-            emit_version = true;
-        }
+        handleEmitVersion();
+        checkWindowSize();
         /// proton: ends.
 
         if (storage && !query.final() && storage->needRewriteQueryWithFinal(syntax_analyzer_result->requiredSourceColumns()))
@@ -3133,6 +3121,61 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
 
         query_plan.addStep(std::make_unique<WatermarkStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
+    }
+}
+
+void InterpreterSelectQuery::handleEmitVersion()
+{
+    bool streaming = isStreaming();
+    StreamingFunctionVisitor::Data func_data(streaming);
+    StreamingFunctionVisitor(func_data).visit(query_ptr);
+
+    if (func_data.emit_version)
+    {
+        /// emit_version() shall be used along with aggregation only
+        if (streaming && syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
+            throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used along with streaming aggregations");
+        else if (!streaming)
+            throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used in streaming query");
+
+        emit_version = true;
+    }
+}
+
+void InterpreterSelectQuery::checkWindowSize()
+{
+    if (getSelectQuery().tables() && isStreaming())
+    {
+        const auto & tables_expr = getTableExpressions(getSelectQuery());
+        for (const auto & table : tables_expr)
+        {
+            auto table_func = table->table_function->as<ASTFunction>();
+            if (!table_func)
+                continue;
+
+            ASTPtr interval_ast = nullptr;
+            if (isTableFunctionTumble(table_func))
+            {
+                /// tumble(table, [time_expr], win_interval, [timezone])
+                interval_ast = checkAndExtractTumbleArguments(table_func)[2];
+            }
+            else if (isTableFunctionHop(table_func))
+            {
+                /// hop(table, [timestamp_column], hop_interval, hop_win_interval, [timezone])
+                interval_ast = checkAndExtractHopArguments(table_func)[2];
+            }
+
+            if (interval_ast)
+            {
+                auto window_interval_bs = BaseScaleInterval::toBaseScale(extractInterval(interval_ast->as<ASTFunction>()));
+
+                if (window_interval_bs.src_kind == IntervalKind::Week ||
+                    window_interval_bs.src_kind == IntervalKind::Month ||
+                    window_interval_bs.src_kind == IntervalKind::Quarter ||
+                    window_interval_bs.src_kind == IntervalKind::Year)
+                    throw Exception(ErrorCodes::UNSUPPORTED, "Interval unit 'week/month/quarter/year' should not be used in streaming query");
+            }
+        }
     }
 }
 /// proton: ends
