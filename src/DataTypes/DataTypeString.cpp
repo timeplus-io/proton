@@ -64,7 +64,7 @@ void registerDataTypeString(DataTypeFactory & factory)
     /// factory.registerAlias("CHAR", "string", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("NCHAR", "string", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("CHARACTER", "string", DataTypeFactory::CaseInsensitive);
-    /// factory.registerAlias("VARCHAR", "string", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("VARCHAR", "string", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("NVARCHAR", "string", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("VARCHAR2", "string", DataTypeFactory::CaseInsensitive); /// Oracle
     /// factory.registerAlias("TEXT", "string", DataTypeFactory::CaseInsensitive);
