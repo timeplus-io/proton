@@ -32,11 +32,12 @@ c=0
 for file in `ls neutron_*report*.csv`
 do
   echo "$file is generated"
-  mv "$file" $proton_version"_neutron_latency_middle_"$c.csv
+  timestamp=$(date +%s)
+  mv "$file" $proton_version"_neutron_latency_middle_"$timestamp.csv
   wait
-  aws s3 cp ./$proton_version"_neutron_latency_middle_"$c.csv s3://tp-internal/proton/perf/$proton_version"_neutron_latency_middle_"$c.csv
+  aws s3 cp ./$proton_version"_neutron_latency_middle_"$timestamp.csv s3://tp-internal/proton/perf/$proton_version"_neutron_latency_middle_"$timestamp.csv
   wait
-  echo "$file is renamed to $proton_version"_neutron_latency_middle_"$c.csv and uploaded to s3..." 
+  echo "$file is renamed to $proton_version"_neutron_latency_middle_"$timestamp.csv and uploaded to s3..." 
   ((C++))
 done
 wait
@@ -46,11 +47,12 @@ c=0
 for file1 in `ls neutron_*report*.csv`
 do
   echo "$file1 is generated and rename and upload..."
-  mv "$file1" $proton_version"_neutron_latency_large_"$c.csv
+  timestamp=$(date +%s)
+  mv "$file1" $proton_version"_neutron_latency_large_"$timestamp.csv
   wait
-  aws s3 cp ./$proton_version"_neutron_latency_large_"$c.csv s3://tp-internal/proton/perf/$proton_version"_neutron_latency_large_"$c.csv  
+  aws s3 cp ./$proton_version"_neutron_latency_large_"$timestamp.csv s3://tp-internal/proton/perf/$proton_version"_neutron_latency_large_"$timestamp.csv  
   wait
-  echo "$file1 is renamed to $proton_version"_neutron_latency_large_"$c.csv and uploaded to s3..." 
+  echo "$file1 is renamed to $proton_version"_neutron_latency_large_"$timestamp.csv and uploaded to s3..." 
   ((C++))
 done
 wait
@@ -60,11 +62,12 @@ c=0
 for file2 in `ls neutron_*report*.csv`
 do
   echo "$file2 is generated and rename and upload..."
-  mv "$file2" $proton_version"_neutron_latency_xlarge_"$c.csv
+  timestamp=$(date +%s)
+  mv "$file2" $proton_version"_neutron_latency_xlarge_"$timestamp.csv
   wait
-  aws s3 cp ./$proton_version"_neutron_latency_xlarge_"$c.csv s3://tp-internal/proton/perf/$proton_version"_neutron_latency_xlarge_"$c.csv  
+  aws s3 cp ./$proton_version"_neutron_latency_xlarge_"$timestamp.csv s3://tp-internal/proton/perf/$proton_version"_neutron_latency_xlarge_"$timestamp.csv  
   wait
-  echo "$file2 is renamed to $proton_version"_neutron_latency_xlarge_"$c.csv and uploaded to s3..." 
+  echo "$file2 is renamed to $proton_version"_neutron_latency_xlarge_"$timestamp.csv and uploaded to s3..." 
   ((C++))
 done
 wait

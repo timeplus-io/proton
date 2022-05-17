@@ -11,6 +11,7 @@ from clickhouse_driver import errors
 from github import (Github,enable_console_debug_logging,GithubException,RateLimitExceededException)
 from requests.exceptions import ReadTimeout
 import requests
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
@@ -46,20 +47,26 @@ def batch_json_input(json_batch, stream, json_column, num=0, interval=1):
     #json_str = json.dumps(json_batch[0])
     add_count = 0
     i = 0
+    type_str = 'PullRequestReviewCommentEvent'
+    column_length_at_input = []
     while i < json_batch_len:
         item = json_batch[i]
         json_str = dict_to_jsonstr(item)
+        json_str_len = len(json_str)
+        column_length_at_input.append(json_str_len)
         add_count = add_count + 1
         sent_at = datetime.datetime.utcnow()
-        insert_sql = f"insert into {stream} (add_count, {json_column}, sent_at) values ({add_count},'{json_str}', '{sent_at}')"
+        insert_sql = f"insert into {stream} (add_count,type,json_string, {json_column}, sent_at) values ({add_count},'{type_str}','{json_str}','{json_str}', '{sent_at}')"
         #insert_sql = insert_sql.replace("\\", "\\\\").replace("'","\\'")
         res = client.execute(insert_sql)
         i += 1
         logger.debug(f"add_count = {add_count}, insert_sql = {insert_sql}, \n done. \n")
         time.sleep(interval)
+    return column_length_at_input
     client.disconnect()
 
 def query_run(stream, query_column, query = None, query_id = '101', query_log_name = 'query_log'):
+    pd.set_option('display.precision', 2)
     logger = mp.get_logger()     
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
@@ -98,36 +105,76 @@ def query_run(stream, query_column, query = None, query_id = '101', query_log_na
     query_records_m = []
 
     header = ["sent_at", "recvd_at", "latency_ms", "query_column_len"]
-    latency_list = []
+    sent_at_list = []
+    recvd_at_list = []
+    latency_ms_list = []
+    query_column_len_list = []
+    #latency_list = []
     query_records_m.append(header)
     for item in query_records:
         line = item[:-1]
         if len(line) >= 2:
             recvd_at_str = str(line[1])
+            recvd_at_list.append(recvd_at_str)
             sent_at_str = str(line[0])
+            sent_at_list.append(sent_at_str)
             t_recvd_at = datetime.datetime.strptime(recvd_at_str,'%Y-%m-%d %H:%M:%S.%f')
             t_sent_at = datetime.datetime.strptime(sent_at_str,'%Y-%m-%d %H:%M:%S.%f')
             diff = (t_recvd_at - t_sent_at).microseconds/1000
+            latency_ms_list.append(diff)
             line.append(diff)
             query_column_len = len(item[-1])
+            query_column_len_list.append(query_column_len)
             line.append(query_column_len)
-            latency_list.append(diff)
-            logger.debug(f"sent_at = {line[0]}, recvd_at = {line[1]}, latency = {line[2]}, query_column_len = {query_column_len}")
+            logger.debug(f"sent_at = {line[0]}, recvd_at = {line[1]}, query_column_len = {query_column_len}, latency = {line[2]}")
             query_records_m.append(line) 
     
     total_latency = 0
+    '''
     count = 0
-    for i in latency_list:
+    for i in latency_ms_list:
         total_latency += i
         count += 1
     if count > 0:
         avg_latency = total_latency/count
-    max_latency = max(latency_list)
-    min_latency = min(latency_list)
-    p90_latency = percentile(latency_list, 0.9)
-    logger.debug(f"max_latency = {max_latency}ms, min_latency = {min_latency}ms, average latency = {avg_latency}ms, p90 latency = {p90_latency}")
+    max_latency = max(latency_ms_list)
+    min_latency = min(latency_ms_list)
+    '''
+    df = pd.DataFrame(
+        {
+            'sent_at':sent_at_list, 
+            'recvd_at':recvd_at_list,
+            'query_column_len':query_column_len_list,
+            'latency_ms':latency_ms_list,
 
+
+        }
+    )
+
+    #p90_latency = percentile(latency__ms_list, 0.9)
+    max_latency = df['latency_ms'].max()
+    min_latency = df['latency_ms'].min()
+    mean_latency = df['latency_ms'].mean()
+    p90_latency = df['latency_ms'].quantile(0.9, interpolation='nearest')
+    metrics_latency = [min_latency, max_latency, mean_latency, p90_latency]
+    max_column_length = df['query_column_len'].max()
+    min_column_length = df['query_column_len'].min()
+    mean_column_length = df['query_column_len'].mean()
+    p90_column_length = df['query_column_len'].quantile(0.9, interpolation='nearest')
+
+    #logger.debug(f"max_latency = {max_latency}ms, min_latency = {min_latency}ms,  mean_latency = {mean_latency}ms, p90 latency = {p90_latency}")
+    metrics_name = ['min', 'max', 'mean', 'p90']
+    metrics_column_length = [min_column_length, max_column_length, mean_column_length, p90_column_length]
+    df_stats = pd.DataFrame(
+        {
+            'stats':metrics_name,
+            f"query_column={query_column}:latency":metrics_latency,
+            f"query_column={query_column}:query_column_length": metrics_column_length
+        }
+    )
     
+    
+    print(f"\n{df_stats}\n")    
 
     with open(query_log_csv, "w") as f:
         writer = csv.writer(f)
@@ -229,6 +276,7 @@ if __name__ == "__main__":
     mode = 'input'
     proc = None
     loop = 1
+    pd.set_option('display.precision', 2)
     try:
         opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","json_column=","query_column=", "interval=", "loop="])
     except(getopt.GetoptError) as error:
@@ -278,7 +326,8 @@ if __name__ == "__main__":
     if mode == 'latency':
         client.execute(f"drop stream if exists {stream}")
         time.sleep(1)
-        client.execute(f'create stream if not exists {stream} (add_count int, {json_column} json, sent_at datetime64)')
+        #client.execute(f'create stream if not exists {stream} (add_count int, type string, {json_column} json, sent_at datetime64)')
+        client.execute(f'create stream if not exists {stream} (add_count int,type string, json_string string, {json_column} json, sent_at datetime64)')
         with open(json_files[0]) as f:  #rest interface will have a bad serialization exception if the stream is empty and then start the query and ingestion, so insert one before running the latency test 
             json_batch = json.load(f, strict=False)        
         res = batch_json_input(json_batch, stream, json_column, 1, interval)
@@ -295,6 +344,7 @@ if __name__ == "__main__":
         proc.start()
         logger.debug(f"query_run proc started...")
         time.sleep(6)
+    column_length_at_input = []    
     if json_files != None:
         for json_file in json_files:
             while not (table_exist_py(client, stream)):
@@ -308,11 +358,11 @@ if __name__ == "__main__":
             logger.debug(f"start bach_json_input from {json_file} to {stream}")
             if loop < 0:
                 while True:
-                    res = batch_json_input(json_batch, stream, json_column, 0, interval)
+                    column_length_at_input = batch_json_input(json_batch, stream, json_column, 0, interval)
             else:
                 i = 0
                 while i < loop:
-                    res = batch_json_input(json_batch, stream, json_column, 0, interval)
+                    column_length_at_input = batch_json_input(json_batch, stream, json_column, 0, interval)
                     i += 1
             end_at = datetime.datetime.utcnow()
             logger.debug(f"end batch_json_input of {json_file} to {stream}") 
@@ -335,4 +385,21 @@ if __name__ == "__main__":
 
     if proc != None:
         proc.join()   
-    #github_event_get()
+    
+    if len(column_length_at_input) > 0:
+        df = pd.DataFrame(column_length_at_input)
+        metrics_name = ["min", "max", "mean", "p90"]
+        metrics = []
+        metrics.append(df[df.columns[-1]].min())
+        metrics.append(df[df.columns[-1]].max())
+        metrics.append(df[df.columns[-1]].mean())
+        metrics.append(df[df.columns[-1]].quantile(0.9, interpolation='nearest'))
+        df_metrics = pd.DataFrame(
+            {
+                'metrics':metrics_name,
+                'json_string_column_len_at_input':metrics
+            
+            }
+        )
+        print(f"\n{df_metrics}\n")         
+        

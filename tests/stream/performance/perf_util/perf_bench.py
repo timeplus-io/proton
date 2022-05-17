@@ -18,9 +18,15 @@ NEUTRON_LATENCY_PERF_REPORT_FILE_PATTERN = "*_neutron_*.csv"
 NEUTRON_LATENCY_PERF_SUMMARY_FILE_TEMPLATE="neutron_perf_summary_template.csv"
 #NEUTRON_LATENCY_PERF_SUMMARY_FILE_PATTERN = "neutron_perf_summary_report*"
 '''
+end to end perf report naming convension: 
+{version}_{component_name}_{type}_{suite}_{timestamp}.csv, e.g. 1.0.42_neutron_latency_middle_1652597055.csv
+
+end to end perf summary report naming convension: 
+{component_name}_perf_summary_report_{version}_{timestamp}.csv
+
 neutron_perf_latency.csv format:
 
-    ,1.0.38,1.0.36,.....1.0.33
+type,metrics, diff_latest_percent, diff_baseline_percent, 1.0.42,1.0.36,.....1.0.33
 latency,middle_min,num,...
 latency,middle_max,num,...
 latency,middle_mean,num,...
@@ -139,9 +145,10 @@ def update_perf(df_perf_summary, perf_report_path, perf_report):
 
 def generate_perf_summary_on_path(perf_summary_file_prefix, perf_report_path, perf_report_pattern = NEUTRON_LATENCY_PERF_REPORT_FILE_PATTERN):
     perf_files = []
-    perf_summary_file_pattern = perf_summary_file_prefix + "*"
-    perf_summary_file = get_latest_file(perf_summary_file_pattern)
-    logger.debug(f"perf_summary_file = get_latest_file({perf_summary_file_pattern}) = {perf_summary_file}")
+    #perf_summary_file_pattern = perf_summary_file_prefix + "*" 
+    #perf_summary_file = get_latest_file(perf_summary_file_pattern)
+    #logger.debug(f"perf_summary_file = get_latest_file({perf_summary_file_pattern}) = {perf_summary_file}")
+    perf_summary_file = None # todo: support update mode, update existing file but not recreate a new summary file
     if perf_summary_file != None:
         try:
             df_perf_summary = pd.read_csv(perf_summary_file, index_col = False)
@@ -159,14 +166,25 @@ def generate_perf_summary_on_path(perf_summary_file_prefix, perf_report_path, pe
     version_list = []
     for report in report_files:
         report_name = report.split("_")
-        metric_version = report_name[0].replace(perf_report_path, '') 
+        metric_version = report_name[0].replace(perf_report_path, '')
         version_list.append(metric_version)
+    #version_list = list(dict.fromkeys(version_list)) #decup the version_list
     version_list = list(dict.fromkeys(version_list)) #decup the version_list
     version_list.sort(key=StrictVersion)
+    logger.debug(f"version_list = {version_list}")
     last_version = 'null'
     for version in version_list:
         files = glob.glob(f"{perf_report_path}/{version}*")
-        for file in files:
+        latest_reports = []
+        for file in files: #for the duplicated reports like 1.0.38_neutron_latency_large_165784.csv and 1.0.38_neutron_latency_large_175786.csv, only get the the one with the latest update time into the latest_reports
+            file_pattern = '_'.join(file.split('_')[:-1])+'*'
+            logger.debug(f"file_pattern of report = {file_pattern}")
+            file = get_latest_file(file_pattern)
+            if not file in latest_reports:
+                latest_reports.append(file)
+        logger.debug(f"latest_reports = {latest_reports}")
+
+        for file in latest_reports:
             report_name = file.split("_")
             metric_version = report_name[0].replace(perf_report_path, '')
             component_name = report_name[1]
@@ -178,7 +196,7 @@ def generate_perf_summary_on_path(perf_summary_file_prefix, perf_report_path, pe
             logger.debug(f"df_perf_summary DataFrame updated by processing perf_report = {perf_report}")
         last_version = version
             
-    new_perf_summary_file = cur_dir + "/" + NEUTRON_PERF_SUMMARY_FILE_PREFIX + '_' + last_version + '_' + str(datetime.datetime.now(datetime.timezone.utc).timestamp()).split('.')[0]
+    new_perf_summary_file = cur_dir + "/" + NEUTRON_PERF_SUMMARY_FILE_PREFIX + '_' + last_version + '_' + str(datetime.datetime.now(datetime.timezone.utc).timestamp()).split('.')[0] + '.csv'
     df_perf_summary.to_csv(new_perf_summary_file, index = False)
 
 

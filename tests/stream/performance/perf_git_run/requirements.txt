@@ -1,0 +1,5 @@
+PyGitHub==1.55
+timeplus==0.1.2
+loguru==0.6.0
+requests==2.26.0
+Rx==3.2.0
