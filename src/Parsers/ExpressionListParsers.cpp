@@ -19,6 +19,7 @@
 
 /// proton: starts.
 #include <Parsers/Streaming/ParserIntervalAliasExpression.h>
+#include <Parsers/Streaming/ParserJsonElementExpression.h>
 /// proton: ends.
 
 using namespace std::literals;
@@ -693,7 +694,11 @@ bool ParserUnaryExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 bool ParserCastExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ASTPtr expr_ast;
-    if (!ParserExpressionElement().parse(pos, expr_ast, expected))
+    /// proton: starts. At first, try to parse the json elem expression and parse it to `json_value` function
+    /// For examples: raw:a.b -> json_value(raw, '$.a.b')
+    if (!ParserJsonElementExpression().parse(pos, expr_ast, expected)
+        /// proton: ends.
+        && !ParserExpressionElement().parse(pos, expr_ast, expected))
         return false;
 
     ASTPtr type_ast;

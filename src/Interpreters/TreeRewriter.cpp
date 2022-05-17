@@ -45,6 +45,7 @@
 
 /// proton: starts.
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/Streaming/OptimizeJsonValueVisitor.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/StorageView.h>
 #include <Storages/Streaming/ProxyStream.h>
@@ -1214,6 +1215,11 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
     }
 
     translateQualifiedNames(query, *select_query, source_columns_set, tables_with_columns);
+
+    /// proton: starts.
+    OptimizeJsonValueVisitor::Data data_optimize_json_value_visitor;
+    OptimizeJsonValueVisitor(data_optimize_json_value_visitor).visit(query);
+    /// proton: ends.
 
     /// Optimizes logical expressions.
     LogicalExpressionsOptimizer(select_query, settings.optimize_min_equality_disjunction_chain_length.value).perform();

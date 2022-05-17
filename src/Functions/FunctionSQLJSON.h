@@ -24,6 +24,11 @@
 
 #include "config_functions.h"
 
+/// proton: starts.
+#include <Columns/ColumnArray.h>
+#include <DataTypes/DataTypeArray.h>
+/// proton: ends.
+
 namespace DB
 {
 namespace ErrorCodes
@@ -32,6 +37,13 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
 extern const int BAD_ARGUMENTS;
 }
+
+/// proton: starts.
+struct NameJSONValues
+{
+    static constexpr auto name{"json_values"};
+};
+/// proton: ends.
 
 class FunctionSQLJSONHelpers
 {
@@ -59,52 +71,65 @@ public:
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
 
-            const auto & json_path_column = arguments[1];
+            /// proton: starts. support multi-paths
+            size_t paths_num = 1;
 
-            if (!isString(json_path_column.type))
+            /// For `json_values` we support multi paths
+            if constexpr (std::is_same_v<Name, NameJSONValues>)
+                paths_num = arguments.size() - 1;
+
+            ASTs paths(paths_num, nullptr);
+            for (size_t i = 0; i < paths_num; ++i)
             {
-                throw Exception(
-                    "JSONPath functions require second argument to be JSONPath of type string, illegal type: " + json_path_column.type->getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            }
-            if (!isColumnConst(*json_path_column.column))
-            {
-                throw Exception("Second argument (JSONPath) must be constant string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                const auto & json_path_column = arguments[i + 1];
+
+                if (!isString(json_path_column.type))
+                {
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "JSONPath functions require argument {} to be JSONPath of type string, illegal type: {}",
+                        i + 1,
+                        json_path_column.type->getName());
+                }
+
+                if (!isColumnConst(*json_path_column.column))
+                {
+                    throw Exception("Second argument (JSONPath) must be constant string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                }
+
+                const ColumnPtr & arg_jsonpath = json_path_column.column;
+                const auto * arg_jsonpath_const = typeid_cast<const ColumnConst *>(arg_jsonpath.get());
+                const auto * arg_jsonpath_string = typeid_cast<const ColumnString *>(arg_jsonpath_const->getDataColumnPtr().get());
+
+                /// Get data and offsets for 1 argument (JSONPath)
+                const ColumnString::Chars & chars_path = arg_jsonpath_string->getChars();
+                const ColumnString::Offsets & offsets_path = arg_jsonpath_string->getOffsets();
+
+                /// Prepare to parse 1 argument (JSONPath)
+                const char * query_begin = reinterpret_cast<const char *>(&chars_path[0]);
+                const char * query_end = query_begin + offsets_path[0] - 1;
+
+                /// Tokenize query
+                Tokens tokens(query_begin, query_end);
+                /// Max depth 0 indicates that depth is not limited
+                IParser::Pos token_iterator(tokens, parse_depth);
+
+                /// Parse query and create AST tree
+                Expected expected;
+                ParserJSONPath parser;
+                const bool parse_res = parser.parse(token_iterator, paths[i], expected);
+                if (!parse_res)
+                {
+                    throw Exception{"Unable to parse JSONPath", ErrorCodes::BAD_ARGUMENTS};
+                }
             }
 
-            const ColumnPtr & arg_jsonpath = json_path_column.column;
-            const auto * arg_jsonpath_const = typeid_cast<const ColumnConst *>(arg_jsonpath.get());
-            const auto * arg_jsonpath_string = typeid_cast<const ColumnString *>(arg_jsonpath_const->getDataColumnPtr().get());
-
+            /// Get data and offsets for json argument (JSON)
             const ColumnPtr & arg_json = json_column.column;
             const auto * col_json_const = typeid_cast<const ColumnConst *>(arg_json.get());
             const auto * col_json_string
                 = typeid_cast<const ColumnString *>(col_json_const ? col_json_const->getDataColumnPtr().get() : arg_json.get());
 
-            /// Get data and offsets for 1 argument (JSONPath)
-            const ColumnString::Chars & chars_path = arg_jsonpath_string->getChars();
-            const ColumnString::Offsets & offsets_path = arg_jsonpath_string->getOffsets();
-
-            /// Prepare to parse 1 argument (JSONPath)
-            const char * query_begin = reinterpret_cast<const char *>(&chars_path[0]);
-            const char * query_end = query_begin + offsets_path[0] - 1;
-
-            /// Tokenize query
-            Tokens tokens(query_begin, query_end);
-            /// Max depth 0 indicates that depth is not limited
-            IParser::Pos token_iterator(tokens, parse_depth);
-
-            /// Parse query and create AST tree
-            Expected expected;
-            ASTPtr res;
-            ParserJSONPath parser;
-            const bool parse_res = parser.parse(token_iterator, res, expected);
-            if (!parse_res)
-            {
-                throw Exception{"Unable to parse JSONPath", ErrorCodes::BAD_ARGUMENTS};
-            }
-
-            /// Get data and offsets for 2 argument (JSON)
             const ColumnString::Chars & chars_json = col_json_string->getChars();
             const ColumnString::Offsets & offsets_json = col_json_string->getOffsets();
 
@@ -125,13 +150,18 @@ public:
                 bool added_to_column = false;
                 if (document_ok)
                 {
-                    added_to_column = impl.insertResultToColumn(*to, document, res);
+                    /// For `json_values` we support multi paths
+                    if constexpr (std::is_same_v<Name, NameJSONValues>)
+                        added_to_column = impl.insertResultToColumn(*to, document, paths);
+                    else
+                        added_to_column = impl.insertResultToColumn(*to, document, paths[0]);
                 }
                 if (!added_to_column)
                 {
                     to->insertDefault();
                 }
             }
+            /// proton: ends.
             return to;
         }
     };
@@ -247,10 +277,16 @@ public:
         {
             if (status == VisitorStatus::Ok)
             {
-                if (!(current_element.isArray() || current_element.isObject()))
-                {
-                    break;
-                }
+                /// proton: starts.
+                /// Support to access non-scalar path
+                /// For example: raw = '{ "data": { "a": 1, "b", 2} }'
+                /// json_value(raw, '$.data'), then return '{ "a": 1, "b", 2}'
+                // if (!(current_element.isArray() || current_element.isObject()))
+                // {
+                //     break;
+                // }
+                break;
+                /// proton:ends.
             }
             else if (status == VisitorStatus::Error)
             {
@@ -285,6 +321,90 @@ public:
         return true;
     }
 };
+
+/// proton: starts. support multi paths `json_values`
+template <typename JSONParser>
+class JSONValuesImpl
+{
+public:
+    using Element = typename JSONParser::Element;
+
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
+    {
+        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
+    }
+
+    static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
+
+    static bool insertResultToColumn(IColumn & dest, const Element & root, const ASTs & query_ptrs)
+    {
+        std::vector<Element> elements;
+        elements.reserve(query_ptrs.size());
+        for (const auto & query_ptr : query_ptrs)
+        {
+            GeneratorJSONPath<JSONParser> generator_json_path(query_ptr);
+            Element current_element = root;
+            VisitorStatus status;
+            Element res;
+            while ((status = generator_json_path.getNextItem(current_element)) != VisitorStatus::Exhausted)
+            {
+                if (status == VisitorStatus::Ok)
+                {
+                    /// Support to access non-scalar path
+                    /// For example: raw = '{ "data": { "a": 1, "b", 2} }'
+                    /// json_value(raw, '$.data'), then return '{ "a": 1, "b", 2}'
+                    // if (!(current_element.isArray() || current_element.isObject()))
+                    // {
+                    //     break;
+                    // }
+                    break;
+                }
+                else if (status == VisitorStatus::Error)
+                {
+                    /// ON ERROR
+                    /// Here it is possible to handle errors with ON ERROR (as described in ISO/IEC TR 19075-6),
+                    ///  however this functionality is not implemented yet
+                }
+                current_element = root;
+            }
+
+            if (status == VisitorStatus::Exhausted)
+                return false;
+
+            elements.emplace_back(std::move(current_element));
+        }
+        
+        auto & arr_to = assert_cast<ColumnArray &>(dest);
+        ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
+        
+        ColumnString & col_str = assert_cast<ColumnString &>(arr_to.getData());
+        ColumnString::Chars & data = col_str.getChars();
+        ColumnString::Offsets & offsets = col_str.getOffsets();
+
+        offsets_to.push_back(offsets_to.back() + query_ptrs.size());
+
+        for (auto & current_element : elements)
+        {
+            std::stringstream out; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+            out << current_element.getElement();
+            auto output_str = out.str();
+
+            if (current_element.isString())
+            {
+                ReadBufferFromString buf(output_str);
+                readJSONStringInto(data, buf);
+                data.push_back(0);
+                offsets.push_back(data.size());
+            }
+            else
+            {
+                col_str.insertData(output_str.data(), output_str.size());
+            }
+        }
+        return true;
+    }
+};
+/// proton: ends.
 
 /**
  * Function to test jsonpath member access, will be removed in final PR
