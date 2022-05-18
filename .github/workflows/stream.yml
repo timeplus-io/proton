@@ -47,7 +47,18 @@ jobs:
         aws s3 cp --no-progress ./cache-address.tar.gz s3://tp-internal/proton/
 
         echo "check test result"
-        cat $GITHUB_WORKSPACE/tests/stream/.status | grep FAILED | (($?==0))
+        
+        result=$(cat $GITHUB_WORKSPACE/tests/stream/.status | grep -E 'FAILED|INTERRUPTED')
+        if [ ! -z "$result" ]
+        then
+          echo "FAILED or INTERRUPTED is found in .status"
+          echo $result > $GITHUB_WORKSPACE/tests/stream/.result
+        else
+          echo "Dual stacks passed"
+          echo 'OK' > $GITHUB_WORKSPACE/tests/stream/.result
+        fi
+
+        cat $GITHUB_WORKSPACE/tests/stream/.result | grep OK
 
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
