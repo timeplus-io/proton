@@ -141,6 +141,10 @@ void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
 
 void prepareColumns(ASTCreateQuery & create)
 {
+    /// columns_list should contains valid column definition
+    if (!create.columns_list || !create.columns_list->columns || create.columns_list->columns->children.empty())
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Columns is empty no column has been defined.");
+
     const ASTs & column_asts = create.columns_list->columns->children;
     auto new_columns = std::make_shared<ASTExpressionList>();
 
