@@ -378,12 +378,13 @@
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session as subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_type": "table", "query":"create stream if not exists test_session_d (id string, type string)"},
+                    {"client":"python", "query_type": "table", "query":"drop stream if exists test_session_d"},
+                    {"client":"python", "query_type": "table", "wait":1, "query":"create stream if not exists test_session_d (id string, type string)"},
                     {"client":"python", "query_type": "table","wait":1, "query":"insert into test_session_d (id, type) values ('dev1', 'roof') ('dev2', 'field') ('dev3', 'window') ('dev4', 'wall') ('dev5', 'roof') ('dev6', 'window') ('dev7', 'wall') ('dev8', 'floor')"},                    
-                    {"client":"python", "query_id": 702,"wait":2, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"with transformed as (select max(value), window_start as s, window_end as e, __tp_session_id, id, b.type, location from session(test_session, timestamp, 2s, id, location) as a join table(test_session_d) as b on a.id = b.id group by __tp_session_id, window_start, window_end, id, location, b.type) select * from transformed"}
+                    {"client":"python", "query_id": 702, "wait":4, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"with transformed as (select max(value), window_start as s, window_end as e, __tp_session_id, id, b.type, location from session(test_session, timestamp, 2s, id, location) as a join table(test_session_d) as b on a.id = b.id group by __tp_session_id, window_start, window_end, id, location, b.type) select * from transformed"}
                 ]},
                 {"inputs": [
-                    {"table_name":"test_session","depends_on":"702", "wait":1, "data": [
+                    {"table_name":"test_session","depends_on_stream": "test_session_d","depends_on":"702", "wait":1, "data": [
                         ["dev1", "ca", 57.3, "{\"create_time\":\"2020-02-02 20:00:00+00:00\"}", "2020-02-02 20:00:00+00:00"],
                         ["dev2", "bj", 58.3, "{\"create_time\":\"2020-02-02 20:00:01+00:00\"}", "2020-02-02 20:00:01+00:00"]
                     ]},
@@ -395,11 +396,7 @@
 
                     {"table_name":"test_session", "data": [["dev3", "ca", 67, "{\"create_time\":\"2020-02-02 20:00:15+00:00\"}", "2020-02-02 20:00:15+00:00"]]}
                 ]
-                },
-                {"statements": [
-                    {"client":"python", "wait": 6, "query_type": "table", "query":"drop stream if exists test_session_d"}
-                ]
-                }      
+                }     
             ],
             "expected_results": [{"query_id" : 702, "expected_results":
             [

@@ -232,7 +232,7 @@
                     {"client":"python", "query_id": 101, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by window_start, window_end emit stream"}
                 ]},
                 {"inputs": [
-                    {"table_name":"test","depends_on":"101", "data": [
+                    {"table_name":"test","depends_on":"101", "wait":1, "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:14"],
                         ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:00:13"]
                     ]},
@@ -819,7 +819,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 { "statements": [
-                    {"client":"python","query_id":"101", "wait":2, "query_type": "table", "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id group by a.id, b.type"}]}
+                    {"client":"python","query_id":"101", "wait":5, "query_type": "table", "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id group by a.id, b.type"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["dev1", "roof", 66],
@@ -852,7 +852,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "table", "wait":2, "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
+                    {"client":"python","query_id":"101", "query_type": "table", "wait":10, "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
             ],
 
             "expected_results": [{"query_id":"101","expected_results":
@@ -1427,7 +1427,7 @@
 
         {
             "id": 43,
-            "tags": ["subquery", "bug"],
+            "tags": ["subquery", "issue-336", "bug"],
             "name": "hop count based on hop join table subquery",
             "description": "hop count based on hopping sum subquery",
             "steps":[
