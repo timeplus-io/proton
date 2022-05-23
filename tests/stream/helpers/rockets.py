@@ -417,7 +417,7 @@ def query_run_exec(statement_2_run, config):
                 logger.debug(f"depends_on_stream exists.")
             else:
                 logger.debug(f"depends_on_stream does not exist, raise exception")
-                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")             
+                raise Exception(f"depends_on_stream = {depends_on_stream} for query_id = {query_id}, query = {query} not found")             
         
     
         query_result_str = exec_command(command)
@@ -654,12 +654,12 @@ def query_run_py(
             while not table_exist_py(pyclient, depends_on_stream) and retry > 0:
                 time.sleep(0.02)
                 retry -= 1
-            logger.debug(f"retry remains after retry -=1 {retry}")
+            logger.debug(f"retry remains after retry -=1: {retry}")
             if retry <= 0:
                 logger.debug(
                     f"check depends_on_stream 500 times and depends_on_stream={depends_on_stream} does not exist"
                 )
-                raise Exception(f"depends_on_stream = {depends_on_stream} for input not found")                
+                raise Exception(f"depends_on_stream = {depends_on_stream} for query_id = {query_id}, query = {query} not found")                
             else:
                 logger.debug(
                     f"check depends_on_stream, depends_on_stream={depends_on_stream} found."
@@ -943,6 +943,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                                     f"query_end_timer = {query_end_timer}, sleep {query_end_timer} secons."
                                 )
                                 time.sleep(int(query_end_timer))
+                            logger.debug(f"query_end_timer sleep {query_end_timer} end start to call kill_query...")
                             kill_query(client, query_id)
                             logger.debug(
                                 f"kill_query() was called, query_id={query_id}"
@@ -1556,7 +1557,7 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
                         )
                         wait_times = 0
                         while table_exist(table_ddl_url, table_name):
-                            time.sleep(0.01)
+                            time.sleep(0.2)
                             wait_times += 1
                         # wait_time = wait_times * 10
                         drop_complete_time = datetime.datetime.now()
@@ -1577,9 +1578,11 @@ def drop_table_if_exist_rest(table_ddl_url, table_name):
 
 
 def table_exist_py(pyclient, table_name):
+    logger = mp.get_logger()
     sql_2_run = "show streams"
     try:
         res = pyclient.execute(sql_2_run)
+        logger.debug(f"show streams = {res}")
         for element in res:
             if table_name in element:
                 return True
@@ -1588,6 +1591,17 @@ def table_exist_py(pyclient, table_name):
         logger.info(f"exception, error = {error}")
         return False
 
+'''
+def table_exist_py(pyclient, table_name):
+    table_list = pyclient.execute("show streams")
+    for item in table_list:
+        if item[0] == table_name:
+            logger.debug(
+                f"table_name = {table_name} = {item[0]} in table_list of show streams"
+            )
+            return True
+    return False
+'''
 
 def table_exist(table_ddl_url, table_name):
     logger = mp.get_logger()
@@ -1763,7 +1777,7 @@ def drop_view_if_exist_py(client, table_name):
         logger.debug(f"drop view {table_name} is executed, res_drop = {res_drop}")
         retry = 100
         while retry < 100 and table_exist_py(client, table_name):
-            time.sleep(0.05)
+            time.sleep(0.2)
             count -= 1
         if table_exist_py(client, table_name):
             logger.debug(
@@ -1780,15 +1794,7 @@ def drop_view_if_exist_py(client, table_name):
         return None
 
 
-def table_exist_py(pyclient, table_name):
-    table_list = pyclient.execute("show streams")
-    for item in table_list:
-        if item[0] == table_name:
-            logger.debug(
-                f"table_name = {table_name} = {item[0]} in table_list of show streams"
-            )
-            return True
-    return False
+
 
 
 def test_suite_env_setup(client, rest_setting, test_suite_config):

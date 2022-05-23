@@ -1432,7 +1432,7 @@
             "description": "hop count based on hopping sum subquery",
             "steps":[
                 { "statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":10, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end emit timeout 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],

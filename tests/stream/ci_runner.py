@@ -126,7 +126,9 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
 
     
     with open(".status", "a+") as status_result:
+        #status_result.writelines(f"{setting}:"+str(retcode)+"\n")
         status_result.writelines(f"{setting}:"+str(retcode))
+
     
     #todo: download proton-logs based on setting
      

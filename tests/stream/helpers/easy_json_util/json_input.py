@@ -18,7 +18,7 @@ formatter = logging.Formatter(
     "%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
 )
 
-github_token = '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'
+
 
 
 def percentile(N, P):
@@ -40,7 +40,7 @@ def dict_to_jsonstr(string):
     #json_str = json_str.replace(r"\", r"\\").replace(r"'",r"\'")
     return json_str     
 
-def batch_json_input(json_batch, stream, json_column, num=0, interval=1):
+def batch_json_input(json_batch, stream, target_columns, num=0, interval=1, ingest_mode='split'):
     json_batch_len = len(json_batch) if num==0 else num
     logger.debug(f"json_batch_len = {json_batch_len}")
     client = Client('localhost',port = 8463)
@@ -49,19 +49,47 @@ def batch_json_input(json_batch, stream, json_column, num=0, interval=1):
     i = 0
     type_str = 'PullRequestReviewCommentEvent'
     column_length_at_input = []
-    while i < json_batch_len:
-        item = json_batch[i]
-        json_str = dict_to_jsonstr(item)
+
+    if ingest_mode != 'split':
+        json_batch_str = str(json_batch)
+        json_str = dict_to_jsonstr(json_batch)
         json_str_len = len(json_str)
         column_length_at_input.append(json_str_len)
         add_count = add_count + 1
         sent_at = datetime.datetime.utcnow()
-        insert_sql = f"insert into {stream} (add_count,type,json_string, {json_column}, sent_at) values ({add_count},'{type_str}','{json_str}','{json_str}', '{sent_at}')"
-        #insert_sql = insert_sql.replace("\\", "\\\\").replace("'","\\'")
+        insert_sql = f"insert into {stream} (add_count, type," 
+        for column in target_columns:
+            insert_sql = insert_sql + column + ','
+        insert_sql = f"{insert_sql} sent_at) values({add_count},'{type_str}',"
+        for column in target_columns:
+            insert_sql = f"{insert_sql} '{json_str}',"
+        insert_sql = f"{insert_sql} '{sent_at}')" 
         res = client.execute(insert_sql)
         i += 1
-        logger.debug(f"add_count = {add_count}, insert_sql = {insert_sql}, \n done. \n")
+        logger.debug(f"add_count = {add_count}, insert_sql = {insert_sql} \n done. \n")
         time.sleep(interval)
+    else:               
+
+        while i < json_batch_len:
+            item = json_batch[i]
+            json_str = dict_to_jsonstr(item)
+            json_str_len = len(json_str)
+            column_length_at_input.append(json_str_len)
+            add_count = add_count + 1
+            sent_at = datetime.datetime.utcnow()
+            insert_sql = f"insert into {stream} (add_count, type," 
+            for column in target_columns:
+                insert_sql = insert_sql + column + ','
+            insert_sql = f"{insert_sql} sent_at) values({add_count},'{type_str}',"
+            for column in target_columns:
+                insert_sql = f"{insert_sql} '{json_str}',"
+            insert_sql = f"{insert_sql} '{sent_at}')"
+
+            #insert_sql = insert_sql.replace("\\", "\\\\").replace("'","\\'")
+            res = client.execute(insert_sql)
+            i += 1
+            logger.debug(f"add_count = {add_count}, insert_sql = {insert_sql}, \n done. \n")
+            time.sleep(interval)
     return column_length_at_input
     client.disconnect()
 
@@ -260,7 +288,27 @@ def github_event_get(stream = "github_event", interval = 5):
         except KeyboardInterrupt:
             print("Good bye!")
             break    
+
+def create_stream (stream_name, target_columns, target_columns_types, host = 'localhost', port = 8463 ): #todo: consolidate stream create logic into one func
+    #create stream if not exists {stream} (add_count int,type string, json_string string, {json_column} json, sent_at datetime64)')
+    client = Client(host, port=port)
+    sql = f'create stream if not exists {stream_name} (add_count int,type string,'
+    column_tuple_list = zip(target_columns, target_columns_types)
+    for column, type in column_tuple_list:
+        sql = sql + f"{column} {type},"
+    sql = sql + 'sent_at datetime64)'
+    logger.debug(f"create stream sql = {sql}")
+    try:
+        client.execute(sql)
+        logger.debug(f"stream = {stream} created")
+        res = client.execute('show streams')
+        logger.debug(f"show streams = {res}")
+        return stream_name
+    except Exception as error:
+        logger.debug(f"create stream exception, {error}")
+        return None
     
+
 
 if __name__ == "__main__":
     console_handler = logging.StreamHandler(sys.stderr)
@@ -272,16 +320,29 @@ if __name__ == "__main__":
     interval = 1
     json_batch = []
     json_column = "json"
+    target_columns = []
+    target_columns_types = []
     query_column = None
     mode = 'input'
     proc = None
     loop = 1
+    ingest_mode = 'split' #split means take the json obj from the list in the json file one by one and intest, single-ling means all the content in the json file is ingested as one line.
+    github_token = os.getenv("GITHUB_TOKEN", 'None')
+    proton_host = os.getenv("PROTON_HOST",'localhost')
+    proton_port = os.getenv("PROTON_PORT",8463)
+
+    if github_token is None:
+        print(f"please config env var of GITHUB_TOKEN")
+        sys.exit(1)
+    else:
+        logger.debug(f"GITHUB_TOKEN env var is detected")
+
     pd.set_option('display.precision', 2)
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","json_column=","query_column=", "interval=", "loop="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","target_columns=", "target_columns_types=", "query_column=", "interval=", "loop=", "ingest_mode="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 json_input.py --input_json_files=github_issue.json --stream=github_issue --json_column=event --interval=1 --loop=-1")
+        print(f"usage: python3 json_input.py --input_json_files=github_issue.json --stream=github_issue --target_columns=event,json_string --target_columns_types=json, string, --interval=1 --loop=-1, --ingest_mode=split")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -299,9 +360,11 @@ if __name__ == "__main__":
         if name in ("--mode"):
             mode = value
 
-        if name in ("--json_column"):
+        if name in ("--target_columns"):
             #os.environ["PROTON_TEST_SUITES"] = value
-            json_column = value 
+            target_columns = value.split(",")
+        if name in ("--target_columns_types"):
+            target_columns_types = value.split(",") 
 
         if name in ("--query_column"):
             query_column = value 
@@ -319,20 +382,39 @@ if __name__ == "__main__":
             except:
                 print(f"unknown input for loop, usage: python3 json_input.py --loop=-1")
                 sys.exit(1)
+        if name in ("--ingest_mode"):
+            ingest_mode = value
     
-    print(f"input_json: input_json_files = {json_files}, stream = {stream}, json_column = {json_column}, query_column = {query_column}, mode = {mode} interval={interval}")
+    print(f"input_json: input_json_files = {json_files}, stream = {stream}, target_columns = {target_columns}, target_columns_types = {target_columns_types}, query_column = {query_column}, mode = {mode} interval={interval}, ingest_mode = {ingest_mode}")
 
-    client = Client('localhost', port = 8463)
+
+    client = Client(proton_host, port = proton_port)
+
     if mode == 'latency':
         client.execute(f"drop stream if exists {stream}")
         time.sleep(1)
+
+    stream = create_stream(stream,target_columns, target_columns_types, proton_host, proton_port)
+    if stream is None:
+        logger.debug(f"stream creation failure")
+        sys.exit(1)
+
+    if mode == 'latency':
         #client.execute(f'create stream if not exists {stream} (add_count int, type string, {json_column} json, sent_at datetime64)')
-        client.execute(f'create stream if not exists {stream} (add_count int,type string, json_string string, {json_column} json, sent_at datetime64)')
+        #if ingest_mode == 'both':
+        #    client.execute(f'create stream if not exists {stream} (add_count int,type string, json_string string, {json_column} json, sent_at datetime64)')
+        #elif ingest_mode == 'json_obj_only':
+        #    client.execute(f'create stream if not exists {stream} (add_count int,type string, {json_column} json, sent_at datetime64)')
+        #elif ingest_mode == 'json_string_only':
+        #    client.execute(f'create stream if not exists {stream} (add_count int,type string, json_string string, sent_at datetime64)')
+        #else:
+        #    logger.debug(f"ingest_mode = {ingest_mode}, unknown ingest_mode and exit")
+        #    sys.exit(1)
+
         with open(json_files[0]) as f:  #rest interface will have a bad serialization exception if the stream is empty and then start the query and ingestion, so insert one before running the latency test 
             json_batch = json.load(f, strict=False)        
-        res = batch_json_input(json_batch, stream, json_column, 1, interval)
-    else:
-        client.execute(f'create stream if not exists {stream} (add_count int, {json_column} json, sent_at datetime64)')
+        res = batch_json_input(json_batch, stream, target_columns, 1, interval, ingest_mode)
+    
     while not (table_exist_py(client, stream)):
         time.sleepl(1)    
     time.sleep(2)
@@ -358,11 +440,11 @@ if __name__ == "__main__":
             logger.debug(f"start bach_json_input from {json_file} to {stream}")
             if loop < 0:
                 while True:
-                    column_length_at_input = batch_json_input(json_batch, stream, json_column, 0, interval)
+                    column_length_at_input = batch_json_input(json_batch, stream, target_columns, 0, interval, ingest_mode)
             else:
                 i = 0
                 while i < loop:
-                    column_length_at_input = batch_json_input(json_batch, stream, json_column, 0, interval)
+                    column_length_at_input = batch_json_input(json_batch, stream, target_columns, 0, interval, ingest_mode)
                     i += 1
             end_at = datetime.datetime.utcnow()
             logger.debug(f"end batch_json_input of {json_file} to {stream}") 
