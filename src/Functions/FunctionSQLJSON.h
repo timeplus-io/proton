@@ -27,6 +27,7 @@
 /// proton: starts.
 #include <Columns/ColumnArray.h>
 #include <DataTypes/DataTypeArray.h>
+#include <base/map.h>
 /// proton: ends.
 
 namespace DB
@@ -35,10 +36,13 @@ namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 extern const int BAD_ARGUMENTS;
 }
 
 /// proton: starts.
+constexpr size_t JSON_VALUES_MAX_ARGUMENTS_NUM = 100;
+
 struct NameJSONValues
 {
     static constexpr auto name{"json_values"};
@@ -87,14 +91,16 @@ public:
                 {
                     throw Exception(
                         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "JSONPath functions require argument {} to be JSONPath of type string, illegal type: {}",
+                        "Function {} require argument {} to be JSONPath of type string, illegal type: {}",
+                        Name::name,
                         i + 1,
                         json_path_column.type->getName());
                 }
 
                 if (!isColumnConst(*json_path_column.column))
                 {
-                    throw Exception("Second argument (JSONPath) must be constant string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function {} require argument {} must be constant string", Name::name, i + 1);
                 }
 
                 const ColumnPtr & arg_jsonpath = json_path_column.column;
@@ -179,7 +185,18 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    /// proton: starts.
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
+    {
+        if constexpr (std::is_same_v<Name, NameJSONValues>)
+            return collections::map<ColumnNumbers>(
+                collections::range(1, JSON_VALUES_MAX_ARGUMENTS_NUM), [](const auto & idx) { return idx; });
+        else
+            return {1};
+    }
+    /// proton: ends.
+
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -329,8 +346,15 @@ class JSONValuesImpl
 public:
     using Element = typename JSONParser::Element;
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName & arguments)
     {
+        if (arguments.size() > JSON_VALUES_MAX_ARGUMENTS_NUM)
+            throw Exception(
+                ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION,
+                "Too many arguments for function json_values, expected at most {}, actual is {}",
+                JSON_VALUES_MAX_ARGUMENTS_NUM,
+                arguments.size());
+
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
     }
 
@@ -338,7 +362,7 @@ public:
 
     static bool insertResultToColumn(IColumn & dest, const Element & root, const ASTs & query_ptrs)
     {
-        std::vector<Element> elements;
+        std::vector<std::optional<Element> > elements;
         elements.reserve(query_ptrs.size());
         for (const auto & query_ptr : query_ptrs)
         {
@@ -369,9 +393,9 @@ public:
             }
 
             if (status == VisitorStatus::Exhausted)
-                return false;
-
-            elements.emplace_back(std::move(current_element));
+                elements.emplace_back(std::nullopt);
+            else
+                elements.emplace_back(std::move(current_element));
         }
         
         auto & arr_to = assert_cast<ColumnArray &>(dest);
@@ -385,11 +409,18 @@ public:
 
         for (auto & current_element : elements)
         {
+            /// Not found, insert default value (empty string).
+            if (!current_element)
+            {
+                col_str.insertDefault();
+                continue;
+            }
+
             std::stringstream out; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-            out << current_element.getElement();
+            out << (*current_element).getElement();
             auto output_str = out.str();
 
-            if (current_element.isString())
+            if ((*current_element).isString())
             {
                 ReadBufferFromString buf(output_str);
                 readJSONStringInto(data, buf);
