@@ -1145,7 +1145,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         else if (storage->as<StorageView>())
         {
             auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            InterpreterSelectWithUnionQuery interpreter_subquery(select, context, SelectQueryOptions().subquery().analyze());
+            InterpreterSelectWithUnionQuery interpreter_subquery(select, context, SelectQueryOptions().analyze());
             streaming = interpreter_subquery.isStreaming();
         }
         else if (storage->as<StorageStream>())
