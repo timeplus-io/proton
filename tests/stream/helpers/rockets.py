@@ -2395,7 +2395,8 @@ def rockets_run(test_context):
         test_suite_run_ctl_queue.put("run a test suite")
  
         test_suite_runner = mp.Process(target=test_suite_run, args=(config, test_suite_run_ctl_queue, test_suite_result_done_queue, test_suite_set_dict))
-        time.sleep(random.randint(1,10)) # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159
+        #time.sleep(random.randint(1,10)) # start test_suite_run processes in a random time gap to avoid ddl operation in parallel to trigger 159
+        time.sleep(test_suite_count*2 + 1)
         test_suite_runner.start()
         test_suite_runners.append(
             {
@@ -2404,6 +2405,7 @@ def rockets_run(test_context):
                 
             }
         )
+        test_suite_count += 1
     
     try:
         test_suite_run_ctl_queue.join()

@@ -791,7 +791,7 @@
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":2, "query_type": "table", "query":"select a.id, b.type, a.value from table(test) as a join table(test_d) as b on a.id = b.id where a.value < 70"}]}
+                    {"client":"python","query_id":"101", "wait":3, "query_type": "table", "query":"select a.id, b.type, a.value from table(test) as a join table(test_d) as b on a.id = b.id where a.value < 70"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["dev1", "roof", 57.3],
@@ -1273,19 +1273,19 @@
                 {"inputs": [
                     {"table_name":"test","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
-                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"test", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"],
+                    ["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev8", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
-                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"test", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"],
+                    ["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
-                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]},
-                    {"table_name":"test", "data": [["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"],
+                    ["dev3", "ca", 80, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev4", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":3, "query_type": "table", "query_end_timer":2, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
+                    {"client":"python","query_id":"101", "wait":5, "query_type": "table", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1308,16 +1308,16 @@
                 {"inputs": [
                     {"table_name":"test","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
-                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"]]},
-                    {"table_name":"test", "data": [["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
+                    ["dev2", "ca", 30, "{\"create_time\":\"2021-11-02 20:00:02\"}", "2021-11-02 20:00:02"],
+                    ["dev2", "ca", 68, "{\"create_time\":\"2021-11-02 20:00:04\"}", "2021-11-02 20:00:04"],
                     ["dev3", "ca", 67, "{\"create_time\":\"2021-11-02 20:00:05\"}", "2021-11-02 20:00:05"],
-                    ["dev4", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]},
-                    {"table_name":"test", "data": [["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
+                    ["dev4", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"],
+                    ["dev3", "ca", 58, "{\"create_time\":\"2021-11-02 20:00:09\"}", "2021-11-02 20:00:09"],
                     ["dev3", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:08\"}", "2021-11-02 20:00:08"],
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 2, "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
+                    {"client":"python", "wait": 5, "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -2309,7 +2309,7 @@
 
                     ]},
                 {"statements": [
-                    {"client":"python","query_id":"103", "wait": 1, "query_type": "table", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(test)"}]}
+                    {"client":"python","query_id":"103", "wait": 5, "query_type": "table", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(test)"}]}
 
                 ],
             "expected_results": [{"query_id":"103", "expected_results":

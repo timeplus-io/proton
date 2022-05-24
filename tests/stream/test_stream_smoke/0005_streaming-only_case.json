@@ -820,7 +820,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 { "statements": [
-                    {"client":"python","query_id":"601", "wait":2, "query_type": "table", "query":"select a.id, b.type, max(value) from table(test_stream_only) as a join table(test_stream_only_d) as b on a.id = b.id group by a.id, b.type"}]}
+                    {"client":"python","query_id":"601", "wait":5, "query_type": "table", "query":"select a.id, b.type, max(value) from table(test_stream_only) as a join table(test_stream_only_d) as b on a.id = b.id group by a.id, b.type"}]}
             ],
             "expected_results": [{"query_id":"601", "expected_results":
                     [["dev1", "roof", 66],
@@ -853,7 +853,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"601", "query_type": "table", "wait":1, "query":"select a.id, b.type, max(value) from table(test_stream_only) as a join table(test_stream_only_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
+                    {"client":"python","query_id":"601", "query_type": "table", "wait":5, "query":"select a.id, b.type, max(value) from table(test_stream_only) as a join table(test_stream_only_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
             ],
 
             "expected_results": [{"query_id":"601","expected_results":
