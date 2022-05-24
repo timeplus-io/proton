@@ -80,7 +80,10 @@ void OptimizeJsonValueMatcher::visit(ASTPtr & ast, Data & data)
             elem_paths.emplace(path, PathInfo{.index = elem_paths.size() + 1, .nodes = {&ast}});
     }
     else
+    {
         data.json_value_info[json_col_name].emplace(path, PathInfo{.index = 1, .nodes = {&ast}});
+        data.json_cols.emplace(json_col_name, json_col->ptr());
+    }
 }
 
 void OptimizeJsonValueMatcher::finalizeJsonValues(Data & data)
@@ -115,7 +118,7 @@ void OptimizeJsonValueMatcher::finalizeJsonValues(Data & data)
             json_values_func->name = "json_values";
             json_values_func->arguments = std::make_shared<ASTExpressionList>();
             json_values_func->children.push_back(json_values_func->arguments);
-            json_values_func->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(json_paths.first));
+            json_values_func->arguments->children.emplace_back(data.json_cols[json_paths.first]->clone());
 
             std::vector<std::pair<String, PathInfo>> paths(json_paths.second.begin(), json_paths.second.end());
             std::sort(paths.begin(), paths.end(), [](const auto & l, const auto & r) { return l.second.index < r.second.index; });

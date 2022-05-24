@@ -42,6 +42,8 @@ public:
 
         /// <json col name, <elem path, PathInfo > >
         std::unordered_map<String, std::unordered_map<String, PathInfo>> json_value_info;
+        /// <json col name, json col>
+        std::unordered_map<String, ASTPtr> json_cols;
     };
 
     static void visit(ASTPtr & ast, Data & data);

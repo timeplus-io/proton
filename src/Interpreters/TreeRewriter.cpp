@@ -1214,12 +1214,14 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
             source_columns_set, right_table.table.getQualifiedNamePrefix());
     }
 
-    translateQualifiedNames(query, *select_query, source_columns_set, tables_with_columns);
-
-    /// proton: starts.
+    /// proton: starts. handling before `translateQualifiedNames`,
+    /// because `translateQualifiedNames` maybe translate `a.json_string` to `json_string`,
+    /// then it will cause ambiguous if used in join on (such as `a.json_string:type = b.json_string:type`),
     OptimizeJsonValueVisitor::Data data_optimize_json_value_visitor;
     OptimizeJsonValueVisitor(data_optimize_json_value_visitor).visit(query);
     /// proton: ends.
+
+    translateQualifiedNames(query, *select_query, source_columns_set, tables_with_columns);
 
     /// Optimizes logical expressions.
     LogicalExpressionsOptimizer(select_query, settings.optimize_min_equality_disjunction_chain_length.value).perform();
