@@ -1,0 +1,64 @@
+{
+    "test_suite_name": "json",
+    "tag":"smoke",
+   
+
+    "test_suite_config":{
+        "setup": {
+            "statements": [
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_str (json string, timestamp datetime64(3) default now64(3))"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_obj (json json, timestamp datetime64(3) default now64(3))"},
+                {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_d (id int, location string)"},
+                {"client":"python", "query_type": "table","depends_on_stream": "test_json_d", "wait":2, "query":"insert into test_json_d(id, location)values(1, '{\"id\":\"dev1\", \"location\":\"roof\"}')(2, '{\"id\":\"dev2\", \"location\":\"window\"}')(3, '{\"id\":\"dev3\", \"location\":\"floor\"}')(4, '{\"id\":\"dev4\", \"location\":\"ground\"}')"}
+    
+    
+            ]
+        },         
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
+        
+    },
+    "commments":
+        "Tests covering the steam query smoke cases.",
+    "tests": [
+
+        {
+            "id": 0,
+            "tags": ["json"],
+            "name": "query time json materialized view on subquery of tumble window",
+            "description": "create a table test_topmax, 1 column for 1 type and ingest data top_k on int",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists json_hop_v"},
+                    {"client":"python", "query_type": "table","wait":5, "query":"drop view if exists json_tumble_hop_v"},
+                    {"client":"python", "query_type": "table","depends_on_stream": "test_json_str", "wait":5, "query":"create materialized view if not exists json_hop_v as with transformed as (select a.json:data.id as id, to_int64(a.json:data.value) as value, to_datetime(a.json:data.create_time) as created_at, b.location:location from test_json_str as a join table(test_json_d) as b on a.json:data.id = b.location:id) select window_start as ws, window_end as we, count() from hop(transformed, created_at, 3s, 5s) group by window_start, window_end"},
+                    {"client":"python","query_id":"1201", "wait":2, "query_type": "table", "query":"create materialized view if not exists json_tumble_hop_v as select window_start as w_s, window_end as w_e, count() as cnt from tumble(json_hop_v, we, 5s) group by window_start, window_end"},
+                    {"client":"python","query_id":"1202", "query_end_timer":5, "query_type": "stream", "query":"select cnt from json_tumble_hop_v"},                    
+                    {"client":"python", "query_type": "table","depends_on":1202,"depends_on_stream": "json_tumble_hop_v", "wait":1,"query":
+                        "insert into test_json_str (json, timestamp) values
+                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:01')
+                        ('{\"data\":{\"id\":\"dev1\", \"value\":100, \"create_time\":\"2021-11-02 20:00:03\"}, \"tag\":\"temperature\"}' ,'2021-11-02 20:00:03')
+                        ('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:02\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:02')
+                        ('{\"data\":{\"id\":\"dev2\", \"value\":100, \"create_time\":\"2021-11-02 20:00:04\"}, \"tag\":\"building\"}' ,'2021-11-02 20:00:04')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:05\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:05')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:06\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:06')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:08\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:08')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:07\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:07')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:09\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:09')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:01\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:01')
+                        ('{\"data\":{\"id\":\"dev3\", \"value\":100, \"create_time\":\"2021-11-02 20:00:10\"}, \"tag\":\"water\"}' ,'2021-11-02 20:00:10')"
+                    }                       
+
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"1202", "expected_results":[
+                ["1"]
+                
+                ]}
+            ]
+        }               
+
+    ]
+}

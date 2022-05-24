@@ -1838,7 +1838,7 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
                 create_view_if_not_exit_py(client, table_schema)
 
     setup = test_suite_config.get("setup")
-    logger.debug(f"env_setup: setup = {setup}")
+    logger.debug(f"setup = {setup}")
     if setup != None:
         setup_inputs = setup.get("inputs")
         if setup_inputs != None:
@@ -1846,6 +1846,27 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
             setup_input_res = input_walk_through_rest(
                 rest_setting, setup_inputs, table_schemas
             )
+        setup_statements = setup.get("statements") #only support table rightnow todo: optimize logic
+        if setup_statements != None:
+            for statement_2_run in setup_statements:
+                settings = {"max_block_size": 100000}
+                query_id = statement_2_run.get("query_id")
+                query_id = statement_2_run.get("query_id")
+                if query_id is None:
+                    query_id = random.randint(
+                        1, 10000
+                    )  # unique query id, if no query_id specified in tests.json
+                statement_2_run["query_id"] = query_id                
+                query_results = query_run_py(
+                    statement_2_run,
+                    settings,
+                    query_results_queue=None,
+                    config=None,
+                    pyclient=client,
+                )
+
+                logger.debug(f"query_id = {query_id}, query_run_py is called")                
+
 
     return tables_setup
 
