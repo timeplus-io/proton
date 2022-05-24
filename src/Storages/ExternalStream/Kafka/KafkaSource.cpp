@@ -5,6 +5,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
+#include <KafkaLog/KafkaWALSettings.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <base/ClockUtils.h>
 #include <base/logger_useful.h>
@@ -246,8 +247,12 @@ void KafkaSource::initConsumer(const Kafka * kafka)
         consume_ctx.auto_offset_reset = "earliest";
 
     consume_ctx.enforce_offset = true;
-
-    consumer = klog::KafkaWALPool::instance(query_context->getGlobalContext()).getOrCreateStreamingExternal(kafka->brokers());
+    klog::KafkaWALAuth auth = {
+        .security_protocol = kafka->securityProtocol(),
+        .username = kafka->username(),
+        .password = kafka->password()
+    };
+    consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth);
     consumer->initTopicHandle(consume_ctx);
 
     if (query_context->getSettingsRef().record_consume_batch_count != 0)

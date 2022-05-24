@@ -4,6 +4,7 @@
 #include <base/logger_useful.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <boost/algorithm/string/predicate.hpp>
 
 
 namespace DB
@@ -124,7 +125,6 @@ void KafkaWALPool::init(const std::string & key)
         {".enabled", "bool", &enabled},
         {".default", "bool", &system_default},
         {".cluster_id", "string", &kafka_settings.cluster_id},
-        {".security_protocol", "string", &kafka_settings.security_protocol},
         {".brokers", "string", &kafka_settings.brokers},
         {".topic_metadata_refresh_interval_ms", "int32", &kafka_settings.topic_metadata_refresh_interval_ms},
         {".message_max_bytes", "int32", &kafka_settings.message_max_bytes},
@@ -155,6 +155,9 @@ void KafkaWALPool::init(const std::string & key)
         {".shared_subscription_flush_threshold_bytes", "int32", &kafka_settings.shared_subscription_flush_threshold_bytes},
         {".shared_subscription_flush_threshold_ms", "int32", &kafka_settings.shared_subscription_flush_threshold_ms},
         {".streaming_processing_pool_size", "int32", &streaming_wal_pool_size},
+        {".security_protocol", "string", &kafka_settings.auth.security_protocol},
+        {".username", "string", &kafka_settings.auth.username},
+        {".password", "string", &kafka_settings.auth.password},
     };
 
     for (const auto & t : settings)
@@ -201,6 +204,9 @@ void KafkaWALPool::init(const std::string & key)
 
     if (wals.contains(kafka_settings.cluster_id))
         throw DB::Exception("Duplicated Kafka cluster id " + kafka_settings.cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
+
+    if (!boost::iequals(kafka_settings.auth.security_protocol, "plaintext") && !boost::iequals(kafka_settings.auth.security_protocol, "sasl_ssl"))
+        throw DB::Exception(DB::ErrorCodes::NOT_IMPLEMENTED, "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",  kafka_settings.auth.security_protocol);
 
     /// Create WALs
     LOG_INFO(log, "Creating KafkaLog with settings: {}", kafka_settings.string());
@@ -357,7 +363,7 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
     return *best_multiplexer;
 }
 
-KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const String & brokers)
+KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const String & brokers, const KafkaWALAuth & auth)
 {
     assert(!brokers.empty());
 
@@ -380,12 +386,16 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
     /// consumer is used up and if we didn't reach maximum
     if (consumers.second.size() < consumers.first)
     {
+        if (!boost::iequals(auth.security_protocol, "plaintext") && !boost::iequals(auth.security_protocol, "sasl_ssl"))
+            throw DB::Exception(DB::ErrorCodes::NOT_IMPLEMENTED, "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported", auth.security_protocol);
         /// Create one
         auto ksettings = std::make_unique<KafkaWALSettings>();
+
         ksettings->brokers = brokers;
 
         /// Streaming WALs have a different group ID
         ksettings->group_id += "-tp-external-streaming-query-" + std::to_string(consumers.second.size() + 1);
+        ksettings->auth = auth;
 
         /// We don't care offset checkpointing for WALs used for streaming processing,
         /// No auto commit

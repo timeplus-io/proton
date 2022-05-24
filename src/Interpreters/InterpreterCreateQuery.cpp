@@ -941,12 +941,15 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
            {"query_id", ctx->getCurrentQueryId()},
            {"user", ctx->getUserName()}};
 
-    std::vector<std::pair<String, Int32>> int32_cols = {{"shards", stream_properties->shards}, {"replication_factor", stream_properties->replication_factor}};
+    std::vector<std::pair<String, Int32>> int32_cols
+        = {{"shards", stream_properties->shards},
+           {"replication_factor", stream_properties->replication_factor},
+           {"logstore_replication_factor", stream_properties->storage_settings->logstore_replication_factor}};
 
     /// Milliseconds since epoch
     std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
 
-    /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor)
+    /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor, logstore_replication_factor)
     Block block = buildBlock(string_cols, int32_cols, uint64_cols);
 
     appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, nlog::OpCode::CREATE_TABLE, log);

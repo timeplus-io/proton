@@ -12,6 +12,9 @@ class ASTStorage;
     /* those are kafka related settings */ \
     M(String, brokers, "", "A comma-separated list of brokers, for example Kafka brokers.", 0) \
     M(String, topic, "", "topic, for example Kafka topic name.", 0) \
+    M(String, security_protocol, "plaintext", "The protocol to connection external logstore", 0) \
+    M(String, username, "", "The username of external logstore", 0) \
+    M(String, password, "", "The password of external logstore", 0) \
     /* those are log related settings */ \
     M(String, log_files, "", "A comma-separated list of log files", 0) \
     M(String, log_dir, "", "log root directory", 0) \

@@ -41,6 +41,7 @@ namespace
         "logstore_retention_ms",
         "logstore_flush_messages",
         "logstore_flush_ms",
+        "logstore_replication_factor",
         "distributed_ingest_mode",
         "distributed_flush_threshold_ms",
         "distributed_flush_threshold_count",

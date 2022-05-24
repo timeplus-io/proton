@@ -4,6 +4,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <KafkaLog/KafkaWALPool.h>
+#include <KafkaLog/KafkaWALSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/Streaming/storageUtil.h>
@@ -38,7 +39,13 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     cacheVirtualColumnNamesAndTypes();
 
     /// Check if topic exists
-    auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value);
+    klog::KafkaWALAuth auth = {
+        .security_protocol = settings->security_protocol.value,
+        .username = settings->username.value,
+        .password = settings->password.value
+    };
+
+    auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
     auto result = consumer->describe(settings->topic.value);
     if (result.err != ErrorCodes::OK)
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
@@ -112,7 +119,12 @@ std::vector<Int64> Kafka::getOffsets(const String & seek_to) const
         return std::vector<Int64>(shards, utc_ms);
     else
     {
-        auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value);
+        klog::KafkaWALAuth auth = {
+            .security_protocol = securityProtocol(),
+            .username = username(),
+            .password = password()
+        };
+        auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
         return consumer->offsetsForTimestamps(settings->topic.value, utc_ms, shards);
     }
 }

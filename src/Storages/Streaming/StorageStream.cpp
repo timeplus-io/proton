@@ -1895,7 +1895,7 @@ void StorageStream::initKafkaLog()
 
     const auto & storage_id = getStorageID();
     auto kafka_log = std::make_unique<KafkaLog>(
-        toString(storage_id.uuid), shards, replication_factor, getContext()->getSettingsRef().async_ingest_block_timeout_ms, log);
+        toString(storage_id.uuid), shards, ssettings->logstore_replication_factor, getContext()->getSettingsRef().async_ingest_block_timeout_ms, log);
 
     kafka.swap(kafka_log);
 
@@ -1906,11 +1906,11 @@ void StorageStream::initKafkaLog()
 
     Int32 dwal_request_required_acks = 1;
     auto acks = ssettings->logstore_request_required_acks.value;
-    if (acks >= -1 && acks <= replication_factor)
+    if (acks >= -1 && acks <= ssettings->logstore_replication_factor)
         dwal_request_required_acks = acks;
     else
         throw Exception(
-            "Invalid logstore_request_required_acks, shall be in [-1, " + std::to_string(replication_factor) + "] range",
+            "Invalid logstore_request_required_acks, shall be in [-1, " + std::to_string(ssettings->logstore_replication_factor) + "] range",
             ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     Int32 dwal_request_timeout_ms = 30000;

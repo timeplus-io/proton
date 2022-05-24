@@ -38,6 +38,7 @@ void registerStorageStream(StorageFactory & factory)
             * - logstore_request_required_acks=1
             * - logstore_request_timeout_ms=30000
             * - logstore_auto_offset_reset=earliest
+            * - logstore_replication_factor=1
             */
 
             MergeTreeData::MergingParams merging_params;

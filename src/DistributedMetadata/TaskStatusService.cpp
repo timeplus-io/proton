@@ -487,8 +487,9 @@ bool TaskStatusService::createTaskTable()
     const auto & config = global_context->getConfigRef();
     const auto & conf = configSettings();
     const String replication_factor_key = conf.key_prefix + "replication_factor";
+    const String logstore_replication_factor_key = conf.key_prefix + "logstore_replication_factor";
     const auto replicas = std::to_string(config.getInt(replication_factor_key, 1));
-
+    const auto logstore_replication_factor = std::to_string(config.getInt(logstore_replication_factor_key, 1));
     String query = fmt::format(
         "CREATE STREAM IF NOT EXISTS \
                     system.tasks \
@@ -508,8 +509,8 @@ bool TaskStatusService::createTaskTable()
                     ORDER BY (to_minute(_tp_time), user, id) \
                     PARTITION BY to_date(_tp_time) \
                     TTL to_datetime(_tp_time + to_interval_day(7)) DELETE \
-                    SETTINGS index_granularity=8192",
-        replicas);
+                    SETTINGS index_granularity=8192, logstore_replication_factor={}",
+        replicas, logstore_replication_factor);
 
     auto query_context = Context::createCopy(global_context);
     query_context->makeQueryContext();

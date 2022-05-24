@@ -7,6 +7,13 @@
 
 namespace klog
 {
+struct KafkaWALAuth
+{
+    std::string security_protocol;
+    std::string username;
+    std::string password;
+};
+
 struct KafkaWALSettings
 {
     std::string cluster_id;
@@ -16,7 +23,11 @@ struct KafkaWALSettings
     /// Global settings for both producer and consumer /// global metrics
     /// comma separated host/port: host1:port,host2:port,...
     std::string brokers;
-    std::string security_protocol = "plaintext";
+    KafkaWALAuth auth = {
+        .security_protocol = "plaintext",
+        .username = "",
+        .password = ""
+    };
     /// FIXME, SASL, SSL etc support
 
     int32_t message_max_bytes = 1000000;

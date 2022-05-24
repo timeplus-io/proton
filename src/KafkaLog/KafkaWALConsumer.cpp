@@ -5,6 +5,8 @@
 #include <base/logger_useful.h>
 #include <Common/Exception.h>
 
+#include <boost/algorithm/string/predicate.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -96,8 +98,15 @@ void KafkaWALConsumer::initHandle()
         /// ensuring no on-the-wire or on-disk corruption to the messages occurred
         std::make_pair("check.crcs", std::to_string(settings->check_crcs)),
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
-        std::make_pair("security.protocol", settings->security_protocol.c_str()),
+        std::make_pair("security.protocol", settings->auth.security_protocol.c_str()),
     };
+
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    {
+        consumer_params.emplace_back("sasl.mechanisms", "PLAIN");
+        consumer_params.emplace_back("sasl.username", settings->auth.username.c_str());
+        consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
+    }
 
     if (!settings->debug.empty())
         consumer_params.emplace_back("debug", settings->debug);

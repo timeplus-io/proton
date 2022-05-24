@@ -6,6 +6,8 @@
 #include <Common/setThreadName.h>
 #include <base/logger_useful.h>
 
+#include <boost/algorithm/string/predicate.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -287,13 +289,20 @@ void KafkaWAL::initProducerHandle()
         std::make_pair("message.max.bytes", std::to_string(settings->message_max_bytes)),
         std::make_pair("message.timeout.ms", std::to_string(settings->message_timeout_ms)),
         /// Protocol used to communicate with brokers.
-        std::make_pair("security.protocol", settings->security_protocol.c_str()),
+        std::make_pair("security.protocol", settings->auth.security_protocol.c_str()),
         std::make_pair("topic.metadata.refresh.interval.ms", std::to_string(settings->topic_metadata_refresh_interval_ms)),
         std::make_pair("compression.codec", settings->compression_codec.c_str()),
     };
 
     if (!settings->debug.empty())
         producer_params.emplace_back("debug", settings->debug);
+
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    {
+        producer_params.emplace_back("sasl.mechanisms", "PLAIN");
+        producer_params.emplace_back("sasl.username", settings->auth.username.c_str());
+        producer_params.emplace_back("sasl.password", settings->auth.password.c_str());
+    }
 
     auto cb_setup = [](rd_kafka_conf_t * kconf)
     {

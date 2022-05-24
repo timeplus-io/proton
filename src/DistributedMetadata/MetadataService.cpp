@@ -20,7 +20,7 @@ namespace ErrorCodes
     extern const int DWAL_FATAL_ERROR;
     extern const int RESOURCE_NOT_FOUND;
     extern const int MSG_SIZE_TOO_LARGE;
-    extern const int INVALID_REPLICATION_FACTOR;
+    extern const int INVALID_LOGSTORE_REPLICATION_FACTOR;
 }
 
 namespace
@@ -28,7 +28,7 @@ namespace
     /// Globals
     const String SYSTEM_ROLES_KEY = "cluster_settings.node_roles";
     const String NAME_KEY = "name";
-    const String REPLICATION_FACTOR_KEY = "replication_factor";
+    const String LOGSTORE_REPLICATION_FACTOR_KEY = "logstore_replication_factor";
     const String DATA_RETENTION_KEY = "data_retention";
     const String LOG_ROLL_SIZE_KEY = "log_roll_size";
     const String LOG_ROLL_PERIOD_KEY = "log_roll_period";
@@ -169,11 +169,11 @@ void MetadataService::doCreateDWal(const klog::KafkaWALContext & ctx) const
         {
             throw Exception("Underlying streaming store " + ctx.topic + " create failed due to fatal error.", ErrorCodes::DWAL_FATAL_ERROR);
         }
-        else if (err == ErrorCodes::INVALID_REPLICATION_FACTOR)
+        else if (err == ErrorCodes::INVALID_LOGSTORE_REPLICATION_FACTOR)
         {
             throw Exception(
                 "Underlying streaming store " + ctx.topic + " create failed due to invalid replication factor.",
-                ErrorCodes::INVALID_REPLICATION_FACTOR);
+                ErrorCodes::INVALID_LOGSTORE_REPLICATION_FACTOR);
         }
         else
         {
@@ -263,9 +263,9 @@ void MetadataService::startup()
     const auto & conf = configSettings();
 
     String topic = config.getString(conf.key_prefix + NAME_KEY, conf.default_name);
-    auto replication_factor = config.getInt(conf.key_prefix + REPLICATION_FACTOR_KEY, 1);
+    auto logstore_replication_factor = config.getInt(conf.key_prefix + LOGSTORE_REPLICATION_FACTOR_KEY, 1);
 
-    klog::KafkaWALContext kctx{topic, 1, replication_factor, cleanupPolicy()};
+    klog::KafkaWALContext kctx{topic, 1, logstore_replication_factor, cleanupPolicy()};
     /// Topic settings
     kctx.retention_ms = config.getInt(conf.key_prefix + DATA_RETENTION_KEY, conf.default_data_retention);
     if (kctx.retention_ms > 0)

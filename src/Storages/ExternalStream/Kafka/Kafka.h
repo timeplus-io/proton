@@ -32,6 +32,9 @@ public:
     const String & dataFormat() const { return data_format; }
     const String & dataSchema() const { return settings->data_schema.value; }
     const String & topic() const { return settings->topic.value; }
+    const String & securityProtocol() const { return settings->security_protocol.value; }
+    const String & username() const { return settings->username.value; }
+    const String & password() const { return settings->password.value; }
 
 private:
     void calculateDataFormat(const IStorage * storage);

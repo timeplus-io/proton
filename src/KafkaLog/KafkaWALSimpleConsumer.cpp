@@ -5,6 +5,8 @@
 #include <base/logger_useful.h>
 #include <Common/setThreadName.h>
 
+#include <boost/algorithm/string/predicate.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -85,11 +87,19 @@ void KafkaWALSimpleConsumer::initHandle()
         std::make_pair("enable.partition.eof", "false"),
         std::make_pair("queued.min.messages", std::to_string(settings->queued_min_messages)),
         std::make_pair("queued.max.messages.kbytes", std::to_string(settings->queued_max_messages_kbytes)),
+        std::make_pair("security.protocol", settings->auth.security_protocol.c_str()),
     };
 
     if (!settings->debug.empty())
     {
         consumer_params.emplace_back("debug", settings->debug);
+    }
+
+    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
+    {
+        consumer_params.emplace_back("sasl.mechanisms", "PLAIN");
+        consumer_params.emplace_back("sasl.username", settings->auth.username.c_str());
+        consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
     }
 
     auto cb_setup = [](rd_kafka_conf_t * kconf) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA

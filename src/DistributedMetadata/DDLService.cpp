@@ -317,7 +317,7 @@ void DDLService::createTable(nlog::Record & record)
 {
     const Block & block = record.getBlock();
     assert(block.has("query_id"));
-    if (!validateSchema(block, {"payload", "database", "table", "uuid", "shards", "replication_factor", "query_id", "user", "timestamp"}))
+    if (!validateSchema(block, {"payload", "database", "table", "uuid", "shards", "replication_factor", "query_id", "user", "timestamp", "logstore_replication_factor"}))
         return;
 
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
@@ -327,6 +327,7 @@ void DDLService::createTable(nlog::Record & record)
     String uuid = block.getByName("uuid").column->getDataAt(0).toString();
     Int32 shards = block.getByName("shards").column->getInt(0);
     Int32 replication_factor = block.getByName("replication_factor").column->getInt(0);
+    Int32 logstore_replication_factor = block.getByName("logstore_replication_factor").column->getInt(0);
 
     /// FIXME : check with catalog to see if this DDL is fulfilled
     /// Build a data structure to cached last 10000 DDLs, check against this data structure
@@ -343,7 +344,7 @@ void DDLService::createTable(nlog::Record & record)
         /// Create a DWAL for this table.
         try
         {
-            createDWAL(uuid, shards, replication_factor, url_parameters);
+            createDWAL(uuid, shards, logstore_replication_factor, url_parameters);
         }
         catch (const Exception & e)
         {
@@ -369,6 +370,7 @@ void DDLService::createTable(nlog::Record & record)
                     uri.setRawQuery(*url_parameters);
 
                 uri.addQueryParameter("shard", std::to_string(j));
+                uri.addQueryParameter("logstore_replication_factor", std::to_string(logstore_replication_factor));
             }
         }
         /// Create table on each target host according to placement
