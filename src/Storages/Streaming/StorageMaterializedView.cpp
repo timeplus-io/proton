@@ -580,6 +580,15 @@ void StorageMaterializedView::executeBackgroundPipeline()
     }};
 }
 
+StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+{
+    if (target_table_storage)
+        return target_table_storage->getStorageSnapshot(metadata_snapshot);
+    else
+        /// TODO: Update dynamic object description for InMemoryTable ?
+        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+}
+
 void registerStorageMaterializedView(StorageFactory & factory)
 {
     factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args) {

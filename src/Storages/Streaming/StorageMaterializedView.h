@@ -66,6 +66,10 @@ public:
     NamesAndTypesList getVirtuals() const override;
     bool isGlobalAggrInnerQuery() { return is_global_aggr_query; }
 
+    bool supportsSubcolumns() const override { return true; }
+    bool supportsDynamicSubcolumns() const override { return true; }
+    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
+
 private:
     void initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void buildBackgroundPipeline(InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);

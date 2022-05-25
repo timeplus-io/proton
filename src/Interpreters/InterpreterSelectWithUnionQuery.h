@@ -42,6 +42,8 @@ public:
     bool isStreaming() const override;
     bool hasGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
+
+    ColumnsDescriptionPtr getExtendedObjects() const override;
     /// proton: ends
 
     virtual void ignoreWithTotals() override;

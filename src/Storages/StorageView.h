@@ -48,12 +48,22 @@ public:
     static void replaceWithSubquery(ASTSelectQuery & outer_query, ASTPtr view_query, ASTPtr & view_name);
     static ASTPtr restoreViewName(ASTSelectQuery & select_query, const ASTPtr & view_name);
 
+    /// proton: starts.
+    bool supportsSubcolumns() const override { return true; }
+    bool supportsDynamicSubcolumns() const override { return true; }
+    StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
+
+private:
+    ContextPtr local_context;
+    /// proton: ends.
+
 protected:
     StorageView(
         const StorageID & table_id_,
         const ASTCreateQuery & query,
         const ColumnsDescription & columns_,
-        const String & comment);
+        const String & comment,
+        ContextPtr context_);
 };
 
 }

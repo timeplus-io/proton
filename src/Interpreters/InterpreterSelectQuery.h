@@ -179,6 +179,8 @@ private:
     bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     void handleEmitVersion();
+
+    ColumnsDescriptionPtr getExtendedObjects() const override;
     /// proton: ends
 
     enum class Modificator

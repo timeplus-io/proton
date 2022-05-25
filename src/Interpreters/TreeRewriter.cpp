@@ -486,6 +486,19 @@ void removeUnneededColumnsFromSelectClause(const ASTSelectQuery * select_query, 
         }
     }
 
+    /// proton: starts. To handle required columns which contains sub-columns cases
+    /// For example:
+    /// Origin query:
+    ///     select x, obj.a from (select x, y, obj from table)
+    /// (After removed unneeded column):
+    ///     select x, obj.a from (select x from table)
+    /// (After handling unknown subcolumns)
+    ///     select x, obj.a from (select x, obj.a from table)
+    for (auto & [name, count] : required_columns_with_duplicate_count)
+        while (count--)
+            new_elements.push_back(std::make_shared<ASTIdentifier>(name));
+    /// proton: ends.
+
     elements = std::move(new_elements);
 }
 

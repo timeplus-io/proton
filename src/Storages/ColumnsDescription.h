@@ -221,4 +221,9 @@ private:
 /// don't have strange constructions in default expression like SELECT query or
 /// arrayJoin function.
 Block validateColumnsDefaultsAndGetSampleBlock(ASTPtr default_expr_list, const NamesAndTypesList & all_columns, ContextPtr context);
+
+/// proton: starts.
+using ColumnsDescriptionPtr = std::shared_ptr<const ColumnsDescription>;
+/// proton: ends.
+
 }

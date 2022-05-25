@@ -6,8 +6,20 @@
 #include <Parsers/IAST_fwd.h>
 #include <DataTypes/DataTypesNumber.h>
 
+/// proton: starts.
+#include <Storages/ColumnsDescription.h>
+/// proton: ends.
+
 namespace DB
 {
+
+/// proton: starts.
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
+/// proton: ends.
+
 class IInterpreterUnionOrSelectQuery : public IInterpreter
 {
 public:
@@ -43,6 +55,10 @@ public:
     virtual bool isStreaming() const = 0;
     virtual bool hasGlobalAggregation() const = 0;
     virtual bool hasStreamingWindowFunc() const = 0;
+
+    /// Return the object column descriptions of the current query to provide subcolumns information to downstream 
+    /// pipeline. If the current query doesn't have any object columns, return empty but non-nullptr ColumnsDescription.
+    virtual ColumnsDescriptionPtr getExtendedObjects() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "not implemented"); }
     /// proton: ends
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override;

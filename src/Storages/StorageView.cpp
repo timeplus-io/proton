@@ -24,6 +24,10 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
+/// proton: starts.
+#include <DataTypes/ObjectUtils.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -88,8 +92,9 @@ StorageView::StorageView(
     const StorageID & table_id_,
     const ASTCreateQuery & query,
     const ColumnsDescription & columns_,
-    const String & comment)
-    : IStorage(table_id_)
+    const String & comment,
+    ContextPtr context_)
+    : IStorage(table_id_), local_context(context_)
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -244,6 +249,21 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
     return subquery->children[0];
 }
 
+/// proton: starts.
+StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
+{
+    if (hasObjectColumns(metadata_snapshot->getColumns()))
+    {
+        auto object_columns
+            = InterpreterSelectWithUnionQuery(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions().analyze())
+                .getExtendedObjects();
+        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, *object_columns);
+    }
+    else
+        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+}
+/// proton: ends.
+
 void registerStorageView(StorageFactory & factory)
 {
     factory.registerStorage("View", [](const StorageFactory::Arguments & args)
@@ -251,7 +271,7 @@ void registerStorageView(StorageFactory & factory)
         if (args.query.storage)
             throw Exception("Specifying ENGINE is not allowed for a View", ErrorCodes::INCORRECT_QUERY);
 
-        return StorageView::create(args.table_id, args.query, args.columns, args.comment);
+        return StorageView::create(args.table_id, args.query, args.columns, args.comment, args.getLocalContext());
     });
 }
 
