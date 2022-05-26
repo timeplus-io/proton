@@ -27,7 +27,32 @@
                         "name": "_perf_ingest_time",
                         "type": "string"
                     }                    
-            ]}, 
+            ]},
+            {
+                "name": "event_s",
+                "type": "table",
+                "reset": "False",
+                "config": "setting_1",
+                "columns": [
+                    {
+                        "name": "json_string",
+                        "type": "string"
+                    },
+                    {
+                        "name": "perf_event_time",
+                        "type": "datetime64(3)",
+                        "default": "now64(3)"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "string"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "string"
+                    }                    
+            ]},            
+             
             {
                 "name": "iris",
                 "type": "table",
@@ -158,7 +183,41 @@
         {
             "id": 2,
             "tags": ["latency"],
-            "name": "longevity - proton, with easy json large volume",
+            "name": "longevity - proton, with query time easy json volume",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 80, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists event_s_tumble_count_v$"},                    
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 80, "query_type": "table", "query":"create materialized view event_s_tumble_count_v$ as select window_start as ws, window_end as we, json_string:repo.name as repo_name, count() from tumble(event_s, 5s) group by repo_name, window_start, window_end"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from event_s_tumble_count_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},                    
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 50, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
+                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
+
+                ]},
+                    
+
+                {"inputs": [
+                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":110, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "event","input_id": 203, "workers":110, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
+
+                ]}
+
+            ]               
+        },
+        {
+            "id": 4,
+            "tags": ["latency"],
+            "name": "longevity - proton, with easy json obj large volume",
             "description": "tail query latency w/single source",
             "db_engine":"proton",
             "input_info_table": "input_info",
@@ -187,11 +246,11 @@
                 ]}
 
             ]               
-        },
+        },        
         {
-            "id": 3,
+            "id": 6,
             "tags": ["latency"],
-            "name": "longevity - proton, no easy json large volume",
+            "name": "longevity - proton, legecy features, no easy json large volume",
             "description": "tail query latency w/single source",
             "db_engine":"proton",
             "input_info_table": "input_info",
@@ -218,7 +277,7 @@
         },                
 
         {
-            "id": 4,
+            "id": 10,
             "tags": ["latency"],
             "name": "longevity - proton, no easy json middle volume",
             "description": "tail query latency w/single source",
@@ -247,7 +306,7 @@
         },        
 
         {
-            "id": 5,
+            "id": 11,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
@@ -278,7 +337,7 @@
 
         
         {
-            "id": 6,
+            "id": 12,
             "tags": ["latency"],
             "name": "tail laterncy - Materialize",
             "description": "tail query latency w/single source",
@@ -291,7 +350,7 @@
             ]               
         },
         {
-            "id": 7,
+            "id": 13,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
@@ -315,7 +374,7 @@
             ]               
         },
         {
-            "id": 8,
+            "id": 14,
             "tags": ["latency"],
             "name": "tail laterncy - proton",
             "description": "tail query latency w/single source",
@@ -347,7 +406,7 @@
             ]               
         },
         {
-            "id": 9,
+            "id": 15,
             "tags": ["latency"],
             "name": "longevity, debug json rest input, rest input of json obj is broken now",
             "description": "tail query latency w/single source",

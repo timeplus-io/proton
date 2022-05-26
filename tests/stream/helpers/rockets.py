@@ -45,6 +45,7 @@ import time
 import datetime
 import random
 import requests
+import uuid
 import multiprocessing as mp
 from clickhouse_driver import Client
 from clickhouse_driver import errors
@@ -1182,9 +1183,11 @@ def query_walk_through(statements, query_conn):
         query_type = statement.get("query_type")
         terminate = statement.get("terminate")
         if query_id == None:
-            query_id = random.randint(
-                1, 10000
-            )  # unique query id, if no query_id specified in tests.json
+            query_id = str(uuid.uuid1())
+
+            #query_id = random.randint(
+            #    1, 10000
+            #)  # unique query id, if no query_id specified in tests.json
             statement["query_id"] = query_id
 
         if query_type == "stream" and terminate == None:
@@ -1259,7 +1262,7 @@ def query_id_exists_py(py_client, query_id, query_exist_check_sql=None):
     logger = mp.get_logger()
     query_id = str(query_id)
     if query_exist_check_sql == None:
-        query_exist_check_sql = "select query_id from system.processes"
+        query_exist_check_sql = f"select query_id from system.processes where query_id = '{query_id}'"
     try:
         # logger.debug(f"query_exist_check_sql = {query_exist_check_sql} to be called.")
         res_check_query_id = py_client.execute(query_exist_check_sql)
@@ -1283,9 +1286,9 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
     logger = mp.get_logger()
     query_id = str(query_id)
     try:
-        query_body = json.dumps({"query": "select query_id from system.processes"})
+        query_body = json.dumps({"query": f"select query_id from system.processes where query_id = '{query_id}'"})
         res = requests.post(query_url, data=query_body)
-        logger.debug(f"table_exist: res.status_code = {res.status_code}")
+        logger.debug(f"query_id exists check: res.status_code = {res.status_code}")
         if res.status_code != 200:
             return False
         res_json = res.json()
@@ -1853,9 +1856,10 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
                 query_id = statement_2_run.get("query_id")
                 query_id = statement_2_run.get("query_id")
                 if query_id is None:
-                    query_id = random.randint(
-                        1, 10000
-                    )  # unique query id, if no query_id specified in tests.json
+                    query_id = str(uuid.uuid1())
+                    #query_id = random.randint(
+                    #    1, 10000
+                    #)  # unique query id, if no query_id specified in tests.json
                 statement_2_run["query_id"] = query_id                
                 query_results = query_run_py(
                     statement_2_run,
