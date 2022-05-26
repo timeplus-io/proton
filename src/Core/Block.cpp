@@ -715,29 +715,6 @@ void Block::updateHash(SipHash & hash) const
             col.column->updateHashWithValue(row_no, hash);
 }
 
-/// proton: starts
-void Block::sortColumnInplace(const std::vector<UInt16> & positions)
-{
-    if (positions.empty())
-        return;
-
-    auto pos_size = positions.size();
-    assert (pos_size == columns());
-
-    for (size_t pos = 0; pos < pos_size - 1; ++pos)
-    {
-        if (positions[pos] == pos)
-            /// already in place
-            continue;
-
-        /// Move column at schema_ctx.column_positions[pos] to pos
-        assert(positions[pos] < pos_size);
-        data[positions[pos]].swap(data[pos]);
-    }
-}
-
-/// proton: ends
-
 void convertToFullIfSparse(Block & block)
 {
     for (auto & column : block)
@@ -765,5 +742,37 @@ void materializeBlockInplace(Block & block)
     for (size_t i = 0; i < block.columns(); ++i)
         block.getByPosition(i).column = recursiveRemoveSparse(block.getByPosition(i).column->convertToFullColumnIfConst());
 }
+
+/// proton: starts
+void Block::sortColumnInplace(const std::vector<UInt16> & positions)
+{
+    if (positions.empty())
+        return;
+
+    auto pos_size = positions.size();
+    assert (pos_size == columns());
+
+    for (size_t pos = 0; pos < pos_size - 1; ++pos)
+    {
+        if (positions[pos] == pos)
+            /// already in place
+            continue;
+
+        /// Move column at schema_ctx.column_positions[pos] to pos
+        assert(positions[pos] < pos_size);
+        data[positions[pos]].swap(data[pos]);
+    }
+}
+
+Block Block::deepClone() const
+{
+    Block result;
+    result.reserve(columns());
+    for (const auto & col : *this)
+        result.insert(ColumnWithTypeAndName{col.column->cloneResized(col.column->size()), col.type, col.name});
+
+    return result;
+}
+/// proton: ends
 
 }

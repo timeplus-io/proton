@@ -103,7 +103,10 @@ CreateStreamResponse MetaStore::createStream(const std::string & ns, const Creat
         return response;
     }
 
-    status = metadb->Put(rocksdb::WriteOptions{}, key, rocksdb::Slice(data.data(), data.size()));
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
+
+    status = metadb->Put(write_options, key, rocksdb::Slice(data.data(), data.size()));
     if (!status.ok())
     {
         LOG_ERROR(logger, "Failed to create stream={} error={}", key, status.ToString());
@@ -127,7 +130,10 @@ DeleteStreamResponse MetaStore::deleteStream(const std::string & ns, const Delet
 
     /// std::scoped_lock guard{mlock};
 
-    auto status = metadb->Delete(rocksdb::WriteOptions(), key);
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
+
+    auto status = metadb->Delete(write_options, key);
     if (!status.ok())
     {
         LOG_ERROR(logger, "Failed to delete stream={}", key);
@@ -259,7 +265,11 @@ RenameStreamResponse MetaStore::renameStream(const std::string & ns, const Renam
 
     batch.Delete(existing_key);
     batch.Put(new_key, rocksdb::Slice(data.data(), data.size()));
-    status = metadb->Write(rocksdb::WriteOptions{}, &batch);
+
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
+
+    status = metadb->Write(write_options, &batch);
     if (status.ok())
         return response;
 

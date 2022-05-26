@@ -2,18 +2,16 @@
 #include "SchemaNativeReader.h"
 #include "SchemaNativeWriter.h"
 
-#include <Formats/NativeReader.h>
-#include <Formats/NativeWriter.h>
-
-#include <Columns/ColumnDecimal.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <Compression/CompressionFactory.h>
 #include <Core/ProtocolDefines.h>
-#include <DataTypes/DataTypeDateTime64.h>
+#include <Formats/NativeReader.h>
+#include <Formats/NativeWriter.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Common/ColumnUtils.h>
 #include <Common/ProtonCommon.h>
 
 namespace nlog
@@ -227,17 +225,7 @@ std::pair<int64_t, int64_t> Record::minMaxEventTime() const
     if (!ts_col)
         return {0, 0};
 
-    const auto * type = typeid_cast<const DB::DataTypeDateTime64 *>(ts_col->type.get());
-    if (type)
-    {
-        auto * col = typeid_cast<DB::ColumnDecimal<DB::DateTime64> *>(ts_col->column->assumeMutable().get());
-        assert(col);
-
-        const auto & timestamps{col->getData()};
-        auto result{std::minmax_element(timestamps.begin(), timestamps.end())};
-        return {result.first->value, result.second->value};
-    }
-    return {0, 0};
+    return columnMinMaxTimestamp(ts_col->column, ts_col->type);
 }
 
 void Record::serializeMetadataV0(DB::WriteBuffer & wb) const

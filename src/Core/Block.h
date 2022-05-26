@@ -155,6 +155,9 @@ public:
 
     /// in-place sort columns according to positions
     void sortColumnInplace(const std::vector<UInt16> & positions);
+
+    /// Deep clone
+    Block deepClone() const;
     /// proton: ends
 
 private:

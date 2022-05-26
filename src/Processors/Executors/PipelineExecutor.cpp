@@ -11,15 +11,12 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <base/scope_guard_safe.h>
 
-/// proton: starts
-#include <Interpreters/Context.h>
-/// proton: ends
-
 #ifndef NDEBUG
     #include <Common/Stopwatch.h>
 #endif
 
 /// proton: starts.
+#include <Interpreters/Context.h>
 #include <Interpreters/PipelineMetricLog.h>
 /// proton: ends.
 

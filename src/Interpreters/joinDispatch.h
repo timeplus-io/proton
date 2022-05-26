@@ -45,14 +45,25 @@ template <> struct MapGetter<ASTTableJoin::Kind::Full, ASTTableJoin::Strictness:
 template <ASTTableJoin::Kind kind>
 struct MapGetter<kind, ASTTableJoin::Strictness::Asof> { using Map = HashJoin::MapsAsof; static constexpr bool flagged = false; };
 
+/// proton : starts
+template <ASTTableJoin::Kind kind>
+struct MapGetter<kind, ASTTableJoin::Strictness::RangeAsof> { using Map = HashJoin::MapsRangeAsof; static constexpr bool flagged = false; };
 
-static constexpr std::array<ASTTableJoin::Strictness, 6> STRICTNESSES = {
+template <ASTTableJoin::Kind kind>
+struct MapGetter<kind, ASTTableJoin::Strictness::Range> { using Map = HashJoin::MapsRangeAsof; static constexpr bool flagged = false; };
+/// proton : ends
+
+static constexpr std::array<ASTTableJoin::Strictness, 8> STRICTNESSES = {
     ASTTableJoin::Strictness::RightAny,
     ASTTableJoin::Strictness::Any,
     ASTTableJoin::Strictness::All,
     ASTTableJoin::Strictness::Asof,
     ASTTableJoin::Strictness::Semi,
     ASTTableJoin::Strictness::Anti,
+    /// proton : starts
+    ASTTableJoin::Strictness::Range,
+    ASTTableJoin::Strictness::RangeAsof
+    /// proton : ends
 };
 
 static constexpr std::array<ASTTableJoin::Kind, 4> KINDS = {

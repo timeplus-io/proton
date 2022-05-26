@@ -67,6 +67,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_IDENTIFIER;
+    extern const int BAD_QUERY_PARAMETER;
 }
 
 namespace
@@ -693,6 +694,26 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
             assert(analyzed_join.oneDisjunct());
         }
 
+        /// proton : starts. `date_diff_within` etc explicitly turns join to Asof join. During on key visitor, `is_asof` can be changed
+        if (analyzed_join.getAsofInequality() == ASOF::Inequality::RangeBetween)
+        {
+            if (!data.range_analyze_finished)
+                throw Exception(
+                    ErrorCodes::SYNTAX_ERROR,
+                    "Range join requires specifying a range on join clause, but only lower bound or upper bound of a range is specified");
+
+            analyzed_join.validateRangeAsof(context->getSettingsRef().max_join_range);
+
+            /// Revise strictness
+            if (is_asof)
+                table_join.strictness = ASTTableJoin::Strictness::RangeAsof;
+            else
+                table_join.strictness = ASTTableJoin::Strictness::Range;
+
+            analyzed_join.setStrictness(table_join.strictness);
+        }
+        /// proton : ends
+
         auto check_keys_empty = [] (auto e) { return e.key_names_left.empty(); };
 
         /// All clauses should to have keys or be empty simultaneously
@@ -700,7 +721,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
         if (all_keys_empty)
         {
             /// Try join on constant (cross or empty join) or fail
-            if (is_asof)
+            if (is_asof || analyzed_join.getAsofInequality() == ASOF::Inequality::RangeBetween) /// proton : starts / ends
                 throw Exception(ErrorCodes::INVALID_JOIN_ON_EXPRESSION,
                                 "Cannot get JOIN keys from JOIN ON section: {}", queryToString(table_join.on_expression));
 
@@ -718,7 +739,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
                                     "Cannot get JOIN keys from JOIN ON section: '{}'",
                                     queryToString(table_join.on_expression));
 
-            if (is_asof)
+            if (is_asof || analyzed_join.getAsofInequality() == ASOF::Inequality::RangeBetween) /// proton : starts / ends
             {
                 if (!analyzed_join.oneDisjunct())
                     throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "ASOF join doesn't support multiple ORs for keys in JOIN ON section");

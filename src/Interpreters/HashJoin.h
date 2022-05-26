@@ -69,6 +69,11 @@ public:
     bool setUsedOnce(const T & f);
 };
 
+/// proton : starts
+ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter = false);
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable);
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map);
+/// proton : ends
 }
 
 /** Data structure for implementation of JOIN.
@@ -312,8 +317,9 @@ public:
     using MapsOne = MapsTemplate<RowRef>;
     using MapsAll = MapsTemplate<RowRefList>;
     using MapsAsof = MapsTemplate<AsofRowRefs>;
+    using MapsRangeAsof = MapsTemplate<RangeAsofRowRefs>;
 
-    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof>;
+    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof>;
 
     using RawBlockPtr = const Block *;
     using BlockNullmapList = std::deque<std::pair<RawBlockPtr, ColumnPtr>>;
@@ -417,5 +423,4 @@ private:
     bool empty() const;
     bool overDictionary() const;
 };
-
 }

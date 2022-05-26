@@ -21,6 +21,10 @@
 #include <base/types.h>
 #include <base/logger_useful.h>
 
+/// proton : starts
+#include "RangeAsofJoinContext.h"
+/// proton : ends
+
 namespace DB
 {
 
@@ -125,6 +129,10 @@ private:
 
     ASOF::Inequality asof_inequality = ASOF::Inequality::GreaterOrEquals;
 
+    /// proton : starts.
+    RangeAsofJoinContext range_asof_join_ctx;
+    /// proton : ends
+
     /// All columns which can be read from joined table. Duplicating names are qualified.
     NamesAndTypesList columns_from_joined_table;
     /// Columns will be added to block by JOIN.
@@ -184,6 +192,7 @@ public:
 
     ASTTableJoin::Kind kind() const { return table_join.kind; }
     ASTTableJoin::Strictness strictness() const { return table_join.strictness; }
+    void setStrictness(ASTTableJoin::Strictness join_strictness) { table_join.strictness = join_strictness; }
     bool sameStrictnessAndKind(ASTTableJoin::Strictness, ASTTableJoin::Kind) const;
     const SizeLimits & sizeLimits() const { return size_limits; }
     VolumePtr getTemporaryVolume() { return tmp_volume; }
@@ -261,7 +270,17 @@ public:
     createConvertingActions(const ColumnsWithTypeAndName & left_sample_columns, const ColumnsWithTypeAndName & right_sample_columns);
 
     void setAsofInequality(ASOF::Inequality inequality) { asof_inequality = inequality; }
-    ASOF::Inequality getAsofInequality() { return asof_inequality; }
+    ASOF::Inequality getAsofInequality() const { return asof_inequality; }
+
+    /// proton : starts
+    void setRangeAsofLeftInequality(ASOF::Inequality inequality) { range_asof_join_ctx.left_inequality = inequality; }
+    void setRangeAsofRightInequality(ASOF::Inequality inequality) { range_asof_join_ctx.right_inequality = inequality; }
+    void setRangeAsofLowerBound(Int64 lower_bound) { range_asof_join_ctx.lower_bound = lower_bound; }
+    void setRangeAsofUpperBound(Int64 upper_bound) { range_asof_join_ctx.upper_bound = upper_bound; }
+    void setRangeType(RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
+    const RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
+    void validateRangeAsof(Int64 max_range) const;
+    /// proton : ends
 
     ASTPtr leftKeysList() const;
     ASTPtr rightKeysList() const; /// For ON syntax only

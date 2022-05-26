@@ -50,6 +50,9 @@ struct BlockInfo
 
     /// Milliseconds since UTC
     Int64 append_time = 0;
+
+    void setBlockId(Int64 block_id) { append_time = block_id; }
+    Int64 blockId() const { return append_time; }
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.

@@ -1,5 +1,3 @@
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
@@ -263,7 +261,7 @@ private:
 
 void registerFunctionDateDiff(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseSensitive);
 }
 
 }

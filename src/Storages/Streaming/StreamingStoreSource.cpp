@@ -6,7 +6,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
-#include <KafkaLog/KafkaWALSimpleConsumer.h>
 
 namespace DB
 {

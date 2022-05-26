@@ -690,6 +690,10 @@ class IColumn;
     M(EnumComparingMode, format_capn_proto_enum_comparising_mode, FormatSettings::EnumComparingMode::BY_VALUES, "How to map proton Enum and CapnProto Enum", 0)\
     M(String, rawstore_time_extraction_type, "", "_tp_time extraction type (string, json, regex)", 0) \
     M(String, rawstore_time_extraction_rule, "", "_tp_time extraction rule (string, json, regex)", 0) \
+    M(UInt64, join_max_wait_ms, 100, "Max wait period before doing stream to stream join", 0) \
+    M(UInt64, join_max_wait_rows, 100, "Max wait rows before doing stream to stream join", 0) \
+    M(UInt64, join_max_cached_bytes, 524288000, "Max cached bytes for stream to stream join", 0) \
+    M(Int64, max_join_range, 300, "Max join range", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

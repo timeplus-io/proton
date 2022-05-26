@@ -5,7 +5,6 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Processors/Transforms/ExtremesTransform.h>
 #include <Processors/Transforms/CreatingSetsTransform.h>
-#include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <Processors/Formats/IOutputFormat.h>
@@ -13,14 +12,17 @@
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Common/typeid_cast.h>
-#include <Common/CurrentThread.h>
 #include <Processors/DelayedPortsProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+
+/// proton : starts
+#include <Processors/Transforms/Streaming/StreamingJoinTranform.h>
+#include <Interpreters/Streaming/StreamingHashJoin.h>
+/// proton : ends
 
 namespace DB
 {
@@ -569,15 +571,6 @@ void QueryPipelineBuilder::setCollectedProcessors(Processors * processors)
     pipe.collected_processors = processors;
 }
 
-/// proton: starts.
-void QueryPipelineBuilder::setStreaming(QueryPipelineBuilder & builder, bool is_streaming)
-{
-    for (const auto & processor : builder.pipe.processors)
-        processor->setStreaming(is_streaming);
-}
-/// proton: ends.
-
-
 QueryPipelineProcessorsCollector::QueryPipelineProcessorsCollector(QueryPipelineBuilder & pipeline_, IQueryPlanStep * step_)
     : pipeline(pipeline_), step(step_)
 {
@@ -599,4 +592,87 @@ Processors QueryPipelineProcessorsCollector::detachProcessors(size_t group)
     return res;
 }
 
+/// proton: starts.
+void QueryPipelineBuilder::setStreaming(QueryPipelineBuilder & builder, bool is_streaming)
+{
+    for (const auto & processor : builder.pipe.processors)
+        processor->setStreaming(is_streaming);
+}
+
+std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreaming(
+    std::unique_ptr<QueryPipelineBuilder> left,
+    std::unique_ptr<QueryPipelineBuilder> right,
+    JoinPtr join,
+    size_t max_block_size,
+    UInt64 join_max_wait_ms,
+    UInt64 join_max_wait_rows,
+    UInt64 join_max_cached_bytes,
+    Processors * collected_processors)
+{
+    left->checkInitializedAndNotCompleted();
+    right->checkInitializedAndNotCompleted();
+
+    /// Extremes before join are useless. They will be calculated after if needed.
+    left->pipe.dropExtremes();
+    right->pipe.dropExtremes();
+
+    left->pipe.collected_processors = collected_processors;
+    right->pipe.collected_processors = collected_processors;
+
+    if (left->hasTotals() || right->hasTotals())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support totals");
+
+    /// (left)  ->
+    /// (left)  ->   resize(1) ->
+    /// (left)  ->                \
+    ///                            -> StreamingJoinTransform
+    /// (right) ->                /
+    /// (right) ->   resize(1) ->
+    /// (right) ->
+
+    right->resize(1);
+    left->resize(1);
+
+    /// This counter is needed for every Joining except totals, to decide which Joining will generate non joined rows.
+    /// FIXME FinishCounter
+    auto finish_counter = std::make_shared<StreamingJoinTransform::FinishCounter>(1);
+
+    auto lit = left->pipe.output_ports.begin();
+    auto rit = right->pipe.output_ports.begin();
+
+    for (size_t i = 0; i < 1; ++i)
+    {
+        auto joining = std::make_shared<StreamingJoinTransform>(
+            left->getHeader(),
+            right->getHeader(),
+            std::dynamic_pointer_cast<StreamingHashJoin>(join),
+            max_block_size,
+            join_max_wait_ms,
+            join_max_wait_rows,
+            join_max_cached_bytes,
+            finish_counter);
+
+        connect(**lit, joining->getInputs().front());
+        connect(**rit, joining->getInputs().back());
+        *lit = &joining->getOutputs().front();
+
+        ++lit;
+        ++rit;
+
+        if (collected_processors)
+            collected_processors->emplace_back(joining);
+
+        left->pipe.processors.emplace_back(std::move(joining));
+    }
+
+    left->pipe.processors.insert(left->pipe.processors.end(), right->pipe.processors.begin(), right->pipe.processors.end());
+    left->pipe.holder = std::move(right->pipe.holder);
+    left->pipe.header = left->pipe.output_ports.front()->getHeader();
+    /// left->pipe.max_parallel_streams = std::max<size_t>({left->pipe.max_parallel_streams, right->pipe.max_parallel_streams, 2ull});
+    /// For multiple stream to stream join, each stream actually needs its own stream to progress. So the max parallel stream is actually
+    /// a sum of all involved streams
+    left->pipe.max_parallel_streams = left->pipe.max_parallel_streams + right->pipe.max_parallel_streams;
+    return left;
+}
+/// proton: ends.
 }

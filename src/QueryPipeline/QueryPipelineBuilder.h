@@ -162,6 +162,18 @@ public:
 
     /// proton: starts.
     static void setStreaming(QueryPipelineBuilder & builder, bool is_streaming);
+
+    /// Join two streaming pipelines together using JoinPtr.
+    /// If collector is used, it will collect only newly-added processors, but not processors from pipelines.
+    static std::unique_ptr<QueryPipelineBuilder> joinPipelinesStreaming(
+        std::unique_ptr<QueryPipelineBuilder> left,
+        std::unique_ptr<QueryPipelineBuilder> right,
+        JoinPtr join,
+        size_t max_block_size,
+        UInt64 join_max_wait_ms,
+        UInt64 join_max_wait_rows,
+        UInt64 join_max_cached_bytes,
+        Processors * collected_processors = nullptr);
     /// proton: ends.
 
 private:

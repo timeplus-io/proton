@@ -20,6 +20,10 @@
 #include <Parsers/ASTColumnsTransformers.h>
 
 
+/// proton : starts
+#include <Common/ProtonCommon.h>
+/// proton : ends
+
 namespace DB
 {
 
@@ -28,6 +32,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_IDENTIFIER;
     extern const int UNSUPPORTED_JOIN_KEYS;
     extern const int LOGICAL_ERROR;
+    extern const int SYNTAX_ERROR;
 }
 
 bool TranslateQualifiedNamesMatcher::Data::unknownColumn(size_t table_pos, const ASTIdentifier & identifier) const
@@ -129,7 +134,7 @@ void TranslateQualifiedNamesMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
 }
 
 /// As special case, treat count(*) as count(), not as count(list of all columns).
-void TranslateQualifiedNamesMatcher::visit(ASTFunction & node, const ASTPtr &, Data &)
+void TranslateQualifiedNamesMatcher::visit(ASTFunction & node, const ASTPtr &, Data & data)
 {
     ASTPtr & func_arguments = node.arguments;
 
@@ -140,6 +145,30 @@ void TranslateQualifiedNamesMatcher::visit(ASTFunction & node, const ASTPtr &, D
         func_arguments->children.size() == 1 &&
         func_arguments->children[0]->as<ASTAsterisk>())
         func_arguments->children.clear();
+
+    /// proton : starts
+    if (func_arguments->children.size() == 1 && func_name_lowercase == "date_diff_within")
+    {
+        if (data.tables.size() != 2)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Multiple stream to stream join is not supported");
+
+        /// Add left._tp_time and right._tp_time as its parameters
+        /// date_diff_within(10s) => date_diff_within(10s, left_table._tp_time, right_table._tp_time)
+        if (!data.tables[0].hasColumn(ProtonConsts::RESERVED_EVENT_TIME) || !data.tables[1].hasColumn(ProtonConsts::RESERVED_EVENT_TIME))
+            throw Exception(
+                ErrorCodes::SYNTAX_ERROR,
+                "Function {} takes 3 arguments, but got '{}' instead",
+                func_name_lowercase,
+                node.formatForErrorMessage());
+
+        for (const auto & table_with_alias : data.tables)
+        {
+            const String & table_name = table_with_alias.table.alias.empty() ? table_with_alias.table.table : table_with_alias.table.alias;
+            func_arguments->children.push_back(
+                std::make_shared<ASTIdentifier>(std::vector<String>{{table_name, ProtonConsts::RESERVED_EVENT_TIME}}));
+        }
+    }
+    /// proton : ends
 }
 
 void TranslateQualifiedNamesMatcher::visit(const ASTQualifiedAsterisk &, const ASTPtr & ast, Data & data)

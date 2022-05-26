@@ -9,7 +9,6 @@
 
 #include <base/argsToConfig.h>
 #include <Common/DateLUT.h>
-#include <Common/LocalDate.h>
 #include <Common/MemoryTracker.h>
 #include <base/LineReader.h>
 #include <base/scope_guard_safe.h>
@@ -42,7 +41,6 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -1536,11 +1534,11 @@ void ClientBase::runInteractive()
         history_file = config().getString("history_file");
     else
     {
-        auto * history_file_from_env = getenv("CLICKHOUSE_HISTORY_FILE");
+        auto * history_file_from_env = getenv("PROTON_HISTORY_FILE");
         if (history_file_from_env)
             history_file = history_file_from_env;
         else if (!home_path.empty())
-            history_file = home_path + "/.clickhouse-client-history";
+            history_file = home_path + "/.proton-client-history";
     }
 
     if (!history_file.empty() && !fs::exists(history_file))

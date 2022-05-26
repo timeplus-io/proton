@@ -12,6 +12,12 @@
 #include <Columns/IColumn.h>
 #include <Interpreters/asof.h>
 
+/// proton : starts
+#include "join_tuple.h"
+#include "RangeAsofJoinContext.h"
+
+#include <map>
+/// proton : ends
 
 namespace DB
 {
@@ -259,5 +265,56 @@ private:
     // Source: https://github.com/ClickHouse/ClickHouse/issues/4906
     Lookups lookups;
 };
+
+/// proton : starts
+class RangeAsofRowRefs
+{
+public:
+    template<typename KeyT>
+    using LookupType = std::multimap<KeyT, RowRef>;
+
+    template<typename KeyT>
+    using LookupPtr = std::unique_ptr<LookupType<KeyT>>;
+
+    using Lookups = std::variant<
+        LookupPtr<UInt8>,
+        LookupPtr<UInt16>,
+        LookupPtr<UInt32>,
+        LookupPtr<UInt64>,
+        LookupPtr<Int8>,
+        LookupPtr<Int16>,
+        LookupPtr<Int32>,
+        LookupPtr<Int64>,
+        LookupPtr<Float32>,
+        LookupPtr<Float64>,
+        LookupPtr<Decimal32>,
+        LookupPtr<Decimal64>,
+        LookupPtr<Decimal128>,
+        LookupPtr<DateTime64>>;
+
+    RangeAsofRowRefs() {}
+
+    explicit RangeAsofRowRefs(TypeIndex t);
+
+    static std::optional<TypeIndex> getTypeSize(const IColumn & asof_column, size_t & size)
+    {
+        return AsofRowRefs::getTypeSize(asof_column, size);
+    }
+
+    void insert(TypeIndex type, const IColumn & asof_column, const Block * block, size_t row_num);
+
+    /// Find a range of rows which can be joined
+    std::vector<RowRef> findRange(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id, JoinTupleMap * joined_rows) const;
+    /// Find the last one
+    const RowRef * findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id, JoinTupleMap * joined_rows) const;
+
+private:
+    // Lookups can be stored in a HashTable because it is memmovable
+    // A std::variant contains a currently active type id (memmovable), together with a union of the types
+    // The types are all std::unique_ptr, which contains a single pointer, which is memmovable.
+    // Source: https://github.com/ClickHouse/ClickHouse/issues/4906
+    Lookups lookups;
+};
+/// proton : ends
 
 }

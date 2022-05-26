@@ -1,0 +1,1140 @@
+{
+  "test_suite_name": "stream_join_stream",
+  "tag":"smoke",
+  "setup": {
+    "statements": [
+      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
+      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
+      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"}
+    ]
+  },
+  "test_suite_config":{
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
+  },
+  "commments": "Tests covering the stream query smoke cases.",
+  "tests": [
+    {
+      "id": 0,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff_within-inner-join",
+      "description": "stream to stream inner join by using date_diff_within",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"},
+            {"client":"python","query_id":"1001", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s, ts, tts)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+                        (1, 's1', '2022-05-23 15:44:59'),
+                        (1, 's2', '2022-05-23 15:45:00'),
+                        (1, 's3', '2022-05-23 15:45:09'),
+                        (1, 's4', '2022-05-23 15:45:10'),
+                        (1, 's5', '2022-05-23 15:45:15'),
+                        (1, 's6', '2022-05-23 15:45:19'),
+                        (1, 's7', '2022-05-23 15:45:20'),
+                        (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1001",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff_within-inner-join-2",
+      "description": "stream to stream inner join by using date_diff_within shortcut",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1002", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1002",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff_within-left-join",
+      "description": "stream to stream left join is not supported yet",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1003", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream left join right_stream on i=ii and date_diff_within(10s, ts, tts)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1003",
+          "expected_results": "error_code:48"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-1",
+      "description": "stream to stream inner join by using date_diff between",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1004", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1004",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-2",
+      "description": "stream to stream inner join by using date_diff between reverse timestamp column",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1005", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', tts, ts) between -10 and 10"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1005",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-3",
+      "description": "stream to stream inner join by using date_diff left - right -> (0, range)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1006", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) > 0 and date_diff('second', ts, tts) < 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:11'),
+              (2, 's6', '2022-05-23 15:45:59'),
+              (2, 's7', '2022-05-23 15:46:00'),
+              (2, 's8', '2022-05-23 15:46:01'),
+              (2, 's9', '2022-05-23 15:46:10'),
+              (2, 's10', '2022-05-23 15:46:11')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1006",
+          "expected_results":[
+            ["s", "s3"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-4",
+      "description": "stream to stream inner join by using date_diff left - right -> [0, range]",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1007", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) >= 0 and date_diff('second', ts, tts) <= 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:11'),
+              (2, 's6', '2022-05-23 15:45:59'),
+              (2, 's7', '2022-05-23 15:46:00'),
+              (2, 's8', '2022-05-23 15:46:01'),
+              (2, 's9', '2022-05-23 15:46:10'),
+              (2, 's10', '2022-05-23 15:46:11')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1007",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s7"], ["s", "s8"], ["s", "s9"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-5",
+      "description": "stream to stream inner join by using date_diff left - right -> (0, range]",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1008", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) > 0 and date_diff('second', ts, tts) <= 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:11'),
+              (2, 's6', '2022-05-23 15:45:59'),
+              (2, 's7', '2022-05-23 15:46:00'),
+              (2, 's8', '2022-05-23 15:46:01'),
+              (2, 's9', '2022-05-23 15:46:10'),
+              (2, 's10', '2022-05-23 15:46:11')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1008",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-5",
+      "description": "stream to stream inner join by using date_diff left - right -> [0, range)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1009", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) >= 0 and date_diff('second', ts, tts) < 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:11'),
+              (2, 's6', '2022-05-23 15:45:59'),
+              (2, 's7', '2022-05-23 15:46:00'),
+              (2, 's8', '2022-05-23 15:46:01'),
+              (2, 's9', '2022-05-23 15:46:10'),
+              (2, 's10', '2022-05-23 15:46:11')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1009",
+          "expected_results":[
+            ["s", "s3"], ["s", "s4"], ["s", "s8"], ["s", "s9"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-0-reverse",
+      "description": "stream to stream inner join by using date_diff right - left -> (0, range)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1010", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', tts, ts) > 0 and date_diff('second', tts, ts) < 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:20'),
+              (1, 's5', '2022-05-23 15:45:21'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:20'),
+              (2, 's10', '2022-05-23 15:46:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1010",
+          "expected_results":[
+            ["s", "s3"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-1-reverse",
+      "description": "stream to stream inner join by using date_diff right - left -> [0, range]",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1011", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', tts, ts) >= 0 and date_diff('second', tts, ts) <= 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:20'),
+              (1, 's5', '2022-05-23 15:45:21'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:20'),
+              (2, 's10', '2022-05-23 15:46:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1011",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s7"], ["s", "s8"], ["s", "s9"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-2-reverse",
+      "description": "stream to stream inner join by using date_diff right - left -> (0, range]",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1012", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', tts, ts) > 0 and date_diff('second', tts, ts) <= 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:20'),
+              (1, 's5', '2022-05-23 15:45:21'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:20'),
+              (2, 's10', '2022-05-23 15:46:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1012",
+          "expected_results":[
+            ["s", "s3"], ["s", "s4"], ["s", "s8"], ["s", "s9"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-3-reverse",
+      "description": "stream to stream inner join by using date_diff right - left -> [0, range)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1013", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', tts, ts) >= 0 and date_diff('second', tts, ts) < 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:20'),
+              (1, 's5', '2022-05-23 15:45:21'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:20'),
+              (2, 's10', '2022-05-23 15:46:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1013",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-left-less-than-right",
+      "description": "stream to stream inner join by using date_diff left - right -> (-range, 0)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1014", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) > -10 and date_diff('second', ts, tts) < 0"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:20'),
+              (1, 's5', '2022-05-23 15:45:21'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:20'),
+              (2, 's10', '2022-05-23 15:46:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1014",
+          "expected_results":[
+            ["s", "s3"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-left-less-than-right",
+      "description": "stream to stream inner join by using date_diff left - right -> (-range, 2)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1015", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) > -8 and date_diff('second', ts, tts) < 2"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:18'),
+              (1, 's5', '2022-05-23 15:45:19'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:18'),
+              (2, 's10', '2022-05-23 15:46:19')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1015",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s6"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-left-greater-than-right",
+      "description": "stream to stream inner join by using date_diff left - right -> (-2, range)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1016", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) > -2 and date_diff('second', ts, tts) < 8"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:12'),
+              (1, 's5', '2022-05-23 15:45:13'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:18'),
+              (2, 's10', '2022-05-23 15:46:19')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1016",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s6"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-only-join-non-joined-left",
+      "description": "stream to stream inner join only non-joined left rows",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1017", "query_end_timer":6, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('minute', ts, tts) between -1 and 1"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:12'),
+              (1, 's5', '2022-05-23 15:45:13')"
+            },
+            {"client":"python", "query_type": "table", "wait":3,
+              "query": "insert into left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'), (2, 'new', '2022-05-23 15:46:10')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1017",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"],
+            ["new", "s1"], ["new", "s2"], ["new", "s3"], ["new", "s4"], ["new", "s5"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-only-join-non-joined-right",
+      "description": "stream to stream inner join only non-joined right rows",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1018", "query_end_timer":6, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('minute', ts, tts) between -1 and 1"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:12'),
+              (1, 's5', '2022-05-23 15:45:13')"
+            },
+            {"client":"python", "query_type": "table", "wait":3,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 'new_s1', '2022-05-23 15:45:09'),
+              (1, 'new_s2', '2022-05-23 15:45:10'),
+              (1, 'new_s3', '2022-05-23 15:45:11'),
+              (1, 'new_s4', '2022-05-23 15:45:12'),
+              (1, 'new_s5', '2022-05-23 15:45:13')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1018",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"],
+            ["s", "new_s1"], ["s", "new_s2"], ["s", "new_s3"], ["s", "new_s4"], ["s", "new_s5"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff-inner-join-watermark-progress",
+      "description": "stream to stream inner join. Watermark progress will prune existing time bucket",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1019", "query_end_timer":6, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:12'),
+              (1, 's5', '2022-05-23 15:45:13'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:18'),
+              (2, 's10', '2022-05-23 15:46:19')"
+            },
+            {"client":"python", "query_type": "table", "wait":3,
+              "query": "insert into left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'), (2, 'new', '2022-05-23 15:46:10')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1019",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"], ["s", "s8"], ["s", "s9"], ["s", "s10"],
+            ["new", "s7"], ["new", "s8"], ["new", "s9"], ["new", "s10"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "tags": ["stream_join_stream"],
+      "name": "unsupported-cross-join",
+      "description": "stream to stream doesn't support cross join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1020", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream cross join right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1020",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "tags": ["stream_join_stream"],
+      "name": "unsupported-right-join",
+      "description": "stream to stream doesn't support right join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1021", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream right join right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1021",
+          "expected_results": "error_code:48"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "tags": ["stream_join_stream"],
+      "name": "malformed-lower-bound",
+      "description": "lower bound shall be less than or equal to 0",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1022", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join right_stream on i=ii and date_diff('second', ts, tts) > 3 and date_diff('second', ts, tts) < 10"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1022",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "tags": ["stream_join_stream"],
+      "name": "malformed-upper-bound",
+      "description": "upper bound shall be greater than or equal to 0",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1023", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join right_stream on i=ii and date_diff('second', ts, tts) > -10 and date_diff('second', ts, tts) < -2"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1023",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "tags": ["stream_join_stream"],
+      "name": "too-big-range",
+      "description": "range shall be within 300 seconds by default",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1024", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join right_stream on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 200"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1024",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "tags": ["stream_join_stream"],
+      "name": "malformed-range-join-clause-1",
+      "description": "range missing upper bound",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1025", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join right_stream on i=ii and date_diff('second', ts, tts) > -200"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1025",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "tags": ["stream_join_stream"],
+      "name": "malformed-range-join-clause-2",
+      "description": "range missing lower bound",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1026", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join right_stream on i=ii and date_diff('second', ts, tts) < 200"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1026",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "tags": ["stream_join_stream"],
+      "name": "malformed-range-join-clause-2",
+      "description": "More than one range",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1027", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join right_stream on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 100 and date_diff('second', ts, tts) < 200"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1027",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "tags": ["stream_join_stream"],
+      "name": "range-asof-join",
+      "description": "range asof join is not supported yet",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1028", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream asof join right_stream on i=ii and date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 200"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1028",
+          "expected_results": "error_code:62"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "tags": ["stream_join_stream"],
+      "name": "stream-asof-join",
+      "description": "stream asof join is not supported yet",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1028", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream asof join right_stream on i=ii and s > ss"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1028",
+          "expected_results": "error_code:48"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "tags": ["stream_join_stream"],
+      "name": "historical-asof-join",
+      "description": "historical asof join shall work",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:45:09'),
+              (1, 's2', '2022-05-23 15:45:10'),
+              (1, 's3', '2022-05-23 15:45:11'),
+              (1, 's4', '2022-05-23 15:45:12'),
+              (1, 's5', '2022-05-23 15:45:13'),
+              (2, 's6', '2022-05-23 15:46:09'),
+              (2, 's7', '2022-05-23 15:46:10'),
+              (2, 's8', '2022-05-23 15:46:11'),
+              (2, 's9', '2022-05-23 15:46:18'),
+              (2, 's10', '2022-05-23 15:46:19')"
+            },
+            {"client":"python","query_id":"1030", "wait":3, "query_end_timer":6, "query_type": "stream", "query":"select s, ss from table(left_stream) as left_stream asof join table(right_stream) as right_stream on i=ii and tts > ts"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1030",
+          "expected_results":[
+            ["s", "s3"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "tags": ["stream_join_stream"],
+      "name": "non-asof-join",
+      "description": "non asof join with inequality join clause for table join is not supported",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1031", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from table(left_stream) as left_stream join table(right_stream) as right_stream on i=ii and ts < tts"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1031",
+          "expected_results": "error_code:403"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "tags": ["stream_join_stream"],
+      "name": "table-range-join",
+      "description": "range join are not supported in non-stream-to-stream join scenarios yet",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1032", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream join table(right_stream) as right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1032",
+          "expected_results": "error_code:48"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "tags": ["stream_join_stream"],
+      "name": "table-range-asof-join",
+      "description": "range asof join are not supported in non-stream-to-stream join scenarios yet",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1033", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream asof join table(right_stream) as right_stream on i=ii and date_diff('second', ts, tts) between -10 and 10"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1033",
+          "expected_results": "error_code:48"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "tags": ["stream_join_stream"],
+      "name": "subquery-stream-stream-join",
+      "description": "subquery in stream to stream join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1034", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from (select * from left_stream) as left_stream inner join (select * from right_stream) as right_stream on i=ii and date_diff_within(10s, ts, tts)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1034",
+          "expected_results":[
+            ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "tags": ["stream_join_stream"],
+      "name": "timestamp-col-in-join-clause-1",
+      "description": "join clause shall support timestamp expression (left column)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1035", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s, date_add(ts, 1s), tts)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1035",
+          "expected_results":[
+            ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "tags": ["stream_join_stream"],
+      "name": "timestamp-col-in-join-clause-2",
+      "description": "join clause shall support timestamp expression (right column)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1036", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s, ts, date_add(tts, 1s))"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1036",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "tags": ["stream_join_stream"],
+      "name": "multiple-streams",
+      "description": "multiple stream to stream join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists middle_stream"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists middle_stream (iii int, sss string, ttts datetime)"},
+            {"client":"python","query_id":"1037", "query_end_timer":5, "query_type": "stream", "query":"select s, ss, sss from (select i, s, ss, ts from left_stream inner join right_stream on i=ii and date_diff_within(10s, ts, tts)) as joined inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into middle_stream(iii, sss, ttts) values (1, 'sss', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1037",
+          "expected_results":[
+            ["s", "s2", "sss"], ["s", "s3", "sss"], ["s", "s4", "sss"], ["s", "s5", "sss"], ["s", "s6", "sss"], ["s", "s7", "sss"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "tags": ["stream_join_stream"],
+      "name": "multiple-streams",
+      "description": "multiple stream to stream join",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists middle_stream"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists middle_stream (iii int, sss string, ttts datetime)"},
+            {"client":"python","query_id":"1038", "query_end_timer":5, "query_type": "stream", "query":"select s, ss, sss from left_stream inner join right_stream on i=ii and date_diff_within(10s, ts, tts) inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into middle_stream(iii, sss, ttts) values (1, 'sss', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1038",
+          "expected_results":[
+            ["s", "s2", "sss"], ["s", "s3", "sss"], ["s", "s4", "sss"], ["s", "s5", "sss"], ["s", "s6", "sss"], ["s", "s7", "sss"]
+          ]
+        }
+      ]
+    }
+  ]
+}

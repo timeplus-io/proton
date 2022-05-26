@@ -159,9 +159,8 @@ namespace JoinStuff
             return flags[nullptr][off].compare_exchange_strong(expected, true);
         }
     }
-}
 
-static ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter = false)
+ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter)
 {
     ColumnPtr column = src_column->convertToFullColumnIfConst();
     MutableColumnPtr mut_column = column->cloneEmpty();
@@ -191,7 +190,7 @@ static ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & 
     return mut_column;
 }
 
-static ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable)
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable)
 {
     if (nullable)
     {
@@ -210,7 +209,7 @@ static ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column,
     return std::move(column);
 }
 
-static ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
 {
     if (nullable)
     {
@@ -227,6 +226,7 @@ static ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column,
 
     return std::move(column);
 }
+}
 
 HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_, bool any_take_last_row_)
     : table_join(table_join_)
@@ -240,6 +240,11 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
     , right_sample_block(right_sample_block_)
     , log(&Poco::Logger::get("HashJoin"))
 {
+    /// proton : starts
+    if (strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Range or range asof join is supported in table join");
+    /// proton : ends
+
     LOG_DEBUG(log, "Right sample block: {}", right_sample_block.dumpStructure());
 
     if (isCrossOrComma(kind))
@@ -633,7 +638,8 @@ namespace
         const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, UInt8ColumnDataPtr join_mask, Arena & pool)
     {
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRef>;
-        constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof;
+        constexpr bool is_asof_join = (STRICTNESS == ASTTableJoin::Strictness::Asof) || (STRICTNESS == ASTTableJoin::Strictness::RangeAsof)
+            || (STRICTNESS == ASTTableJoin::Strictness::Range);
 
         const IColumn * asof_column [[maybe_unused]] = nullptr;
         if constexpr (is_asof_join)
@@ -1033,6 +1039,8 @@ struct JoinFeatures
     static constexpr bool is_any_or_semi_join = STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::RightAny || (STRICTNESS == ASTTableJoin::Strictness::Semi && KIND == ASTTableJoin::Kind::Left);
     static constexpr bool is_all_join = STRICTNESS == ASTTableJoin::Strictness::All;
     static constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof;
+    static constexpr bool is_range_asof_join = STRICTNESS == ASTTableJoin::Strictness::RangeAsof;
+    static constexpr bool is_range_join = STRICTNESS == ASTTableJoin::Strictness::Range;
     static constexpr bool is_semi_join = STRICTNESS == ASTTableJoin::Strictness::Semi;
     static constexpr bool is_anti_join = STRICTNESS == ASTTableJoin::Strictness::Anti;
 
@@ -1259,6 +1267,16 @@ NO_INLINE IColumn::Filter joinRightColumns(
                     else
                         addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
                 }
+                /// proton : starts
+                else if constexpr (jf.is_range_join)
+                {
+                    /// FIXME
+                }
+                else if constexpr (jf.is_range_asof_join)
+                {
+                    /// FIXME
+                }
+                /// proton : ends
                 else if constexpr (jf.is_all_join)
                 {
                     setUsed<need_filter>(filter, i);
@@ -1496,7 +1514,7 @@ void HashJoin::joinBlockImpl(
         savedBlockSample(),
         *this,
         std::move(join_on_keys),
-        jf.is_asof_join,
+        jf.is_asof_join || jf.is_range_asof_join, /// proton : starts / ends
         is_join_get);
 
     bool has_required_right_keys = (required_right_keys.columns() != 0);
@@ -1536,7 +1554,7 @@ void HashJoin::joinBlockImpl(
                 ColumnWithTypeAndName right_col(col.column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = correctNullability(std::move(right_col), is_nullable);
+                right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable);
                 block.insert(right_col);
             }
         }
@@ -1565,12 +1583,12 @@ void HashJoin::joinBlockImpl(
                 const auto & col = block.getByName(left_name);
                 bool is_nullable = nullable_right_side || right_key.type->isNullable();
 
-                ColumnPtr thin_column = filterWithBlanks(col.column, filter);
+                ColumnPtr thin_column = JoinStuff::filterWithBlanks(col.column, filter);
 
                 ColumnWithTypeAndName right_col(thin_column, col.type, right_col_name);
                 if (right_col.type->lowCardinality() != right_key.type->lowCardinality())
                     JoinCommon::changeLowCardinalityInplace(right_col);
-                right_col = correctNullability(std::move(right_col), is_nullable, null_map_filter);
+                right_col = JoinStuff::correctNullability(std::move(right_col), is_nullable, null_map_filter);
                 block.insert(right_col);
 
                 if constexpr (jf.need_replication)
@@ -1822,9 +1840,16 @@ struct AdderNonJoined
     static void add(const Mapped & mapped, size_t & rows_added, MutableColumns & columns_right)
     {
         constexpr bool mapped_asof = std::is_same_v<Mapped, AsofRowRefs>;
+        /// proton : starts
+        constexpr bool mapped_range_asof = std::is_same_v<Mapped, RangeAsofRowRefs>;
+        /// proton : ends
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<Mapped, RowRef>;
 
         if constexpr (mapped_asof)
+        {
+            /// Do nothing
+        }
+        else if constexpr (mapped_range_asof)
         {
             /// Do nothing
         }

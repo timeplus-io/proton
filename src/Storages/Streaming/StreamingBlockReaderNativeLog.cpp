@@ -138,7 +138,8 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
             auto * col_with_type = rb.findByName(column_name);
             if (col_with_type)
             {
-                /// We will need deep copy
+                /// We will need deep copy since the block from cached can be shared between different clients
+                /// Some client may modify the columns in place
                 block.insert(ColumnWithTypeAndName{
                     col_with_type->column->cloneResized(col_with_type->column->size()), col_with_type->type, col_with_type->name});
             }

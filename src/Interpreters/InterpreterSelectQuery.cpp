@@ -1,20 +1,6 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeInterval.h>
 
-/// proton: starts
-#include <DataTypes/ObjectUtils.h>
-#include <Interpreters/Streaming/StreamingAggregator.h>
-#include <Interpreters/Streaming/StreamingEmitInterpreter.h>
-#include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
-#include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
-#include <Processors/QueryPlan/Streaming/WatermarkStep.h>
-#include <Storages/Streaming/ProxyStream.h>
-#include <Storages/Streaming/StorageStream.h>
-#include <Common/ProtonCommon.h>
-/// proton: ends
-
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -97,6 +83,21 @@
 #include <base/map.h>
 #include <base/scope_guard_safe.h>
 #include <memory>
+
+/// proton: starts
+#include <DataTypes/ObjectUtils.h>
+#include <Interpreters/Streaming/StreamingAggregator.h>
+#include <Interpreters/Streaming/StreamingEmitInterpreter.h>
+#include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
+#include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
+#include <Processors/QueryPlan/Streaming/StreamingJoinStep.h>
+#include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
+#include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
+#include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Storages/Streaming/ProxyStream.h>
+#include <Storages/Streaming/StorageStream.h>
+#include <Common/ProtonCommon.h>
+/// proton: ends
 
 namespace DB
 {
@@ -1346,11 +1347,28 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                     if (!joined_plan)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no joined plan for query");
 
-                    QueryPlanStepPtr join_step = std::make_unique<JoinStep>(
-                        query_plan.getCurrentDataStream(),
-                        joined_plan->getCurrentDataStream(),
-                        expressions.join,
-                        settings.max_block_size);
+                    /// proton : starts
+                    QueryPlanStepPtr join_step;
+                    if (joined_plan->isStreaming())
+                    {
+                        join_step = std::make_unique<StreamingJoinStep>(
+                            query_plan.getCurrentDataStream(),
+                            joined_plan->getCurrentDataStream(),
+                            expressions.join,
+                            settings.max_block_size,
+                            settings.join_max_wait_ms,
+                            settings.join_max_wait_rows,
+                            settings.join_max_cached_bytes);
+                    }
+                    else
+                    {
+                        join_step = std::make_unique<JoinStep>(
+                            query_plan.getCurrentDataStream(),
+                            joined_plan->getCurrentDataStream(),
+                            expressions.join,
+                            settings.max_block_size);
+                    }
+                    /// proton : ends
 
                     join_step->setStepDescription("JOIN");
                     std::vector<QueryPlanPtr> plans;
@@ -2973,7 +2991,12 @@ bool InterpreterSelectQuery::isStreaming() const
         return true;
 
     if (interpreter_subquery)
-        return interpreter_subquery->isStreaming();
+    {
+        /// We like to fix syntax_analyzer_result
+        auto res = interpreter_subquery->isStreaming();
+        const_cast<TreeRewriterResult*>(query_info.syntax_analyzer_result.get())->streaming = res;
+        return res;
+    }
     else
         return false;
 }

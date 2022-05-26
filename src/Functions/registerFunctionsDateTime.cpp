@@ -76,6 +76,7 @@ void registerFunctiontimezoneOffset(FunctionFactory &);
 /// proton: starts
 void registerFunctionStreamingNow64(FunctionFactory &);
 void registerFunctionStreamingNow(FunctionFactory &);
+void registerFunctionDateDiffWithin(FunctionFactory &);
 /// proton: ends
 
 void registerFunctionsDateTime(FunctionFactory & factory)
@@ -152,6 +153,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     /// proton: starts
     registerFunctionStreamingNow64(factory);
     registerFunctionStreamingNow(factory);
+    registerFunctionDateDiffWithin(factory);
     /// proton: ends
 }
 

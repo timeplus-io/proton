@@ -59,6 +59,7 @@
 
 /// proton: starts
 #include <Common/ProtonCommon.h>
+#include <Interpreters/Streaming/StreamingHashJoin.h>
 /// proton: ends
 
 namespace DB
@@ -978,8 +979,13 @@ static ActionsDAGPtr createJoinedBlockActions(ContextPtr context, const TableJoi
     return ExpressionAnalyzer(expression_list, syntax_result, context).getActionsDAG(true, false);
 }
 
-static std::shared_ptr<IJoin> chooseJoinAlgorithm(std::shared_ptr<TableJoin> analyzed_join, const Block & sample_block, ContextPtr context)
+/// proton : starts
+static std::shared_ptr<IJoin> chooseJoinAlgorithm(std::shared_ptr<TableJoin> analyzed_join, const Block & sample_block, bool streaming, ContextPtr context)
 {
+    if (streaming)
+        return std::make_shared<StreamingHashJoin>(analyzed_join, sample_block);
+    /// proton : ends
+
     /// HashJoin with Dictionary optimisation
     if (analyzed_join->tryInitDictJoin(sample_block, context))
         return std::make_shared<HashJoin>(analyzed_join, sample_block);
@@ -1075,7 +1081,12 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
         joined_plan->addStep(std::move(converting_step));
     }
 
-    JoinPtr join = chooseJoinAlgorithm(analyzed_join, joined_plan->getCurrentDataStream().header, getContext());
+    /// proton : starts
+    if (joined_plan->isStreaming() && !syntax->streaming)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Table to stream join is not supported. Use Stream to table join instead");
+
+    JoinPtr join = chooseJoinAlgorithm(analyzed_join, joined_plan->getCurrentDataStream().header, syntax->streaming && joined_plan->isStreaming(), getContext());
+    /// proton : ends
 
     /// Do not make subquery for join over dictionary.
     if (analyzed_join->getDictionaryReader())

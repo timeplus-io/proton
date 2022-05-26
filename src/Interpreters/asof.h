@@ -13,6 +13,9 @@ enum class Inequality
     Greater,
     LessOrEquals,
     GreaterOrEquals,
+    /// proton : starts
+    RangeBetween,
+    /// proton : ends
 };
 
 inline Inequality getInequality(const std::string & func_name)
@@ -26,6 +29,8 @@ inline Inequality getInequality(const std::string & func_name)
         inequality = Inequality::LessOrEquals;
     else if (func_name == "greater_or_equals")
         inequality = Inequality::GreaterOrEquals;
+    else if (func_name == "date_diff_within")
+        inequality = Inequality::RangeBetween;
     return inequality;
 }
 
@@ -39,6 +44,8 @@ inline Inequality reverseInequality(Inequality inequality)
         return Inequality::GreaterOrEquals;
     else if (inequality == Inequality::GreaterOrEquals)
         return Inequality::LessOrEquals;
+    else if (inequality == Inequality::RangeBetween)
+        return Inequality::RangeBetween;
     return Inequality::None;
 }
 

@@ -197,6 +197,13 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
             case Strictness::Anti:
                 settings.ostr << "ANTI ";
                 break;
+            /// proton : starts
+            case Strictness::Range:
+                break;
+            case Strictness::RangeAsof:
+                settings.ostr << "ASOF ";
+                break;
+            /// proton : ends
         }
     }
 

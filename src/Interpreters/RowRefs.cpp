@@ -164,4 +164,161 @@ std::optional<TypeIndex> AsofRowRefs::getTypeSize(const IColumn & asof_column, s
     throw Exception("ASOF join not supported for type: " + std::string(asof_column.getFamilyName()), ErrorCodes::BAD_TYPE_OF_FIELD);
 }
 
+/// proton : starts
+RangeAsofRowRefs::RangeAsofRowRefs(TypeIndex type)
+{
+    auto call = [&](const auto & t)
+    {
+        using T = std::decay_t<decltype(t)>;
+        lookups = std::make_unique<LookupType<T>>();
+    };
+
+    callWithType(type, call);
+}
+
+void RangeAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, const Block * block, size_t row_num)
+{
+    auto call = [&](const auto & t)
+    {
+        using T = std::decay_t<decltype(t)>;
+        using ColumnType = ColumnVectorOrDecimal<T>;
+        const auto & column = typeid_cast<const ColumnType &>(asof_column);
+
+        T key = column.getElement(row_num);
+        std::get<LookupPtr<T>>(lookups)->emplace(key, RowRef(block, row_num));
+    };
+
+    callWithType(type, call);
+}
+
+std::vector<RowRef> RangeAsofRowRefs::findRange(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id, JoinTupleMap * joined_rows) const
+{
+    std::vector<RowRef> results;
+
+    auto call = [&](const auto & t)
+    {
+        using T = std::decay_t<decltype(t)>;
+        using ColumnType = ColumnVectorOrDecimal<T>;
+        const auto & column = typeid_cast<const ColumnType &>(asof_column);
+
+        T key = column.getElement(row_num);
+
+        auto & m = std::get<LookupPtr<T>>(lookups);
+
+        /// lower_bound [left_inequality] key - right_key [right_inequality] upper_bound
+        /// Example: lower_bound < key - right_key <= upper_bound
+        /// => -upper_bound <= right_key - key < -lower_bound
+        /// => key - upper_bound <= right_key < key - lower_bound
+        /// Find key range : [key - upper_bound, key - lower_bound)
+
+        bool is_right_strict = range_join_ctx.right_inequality == ASOF::Inequality::Less;
+
+        key -= range_join_ctx.upper_bound;
+
+        decltype(m->begin()) lower_iter;
+        if (is_right_strict)
+            lower_iter = m->upper_bound(key);
+        else
+            lower_iter = m->lower_bound(key);
+
+        if (lower_iter == m->end())
+            /// all keys in the map < key - upper_bound
+            return;
+
+        assert(lower_iter->first >= key);
+
+        bool is_left_strict = range_join_ctx.left_inequality == ASOF::Inequality::Greater;
+
+        key += range_join_ctx.upper_bound; // restore
+        key -= range_join_ctx.lower_bound;
+
+        /// >= key
+        auto upper_iter = m->lower_bound(key);
+
+        if (is_left_strict && upper_iter == m->begin())
+            return;
+
+        /// All keys in the map are less than `key`
+        if (upper_iter == m->end() || is_left_strict)
+            --upper_iter;
+
+        assert(upper_iter->first <= key);
+        assert(upper_iter->first >= lower_iter->first);
+
+        /// We need include value at upper_iter
+        do
+        {
+            /// Add to results only if the right rows are not joined with the source rows in the src block
+            if (!joined_rows
+                || !joined_rows->contains(
+                    JoinTuple{src_block_id, lower_iter->second.block, static_cast<uint32_t>(row_num), lower_iter->second.row_num}))
+                results.push_back(lower_iter->second);
+        } while (lower_iter++ != upper_iter);
+    };
+
+    callWithType(type, call);
+    return results;
+}
+
+const RowRef * RangeAsofRowRefs::findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id, JoinTupleMap * joined_rows) const
+{
+    RowRef * result = nullptr;
+
+    auto call = [&](const auto & t)
+    {
+        using T = std::decay_t<decltype(t)>;
+        using ColumnType = ColumnVectorOrDecimal<T>;
+        const auto & column = typeid_cast<const ColumnType &>(asof_column);
+
+        T key = column.getElement(row_num);
+
+        auto & m = std::get<LookupPtr<T>>(lookups);
+
+        /// lower_bound [left_inequality] key - right_key [right_inequality] upper_bound
+        /// Example: lower_bound < key - right_key <= upper_bound
+        /// => -upper_bound <= right_key - key < -lower_bound
+        /// => key - upper_bound <= right_key < key - lower_bound
+        /// Find key range : [key - upper_bound, key - lower_bound)
+
+        bool is_right_strict = range_join_ctx.right_inequality == ASOF::Inequality::Less;
+
+        key -= range_join_ctx.upper_bound;
+
+        decltype(m->begin()) lower_iter;
+        if (is_right_strict)
+            lower_iter = m->upper_bound(key);
+        else
+            lower_iter = m->lower_bound(key);
+
+        if (lower_iter == m->end())
+            /// all keys in the map < key - upper_bound
+            return;
+
+        assert(lower_iter->first >= key);
+
+        key += range_join_ctx.upper_bound; // restore
+        key -= range_join_ctx.lower_bound;
+
+        /// >= key
+        auto upper_iter = m->lower_bound(key);
+
+        bool is_left_strict = range_join_ctx.left_inequality == ASOF::Inequality::Greater;
+        if (is_left_strict && upper_iter == m->begin())
+            return;
+
+        if (upper_iter == m->end() || is_left_strict)
+            --upper_iter;
+
+        assert(upper_iter->first <= key);
+        assert(upper_iter->first >= lower_iter->first);
+
+        if (!joined_rows || !joined_rows->contains(JoinTuple{src_block_id, upper_iter->second.block, static_cast<uint32_t>(row_num), upper_iter->second.row_num}))
+            result = &upper_iter->second;
+    };
+
+    callWithType(type, call);
+    return result;
+}
+/// proton : ends
+
 }
