@@ -30,6 +30,8 @@ namespace
     std::unique_ptr<StorageExternalStreamImpl>
     createExternalStream(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context)
     {
+        if (settings->type.value == "")
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
         if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
             return std::make_unique<Kafka>(storage, std::move(settings));
 
