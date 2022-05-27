@@ -1135,6 +1135,71 @@
           ]
         }
       ]
+    },
+    {
+      "id": 38,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff_within-accepts-minute-interval",
+      "description": "date_diff_within-accepts-minute-interval",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
+            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"},
+            {"client":"python","query_id":"1039", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(1m, ts, tts)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09'),
+              (1, 's4', '2022-05-23 15:45:10'),
+              (1, 's5', '2022-05-23 15:45:15'),
+              (1, 's6', '2022-05-23 15:45:19'),
+              (1, 's7', '2022-05-23 15:45:20'),
+              (1, 's8', '2022-05-23 15:45:21')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1039",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"], ["s", "s3"], ["s", "s4"], ["s", "s5"], ["s", "s6"], ["s", "s7"], ["s", "s8"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "tags": ["stream_join_stream"],
+      "name": "date_diff_within-join-range",
+      "description": "date_diff_within-join-range-issue-944",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1040", "query_end_timer":3, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(100s, left_stream._tp_time, right_stream._tp_time)"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts, _tp_time) values (1, 's', '2022-05-23 15:45:10', '2022-05-25 23:57:31.023')"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts, _tp_time) values
+              (1, 's1', '2022-05-23 15:44:59', '2022-05-25 23:57:39.204'),
+              (1, 's2', '2022-05-23 15:44:59', '2022-05-25 23:59:06.204'),
+              (1, 's3', '2022-05-23 15:44:59', '2022-05-25 23:59:39.204')"
+            }
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1040",
+          "expected_results":[
+            ["s", "s1"], ["s", "s2"]
+          ]
+        }
+      ]
     }
   ]
 }

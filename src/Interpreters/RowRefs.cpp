@@ -221,16 +221,15 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(TypeIndex type, const RangeAsofJ
         else
             lower_iter = m->lower_bound(key);
 
-        if (lower_iter == m->end())
-            /// all keys in the map < key - upper_bound
+        key += range_join_ctx.upper_bound; /// restore
+        key -= range_join_ctx.lower_bound; /// upper bound
+
+        if (lower_iter == m->end() || lower_iter->first > key)
+            /// all keys in the map < key - upper_bound or
+            /// all keys in the map > key - lower_bound
             return;
 
-        assert(lower_iter->first >= key);
-
         bool is_left_strict = range_join_ctx.left_inequality == ASOF::Inequality::Greater;
-
-        key += range_join_ctx.upper_bound; // restore
-        key -= range_join_ctx.lower_bound;
 
         /// >= key
         auto upper_iter = m->lower_bound(key);
@@ -238,11 +237,10 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(TypeIndex type, const RangeAsofJ
         if (is_left_strict && upper_iter == m->begin())
             return;
 
-        /// All keys in the map are less than `key`
-        if (upper_iter == m->end() || is_left_strict)
+        if (upper_iter == m->end() || is_left_strict || upper_iter->first > key)
+            /// We need back one step in these cases
             --upper_iter;
 
-        assert(upper_iter->first <= key);
         assert(upper_iter->first >= lower_iter->first);
 
         /// We need include value at upper_iter

@@ -336,7 +336,7 @@ void CollectJoinOnKeysMatcher::handleRangeBetweenAsOfJoin(const ASTFunction & fu
         if (interval_func->name == "to_interval_second")
             range = 1;
         else if (interval_func->name == "to_interval_minute")
-            range *= 60;
+            range = 60;
         else
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
