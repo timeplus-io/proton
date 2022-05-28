@@ -157,6 +157,23 @@ public:
     }
 };
 
+/// proton: starts
+template <typename Base>
+class BufferWithOwnMemoryNoTrack : public Base
+{
+protected:
+    Memory<Allocator<false, false, true>> memory;
+
+public:
+    /// If non-nullptr 'existing_memory' is passed, then buffer will not create its own memory and will use existing_memory without ownership.
+    explicit BufferWithOwnMemoryNoTrack(size_t size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
+        : Base(nullptr, 0), memory(existing_memory ? 0 : size, alignment)
+    {
+        Base::set(existing_memory ? existing_memory : memory.data(), size);
+        Base::padded = !existing_memory;
+    }
+};
+/// proton: ends
 
 /** Buffer that could write data to external memory which came from outside
   * Template parameter: ReadBuffer or WriteBuffer

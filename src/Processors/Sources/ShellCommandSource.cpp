@@ -103,7 +103,7 @@ static bool pollFd(int fd, size_t timeout_milliseconds, int events)
     return res > 0;
 }
 
-class TimeoutReadBufferFromFileDescriptor : public BufferWithOwnMemory<ReadBuffer>
+class TimeoutReadBufferFromFileDescriptor : public BufferWithOwnMemoryNoTrack<ReadBuffer>
 {
 public:
     explicit TimeoutReadBufferFromFileDescriptor(int fd_, size_t timeout_milliseconds_)
@@ -162,7 +162,7 @@ private:
     size_t timeout_milliseconds;
 };
 
-class TimeoutWriteBufferFromFileDescriptor : public BufferWithOwnMemory<WriteBuffer>
+class TimeoutWriteBufferFromFileDescriptor : public BufferWithOwnMemoryNoTrack<WriteBuffer>
 {
 public:
     explicit TimeoutWriteBufferFromFileDescriptor(int fd_, size_t timeout_milliseconds_)
