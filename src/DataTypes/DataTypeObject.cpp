@@ -37,44 +37,12 @@ SerializationPtr DataTypeObject::doGetDefaultSerialization() const
 
 String DataTypeObject::doGetName() const
 {
-    WriteBufferFromOwnString out;
-    if (is_nullable)
-        out << "object(nullable(" << quote << schema_format << "))";
-    else
-        out << "object(" << quote << schema_format << ")";
-    return out.str();
-}
-
-static DataTypePtr create(const ASTPtr & arguments)
-{
-    if (!arguments || arguments->children.size() != 1)
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-            "The object data type family must have one argument - name of schema format");
-
-    ASTPtr schema_argument = arguments->children[0];
-    bool is_nullable = false;
-
-    if (const auto * func = schema_argument->as<ASTFunction>())
-    {
-        if (func->name != "nullable" || func->arguments->children.size() != 1)
-            throw Exception(ErrorCodes::UNEXPECTED_AST_STRUCTURE,
-                "Expected 'nullable(<schema_name>)' as parameter for type object", func->name);
-
-        schema_argument = func->arguments->children[0];
-        is_nullable = true;
-    }
-
-    const auto * literal = schema_argument->as<ASTLiteral>();
-    if (!literal || literal->value.getType() != Field::Types::String)
-        throw Exception(ErrorCodes::UNEXPECTED_AST_STRUCTURE,
-            "The object data type family must have a const string as its schema name parameter");
-
-    return std::make_shared<DataTypeObject>(literal->value.get<const String &>(), is_nullable);
+    assert(schema_format == "json");
+    return is_nullable ? "nullable_json" : "json";
 }
 
 void registerDataTypeObject(DataTypeFactory & factory)
 {
-    factory.registerDataType("object", create);
     factory.registerSimpleDataType("json",
         [] { return std::make_shared<DataTypeObject>("json", false); },
         DataTypeFactory::CaseInsensitive);

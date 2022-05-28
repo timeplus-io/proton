@@ -169,7 +169,7 @@ public:
 
     /// Part of interface
 
-    const char * getFamilyName() const override { return "object"; }
+    const char * getFamilyName() const override { return "json"; }
     TypeIndex getDataType() const override { return TypeIndex::Object; }
 
     size_t size() const override;

@@ -23,7 +23,7 @@ private:
 public:
     DataTypeObject(const String & schema_format_, bool is_nullable_);
 
-    const char * getFamilyName() const override { return "object"; }
+    const char * getFamilyName() const override { return "json"; }
     String doGetName() const override;
     TypeIndex getTypeId() const override { return TypeIndex::Object; }
 
