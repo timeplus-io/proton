@@ -162,7 +162,7 @@ template <typename Base>
 class BufferWithOwnMemoryNoTrack : public Base
 {
 protected:
-    Memory<Allocator<false, false, true>> memory;
+    Memory<Allocator<false, false, false>> memory;
 
 public:
     /// If non-nullptr 'existing_memory' is passed, then buffer will not create its own memory and will use existing_memory without ownership.

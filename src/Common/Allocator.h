@@ -84,7 +84,7 @@ namespace ErrorCodes
   * - random hint address for mmap
   * - mmap_threshold for using mmap less or more
   */
-template <bool clear_memory_, bool mmap_populate, bool no_track>
+template <bool clear_memory_, bool mmap_populate, bool track>
 class Allocator
 {
 public:
@@ -92,7 +92,7 @@ public:
     void * alloc(size_t size, size_t alignment = 0)
     {
         checkSize(size);
-        if (likely(!no_track))
+        if constexpr (track)
             CurrentMemoryTracker::alloc(size);
         return allocNoTrack(size, alignment);
     }
@@ -104,7 +104,7 @@ public:
         {
             checkSize(size);
             freeNoTrack(buf, size);
-            if (!no_track)
+            if constexpr (track)
                 CurrentMemoryTracker::free(size);
         }
         catch (...)
