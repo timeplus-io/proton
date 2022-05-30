@@ -1,4 +1,5 @@
-FROM timeplus/proton:prestage
+ARG BASE_TAG
+FROM $BASE_TAG
 
 RUN apt update -y &&\
     apt install software-properties-common -y &&\ 

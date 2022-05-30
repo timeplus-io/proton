@@ -4,11 +4,16 @@ on:
   workflow_dispatch:
     # Inputs the workflow accepts.
     inputs:
-      tag:
+      base_proton_tag:
+        description: "Base Proton Docker Image Tag"
+        default: "timeplus/proton:prestage"
+        required: true
+
+      tag_suffix:
         # Friendly description to be shown in the UI instead of 'name'
-        description: "Proton UDF Docker Image Tag"
+        description: "Proton UDF Docker Image Tag Suffix, e.g. timeplus/proton:proton_version-tag_suffix"
         # Default value if no value is explicitly provided
-        default: "timeplus/proton:udf"
+        default: "udf"
         # Input has to be provided for the workflow to run
         required: true
 
@@ -23,9 +28,21 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: get proton versions
+        run: |
+          docker pull ${{ github.event.inputs.base_proton_tag }}
+          docker run -d --name=proton-server --expose 8463 ${{ github.event.inputs.base_proton_tag }}
+          containers=$(docker ps)
+          echo $containers
+          sleep 10s
+          proton_version=$(docker exec proton-server proton-client -u proton --password 'proton@t+' --query="select version()")
+
+
+
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
           context: ./docker/udf
+          build-args: BASE_TAG=${{ github.event.inputs.base_proton_tag }}
           push: true
-          tags: ${{github.event.inputs.tag}}
+          tags: timeplus/proton:$proton_version-${{ github.event.inputs.tag_suffix }}
