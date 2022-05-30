@@ -35,7 +35,9 @@ jobs:
           containers=$(docker ps)
           echo $containers
           sleep 10s
-          proton_version=$(docker exec proton-server proton-client -u proton --password 'proton@t+' --query="select version()")
+          proton_ver=$(docker exec proton-server proton-client --query="select version()")
+          echo "PROTON_VER=$proton_ver" >> $GITHUB_ENV
+          
 
 
 
@@ -45,4 +47,6 @@ jobs:
           context: ./docker/udf
           build-args: BASE_TAG=${{ github.event.inputs.base_proton_tag }}
           push: true
-          tags: timeplus/proton:$proton_version-${{ github.event.inputs.tag_suffix }}
+
+          tags: timeplus/proton:${{ env.PROTON_VER }}-${{ github.event.inputs.tag_suffix }}
+
