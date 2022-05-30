@@ -30,26 +30,9 @@ void ExecutionThreadContext::wakeUp()
     condvar.notify_one();
 }
 
-static bool checkCanAddAdditionalInfoToException(const DB::Exception & exception)
-{
-    /// Don't add additional info to limits and quota exceptions, and in case of kill query (to pass tests).
-    return exception.code() != ErrorCodes::TOO_MANY_ROWS_OR_BYTES
-           && exception.code() != ErrorCodes::QUOTA_EXPIRED
-           && exception.code() != ErrorCodes::QUERY_WAS_CANCELLED;
-}
-
 static void executeJob(IProcessor * processor)
 {
-    try
-    {
         processor->work();
-    }
-    catch (Exception & exception)
-    {
-        if (checkCanAddAdditionalInfoToException(exception))
-            exception.addMessage("While executing " + processor->getName());
-        throw;
-    }
 }
 
 bool ExecutionThreadContext::executeTask()
