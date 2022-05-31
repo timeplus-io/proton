@@ -13,6 +13,7 @@ void registerFileSegmentationEngineCSV(FormatFactory & factory);
 void registerFileSegmentationEngineJSONEachRow(FormatFactory & factory);
 void registerFileSegmentationEngineRegexp(FormatFactory & factory);
 void registerFileSegmentationEngineJSONAsString(FormatFactory & factory);
+void registerFileSegmentationEngineJSONAsObject(FormatFactory & factory);
 void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory);
 
 /// proton: starts
@@ -38,6 +39,10 @@ void registerInputFormatJSONEachRow(FormatFactory & factory);
 void registerOutputFormatJSONEachRow(FormatFactory & factory);
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory);
 void registerOutputFormatJSONCompactEachRow(FormatFactory & factory);
+void registerInputFormatJSONColumns(FormatFactory & factory);
+void registerOutputFormatJSONColumns(FormatFactory & factory);
+void registerInputFormatJSONCompactColumns(FormatFactory & factory);
+void registerOutputFormatJSONCompactColumns(FormatFactory & factory);
 void registerInputFormatProtobuf(FormatFactory & factory);
 void registerOutputFormatProtobuf(FormatFactory & factory);
 void registerInputFormatTemplate(FormatFactory & factory);
@@ -66,6 +71,7 @@ void registerOutputFormatVertical(FormatFactory & factory);
 void registerOutputFormatJSON(FormatFactory & factory);
 void registerOutputFormatJSONCompact(FormatFactory & factory);
 void registerOutputFormatJSONEachRowWithProgress(FormatFactory & factory);
+void registerOutputFormatJSONColumnsWithMetadata(FormatFactory & factory);
 void registerOutputFormatXML(FormatFactory & factory);
 void registerOutputFormatODBCDriver2(FormatFactory & factory);
 void registerOutputFormatNull(FormatFactory & factory);
@@ -102,12 +108,14 @@ void registerTSVSchemaReader(FormatFactory & factory);
 void registerCSVSchemaReader(FormatFactory & factory);
 void registerJSONCompactEachRowSchemaReader(FormatFactory & factory);
 void registerJSONEachRowSchemaReader(FormatFactory & factory);
+void registerJSONAsStringSchemaReader(FormatFactory & factory);
+void registerJSONColumnsSchemaReader(FormatFactory & factory);
+void registerJSONCompactColumnsSchemaReader(FormatFactory & factory);
 void registerNativeSchemaReader(FormatFactory & factory);
 void registerRowBinaryWithNamesAndTypesSchemaReader(FormatFactory & factory);
 void registerAvroSchemaReader(FormatFactory & factory);
 void registerProtobufSchemaReader(FormatFactory & factory);
 void registerLineAsStringSchemaReader(FormatFactory & factory);
-void registerJSONAsStringSchemaReader(FormatFactory & factory);
 void registerRawBLOBSchemaReader(FormatFactory & factory);
 void registerMsgPackSchemaReader(FormatFactory & factory);
 void registerCapnProtoSchemaReader(FormatFactory & factory);
@@ -125,9 +133,10 @@ void registerFormats()
 
     registerFileSegmentationEngineTabSeparated(factory);
     registerFileSegmentationEngineCSV(factory);
-    registerFileSegmentationEngineJSONEachRow(factory);
     registerFileSegmentationEngineRegexp(factory);
+    registerFileSegmentationEngineJSONEachRow(factory);
     registerFileSegmentationEngineJSONAsString(factory);
+    registerFileSegmentationEngineJSONAsObject(factory);
     registerFileSegmentationEngineJSONCompactEachRow(factory);
 
     /// proton: starts
@@ -151,6 +160,10 @@ void registerFormats()
     registerOutputFormatJSONEachRow(factory);
     registerInputFormatJSONCompactEachRow(factory);
     registerOutputFormatJSONCompactEachRow(factory);
+    registerInputFormatJSONColumns(factory);
+    registerOutputFormatJSONColumns(factory);
+    registerInputFormatJSONCompactColumns(factory);
+    registerOutputFormatJSONCompactColumns(factory);
     registerInputFormatProtobuf(factory);
     registerOutputFormatProtobuf(factory);
     registerInputFormatTemplate(factory);
@@ -178,6 +191,7 @@ void registerFormats()
     registerOutputFormatJSON(factory);
     registerOutputFormatJSONCompact(factory);
     registerOutputFormatJSONEachRowWithProgress(factory);
+    registerOutputFormatJSONColumnsWithMetadata(factory);
     registerOutputFormatXML(factory);
     registerOutputFormatODBCDriver2(factory);
 
@@ -192,8 +206,8 @@ void registerFormats()
 
     registerInputFormatRegexp(factory);
     registerInputFormatJSONAsString(factory);
-    registerInputFormatLineAsString(factory);
     registerInputFormatJSONAsObject(factory);
+    registerInputFormatLineAsString(factory);
 #if USE_HIVE
     registerInputFormatHiveText(factory);
 #endif
@@ -211,12 +225,14 @@ void registerFormats()
     registerCSVSchemaReader(factory);
     registerJSONCompactEachRowSchemaReader(factory);
     registerJSONEachRowSchemaReader(factory);
+    registerJSONAsStringSchemaReader(factory);
+    registerJSONColumnsSchemaReader(factory);
+    registerJSONCompactColumnsSchemaReader(factory);
     registerNativeSchemaReader(factory);
     registerRowBinaryWithNamesAndTypesSchemaReader(factory);
     registerAvroSchemaReader(factory);
     registerProtobufSchemaReader(factory);
     registerLineAsStringSchemaReader(factory);
-    registerJSONAsStringSchemaReader(factory);
     registerRawBLOBSchemaReader(factory);
     registerMsgPackSchemaReader(factory);
     registerCapnProtoSchemaReader(factory);

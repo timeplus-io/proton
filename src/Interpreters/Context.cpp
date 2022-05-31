@@ -80,6 +80,7 @@
 #include <Core/SettingsUtil.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <base/getFQDNOrHostName.h>
+#include <Common/ProtonCommon.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -1515,7 +1516,15 @@ void Context::loadOrReloadDictionaries(const Poco::Util::AbstractConfiguration &
 void Context::loadOrReloadUserDefinedExecutableFunctions(const Poco::Util::AbstractConfiguration & config)
 {
     auto patterns_values = getMultipleValuesFromConfig(config, "", "user_defined_executable_functions_config");
-    std::unordered_set<std::string> patterns(patterns_values.begin(), patterns_values.end());
+    /// proton: starts
+    std::unordered_set<std::string> patterns;
+    if (!patterns_values.empty())
+        patterns.insert(patterns_values.begin(), patterns_values.end());
+    else
+    {
+        patterns.insert(std::filesystem::path(shared->user_scripts_path) / ProtonConsts::UDF_XML_PATTERN);
+    }
+    /// proton: ends
 
     std::lock_guard lock(shared->external_user_defined_executable_functions_mutex);
 

@@ -13,11 +13,9 @@ namespace ErrorCodes
 IRowOutputFormat::IRowOutputFormat(const Block & header, WriteBuffer & out_, const Params & params_)
     : IOutputFormat(header, out_)
     , types(header.getDataTypes())
+    , serializations(header.getSerializations())
     , params(params_)
 {
-    serializations.reserve(types.size());
-    for (const auto & type : types)
-        serializations.push_back(type->getDefaultSerialization());
 }
 
 void IRowOutputFormat::consume(DB::Chunk chunk)

@@ -55,7 +55,9 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
     if (AggregateFunctionFactory::instance().hasNameOrAlias(name))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The aggregate function '{}' already exists", name);
 
-    String type = config.getString(key_in_config + ".type");
+    /// proton: starts
+    String type = config.getString(key_in_config + ".type", "executable_pool");
+    /// proton: ends
 
     bool is_executable_pool = false;
 
@@ -81,7 +83,9 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         command_arguments.erase(command_arguments.begin());
     }
 
-    String format = config.getString(key_in_config + ".format");
+    /// proton: starts
+    String format = config.getString(key_in_config + ".format", "ArrowStream");
+    /// proton: ends
     DataTypePtr result_type = DataTypeFactory::instance().get(config.getString(key_in_config + ".return_type"));
     bool send_chunk_header = config.getBool(key_in_config + ".send_chunk_header", false);
     size_t command_termination_timeout_seconds = config.getUInt64(key_in_config + ".command_termination_timeout", 10);
@@ -93,7 +97,9 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
 
     if (is_executable_pool)
     {
-        pool_size = config.getUInt64(key_in_config + ".pool_size", 16);
+        /// proton: starts
+        pool_size = config.getUInt64(key_in_config + ".pool_size", 1);
+        /// proton: ends
         max_command_execution_time = config.getUInt64(key_in_config + ".max_command_execution_time", 10);
 
         size_t max_execution_time_seconds = static_cast<size_t>(getContext()->getSettings().max_execution_time.totalSeconds());

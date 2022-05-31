@@ -50,5 +50,8 @@ const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeo
 
 /// JSON VALUES PREFIX for OptimizeJsonValueVisitor
 const String JSON_VALUES_PREFIX = "__json_values_";
+
+/// PREFIX of UDF config files
+const String UDF_XML_PATTERN = "*_function.xml";
 }
 }

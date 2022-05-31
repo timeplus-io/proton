@@ -4,7 +4,7 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <Formats/FormatFactory.h>
-#include <Formats/JSONEachRowUtils.h>
+#include <Formats/JSONUtils.h>
 #include <Processors/Formats/Impl/RawStoreInputFormat.h>
 #include <Common/ProtonCommon.h>
 
@@ -508,7 +508,7 @@ void registerInputFormatProcessorRawStoreEachRow(FormatFactory & factory)
 
 void registerFileSegmentationEngineRawStoreEachRow(FormatFactory & factory)
 {
-    factory.registerFileSegmentationEngine("RawStoreEachRow", &fileSegmentationEngineJSONEachRow);
+    factory.registerFileSegmentationEngine("RawStoreEachRow", &JSONUtils::fileSegmentationEngineJSONEachRow);
 }
 
 }

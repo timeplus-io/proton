@@ -1396,9 +1396,9 @@ struct PcgDeserializer
     }
 };
 
-void readQuotedFieldIntoString(String & s, ReadBuffer & buf);
+void readQuotedField(String & s, ReadBuffer & buf);
 
-void readJSONFieldIntoString(String & s, ReadBuffer & buf);
+void readJSONField(String & s, ReadBuffer & buf);
 
 }
 

@@ -319,6 +319,7 @@ namespace
             if (command_is_invalid)
                 command = nullptr;
 
+
             if (command_holder && process_pool)
             {
                 bool valid_command = configuration.read_fixed_number_of_rows && current_read_rows >= configuration.number_of_rows_to_read;
@@ -458,6 +459,19 @@ ShellCommandSourceCoordinator::ShellCommandSourceCoordinator(const Configuration
         process_pool = std::make_shared<ProcessPool>(configuration.pool_size ? configuration.pool_size : std::numeric_limits<size_t>::max());
 }
 
+/// proton: starts
+void ShellCommandSourceCoordinator::stopProcessPool()
+{
+    if(!configuration.is_executable_pool)
+        return;
+
+    if (process_pool->borrowedObjectsSize()>0 || process_pool->allocatedObjectsSize() == 0)
+        return;
+
+    process_pool->clearUp();
+}
+/// proton: ends
+
 Pipe ShellCommandSourceCoordinator::createPipe(
     const std::string & command,
     const std::vector<std::string> & arguments,
@@ -516,7 +530,6 @@ Pipe ShellCommandSourceCoordinator::createPipe(
 
     std::vector<ShellCommandSource::SendDataTask> tasks;
     tasks.reserve(input_pipes.size());
-
     for (size_t i = 0; i < input_pipes.size(); ++i)
     {
         WriteBufferFromFile * write_buffer = nullptr;

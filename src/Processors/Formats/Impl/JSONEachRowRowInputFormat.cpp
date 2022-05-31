@@ -2,7 +2,7 @@
 #include <IO/ReadBufferFromString.h>
 
 #include <Processors/Formats/Impl/JSONEachRowRowInputFormat.h>
-#include <Formats/JSONEachRowUtils.h>
+#include <Formats/JSONUtils.h>
 #include <Formats/FormatFactory.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
@@ -57,8 +57,6 @@ JSONEachRowRowInputFormat::JSONEachRowRowInputFormat(
                 table_name_size += split.first.size();
                 StringRef table_name(column_name.data(), table_name_size);
                 name_map[table_name] = NESTED_FIELD;
-                split = Nested::splitName(split.second);
-            /// proton: ends.
             }
         }
     }
@@ -149,7 +147,7 @@ void JSONEachRowRowInputFormat::readField(size_t index, MutableColumns & columns
     seen_columns[index] = true;
     const auto & type = getPort().getHeader().getByPosition(index).type;
     const auto & serialization = serializations[index];
-    read_columns[index] = readFieldImpl(*in, *columns[index], type, serialization, columnName(index), format_settings, yield_strings);
+    read_columns[index] = JSONUtils::readField(*in, *columns[index], type, serialization, columnName(index), format_settings, yield_strings);
 }
 
 inline bool JSONEachRowRowInputFormat::advanceToNextKey(size_t key_index)
@@ -321,7 +319,7 @@ JSONEachRowSchemaReader::JSONEachRowSchemaReader(ReadBuffer & in_, bool json_str
 }
 
 
-std::unordered_map<String, DataTypePtr> JSONEachRowSchemaReader::readRowAndGetNamesAndDataTypes()
+NamesAndTypesList JSONEachRowSchemaReader::readRowAndGetNamesAndDataTypes(bool & eof)
 {
     if (first_row)
     {
@@ -348,9 +346,12 @@ std::unordered_map<String, DataTypePtr> JSONEachRowSchemaReader::readRowAndGetNa
 
     skipWhitespaceIfAny(in);
     if (in.eof())
+    {
+        eof = true;
         return {};
+    }
 
-    return readRowAndGetNamesAndDataTypesForJSONEachRow(in, json_strings);
+    return JSONUtils::readRowAndGetNamesAndDataTypesForJSONEachRow(in, json_strings);
 }
 
 void registerInputFormatJSONEachRow(FormatFactory & factory)
@@ -378,14 +379,14 @@ void registerInputFormatJSONEachRow(FormatFactory & factory)
 
 void registerFileSegmentationEngineJSONEachRow(FormatFactory & factory)
 {
-    factory.registerFileSegmentationEngine("JSONEachRow", &fileSegmentationEngineJSONEachRow);
-    factory.registerFileSegmentationEngine("JSONStringsEachRow", &fileSegmentationEngineJSONEachRow);
+    factory.registerFileSegmentationEngine("JSONEachRow", &JSONUtils::fileSegmentationEngineJSONEachRow);
+    factory.registerFileSegmentationEngine("JSONStringsEachRow", &JSONUtils::fileSegmentationEngineJSONEachRow);
 }
 
 void registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(FormatFactory & factory)
 {
-    factory.registerNonTrivialPrefixAndSuffixChecker("JSONEachRow", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
-    factory.registerNonTrivialPrefixAndSuffixChecker("JSONStringsEachRow", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+    factory.registerNonTrivialPrefixAndSuffixChecker("JSONEachRow", JSONUtils::nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+    factory.registerNonTrivialPrefixAndSuffixChecker("JSONStringsEachRow", JSONUtils::nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
 }
 
 void registerJSONEachRowSchemaReader(FormatFactory & factory)

@@ -72,5 +72,4 @@ public:
         return {{"json", std::make_shared<DataTypeString>()}};
     }
 };
-
 }

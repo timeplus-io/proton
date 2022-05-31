@@ -44,7 +44,6 @@ void ArrowBlockOutputFormat::consume(Chunk chunk)
 
     // TODO: calculate row_group_size depending on a number of rows and table size
     auto status = writer->WriteTable(*arrow_table, format_settings.arrow.row_group_size);
-
     if (!status.ok())
         throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
             "Error while writing a table: {}", status.ToString());

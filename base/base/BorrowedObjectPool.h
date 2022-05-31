@@ -104,6 +104,20 @@ public:
         return max_size;
     }
 
+    /// proton: starts
+    void clearUp()
+    {
+        std::unique_lock<std::mutex> lock(objects_mutex);
+        allocated_objects_size = 0;
+        borrowed_objects_size = 0;
+
+        while(!objects.empty())
+        {
+            objects.pop_back();
+        }
+    }
+    /// proton: ends
+
     /// Allocated objects size by the pool. If allocatedObjectsSize == maxSize then pool is full.
     inline size_t allocatedObjectsSize() const
     {

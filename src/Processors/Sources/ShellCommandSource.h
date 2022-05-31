@@ -114,6 +114,10 @@ public:
         return createPipe(command, {}, {}, std::move(sample_block), std::move(context), {});
     }
 
+    /// proton: starts
+    void stopProcessPool();
+    /// proton: ends
+
 private:
 
     Configuration configuration;

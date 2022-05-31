@@ -88,6 +88,7 @@ public:
 
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
     NamesAndTypesList getNamesAndTypesList() const;
+    NamesAndTypes getNamesAndTypes() const;
     Names getNames() const;
     DataTypes getDataTypes() const;
     Names getDataTypeNames() const;
@@ -149,6 +150,9 @@ public:
       *  with same structure, but different data.
       */
     void updateHash(SipHash & hash) const;
+
+    std::unordered_map<String, size_t> getNamesToIndexesMap() const;
+    Serializations getSerializations() const;
 
     /// proton: starts
     void reserve(size_t count);

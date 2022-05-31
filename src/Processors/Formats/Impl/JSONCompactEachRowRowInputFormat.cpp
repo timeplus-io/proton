@@ -5,7 +5,7 @@
 #include <IO/Operators.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/verbosePrintString.h>
-#include <Formats/JSONEachRowUtils.h>
+#include <Formats/JSONUtils.h>
 #include <Formats/registerWithNamesAndTypes.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
@@ -127,7 +127,7 @@ std::vector<String> JSONCompactEachRowFormatReader::readHeaderRow()
 bool JSONCompactEachRowFormatReader::readField(IColumn & column, const DataTypePtr & type, const SerializationPtr & serialization, bool /*is_last_file_column*/, const String & column_name)
 {
     skipWhitespaceIfAny(*in);
-    return readFieldImpl(*in, column, type, serialization, column_name, format_settings, yield_strings);
+    return JSONUtils::readField(*in, column, type, serialization, column_name, format_settings, yield_strings);
 }
 
 bool JSONCompactEachRowFormatReader::parseRowStartWithDiagnosticInfo(WriteBuffer & out)
@@ -220,7 +220,7 @@ DataTypes JSONCompactEachRowRowSchemaReader::readRowAndGetDataTypes()
     if (in.eof())
         return {};
 
-    return readRowAndGetDataTypesForJSONCompactEachRow(in, reader.yieldStrings());
+    return JSONUtils::readRowAndGetDataTypesForJSONCompactEachRow(in, reader.yieldStrings());
 }
 
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
@@ -269,7 +269,7 @@ void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory)
         size_t min_rows = 1 + int(with_names) + int(with_types);
         factory.registerFileSegmentationEngine(format_name, [min_rows](ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size)
         {
-            return fileSegmentationEngineJSONCompactEachRow(in, memory, min_chunk_size, min_rows);
+            return JSONUtils::fileSegmentationEngineJSONCompactEachRow(in, memory, min_chunk_size, min_rows);
         });
     };
 

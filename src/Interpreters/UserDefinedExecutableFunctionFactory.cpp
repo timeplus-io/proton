@@ -38,6 +38,14 @@ public:
     {
     }
 
+    ~UserDefinedFunction() override
+    {
+        /// proton: starts
+        /// query ends, stop all udf processes in process pool
+        executable_function->getCoordinator()->stopProcessPool();
+        /// proton: ends
+    }
+
     String getName() const override { return executable_function->getConfiguration().name; }
 
     bool isVariadic() const override { return false; }

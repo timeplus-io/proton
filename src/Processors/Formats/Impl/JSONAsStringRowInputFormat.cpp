@@ -1,5 +1,5 @@
 #include <Processors/Formats/Impl/JSONAsStringRowInputFormat.h>
-#include <Formats/JSONEachRowUtils.h>
+#include <Formats/JSONUtils.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <base/find_symbols.h>
@@ -54,6 +54,7 @@ void JSONAsRowInputFormat::readSuffix()
     {
         assertChar(']', *buf);
         skipWhitespaceIfAny(*buf);
+        data_in_square_brackets = false;
     }
     if (!buf->eof() && *buf->position() == ';')
     {
@@ -222,12 +223,20 @@ void registerInputFormatJSONAsString(FormatFactory & factory)
 
 void registerFileSegmentationEngineJSONAsString(FormatFactory & factory)
 {
-    factory.registerFileSegmentationEngine("JSONAsString", &fileSegmentationEngineJSONEachRow);
+    factory.registerFileSegmentationEngine("JSONAsString", &JSONUtils::fileSegmentationEngineJSONEachRow);
 }
 
 void registerNonTrivialPrefixAndSuffixCheckerJSONAsString(FormatFactory & factory)
 {
-    factory.registerNonTrivialPrefixAndSuffixChecker("JSONAsString", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+    factory.registerNonTrivialPrefixAndSuffixChecker("JSONAsString", JSONUtils::nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+}
+
+void registerJSONAsStringSchemaReader(FormatFactory & factory)
+{
+    factory.registerExternalSchemaReader("JSONAsString", [](const FormatSettings &)
+    {
+        return std::make_shared<JSONAsStringExternalSchemaReader>();
+    });
 }
 
 void registerInputFormatJSONAsObject(FormatFactory & factory)
@@ -244,15 +253,12 @@ void registerInputFormatJSONAsObject(FormatFactory & factory)
 
 void registerNonTrivialPrefixAndSuffixCheckerJSONAsObject(FormatFactory & factory)
 {
-    factory.registerNonTrivialPrefixAndSuffixChecker("JSONAsObject", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+    factory.registerNonTrivialPrefixAndSuffixChecker("JSONAsObject", JSONUtils::nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
 }
 
-void registerJSONAsStringSchemaReader(FormatFactory & factory)
+void registerFileSegmentationEngineJSONAsObject(FormatFactory & factory)
 {
-    factory.registerExternalSchemaReader("JSONAsString", [](const FormatSettings &)
-    {
-        return std::make_shared<JSONAsStringExternalSchemaReader>();
-    });
+    factory.registerFileSegmentationEngine("JSONAsObject", &JSONUtils::fileSegmentationEngineJSONEachRow);
 }
 
 }
