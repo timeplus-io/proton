@@ -20,6 +20,8 @@ services:
       - STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS=50 # Control producer latency
       - STREAM_STORAGE_FETCH_WAIT_MAX_MS=500 # Control consumer latency
       - STREAM_STORAGE_TYPE=kafka # log type
+      - STREAM_STORAGE_CLUSTER_ID=default-sys-kafka-cluster-id
+      - STREAM_STORAGE_SECURITY_PROTOCOL=PLAINTEXT
       - ENABLE_LOG_STREAM=true # log stream
     command: >
       /bin/bash -c "sleep 2; /entrypoint.sh"

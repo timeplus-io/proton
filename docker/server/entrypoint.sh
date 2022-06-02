@@ -259,6 +259,38 @@ if [ "$STREAM_STORAGE_TYPE" = "kafka" ]; then
         echo >&2 'Failed to disable native log.'
         exit 1
     fi
+
+    if [ -n "$STREAM_STORAGE_SECURITY_PROTOCOL" ]; then
+        sed -i"" "s/security_protocol: PLAINTEXT/security_protocol: $STREAM_STORAGE_SECURITY_PROTOCOL/g" "$PROTON_CONFIG"
+        if [[ $? -ne 0 ]]; then
+            echo >&2 'Failed to set kafka security protocol.'
+            exit 1
+        fi
+
+        if [ -n "$STREAM_STORAGE_USERNAME" ]; then
+            sed -i"" "s/# username:/username: $STREAM_STORAGE_USERNAME/g" "$PROTON_CONFIG"
+            if [[ $? -ne 0 ]]; then
+                echo >&2 'Failed to set kafka username.'
+                exit 1
+            fi
+        fi
+
+        if [ -n "$STREAM_STORAGE_PASSWORD" ]; then
+            sed -i"" "s/# password:/password: $STREAM_STORAGE_PASSWORD/g" "$PROTON_CONFIG"
+            if [[ $? -ne 0 ]]; then
+                echo >&2 'Failed to set kafka password.'
+                exit 1
+            fi
+        fi
+    fi
+
+    if [ -n "$STREAM_STORAGE_CLUSTER_ID" ]; then
+        sed -i"" "s/cluster_id: default-sys-kafka-cluster-id/cluster_id: $STREAM_STORAGE_CLUSTER_ID/g" "$PROTON_CONFIG"
+        if [[ $? -ne 0 ]]; then
+            echo >&2 'Failed to set kafka cluster id.'
+            exit 1
+        fi
+    fi
 elif [ "$STREAM_STORAGE_TYPE" = "nativelog" ]; then
     sed -i"" "/kafka:/{n;s/enabled: true/enabled: false/g}" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
