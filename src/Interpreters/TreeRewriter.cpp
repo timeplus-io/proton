@@ -46,11 +46,6 @@
 /// proton: starts.
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Streaming/OptimizeJsonValueVisitor.h>
-#include <Storages/ExternalStream/StorageExternalStream.h>
-#include <Storages/StorageView.h>
-#include <Storages/Streaming/ProxyStream.h>
-#include <Storages/Streaming/StorageStream.h>
-#include <Storages/Streaming/StorageMaterializedView.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends.
 
@@ -1163,38 +1158,6 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     {
         source_column_names.insert(column.name);
     }
-
-    /// proton: starts
-    /// As required_source_columns are collected from storage, if it is not empty, then we can simple determine the query type (stream or
-    /// not) by storage's type. Only one exception is that the storage is nullptr. In this case, the storage must be a subquery, only
-    /// the calling interpreter knows whether or not it is a streaming query. therefore InterpreterSelectQuery::isStreaming() is more accurate.
-    streaming = false;
-    if (storage && !required_source_columns.empty())
-    {
-        if (const auto * proxy = storage->as<ProxyStream>())
-        {
-            if (proxy->isStreaming())
-                streaming = true;
-        }
-        else if (storage->as<StorageView>())
-        {
-            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
-            InterpreterSelectWithUnionQuery interpreter_subquery(select, context, SelectQueryOptions().analyze());
-            streaming = interpreter_subquery.isStreaming();
-        }
-        else if (storage->as<StorageStream>())
-            streaming = true;
-        else if (storage->as<StorageMaterializedView>())
-            streaming = true;
-        else if (storage->as<StorageExternalStream>())
-            streaming = true;
-    }
-
-    /// force table mode
-    if (context->getSettingsRef().query_mode.value == "table")
-        streaming = false;
-
-    /// proton: ends
 }
 
 NameSet TreeRewriterResult::getArrayJoinSourceNameSet() const

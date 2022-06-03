@@ -297,7 +297,7 @@ void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_que
 /// Add `_tp_time >= now64(3, 'UTC') to WHERE clause
 void StreamingEmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery & select_query) const
 {
-    auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(3), std::make_shared<ASTLiteral>("UTC"));
+    auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(UInt64(3)), std::make_shared<ASTLiteral>("UTC"));
     auto minus = makeASTFunction("minus", now, last_interval);
     auto greater = makeASTFunction("greater_or_equals", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME), minus);
 

@@ -94,8 +94,11 @@
 #include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
+#include <Storages/Streaming/StorageMaterializedView.h>
 #include <Storages/Streaming/StorageStream.h>
+#include <Storages/Streaming/storageUtil.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -175,6 +178,24 @@ namespace
         {"now", "__streaming_now"},
     };
     using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
+
+    /// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
+    void addEventTimeFilter(ASTSelectQuery & select, Int64 utc_ms)
+    {
+        auto where_ast = makeASTFunction(
+            "greater_or_equals",
+            std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME),
+            makeASTFunction(
+                "to_datetime64",
+                makeASTFunction("divide", std::make_shared<ASTLiteral>(utc_ms), std::make_shared<ASTLiteral>(1000)),
+                std::make_shared<ASTLiteral>(UInt64(3)),
+                std::make_shared<ASTLiteral>("UTC")));
+
+        if (select.where())
+            select.refWhere() = makeASTFunction("and", where_ast, select.where()->clone());
+        else
+            select.setExpression(ASTSelectQuery::Expression::WHERE, where_ast);
+    }
 }
 /// proton: ends.
 
@@ -486,6 +507,14 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         }
     }
 
+    /// proton: starts.
+    analyzeStreamingMode();
+
+    /// Support snapshot query with seek_to, handling with streaming query before `TreeRewriter::analyzeSelect`
+    if (!isStreaming() && storage && supportStreamingQuery(storage))
+        handleSnapshotSeekTo();
+    /// proton: ends.
+
     joined_tables.rewriteDistributedInAndJoins(query_ptr);
 
     max_streams = settings.max_threads;
@@ -509,10 +538,18 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (view)
             view->replaceWithSubquery(getSelectQuery(), view_table, metadata_snapshot);
 
+        /// proton: starts.
+        TreeRewriterResult tree_rewriter_result(source_header.getNamesAndTypesList(), storage, storage_snapshot);
+        tree_rewriter_result.streaming = isStreaming();
+
         syntax_analyzer_result = TreeRewriter(context).analyzeSelect(
             query_ptr,
-            TreeRewriterResult(source_header.getNamesAndTypesList(), storage, storage_snapshot),
-            options, joined_tables.tablesWithColumns(), required_result_column_names, table_join);
+            std::move(tree_rewriter_result),
+            options,
+            joined_tables.tablesWithColumns(),
+            required_result_column_names,
+            table_join);
+        /// proton: ends
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
         context->setDistributed(syntax_analyzer_result->is_remote_storage);
@@ -2984,21 +3021,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
 bool InterpreterSelectQuery::isStreaming() const
 {
-    if (context->getSettingsRef().query_mode.value == "table")
-        return false;
-
-    if (query_info.syntax_analyzer_result->streaming)
-        return true;
-
-    if (interpreter_subquery)
-    {
-        /// We like to fix syntax_analyzer_result
-        auto res = interpreter_subquery->isStreaming();
-        const_cast<TreeRewriterResult*>(query_info.syntax_analyzer_result.get())->streaming = res;
-        return res;
-    }
-    else
-        return false;
+    assert(is_streaming.has_value());
+    return *is_streaming;
 }
 
 bool InterpreterSelectQuery::hasStreamingWindowFunc() const
@@ -3176,6 +3200,61 @@ void InterpreterSelectQuery::handleEmitVersion()
 
         emit_version = true;
     }
+}
+
+void InterpreterSelectQuery::handleSnapshotSeekTo()
+{
+    /// For snapshot query, if seek_to is empty, we use 'earliest' by default.
+    auto seek_to = context->getSettingsRef().seek_to.value;
+    auto utc_ms = parseSeekTo((seek_to.empty() ? "earliest" : seek_to), true);
+    if (utc_ms == nlog::EARLIEST_SN)
+    {
+        /// Do nothing for earliest
+    }
+    else if (utc_ms == nlog::LATEST_SN)
+    {
+        /// Filter by now() for latest
+        addEventTimeFilter(getSelectQuery(), UTCMilliseconds::now());
+    }
+    else
+    {
+        /// Filter by the specified timestamp
+        addEventTimeFilter(getSelectQuery(), utc_ms);
+    }
+}
+
+void InterpreterSelectQuery::analyzeStreamingMode()
+{
+    /// We can simple determine the query type (stream or not) by the type of storage or subquery.
+    /// Although `TreeRewriter` optimization may rewrite the subquery, it does not affect whether it is streaming
+    bool streaming = false;
+    if (context->getSettingsRef().query_mode.value == "table")
+    {
+        streaming = false; /// force table mode
+    }
+    else if (storage)
+    {
+        if (const auto * proxy = storage->as<ProxyStream>())
+        {
+            if (proxy->isStreaming())
+                streaming = true;
+        }
+        else if (storage->as<StorageView>())
+        {
+            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+            streaming = InterpreterSelectWithUnionQuery(select, context, SelectQueryOptions().analyze()).isStreaming();
+        }
+        else if (storage->as<StorageStream>())
+            streaming = true;
+        else if (storage->as<StorageMaterializedView>())
+            streaming = true;
+        else if (storage->as<StorageExternalStream>())
+            streaming = true;
+    }
+    else if (interpreter_subquery)
+        streaming = interpreter_subquery->isStreaming();
+
+    is_streaming = streaming;
 }
 
 ColumnsDescriptionPtr InterpreterSelectQuery::getExtendedObjects() const

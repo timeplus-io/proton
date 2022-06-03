@@ -708,7 +708,7 @@ class IColumn;
     M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in streaming view", 0) \
     M(UInt64, max_streaming_view_cached_block_bytes, 100 * 1024 * 1024, "Maximum bytes of block cached in streaming view", 0) \
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
-    M(String, seek_to, "latest", "Seeking to an offset of the streaming store to seek when a streaming query is initiated", 0) \
+    M(String, seek_to, "", "Seeking to an offset of the streaming/historical store to seek", 0) \
     M(Bool, enable_backfill_from_historical_store, false, "Enable backfill data from historical data store", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
 // End of GLOBAL_SETTINGS

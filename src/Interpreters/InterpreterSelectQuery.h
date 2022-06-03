@@ -179,6 +179,8 @@ private:
     bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
     void handleEmitVersion();
+    void handleSnapshotSeekTo();
+    void analyzeStreamingMode(); /// analyze whether it is streaming query
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     /// proton: ends
@@ -222,6 +224,7 @@ private:
     bool last_tail = false;
     BaseScaleInterval last_interval_bs;
     bool emit_version = false;
+    std::optional<bool> is_streaming;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

@@ -132,7 +132,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample", "native_not_support","snapshot seek to"]}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample", "native_not_support"]}
     },
 
     "tests": [
@@ -1850,7 +1850,7 @@
 
             "expected_results": [{"query_id":"101", "expected_results":
                 [["dev3", 3, "2021-11-02 20:00:10"],
-                ["dev8", 4, "2021-11-02 20:00:10"],
+                ["dev8", 2, "2021-11-02 20:00:10"],
                 ["dev4", 2, "2021-11-02 20:00:10"],
                 ["dev8", 1, "2021-11-02 20:00:15"]
                 ]}]
