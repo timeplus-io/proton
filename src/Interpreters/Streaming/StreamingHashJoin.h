@@ -155,6 +155,8 @@ public:
 
     struct StreamData
     {
+        explicit StreamData(StreamingHashJoin * join_) : join(join_) { }
+
         StreamData(const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_, StreamingHashJoin * join_)
             : range_asof_join_ctx(range_asof_join_ctx_), asof_col_name(asof_column_name_), join(join_)
         {
@@ -330,7 +332,7 @@ public:
         Int64 bucket_size = 0;
         Int64 join_start_bucket = 0;
         Int64 join_stop_bucket = 0;
-        const String & asof_col_name;
+        String asof_col_name;
         Int64 asof_col_pos = -1;
         BlockRangeSplitterPtr range_splitter;
         std::atomic_int64_t current_watermark = 0;
@@ -363,7 +365,6 @@ public:
         using StreamData::StreamData;
 
         Type type = Type::EMPTY;
-        bool empty = true;
 
         Block sample_block; /// Block as it would appear in the BlockList
 
@@ -405,6 +406,12 @@ public:
         size_t removeOldData() { return removeOldBuckets(hashed_blocks, "right"); }
 
         std::map<Int64, std::shared_ptr<RightTableBlocks>> hashed_blocks;
+
+        /// `current_join_blocks` serves 3 purposes
+        /// 1) During query plan phase, we will need it to evaulate the header
+        /// 2) Workaround the `joinBlock` API interface for range join, it points the working right blocks in the time bucket
+        /// 3) For all join, it points the global blocks since there is no time bucket in this case
+        std::shared_ptr<RightTableBlocks> current_join_blocks;
     };
 
     using RightTableDataPtr = std::shared_ptr<RightTableData>;
@@ -414,13 +421,17 @@ public:
     {
         using StreamData::StreamData;
 
-        void insertBlock(Block block);
+        void insertBlock(Block && block);
+
+        void insertBlockToTimeBucket(Block && block);
 
         size_t removeOldData() { return removeOldBuckets(blocks, "left"); }
 
         struct LeftTableBlocks : public StreamBlocks
         {
-            LeftTableBlocks(Block block, StreamData * stream_data_) : StreamBlocks(stream_data_)
+            explicit LeftTableBlocks(StreamData * stream_data_) : StreamBlocks(stream_data_), new_data_iter(blocks.end()) { }
+
+            LeftTableBlocks(Block && block, StreamData * stream_data_) : StreamBlocks(stream_data_)
             {
                 blocks.push_back(std::move(block));
                 new_data_iter = blocks.begin();
@@ -457,10 +468,14 @@ public:
 
         UInt64 block_id = 0;
         std::map<Int64, LeftTableBlocksPtr> blocks;
+
+        /// `current_join_blocks serves 2 different purpose
+        /// 1) Workaround the `joinBlock` interface. For range join, it points to the current working blocks in the time bucket
+        /// 2) For all join, it points to the global working blocks since there is not time bucket in this case
+        LeftTableBlocksPtr current_join_blocks;
     };
 
     using LeftTableDataPtr = std::shared_ptr<LeftTableData>;
-    JoinTupleMap * current_join_map = nullptr;
     /// proton : ends
 
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
@@ -493,14 +508,15 @@ private:
 
     void initHashMaps(std::vector<MapsVariant> & all_maps);
 
-    bool doAddJoinedBlock(Int64 bucket, Block block, bool check_limits);
-
     /// When left stream joins right stream, watermark calculation is more complicated.
     /// Firstly, each stream has its own watermark and progresses separately.
     /// Secondly, `combined_watermark` is calculated periodically according the watermarks in the left and right streams
     void calculateWatermark();
 
     std::pair<size_t, size_t> removeOldData();
+
+    /// For global join without time bucket
+    Block joinBlocksAll(size_t & left_cached_bytes, size_t & right_cached_bytes);
     /// proton : ends
 
 private:
@@ -529,7 +545,6 @@ private:
     /// so we must guarantee constantness of hash table during HashJoin lifetime (using method setLock)
     /// mutable JoinStuff::JoinUsedFlags used_flags;
     RightTableDataPtr right_data;
-    std::shared_ptr<RightTableData::RightTableBlocks> current_right_join_blocks;
 
     std::vector<Sizes> key_sizes;
 

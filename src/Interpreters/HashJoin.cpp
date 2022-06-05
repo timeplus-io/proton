@@ -1514,7 +1514,7 @@ void HashJoin::joinBlockImpl(
         savedBlockSample(),
         *this,
         std::move(join_on_keys),
-        jf.is_asof_join || jf.is_range_asof_join, /// proton : starts / ends
+        jf.is_asof_join || jf.is_range_asof_join || jf.is_range_join, /// proton : starts / ends
         is_join_get);
 
     bool has_required_right_keys = (required_right_keys.columns() != 0);

@@ -207,6 +207,9 @@ bool StreamingJoinTransform::timeToJoin() const
 
 void StreamingJoinTransform::validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header)
 {
+    if (join->getStrictness() == ASTTableJoin::Strictness::All)
+        return;
+
     const auto & table_join = join->getTableJoin();
     if (table_join.rangeAsofJoinContext().type != RangeType::Interval)
         throw Exception(
