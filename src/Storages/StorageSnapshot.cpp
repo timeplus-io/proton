@@ -177,4 +177,15 @@ DataTypePtr StorageSnapshot::getConcreteType(const String & column_name) const
     return metadata->getColumns().get(column_name).type;
 }
 
+std::shared_ptr<StorageSnapshot> StorageSnapshot::clone() const
+{
+    return std::make_shared<StorageSnapshot>(*this);
+}
+
+void StorageSnapshot::addVirtuals(const NamesAndTypesList & virtuals_)
+{
+    for (const auto & [name, type] : virtuals_)
+        virtual_columns.emplace(name, type);
+}
+
 }

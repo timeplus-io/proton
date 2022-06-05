@@ -1785,7 +1785,7 @@
                     ["dev1", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 2,"query_id":"101", "query_type": "table", "query":"select id, count(*), window_start, window_end from tumble(test, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest', query_mode = 'table'"}]}
+                    {"client":"python","wait": 4,"query_id":"101", "query_type": "table", "query":"select id, count(*), window_start, window_end from tumble(test, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest', query_mode = 'table'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":

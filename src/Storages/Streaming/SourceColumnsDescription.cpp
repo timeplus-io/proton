@@ -1,10 +1,32 @@
 #include "SourceColumnsDescription.h"
 
+#include <Core/Block.h>
 #include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
 {
+SourceColumnsDescription::PhysicalColumnPositions &
+SourceColumnsDescription::PhysicalColumnPositions::operator=(std::initializer_list<uint16_t> positions_)
+{
+    positions = std::move(positions_);
+    subcolumns.clear();
+    return *this;
+}
+
+SourceColumnsDescription::PhysicalColumnPositions &
+SourceColumnsDescription::PhysicalColumnPositions::operator=(const std::vector<uint16_t> & positions_)
+{
+    positions = std::move(positions_);
+    subcolumns.clear();
+    return *this;
+}
+
+void SourceColumnsDescription::PhysicalColumnPositions::clear()
+{
+    positions.clear();
+    subcolumns.clear();
+}
 
 SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & columns_to_read, const Block & schema)
 {
@@ -12,9 +34,12 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
     auto column_size = columns_to_read.size();
 
     positions.reserve(column_size);
-    physical_column_positions_to_read.reserve(column_size);
+    physical_column_positions_to_read.positions.reserve(column_size);
     physical_object_column_names_to_read.reserve(column_size);
     subcolumns_to_read.reserve(column_size);
+
+    std::vector<uint16_t> read_all_subcolumns_positions;
+    read_all_subcolumns_positions.reserve(column_size);
 
     /// There are three columns
     /// 1) normal physical column position
@@ -73,28 +98,29 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
             size_t physical_pos_in_schema_to_read = 0;
             /// We don't need to read duplicate physical columns from schema
             auto physical_pos_iter = std::find(
-                physical_column_positions_to_read.begin(),
-                physical_column_positions_to_read.end(),
-                pos_in_schema);
-            if (physical_pos_iter == physical_column_positions_to_read.end())
+                physical_column_positions_to_read.positions.begin(), physical_column_positions_to_read.positions.end(), pos_in_schema);
+            if (physical_pos_iter == physical_column_positions_to_read.positions.end())
             {
-                physical_pos_in_schema_to_read = physical_column_positions_to_read.size();
-
-                physical_column_positions_to_read.push_back(pos_in_schema);
+                physical_pos_in_schema_to_read = physical_column_positions_to_read.positions.size();
+                physical_column_positions_to_read.positions.emplace_back(pos_in_schema);
 
                 if (isObject(column_in_storage.type))
                     physical_object_column_names_to_read.push_back(name_in_storage);
             }
             else
-                physical_pos_in_schema_to_read = physical_pos_iter - physical_column_positions_to_read.begin();
+                physical_pos_in_schema_to_read = physical_pos_iter - physical_column_positions_to_read.positions.begin();
 
             /// For subcolumn, which dependents on the main column
             if (column.isSubcolumn())
             {
                 ReadColumnPosition curr_column_pos(ReadColumnType::SUB, physical_pos_in_schema_to_read, subcolumns_to_read.size());
 
-                subcolumns_to_read.emplace_back(
-                    name_in_storage, column.getSubcolumnName(), column_in_storage.type, column.type);
+                const auto & subcolumn_name = column.getSubcolumnName();
+                NameAndTypePair subcolumn{name_in_storage, subcolumn_name, column_in_storage.type, column.type};
+                subcolumns_to_read.emplace_back(subcolumn);
+
+                /// read partial subcolumn of the physical column.
+                physical_column_positions_to_read.subcolumns[physical_pos_in_schema_to_read].emplace_back(subcolumn_name);
 
                 positions.emplace_back(std::move(curr_column_pos));
             }
@@ -102,14 +128,20 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
             {
                 ReadColumnPosition curr_column_pos(ReadColumnType::PHYSICAL, physical_pos_in_schema_to_read);
                 positions.emplace_back(std::move(curr_column_pos));
+
+                read_all_subcolumns_positions.push_back(physical_pos_in_schema_to_read);  /// read all physical column.
             }
         }
 
         ++pos;
     }
 
+    /// Clear subcolumns if need to read all subcolumns.
+    for (auto pos : read_all_subcolumns_positions)
+        physical_column_positions_to_read.subcolumns.erase(pos);
+
     /// Clients like to read virtual columns only, add `_tp_time`, then we know how many rows
-    if (physical_column_positions_to_read.empty())
-        physical_column_positions_to_read.push_back(schema.getPositionByName(ProtonConsts::RESERVED_EVENT_TIME));
+    if (physical_column_positions_to_read.positions.empty())
+        physical_column_positions_to_read.positions.emplace_back(schema.getPositionByName(ProtonConsts::RESERVED_EVENT_TIME));
 }
 }

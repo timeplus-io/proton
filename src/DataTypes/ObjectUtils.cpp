@@ -140,7 +140,13 @@ static auto extractVector(const std::vector<Tuple> & vec)
     return res;
 }
 
-void fillAndConvertObjectsToTuples(NamesAndTypesList & columns_list, Block & block, const NamesAndTypesList & extended_storage_columns, bool no_convert /*= false*/)
+/// proton: starts. Add `fill_missing_elems` used for streaming store source
+void fillAndConvertObjectsToTuples(
+    NamesAndTypesList & columns_list,
+    Block & block,
+    const NamesAndTypesList & extended_storage_columns,
+    const NameSet & fill_missing_objects,
+    bool no_convert /*= false*/)
 {
     std::unordered_map<String, DataTypePtr> storage_columns_map;
     for (const auto & [name, type] : extended_storage_columns)
@@ -170,17 +176,20 @@ void fillAndConvertObjectsToTuples(NamesAndTypesList & columns_list, Block & blo
         if (it == storage_columns_map.end())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Column '{}' not found in storage", name_type.name);
 
-        /// Fill missing elems into object column.
-        auto [paths, types] = flattenTuple(it->second);
-        assert(paths.size() == types.size());
-        for (size_t i = 0; i < paths.size(); ++i)
+        /// Fill missing elems into object column as needed.
+        if (fill_missing_objects.contains(name_type.name))
         {
-            const auto & path = paths[i];
-            if (path.getPath() == ColumnObject::COLUMN_NAME_DUMMY)
-                continue;
+            auto [paths, types] = flattenTuple(it->second);
+            assert(paths.size() == types.size());
+            for (size_t i = 0; i < paths.size(); ++i)
+            {
+                const auto & path = paths[i];
+                if (path.getPath() == ColumnObject::COLUMN_NAME_DUMMY)
+                    continue;
 
-            if (!column_object.hasSubcolumn(path))
-                column_object.addSubcolumn(path, types[i]->createColumn()->cloneResized(block.rows()));
+                if (!column_object.hasSubcolumn(path))
+                    column_object.addSubcolumn(path, types[i]->createColumn()->cloneResized(block.rows()));
+            }
         }
 
         size_t subcolumn_size = subcolumns.size();
@@ -210,9 +219,11 @@ void fillAndConvertObjectsToTuples(NamesAndTypesList & columns_list, Block & blo
         }
 
         /// Check that constructed Tuple type and type in storage are compatible.
-        getLeastCommonTypeForObject({name_type.type, it->second}, true);
+        /// No check, do it in `updateObjectColumns` later
+        // getLeastCommonTypeForObject({name_type.type, it->second}, true);
     }
 }
+/// proton: ends.
 
 static bool isPrefix(const PathInData::Parts & prefix, const PathInData::Parts & parts)
 {
@@ -241,7 +252,7 @@ void checkObjectHasNoAmbiguosPaths(const PathsInData & paths)
     }
 }
 
-DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambiguos_paths)
+DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambiguos_paths, SubcolumnTypeChangeCallback change_callback)
 {
     if (types.empty())
         return nullptr;
@@ -297,6 +308,12 @@ DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambi
 
         tuple_paths.emplace_back(key);
         tuple_types.emplace_back(getLeastSupertype(subtypes, /*allow_conversion_to_string=*/ true));
+
+        /// proton: starts. we call the `diff_callback` when subcolumns type changed to common type.
+        /// diff_callback(subcolumns name, common type);
+        if (change_callback && !tuple_types.back()->equals(**subtypes.begin()))
+            change_callback(key.getPath(), tuple_types.back());
+        /// proton: ends.
     }
 
     if (tuple_paths.empty())
@@ -413,13 +430,20 @@ bool updateObjectColumns(ColumnsDescription & object_columns, const NamesAndType
     for (const auto & new_column : new_columns)
     {
         auto object_column = object_columns.tryGetColumn(GetColumnsOptions::All, new_column.name);
-        if (object_column && !object_column->type->equals(*new_column.type))
+        if (object_column)
         {
-            object_columns.modify(new_column.name, [&](auto & column)
+            NamesAndTypes updated_subcolumns;
+            auto common_type = getLeastCommonTypeForObject(
+                {object_column->type, new_column.type}, false, [&](const auto & subcolumn_name, const auto & new_type) {
+                    updated_subcolumns.emplace_back(subcolumn_name, new_type);
+                });
+
+            if (!updated_subcolumns.empty())
             {
-                column.type = getLeastCommonTypeForObject({object_column->type, new_column.type});
                 changed = true;
-            });
+                object_columns.updateColumn(object_column->name, common_type);
+                object_columns.addOrUpdateSubcolumns(object_column->name, common_type, updated_subcolumns);
+            }
         }
     }
     return changed;

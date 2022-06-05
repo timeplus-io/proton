@@ -28,6 +28,8 @@ protected:
 
     SourceColumnsDescription columns_desc;
 
+    NameSet required_object_names;
+
     bool hasObjectColumns() const { return !columns_desc.physical_object_column_names_to_read.empty(); }
     ColumnPtr getSubcolumnFromblock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const;
     void fillAndUpdateObjects(Block & block);

@@ -14,12 +14,13 @@ namespace ErrorCodes
 StreamingStoreSourceBase::StreamingStoreSourceBase(
     const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_)
     : SourceWithProgress(header)
-    , storage_snapshot(storage_snapshot_->storage, storage_snapshot_->metadata, *(storage_snapshot_->object_columns.get()))
+    , storage_snapshot(*storage_snapshot_)
     , query_context(std::move(query_context_))
     , header_chunk(header.getColumns(), 0)
     , columns_desc(
-          storage_snapshot.getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), header.getNames()),
+          storage_snapshot.getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals(), header.getNames()),
           storage_snapshot.getMetadataForQuery()->getSampleBlock())
+    , required_object_names(getNamesOfObjectColumns(header.getNamesAndTypesList()))
 {
     /// Init current object description and update current storage snapshot for streaming source
     if (!columns_desc.physical_object_column_names_to_read.empty())
@@ -40,7 +41,7 @@ StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t pare
     if (isObject(parent.type))
     {
         const auto & object = assert_cast<const ColumnObject &>(*parent.column);
-        if (const auto * node = object.getSubcolumns().findBestMatch(PathInData{subcolumn_pair.getSubcolumnName()}))
+        if (const auto * node = object.getSubcolumns().findExact(PathInData{subcolumn_pair.getSubcolumnName()}))
         {
             auto [subcolumn, subcolumn_type] = createSubcolumnFromNode(*node);
             if (subcolumn_type->equals(*subcolumn_pair.type))
@@ -55,6 +56,11 @@ StreamingStoreSourceBase::getSubcolumnFromblock(const Block & block, size_t pare
                 ActionsDAG::MatchColumnsMode::Position));
             convert_act.execute(subcolumn_block, block.rows());
             return subcolumn_block.getByPosition(0).column;
+        }
+        else if (storage_snapshot.object_columns.get()->hasSubcolumn(subcolumn_pair.name))
+        {
+            /// we return default value if the object has this subcolumn but current block doesn't exist
+            return subcolumn_pair.type->createColumn()->cloneResized(block.rows());
         }
         else
             throw Exception(
@@ -72,7 +78,8 @@ void StreamingStoreSourceBase::fillAndUpdateObjects(Block & block)
         auto extended_storage_columns
             = storage_snapshot.getColumns(GetColumnsOptions(GetColumnsOptions::AllPhysical).withExtendedObjects());
 
-        fillAndConvertObjectsToTuples(columns_list, block, extended_storage_columns, /*no_convert*/ true);
+        /// Fill missing elems for objects in block (only filled those @required_object_names)
+        fillAndConvertObjectsToTuples(columns_list, block, extended_storage_columns, required_object_names, /*no_convert*/ true);
 
         /// Update object columns if have changes
         auto current_object_columns = *storage_snapshot.object_columns.get();

@@ -40,14 +40,23 @@ DataTypePtr getDataTypeByColumn(const IColumn & column);
 /// proton: starts. Add `fill_missing_elems` used for streaming store source
 /// Converts Object types and columns to Tuples in @columns_list and @block
 /// and checks that types are consistent with types in @extended_storage_columns.
-void fillAndConvertObjectsToTuples(NamesAndTypesList & columns_list, Block & block, const NamesAndTypesList & extended_storage_columns, bool no_convert = false);
+void fillAndConvertObjectsToTuples(
+    NamesAndTypesList & columns_list,
+    Block & block,
+    const NamesAndTypesList & extended_storage_columns,
+    const NameSet & fill_missing_objects = {},
+    bool no_convert = false);
 /// proton: ends.
 
 /// Checks that each path is not the prefix of any other path.
 void checkObjectHasNoAmbiguosPaths(const PathsInData & paths);
 
+/// proton: starts. Add argument `change_callback`
+/// SubcolumnTypeChangeCallback(<subcolumn name>, <common type>)
+using SubcolumnTypeChangeCallback = std::function<void(const String &, const DataTypePtr &)>;
 /// Receives several Tuple types and deduces the least common type among them.
-DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambiguos_paths = false);
+DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambiguos_paths = false, SubcolumnTypeChangeCallback change_callback  = {});
+/// proton: ends.
 
 /// Converts types of object columns to tuples in @columns_list
 /// according to @object_columns and adds all tuple's subcolumns if needed.

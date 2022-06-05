@@ -12,6 +12,8 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Common/HashTable/HashSet.h>
 
+#include <DataTypes/Serializations/SerializationInfoObject.h>
+
 namespace DB
 {
 
@@ -687,12 +689,12 @@ bool ColumnObject::hasSubcolumn(const PathInData & key) const
     return subcolumns.findLeaf(key) != nullptr;
 }
 
-void ColumnObject::addSubcolumn(const PathInData & key, MutableColumnPtr && subcolumn)
+void ColumnObject::addSubcolumn(const PathInData & key, MutableColumnPtr && subcolumn, bool throw_if_exists /* = true */)
 {
     size_t new_size = subcolumn->size();
     bool inserted = subcolumns.add(key, Subcolumn(std::move(subcolumn), is_nullable));
 
-    if (!inserted)
+    if (!inserted && throw_if_exists)
         throw Exception(ErrorCodes::DUPLICATE_COLUMN, "Subcolumn '{}' already exists", key.getPath());
 
     if (num_rows == 0)
@@ -824,6 +826,37 @@ ColumnPtr ColumnObject::filter(const Filter & filt, ssize_t result_size_hint) co
         auto filtered_data = entry->data.data.back()->filter(filt, result_size_hint)->assumeMutable();
         res->addSubcolumn(entry->path, std::move(filtered_data));
     }
+
+    return res;
+}
+
+SerializationInfoPtr ColumnObject::getSerializationInfo() const
+{
+    return std::make_shared<SerializationInfoObject>(ISerialization::Kind::DEFAULT, SerializationInfo::Settings{});
+}
+
+MutableColumnPtr ColumnObject::cloneWithSubcolumns(const Names & subcolumn_names) const
+{
+    auto res = ColumnObject::create(is_nullable);
+    for (const auto & subcolumn_name : subcolumn_names)
+    {
+        auto * node = subcolumns.findExact(PathInData{subcolumn_name});
+        if (!node)
+            continue; /// Ignoring non-exists subcolumns.
+
+        if (node->isScalar())
+            res->addSubcolumn(node->path, node->data.getFinalizedColumnPtr()->cloneResized(num_rows), /*throw_if_exists*/ false);
+        else
+            /// add all leaf nodes in the tuple or nested.
+            for (const auto & [_, child] : node->children)
+                SubcolumnsTree::findLeaf(child.get(), [&](const auto & leaf) {
+                    res->addSubcolumn(leaf.path, leaf.data.getFinalizedColumnPtr()->cloneResized(num_rows), /*throw_if_exists*/ false);
+                    return false;  /// to traverse all leaf
+                });
+    }
+
+    if (res->num_rows == 0)
+        res->num_rows = num_rows;
 
     return res;
 }

@@ -134,6 +134,12 @@ public:
     bool hasSubcolumn(const String & column_name) const;
     const ColumnDescription & get(const String & column_name) const;
 
+    /// proton: starts.
+    void updateColumn(const String & column_name, const DataTypePtr & new_type);
+
+    void addOrUpdateSubcolumns(const String & name_in_storage, const DataTypePtr & type_in_storage, const NamesAndTypes & subcolumns_list);
+    /// proton: ends.
+
     template <typename F>
     void modify(const String & column_name, F && f)
     {

@@ -729,4 +729,31 @@ Block validateColumnsDefaultsAndGetSampleBlock(ASTPtr default_expr_list, const N
     }
 }
 
+/// proton: starts.
+void ColumnsDescription::updateColumn(const String & column_name, const DataTypePtr & new_type)
+{
+    auto it = columns.get<1>().find(column_name);
+    if (it == columns.get<1>().end())
+        throw Exception("Cannot find column " + column_name + " in ColumnsDescription", ErrorCodes::LOGICAL_ERROR);
+
+    columns.get<1>().modify(it, [new_type](auto & column) { column.type = new_type; });
+}
+
+void ColumnsDescription::addOrUpdateSubcolumns(
+    const String & name_in_storage, const DataTypePtr & type_in_storage, const NamesAndTypes & subcolumns_list)
+{
+    for (const auto & [subcolumn_name, new_type] : subcolumns_list)
+    {
+        auto subcolumn = NameAndTypePair(name_in_storage, subcolumn_name, type_in_storage, new_type);
+        auto it = subcolumns.get<0>().find(subcolumn.name);
+        if (it == subcolumns.get<0>().end())
+        {
+            subcolumns.get<0>().insert(std::move(subcolumn));
+        }
+        else
+            subcolumns.get<0>().modify(
+                it, [moved_subcolumn = std::move(subcolumn)](auto & column) { column = std::move(moved_subcolumn); });
+    }
+}
+/// proton: ends.
 }

@@ -2,6 +2,10 @@
 
 #include <DataTypes/Serializations/SimpleTextSerialization.h>
 
+/// proton: starts.
+#include <Core/Names.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -56,6 +60,21 @@ public:
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
 
+    /// proton: starts
+    void deserializeBinaryBulkWithMultipleStreamsSkip(
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const override;
+
+    explicit SerializationObject(const Names & partial_deserialized_subcolumns_ = {})
+        : partial_deserialized_subcolumns(partial_deserialized_subcolumns_)
+    {
+    }
+
+private:
+    Names partial_deserialized_subcolumns;
+    /// proton: ends
+
 private:
     template <typename TSettings, typename TStatePtr>
     void checkSerializationIsSupported(const TSettings & settings, const TStatePtr & state) const;
@@ -68,6 +87,8 @@ private:
     mutable Parser parser;
 };
 
-SerializationPtr getObjectSerialization(const String & schema_format);
+/// proton: starts.
+SerializationPtr getObjectSerialization(const String & schema_format, const Names & partial_deserialized_subcolumns = {});
+/// proton: ends.
 
 }

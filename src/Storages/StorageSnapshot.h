@@ -24,11 +24,13 @@ struct StorageSnapshot
         virtual ~Data() = default;
     };
 
-    using DataPtr = std::unique_ptr<const Data>;
+    using DataPtr = std::shared_ptr<const Data>;
     const DataPtr data;
 
     /// Projection that is used in query.
     mutable const ProjectionDescription * projection = nullptr;
+
+    std::unordered_map<String, DataTypePtr> virtual_columns;
 
     StorageSnapshot(
         const IStorage & storage_,
@@ -57,6 +59,18 @@ struct StorageSnapshot
         init();
     }
 
+    StorageSnapshot(const StorageSnapshot & snapshot_)
+        : storage(snapshot_.storage)
+        , metadata(snapshot_.metadata)
+        , object_columns(std::make_unique<ColumnsDescription>(*(snapshot_.object_columns.get())))
+        , data(snapshot_.data)
+        , projection(snapshot_.projection)
+        , virtual_columns(snapshot_.virtual_columns)
+    {
+    }
+
+    std::shared_ptr<StorageSnapshot> clone() const;
+
     /// Get all available columns with types according to options.
     NamesAndTypesList getColumns(const GetColumnsOptions & options) const;
 
@@ -78,13 +92,13 @@ struct StorageSnapshot
 
     void addProjection(const ProjectionDescription * projection_) const { projection = projection_; }
 
+    void addVirtuals(const NamesAndTypesList & virtuals_);
+
     /// If we have a projection then we should use its metadata.
     StorageMetadataPtr getMetadataForQuery() const { return projection ? projection->metadata : metadata; }
 
 private:
     void init();
-
-    std::unordered_map<String, DataTypePtr> virtual_columns;
 };
 
 using StorageSnapshotPtr = std::shared_ptr<const StorageSnapshot>;

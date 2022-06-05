@@ -124,6 +124,23 @@ bool tryInsertDefaultFromNested(
     return true;
 }
 
+/// proton: starts.
+bool needDeserialization(const String & subcolumn_name, const Names & partial_deserialized_subcolumns)
+{
+    if (partial_deserialized_subcolumns.empty())
+        return true;
+
+    /// Two cases:
+    /// 1) subcolumn_name is `obj.a`, partial_deserialized_subcolumns has `obj.a`
+    /// 2) subcolumn_name is `obj.a`, partial_deserialized_subcolumns only has `obj`
+    for (const auto & name : partial_deserialized_subcolumns)
+        if (subcolumn_name.starts_with(name)
+            && ((subcolumn_name.size() == name.size()) || (subcolumn_name.size() > name.size() && subcolumn_name[name.size()] == '.')))
+            return true;
+
+    return false;
+}
+/// proton: ends.
 }
 
 template <typename Parser>
@@ -340,9 +357,17 @@ void SerializationObject<Parser>::deserializeBinaryBulkWithMultipleStreams(
         {
             auto type = DataTypeFactory::instance().get(type_name);
             auto serialization = type->getDefaultSerialization();
-            ColumnPtr subcolumn_data = type->createColumn();
-            serialization->deserializeBinaryBulkWithMultipleStreams(subcolumn_data, limit, settings, state, cache);
-            column_object.addSubcolumn(key, subcolumn_data->assumeMutable());
+
+            /// proton: starts. support partial deserialized
+            if (needDeserialization(settings.path.back().object_key_name, partial_deserialized_subcolumns))
+            {
+                ColumnPtr subcolumn_data = type->createColumn();
+                serialization->deserializeBinaryBulkWithMultipleStreams(subcolumn_data, limit, settings, state, cache);
+                column_object.addSubcolumn(key, subcolumn_data->assumeMutable());
+            }
+            else
+                serialization->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+            /// proton: ends.
         }
         else
         {
@@ -350,6 +375,11 @@ void SerializationObject<Parser>::deserializeBinaryBulkWithMultipleStreams(
                 "Cannot read subcolumn '{}' of DataTypeObject, because its stream is missing", key.getPath());
         }
     }
+
+    /// proton: starts. Add default values if all skiped
+    if (column_object.size() == 0)
+        column_object.insertManyDefaults(limit);
+    /// proton: ends.
 
     settings.path.pop_back();
     column_object.checkConsistency();
@@ -440,14 +470,15 @@ void SerializationObject<Parser>::serializeTextCSV(const IColumn & column, size_
     writeCSVString(ostr_str.str(), ostr);
 }
 
-SerializationPtr getObjectSerialization(const String & schema_format)
+/// proton: starts.
+SerializationPtr getObjectSerialization(const String & schema_format, const Names & partial_deserialized_subcolumns)
 {
     if (schema_format == "json")
     {
 #if USE_SIMDJSON
-        return std::make_shared<SerializationObject<JSONDataParser<SimdJSONParser>>>();
+        return std::make_shared<SerializationObject<JSONDataParser<SimdJSONParser>>>(partial_deserialized_subcolumns);
 #elif USE_RAPIDJSON
-        return std::make_shared<SerializationObject<JSONDataParser<RapidJSONParser>>>();
+        return std::make_shared<SerializationObject<JSONDataParser<RapidJSONParser>>>(partial_deserialized_subcolumns);
 #else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
             "To use data type Object with JSON format ClickHouse should be built with Simdjson or Rapidjson");
@@ -456,5 +487,55 @@ SerializationPtr getObjectSerialization(const String & schema_format)
 
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown schema format '{}'", schema_format);
 }
+
+template <typename Parser>
+void SerializationObject<Parser>::deserializeBinaryBulkWithMultipleStreamsSkip(
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    checkSerializationIsSupported(settings, state);
+
+    size_t num_subcolumns = 0;
+    settings.path.push_back(Substream::ObjectStructure);
+    if (auto * stream = settings.getter(settings.path))
+        readVarUInt(num_subcolumns, *stream);
+
+    settings.path.back() = Substream::ObjectElement;
+    for (size_t i = 0; i < num_subcolumns; ++i)
+    {
+        PathInData key;
+        String type_name;
+
+        settings.path.back() = Substream::ObjectStructure;
+        if (auto * stream = settings.getter(settings.path))
+        {
+            key.readBinary(*stream);
+            readStringBinary(type_name, *stream);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
+                "Cannot read structure of DataTypeObject, because its stream is missing");
+        }
+
+        settings.path.back() = Substream::ObjectElement;
+        settings.path.back().object_key_name = key.getPath();
+
+        if (auto * stream = settings.getter(settings.path))
+        {
+            auto serialization = DataTypeFactory::instance().get(type_name)->getDefaultSerialization();
+            serialization->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
+                "Cannot read subcolumn '{}' of DataTypeObject, because its stream is missing", key.getPath());
+        }
+    }
+
+    settings.path.pop_back();
+}
+/// proton: ends
 
 }

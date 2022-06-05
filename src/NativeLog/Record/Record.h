@@ -38,7 +38,7 @@ struct Record
 {
 public:
     Record(OpCode op_code, DB::Block && block_, uint16_t schema_version_, std::vector<uint16_t> column_positions_ = {})
-        : flags((static_cast<uint16_t>(op_code) << OP_CODE_OFFSET) | (MAGIC << MAGIC_OFFSET))
+        : flags((static_cast<uint64_t>(op_code) << OP_CODE_OFFSET) | (MAGIC << MAGIC_OFFSET))
         , sn(-1)
         , schema_version(schema_version_)
         , column_positions(std::move(column_positions_))
@@ -222,7 +222,7 @@ public:
     void setCodec(DB::CompressionMethodByte codec)
     {
         flags &= ~CODEC_MASK;
-        flags |= (static_cast<uint8_t>(codec) << CODEC_OFFSET);
+        flags |= (static_cast<uint64_t>(codec) << CODEC_OFFSET);
     }
 
     OpCode opcode() const

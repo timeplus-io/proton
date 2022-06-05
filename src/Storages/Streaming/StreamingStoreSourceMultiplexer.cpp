@@ -26,7 +26,7 @@ StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
     assert(distributed);
 
     auto consumer = klog::KafkaWALPool::instance(global_context).getOrCreateStreaming(distributed->streamingStorageClusterId());
-    reader = std::make_shared<StreamingBlockReaderKafka>(storage, shard, -1 /*latest*/, std::vector<uint16_t>{}, std::move(consumer), log);
+    reader = std::make_shared<StreamingBlockReaderKafka>(storage, shard, -1 /*latest*/, SourceColumnsDescription::PhysicalColumnPositions{}, std::move(consumer), log);
 
     poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
 }

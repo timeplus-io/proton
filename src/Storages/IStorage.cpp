@@ -273,5 +273,4 @@ std::string FilterDAGInfo::dump() const
 
     return ss.str();
 }
-
 }

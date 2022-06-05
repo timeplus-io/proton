@@ -11,7 +11,6 @@
 #include <set>
 #include <vector>
 
-
 namespace DB
 {
 

@@ -22,6 +22,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeObject.h>
 
 #include <NativeLog/Base/ByteVector.h>
 #include <NativeLog/Record/SchemaNativeReader.h>
@@ -496,14 +497,73 @@ void insertColumnSparse(DB::Block & block, size_t rows)
     block.insert(DB::ColumnWithTypeAndName{std::move(sparse_string2), string_type, "sparse-string-all-default"});
 }
 
-void checkBlock(const DB::Block & origin, DB::Block actual, const std::vector<uint16_t> & positions)
+void insertColumnObject(DB::Block & block, size_t rows)
 {
-    EXPECT_EQ(actual.columns(), positions.size());
+    /// Json: {"data": string, "id": number, "obj": {"data": string, "array": [numbers]}, "array": [strings]}
+    auto insert_func = [&](DB::DataTypePtr type, const String & col_name) {
+        auto col = type->createColumn();
+        auto * col_ptr = typeid_cast<DB::ColumnObject *>(col.get());
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            col_ptr->insert(DB::Object{
+                {"data", DB::Field{"abc"}},
+                {"id", DB::Field{i}},
+                {"obj.data", DB::Field{"xyz"}},
+                {"obj.array", DB::Array{DB::Field{i}, DB::Field{i}, DB::Field{i}}},
+                {"array", DB::Array{DB::Field{std::to_string(i)}, DB::Field{std::to_string(i)}, DB::Field{std::to_string(i)}}}
+            });
+        }
+
+        DB::ColumnWithTypeAndName col_with_name{std::move(col), type, col_name};
+        block.insert(std::move(col_with_name));
+    };
+
+    auto json_type = std::make_shared<DB::DataTypeObject>("json", false);
+    auto nullable_json_type = std::make_shared<DB::DataTypeObject>("json", true);
+    insert_func(json_type, "json_obj");
+    insert_func(nullable_json_type, "nullable_json_obj");
+}
+
+void checkColumnObject(DB::ColumnPtr origin, DB::ColumnPtr actual, size_t rows, const std::vector<std::string> & requried_subcolumns = {})
+{
+    const auto * col_object = assert_cast<const DB::ColumnObject *>(origin.get());
+    const auto * col_object_got = assert_cast<const DB::ColumnObject *>(actual.get());
+    EXPECT_TRUE(col_object != nullptr);
+    EXPECT_TRUE(col_object_got != nullptr);
+
+    /// Check got subcolumns size
+    const auto & subcolumns_got = col_object_got->getSubcolumns();
+    auto subcolumns_size_expected = requried_subcolumns.empty() ? col_object->getSubcolumns().size() : requried_subcolumns.size();
+    EXPECT_EQ(subcolumns_got.size(), subcolumns_size_expected);
+
+    for (const auto & entry : subcolumns_got)
+    {
+        EXPECT_TRUE(col_object->hasSubcolumn(entry->path));
+        const auto & subcolumn_data = col_object->getSubcolumn(entry->path);
+
+        /// Check got subcolumn type
+        EXPECT_TRUE(subcolumn_data.getLeastCommonType()->equals(*(entry->data.getLeastCommonType())));
+
+        /// Check got subcolumn
+        auto subcolumn_expected = subcolumn_data.getFinalizedColumnPtr();
+        auto subcolumn_got = entry->data.getFinalizedColumnPtr();
+        for (size_t row = 0; row < rows; ++row)
+        {
+            EXPECT_EQ(subcolumn_expected->compareAt(row, row, *subcolumn_got, -1), 0);
+        }
+    }
+}
+
+void checkBlock(const DB::Block & origin, DB::Block actual, const DB::SourceColumnsDescription::PhysicalColumnPositions & physical_positions)
+{
+    EXPECT_EQ(actual.columns(), physical_positions.positions.size());
     EXPECT_EQ(actual.rows(), origin.rows());
 
     for (size_t pos = 0; pos < origin.columns(); ++pos)
     {
-        if (std::find(positions.begin(), positions.end(), pos) == positions.end())
+        auto iter = std::find(physical_positions.positions.begin(), physical_positions.positions.end(), pos);
+        if (iter == physical_positions.positions.end())
         {
             /// skipped column
             EXPECT_TRUE(actual.findByName(origin.getByPosition(pos).name) == nullptr);
@@ -515,9 +575,19 @@ void checkBlock(const DB::Block & origin, DB::Block actual, const std::vector<ui
             auto * col_got = actual.findByName(col_expected.name);
             EXPECT_TRUE(col_got != nullptr);
 
-            /// std::cout << "comparing " << col_expected.name << "\n";
-            for (size_t row = 0; row < actual.rows(); ++row)
-                EXPECT_EQ(col_expected.column->compareAt(row, row, *col_got->column, -1), 0);
+            if (isObject(col_got->type))
+            {
+                auto target_pos = std::distance(physical_positions.positions.begin(), iter);
+                auto subcolumns_iter = physical_positions.subcolumns.find(target_pos);
+                if (subcolumns_iter != physical_positions.subcolumns.end())
+                    checkColumnObject(col_expected.column, col_got->column, actual.rows(), subcolumns_iter->second);
+                else
+                    checkColumnObject(col_expected.column, col_got->column, actual.rows());
+            }
+            else
+                /// std::cout << "comparing " << col_expected.name << "\n";
+                for (size_t row = 0; row < actual.rows(); ++row)
+                    EXPECT_EQ(col_expected.column->compareAt(row, row, *col_got->column, -1), 0);
         }
     }
 }
@@ -543,6 +613,8 @@ DB::Block createBlock(size_t rows)
     insertColumnSparse(block, rows);
 
     insertColumnString(block, rows);
+
+    insertColumnObject(block, rows);
 
     return block;
 }
@@ -603,10 +675,11 @@ TEST(RecordSerder, Skip)
     for (size_t pos = 0; pos < block.columns(); ++pos)
     {
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
 
         /// Only read column at pos and skip all others
         schema_ctx.column_positions = {static_cast<uint16_t>(pos)};
+
+        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
 
         DB::Block new_block;
         reader.read(new_block);
@@ -616,25 +689,127 @@ TEST(RecordSerder, Skip)
     for (size_t pos = 0; pos < block.columns(); ++pos)
     {
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
 
-        std::vector<uint16_t> positions;
-        positions.reserve(block.columns() - 1);
+        DB::SourceColumnsDescription::PhysicalColumnPositions column_positions;
+        column_positions.positions.reserve(block.columns() - 1);
 
         for (size_t i = 0; i < block.columns(); ++i)
         {
             if (i != pos)
-                positions.push_back(i);
+                column_positions.positions.push_back(i);
         }
 
-        schema_ctx.column_positions = positions;
+        schema_ctx.column_positions = column_positions;
+
+        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
 
         /// Skip current pos
-        if (!positions.empty())
+        if (!column_positions.positions.empty())
         {
             DB::Block new_block;
             reader.read(new_block);
-            checkBlock(block, new_block, positions);
+            checkBlock(block, new_block, column_positions);
         }
+    }
+}
+
+TEST(RecordSerder, SkipPartialJsonSubcolumns)
+{
+    size_t rows = 3;
+    auto block = createBlock(rows);
+
+    /// Serialize everything
+    nlog::ByteVector data{static_cast<size_t>((block.bytes() + 2) * 1.5)};
+    DB::WriteBufferFromVector wb{data};
+    /// write all columns
+    nlog::SchemaNativeWriter writer(wb, {});
+    writer.write(block);
+    wb.finalize();
+
+    struct TestSchemaProvider : public nlog::SchemaProvider
+    {
+        TestSchemaProvider(DB::Block header_) : header(std::move(header_)) { }
+
+        const DB::Block & getSchema(uint16_t /*schema_version*/) const override { return header; }
+
+        DB::Block header;
+    };
+
+    TestSchemaProvider schema_provider(block.cloneEmpty());
+    nlog::SchemaContext schema_ctx(schema_provider);
+
+    uint16_t schema_version = 0;
+
+    /// Only read partial subcolumns of json
+    for (size_t pos = 0; pos < block.columns(); ++pos)
+    {
+        if (!isObject(block.getByPosition(pos).type))
+            continue;
+
+        DB::ReadBufferFromMemory rb{data.data(), data.size()};
+
+        schema_ctx.column_positions.positions = {static_cast<uint16_t>(pos)};
+        schema_ctx.column_positions.subcolumns = {{0, {"data"}}};
+
+        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+
+        DB::Block new_block;
+        reader.read(new_block);
+        checkBlock(block, new_block, schema_ctx.column_positions);
+    }
+
+    /// Only read more partial subcolumns of json
+    for (size_t pos = 0; pos < block.columns(); ++pos)
+    {
+        if (!isObject(block.getByPosition(pos).type))
+            continue;
+
+        DB::ReadBufferFromMemory rb{data.data(), data.size()};
+
+        /// Only read column at pos and skip all others
+        schema_ctx.column_positions.positions = {static_cast<uint16_t>(pos)};
+        schema_ctx.column_positions.subcolumns = {{0, {"data", "obj.data", "obj.array", "array", "id"}}};
+
+        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+
+        DB::Block new_block;
+        reader.read(new_block);
+        checkBlock(block, new_block, schema_ctx.column_positions);
+    }
+
+    /// Read partial subcolumns of json and others columns
+    {
+        schema_ctx.column_positions.clear();
+        for (size_t pos = 0; pos < block.columns(); ++pos)
+        {
+            if (isObject(block.getByPosition(pos).type))
+                schema_ctx.column_positions.subcolumns[schema_ctx.column_positions.positions.size()] = {"data"};
+
+            schema_ctx.column_positions.positions.push_back(pos);
+        }
+        DB::ReadBufferFromMemory rb{data.data(), data.size()};
+        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+
+        DB::Block new_block;
+        reader.read(new_block);
+        checkBlock(block, new_block, schema_ctx.column_positions);
+    }
+
+    /// Read more partial subcolumns of json and others columns
+    {
+        schema_ctx.column_positions.clear();
+        for (size_t pos = 0; pos < block.columns(); ++pos)
+        {
+            if (isObject(block.getByPosition(pos).type))
+                schema_ctx.column_positions.subcolumns[schema_ctx.column_positions.positions.size()] = {"data", "obj.data", "obj.array", "array", "id"};
+
+            schema_ctx.column_positions.positions.push_back(pos);
+        }
+        DB::ReadBufferFromMemory rb{data.data(), data.size()};
+        nlog::SchemaNativeReader reader{rb, false, schema_version, schema_ctx};
+
+        DB::Block new_block;
+        reader.read(new_block);
+        checkBlock(block, new_block, schema_ctx.column_positions);
     }
 }

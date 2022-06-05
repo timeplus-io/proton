@@ -1,10 +1,12 @@
 #pragma once
 
-#include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
 
 namespace DB
 {
+
+class Block;
+struct BlockInfo;
 
 /// We calculate these column positions and lambda vector for simplify the logic and
 /// fast processing in readAndProcess since we don't need index by column name any more
@@ -18,6 +20,20 @@ struct SourceColumnsDescription
         PHYSICAL,
         VIRTUAL,
         SUB
+    };
+
+    struct PhysicalColumnPositions
+    {
+        std::vector<uint16_t> positions;
+        std::unordered_map<uint16_t, std::vector<String>> subcolumns; /// Only json / tuple column will have an entry in subcolumns map
+
+        PhysicalColumnPositions() = default;
+        explicit PhysicalColumnPositions(std::initializer_list<uint16_t> positions_) : positions(std::move(positions_)) {}
+        explicit PhysicalColumnPositions(std::vector<uint16_t> positions_) : positions(std::move(positions_)) {}
+        PhysicalColumnPositions & operator=(std::initializer_list<uint16_t> positions_);
+        PhysicalColumnPositions & operator=(const std::vector<uint16_t> & positions_);
+
+        void clear();
     };
 
     struct ReadColumnPosition
@@ -62,7 +78,9 @@ struct SourceColumnsDescription
     std::vector<ReadColumnPosition> positions;
 
     /// Column positions to read from file system
-    std::vector<uint16_t> physical_column_positions_to_read;
+    /// For some physical column positions, we only marked those partial subcolumns to read
+    /// <Column position, <is_all_read, subcolumns_to_read> >
+    PhysicalColumnPositions physical_column_positions_to_read;
 
     std::vector<std::function<Int64(const BlockInfo &)>> virtual_time_columns_calc;
 

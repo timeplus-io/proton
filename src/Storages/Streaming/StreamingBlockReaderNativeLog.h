@@ -29,7 +29,7 @@ public:
         Int64 read_buf_size_,
         const nlog::SchemaProvider * schema_provider,
         UInt16 schema_version,
-        std::vector<UInt16> column_positions_,
+        SourceColumnsDescription::PhysicalColumnPositions column_positions_,
         Poco::Logger * logger_);
 
     const Block & getSchema(UInt16 /*schema_version*/) const override { return header; }

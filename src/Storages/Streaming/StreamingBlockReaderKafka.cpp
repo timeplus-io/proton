@@ -17,7 +17,7 @@ StreamingBlockReaderKafka::StreamingBlockReaderKafka(
     std::shared_ptr<IStorage> storage_,
     Int32 shard_,
     Int64 offset,
-    std::vector<uint16_t> column_positions,
+    SourceColumnsDescription::PhysicalColumnPositions column_positions,
     klog::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
     : storage(std::move(storage_))
@@ -38,13 +38,14 @@ StreamingBlockReaderKafka::StreamingBlockReaderKafka(
     consume_ctx.schema_ctx.column_positions = std::move(column_positions);
     consumer->initTopicHandle(consume_ctx);
 
+    const auto & positions = consume_ctx.schema_ctx.column_positions.positions;
     LOG_INFO(
         log,
         "Start streaming reading from topic={} shard={} offset={} column_positions={}",
         consume_ctx.topic,
         shard_,
         offset,
-        fmt::join(consume_ctx.schema_ctx.column_positions.begin(), consume_ctx.schema_ctx.column_positions.end(), ","));
+        fmt::join(positions.begin(), positions.end(), ","));
 }
 
 StreamingBlockReaderKafka::~StreamingBlockReaderKafka()

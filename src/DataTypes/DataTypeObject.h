@@ -39,6 +39,10 @@ public:
     bool isParametric() const override { return true; }
 
     SerializationPtr doGetDefaultSerialization() const override;
+    /// proton: starts.
+    SerializationPtr getSerialization(const SerializationInfo & info) const override;
+    MutableSerializationInfoPtr createSerializationInfo(const SerializationInfo::Settings & settings) const override;
+    /// proton: ends.
 
     bool hasNullableSubcolumns() const { return is_nullable; }
 };

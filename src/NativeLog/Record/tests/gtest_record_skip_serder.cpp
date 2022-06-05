@@ -86,7 +86,7 @@ TEST(RecordSerde, NativeInSchemaSkipWriteReadAllWritten)
     auto [r, data] = prepare();
     test_schema_ctx.column_positions = r->getColumnPositions();
     auto rr = nlog::Record::deserialize(reinterpret_cast<char *>(data.data()), data.size(), test_schema_ctx);
-    checkRecord(*r, *rr, test_schema_ctx.column_positions);
+    checkRecord(*r, *rr, test_schema_ctx.column_positions.positions);
 }
 
 TEST(RecordSerde, NativeInSchemaSkipWriteReadPartialWritten)
@@ -95,7 +95,7 @@ TEST(RecordSerde, NativeInSchemaSkipWriteReadPartialWritten)
     auto [r, data] = prepare();
     test_schema_ctx.column_positions = {3u, 13u};
     auto rr = nlog::Record::deserialize(reinterpret_cast<char *>(data.data()), data.size(), test_schema_ctx);
-    checkRecord(*r, *rr, test_schema_ctx.column_positions);
+    checkRecord(*r, *rr, test_schema_ctx.column_positions.positions);
 }
 
 TEST(RecordSerde, NativeInSchemaSkipWriteReadPartialWrittenAndPartialUnwritten)
@@ -122,7 +122,7 @@ TEST(RecordSerde, NativeInSchemaSkipWriteReadPartialUnwritten)
     auto [r, data] = prepare();
     test_schema_ctx.column_positions = {0u, 30u, 15u};
     auto rr = nlog::Record::deserialize(reinterpret_cast<char *>(data.data()), data.size(), test_schema_ctx);
-    checkRecord(*r, *rr, {}, test_schema_ctx.column_positions);
+    checkRecord(*r, *rr, {}, test_schema_ctx.column_positions.positions);
 }
 
 TEST(RecordSerde, NativeInSchemaSkipWriteReadAll)

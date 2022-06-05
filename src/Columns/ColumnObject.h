@@ -150,7 +150,9 @@ public:
     void incrementNumRows() { ++num_rows; }
 
     /// Adds a subcolumn from existing IColumn.
-    void addSubcolumn(const PathInData & key, MutableColumnPtr && subcolumn);
+    /// proton: starts. Add `throw_if_exists`
+    void addSubcolumn(const PathInData & key, MutableColumnPtr && subcolumn, bool throw_if_exists = true);
+    /// proton: ends.
 
     /// Adds a subcolumn of specific size with default values.
     void addSubcolumn(const PathInData & key, size_t new_size);
@@ -188,6 +190,8 @@ public:
     /// proton: starts.
     ColumnPtr permute(const Permutation &, size_t) const override;
     ColumnPtr filter(const Filter &, ssize_t) const override;
+    SerializationInfoPtr getSerializationInfo() const override;
+    MutableColumnPtr cloneWithSubcolumns(const Names & subcolumn_names) const;
     /// proton: ends.
 
     /// All other methods throw exception.

@@ -583,7 +583,12 @@ void StorageMaterializedView::executeBackgroundPipeline()
 StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
 {
     if (target_table_storage)
-        return target_table_storage->getStorageSnapshot(metadata_snapshot);
+    {
+        auto storage_snapshot = target_table_storage->getStorageSnapshot(metadata_snapshot)->clone();
+        /// Add virtuals, such as `_tp_version`
+        storage_snapshot->addVirtuals(getVirtuals());
+        return storage_snapshot;
+    }
     else
         /// TODO: Update dynamic object description for InMemoryTable ?
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);

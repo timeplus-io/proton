@@ -858,7 +858,10 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
 StorageSnapshotPtr StorageStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
 {
     assert(storage);
-    return storage->getStorageSnapshot(metadata_snapshot);
+    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot)->clone();
+    /// Add virtuals, such as `_tp_append_time` and `_tp_process_time
+    storage_snapshot->addVirtuals(getVirtuals());
+    return storage_snapshot; 
 }
 
 void StorageStream::dropPartNoWaitNoThrow(const String & part_name)

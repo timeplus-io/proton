@@ -1,5 +1,6 @@
 #include "StreamingBlockReaderNativeLog.h"
 
+#include <Columns/ColumnObject.h>
 #include <NativeLog/Cache/TailCache.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Storages/IStorage.h>
@@ -21,7 +22,7 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     Int64 read_buf_size_,
     const nlog::SchemaProvider * schema_provider,
     UInt16 schema_version,
-    std::vector<UInt16> column_positions_,
+    SourceColumnsDescription::PhysicalColumnPositions column_positions_,
     Poco::Logger * logger_)
     : native_log(nlog::NativeLog::instance(nullptr))
     , tail_cache(native_log.getCache())
@@ -39,7 +40,7 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     fetch_request.fetch_descs.emplace_back(storage_id.getTableName(), storage_id.uuid, shard_, sn, max_wait_ms, read_buf_size_);
 
     /// FIXME
-    for (auto pos : schema_ctx.column_positions)
+    for (auto pos : schema_ctx.column_positions.positions)
         column_names.push_back(header.getByPosition(pos).name);
 
     if (column_names.empty())
@@ -133,11 +134,26 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
         const auto & rb = record->getBlock();
         auto rows = rb.rows();
 
-        for (const auto & column_name : column_names)
+        for (size_t i = 0; i < columns; ++i)
         {
+            const auto & column_name = column_names[i];
             auto * col_with_type = rb.findByName(column_name);
             if (col_with_type)
             {
+                /// In general, an object has a large number of subcolumns,
+                /// so when a few subcolumns required for the object, we only copy partials to improve performance
+                if (isObject(col_with_type->type) && !schema_ctx.column_positions.positions.empty())
+                {
+                    assert(column_names.size() == schema_ctx.column_positions.positions.size());
+                    auto iter = schema_ctx.column_positions.subcolumns.find(i);
+                    if (iter != schema_ctx.column_positions.subcolumns.end())
+                    {
+                        const auto & column_object = assert_cast<const ColumnObject &>(*(col_with_type->column));
+                        block.insert(ColumnWithTypeAndName{column_object.cloneWithSubcolumns(iter->second), col_with_type->type, col_with_type->name});
+                        continue; 
+                    }
+                }
+
                 /// We will need deep copy since the block from cached can be shared between different clients
                 /// Some client may modify the columns in place
                 block.insert(ColumnWithTypeAndName{

@@ -20,7 +20,7 @@ public:
         std::shared_ptr<IStorage> storage_,
         Int32 shard_,
         Int64 offset,
-        std::vector<uint16_t> column_positions,
+        SourceColumnsDescription::PhysicalColumnPositions column_positions,
         klog::KafkaWALSimpleConsumerPtr consumer_,
         Poco::Logger * log_);
 

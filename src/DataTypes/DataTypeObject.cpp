@@ -7,6 +7,10 @@
 #include <Parsers/ASTFunction.h>
 #include <IO/Operators.h>
 
+/// proton: starts.
+#include <DataTypes/Serializations/SerializationInfoObject.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -34,6 +38,19 @@ SerializationPtr DataTypeObject::doGetDefaultSerialization() const
 {
     return default_serialization;
 }
+
+/// proton: starts.
+SerializationPtr DataTypeObject::getSerialization(const SerializationInfo & info) const
+{
+    const auto & info_object = assert_cast<const SerializationInfoObject &>(info);
+    return getObjectSerialization(schema_format, info_object.getPartialDeserializedSubcolumns());
+}
+
+MutableSerializationInfoPtr DataTypeObject::createSerializationInfo(const SerializationInfo::Settings & settings) const
+{
+    return std::make_shared<SerializationInfoObject>(ISerialization::Kind::DEFAULT, settings);
+}
+/// proton: ends.
 
 String DataTypeObject::doGetName() const
 {

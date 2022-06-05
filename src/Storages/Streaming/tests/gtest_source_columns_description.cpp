@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/Streaming/SourceColumnsDescription.h>
 #include <Common/ProtonCommon.h>
@@ -45,9 +46,10 @@ TEST(SourceColumnsDescription, AllPhysical)
     EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 1);
 
     /// Physical columns description
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 2);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 1);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 3);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 2);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 1);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 3);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
     ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -74,9 +76,10 @@ TEST(SourceColumnsDescription, AllPhysicalWithJSON)
     EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 1);
 
     /// Physical columns description
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 2);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 1);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 4);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 2);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 1);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 4);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
     ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -104,9 +107,10 @@ TEST(SourceColumnsDescription, AllPhysicalAndAllJson)
     EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 1);
 
     /// Physical columns description
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 2);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 5);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 4);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 2);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 5);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 4);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
     ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -136,8 +140,9 @@ TEST(SourceColumnsDescription, AllVirtual)
     EXPECT_EQ(columns_desc.positions[1].virtualPosition(), 1);
 
     /// Physical columns description
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read[0], 6); /// Default is `_tp_time`
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 6); /// Default is `_tp_time`
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
     /// Virtual columns description
     ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 2);
@@ -168,8 +173,10 @@ TEST(SourceColumnsDescription, AllSubcolumn)
     EXPECT_EQ(columns_desc.positions[1].subPosition(), 1);
 
     /// Physical columns description
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 3);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 3);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y", "x"}));
 
     /// Virtual columns description
     ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -212,9 +219,12 @@ TEST(SourceColumnsDescription, AllSubcolumnWithJson)
     EXPECT_EQ(columns_desc.positions[1].subPosition(), 1);
 
     /// Physical columns description
-    ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 2);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 3);
-    EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 5);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 2);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 3);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 5);
+    ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 2);
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y"}));
+    EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[1], std::vector<std::string>({"abc"}));
 
     /// Virtual columns description
     ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -255,8 +265,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         EXPECT_EQ(columns_desc.positions[1].virtualPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 1);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 1);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -280,8 +291,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         EXPECT_EQ(columns_desc.positions[1].virtualPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -306,8 +318,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 1);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 1);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -331,8 +344,9 @@ TEST(SourceColumnsDescription, PhysicalAndVirtual)
         EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 0);
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -367,9 +381,11 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
         EXPECT_EQ(columns_desc.positions[1].subPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 2);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 3);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 2);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 3);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[1], std::vector<std::string>({"y"}));
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -400,9 +416,11 @@ TEST(SourceColumnsDescription, PhysicalAndSubcolumn)
         EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 1);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 2);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 5);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 4);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 2);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 5);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 4);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"abc"}));
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 0);
@@ -443,8 +461,10 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.positions[1].subPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 3);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 3);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y"}));
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -477,8 +497,10 @@ TEST(SourceColumnsDescription, VirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.positions[1].subPosition(), 0);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"abc"}));
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -525,10 +547,13 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.positions[3].subPosition(), 1);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 3);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 3);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[2], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 3);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 3);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[2], 5);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 2);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[1], std::vector<std::string>({"y"}));
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[2], std::vector<std::string>({"abc"}));
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 1);
@@ -591,12 +616,14 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.positions[8].virtualPosition(), 1);
 
         /// Physical columns description
-        ASSERT_EQ(columns_desc.physical_column_positions_to_read.size(), 5);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[0], 3);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[1], 1);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[2], 5);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[3], 4);
-        EXPECT_EQ(columns_desc.physical_column_positions_to_read[4], 2);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 5);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 3);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[2], 5);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[3], 4);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[4], 2);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[0], std::vector<std::string>({"y"}));
 
         /// Virtual columns description
         ASSERT_EQ(columns_desc.virtual_time_columns_calc.size(), 2);
