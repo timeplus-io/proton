@@ -67,6 +67,7 @@ std::pair<String, Int32> TaskRestRouterHandler::executeGet(const Poco::JSON::Obj
             query_context->getUserName(),
             query_context->getPasswordByUserName(query_context->getUserName()),
             "",
+            {},
             log);
 
         if (http_status == HTTPResponse::HTTP_OK)

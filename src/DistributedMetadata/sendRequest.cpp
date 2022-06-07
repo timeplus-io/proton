@@ -32,6 +32,7 @@ std::pair<String, Int32> sendRequest(
     const String & user,
     const String & password,
     const String & payload,
+    const std::vector<std::pair<String, String>> & headers,
     Poco::Logger * log)
 {
     /// One second for connect/send/receive
@@ -48,6 +49,11 @@ std::pair<String, Int32> sendRequest(
         /// FIXME : query ID chain. Change the query ID to avoid same query ID issue
         request.add("x-proton-query-id", "from-" + query_id);
         request.add("x-proton-user", user);
+
+        /// add other headers
+        if (!headers.empty())
+            for(const auto & [k, v]: headers)
+                request.add(k, v);
 
         if (!password.empty())
         {

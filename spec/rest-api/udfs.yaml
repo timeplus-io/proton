@@ -1,0 +1,321 @@
+openapi: 3.0.0
+
+servers:
+  - url: http://{host}:{port}/proton/v1/
+info:
+  version: "1.0.0"
+  title: "UDF service"
+  description: 'Rest API for UDF service, including CRUD operation on user defined functions'
+paths:
+  /udfs:
+    post:
+      summary: Create a user defined function
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UDF'
+      parameters:
+        - name: x-proton-request-id
+          in: header
+          required: false
+          description: the unique id to identify arequest
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-user
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+    get:
+      summary: List all user defined functions (UDF)
+      parameters:
+        - name: x-proton-request-id
+          in: header
+          required: false
+          description: the unique id to identify a request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-user
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UDFListResp"
+        '400':
+          description: Bad Request or Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/errorResp"
+
+  /udfs/{function}:
+    get:
+      summary: Get definition of an existing function
+      parameters:
+        - name: function
+          in: path
+          required: true
+          schema:
+            type: string
+          description: the UDF function name
+        - name: x-proton-request-id
+          in: header
+          required: false
+          description: the unique id to identify a request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-user
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UDFResp"
+        '400':
+          description: Bad Request or Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/errorResp"
+    delete:
+      summary: Delete an existing function
+      parameters:
+        - name: function
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-proton-request-id
+          in: header
+          required: false
+          description: the unique id to identify a request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-user
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-quota
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/generalResp"
+
+
+components:
+  schemas:
+    UDF:
+      type: object
+      required:
+        - "name"
+        - "type"
+        - "arguments"
+        - "return_type"
+      properties:
+        name:
+          description: UDF name, should be unique in proton
+          type: string
+        type:
+          type: string
+          description: executable for local executable or script in S3 or 'remote' for remote web service endpoint, for example "https://function.lambda.us-west-1.aws.com"
+        return_type:
+          type: string
+          description: return type of the UDF.
+        arguments:
+          description: UDF support any number of arguments.
+          type: array
+          items:
+            type: object
+            required:
+              - "name"
+              - "type"
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+        format:
+          type: string
+          default: ArrowStream
+          description: Data format used to transfer data between proton and UDF subprocess. Only available for UDF of 'executable' type. for UDF of 'remote' type, the data format is JSON.
+        command:
+          type: string
+          description: for UDF of 'executable' type, it is the URI of the script file
+        url:
+          type: string
+          description: for UDF of 'remote' type, it is the remote endpoint of web service, for example "https://function.lambda.us-west-1.aws.com"
+        auth_method:
+          type: string
+          description: authorization method used for UDF, only support 'auth_header' now
+        auth_context:
+          type: object
+          description: settings for various authorization method
+          properties:
+            auth_header:
+              type: string
+              description: for UDF of 'remote' type, it is the HTTP header name of request sent to remote endpoint, which can be used for authorization.
+            auth_value:
+              type: string
+              description: for UDF of 'remote' type, it is the value of HTTP header auth_header sent to remote endpoint.
+
+    UDFResp:
+      type: object
+      properties:
+        request_id:
+          type: string
+        data:
+          $ref: "#/components/schemas/UDF"
+
+    generalResp:
+      type: object
+      properties:
+        request_id:
+          type: string
+
+    errorResp:
+      type: object
+      properties:
+        code:
+          type: number
+        error_msg:
+          type: string
+        request_id:
+          type: string
+      required:
+        - code
+        - error_msg
+        - request_id
+
+    UDFListResp:
+      type: object
+      properties:
+        request_id:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/UDF"
+

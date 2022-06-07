@@ -144,6 +144,7 @@ std::pair<String, Int32> IngestStatusHandler::executePost(const Poco::JSON::Obje
             query_context->getUserName(),
             query_context->getPasswordByUserName(query_context->getUserName()),
             body,
+            {},
             log);
 
         if (http_status == HTTPResponse::HTTP_OK)

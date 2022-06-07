@@ -50,7 +50,7 @@ public:
 
     bool isVariadic() const override { return false; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
-    size_t getNumberOfArguments() const override { return executable_function->getConfiguration().argument_types.size(); }
+    size_t getNumberOfArguments() const override { return executable_function->getConfiguration().arguments.size(); }
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return true; }
@@ -98,7 +98,7 @@ public:
             auto & column_with_type = arguments_copy[i];
             column_with_type.column = column_with_type.column->convertToFullColumnIfConst();
 
-            const auto & argument_type = configuration.argument_types[i];
+            const auto & argument_type = configuration.arguments[i].type;
             if (areTypesEqual(arguments_copy[i].type, argument_type))
                 continue;
 

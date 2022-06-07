@@ -1063,6 +1063,7 @@ metastore_server:
         namespace:
             - "proton"
             - "neutron"
+            - "udf"
 
     coordination_settings:
         # <!-- Default client session timeout -->

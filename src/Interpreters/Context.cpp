@@ -78,6 +78,7 @@
 #include <Access/Authentication.h>
 #include <Coordination/MetaStoreDispatcher.h>
 #include <Core/SettingsUtil.h>
+#include <Interpreters/MetaStoreJSONConfigRepository.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <base/getFQDNOrHostName.h>
 #include <Common/ProtonCommon.h>
@@ -198,7 +199,7 @@ struct ContextSharedPart
     ExternalLoaderXMLConfigRepository * external_dictionaries_config_repository = nullptr;
     scope_guard dictionaries_xmls;
 
-    ExternalLoaderXMLConfigRepository * user_defined_executable_functions_config_repository = nullptr;
+    MetaStoreJSONConfigRepository * user_defined_executable_functions_config_repository = nullptr;
     scope_guard user_defined_executable_functions_xmls;
 
 #if USE_NLP
@@ -1513,36 +1514,32 @@ void Context::loadOrReloadDictionaries(const Poco::Util::AbstractConfiguration &
     shared->dictionaries_xmls = external_dictionaries_loader.addConfigRepository(std::move(repository));
 }
 
-void Context::loadOrReloadUserDefinedExecutableFunctions(const Poco::Util::AbstractConfiguration & config)
+/// proton: starts
+void Context::loadOrReloadUserDefinedExecutableFunctions()
 {
-    auto patterns_values = getMultipleValuesFromConfig(config, "", "user_defined_executable_functions_config");
-    /// proton: starts
-    std::unordered_set<std::string> patterns;
-    if (!patterns_values.empty())
-        patterns.insert(patterns_values.begin(), patterns_values.end());
-    else
-    {
-        patterns.insert(std::filesystem::path(shared->user_scripts_path) / ProtonConsts::UDF_XML_PATTERN);
-    }
-    /// proton: ends
-
     std::lock_guard lock(shared->external_user_defined_executable_functions_mutex);
-
     auto & external_user_defined_executable_functions_loader = getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
-
     if (shared->user_defined_executable_functions_config_repository)
     {
-        shared->user_defined_executable_functions_config_repository->updatePatterns(patterns);
-        external_user_defined_executable_functions_loader.reloadConfig(shared->user_defined_executable_functions_config_repository->getName());
+        external_user_defined_executable_functions_loader.reloadConfig(
+            shared->user_defined_executable_functions_config_repository->getName());
         return;
     }
-
-    auto app_path = getPath();
-    auto config_path = getConfigRef().getString("config-file", "config.xml");
-    auto repository = std::make_unique<ExternalLoaderXMLConfigRepository>(app_path, config_path, patterns);
+    auto repository = std::make_unique<MetaStoreJSONConfigRepository>(getMetaStoreDispatcher(), ProtonConsts::UDF_METASTORE_NAMESPACE);
     shared->user_defined_executable_functions_config_repository = repository.get();
-    shared->user_defined_executable_functions_xmls = external_user_defined_executable_functions_loader.addConfigRepository(std::move(repository));
+    shared->user_defined_executable_functions_xmls
+        = external_user_defined_executable_functions_loader.addConfigRepository(std::move(repository));
 }
+
+MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigRepository() const
+{
+    std::lock_guard lock(shared->metastore_dispatcher_mutex);
+    if (!shared->user_defined_executable_functions_config_repository)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "MetaStoreJSONConfigRepository must be created first");
+
+    return shared->user_defined_executable_functions_config_repository;
+}
+/// proton: ends
 
 #if USE_NLP
 

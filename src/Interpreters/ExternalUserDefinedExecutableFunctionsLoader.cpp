@@ -9,6 +9,9 @@
 #include <Functions/FunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
+/// proton: starts
+#include <Poco/JSON/Parser.h>
+/// proton: ends
 
 namespace DB
 {
@@ -56,23 +59,28 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "The aggregate function '{}' already exists", name);
 
     /// proton: starts
-    String type = config.getString(key_in_config + ".type", "executable_pool");
-    /// proton: ends
-
-    bool is_executable_pool = false;
-
+    String type = config.getString(key_in_config + ".type");
+    UserDefinedExecutableFunctionConfiguration::FuncType func_type;
+    String command_value;
+    Poco::URI url;
     if (type == "executable")
-        is_executable_pool = false;
-    else if (type == "executable_pool")
-        is_executable_pool = true;
+    {
+        func_type = UserDefinedExecutableFunctionConfiguration::FuncType::EXECUTABLE;
+        command_value = config.getString(key_in_config + ".command", "");
+    }
+    else if (type == "remote")
+    {
+        func_type = UserDefinedExecutableFunctionConfiguration::FuncType::REMOTE;
+        url = Poco::URI(config.getString(key_in_config + ".url"));
+    }
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Wrong user defined function type expected 'executable' or 'executable_pool' actual {}",
-            type);
+                        "Wrong user defined function type expected 'executable' or 'remote' actual {}",
+                        type);
+    /// proton: ends
 
     bool execute_direct = config.getBool(key_in_config + ".execute_direct", true);
 
-    String command_value = config.getString(key_in_config + ".command");
     std::vector<String> command_arguments;
 
     if (execute_direct)
@@ -88,51 +96,82 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
     /// proton: ends
     DataTypePtr result_type = DataTypeFactory::instance().get(config.getString(key_in_config + ".return_type"));
     bool send_chunk_header = config.getBool(key_in_config + ".send_chunk_header", false);
-    size_t command_termination_timeout_seconds = config.getUInt64(key_in_config + ".command_termination_timeout", 10);
+    size_t command_termination_timeout_seconds = config.getUInt64(key_in_config + ".command_termination_timeout", 0);
     size_t command_read_timeout_milliseconds = config.getUInt64(key_in_config + ".command_read_timeout", 10000);
     size_t command_write_timeout_milliseconds = config.getUInt64(key_in_config + ".command_write_timeout", 10000);
 
     size_t pool_size = 0;
     size_t max_command_execution_time = 0;
 
-    if (is_executable_pool)
-    {
-        /// proton: starts
-        pool_size = config.getUInt64(key_in_config + ".pool_size", 1);
-        /// proton: ends
-        max_command_execution_time = config.getUInt64(key_in_config + ".max_command_execution_time", 10);
+    /// proton: starts
+    pool_size = config.getUInt64(key_in_config + ".pool_size", 1);
+    /// proton: ends
+    max_command_execution_time = config.getUInt64(key_in_config + ".max_command_execution_time", 10);
 
-        size_t max_execution_time_seconds = static_cast<size_t>(getContext()->getSettings().max_execution_time.totalSeconds());
-        if (max_execution_time_seconds != 0 && max_command_execution_time > max_execution_time_seconds)
-            max_command_execution_time = max_execution_time_seconds;
-    }
+    size_t max_execution_time_seconds = static_cast<size_t>(getContext()->getSettings().max_execution_time.totalSeconds());
+    if (max_execution_time_seconds != 0 && max_command_execution_time > max_execution_time_seconds)
+        max_command_execution_time = max_execution_time_seconds;
 
     ExternalLoadableLifetime lifetime;
 
     if (config.has(key_in_config + ".lifetime"))
         lifetime = ExternalLoadableLifetime(config, key_in_config + ".lifetime");
 
-    std::vector<DataTypePtr> argument_types;
-
-    Poco::Util::AbstractConfiguration::Keys config_elems;
-    config.keys(key_in_config, config_elems);
-
-    for (const auto & config_elem : config_elems)
+    /// proton: starts
+    /// Below implementation only available for JSON configuration, because Poco::Util::AbstractConfiguration cannot work well with Array
+    std::vector<UserDefinedExecutableFunctionConfiguration::Argument> arguments;
+    String arg_str = config.getRawString(key_in_config + ".arguments", "");
+    if (!arg_str.empty())
     {
-        if (!startsWith(config_elem, "argument"))
-            continue;
-
-        const auto argument_prefix = key_in_config + '.' + config_elem + '.';
-        auto argument_type = DataTypeFactory::instance().get(config.getString(argument_prefix + "type"));
-        argument_types.emplace_back(std::move(argument_type));
+        Poco::JSON::Parser parser;
+        try
+        {
+            auto json_arguments = parser.parse(arg_str).extract<Poco::JSON::Array::Ptr>();
+            for (size_t i = 0; i < json_arguments->size(); i++)
+            {
+                UserDefinedExecutableFunctionConfiguration::Argument argument;
+                argument.name = json_arguments->getObject(i)->get("name").toString();
+                argument.type = DataTypeFactory::instance().get(json_arguments->getObject(i)->get("type").toString());
+                arguments.emplace_back(std::move(argument));
+            }
+        }
+        catch (const std::exception &)
+        {
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid UDF config");
+        }
     }
+
+    /// handler auth_method
+    UserDefinedExecutableFunctionConfiguration::AuthMethod auth_method = UserDefinedExecutableFunctionConfiguration::AuthMethod::NONE;
+    UserDefinedExecutableFunctionConfiguration::AuthContext auth_ctx;
+    String method = config.getString(key_in_config + ".auth_method", "none");
+    if (method == "none")
+    {
+        auth_method = UserDefinedExecutableFunctionConfiguration::AuthMethod::NONE;
+    }
+    else if (method == "auth_header")
+    {
+        auth_ctx.key_name = config.getString(key_in_config + ".auth_context.key_name", "");
+        auth_ctx.key_value = config.getString(key_in_config + ".auth_context.key_value", "");
+    }
+    else
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                        "Wrong 'auth_method' expected 'none' or 'auth_header' actual {}",
+                        method);
+    /// proton: ends
 
     UserDefinedExecutableFunctionConfiguration function_configuration
     {
+        /// proton: starts.
+        .type = std::move(func_type), //-V1030
+        .url = std::move(url),
+        .auth_method = std::move(auth_method),
+        .auth_context = std::move(auth_ctx),
+        .arguments = std::move(arguments),
         .name = std::move(name), //-V1030
         .command = std::move(command_value), //-V1030
+        /// proton: ends
         .command_arguments = std::move(command_arguments), //-V1030
-        .argument_types = std::move(argument_types), //-V1030
         .result_type = std::move(result_type), //-V1030
     };
 
@@ -144,7 +183,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         .command_write_timeout_milliseconds = command_write_timeout_milliseconds,
         .pool_size = pool_size,
         .max_command_execution_time_seconds = max_command_execution_time,
-        .is_executable_pool = is_executable_pool,
+        .is_executable_pool = true,
         .send_chunk_header = send_chunk_header,
         .execute_direct = execute_direct
     };

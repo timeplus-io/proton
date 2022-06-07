@@ -84,6 +84,7 @@ std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object
         query_context->getUserName(),
         query_context->getPasswordByUserName(query_context->getUserName()),
         "",
+        {},
         log);
 
     if (http_status == HTTPResponse::HTTP_OK)

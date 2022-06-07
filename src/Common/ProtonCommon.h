@@ -48,6 +48,9 @@ const UInt64 DEFAULT_DDL_TIMEOUT_MS = 10000;
 /// Default settings for session window
 const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeout_interval of session window
 
+/// Metastore namespace for UDF configuration
+const String UDF_METASTORE_NAMESPACE = "udf";
+
 /// JSON VALUES PREFIX for OptimizeJsonValueVisitor
 const String JSON_VALUES_PREFIX = "__json_values_";
 

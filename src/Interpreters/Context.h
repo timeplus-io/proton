@@ -128,6 +128,7 @@ class MetaStoreDispatcher;
 class PipelineMetricLog;
 struct StreamSettings;
 using MergeTreeSettings = StreamSettings;
+class MetaStoreJSONConfigRepository;
 /// proton: ends.
 
 class IOutputFormat;
@@ -647,7 +648,10 @@ public:
     ExternalModelsLoader & getExternalModelsLoaderUnlocked();
     void tryCreateEmbeddedDictionaries(const Poco::Util::AbstractConfiguration & config) const;
     void loadOrReloadDictionaries(const Poco::Util::AbstractConfiguration & config);
-    void loadOrReloadUserDefinedExecutableFunctions(const Poco::Util::AbstractConfiguration & config);
+    /// proton: starts
+    void loadOrReloadUserDefinedExecutableFunctions();
+    MetaStoreJSONConfigRepository * getMetaStoreJSONConfigRepository() const;
+    /// proton: ends
     void loadOrReloadModels(const Poco::Util::AbstractConfiguration & config);
 
 #if USE_NLP

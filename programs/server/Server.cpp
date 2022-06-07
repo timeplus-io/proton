@@ -995,91 +995,6 @@ if (ThreadFuzzer::instance().isEffective())
         SensitiveDataMasker::setInstance(std::make_unique<SensitiveDataMasker>(config(), "query_masking_rules"));
     }
 
-    auto main_config_reloader = std::make_unique<ConfigReloader>(
-        config_path,
-        include_from_path,
-        config().getString("path", ""),
-        [&](ConfigurationPtr config, bool initial_loading)
-        {
-            Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
-
-            /// Limit on total memory usage
-            size_t max_server_memory_usage = config->getUInt64("max_server_memory_usage", 0);
-
-            double max_server_memory_usage_to_ram_ratio = config->getDouble("max_server_memory_usage_to_ram_ratio", 0.9);
-            size_t default_max_server_memory_usage = memory_amount * max_server_memory_usage_to_ram_ratio;
-
-            if (max_server_memory_usage == 0)
-            {
-                max_server_memory_usage = default_max_server_memory_usage;
-                LOG_INFO(log, "Setting max_server_memory_usage was set to {}"
-                    " ({} available * {:.2f} max_server_memory_usage_to_ram_ratio)",
-                    formatReadableSizeWithBinarySuffix(max_server_memory_usage),
-                    formatReadableSizeWithBinarySuffix(memory_amount),
-                    max_server_memory_usage_to_ram_ratio);
-            }
-            else if (max_server_memory_usage > default_max_server_memory_usage)
-            {
-                max_server_memory_usage = default_max_server_memory_usage;
-                LOG_INFO(log, "Setting max_server_memory_usage was lowered to {}"
-                    " because the system has low amount of memory. The amount was"
-                    " calculated as {} available"
-                    " * {:.2f} max_server_memory_usage_to_ram_ratio",
-                    formatReadableSizeWithBinarySuffix(max_server_memory_usage),
-                    formatReadableSizeWithBinarySuffix(memory_amount),
-                    max_server_memory_usage_to_ram_ratio);
-            }
-
-            total_memory_tracker.setHardLimit(max_server_memory_usage);
-            total_memory_tracker.setDescription("(total)");
-            total_memory_tracker.setMetric(CurrentMetrics::MemoryTracking);
-
-            // FIXME logging-related things need synchronization -- see the 'Logger * log' saved
-            // in a lot of places. For now, disable updating log configuration without server restart.
-            //setTextLog(global_context->getTextLog());
-            updateLevels(*config, logger());
-            global_context->setClustersConfig(config, false);
-            global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
-            global_context->setExternalAuthenticatorsConfig(*config);
-
-            global_context->loadOrReloadDictionaries(*config);
-            global_context->loadOrReloadModels(*config);
-            global_context->loadOrReloadUserDefinedExecutableFunctions(*config);
-
-            /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
-            if (config->has("max_stream_size_to_drop"))
-                global_context->setMaxTableSizeToDrop(config->getUInt64("max_stream_size_to_drop"));
-
-            if (config->has("max_partition_size_to_drop"))
-                global_context->setMaxPartitionSizeToDrop(config->getUInt64("max_partition_size_to_drop"));
-
-            if (config->has("max_concurrent_queries"))
-                global_context->getProcessList().setMaxSize(config->getInt("max_concurrent_queries", 0));
-
-            if (config->has("max_concurrent_insert_queries"))
-                global_context->getProcessList().setMaxInsertQueriesAmount(config->getInt("max_concurrent_insert_queries", 0));
-
-            if (config->has("max_concurrent_select_queries"))
-                global_context->getProcessList().setMaxSelectQueriesAmount(config->getInt("max_concurrent_select_queries", 0));
-
-            if (config->has("keeper_server"))
-                global_context->updateKeeperConfiguration(*config);
-
-            if (!initial_loading)
-            {
-                std::lock_guard lock(servers_lock);
-                updateServers(*config, server_pool, async_metrics, servers);
-            }
-
-            global_context->updateStorageConfiguration(*config);
-            global_context->updateInterserverCredentials(*config);
-
-            CompressionCodecEncrypted::Configuration::instance().tryLoad(*config, "encryption_codecs");
-
-            ProfileEvents::increment(ProfileEvents::MainConfigLoads);
-        },
-        /* already_loaded = */ false);  /// Reload it right now (initial loading)
-
     const auto listen_hosts = getListenHosts(config());
     const auto listen_try = getListenTry(config());
 
@@ -1192,6 +1107,93 @@ if (ThreadFuzzer::instance().isEffective())
         LOG_INFO(log, "Listening for {}", server.getDescription());
     }
 
+    auto main_config_reloader = std::make_unique<ConfigReloader>(
+        config_path,
+        include_from_path,
+        config().getString("path", ""),
+        [&](ConfigurationPtr config, bool initial_loading)
+        {
+            Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
+
+            /// Limit on total memory usage
+            size_t max_server_memory_usage = config->getUInt64("max_server_memory_usage", 0);
+
+            double max_server_memory_usage_to_ram_ratio = config->getDouble("max_server_memory_usage_to_ram_ratio", 0.9);
+            size_t default_max_server_memory_usage = memory_amount * max_server_memory_usage_to_ram_ratio;
+
+            if (max_server_memory_usage == 0)
+            {
+                max_server_memory_usage = default_max_server_memory_usage;
+                LOG_INFO(log, "Setting max_server_memory_usage was set to {}"
+                              " ({} available * {:.2f} max_server_memory_usage_to_ram_ratio)",
+                         formatReadableSizeWithBinarySuffix(max_server_memory_usage),
+                         formatReadableSizeWithBinarySuffix(memory_amount),
+                         max_server_memory_usage_to_ram_ratio);
+            }
+            else if (max_server_memory_usage > default_max_server_memory_usage)
+            {
+                max_server_memory_usage = default_max_server_memory_usage;
+                LOG_INFO(log, "Setting max_server_memory_usage was lowered to {}"
+                              " because the system has low amount of memory. The amount was"
+                              " calculated as {} available"
+                              " * {:.2f} max_server_memory_usage_to_ram_ratio",
+                         formatReadableSizeWithBinarySuffix(max_server_memory_usage),
+                         formatReadableSizeWithBinarySuffix(memory_amount),
+                         max_server_memory_usage_to_ram_ratio);
+            }
+
+            total_memory_tracker.setHardLimit(max_server_memory_usage);
+            total_memory_tracker.setDescription("(total)");
+            total_memory_tracker.setMetric(CurrentMetrics::MemoryTracking);
+
+            // FIXME logging-related things need synchronization -- see the 'Logger * log' saved
+            // in a lot of places. For now, disable updating log configuration without server restart.
+            //setTextLog(global_context->getTextLog());
+            updateLevels(*config, logger());
+            global_context->setClustersConfig(config, false);
+            global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
+            global_context->setExternalAuthenticatorsConfig(*config);
+
+            global_context->loadOrReloadDictionaries(*config);
+            global_context->loadOrReloadModels(*config);
+            /// proton: starts
+            //global_context->loadOrReloadUserDefinedExecutableFunctions(*config);
+            global_context->loadOrReloadUserDefinedExecutableFunctions();
+            /// proton: ends
+
+            /// Setup protection to avoid accidental DROP for big tables (that are greater than 50 GB by default)
+            if (config->has("max_stream_size_to_drop"))
+                global_context->setMaxTableSizeToDrop(config->getUInt64("max_stream_size_to_drop"));
+
+            if (config->has("max_partition_size_to_drop"))
+                global_context->setMaxPartitionSizeToDrop(config->getUInt64("max_partition_size_to_drop"));
+
+            if (config->has("max_concurrent_queries"))
+                global_context->getProcessList().setMaxSize(config->getInt("max_concurrent_queries", 0));
+
+            if (config->has("max_concurrent_insert_queries"))
+                global_context->getProcessList().setMaxInsertQueriesAmount(config->getInt("max_concurrent_insert_queries", 0));
+
+            if (config->has("max_concurrent_select_queries"))
+                global_context->getProcessList().setMaxSelectQueriesAmount(config->getInt("max_concurrent_select_queries", 0));
+
+            if (config->has("keeper_server"))
+                global_context->updateKeeperConfiguration(*config);
+
+            if (!initial_loading)
+            {
+                std::lock_guard lock(servers_lock);
+                updateServers(*config, server_pool, async_metrics, servers);
+            }
+
+            global_context->updateStorageConfiguration(*config);
+            global_context->updateInterserverCredentials(*config);
+
+            CompressionCodecEncrypted::Configuration::instance().tryLoad(*config, "encryption_codecs");
+
+            ProfileEvents::increment(ProfileEvents::MainConfigLoads);
+        },
+        /* already_loaded = */ false);  /// Reload it right now (initial loading)
     auto & access_control = global_context->getAccessControl();
     if (config().has("custom_settings_prefixes"))
         access_control.setCustomSettingsPrefixes(config().getString("custom_settings_prefixes"));
@@ -1576,7 +1578,9 @@ if (ThreadFuzzer::instance().isEffective())
         /// try to load user defined executable functions, throw on error and die
         try
         {
-            global_context->loadOrReloadUserDefinedExecutableFunctions(config());
+            /// proton: starts
+            global_context->loadOrReloadUserDefinedExecutableFunctions();
+            /// proton: ends
         }
         catch (...)
         {

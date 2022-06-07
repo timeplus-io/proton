@@ -12,10 +12,41 @@ namespace DB
 
 struct UserDefinedExecutableFunctionConfiguration
 {
+    /// proton: starts.
+    enum FuncType
+    {
+        EXECUTABLE = 0,
+        REMOTE = 1
+    };
+    /// 'type' can be 'executable' or 'remote'
+    FuncType type;
+    /// url of remote endpoint, only available when 'type' is 'remote'
+    Poco::URI url;
+    enum AuthMethod
+    {
+        NONE = 0,
+        AUTH_HEADER = 1
+    };
+    AuthMethod auth_method;
+    struct AuthContext
+    {
+        /// authorization header name, only available when 'type' is 'remote' and 'auth_method' is AUTH_HEADER
+        std::string key_name;
+        /// authorization header value, only available when 'type' is 'remote' and 'auth_method' is AUTH_HEADER
+        std::string key_value;
+    };
+    AuthContext auth_context;
+    struct Argument
+    {
+        std::string name;
+        DataTypePtr type;
+    };
+    std::vector<Argument> arguments;
+    /// proton: ends
     std::string name;
+    /// executable file name, only available when 'type' is 'remote'
     std::string command;
     std::vector<std::string> command_arguments;
-    std::vector<DataTypePtr> argument_types;
     DataTypePtr result_type;
 };
 

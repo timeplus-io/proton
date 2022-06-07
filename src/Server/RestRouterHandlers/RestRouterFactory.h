@@ -17,6 +17,7 @@
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
+#include "UDFHandler.h"
 
 #include <re2/re2.h>
 #include <Common/escapeForFileName.h>
@@ -149,7 +150,15 @@ public:
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<SQLFormatHandler>(query_context);
             });
-
+#if USE_NURAFT
+        /// GET/POST/DELETE: /proton/v1/udfs[/{func}]
+        factory.registerRouterHandler(
+            "/proton/v1/udfs(/?$|/(?P<func>[%\\w]+))",
+            "GET/POST/DELETE",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<UDFHandler>(query_context);
+            });
+#endif
         factory.registerRouterHandler(
             "/proton/v1/tasks(/?$|/(?P<task_id>[-\\w]+))",
             "GET",

@@ -250,7 +250,7 @@ Int32 DDLService::doDDL(
 
     for (auto i = 0; i < MAX_RETRIES; ++i)
     {
-        auto [response, http_code] = sendRequest(uri, method, query_id, user, password, payload, log);
+        auto [response, http_code] = sendRequest(uri, method, query_id, user, password, payload, {}, log);
 
         err = toErrorCode(http_code, response);
         if (err == ErrorCodes::OK)
