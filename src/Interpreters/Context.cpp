@@ -841,7 +841,7 @@ void Context::setUserScriptsPath(const String & path)
     shared->user_scripts_path = path;
 }
 
-void Context::addWarningMessage(const String & msg)
+void Context::addWarningMessage(const String & msg) const
 {
     std::lock_guard lock(shared->mutex);
     shared->addWarningMessage(msg);
@@ -905,6 +905,7 @@ void Context::setUser(const UUID & user_id_)
         user_id_, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info);
 
     auto user = access->getUser();
+
     current_roles = std::make_shared<std::vector<UUID>>(user->granted_roles.findGranted(user->default_roles));
 
     auto default_profile_info = access->getDefaultProfileInfo();
@@ -1021,7 +1022,7 @@ void Context::calculateAccessRightsWithLock(const std::lock_guard<ContextSharedM
             /* use_default_roles = */ false,
             settings,
             current_database,
-            client_info);    
+            client_info);
 }
 
 
@@ -3449,7 +3450,7 @@ IAsynchronousReader & Context::getThreadPoolReader(FilesystemReaderType type) co
         auto pool_size = getThreadPoolReaderSizeFromConfig(type, config);
         auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
         shared->asynchronous_remote_fs_reader = std::make_unique<ThreadPoolRemoteFSReader>(pool_size, queue_size);
-        
+
         queue_size = config.getUInt(".threadpool_local_fs_reader_queue_size", 1000000);
         shared->asynchronous_local_fs_reader = std::make_unique<ThreadPoolReader>(pool_size, queue_size);
 

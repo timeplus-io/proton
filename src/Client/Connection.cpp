@@ -373,11 +373,10 @@ void Connection::sendClusterNameAndSalt()
 
 bool Connection::ping()
 {
-    // LOG_TRACE(log_wrapper.get(), "Ping");
-
-    TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
     try
     {
+        TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
+
         UInt64 pong = 0;
         writeVarUInt(Protocol::Client::Ping, *out);
         out->next();
@@ -822,7 +821,6 @@ std::optional<UInt64> Connection::checkPacket(size_t timeout_microseconds)
 
     if (hasReadPendingData() || poll(timeout_microseconds))
     {
-        // LOG_TRACE(log_wrapper.get(), "Receiving packet type");
         UInt64 packet_type;
         readVarUInt(packet_type, *in);
 
