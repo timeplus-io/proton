@@ -291,6 +291,14 @@ if [ "$STREAM_STORAGE_TYPE" = "kafka" ]; then
             exit 1
         fi
     fi
+
+    if [ -n "$STREAM_STORAGE_LOGSTORE_REPLICATION_FACTOR" ]; then
+        sed -i"" "s/logstore_replication_factor: 1/logstore_replication_factor: $STREAM_STORAGE_LOGSTORE_REPLICATION_FACTOR/g" "$PROTON_CONFIG"
+        if [[ $? -ne 0 ]]; then
+            echo >&2 'Failed to set kafka logstore_replication_factor.'
+            exit 1
+        fi
+    fi
 elif [ "$STREAM_STORAGE_TYPE" = "nativelog" ]; then
     sed -i"" "/kafka:/{n;s/enabled: true/enabled: false/g}" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then

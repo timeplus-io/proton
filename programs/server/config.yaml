@@ -927,6 +927,7 @@ settings:
         default_sharding_expr: "rand()"
         distributed_ingest_mode: "async"    # Data ingestion mode for Stream
         logstore: ""
+        logstore_replication_factor: 1
         storage_type: "hybrid"
 
 cluster_settings:
