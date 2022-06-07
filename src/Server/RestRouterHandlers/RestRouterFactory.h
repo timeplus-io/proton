@@ -44,16 +44,18 @@ public:
 
     static void registerRestRouterHandlers()
     {
+        constexpr auto * stream_name_regex = "(?P<stream>[_%\\.\\-\\w]+)";
+
         auto & factory = RestRouterFactory::instance();
         factory.registerRouterHandler(
-            "/proton/v1/ingest/streams/(?P<stream>[%\\w]+)(\\?mode=\\w+){0,1}",
+            fmt::format("/proton/v1/ingest/streams/{}(\\?mode=\\w+){{0,1}}", stream_name_regex),
             "POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ingest/rawstores/(?P<rawstore>[%\\w]+)(\\?mode=\\w+){0,1}",
+            fmt::format("/proton/v1/ingest/rawstores/{}(\\?mode=\\w+){{0,1}}", stream_name_regex),
             "POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<IngestRawStoreHandler>(query_context);
@@ -88,7 +90,7 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/streams/(?P<stream>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+            fmt::format("/proton/v1/ddl/streams/{}(\\?[\\w\\-=&#]+){{0,1}}", stream_name_regex),
             "DELETE" /* So far, not support PATCH */,
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
@@ -102,7 +104,7 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/rawstores/(?P<table>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+            fmt::format("/proton/v1/ddl/rawstores/{}(\\?[\\w\\-=&#]+){{0,1}}", stream_name_regex),
             "DELETE" /* So far, not support PATCH */,
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<RawstoreTableRestRouterHandler>(query_context);
@@ -110,14 +112,14 @@ public:
 
         /// So far, we do not support ALTER TABLE ADD/UPDATE/DELETE COLUMN ...
         // factory.registerRouterHandler(
-        //     "/proton/v1/ddl/(?P<table>[%\\w]+)/columns(\\?[\\w\\-=&#]+){0,1}",
+        //     fmt::format("/proton/v1/ddl/{}/columns(\\?[\\w\\-=&#]+){{0,1}}", stream_name_regex),
         //     "GET/POST",
         //     [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         //         return std::make_shared<ColumnRestRouterHandler>(query_context);
         //     });
 
         // factory.registerRouterHandler(
-        //     "/proton/v1/ddl/(?P<table>[%\\w]+)/columns/(?P<column>[%\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+        //     fmt::format("/proton/v1/ddl/{}/columns/(?P<column>[%\\w]+)(\\?[\\w\\-=&#]+){{0,1}}", stream_name_regex},
         //     "PATCH/DELETE",
         //     [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         //         return std::make_shared<ColumnRestRouterHandler>(query_context);
