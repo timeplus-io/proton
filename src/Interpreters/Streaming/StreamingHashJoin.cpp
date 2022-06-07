@@ -1664,9 +1664,9 @@ void StreamingHashJoin::RightTableData::insertBlock(
     ColumnPtr null_map_holder,
     ColumnUInt8::MutablePtr not_joined_map)
 {
-    assert(block);
-
-    auto rows = block.rows();
+    /// Note structured_block may be empty for cases in which the query doesn't care other non-key columns.
+    /// For example, SELECT count() FROM stream_a JOIN stream_b ON i=ii;
+    auto rows = key_columns[0]->size();
 
     if (bucket > 0 && bucket + bucket_size < join->combined_watermark)
     {

@@ -39,6 +39,7 @@ StreamingJoinTransform::StreamingJoinTransform(
     : IProcessor({left_input_header, right_input_header}, {transformHeader(left_input_header, join_)})
     , join_funcs({&StreamingHashJoin::insertLeftBlock, &StreamingHashJoin::insertRightBlock})
     , port_can_have_more_data{true, true}
+    , header_chunk(outputs.front().getHeader().getColumns(), 0)
     , join(std::move(join_))
     , finish_counter(std::move(finish_counter_))
     , max_block_size(max_block_size_)
@@ -48,12 +49,12 @@ StreamingJoinTransform::StreamingJoinTransform(
 {
     assert(join);
 
+    /// Validate asof join column data type
+    validateAsofJoinKey(left_input_header, right_input_header);
+
     port_contexts.reserve(2);
     port_contexts.emplace_back(&inputs.front());
     port_contexts.emplace_back(&inputs.back());
-
-    /// Validate asof join column data type
-    validateAsofJoinKey(left_input_header, right_input_header);
 
     last_join = MonotonicMilliseconds::now();
 }
@@ -139,17 +140,28 @@ void StreamingJoinTransform::work()
 
         for (size_t i = 0; auto & port_ctx : port_contexts)
         {
-            if (port_ctx.has_input && port_ctx.input_chunk.hasRows())
+            if (port_ctx.has_input)
             {
-                added_rows_since_last_join += port_ctx.input_chunk.getNumRows();
-                auto block{port_ctx.input_port->getHeader().cloneWithColumns(port_ctx.input_chunk.detachColumns())};
-                blocks[i].swap(block);
+                if (port_ctx.input_chunk.hasRows())
+                {
+                    added_rows_since_last_join += port_ctx.input_chunk.getNumRows();
+                    auto block{port_ctx.input_port->getHeader().cloneWithColumns(port_ctx.input_chunk.detachColumns())};
+                    blocks[i].swap(block);
+                }
+
+                if (port_ctx.input_chunk.hasWatermark())
+                    /// We will use one of the watermark if both of them are present at port
+                    /// FIXME
+                    header_chunk.setChunkInfo(port_ctx.input_chunk.getChunkInfo());
+
+                port_ctx.has_input = false;
             }
 
-            port_ctx.has_input = false;
             ++i;
         }
     }
+
+    bool only_timer_blocks = true;
 
     /// FIXME, non_joined_blocks
     /// Doesn't have not processed block, normal case
@@ -158,6 +170,7 @@ void StreamingJoinTransform::work()
         if (!blocks[i])
             continue;
 
+        only_timer_blocks = false;
         auto cached_bytes_so_far = std::invoke(join_funcs[i], join.get(), std::move(blocks[i]));
         if (cached_bytes_so_far > join_max_cached_bytes)
             port_can_have_more_data[i] = false;
@@ -172,16 +185,27 @@ void StreamingJoinTransform::work()
         if (block)
         {
             std::scoped_lock lock(mutex);
-            output_chunks.emplace_back(block.getColumns(), block.rows());
+            /// Piggy-back watermark in header's chunk info if there is
+            output_chunks.emplace_back(block.getColumns(), block.rows(), header_chunk.getChunkInfo());
+            header_chunk.setChunkInfo(nullptr);
         }
 
         /// Join may trigger data recycling
         /// If cached bytes drop below threshold, clear the no more data flag
-        if (left_cached_bytes <= join_max_wait_rows)
-            port_can_have_more_data[0] = true;
+        port_can_have_more_data[0] = left_cached_bytes <= join_max_cached_bytes;
+        port_can_have_more_data[1] = right_cached_bytes <= join_max_cached_bytes;
+    }
 
-        if (right_cached_bytes <= join_max_wait_rows)
-            port_can_have_more_data[1] = true;
+    {
+        std::scoped_lock lock(mutex);
+        if (only_timer_blocks || header_chunk.hasWatermark())
+        {
+            /// We like to propagate the empty timer block as well
+            /// FIXME, when high performance timer is ready, we probably don't need pass along the empty timer block
+            /// in the pipeline
+            output_chunks.emplace_back(header_chunk.clone());
+            header_chunk.setChunkInfo(nullptr);
+        }
     }
 
     if (!port_can_have_more_data[0] && !port_can_have_more_data[1])

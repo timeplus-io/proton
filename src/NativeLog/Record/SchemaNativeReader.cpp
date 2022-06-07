@@ -72,17 +72,16 @@ namespace
 SchemaNativeReader::SchemaNativeReader(DB::ReadBuffer & istr_, bool partial_, uint16_t schema_version_, const SchemaContext & schema_ctx_)
     : istr(istr_), partial(partial_), schema_version(schema_version_), schema_ctx(schema_ctx_)
 {
-    const auto & header = schema_ctx.schema_provider->getSchema(schema_version);
-    buildDeserializationInfos(deserialization_context, header, schema_ctx.column_positions);
+    initDeserializationContext();
 }
 
-void SchemaNativeReader::buildDeserializationInfos(
-    SchemaNativeReader::DeserializationContext & deserialization_infos,
-    const DB::Block & header,
-    const DB::SourceColumnsDescription::PhysicalColumnPositions & column_positions)
+void SchemaNativeReader::initDeserializationContext()
 {
-    deserialization_infos.infos.resize(header.columns());
-    deserialization_infos.target_positions.resize(header.columns());
+    const auto & header = schema_ctx.schema_provider->getSchema(schema_version);
+    const auto & column_positions = schema_ctx.column_positions;
+
+    serder_ctx.infos.resize(header.columns());
+    serder_ctx.target_positions.resize(header.columns());
 
     for (size_t pos = 0; auto & column : header)
     {
@@ -95,25 +94,25 @@ void SchemaNativeReader::buildDeserializationInfos(
             if (subcolumns_iter != column_positions.subcolumns.end())
                 processPartialDeserializationInfo(info, column, subcolumns_iter->second);
 
-            deserialization_infos.infos[pos] = std::move(info);
-            deserialization_infos.target_positions[pos] = target_pos;
+            serder_ctx.infos[pos] = std::move(info);
+            serder_ctx.target_positions[pos] = target_pos;
         }
         else if (column_positions.positions.empty())
         {
             /// Read all
-            deserialization_infos.infos[pos] = column.type->createSerializationInfo({});
-            deserialization_infos.target_positions[pos] = pos;
+            serder_ctx.infos[pos] = column.type->createSerializationInfo({});
+            serder_ctx.target_positions[pos] = pos;
         }
         else
         {
-            deserialization_infos.infos[pos] = nullptr; /// No deserialization infos, skip it.
-            deserialization_infos.target_positions[pos] = nlog::NO_POSITION;
-        }   
+            serder_ctx.infos[pos] = nullptr; /// No deserialization info, skip it.
+            serder_ctx.target_positions[pos] = nlog::NO_POSITION;
+        }
 
         ++pos;
     }
-    assert(deserialization_infos.infos.size() == deserialization_infos.target_positions.size());
-    assert(deserialization_infos.infos.size() == header.columns());
+    assert(serder_ctx.infos.size() == serder_ctx.target_positions.size());
+    assert(serder_ctx.infos.size() == header.columns());
 }
 
 /// read guarantee that the returned block has the same column order as request if `column_positions` is
@@ -147,10 +146,10 @@ void SchemaNativeReader::read(DB::Block & res)
         /// Clone empty here for easier processing for light ingestion case
         if (schema_ctx.column_positions.positions.empty() || schema_ctx.column_positions.positions.size() == header.columns())
             /// Write partial / request full
-            return readPartialForRequestFull(columns, rows, header, deserialization_context, res);
+            return readPartialForRequestFull(columns, rows, header, res);
         else
             /// Write partial / request partial
-            return readPartialForRequestPartial(columns, rows, header, deserialization_context, res);
+            return readPartialForRequestPartial(columns, rows, header, res);
     }
     else
     {
@@ -158,18 +157,17 @@ void SchemaNativeReader::read(DB::Block & res)
 
         if (schema_ctx.column_positions.positions.empty() || schema_ctx.column_positions.positions.size() == header.columns())
             /// Write full / request full
-            return readFullForRequestFull(rows, header, deserialization_context, res);
+            return readFullForRequestFull(rows, header, res);
         else
             /// Write full / request partial
-            return readFullForRequestPartial(rows, header, deserialization_context, res);
+            return readFullForRequestPartial(rows, header, res);
     }
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(
-    uint32_t rows, const DB::Block & header, const DeserializationContext & deserialization_infos, DB::Block & res)
+ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(uint32_t rows, const DB::Block & header, DB::Block & res)
 {
     assert(schema_ctx.column_positions.positions.empty() || schema_ctx.column_positions.positions.size() == header.columns());
-    assert(header.columns() == deserialization_infos.infos.size());
+    assert(header.columns() == serder_ctx.infos.size());
 
     res.reserve(header.columns());
     /// Clone the header
@@ -181,8 +179,8 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(
     /// to ingest stage makes sense since ingestion is more scale and can be more concurrent
     for (size_t pos = 0; auto & column : res)
     {
-        assert(deserialization_infos.infos[pos]);
-        auto info = deserialization_infos.infos[pos]->clone();
+        assert(serder_ctx.infos[pos]);
+        auto info = serder_ctx.infos[pos]->clone();
 
         uint8_t has_custom;
         DB::readIntBinary(has_custom, istr);
@@ -203,15 +201,14 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(
     res.sortColumnInplace(schema_ctx.column_positions.positions);
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(
-    uint32_t rows, const DB::Block & header, const DeserializationContext & deserialization_infos, DB::Block & res)
+ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(uint32_t rows, const DB::Block & header, DB::Block & res)
 {
     size_t read_columns = 0;
     const auto & column_positions = schema_ctx.column_positions.positions;
     size_t request_column_num = column_positions.size();
     assert(!column_positions.empty() && request_column_num < header.columns());
-    assert(header.columns() == deserialization_infos.infos.size());
-    assert(header.columns() == deserialization_infos.target_positions.size());
+    assert(header.columns() == serder_ctx.infos.size());
+    assert(header.columns() == serder_ctx.target_positions.size());
 
     /// We want to avoid header.cloneEmpty() here since it copies the columns names for unwanted columns which is slow
     /// We want to avoid complicate sorting or hash table lookup as well
@@ -220,8 +217,8 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(
 
     for (size_t pos = 0; const auto & column : header)
     {
-        bool need_read = (deserialization_infos.infos[pos] != nullptr);
-        auto info = need_read ? deserialization_infos.infos[pos]->clone() : column.type->createSerializationInfo({});
+        bool need_read = (serder_ctx.infos[pos] != nullptr);
+        auto info = need_read ? serder_ctx.infos[pos]->clone() : column.type->createSerializationInfo({});
 
         uint8_t has_custom;
         readIntBinary(has_custom, istr);
@@ -233,7 +230,7 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(
         /// We probably don't need build a hash table for position lookup. Short integer vector lookup is super fast
         if (need_read)
         {
-            auto target_pos = deserialization_infos.target_positions[pos];
+            auto target_pos = serder_ctx.target_positions[pos];
 
             /// Data
             DB::ColumnPtr read_column = column.type->createColumn(*serialization);
@@ -263,14 +260,13 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(
     }
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(
-    uint16_t columns, uint32_t rows, const DB::Block & header, const DeserializationContext & deserialization_infos, DB::Block & res)
+ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res)
 {
     /// In file system, we store partial columns, but clients request all columns
     /// For those we can get the columns from file system, we deserialize them
     /// For those we cannot get the columns from file system, we create these columns with default values
     assert(schema_ctx.column_positions.positions.empty() || schema_ctx.column_positions.positions.size() == header.columns());
-    assert(header.columns() == deserialization_infos.infos.size());
+    assert(header.columns() == serder_ctx.infos.size());
 
     res.reserve(header.columns());
     /// Clone the header
@@ -292,8 +288,8 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(
         assert(col_pos < res.columns());
 
         auto & column = res.getByPosition(col_pos);
-        assert(deserialization_infos.infos[col_pos]);
-        auto info = deserialization_infos.infos[col_pos]->clone();
+        assert(serder_ctx.infos[col_pos]);
+        auto info = serder_ctx.infos[col_pos]->clone();
 
         uint8_t has_custom;
         DB::readIntBinary(has_custom, istr);
@@ -315,8 +311,8 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(
     res.sortColumnInplace(schema_ctx.column_positions.positions);
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestPartial(
-    uint16_t columns, uint32_t rows, const DB::Block & header, const DeserializationContext & deserialization_infos, DB::Block & res)
+ALWAYS_INLINE void
+SchemaNativeReader::readPartialForRequestPartial(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res)
 {
     /// In file system, we store partial columns, and clients also request partial columns
     /// For those we can get the columns from file system, we deserialize them
@@ -324,8 +320,8 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestPartial(
     const auto & column_positions = schema_ctx.column_positions.positions;
     auto request_column_size = column_positions.size();
     assert(!column_positions.empty() && request_column_size < header.columns());
-    assert(header.columns() == deserialization_infos.infos.size());
-    assert(header.columns() == deserialization_infos.target_positions.size());
+    assert(header.columns() == serder_ctx.infos.size());
+    assert(header.columns() == serder_ctx.target_positions.size());
 
     /// We want to avoid header.cloneEmpty() here since it copies the columns names for unwanted columns which is slow
     /// We want to avoid complicate sorting or hash table lookup as well
@@ -346,8 +342,8 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestPartial(
 
         const auto & column = header.getByPosition(col_pos);
 
-        bool need_read = (deserialization_infos.infos[col_pos] != nullptr);
-        auto info = need_read ? deserialization_infos.infos[col_pos]->clone() : column.type->createSerializationInfo({});
+        bool need_read = (serder_ctx.infos[col_pos] != nullptr);
+        auto info = need_read ? serder_ctx.infos[col_pos]->clone() : column.type->createSerializationInfo({});
 
         uint8_t has_custom;
         DB::readIntBinary(has_custom, istr);
@@ -361,7 +357,7 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestPartial(
             /// Data
             DB::ColumnPtr read_column = column.type->createColumn(*serialization);
 
-            auto target_pos = deserialization_infos.target_positions[col_pos];
+            auto target_pos = serder_ctx.target_positions[col_pos];
 
             readData(*serialization, read_column, istr, rows);
             request_columns[target_pos] = std::move(read_column);

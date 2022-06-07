@@ -73,6 +73,7 @@ private:
     std::vector<decltype(&StreamingHashJoin::insertLeftBlock)> join_funcs;
     std::array<std::atomic_bool , 2> port_can_have_more_data;
 
+    Chunk header_chunk;
     mutable std::mutex mutex;
     std::list<Chunk> output_chunks;
 

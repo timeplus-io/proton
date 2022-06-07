@@ -147,6 +147,13 @@ public:
 
     void append(const Chunk & chunk);
 
+    /// proton : starts
+    bool hasWatermark() const
+    {
+        return chunk_info && chunk_info->ctx.hasWatermark();
+    }
+    /// proton : ends
+
 private:
     Columns columns;
     UInt64 num_rows = 0;

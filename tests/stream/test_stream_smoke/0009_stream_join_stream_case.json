@@ -1298,6 +1298,34 @@
           ]
         }
       ]
+    },
+    {
+      "id": 43,
+      "tags": ["stream_join_stream"],
+      "name": "inner-global-aggr-global",
+      "description": "stream to stream left join globally and then do global aggr",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1044", "query_end_timer":3, "query_type": "stream", "query":"select count() as c from left_stream inner join right_stream on i=ii emit periodic 3s"},
+            {"client":"python", "query_type": "table", "wait":1,
+              "query": "insert into right_stream(ii, ss, tts) values
+              (1, 's1', '2022-05-23 15:44:59'),
+              (1, 's2', '2022-05-23 15:45:00'),
+              (1, 's3', '2022-05-23 15:45:09')"
+            },
+            {"client":"python", "query_type": "table","depends_on":1044, "wait":0, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1044",
+          "expected_results":[
+            [3]
+          ]
+        }
+      ]
     }
   ]
 }

@@ -4,7 +4,6 @@
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <Interpreters/Streaming/StreamingFunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Storages/SelectQueryInfo.h>
