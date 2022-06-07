@@ -54,7 +54,7 @@ public:
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
 
 private:
-    ContextPtr local_context;
+    ContextMutablePtr local_context;
     /// proton: ends.
 
 protected:

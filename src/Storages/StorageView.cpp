@@ -94,8 +94,10 @@ StorageView::StorageView(
     const ColumnsDescription & columns_,
     const String & comment,
     ContextPtr context_)
-    : IStorage(table_id_), local_context(context_)
+    : IStorage(table_id_), local_context(Context::createCopy(context_))
 {
+    local_context->makeQueryContext();
+
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     storage_metadata.setComment(comment);
@@ -108,7 +110,6 @@ StorageView::StorageView(
     storage_metadata.setSelectQuery(description);
     setInMemoryMetadata(storage_metadata);
 }
-
 
 Pipe StorageView::read(
     const Names & column_names,
@@ -255,7 +256,7 @@ StorageSnapshotPtr StorageView::getStorageSnapshot(const StorageMetadataPtr & me
     if (hasObjectColumns(metadata_snapshot->getColumns()))
     {
         auto object_columns
-            = InterpreterSelectWithUnionQuery(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions().analyze())
+            = InterpreterSelectWithUnionQuery(getInMemoryMetadataPtr()->getSelectQuery().inner_query, local_context, SelectQueryOptions().analyze())
                 .getExtendedObjects();
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, *object_columns);
     }
