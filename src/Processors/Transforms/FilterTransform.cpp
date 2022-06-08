@@ -168,13 +168,14 @@ void FilterTransform::transform(Chunk & chunk)
 
     /// If the current block is completely filtered out, let's move on to the next one.
     /// proton: starts
-    if (num_filtered_rows == 0)
+    if (num_filtered_rows == 0 && is_streaming)
     {
-        /// If watermark is not empty, still keep the column header in chunk to avoid emptiness
-        auto chunk_info = chunk.getChunkInfo();
-        if (chunk_info && chunk_info->ctx.hasWatermark())
-            chunk.setColumns(output.getHeader().getColumns(), 0);
-
+        /// In streaming mode, we still like to propagate the empty chunk to downstream
+        /// since downstream so far relies on upstreams data chunk or timer chunk to calculate
+        /// timeout etc, for example, global aggregation or windowed aggregation
+        /// FIXME, we may be able to get rid of empty chunk propagation once we have a high perf timer.
+        chunk.setColumns(output.getHeader().getColumns(), 0);
+    
         /// SimpleTransform will skip it.
         return;
     }
