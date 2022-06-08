@@ -1304,7 +1304,29 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             res->getName());
     }
 
-    res->startup();
+    /// proton: starts.
+    try
+    {
+        res->startup();
+    }
+    catch (...)
+    {
+        /// Drop table if it was successfully created, but was not startup
+        /// We create and execute `drop` query for this table.
+        auto storage_id = res->getStorageID();
+        auto drop_ast = std::make_shared<ASTDropQuery>();
+        drop_ast->setDatabase(storage_id.database_name);
+        drop_ast->setTable(storage_id.table_name);
+        drop_ast->no_ddl_lock = true;
+
+        auto drop_context = Context::createCopy(getContext());
+        InterpreterDropQuery interpreter(drop_ast, drop_context);
+        interpreter.execute();
+
+        throw;
+    }
+    /// proton: ends.
+
     return true;
 }
 
