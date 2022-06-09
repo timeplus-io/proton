@@ -28,16 +28,15 @@ namespace ErrorCodes
 namespace
 {
     std::unique_ptr<StorageExternalStreamImpl>
-    createExternalStream(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context)
+    createExternalStream(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]])
     {
         if (settings->type.value == "")
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
+
         if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
             return std::make_unique<Kafka>(storage, std::move(settings));
-
-        (void)context;
 #ifdef OS_LINUX
-        if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
+        else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
             return std::make_unique<FileLog>(storage, std::move(settings));
         else
 #endif
