@@ -22,6 +22,9 @@
 
 namespace nlog
 {
+
+class MetaStore;
+
 /// The entry point of NativeLog management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
 /// All read and write operations are delegated to the individual log instances
 /// The log manager maintains logs in one or more directories. New logs are created in the data directory
@@ -43,6 +46,7 @@ public:
         LogConfigPtr default_config_,
         const LogCompactorConfig & compactor_config_,
         const LogManagerConfig & log_manager_config_,
+        MetaStore & meta_store_,
         std::shared_ptr<DB::NLOG::BackgroundSchedulePool> scheduler_,
         std::shared_ptr<ThreadPool> adhoc_scheduler_,
         TailCachePtr cache_);
@@ -50,7 +54,8 @@ public:
     ~LogManager();
 
     /// Start the background threads to flush logs and do log cleanup
-    void startup(const std::unordered_map<std::string, std::vector<Stream>> & streams);
+    /// void startup(const std::unordered_map<std::string, std::vector<Stream>> & streams);
+    void startup();
 
     /// Close all the logs
     void shutdown();
@@ -110,7 +115,9 @@ private:
         int64_t log_start_sn,
         int64_t recovery_point);
 
-    LogConfigMap fetchStreamConfigOverrides(LogConfigPtr config, const std::unordered_map<std::string, std::vector<Stream>> & streams);
+    LogConfigMap fetchAllStreamConfigOverrides(LogConfigPtr config);
+
+    /// LogConfigMap fetchAllStreamConfigOverrides(LogConfigPtr config, const std::unordered_map<std::string, std::vector<Stream>> & streams);
 
     void createAndValidateLogDirs(const std::vector<fs::path> & initial_offline_dirs);
 
@@ -194,6 +201,8 @@ private:
     LogConfigPtr default_config;
     LogCompactorConfig compactor_config;
     LogManagerConfig log_manager_config;
+
+    MetaStore & meta_store;
 
     template <typename K, typename KK, typename VV>
     using TwoLevelConcurrentHashMap = ConcurrentHashMap<K, ConcurrentHashMapPtr<KK, VV>>;

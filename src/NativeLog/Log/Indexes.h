@@ -22,7 +22,7 @@ namespace nlog
 class Indexes final : private boost::noncopyable
 {
 public:
-    Indexes(const fs::path & index_dir, int64_t base_sn, Poco::Logger * logger_);
+    Indexes(fs::path index_dir_, int64_t base_sn_, Poco::Logger * logger_);
     ~Indexes();
 
     TimestampSequence lastIndexedAppendTimeSequence() const;
@@ -68,6 +68,23 @@ public:
 
     void close();
 
+    const fs::path & indexDir() const { return index_dir; }
+
+    void renameTo(fs::path new_index_dir, std::error_code & err)
+    {
+        close();
+        fs::rename(index_dir, new_index_dir, err);
+
+        if (!err)
+            index_dir.swap(new_index_dir);
+    }
+
+    void updateParentDir(const fs::path & parent_dir)
+    {
+        /// We are assuming `index_dir` doesn't end with `/`
+        index_dir = parent_dir / index_dir.filename();
+    }
+
 private:
     inline IndexEntry lastIndexedEntry(rocksdb::ColumnFamilyHandle * cf_handle) const;
     inline IndexEntry lowerBound(int64_t key, rocksdb::ColumnFamilyHandle * cf_handle) const;
@@ -81,6 +98,7 @@ private:
     rocksdb::ColumnFamilyHandle * etime_sn_cf_handle;
     rocksdb::ColumnFamilyHandle * atime_sn_cf_handle;
 
+    fs::path index_dir;
     int64_t base_sn;
 
     TimestampSequence last_indexed_etimestamp;

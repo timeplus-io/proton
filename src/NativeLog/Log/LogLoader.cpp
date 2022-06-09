@@ -22,9 +22,10 @@ std::pair<int64_t, int64_t> LogLoader::load(
     bool had_clean_shutdown,
     int64_t log_start_sn,
     int64_t recovery_point,
+    std::shared_ptr<ThreadPool> adhoc_scheduler,
     Poco::Logger * logger,
     LogSegmentsPtr segments,
-    LogSequenceMetadata & log_sn_meta_)
+    LogSequenceMetadata & log_sn_meta)
 {
     /// First pass: go through the files in the log directory and remove any temporary files
     /// and find any interrupted swap operations
@@ -54,14 +55,8 @@ std::pair<int64_t, int64_t> LogLoader::load(
     int64_t new_recovery_point = 0, new_next_sn = 0;
     if (!log_dir.filename().string().ends_with(Log::DELETE_DIR_SUFFIX()))
     {
-        std::tie(new_recovery_point, new_next_sn) = recoverLog(
-            log_dir,
-            log_config,
-            segments,
-            had_clean_shutdown,
-            log_start_sn,
-            recovery_point,
-            logger);
+        std::tie(new_recovery_point, new_next_sn)
+            = recoverLog(log_dir, log_config, segments, had_clean_shutdown, log_start_sn, recovery_point, adhoc_scheduler, logger);
     }
     else
     {
@@ -69,13 +64,15 @@ std::pair<int64_t, int64_t> LogLoader::load(
             segments->add(std::make_shared<LogSegment>(log_dir, /*base_sn*/ 0, log_config, logger));
     }
 
+    /// calculate new log start sn, it shall be a max log sn of the first recovered segments
+    /// and the start sn from checkpoint
     auto new_log_start_sn = std::max(log_start_sn, segments->firstSegment()->baseSequence());
 
     /// Calculate returned log sn meta
     auto active_segment = segments->lastSegment();
-    log_sn_meta_.record_sn = new_next_sn;
-    log_sn_meta_.segment_base_sn = active_segment->baseSequence();
-    log_sn_meta_.file_position = active_segment->size();
+    log_sn_meta.record_sn = new_next_sn;
+    log_sn_meta.segment_base_sn = active_segment->baseSequence();
+    log_sn_meta.file_position = active_segment->size();
 
     return {new_log_start_sn, new_recovery_point};
 }
@@ -234,12 +231,11 @@ void LogLoader::loadSegmentFiles(const fs::path & log_dir, const LogConfig & log
 }
 
 /// @return the number of bytes truncated from the segment
-int32_t LogLoader::recoverSegment(LogSegmentPtr segment)
+size_t LogLoader::recoverSegment(LogSegmentPtr segment)
 {
-    (void)segment;
     /// FIXME
     /// auto producer_state_manager = std::make_shared<ProducerStateManager>();
-    return 0;
+    return segment->recover();
 }
 
 std::pair<int64_t, int64_t> LogLoader::recoverLog(
@@ -249,19 +245,19 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
     bool had_clean_shutdown,
     int64_t log_start_sn,
     int64_t recovery_point,
+    std::shared_ptr<ThreadPool> adhoc_scheduler,
     Poco::Logger * logger)
 {
     /// Return the log end sn if valid
     if (!had_clean_shutdown)
     {
         auto unflushed = segments->values(recovery_point, std::numeric_limits<int64_t>::max());
-        bool truncated = false;
 
         LOG_INFO(logger, "Found unclean shutdown and {} unflushed segments. Recovering these segments.", unflushed.size());
 
-        for (auto iter = unflushed.begin(), end_iter = unflushed.end(); iter != end_iter && !truncated; ++iter)
+        for (auto iter = unflushed.begin(), end_iter = unflushed.end(); iter != end_iter; ++iter)
         {
-            int32_t truncated_bytes = 0;
+            size_t truncated_bytes = 0;
             try
             {
                 truncated_bytes = recoverSegment(*iter);
@@ -269,16 +265,26 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
             catch (const DB::Exception & e)
             {
                 if (e.code() == DB::ErrorCodes::INVALID_SEQUENCE)
-                    /// LOG
-                    truncated_bytes = (*iter)->trim((*iter)->baseSequence());
+                {
+
+                    auto start_sn = (*iter)->baseSequence();
+                    truncated_bytes = (*iter)->trim(start_sn);
+
+                    LOG_ERROR(
+                        logger,
+                        "Found invalid sequence during recovery. Deleting the corrupt segment and creating an empty one with starting "
+                        "sequence={}",
+                        start_sn);
+                }
             }
 
             if (truncated_bytes > 0)
             {
                 /// We had an invalid message, delete all remaining log
-                /// LOG
-                removeSegmentsAsync(unflushed);
-                truncated = true;
+                std::vector<LogSegmentPtr> to_delete(++iter, end_iter);
+                removeSegmentsAsync(segments, unflushed, "data_corruption", adhoc_scheduler, logger);
+                LOG_WARNING(logger, "Remove {} segments due to unclean shutdown which caused corrupted log", to_delete.size());
+                break;
             }
         }
     }
@@ -294,8 +300,8 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
         }
         else
         {
-            /// LOG
-            removeSegmentsAsync(segments->values());
+            LOG_WARNING(logger, "Found all logs are behind log_start_sn={} during boot, delete all of segments", log_start_sn);
+            removeSegmentsAsync(segments, segments->values(), "start_sequence_breached", adhoc_scheduler, logger);
         }
     }
 
@@ -326,8 +332,18 @@ std::pair<int64_t, int64_t> LogLoader::recoverLog(
     }
 }
 
-void LogLoader::removeSegmentsAsync(const std::vector<LogSegmentPtr> & segments)
+void LogLoader::removeSegmentsAsync(
+    LogSegmentsPtr all_segments,
+    const std::vector<LogSegmentPtr> & segments_to_remove,
+    const std::string & reason,
+    std::shared_ptr<ThreadPool> adhoc_scheduler,
+    Poco::Logger * logger)
 {
-    (void)segments;
+    /// First remove segments from all_segments
+    for (const auto & seg : segments_to_remove)
+        all_segments->remove(seg->baseSequence());
+
+    /// Delete them from file system
+    Loglet::removeSegmentFiles(segments_to_remove, true, reason, adhoc_scheduler, logger);
 }
 }

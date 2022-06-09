@@ -168,8 +168,8 @@ struct Settings;
     M(Int64, logstore_request_timeout_ms, 30000, "Time out value for an ingest request to the backend write-ahead log", 0) \
     M(Int64, logstore_retention_bytes, -1, "When this threshold reaches, streaming storage deletes old data", 0) \
     M(Int64, logstore_retention_ms, -1, "when this threshold reaches, streaming storage delete old data", 0) \
-    M(Int64, logstore_flush_messages, -1, "Tell streaming storage to call fsync per flush messages", 0) \
-    M(Int64, logstore_flush_ms, -1, "Tell streaming storage to call fsync every flush_ms interval", 0) \
+    M(Int64, logstore_flush_messages, 1000, "Tell streaming storage to call fsync per flush messages", 0) \
+    M(Int64, logstore_flush_ms, 120000, "Tell streaming storage to call fsync every flush_ms interval", 0) \
     M(Int64, distributed_flush_threshold_ms, 2000, "Time threshold for streaming storage to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_count, 100000, "Row count threshold for streaming storage to flush consumed data from write-ahead log", 0) \
     M(Int64, distributed_flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for streaming storage to flush consumed data from write-ahead log", 0) \

@@ -229,18 +229,13 @@ void NativeLog::startup()
         config.logConfig(),
         config.logCompactorConfig(),
         config.logManagerConfig(),
+        *meta_store,
         scheduler,
         adhoc_scheduler,
         cache);
 
     log_manager.swap(lmgr);
-    auto stream_response = meta_store->listStreams("", ListStreamsRequest{""});
-    std::unordered_map<std::string, std::vector<Stream>> streams;
-
-    for (auto & stream_desc : stream_response.streams)
-        streams[stream_desc.ns].emplace_back(stream_desc.stream, stream_desc.id);
-
-    log_manager->startup(streams);
+    log_manager->startup();
 
     LOG_INFO(logger, "Started");
 }

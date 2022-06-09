@@ -112,6 +112,8 @@ public:
     /// API calls forwarding to Loglet
     int64_t logEndSequence() const { return loglet->logEndSequence(); }
 
+    size_t size() const { return loglet->size(); }
+
 private:
     inline LogAppendDescription analyzeAndValidateRecord(Record & record);
     inline void checkSize(int64_t record_size);
@@ -140,10 +142,10 @@ private:
     void endCheckpointRecoveryPoint() { loglet->endCheckpointRecoveryPoint(); }
 
     /// @return true if there is new change and need checkpoint it, otherwise return false
-    bool needCheckpointStartSN() const
+    bool needCheckpointStartSequence() const
     {
-        auto base_sn = firstSegment()->baseSequence();
-        return log_start_sn > base_sn && log_start_sn != log_start_sn_checkpoint;
+        /// auto base_sn = firstSegment()->baseSequence();
+        return log_start_sn > log_start_sn_checkpoint;
     }
 
     void beginCheckpointStartSequence(int64_t log_start_sn_checkpoint_) { log_start_sn_checkpoint_prepare = log_start_sn_checkpoint_; }
@@ -154,10 +156,26 @@ private:
     void maybeIncrementFirstUnstableSequence();
     void maybeIncrementFirstUnstableSequenceWithoutLock();
 
+    /// Increment the log start sequence if the provided sequence is larger
+    /// If the log start sequence changed, then this method also update a few key sequence
+    /// such that `log_start_sn <= log_stable_sn <= high_watermark`. The leader
+    /// epoch cache is also updated such that all of sequences referenced in that component
+    /// point to valid sequence in this log
+    /// @throws OffsetOutOfRangeException if the log start sequence is greater than the
+    /// high watermark
+    /// @return true if the log start sequence was updated; otherwise false
+    bool maybeIncrementLogStartSequence(int64_t new_log_start_sn, const std::string & reason);
+
     inline void checkLogStartSequence(int64_t sn) const;
     LogSequenceMetadata convertToSequenceMetadataOrThrow(int64_t sn) const;
 
-    int64_t highWatermark() const { return high_watermark_metadata.record_sn; }
+//    int64_t highWatermark() const
+//    {
+//        std::scoped_lock lock(lmutex);
+//        return high_watermark_metadata.record_sn;
+//    }
+//
+//    int64_t highWatermarkWithoutLock() const { return high_watermark_metadata.record_sn; }
 
     /// Update the high watermark to a new sn. The new high watermark will be
     /// lower bounded by the log start sn and upper bounded by the log end sn.
@@ -165,22 +183,43 @@ private:
     /// updating it on a follower after receiving a Fetch response from the leader
     /// @param hw the suggested new value for the high watermark
     /// @return the updated high watermark sn
-    int64_t updateHighWatermark(int64_t hw);
+    /// int64_t updateHighWatermark(int64_t hw);
 
     /// @param with_lock true if the caller holds the lock already, otherwise false
-    int64_t updateHighWatermark(const LogSequenceMetadata & high_watermark_metadata_, bool with_lock = false);
+    /// int64_t updateHighWatermark(const LogSequenceMetadata & high_watermark_metadata_, bool with_lock = false);
 
-    void updateHighWatermarkMetadata(const LogSequenceMetadata & new_high_watermark_metadata);
-    inline void updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata);
+    /// void updateHighWatermarkMetadata(const LogSequenceMetadata & new_high_watermark_metadata);
+    /// inline void updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata);
 
     /// Get the sequence and metadata for the current high watermark. If sequence metadata is not
     /// known, it will do a lookup in the index and cache the result
-    LogSequenceMetadata fetchHighWatermarkMetadata();
-    inline LogSequenceMetadata fetchHighWatermarkMetadataWithoutLock();
+    /// LogSequenceMetadata fetchHighWatermarkMetadata();
+    /// inline LogSequenceMetadata fetchHighWatermarkMetadataWithoutLock();
+
     LogSequenceMetadata fetchLastStableMetadata() const;
     inline LogSequenceMetadata fetchLastStableMetadataWithoutLock() const;
     inline LogSequenceMetadata maxSequenceMetadata(FetchIsolation isolation, bool with_committed_lock_held=false) const;
     LogSequenceMetadata waitForMoreDataIfNeeded(int64_t & sn, int64_t max_wait_ms, FetchIsolation isolation) const;
+
+    /// If stream deletion is enabled, delete any local log segments that either expired due to time based
+    /// retention or because the log size > retention_size
+    /// Whether or not deletion is enabled, delete any local log segments that are before the log start offset
+    size_t deleteOldSegments();
+
+    size_t deleteLogStartSequenceBreachedSegments();
+    size_t deleteRetentionSizeBreachedSegments();
+    size_t deleteRetentionTimeBreachedSegments();
+
+    /// Delete any local log segments starting with the oldest segment and moving forward until
+    /// the user-supplied predicate is false or the segment containing the current high watermark
+    /// is reached. We don't delete segments with offsets at or beyond the high watermark to ensure
+    /// that the log start offset can never exceed it. If the high watermark has not yet been initialized,
+    /// no segments are eligible for deletion
+    /// @param should_delete A function that takes in a candidate log segment and the next higher segment
+    ///        if there is one and return true iff it is deletable
+    /// @param reason The reason for the segment deletion
+    /// @return The number of segments deleted
+    size_t deleteOldSegments(std::function<bool(LogSegmentPtr, LogSegmentPtr)> should_delete, const std::string & reason);
 
 private:
     /// API calls forwarding to Loglet
@@ -262,7 +301,7 @@ private:
     /// for deletion if the high watermark equals the log end sn (which may never happen for a shard
     /// under consistent load). This is needed to prevent log start sn which is exposed in fetch
     /// responses from getting ahead of the high watermark.
-    LogSequenceMetadata high_watermark_metadata;
+    /// LogSequenceMetadata high_watermark_metadata;
 
     mutable std::mutex log_end_mutex;
     mutable std::condition_variable log_end_cv;
@@ -271,6 +310,8 @@ private:
     mutable std::mutex last_committed_mutex;
     mutable std::condition_variable last_committed_cv;
     LogSequenceMetadata last_committed_metadata;
+
+    std::mutex segment_delete_mutex;
 
     Poco::Logger * logger;
 };

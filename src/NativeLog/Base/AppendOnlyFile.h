@@ -3,6 +3,7 @@
 #include "Stds.h"
 
 #include <sys/types.h>
+#include <sys/stat.h>
 
 #include <span>
 #include <memory>
@@ -18,6 +19,7 @@ class AppendOnlyFile final
 public:
     /// @param filename_ the backing file name of the channel
     AppendOnlyFile(const fs::path & filename_, bool file_already_exists, bool read_only_);
+
     ~AppendOnlyFile();
 
     /// Append a sequence of bytes to this channel from the given data buffer
@@ -69,6 +71,9 @@ public:
     /// Returns the current size of the channel's backing file in bytes
     int64_t size() const;
 
+    /// Last modified time in milliseconds
+    int64_t lastModified() const;
+
     /// Flush any updates to this channel's file to be written to the storage device
     /// that contains it
     /// @param include_metadata If true, data and metadata of the underlying file will
@@ -76,6 +81,21 @@ public:
     void sync(bool include_metadata) const;
 
     const fs::path & getFilename() const { return filename; }
+
+    void renameTo(fs::path new_file, std::error_code & err)
+    {
+        fs::rename(filename, new_file, err);
+        if (!err)
+            filename.swap(new_file);
+    }
+
+    void updateParentDir(const fs::path & parent_dir)
+    {
+        filename = parent_dir / filename.filename();
+    }
+
+private:
+    inline struct stat stat() const;
 
 private:
     fs::path filename;

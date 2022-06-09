@@ -19,7 +19,7 @@ struct LogConfig
     static const int64_t DEFAULT_FLUSH_MS = 2 * 60 * 1000;
     static const int64_t DEFAULT_RETENTION_BYTES = -1;
     static const int64_t DEFAULT_RETENTION_MS = 24ull * 7 * 60 * 60 * 1000;
-    static const int64_t DEFAULT_LOG_DELETE_DELAY_MS = 60 * 1000;
+    static const int64_t DEFAULT_LOG_DELETE_DELAY_MS = 300 * 1000;
     static const int64_t DEFAULT_INDEX_INTERVAL_BYTES = 4096;
     static const int64_t DEFAULT_INDEX_INTERVAL_RECORDS = 1000;
     static const int64_t DEFAULT_MAX_INDEX_BYTES = 10 * 1024 * 1024;
@@ -53,6 +53,11 @@ struct LogConfig
             return segment_size;
         else
             return 0;
+    }
+
+    std::shared_ptr<LogConfig> clone() const
+    {
+        return std::make_shared<LogConfig>(*this);
     }
 
     std::string string() const

@@ -43,13 +43,14 @@ LogPtr Log::create(
     auto segments = std::make_shared<LogSegments>(stream_shard);
 
     LogSequenceMetadata next_sn_meta;
-    auto [new_start_sn, new_recovery_point]
-        = LogLoader::load(log_dir, *log_config, had_clean_shutdown, log_start_sn, recovery_point, logger, segments, next_sn_meta);
+    auto [new_recovery_point, new_log_end] = LogLoader::load(
+        log_dir, *log_config, had_clean_shutdown, log_start_sn, recovery_point, adhoc_scheduler, logger, segments, next_sn_meta);
 
     auto loglet = std::make_shared<Loglet>(
         stream_shard, log_dir, log_config, new_recovery_point, next_sn_meta, segments, scheduler, adhoc_scheduler, logger);
 
-    return std::make_shared<Log>(new_start_sn, std::move(loglet), std::move(cache_), logger);
+    auto new_log_start_sn = std::max(log_start_sn, segments->firstSegment()->baseSequence());
+    return std::make_shared<Log>(new_log_start_sn, std::move(loglet), std::move(cache_), logger);
 }
 
 Log::Log(int64_t log_start_sn_, LogletPtr loglet_, TailCachePtr cache_, Poco::Logger * logger_)
@@ -57,7 +58,7 @@ Log::Log(int64_t log_start_sn_, LogletPtr loglet_, TailCachePtr cache_, Poco::Lo
     , log_start_sn_checkpoint(log_start_sn_)
     , loglet(std::move(loglet_))
     , cache(std::move(cache_))
-    , high_watermark_metadata(log_start_sn_)
+    /// , high_watermark_metadata(log_start_sn_)
     , last_committed_metadata(loglet->logEndSequenceMetadata())
     , logger(logger_)
 {
@@ -90,8 +91,8 @@ LogAppendDescription Log::append(RecordPtr & record)
 
         /// Update the high watermark in case it has gotten ahead of the log end sn following a truncation
         /// or if a new segment has been rolled and the sn metadata needs to be updated
-        /// if (highWatermark() >= logEndSequence())
-        ///    updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
+//        if (highWatermarkWithoutLock() >= logEndSequence())
+//            updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
 
         /// maybeIncrementFirstUnstableSequenceWithoutLock();
 
@@ -137,8 +138,8 @@ LogSegmentPtr Log::rollWithoutLock(std::optional<int64_t> expected_next_sn)
 {
     auto new_segment = loglet->roll(expected_next_sn);
 
-    if (highWatermark() >= logEndSequence())
-        updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
+//    if (highWatermarkWithoutLock() >= logEndSequence())
+//        updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
 
     auto base_sn = new_segment->baseSequence();
 
@@ -226,7 +227,10 @@ LogAppendDescription Log::analyzeAndValidateRecord(Record & record)
     {
         append_info.error_message = "Compacted stream cannot accept message without key in stream shard " + streamShard().string();
         append_info.error_code = DB::ErrorCodes::INVALID_RECORD;
-        throw DB::Exception(DB::ErrorCodes::INVALID_RECORD, "Compacted stream cannot accept message without key in stream shard {}", streamShard().string());
+        throw DB::Exception(
+            DB::ErrorCodes::INVALID_RECORD,
+            "Compacted stream cannot accept message without key in stream shard {}",
+            streamShard().string());
     }
 
     return append_info;
@@ -300,7 +304,8 @@ LogSequenceMetadata Log::waitForMoreDataIfNeeded(int64_t & sn, int64_t max_wait_
     return max_sn_metadata;
 }
 
-FetchDataDescription Log::fetch(int64_t sn, uint64_t max_size, int64_t max_wait_ms, std::optional<uint64_t> position, FetchIsolation isolation)
+FetchDataDescription
+Log::fetch(int64_t sn, uint64_t max_size, int64_t max_wait_ms, std::optional<uint64_t> position, FetchIsolation isolation)
 {
     assert(max_wait_ms >= 0);
 
@@ -337,8 +342,8 @@ bool Log::trim(int64_t target_sn)
         else
         {
             auto deleted_segments = loglet->trim(target_sn);
-            if (highWatermark() >= log_end_sn)
-                updateHighWatermark(loglet->logEndSequenceMetadata(), true);
+//            if (highWatermarkWithoutLock() >= log_end_sn)
+//                updateHighWatermark(loglet->logEndSequenceMetadata(), true);
         }
         return true;
     }
@@ -383,46 +388,46 @@ void Log::flush(int64_t sn)
     }
 }
 
-std::optional<LogSequenceMetadata> Log::maybeIncrementHighWatermark(const LogSequenceMetadata & new_high_watermark)
-{
-    if (new_high_watermark.record_sn > logEndSequence())
-        throw DB::Exception(
-            DB::ErrorCodes::BAD_ARGUMENTS,
-            "High watermark {} update exceeds current log end sn {}",
-            new_high_watermark.record_sn,
-            logEndSequence());
+//std::optional<LogSequenceMetadata> Log::maybeIncrementHighWatermark(const LogSequenceMetadata & new_high_watermark)
+//{
+//    if (new_high_watermark.record_sn > logEndSequence())
+//        throw DB::Exception(
+//            DB::ErrorCodes::BAD_ARGUMENTS,
+//            "High watermark {} update exceeds current log end sn {}",
+//            new_high_watermark.record_sn,
+//            logEndSequence());
+//
+//    std::unique_lock lock{lmutex};
+//
+//    auto old_high_watermark = fetchHighWatermarkMetadataWithoutLock();
+//
+//    /// Ensure that the high watermark increases monotonically. We also update the high watermark when
+//    /// the new sn metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
+//    if (old_high_watermark.record_sn < new_high_watermark.record_sn
+//        || (old_high_watermark.record_sn == new_high_watermark.record_sn && old_high_watermark.onOldSegment(new_high_watermark)))
+//    {
+//        updateHighWatermarkMetadataWithoutLock(new_high_watermark);
+//        return old_high_watermark;
+//    }
+//    return {};
+//}
 
-    std::unique_lock lock{lmutex};
-
-    auto old_high_watermark = fetchHighWatermarkMetadataWithoutLock();
-
-    /// Ensure that the high watermark increases monotonically. We also update the high watermark when
-    /// the new sn metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
-    if (old_high_watermark.record_sn < new_high_watermark.record_sn
-        || (old_high_watermark.record_sn == new_high_watermark.record_sn && old_high_watermark.onOldSegment(new_high_watermark)))
-    {
-        updateHighWatermarkMetadataWithoutLock(new_high_watermark);
-        return old_high_watermark;
-    }
-    return {};
-}
-
-LogSequenceMetadata Log::fetchHighWatermarkMetadata()
-{
-    std::unique_lock lock{lmutex};
-    return fetchHighWatermarkMetadataWithoutLock();
-}
-
-LogSequenceMetadata Log::fetchHighWatermarkMetadataWithoutLock()
-{
-    if (high_watermark_metadata.sequenceOnly())
-    {
-        auto sn_metadata = convertToSequenceMetadataOrThrow(highWatermark());
-        updateHighWatermarkMetadataWithoutLock(sn_metadata);
-        return sn_metadata;
-    }
-    return high_watermark_metadata;
-}
+//LogSequenceMetadata Log::fetchHighWatermarkMetadata()
+//{
+//    std::unique_lock lock{lmutex};
+//    return fetchHighWatermarkMetadataWithoutLock();
+//}
+//
+//LogSequenceMetadata Log::fetchHighWatermarkMetadataWithoutLock()
+//{
+//    if (high_watermark_metadata.sequenceOnly())
+//    {
+//        auto sn_metadata = convertToSequenceMetadataOrThrow(highWatermarkWithoutLock());
+//        updateHighWatermarkMetadataWithoutLock(sn_metadata);
+//        return sn_metadata;
+//    }
+//    return high_watermark_metadata;
+//}
 
 LogSequenceMetadata Log::fetchLastStableMetadata() const
 {
@@ -485,71 +490,96 @@ void Log::updateLogStartSequence(int64_t log_start_sn_)
 {
     log_start_sn = log_start_sn_;
 
-    if (highWatermark() < log_start_sn_)
-        updateHighWatermark(log_start_sn_);
+//    if (highWatermark() < log_start_sn_)
+//        updateHighWatermark(log_start_sn_);
 
     if (loglet->recoveryPoint() < log_start_sn_)
         loglet->updateRecoveryPoint(log_start_sn_);
 }
 
-int64_t Log::updateHighWatermark(int64_t hw)
-{
-    return updateHighWatermark(LogSequenceMetadata{hw});
-}
+//int64_t Log::updateHighWatermark(int64_t hw)
+//{
+//    return updateHighWatermark(LogSequenceMetadata{hw});
+//}
+//
+//int64_t Log::updateHighWatermark(const LogSequenceMetadata & high_watermark_metadata_, bool with_lock)
+//{
+//    auto end_sn_metadata{loglet->logEndSequenceMetadata()};
+//
+//    LogSequenceMetadata new_high_watermark_metadata{0};
+//    if (new_high_watermark_metadata.record_sn < log_start_sn)
+//        new_high_watermark_metadata = LogSequenceMetadata{log_start_sn};
+//    else if (new_high_watermark_metadata.record_sn >= end_sn_metadata.record_sn)
+//        new_high_watermark_metadata = end_sn_metadata;
+//    else
+//        new_high_watermark_metadata = high_watermark_metadata_;
+//
+//    if (with_lock)
+//        updateHighWatermarkMetadataWithoutLock(new_high_watermark_metadata);
+//    else
+//        updateHighWatermarkMetadata(new_high_watermark_metadata);
+//
+//    return new_high_watermark_metadata.record_sn;
+//}
 
-int64_t Log::updateHighWatermark(const LogSequenceMetadata & high_watermark_metadata_, bool with_lock)
-{
-    auto end_sn_metadata{loglet->logEndSequenceMetadata()};
+//void Log::updateHighWatermarkMetadata(const LogSequenceMetadata & new_high_watermark_metadata)
+//{
+//    std::unique_lock guard{lmutex};
+//    updateHighWatermarkMetadataWithoutLock(new_high_watermark_metadata);
+//}
 
-    LogSequenceMetadata new_high_watermark_metadata{0};
-    if (new_high_watermark_metadata.record_sn < log_start_sn)
-        new_high_watermark_metadata = LogSequenceMetadata{log_start_sn};
-    else if (new_high_watermark_metadata.record_sn >= end_sn_metadata.record_sn)
-        new_high_watermark_metadata = end_sn_metadata;
-    else
-        new_high_watermark_metadata = high_watermark_metadata_;
-
-    if (with_lock)
-        updateHighWatermarkMetadataWithoutLock(new_high_watermark_metadata);
-    else
-        updateHighWatermarkMetadata(new_high_watermark_metadata);
-
-    return new_high_watermark_metadata.record_sn;
-}
-
-void Log::updateHighWatermarkMetadata(const LogSequenceMetadata & new_high_watermark_metadata)
-{
-    std::unique_lock guard{lmutex};
-    updateHighWatermarkMetadataWithoutLock(new_high_watermark_metadata);
-}
-
-void Log::updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata)
-{
-    if (new_high_watermark_metadata.record_sn < 0)
-        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "High watermark sn should be non-negative");
-
-    if (new_high_watermark_metadata.record_sn < high_watermark_metadata.record_sn)
-        LOG_WARNING(
-            logger,
-            "Non-monotonic update of high watermark from {} to {}",
-            high_watermark_metadata.record_sn,
-            new_high_watermark_metadata.record_sn);
-
-    high_watermark_metadata = new_high_watermark_metadata;
-    maybeIncrementFirstUnstableSequenceWithoutLock();
-
-    LOG_TRACE(logger, "Setting high watermark {}", new_high_watermark_metadata.record_sn);
-}
+//void Log::updateHighWatermarkMetadataWithoutLock(const LogSequenceMetadata & new_high_watermark_metadata)
+//{
+//    if (new_high_watermark_metadata.record_sn < 0)
+//        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "High watermark sn should be non-negative");
+//
+//    if (new_high_watermark_metadata.record_sn < high_watermark_metadata.record_sn)
+//        LOG_WARNING(
+//            logger,
+//            "Non-monotonic update of high watermark from {} to {}",
+//            high_watermark_metadata.record_sn,
+//            new_high_watermark_metadata.record_sn);
+//
+//    high_watermark_metadata = new_high_watermark_metadata;
+//    maybeIncrementFirstUnstableSequenceWithoutLock();
+//
+//    LOG_TRACE(logger, "Setting high watermark {}", new_high_watermark_metadata.record_sn);
+//}
 
 void Log::maybeIncrementFirstUnstableSequence()
 {
-    std::unique_lock guard{lmutex};
-    maybeIncrementFirstUnstableSequenceWithoutLock();
+    /// std::unique_lock guard{lmutex};
+    /// maybeIncrementFirstUnstableSequenceWithoutLock();
 }
 
 void Log::maybeIncrementFirstUnstableSequenceWithoutLock()
 {
     /// FIXME
+}
+
+bool Log::maybeIncrementLogStartSequence(int64_t new_log_start_sn, const std::string & reason)
+{
+    /// We don't have to write the log start sn to checkpoint immediately.
+    /// LogManager will schedule checkpoint log start sn periodically.
+    /// If before LogManager's schedule chimes in and the system crashes,
+    /// during the recovery, we shall be able to find the clean start sn
+
+//    if (new_log_start_sn > highWatermark())
+//        throw DB::Exception(
+//            DB::ErrorCodes::SEQUENCE_OUT_OF_RANGE,
+//            "Failed to increase log start sequence for stream={} to new_start_sn={}",
+//            streamShard().string(),
+//            new_log_start_sn);
+
+    auto current_start_sn = logStartSequence();
+    if (new_log_start_sn > current_start_sn)
+    {
+        LOG_INFO(logger, "Progress log start sequence from {} to {} due to {}", current_start_sn, new_log_start_sn, reason);
+        updateLogStartSequence(new_log_start_sn);
+        maybeIncrementFirstUnstableSequence();
+        return true;
+    }
+    return false;
 }
 
 void Log::checkLogStartSequence(int64_t sn) const
@@ -568,4 +598,79 @@ LogSequenceMetadata Log::convertToSequenceMetadataOrThrow(int64_t sn) const
     checkLogStartSequence(sn);
     return loglet->convertToSequenceMetadataOrThrow(sn);
 }
+
+size_t Log::deleteOldSegments()
+{
+    return deleteLogStartSequenceBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteRetentionTimeBreachedSegments();
+}
+
+size_t Log::deleteLogStartSequenceBreachedSegments()
+{
+    auto start_sn = logStartSequence();
+    auto should_delete
+        = [start_sn = start_sn](LogSegmentPtr, LogSegmentPtr next_segment) { return next_segment->baseSequence() <= start_sn; };
+
+    return deleteOldSegments(should_delete, "start_sequence_breached");
+}
+
+size_t Log::deleteRetentionSizeBreachedSegments()
+{
+    if (config().retention_size < 0)
+        return 0;
+
+    auto retention_size = static_cast<size_t>(config().retention_size);
+    auto total_bytes = loglet->size();
+    if (total_bytes < retention_size)
+        return 0;
+
+    auto diff = total_bytes - retention_size;
+    auto should_delete = [diff = diff](LogSegmentPtr segment, LogSegmentPtr) mutable {
+        if (diff >= segment->size())
+        {
+            diff -= segment->size();
+            return true;
+        }
+        return false;
+    };
+
+    return deleteOldSegments(should_delete, "retention_size_breached");
+}
+
+size_t Log::deleteRetentionTimeBreachedSegments()
+{
+    auto retention_ms = config().retention_ms;
+    if (retention_ms < 0)
+        return 0;
+
+    auto start_ms = DB::local_now_ms();
+    auto should_delete = [start_ms = start_ms, retention_ms = retention_ms](LogSegmentPtr segment, LogSegmentPtr) {
+        return start_ms - segment->lastModified() > retention_ms;
+    };
+
+    return deleteOldSegments(should_delete, "retention_time_breached");
+}
+
+size_t Log::deleteOldSegments(std::function<bool(LogSegmentPtr, LogSegmentPtr)> should_delete, const std::string & reason)
+{
+    std::scoped_lock lock(segment_delete_mutex);
+
+    auto deletable = loglet->deletableSegments(should_delete);
+    if (deletable.empty())
+        return 0;
+
+    /// FIXME, more granularity control by rolling current segment
+    /// Note background segment retention for now don't have conflicts with tail cache in practice since
+    /// we always keep the active segment around and tail cache is assume to have only contain records
+    /// in active segment
+
+    loglet->removeSegments(deletable, true, reason);
+
+    /// After loglet->removeSegments, the in-memory segments is already changed to up to date
+    /// although the actual log deletion can be scheduled in background
+    /// Increment log start sequence
+    maybeIncrementLogStartSequence(firstSegment()->baseSequence(), reason);
+
+    return deletable.size();
+}
+
 }

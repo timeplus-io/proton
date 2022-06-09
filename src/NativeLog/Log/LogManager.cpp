@@ -1,6 +1,7 @@
 #include "LogManager.h"
 
 #include <NativeLog/Base/Utils.h>
+#include <NativeLog/MetaStore/MetaStore.h>
 
 #include <base/logger_useful.h>
 
@@ -17,6 +18,7 @@ namespace ErrorCodes
     extern const int LOG_DIR_UNAVAILABLE;
     extern const int LOG_ALREADY_EXISTS;
     extern const int LOG_NOT_EXISTS;
+    extern const int CANNOT_LOAD_CONFIG;
 }
 }
 
@@ -93,6 +95,7 @@ LogManager::LogManager(
     LogConfigPtr default_config_,
     const LogCompactorConfig & compactor_config_,
     const LogManagerConfig & log_manager_config_,
+    MetaStore & meta_store_,
     std::shared_ptr<DB::NLOG::BackgroundSchedulePool> scheduler_,
     std::shared_ptr<ThreadPool> adhoc_scheduler_,
     TailCachePtr cache_)
@@ -100,6 +103,7 @@ LogManager::LogManager(
     , default_config(std::move(default_config_))
     , compactor_config(compactor_config_)
     , log_manager_config(log_manager_config_)
+    , meta_store(meta_store_)
     , scheduler(std::move(scheduler_))
     , adhoc_scheduler(std::move(adhoc_scheduler_))
     , cache(std::move(cache_))
@@ -127,11 +131,11 @@ LogManager::~LogManager()
         dir_lock->unlock();
 }
 
-void LogManager::startup(const std::unordered_map<std::string, std::vector<Stream>> & streams)
+void LogManager::startup()
 {
     /// Make a copy of config since it can be changed
     auto config{default_config};
-    startupWithConfigOverrides(config, fetchStreamConfigOverrides(config, streams));
+    startupWithConfigOverrides(config, fetchAllStreamConfigOverrides(config));
 }
 
 void LogManager::shutdown()
@@ -182,7 +186,7 @@ void LogManager::shutdown()
 
         /// Only checkpoint start sn changed logs
         checkpointLogStartSequencesInDir(dir_pool.first, getLogs(dir_pool.first, "", [](const auto & stream_shard_log) {
-                                             return stream_shard_log.second->needCheckpointStartSN();
+                                             return stream_shard_log.second->needCheckpointStartSequence();
                                          }));
 
         /// Mark that the shutdown was clean by creating marker file
@@ -316,9 +320,9 @@ void LogManager::loadLogs(LogConfigPtr default_config_, const LogConfigMap & log
 ///            | --- <stream2-shard2>
 ///            | --- <stream3-shard3>
 ///                      | --- <segment1>
+///                      | --- <segment1.index>
 ///                      | --- <segment2>
 ///                      | --- <segment3>
-///                      | --- <segment3.index>
 std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
     const fs::path & root_log_dir, LogConfigPtr default_config_, const LogConfigMap & log_config_overrides, int32_t & total_logs)
 {
@@ -451,8 +455,8 @@ LogPtr LogManager::loadLog(
     int64_t log_start_sn,
     int64_t recovery_point)
 {
-    auto log
-        = Log::create(stream_shard, log_dir, default_config_, had_clean_shutdown, log_start_sn, recovery_point, scheduler, adhoc_scheduler, cache);
+    auto log = Log::create(
+        stream_shard, log_dir, default_config_, had_clean_shutdown, log_start_sn, recovery_point, scheduler, adhoc_scheduler, cache);
 
     if (log_dir.extension().string() == Log::DELETE_DIR_SUFFIX())
     {
@@ -484,18 +488,48 @@ LogPtr LogManager::loadLog(
     return log;
 }
 
-LogManager::LogConfigMap
-LogManager::fetchStreamConfigOverrides(LogConfigPtr config, const std::unordered_map<std::string, std::vector<Stream>> & streams)
+LogManager::LogConfigMap LogManager::fetchAllStreamConfigOverrides(LogConfigPtr config)
 {
-    LogConfigMap results;
-    results.reserve(streams.size());
+    auto response{meta_store.listStreams("", ListStreamsRequest{""})};
+    if (response.hasError())
+        throw DB::Exception(DB::ErrorCodes::CANNOT_LOAD_CONFIG, "Failed to load all stream configurations", response.errString());
 
-    /// FIXME, override
-    for (const auto & ns_streams : streams)
-        for (const auto & stream : ns_streams.second)
-            results[ns_streams.first].emplace(stream, config);
+    LogConfigMap results;
+
+    for (auto & stream_desc : response.streams)
+    {
+        auto new_config = config->clone();
+        new_config->flush_interval_ms = stream_desc.flush_ms;
+        new_config->flush_interval_records = stream_desc.flush_messages;
+        new_config->retention_size = stream_desc.retention_bytes;
+        new_config->retention_ms = stream_desc.retention_ms;
+        new_config->codec = stream_desc.codec;
+
+        results[stream_desc.ns][Stream{stream_desc.stream, stream_desc.id}] = std::move(new_config);
+    }
 
     return results;
+}
+
+LogConfigPtr LogManager::fetchLogConfig(const std::string & ns, const Stream & stream)
+{
+    auto response{meta_store.listStreams(ns, ListStreamsRequest{stream.name})};
+    if (response.hasError())
+        throw DB::Exception(
+            DB::ErrorCodes::CANNOT_LOAD_CONFIG,
+            "Failed to load configuration for stream={} in namespace={} error={}",
+            stream.name,
+            ns,
+            response.errString());
+
+    const auto & stream_desc = response.streams[0];
+    LogConfigPtr new_config{default_config->clone()};
+    new_config->flush_interval_ms = stream_desc.flush_ms;
+    new_config->flush_interval_records = stream_desc.flush_messages;
+    new_config->retention_size = stream_desc.retention_bytes;
+    new_config->retention_ms = stream_desc.retention_ms;
+    new_config->codec = stream_desc.codec;
+    return new_config;
 }
 
 LogPtr LogManager::getOrCreateLog(const std::string & ns, const StreamShard & stream_shard, bool is_new, bool is_future)
@@ -854,16 +888,6 @@ fs::path LogManager::createLogDirectory(const fs::path & log_dir, const std::str
             DB::ErrorCodes::LOG_DIR_UNAVAILABLE, "Cannot create log {} because log directory {} is offline", log_dir_name, log_dir.c_str());
 }
 
-LogConfigPtr LogManager::fetchLogConfig(const std::string & ns, const Stream & stream)
-{
-    LogConfigPtr config{default_config};
-    (void)stream;
-    (void)ns;
-    /// FIXME, overrides
-    /// std::vector<LogConfig> configs = fetchStreamConfigOverrides(ns, config, {stream});
-    return config;
-}
-
 std::vector<fs::path> LogManager::offlineLogDirs() const
 {
     if (root_dirs.size() == live_log_dirs.size())
@@ -923,7 +947,46 @@ void LogManager::cleanupLogs()
 {
     LOG_INFO(logger, "Beginning log cleanup...");
 
-    /// FIXME
+    size_t total = 0;
+    auto start = DB::MonotonicMilliseconds::now();
+
+    std::vector<std::pair<std::string, std::pair<StreamShard, LogPtr>>> deletable_logs;
+
+    /// Collect all non-compact logs
+    current_logs.apply([&](const auto & ns_logs) {
+        ns_logs.second->apply([&](const auto & shard_log) {
+            if (!shard_log.second->config().compact())
+                deletable_logs.push_back({ns_logs.first, shard_log});
+        });
+    });
+
+    try
+    {
+        for (auto & ns_log : deletable_logs)
+        {
+            LOG_DEBUG(logger, "Garbage collecting log={} in namespace={}", ns_log.first, ns_log.second.first.string());
+            total += ns_log.second.second->deleteOldSegments();
+
+            /// FIXME, delete future logs
+            ConcurrentHashMapPtr<StreamShard, LogPtr> ns_future_logs;
+            if (future_logs.at(ns_log.first, ns_future_logs))
+            {
+                LogPtr future_log;
+                if (ns_future_logs->at(ns_log.second.first, future_log))
+                {
+                    assert(future_log);
+                    LOG_DEBUG(logger, "Garbage collecting log={} in namespace={}", ns_log.first, ns_log.second.first.string());
+                    total += future_log->deleteOldSegments();
+                }
+            }
+        }
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException(logger, "Fail to retention logs");
+    }
+
+    LOG_INFO(logger, "Log cleanup completed: {} files were deleted in {} milliseconds", total, DB::MonotonicMilliseconds::now() - start);
 
     if (!stopped.test())
         log_retention_task->scheduleAfter(log_manager_config.retention_check_ms);
@@ -996,8 +1059,9 @@ void LogManager::checkpointLogStartSequences()
     auto all_live_log_dirs{liveLogDirs()};
     for (const auto & log_dir : all_live_log_dirs)
         /// Only checkpoint start sn changed logs
-        checkpointLogStartSequencesInDir(
-            log_dir, getLogs(log_dir, "", [](const auto & stream_shard_log) { return stream_shard_log.second->needCheckpointStartSN(); }));
+        checkpointLogStartSequencesInDir(log_dir, getLogs(log_dir, "", [](const auto & stream_shard_log) {
+                                             return stream_shard_log.second->needCheckpointStartSequence();
+                                         }));
 
     /// We will need make sure all exceptions are handled, otherwise the reschedule will not be called.
     if (!stopped.test())
@@ -1047,12 +1111,14 @@ void LogManager::checkpointLogStartSequencesInDir(
     sns.reserve(logs_to_checkpoint.size());
 
     for (const auto & ns_logs : logs_to_checkpoint)
+    {
         for (const auto & log : ns_logs.second)
         {
             auto log_start_sn = log->logStartSequence();
             sns[ns_logs.first].emplace_back(log->streamShard(), log_start_sn);
             log->beginCheckpointStartSequence(log_start_sn);
         }
+    }
 
     auto iter = checkpoints.find(root_dir);
     assert(iter != checkpoints.end());

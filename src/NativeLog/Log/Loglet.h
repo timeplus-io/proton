@@ -45,7 +45,8 @@ public:
 
     /// Read record data up to max_sn_meta indicates
     /// Return record read at sn
-    FetchDataDescription fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_meta, std::optional<uint64_t> position) const;
+    FetchDataDescription
+    fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_meta, std::optional<uint64_t> position) const;
 
     /// @param target_sn The sn to truncate to, an upper bound on all sn in the log after
     ///        truncation is complete
@@ -54,10 +55,18 @@ public:
 
     void flush(int64_t sn);
 
+    size_t size() const;
+
     void close();
 
 public:
     static StreamShard streamShardFrom(const fs::path & log_dir_);
+
+    /// Perform physical deletion of the index and the log files for the given segment.
+    /// Prior to the deletion, the index and log files are renamed by appending .deleted to the
+    /// respective file name. Allows these files to be optionally deleted asynchronously
+    /// This method assumes the file exists.
+    static void removeSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason, std::shared_ptr<ThreadPool> adhoc_scheduler_, Poco::Logger * logger_);
 
 private:
     /// Construct a log file name in the given dir with the given base offset and the given suffix
@@ -71,14 +80,20 @@ private:
 
     /// Return a future directory name for the given stream shard. The name will be in the following format:
     /// `stream_uuid.shard.future` where stream, shard and unique_id are variables
-    static std::string logFutureDirName(const StreamShard & stream_shard_) { return logDirNameWithSuffix(stream_shard_, FUTURE_DIR_SUFFIX); }
+    static std::string logFutureDirName(const StreamShard & stream_shard_)
+    {
+        return logDirNameWithSuffix(stream_shard_, FUTURE_DIR_SUFFIX);
+    }
 
     /// stream_uuid.shard_id
     static std::string logDirName(const StreamShard & stream_shard_);
 
     /// Return a directory name to rename the log directory to for async deletion.
     /// The name will be in the following format: "stream_uuid.shard.delete"
-    static std::string logDeleteDirName(const StreamShard & stream_shard_) { return logDirNameWithSuffix(stream_shard_, DELETED_FILE_SUFFIX); }
+    static std::string logDeleteDirName(const StreamShard & stream_shard_)
+    {
+        return logDirNameWithSuffix(stream_shard_, DELETED_FILE_SUFFIX);
+    }
 
     /// Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
     /// so that ls sorts the files numerically
@@ -113,6 +128,9 @@ private:
 
     LogSegmentPtr roll(std::optional<int64_t> expected_next_offset);
 
+    /// The current active segment is never deletable
+    std::vector<LogSegmentPtr> deletableSegments(std::function<bool(LogSegmentPtr, LogSegmentPtr)> should_delete);
+
     /// Completely delete all segments with no delay
     std::vector<LogSegmentPtr> removeAllSegments();
 
@@ -122,13 +140,12 @@ private:
     /// - It can either schedule an async delete operation to occur in the future or perform the deletion synchronously.
     /// Async deletion allows reads to happen concurrently without synchronization and without the possibility of
     /// physically deleting a file while it is being read
-    void removeSegments(const std::vector<LogSegmentPtr> & segments_to_delete, bool async);
+    void removeSegments(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason);
 
-    /// Perform physical deletion of the index and the log files for the given segment.
-    /// Prior to the deletion, the index and log files are renamed by appending .deleted to the
-    /// respective file name. Allows these files to be optionally deleted asynchronously
-    /// This method assumes the file exists.
-    void removeAllSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async);
+    inline void removeSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason)
+    {
+        removeSegmentFiles(segments_to_delete, async, reason, adhoc_scheduler, logger);
+    }
 
     /// Completely delete this log directory with no delay
     void removeEmptyDir();
@@ -151,7 +168,7 @@ private:
 
     void updateRecoveryPoint(int64_t new_recovery_point) { recovery_point = new_recovery_point; }
 
-    bool needCheckpointRecoveryPoint() const { return recovery_point != recovery_point_checkpoint; }
+    bool needCheckpointRecoveryPoint() const { return recovery_point > recovery_point_checkpoint; }
 
     void beginCheckpointRecoveryPoint(int64_t recovery_point_checkpoint_)
     {
@@ -244,7 +261,7 @@ private:
     mutable std::mutex next_sn_mutex;
     LogSequenceMetadata next_sn_meta;
 
-    LogSegmentsPtr segments;
+    mutable LogSegmentsPtr segments;
 
     int64_t last_flushed_ms;
 

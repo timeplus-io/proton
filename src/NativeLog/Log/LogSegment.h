@@ -48,7 +48,6 @@ public:
         bool file_already_exists = false,
         bool preallocate = false,
         const std::string & file_suffix = "");
-    ~LogSegment();
 
     /// Append the given messages starting with the given sn. Add one entry to the index if needed
     /// Append is not multi-thread safe so it is assumed this method is being called from within a lock
@@ -84,6 +83,10 @@ public:
     /// Physical size in bytes
     uint64_t size() const { return log->size(); }
 
+    int64_t lastModified() const { return log->lastModified(); }
+
+    const fs::path & filename() const { return log->getFilename(); }
+
     int64_t baseSequence() const { return base_sn; }
 
     /// Calculate the sn that would be used for next record to be appended to this
@@ -92,7 +95,10 @@ public:
     /// This method is multi-thread safe
     int64_t readNextSequence();
 
-    int32_t recover() { return 0; }
+    /// Run recovery. This will rebuild the index from the log file and lop off
+    /// any invalid bytes from the end of the log and index
+    /// @return The nunber of bytes truncated from the log
+    size_t recover() { return 0; }
 
     void updateParentDir(const fs::path & parent_dir);
 
@@ -100,7 +106,7 @@ public:
 
     /// Change the suffix for the index and log files for this log segment
     /// Exception shall be handled by caller
-    void changeFileSuffix(const std::string & old_suffix, const std::string & new_suffix);
+    void changeFileSuffix(const std::string & new_suffix);
 
     /// When LogSegment turns from active segment to inactive (rolled)
     /// Append the largest time index entry to the indexes. The time index

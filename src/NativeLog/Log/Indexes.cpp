@@ -14,9 +14,12 @@ namespace ErrorCodes
 
 namespace nlog
 {
-Indexes::Indexes(const fs::path & index_dir, int64_t base_sn_, Poco::Logger * logger_)
-    : base_sn(base_sn_), last_indexed_etimestamp(-1, -1), last_indexed_atimestamp(-1, -1), logger(logger_)
+Indexes::Indexes(fs::path index_dir_, int64_t base_sn_, Poco::Logger * logger_)
+    : index_dir(std::move(index_dir_)), base_sn(base_sn_), last_indexed_etimestamp(-1, -1), last_indexed_atimestamp(-1, -1), logger(logger_)
 {
+    /// We are expecting `index_dir` doesn't end with `/`
+    assert(index_dir.has_filename());
+
     /// FIXME, lazy init index db since if there are lots of segments, init may take a long time
     rocksdb::Options options;
     /// Since index entry is append only, we don't need compaction, keys are always unique and monotonically increasing

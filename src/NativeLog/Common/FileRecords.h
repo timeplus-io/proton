@@ -48,9 +48,15 @@ public:
 
     size_t size() const { return bytes; }
 
+    int64_t lastModified() const { return file->lastModified(); }
+
     void sync() const { file->sync(true); }
 
-    const fs::path getFilename() const { return file->getFilename(); }
+    const fs::path & getFilename() const { return file->getFilename(); }
+
+    void renameTo(fs::path new_file, std::error_code & err) { file->renameTo(std::move(new_file), err); }
+
+    void updateParentDir(const fs::path & parent_dir) { file->updateParentDir(parent_dir); }
 
     uint64_t startPosition() const { return start_pos; }
     uint64_t endPosition() const { return end_pos; }

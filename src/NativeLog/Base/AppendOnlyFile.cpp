@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/stat.h>
 
 namespace DB
 {
@@ -139,12 +138,23 @@ int64_t AppendOnlyFile::zeroCopyFrom(int32_t source_fd, uint64_t offset, uint64_
 
 int64_t AppendOnlyFile::size() const
 {
+    return stat().st_size;
+}
+
+int64_t AppendOnlyFile::lastModified() const
+{
+    struct stat buf = stat();
+    return buf.st_mtim.tv_sec + buf.st_mtim.tv_nsec / 1000000;
+}
+
+struct stat AppendOnlyFile::stat() const
+{
     struct stat buf;
     int res = fstat(fd, &buf);
     if (-1 == res)
         DB::throwFromErrnoWithPath("Cannot execute fstat ", filename.string(), DB::ErrorCodes::CANNOT_FSTAT, errno);
 
-    return buf.st_size;
+    return buf;
 }
 
 void AppendOnlyFile::sync(bool include_metadata) const

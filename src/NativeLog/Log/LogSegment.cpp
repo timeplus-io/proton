@@ -27,10 +27,6 @@ LogSegment::LogSegment(
     max_atimestamp_and_sn_so_far = indexes.lastIndexedAppendTimeSequence();
 }
 
-LogSegment::~LogSegment()
-{
-}
-
 int64_t LogSegment::append(const ByteVector & record, const LogAppendDescription & append_info)
 {
     auto physical_position = log->size();
@@ -194,18 +190,57 @@ void LogSegment::flush()
 
 void LogSegment::close()
 {
-    /// log->close();
     indexes.close();
 }
 
 void LogSegment::remove()
 {
+    const auto & segment_file = filename();
+    const auto & index_file = indexes.indexDir();
+
+    LOG_INFO(logger, "Removing segment={} seg_indexes={} base_sn={}", segment_file.c_str(), index_file.c_str(), base_sn);
+    {
+        std::error_code ec;
+        fs::remove_all(segment_file, ec);
+
+        if (ec)
+            LOG_INFO(logger, "Failed to remove segment={} base_sn={}, error={}", segment_file.c_str(), base_sn, ec.message());
+    }
+    {
+        std::error_code ec;
+        fs::remove_all(index_file, ec);
+        if (ec)
+            LOG_INFO(logger, "Failed to remove seg_indexes={} base_sn={}, error={}", index_file.c_str(), base_sn, ec.message());
+    }
+    LOG_INFO(logger, "Successfully removed segment={} seg_indexes={} base_sn={}", segment_file.c_str(), index_file.c_str(), base_sn);
 }
 
-void LogSegment::changeFileSuffix(const std::string & old_suffix, const std::string & new_suffix)
+void LogSegment::changeFileSuffix(const std::string & new_suffix)
 {
-    (void)old_suffix;
-    (void)new_suffix;
+    const auto & file = filename();
+    if (file.extension() != new_suffix)
+    {
+        std::error_code err;
+
+        fs::path new_file(file);
+        new_file += new_suffix;
+        log->renameTo(std::move(new_file), err);
+
+        if (err)
+            LOG_ERROR(logger, "Failed to rename file from {} to {}, error={}", file.c_str(), new_file.c_str(), err.message());
+    }
+
+    const auto & index_dir = indexes.indexDir();
+    if (index_dir.extension() != new_suffix)
+    {
+        std::error_code err;
+        fs::path new_index_dir(index_dir);
+        new_index_dir += new_suffix;
+        indexes.renameTo(std::move(new_index_dir), err);
+
+        if (err)
+            LOG_ERROR(logger, "Failed to rename file from {} to {}, error={}", index_dir.c_str(), new_index_dir.c_str(), err.message());
+    }
 }
 
 bool LogSegment::shouldRoll(const LogConfig & config_, uint32_t records_size) const
@@ -221,7 +256,8 @@ void LogSegment::turnInactive()
 
 void LogSegment::updateParentDir(const fs::path & parent_dir)
 {
-    (void)parent_dir;
+    log->updateParentDir(parent_dir);
+    indexes.updateParentDir(parent_dir);
 }
 
 FileRecords::LogSequencePosition LogSegment::translateSequence(int64_t sn, int64_t starting_file_position)

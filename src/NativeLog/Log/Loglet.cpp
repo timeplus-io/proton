@@ -57,7 +57,8 @@ Loglet::Loglet(
         next_sn_meta.string());
 }
 
-FetchDataDescription Loglet::fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_meta, std::optional<uint64_t> position) const
+FetchDataDescription
+Loglet::fetch(int64_t sn, uint64_t max_size, const LogSequenceMetadata & max_sn_meta, std::optional<uint64_t> position) const
 {
     if (sn >= max_sn_meta.record_sn)
         /// If client request sn is the max ns meta, return its sn back and empty records
@@ -217,7 +218,7 @@ void Loglet::close()
 std::vector<LogSegmentPtr> Loglet::trim(int64_t target_sn)
 {
     auto segments_to_delete = segments->lowerEqualSegments(target_sn);
-    removeSegments(segments_to_delete, true);
+    removeSegments(segments_to_delete, true, "trim_log");
     auto active = segments->activeSegment();
     assert(active);
     active->trim(target_sn);
@@ -320,7 +321,7 @@ bool Loglet::isIndexFile(const std::string & filename)
 std::vector<LogSegmentPtr> Loglet::removeAllSegments()
 {
     auto segments_to_delete = segments->values();
-    removeSegments(segments_to_delete, false);
+    removeSegments(segments_to_delete, false, "delete_log");
     return segments_to_delete;
 }
 
@@ -374,34 +375,59 @@ void Loglet::markFlushed(int64_t sn)
     }
 }
 
-void Loglet::removeSegments(const std::vector<LogSegmentPtr> & segments_to_delete, bool async)
+std::vector<LogSegmentPtr> Loglet::deletableSegments(std::function<bool(LogSegmentPtr, LogSegmentPtr)> should_delete)
+{
+    std::vector<LogSegmentPtr> deletable;
+    LogSegmentPtr current_segment;
+
+    segments->apply([&](LogSegmentPtr & segment){
+        if (!current_segment)
+        {
+            current_segment = segment;
+        }
+        else if (should_delete(current_segment, segment))
+        {
+            deletable.push_back(current_segment);
+            current_segment = segment;
+        }
+        return false;
+    });
+
+    return deletable;
+}
+
+void Loglet::removeSegments(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason)
 {
     for (const auto & segment : segments_to_delete)
         segments->remove(segment->baseSequence());
 
-    removeAllSegmentFiles(segments_to_delete, async);
+    removeSegmentFiles(segments_to_delete, async, reason);
 }
 
-void Loglet::removeAllSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async)
+void Loglet::removeSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason, std::shared_ptr<ThreadPool> adhoc_scheduler_, Poco::Logger * logger_)
 {
     for (auto & segment : segments_to_delete)
-        segment->changeFileSuffix("", DELETED_FILE_SUFFIX);
+        segment->changeFileSuffix(DELETED_FILE_SUFFIX);
 
     if (async)
     {
         std::vector<LogSegmentPtr> copy{segments_to_delete};
         /// We will need pay close attention to the lifecycle here
-        adhoc_scheduler->scheduleOrThrow([moved_segments = std::move(copy), this]() {
-            LOG_INFO(logger, "Deleting segment files");
+        adhoc_scheduler_->scheduleOrThrow([moved_segments = std::move(copy), reason = reason, logger_]() {
             for (auto & segment : moved_segments)
+            {
+                LOG_INFO(logger_, "Deleting segment file={} base_sequence={} reason={}", segment->filename().c_str(), segment->baseSequence(), reason);
                 segment->remove();
+            }
         });
     }
     else
     {
-        LOG_INFO(logger, "Deleting segment files");
         for (auto & segment : segments_to_delete)
+        {
+            LOG_INFO(logger_, "Deleting segment file={} base_sequence={} reason={}", segment->filename().c_str(), segment->baseSequence(), reason);
             segment->remove();
+        }
     }
 }
 
@@ -423,6 +449,16 @@ LogSequenceMetadata Loglet::logEndSequenceMetadata() const
 {
     std::scoped_lock lock(next_sn_mutex);
     return next_sn_meta;
+}
+
+size_t Loglet::size() const
+{
+    size_t total_bytes = 0;
+    segments->apply([&](LogSegmentPtr & segment) {
+        total_bytes += segment->size();
+        return false;
+    });
+    return total_bytes;
 }
 
 }
