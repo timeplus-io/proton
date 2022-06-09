@@ -16,6 +16,7 @@
 #include "SQLFormatHandler.h"
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
+#include "ExternalStreamRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
 #include "UDFHandler.h"
 
@@ -94,6 +95,20 @@ public:
             "DELETE" /* So far, not support PATCH */,
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
+            "/proton/v1/ddl/externalstreams(\\?[\\w\\-=&#]+){0,1}",
+            "GET/POST",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<ExternalStreamRestRouterHandler>(query_context);
+            });
+
+        factory.registerRouterHandler(
+            "/proton/v1/ddl/externalstreams/(?P<stream>[_%\\.\\-\\w]+)(\\?[\\w\\-=&#]+){0,1}",
+            "DELETE" /* So far, not support PATCH */,
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<ExternalStreamRestRouterHandler>(query_context);
             });
 
         factory.registerRouterHandler(

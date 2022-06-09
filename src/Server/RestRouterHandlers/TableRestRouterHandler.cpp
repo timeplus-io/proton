@@ -278,7 +278,17 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
 {
     const auto & time_col = getStringValueFrom(payload, ProtonConsts::RESERVED_EVENT_TIME_API_NAME, ProtonConsts::RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
-    if (uuid.empty())
+
+    if (isExternal())
+    {
+        return fmt::format(
+            "CREATE EXTERNAL STREAM `{}`.`{}` ({}) SETTINGS {}",
+            database,
+            payload->get("name").toString(),
+            getColumnsDefinition(payload),
+            getSettings(payload));
+    }
+    else if (uuid.empty())
     {
         create_segments.push_back(fmt::format(
             "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
