@@ -111,8 +111,8 @@ void registerAggregateFunctionMoving(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = { .returns_default_when_only_null = false, .is_order_dependent = true };
 
-    factory.registerFunction("group_array_moving_sum", { createAggregateFunctionMoving<MovingSumTemplate>, properties });
-    factory.registerFunction("group_array_moving_svg", { createAggregateFunctionMoving<MovingAvgTemplate>, properties });
+    factory.registerFunction("moving_sum", { createAggregateFunctionMoving<MovingSumTemplate>, properties });
+    factory.registerFunction("moving_avg", { createAggregateFunctionMoving<MovingAvgTemplate>, properties });
 }
 
 }

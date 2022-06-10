@@ -186,6 +186,7 @@ set (clickhouse_aggregate_functions_sources
         AggregateFunctionDistinct.cpp
         AggregateFunctionDistinctStreaming.cpp
         AggregateFunctionGroupArray.cpp
+        AggregateFunctionGroupArrayMoving.cpp
         AggregateFunctionHistogram.cpp
         AggregateFunctionIf.cpp
         AggregateFunctionMin.cpp

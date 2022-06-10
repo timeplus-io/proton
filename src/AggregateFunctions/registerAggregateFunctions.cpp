@@ -41,7 +41,7 @@ void registerAggregateFunctionHistogram(AggregateFunctionFactory &);
 //void registerAggregateFunctionMLMethod(AggregateFunctionFactory &);
 //void registerAggregateFunctionEntropy(AggregateFunctionFactory &);
 //void registerAggregateFunctionSimpleLinearRegression(AggregateFunctionFactory &);
-//void registerAggregateFunctionMoving(AggregateFunctionFactory &);
+void registerAggregateFunctionMoving(AggregateFunctionFactory &);
 //void registerAggregateFunctionCategoricalIV(AggregateFunctionFactory &);
 //void registerAggregateFunctionAggThrow(AggregateFunctionFactory &);
 //void registerAggregateFunctionRankCorrelation(AggregateFunctionFactory &);
@@ -123,7 +123,7 @@ void registerAggregateFunctions()
         /// registerAggregateFunctionMLMethod(factory);
         /// registerAggregateFunctionEntropy(factory);
         /// registerAggregateFunctionSimpleLinearRegression(factory);
-        /// registerAggregateFunctionMoving(factory);
+        registerAggregateFunctionMoving(factory);
         /// registerAggregateFunctionCategoricalIV(factory);
         /// registerAggregateFunctionAggThrow(factory);
         /// registerAggregateFunctionRankCorrelation(factory);
