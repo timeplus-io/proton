@@ -187,7 +187,7 @@ Chain InterpreterInsertQuery::buildChainImpl(
 {
     auto context_ptr = getContext();
     const Settings & settings = context_ptr->getSettingsRef();
-    if (settings.enable_light_ingest)
+    if (table->getName() == "Stream" && settings.enable_light_ingest)
         return buildChainLightImpl(table, metadata_snapshot, query_sample_block, thread_status, elapsed_counter_ms);
 
     /// The only case is system tables inserts. System tables are still merge tree

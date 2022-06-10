@@ -272,10 +272,11 @@ DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambi
 
     /// Types of subcolumns by path from all tuples.
     std::unordered_map<PathInData, DataTypes, PathInData::Hash> subcolumns_types;
+    std::unordered_set<PathInData, PathInData::Hash> added_subcolumns;
 
     /// First we flatten tuples, then get common type for paths
     /// and finally unflatten paths and create new tuple type.
-    for (const auto & type : types)
+    for (size_t index = 0; const auto & type : types)
     {
         const auto * type_tuple = typeid_cast<const DataTypeTuple *>(type.get());
         if (!type_tuple)
@@ -286,7 +287,17 @@ DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambi
         assert(tuple_paths.size() == tuple_types.size());
 
         for (size_t i = 0; i < tuple_paths.size(); ++i)
-            subcolumns_types[tuple_paths[i]].push_back(tuple_types[i]);
+        {
+            /// proton: starts.
+            /// If first type (source type) hasn't this subpath, but others type has it, mark it as added subcolumn
+            auto & subpath = subcolumns_types[tuple_paths[i]];
+            if (subpath.size() == 0 && index !=0)
+                added_subcolumns.emplace(tuple_paths[i]);
+
+            subpath.push_back(tuple_types[i]);
+            /// proton: ends.
+        }
+        ++index;
     }
 
     PathsInData tuple_paths;
@@ -311,7 +322,7 @@ DataTypePtr getLeastCommonTypeForObject(const DataTypes & types, bool check_ambi
 
         /// proton: starts. we call the `diff_callback` when subcolumns type changed to common type.
         /// diff_callback(subcolumns name, common type);
-        if (change_callback && !tuple_types.back()->equals(**subtypes.begin()))
+        if (change_callback && (!tuple_types.back()->equals(**subtypes.begin()) || added_subcolumns.contains(key)))
             change_callback(key.getPath(), tuple_types.back());
         /// proton: ends.
     }

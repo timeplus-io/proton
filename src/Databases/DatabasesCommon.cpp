@@ -340,7 +340,6 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
     create->setTable(table_);
 
     /// We remove everything that is not needed for ATTACH from the query.
-    assert(!create->temporary);
     create->as_database.clear();
     create->as_table.clear();
     create->if_not_exists = false;

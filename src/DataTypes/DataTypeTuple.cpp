@@ -205,6 +205,13 @@ bool DataTypeTuple::equals(const IDataType & rhs) const
     if (size != rhs_tuple.elems.size())
         return false;
 
+    /// proton: starts
+    if (have_explicit_names)
+        for (size_t i = 0; i < size; ++i)
+            if (names[i] != rhs_tuple.names[i])
+                return false;
+    /// proton: ends.
+
     for (size_t i = 0; i < size; ++i)
         if (!elems[i]->equals(*rhs_tuple.elems[i]))
             return false;
