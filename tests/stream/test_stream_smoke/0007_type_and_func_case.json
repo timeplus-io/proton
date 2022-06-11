@@ -381,8 +381,26 @@
                 ["1", 1.261261324646445]
                 ]}
             ]
-        }                 
-                                                                                                                                                                                                                                                           
+        }, 
+        {
+            "id": 18,
+            "tags": ["func"],
+            "name": "array sum",
+            "description": "calculate array_sum for integer & float",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "wait":1, "query_id": "802", "query_end_timer": 5, "query":"SELECT [1, 1, 1] AS a, array_sum(a)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query_id": "803", "query_end_timer": 5, "query":"SELECT [1.5, 2.2, 3] AS a, array_sum(a)"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"802", "expected_results":[
+                    ["[1, 1, 1]", 3]]},
+                {"query_id":"803", "expected_results":[
+                    ["[1.5, 2.2, 3.0]", 6.7]]}
+            ]
+        }
     ]
 }
 
