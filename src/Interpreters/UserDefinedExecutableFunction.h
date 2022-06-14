@@ -16,7 +16,8 @@ struct UserDefinedExecutableFunctionConfiguration
     enum FuncType
     {
         EXECUTABLE = 0,
-        REMOTE = 1
+        REMOTE = 1,
+        UNKNOWN = 999
     };
     /// 'type' can be 'executable' or 'remote'
     FuncType type;

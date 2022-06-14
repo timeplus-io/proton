@@ -76,6 +76,29 @@ public:
         return t;
     }
 
+    /// get and pop front if not timeout
+    /// return empty if timeout
+    std::optional<T> take(const UInt64 timeout_ms)
+    {
+        std::unique_lock guard{qlock};
+        auto status = cv.wait_for(guard, std::chrono::milliseconds(timeout_ms), [this] { return !queue.empty(); });
+
+        if (!status)
+            return {};
+
+        T t = queue.front();
+        queue.pop();
+
+        /// Manually unlocking is done before notifying to avoid waking up
+        /// the waiting thread only to block again
+        guard.unlock();
+
+        /// Notify push/emplace, there is empty slot
+        cv.notify_one();
+
+        return t;
+    }
+
     /// Get front. If queue is empty, wait forever for one
     T peek() const
     {

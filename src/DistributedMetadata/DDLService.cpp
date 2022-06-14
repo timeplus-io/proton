@@ -3,14 +3,14 @@
 #include "CatalogService.h"
 #include "PlacementService.h"
 #include "TaskStatusService.h"
-#include "sendRequest.h"
 
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
-#include <Common/ErrorCodes.h>
 #include <KafkaLog/KafkaWAL.h>
 #include <KafkaLog/KafkaWALCommon.h>
+#include <Common/ErrorCodes.h>
 #include <Common/escapeForFileName.h>
+#include <Common/sendRequest.h>
 
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
@@ -300,7 +300,8 @@ void DDLService::doDDLOnHosts(
         }
         catch (...)
         {
-            failed_hosts.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), getCurrentExceptionCode(), getCurrentExceptionMessage(false)));
+            failed_hosts.push_back(fmt::format(
+                "{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), getCurrentExceptionCode(), getCurrentExceptionMessage(false)));
         }
     }
 
@@ -317,7 +318,18 @@ void DDLService::createTable(nlog::Record & record)
 {
     const Block & block = record.getBlock();
     assert(block.has("query_id"));
-    if (!validateSchema(block, {"payload", "database", "table", "uuid", "shards", "replication_factor", "query_id", "user", "timestamp", "logstore_replication_factor"}))
+    if (!validateSchema(
+            block,
+            {"payload",
+             "database",
+             "table",
+             "uuid",
+             "shards",
+             "replication_factor",
+             "query_id",
+             "user",
+             "timestamp",
+             "logstore_replication_factor"}))
         return;
 
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
@@ -635,8 +647,7 @@ DDLService::getTargetURIs(nlog::Record & record, const String & database, const 
     }
 }
 
-void DDLService::createDWAL(
-    const String & uuid, Int32 shards, Int32 replication_factor, const String * url_parameters) const
+void DDLService::createDWAL(const String & uuid, Int32 shards, Int32 replication_factor, const String * url_parameters) const
 {
     klog::KafkaWALContext ctx{uuid, shards, replication_factor, "delete"};
 

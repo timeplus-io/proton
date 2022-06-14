@@ -13,6 +13,10 @@
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Interpreters/Context.h>
 
+/// proton: starts
+#include <Processors/Formats/IRowInputFormat.h>
+/// proton: ends
+
 
 namespace DB
 {
@@ -455,22 +459,14 @@ namespace
 ShellCommandSourceCoordinator::ShellCommandSourceCoordinator(const Configuration & configuration_)
     : configuration(configuration_)
 {
-    if (configuration.is_executable_pool)
-        process_pool = std::make_shared<ProcessPool>(configuration.pool_size ? configuration.pool_size : std::numeric_limits<size_t>::max());
+    /// proton: starts.
+    constexpr size_t max_pool_size = 100;
+    process_pool = std::make_shared<ProcessPool>(
+        configuration.pool_size ? configuration.pool_size : max_pool_size);
+    udf_ctx_pool = std::make_shared<UDFExecutionContextPool>(
+        configuration.pool_size ? configuration.pool_size : max_pool_size);
+    /// proton: ends.
 }
-
-/// proton: starts
-void ShellCommandSourceCoordinator::stopProcessPool()
-{
-    if(!configuration.is_executable_pool)
-        return;
-
-    if (process_pool->borrowedObjectsSize()>0 || process_pool->allocatedObjectsSize() == 0)
-        return;
-
-    process_pool->clearUp();
-}
-/// proton: ends
 
 Pipe ShellCommandSourceCoordinator::createPipe(
     const std::string & command,
@@ -595,5 +591,158 @@ Pipe ShellCommandSourceCoordinator::createPipe(
 
     return pipe;
 }
+
+/// proton: starts
+UDFExecutionContext::~UDFExecutionContext()
+{
+    /// stop send_data_thread
+    bool old_val = false;
+    if (send_data_thread.joinable() && is_shutdown.compare_exchange_strong(old_val, true))
+        send_data_thread.join();
+
+    /// stop subprocess
+    process = nullptr;
+}
+
+UDFExecutionContextPtr ShellCommandSourceCoordinator::getUDFContext(
+    const std::string & command, const std::vector<std::string> & arguments, Block input_header, Block result_header, ContextPtr context)
+{
+    /// prepare sub-process of UDF
+    ShellCommand::Config command_config(command);
+    command_config.arguments = arguments;
+    command_config.write_fds.emplace_back(3);
+
+    auto destructor_strategy
+        = ShellCommand::DestructorStrategy{true /*terminate_in_destructor*/, configuration.command_termination_timeout_seconds};
+    command_config.terminate_in_destructor_strategy = destructor_strategy;
+
+    assert(udf_ctx_pool);
+
+    bool execute_direct = configuration.execute_direct;
+
+    auto create_context = [this, context, command_config, execute_direct, input_header, result_header]() {
+        /// start subprocess
+        std::unique_ptr<ShellCommand> process;
+        if (execute_direct)
+            process = ShellCommand::executeDirect(command_config);
+        else
+            process = ShellCommand::execute(command_config);
+
+        /// prepare out_format
+        auto timeout_write_buffer = std::make_shared<TimeoutWriteBufferFromFileDescriptor>(
+            process->in.getFD(), this->configuration.command_write_timeout_milliseconds);
+        auto out_format = context->getOutputFormat(this->configuration.format, *timeout_write_buffer, input_header);
+
+        /// prepare in_format
+        auto timeout_read_buffer = std::make_shared<TimeoutReadBufferFromFileDescriptor>(
+            process->out.getFD(), this->configuration.command_read_timeout_milliseconds);
+        auto context_for_reading = Context::createCopy(context);
+        context_for_reading->setSetting("input_format_parallel_parsing", false);
+        auto in_format
+            = context_for_reading->getInputFormat(this->configuration.format, *timeout_read_buffer, result_header, DEFAULT_BLOCK_SIZE);
+
+        auto ctx = std::make_unique<UDFExecutionContext>(
+            std::move(process),
+            std::move(out_format),
+            std::move(in_format),
+            std::move(timeout_write_buffer),
+            std::move(timeout_read_buffer));
+
+        /// Start send data thread
+        UDFExecutionContext * ctx_ptr = ctx.get();
+        constexpr UInt64 timeout_ms = 5;
+        ctx->send_data_thread = ThreadFromGlobalPool([ctx_ptr] {
+            while (!ctx_ptr->is_shutdown)
+            {
+                try
+                {
+                    std::optional<Block> block = ctx_ptr->input_block_queue.take(timeout_ms);
+                    if (block)
+                    {
+                        ctx_ptr->out_format->setAutoFlush();
+                        ctx_ptr->out_format->write(*block);
+                        ctx_ptr->write_buffer->next();
+                        ctx_ptr->write_buffer->reset();
+                    }
+                }
+                catch (...)
+                {
+                    bool old_val = false;
+                    ctx_ptr->command_is_invalid.compare_exchange_strong(old_val, true);
+                    tryLogCurrentException(__PRETTY_FUNCTION__);
+                }
+            }
+        });
+
+        return ctx;
+    };
+
+    UDFExecutionContextPtr ctx;
+    bool result = udf_ctx_pool->tryBorrowObject(ctx, create_context, configuration.max_command_execution_time_seconds * 10000);
+
+    if (!result)
+        throw Exception(
+            ErrorCodes::TIMEOUT_EXCEEDED,
+            "Could not get process from pool, max command execution timeout exceeded {} seconds",
+            configuration.max_command_execution_time_seconds);
+
+    return ctx;
+}
+
+void ShellCommandSourceCoordinator::release(UDFExecutionContextPtr && ctx)
+{
+    if (ctx->command_is_invalid)
+    {
+        /// destroy the context
+        ctx = nullptr;
+        udf_ctx_pool->removeObject();
+    }
+    else
+    {
+        /// return subprocess to pool
+        udf_ctx_pool->returnObject(std::move(ctx));
+    }
+}
+
+void ShellCommandSourceCoordinator::sendData(UDFExecutionContextPtr & ctx, const Block & block)
+{
+    if (ctx)
+    {
+        ctx->input_block_queue.add(block);
+        LOG_TRACE(&Poco::Logger::get("ShellCommandSourceCoordinator"), "send {} rows to UDF", block.rows());
+    }
+}
+
+ColumnPtr ShellCommandSourceCoordinator::pull(UDFExecutionContextPtr & ctx, const DataTypePtr & result_type, size_t result_rows_count)
+{
+    auto result_column = pull(ctx->in_format, result_type, result_rows_count);
+    if (result_column->size() != result_rows_count)
+    {
+        bool old_val = false;
+        ctx->command_is_invalid.compare_exchange_strong(old_val, true);
+    }
+    return result_column;
+}
+
+ColumnPtr ShellCommandSourceCoordinator::pull(InputFormatPtr & in_format, const DataTypePtr & result_type, size_t result_rows_count)
+{
+    auto result_column = result_type->createColumn();
+    result_column->reserve(result_rows_count);
+
+    if (auto * row_fmt = static_cast<IRowInputFormat *>(in_format.get()))
+        row_fmt->setMaxSize(result_rows_count);
+
+    Block block = in_format->read(result_rows_count, configuration.command_read_timeout_milliseconds);
+    return block.safeGetByPosition(0).column;
+}
+
+void ShellCommandSourceCoordinator::stopProcessPool()
+{
+    if (udf_ctx_pool->borrowedObjectsSize() > 0 || udf_ctx_pool->allocatedObjectsSize() == 0)
+        return;
+
+    udf_ctx_pool->clearUp();
+}
+/// proton: ends
 
 }

@@ -2,8 +2,8 @@
 #include "SchemaValidator.h"
 
 #include <DistributedMetadata/CatalogService.h>
-#include <DistributedMetadata/sendRequest.h>
 #include <Storages/Streaming/StorageStream.h>
+#include <Common/sendRequest.h>
 
 #include <Poco/Path.h>
 
@@ -24,65 +24,66 @@ namespace ErrorCodes
 
 namespace
 {
-constexpr auto * BATCH_URL = "http://{}:{}/proton/v1/ingest/statuses";
+    constexpr auto * BATCH_URL = "http://{}:{}/proton/v1/ingest/statuses";
 
-const std::map<String, std::map<String, String>> POLL_SCHEMA = {{"required", {{"channel", "string"}, {"poll_ids", "array"}}}};
+    const std::map<String, std::map<String, String>> POLL_SCHEMA = {{"required", {{"channel", "string"}, {"poll_ids", "array"}}}};
 
-StoragePtr
-getTableStorage(const String & database_name, const String & table_name, ContextPtr query_context, String & error, int & error_code)
-{
-    StoragePtr storage;
-    try
+    StoragePtr
+    getTableStorage(const String & database_name, const String & table_name, ContextPtr query_context, String & error, int & error_code)
     {
-        storage = DatabaseCatalog::instance().getTable(StorageID(database_name, table_name), query_context);
-    }
-    catch (Exception & e)
-    {
-        error = e.message();
-        error_code = e.code();
-        return nullptr;
-    }
-
-    if (!storage)
-    {
-        error = "Stream: " + database_name + "." + table_name + " does not exist";
-        error_code = ErrorCodes::UNKNOWN_STREAM;
-        return nullptr;
-    }
-
-    if (storage->getName() != "Stream")
-    {
-        error = database_name + "." + table_name + " is not a Stream";
-        error_code = ErrorCodes::TYPE_MISMATCH;
-        return nullptr;
-    }
-    return storage;
-}
-
-String makeBatchResponse(std::vector<std::pair<std::vector<String>, std::vector<IngestingBlocks::IngestStatus>>> statuses, const String & query_id)
-{
-    Poco::JSON::Object resp;
-    Poco::JSON::Array json_statuses;
-    for (auto & poll_id_and_status : statuses)
-    {
-        assert(poll_id_and_status.first.size() == poll_id_and_status.second.size());
-
-        for (size_t i = 0; auto & poll_id : poll_id_and_status.first)
+        StoragePtr storage;
+        try
         {
-            Poco::JSON::Object::Ptr json(new Poco::JSON::Object());
-            json->set("poll_id", std::move(poll_id));
-            json->set("status", std::move(poll_id_and_status.second[i].status));
-            json->set("progress", poll_id_and_status.second[i].progress);
-            json_statuses.add(json);
-            ++i;
+            storage = DatabaseCatalog::instance().getTable(StorageID(database_name, table_name), query_context);
         }
+        catch (Exception & e)
+        {
+            error = e.message();
+            error_code = e.code();
+            return nullptr;
+        }
+
+        if (!storage)
+        {
+            error = "Stream: " + database_name + "." + table_name + " does not exist";
+            error_code = ErrorCodes::UNKNOWN_STREAM;
+            return nullptr;
+        }
+
+        if (storage->getName() != "Stream")
+        {
+            error = database_name + "." + table_name + " is not a Stream";
+            error_code = ErrorCodes::TYPE_MISMATCH;
+            return nullptr;
+        }
+        return storage;
     }
-    resp.set("status", json_statuses);
-    resp.set("request_id", query_id);
-    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    resp.stringify(resp_str_stream, 0);
-    return resp_str_stream.str();
-}
+
+    String makeBatchResponse(
+        std::vector<std::pair<std::vector<String>, std::vector<IngestingBlocks::IngestStatus>>> statuses, const String & query_id)
+    {
+        Poco::JSON::Object resp;
+        Poco::JSON::Array json_statuses;
+        for (auto & poll_id_and_status : statuses)
+        {
+            assert(poll_id_and_status.first.size() == poll_id_and_status.second.size());
+
+            for (size_t i = 0; auto & poll_id : poll_id_and_status.first)
+            {
+                Poco::JSON::Object::Ptr json(new Poco::JSON::Object());
+                json->set("poll_id", std::move(poll_id));
+                json->set("status", std::move(poll_id_and_status.second[i].status));
+                json->set("progress", poll_id_and_status.second[i].progress);
+                json_statuses.add(json);
+                ++i;
+            }
+        }
+        resp.set("status", json_statuses);
+        resp.set("request_id", query_id);
+        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        resp.stringify(resp_str_stream, 0);
+        return resp_str_stream.str();
+    }
 }
 
 bool IngestStatusHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const

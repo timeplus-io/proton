@@ -5,7 +5,7 @@
 #    include <Coordination/KVRequest.h>
 #    include <Coordination/MetaStoreDispatcher.h>
 #    include <Coordination/ReadBufferFromNuraftBuffer.h>
-#    include <DistributedMetadata/sendRequest.h>
+#    include <Common/sendRequest.h>
 
 #    include <Poco/Path.h>
 

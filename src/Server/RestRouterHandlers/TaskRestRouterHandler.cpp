@@ -2,7 +2,7 @@
 
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/TaskStatusService.h>
-#include <DistributedMetadata/sendRequest.h>
+#include <Common/sendRequest.h>
 
 
 namespace DB

@@ -11,6 +11,7 @@
 
 /// proton: starts
 #include <Poco/JSON/Parser.h>
+#include <Common/filesystemHelpers.h>
 /// proton: ends
 
 namespace DB
@@ -20,6 +21,9 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int FUNCTION_ALREADY_EXISTS;
+    /// proton: starts.
+    extern const int UNSUPPORTED_METHOD;
+    /// proton: ends
 }
 
 ExternalUserDefinedExecutableFunctionsLoader::ExternalUserDefinedExecutableFunctionsLoader(ContextPtr global_context_)
@@ -62,6 +66,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
     String type = config.getString(key_in_config + ".type");
     UserDefinedExecutableFunctionConfiguration::FuncType func_type;
     String command_value;
+    String command;
     Poco::URI url;
     if (type == "executable")
     {
@@ -88,6 +93,20 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         boost::split(command_arguments, command_value, [](char c) { return c == ' '; });
 
         command_value = std::move(command_arguments[0]);
+        auto user_scripts_path = getContext()->getUserScriptsPath();
+        command = std::filesystem::path(user_scripts_path) / command_value;
+
+        if (!fileOrSymlinkPathStartsWith(command, user_scripts_path))
+            throw Exception(
+                ErrorCodes::UNSUPPORTED_METHOD, "Executable file {} must be inside user scripts folder {}", command_value, user_scripts_path);
+
+        if (!std::filesystem::exists(std::filesystem::path(command)))
+            throw Exception(
+                ErrorCodes::UNSUPPORTED_METHOD,
+                "Executable file {} does not exist inside user scripts folder {}",
+                command_value,
+                user_scripts_path);
+
         command_arguments.erase(command_arguments.begin());
     }
 
@@ -169,7 +188,7 @@ ExternalLoader::LoadablePtr ExternalUserDefinedExecutableFunctionsLoader::create
         .auth_context = std::move(auth_ctx),
         .arguments = std::move(arguments),
         .name = std::move(name), //-V1030
-        .command = std::move(command_value), //-V1030
+        .command = std::move(command), //-V1030
         /// proton: ends
         .command_arguments = std::move(command_arguments), //-V1030
         .result_type = std::move(result_type), //-V1030

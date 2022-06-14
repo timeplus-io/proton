@@ -7,7 +7,6 @@
 #include <IO/WriteHelpers.h>
 
 #include <Processors/Sources/ShellCommandSource.h>
-#include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Formats/formatBlock.h>
 
 #include <Functions/FunctionFactory.h>
@@ -17,6 +16,15 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 
+#include <Processors/Formats/IOutputFormat.h>
+
+/// proton: starts
+#include <Common/sendRequest.h>
+#include <IO/ReadBufferFromString.h>
+
+#include <Poco/Net/HTTPRequest.h>
+#include <Poco/Net/HTTPResponse.h>
+/// proton: ends
 
 namespace DB
 {
@@ -24,6 +32,9 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNSUPPORTED_METHOD;
+    /// proton: starts
+    extern const int REMOTE_CALL_FAILED;
+    /// proton: ends
 }
 
 class UserDefinedFunction final : public IFunction
@@ -35,6 +46,7 @@ public:
         ContextPtr context_)
         : executable_function(std::move(executable_function_))
         , context(context_)
+        , log(&Poco::Logger::get("UserDefinedFunction"))
     {
     }
 
@@ -62,34 +74,82 @@ public:
         return configuration.result_type;
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    /// proton: starts.
+    ColumnPtr executeLocal(const Block & block, const DataTypePtr & result_type, size_t input_rows_count) const
     {
         auto coordinator = executable_function->getCoordinator();
-        const auto & coordinator_configuration = coordinator->getConfiguration();
         const auto & configuration = executable_function->getConfiguration();
 
-        String command = configuration.command;
+        ColumnWithTypeAndName result(result_type, "result");
+        Block result_header({result});
 
-        if (coordinator_configuration.execute_direct)
+        auto ctx = coordinator->getUDFContext(configuration.command, configuration.command_arguments, block.cloneEmpty(), result_header, context);
+
+        coordinator->sendData(ctx, block);
+
+        auto result_column = coordinator->pull(ctx, result_type, input_rows_count);
+        LOG_TRACE(log, "pull {} rows", result_column->size());
+        coordinator->release(std::move(ctx));
+
+        return result_column;
+    }
+
+    ColumnPtr executeRemote(const Block & block, const DataTypePtr & result_type, size_t input_rows_count) const
+    {
+        auto coordinator = executable_function->getCoordinator();
+        const auto & configuration = executable_function->getConfiguration();
+
+        /// convert block to 'JSONColumns' string
+        String out;
+        WriteBufferFromString out_buf{out};
+        auto convert = [&](const Block & block_to_send) {
+            auto out_format = context->getOutputFormat("JSONColumns", out_buf, block_to_send.cloneEmpty());
+            out_format->setAutoFlush();
+            out_format->write(block_to_send);
+            out_format->finalize();
+            out_buf.finalize();
+        };
+        convert(block);
+
+        /// send data to remote endpoint
+        auto [resp, http_status] = sendRequest(
+            configuration.url,
+            Poco::Net::HTTPRequest::HTTP_POST,
+            context->getCurrentQueryId(),
+            context->getUserName(),
+            context->getPasswordByUserName(context->getUserName()),
+            out,
+            {{configuration.auth_context.key_name, configuration.auth_context.key_value}},
+            &Poco::Logger::get("UserDefinedFunction"));
+
+        if (http_status != Poco::Net::HTTPResponse::HTTP_OK)
+            throw Exception(
+                ErrorCodes::REMOTE_CALL_FAILED,
+                "Call remote uri {} failed, message: {}, http_status: {}",
+                configuration.command,
+                resp,
+                http_status);
+
+        /// Convert resp to block
+        ColumnWithTypeAndName result(result_type, "result");
+        Block result_header({result});
+        ReadBufferFromString read_buffer(resp);
+        auto input_format = context->getInputFormat("JSONColumns", read_buffer, result_header, input_rows_count);
+        return coordinator->pull(input_format, result_type, input_rows_count);
+    }
+    /// proton: ends
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        /// proton: starts
+        /// No need to execute UDF if it is an empty block.
+        if (input_rows_count == 0)
         {
-            auto user_scripts_path = context->getUserScriptsPath();
-            auto script_path = user_scripts_path + '/' + command;
-
-            if (!fileOrSymlinkPathStartsWith(script_path, user_scripts_path))
-                throw Exception(ErrorCodes::UNSUPPORTED_METHOD,
-                    "Executable file {} must be inside user scripts folder {}",
-                    command,
-                    user_scripts_path);
-
-            if (!std::filesystem::exists(std::filesystem::path(script_path)))
-                throw Exception(ErrorCodes::UNSUPPORTED_METHOD,
-                    "Executable file {} does not exist inside user scripts folder {}",
-                    command,
-                    user_scripts_path);
-
-            command = std::move(script_path);
+            auto result_column = result_type->createColumn();
+            return result_column;
         }
 
+        const auto & configuration = executable_function->getConfiguration();
         size_t argument_size = arguments.size();
         auto arguments_copy = arguments;
 
@@ -97,6 +157,7 @@ public:
         {
             auto & column_with_type = arguments_copy[i];
             column_with_type.column = column_with_type.column->convertToFullColumnIfConst();
+            column_with_type.name = configuration.arguments[i].name;
 
             const auto & argument_type = configuration.arguments[i].type;
             if (areTypesEqual(arguments_copy[i].type, argument_type))
@@ -109,60 +170,38 @@ public:
             column_with_type = std::move(column_to_cast);
         }
 
-        ColumnWithTypeAndName result(result_type, "result");
-        Block result_block({result});
-
         Block arguments_block(arguments_copy);
-        auto source = std::make_shared<SourceFromSingleChunk>(std::move(arguments_block));
-        auto shell_input_pipe = Pipe(std::move(source));
-
-        ShellCommandSourceConfiguration shell_command_source_configuration;
-
-        if (coordinator_configuration.is_executable_pool)
+        ColumnPtr result_col_ptr;
+        switch (configuration.type)
         {
-            shell_command_source_configuration.read_fixed_number_of_rows = true;
-            shell_command_source_configuration.number_of_rows_to_read = input_rows_count;
+            case UserDefinedExecutableFunctionConfiguration::FuncType::EXECUTABLE:
+                result_col_ptr = executeLocal(arguments_block, result_type, input_rows_count);
+                break;
+            case UserDefinedExecutableFunctionConfiguration::FuncType::REMOTE:
+                result_col_ptr = executeRemote(arguments_block, result_type, input_rows_count);
+                break;
+            default:
+                throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "UDF type {} does not support yet.", configuration.type);
         }
 
-        Pipes shell_input_pipes;
-        shell_input_pipes.emplace_back(std::move(shell_input_pipe));
-
-        Pipe pipe = coordinator->createPipe(
-            command,
-            configuration.command_arguments,
-            std::move(shell_input_pipes),
-            result_block,
-            context,
-            shell_command_source_configuration);
-
-        QueryPipeline pipeline(std::move(pipe));
-        PullingPipelineExecutor executor(pipeline);
-
-        auto result_column = result_type->createColumn();
-        result_column->reserve(input_rows_count);
-
-        Block block;
-        while (executor.pull(block))
-        {
-            const auto & result_column_to_add = *block.safeGetByPosition(0).column;
-            result_column->insertRangeFrom(result_column_to_add, 0, result_column_to_add.size());
-        }
-
-        size_t result_column_size = result_column->size();
+        size_t result_column_size = result_col_ptr->size();
         if (result_column_size != input_rows_count)
-            throw Exception(ErrorCodes::UNSUPPORTED_METHOD,
+            throw Exception(
+                ErrorCodes::UNSUPPORTED_METHOD,
                 "Function {}: wrong result, expected {} row(s), actual {}",
                 quoteString(getName()),
                 input_rows_count,
                 result_column_size);
 
-        return result_column;
+        return result_col_ptr;
+        /// proton: ends
     }
 
 private:
 
     ExternalUserDefinedExecutableFunctionsLoader::UserDefinedExecutableFunctionPtr executable_function;
     ContextPtr context;
+    Poco::Logger * log;
 };
 
 UserDefinedExecutableFunctionFactory & UserDefinedExecutableFunctionFactory::instance()

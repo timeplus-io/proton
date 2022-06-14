@@ -68,6 +68,11 @@ public:
 
     void addBuffer(std::unique_ptr<ReadBuffer> buffer) { owned_buffers.emplace_back(std::move(buffer)); }
 
+    /// proton: starts. read Chunk from InputFormat, num_rows is the rows to be read used by some InputFormat types
+    /// timeout_ms is the timeout in milliseconds
+    Block read(size_t num_rows, UInt64 timeout_ms);
+    /// proton: ends
+
 protected:
     ColumnMappingPtr column_mapping{};
 

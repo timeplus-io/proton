@@ -46,6 +46,11 @@ public:
 
     void resetParser() override;
 
+    /// proton: starts
+    void setMaxSize(UInt64 size) { params.max_block_size = size; }
+    UInt64 getMaxSize() const { return params.max_block_size; }
+    /// proton: ends
+
 protected:
     /** Read next row and append it to the columns.
       * If no more rows - return false.

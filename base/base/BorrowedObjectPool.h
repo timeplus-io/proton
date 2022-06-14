@@ -105,6 +105,17 @@ public:
     }
 
     /// proton: starts
+    void removeObject()
+    {
+        std::lock_guard<std::mutex> lock(objects_mutex);
+
+        if (borrowed_objects_size > 0)
+            --borrowed_objects_size;
+
+        if (allocated_objects_size > 0)
+            --allocated_objects_size;
+    }
+
     void clearUp()
     {
         std::unique_lock<std::mutex> lock(objects_mutex);
