@@ -407,6 +407,9 @@ void MetaStateMachine::rangeGetByPrefix(
 
 void MetaStateMachine::shutdownStorage()
 {
+    if (!rocksdb_ptr)
+        return;
+
     for (auto iter = column_families.begin(); iter != column_families.end(); ++iter)
     {
         if (iter->second != nullptr)
