@@ -1047,6 +1047,7 @@ def batch_input_from_data_set_rest(
 
 def input_client(
     config,
+    table_name,
     source,
     table_schema,
     input_sub_id,
@@ -1075,9 +1076,26 @@ def input_client(
 
     test_id = source.get("test_id")
     input_id = source.get("input_id")
-    table_name = source.get("table_name")
+    #table_name = source.get("table_name")
     result_keep = source.get("result_keep")
     loop_times = int(source.get("loop_times"))
+
+    start_from = source.get("$start_from")
+    if start_from is None:
+        start_from = 0
+    else:
+        start_from = int(start_from)
+
+    workers = source.get("workers")
+    end_at = source.get("$end_at")
+    if end_at is None:
+        end_at = 0
+
+
+    worker_mode = source.get("worker_mode")
+
+    print(f"worker_mode = {worker_mode}, start_from = {start_from}, end_at = {end_at}")
+
 
     logger.debug(
         f"worker for input_id = {input_id}, input_sub_id = {input_sub_id}, agend_id = {agent_id} started... input_tear_down.value = {input_tear_down.value}"
@@ -1096,24 +1114,43 @@ def input_client(
         if data_sets_play_mode == "sequence":
             loop_count = 0
             # loop_limit = 10 if loop_times < 0 else loop_times
+            i = start_from
             while loop_count < loop_times or loop_times < 0:
                 try:
                     logger.debug(
                         f"input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: batch_input_from_data_set_py to be executed"
                     )
+                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                        table_name_copy = table_name.replace("$", str(i))
+                    else:
+                        table_name_copy = table_name                    
                     batch_input_from_data_set_py(
-                        config, table_name, py_client, data_set, batch_size
+                        config, table_name_copy, py_client, data_set, batch_size
                     )
+
+                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                        i += 1
+                        if i > end_at:
+                            i = 0
+
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
+
                 except (BaseException) as error:
                     logger.debug(f"exception, error = {error}")
                     py_client.disconnect()
                     py_client = Client(
                         host=proton_server, port=proton_server_native_port
                     )  # create python client
+
+                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                        i += 1
+                        if i > end_at:
+                            i = 0
+
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
+
 
             input_done.value = True  # set input_done mp.Value to True to indicate all the inputs are executed.
 
@@ -1127,18 +1164,31 @@ def input_client(
         session = requests.Session()
         if data_sets_play_mode == "sequence":
             loop_count = 0
+            i = start_from
             while loop_count < loop_times or loop_times < 0:
                 try:
                     logger.debug(
                         f"input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: batch_input_from_data_set_rest to be executed"
                     )
+                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                        table_name_copy = table_name.replace("$", str(i))
+                    else:
+                        table_name_copy = table_name                    
                     batch_input_from_data_set_rest(
-                        config, table_name, table_schema, session, data_set, batch_size
+                        config, table_name_copy, table_schema, session, data_set, batch_size
                     )
+                    if worker_mode is not None and worker_mode == "round_robin" and "$" in table_name:
+                        i += 1
+                        if i > end_at:
+                            i = 0                    
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
                 except (BaseException) as error:
                     logger.debug(f"exception, error = {error}")
+                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                        i += 1
+                        if i > end_at:
+                            i = 0                    
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
             input_done.value = True
@@ -1171,9 +1221,14 @@ def input_walk_through(
 
     for source in inputs:
         table_name = source.get("table_name")
+        worker_mode = source.get("worker_mode")
         input_id = source.get("input_id")
         client = source.get("client")
-        table_schema = find_schema(table_name, table_schemas)
+        table_schema_ref = source.get("table_schema_ref")
+        #table_schema = find_schema(table_name, table_schemas)
+        table_schema = find_schema(table_schema_ref, table_schemas) # to support $ as a token of auto increased surfix in inputs, the table name can't be used to find schema, but use table_schema_ref
+        print(f"input_walk_through: table_name = {table_name}, table_schema_ref = {table_schema_ref}, table_schema = {table_schema}")
+
         workers = source.get("workers")
         data_source = source.get("data_source")
         data_set_path = source.get("data_set_path")
@@ -1228,20 +1283,26 @@ def input_walk_through(
             json_column = json_column
         )
 
-        # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")
-
+        # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")    
+        i = 0
         for data_set_dict in data_sets_for_workers:
             input_sub_id = data_set_dict.get("input_sub_id")
             data_set = data_set_dict.get("data_set")
             agent_id = data_set_dict.get("agent_id")
             input_done = mp.Value("b", False)
             input_tear_down = mp.Value("b", False)
+            table_name
             # logger.debug(f"{sys._getframe().f_code.co_name}: agent_id = {agent_id}, data_set = {data_set}")
             logger.debug(
                 f"worker for input_id = {input_id}, input_sub_id = {input_sub_id}, agend_id = {agent_id} to be started..., alive = {alive}, alive.value = {alive.value}"
             )
+            if worker_mode is None and "$" in table_name:
+                table_name_copy = table_name.replace("$", str(i))
+            else:
+                table_name_copy = table_name
             args = (
                 config,
+                table_name_copy,
                 source,
                 table_schema,
                 input_sub_id,
@@ -1267,6 +1328,7 @@ def input_walk_through(
                     "input_tear_down": input_tear_down,
                 }
             )
+            i += 1
 
         logger.debug(f"proc_workers = {proc_workers}")
     for worker in proc_workers:

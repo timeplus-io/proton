@@ -289,7 +289,7 @@ def github_event_get(stream = "github_event", interval = 5):
             print("Good bye!")
             break    
 
-def create_stream (stream_name, target_columns, target_columns_types, host = 'localhost', port = 8463 ): #todo: consolidate stream create logic into one func
+def create_stream (stream_name, target_columns, target_columns_types, host = 'localhost', port = 8463, logstore_replica_factor = 1 ): #todo: consolidate stream create logic into one func
     #create stream if not exists {stream} (add_count int,type string, json_string string, {json_column} json, sent_at datetime64)')
     client = Client(host, port=port)
     sql = f'create stream if not exists {stream_name} (add_count int,type string,'
@@ -297,6 +297,8 @@ def create_stream (stream_name, target_columns, target_columns_types, host = 'lo
     for column, type in column_tuple_list:
         sql = sql + f"{column} {type},"
     sql = sql + 'sent_at datetime64)'
+    if logstore_replica_factor != 1:
+        sql = sql + f"settings logstore_replication_factor={logstore_replica_factor}"
     logger.debug(f"create stream sql = {sql}")
     try:
         client.execute(sql)
@@ -326,10 +328,12 @@ if __name__ == "__main__":
     mode = 'input'
     proc = None
     loop = 1
+    logstore_replica_factor = 1
     ingest_mode = 'split' #split means take the json obj from the list in the json file one by one and intest, single-ling means all the content in the json file is ingested as one line.
     github_token = os.getenv("GITHUB_TOKEN", 'None')
     proton_host = os.getenv("PROTON_HOST",'localhost')
     proton_port = os.getenv("PROTON_PORT",8463)
+
 
     if github_token is None:
         print(f"please config env var of GITHUB_TOKEN")
@@ -339,10 +343,10 @@ if __name__ == "__main__":
 
     pd.set_option('display.precision', 2)
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","target_columns=", "target_columns_types=", "query_column=", "interval=", "loop=", "ingest_mode="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["input_json_files=","mode=", "stream=","target_columns=", "target_columns_types=", "query_column=", "interval=", "loop=", "ingest_mode=", "logstore_replica=", "logstore_retension_ms"])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 json_input.py --input_json_files=github_issue.json --stream=github_issue --target_columns=event,json_string --target_columns_types=json, string, --interval=1 --loop=-1, --ingest_mode=split")
+        print(f"usage: python3 json_input.py --input_json_files=github_issue.json --stream=github_issue --target_columns=event,json_string --target_columns_types=json, string, --interval=1 --loop=-1, --ingest_mode=split, --logstore_replica=3, --logstore_retension_ms=480000")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -384,6 +388,12 @@ if __name__ == "__main__":
                 sys.exit(1)
         if name in ("--ingest_mode"):
             ingest_mode = value
+        
+        if name in ("--logstore_replica"):
+            logstore_replica_factor = value
+        
+        if name in ("--logstore_retension_ms"):
+            logstore_retension_ms = value
     
     print(f"input_json: input_json_files = {json_files}, stream = {stream}, target_columns = {target_columns}, target_columns_types = {target_columns_types}, query_column = {query_column}, mode = {mode} interval={interval}, ingest_mode = {ingest_mode}")
 
@@ -394,7 +404,7 @@ if __name__ == "__main__":
         client.execute(f"drop stream if exists {stream}")
         time.sleep(1)
 
-    stream = create_stream(stream,target_columns, target_columns_types, proton_host, proton_port)
+    stream = create_stream(stream,target_columns, target_columns_types, proton_host, proton_port, logstore_replica_factor)
     if stream is None:
         logger.debug(f"stream creation failure")
         sys.exit(1)
