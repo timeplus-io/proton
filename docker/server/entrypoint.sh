@@ -177,7 +177,7 @@ fi
 # Produce latency
 if [ -n "$STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS" ]; then
     # Replace `queue_buffering_max_ms: 50` in config.yaml with customized one
-    sed -i"" "s/queue_buffering_max_ms: 50/queue_buffering_max_ms: $STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS/g" "$PROTON_CONFIG"
+    sed -i"" "s/queue_buffering_max_ms: 50\s*\(#.*\)\?$/queue_buffering_max_ms: $STREAM_STORAGE_QUEUE_BUFFERING_MAX_MS \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup queue_buffering_max_ms for stream storage.'
         exit 1
@@ -186,7 +186,7 @@ fi
 
 if [ -n "$STREAM_STORAGE_FETCH_WAIT_MAX_MS" ]; then
     # Replace `fetch_wait_max_ms: 500` in config.yaml with customized one
-    sed -i"" "s/fetch_wait_max_ms: 500/fetch_wait_max_ms: $STREAM_STORAGE_FETCH_WAIT_MAX_MS/g" "$PROTON_CONFIG"
+    sed -i"" "s/fetch_wait_max_ms: 500\s*\(#.*\)\?$/fetch_wait_max_ms: $STREAM_STORAGE_FETCH_WAIT_MAX_MS \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup fetch_wait_max_ms for stream storage.'
         exit 1
@@ -195,7 +195,7 @@ fi
 
 if [ -n "$MAX_CONCURRENT_QUERIES" ]; then
     # Replace `max_concurrent_queries: 100` in config.yaml with customized one
-    sed -i"" "s/max_concurrent_queries: 100/max_concurrent_queries: $MAX_CONCURRENT_QUERIES/g" "$PROTON_CONFIG"
+    sed -i"" "s/max_concurrent_queries: 100\s*\(#.*\)\?$/max_concurrent_queries: $MAX_CONCURRENT_QUERIES \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup max_concurrent_queries for stream storage.'
         exit 1
@@ -204,7 +204,7 @@ fi
 
 if [ -n "$MAX_CONCURRENT_SELECT_QUERIES" ]; then
     # Replace `max_concurrent_select_queries: 100` in config.yaml with customized one
-    sed -i"" "s/max_concurrent_select_queries: 100/max_concurrent_select_queries: $MAX_CONCURRENT_SELECT_QUERIES/g" "$PROTON_CONFIG"
+    sed -i"" "s/max_concurrent_select_queries: 100\s*\(#.*\)\?$/max_concurrent_select_queries: $MAX_CONCURRENT_SELECT_QUERIES \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup max_concurrent_select_queries for stream storage.'
         exit 1
@@ -213,7 +213,7 @@ fi
 
 if [ -n "$MAX_CONCURRENT_INSERT_QUERIES" ]; then
     # Replace `max_concurrent_insert_queries: 100` in config.yaml with customized one
-    sed -i"" "s/max_concurrent_insert_queries: 100/max_concurrent_insert_queries: $MAX_CONCURRENT_INSERT_QUERIES/g" "$PROTON_CONFIG"
+    sed -i"" "s/max_concurrent_insert_queries: 100\s*\(#.*\)\?$/max_concurrent_insert_queries: $MAX_CONCURRENT_INSERT_QUERIES \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup max_concurrent_insert_queries for stream storage.'
         exit 1
@@ -222,7 +222,7 @@ fi
 
 if [ -n "$MAX_CONCURRENT_STREAMING_QUERIES" ]; then
     # Replace `streaming_processing_pool_size: 100` in config.yaml with customized one
-    sed -i"" "s/streaming_processing_pool_size: 100/streaming_processing_pool_size: $MAX_CONCURRENT_STREAMING_QUERIES/g" "$PROTON_CONFIG"
+    sed -i"" "s/streaming_processing_pool_size: 100\s*\(#.*\)\?$/streaming_processing_pool_size: $MAX_CONCURRENT_STREAMING_QUERIES \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup streaming_processing_pool_size for stream storage.'
         exit 1
@@ -231,7 +231,7 @@ fi
 
 if [ -n "$MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO" ]; then
     # Replace `max_server_memory_usage_to_ram_ratio: 0.9` in config.yaml with customized one
-    sed -i"" "s/max_server_memory_usage_to_ram_ratio: 0.9/max_server_memory_usage_to_ram_ratio: $MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO/g" "$PROTON_CONFIG"
+    sed -i"" "s/max_server_memory_usage_to_ram_ratio: 0.9\s*\(#.*\)\?$/max_server_memory_usage_to_ram_ratio: $MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup max_server_memory_usage_to_ram_ratio for stream storage.'
         exit 1
@@ -240,7 +240,7 @@ fi
 
 if [ -n "$MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO" ]; then
     # Replace `cache_size_to_ram_max_ratio: 0.5` in config.yaml with customized one
-    sed -i"" "s/cache_size_to_ram_max_ratio: 0.5/cache_size_to_ram_max_ratio: $MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO/g" "$PROTON_CONFIG"
+    sed -i"" "s/cache_size_to_ram_max_ratio: 0.5\s*\(#.*\)\?$/cache_size_to_ram_max_ratio: $MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO \1/g" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
         echo >&2 'Failed to setup cache_size_to_ram_max_ratio for stream storage.'
         exit 1
@@ -293,7 +293,7 @@ if [ "$STREAM_STORAGE_TYPE" = "kafka" ]; then
     fi
 
     if [ -n "$STREAM_STORAGE_LOGSTORE_REPLICATION_FACTOR" ]; then
-        sed -i"" "s/logstore_replication_factor: 1/logstore_replication_factor: $STREAM_STORAGE_LOGSTORE_REPLICATION_FACTOR/g" "$PROTON_CONFIG"
+        sed -i"" "s/logstore_replication_factor: 1\s*\(#.*\)\?$/logstore_replication_factor: $STREAM_STORAGE_LOGSTORE_REPLICATION_FACTOR \1/g" "$PROTON_CONFIG"
         if [[ $? -ne 0 ]]; then
             echo >&2 'Failed to set kafka logstore_replication_factor.'
             exit 1
