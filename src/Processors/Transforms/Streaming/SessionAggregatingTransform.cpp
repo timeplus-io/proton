@@ -68,20 +68,20 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         if (params->params.time_col_is_datetime64)
         {
             status = params->aggregator.processSessionRow<ColumnDecimal<DateTime64>>(
-                const_cast<SessionHashMap &>(params->aggregator.session_map),
+                params->aggregator.session_map,
                 session_id_column,
                 time_column,
                 i,
-                const_cast<Int64 &>(params->aggregator.max_event_ts));
+                params->aggregator.max_event_ts);
         }
         else
         {
             status = params->aggregator.processSessionRow<ColumnVector<UInt32>>(
-                const_cast<SessionHashMap &>(params->aggregator.session_map),
+                params->aggregator.session_map,
                 session_id_column,
                 time_column,
                 i,
-                const_cast<Int64 &>(params->aggregator.max_event_ts));
+                params->aggregator.max_event_ts);
         }
 
         if (status != SessionStatus::IGNORE)
@@ -263,9 +263,11 @@ void SessionAggregatingTransform::mergeTwoLevel(
                     if (params->params.time_col_is_datetime64)
                     {
                         window_start_col_ptr->insert(
-                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_start, 0, params->params.time_scale));
+                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_start / common::exp10_i64(info.scale), info.win_start % common::exp10_i64(info.scale), info.scale)
+                        );
                         window_end_col_ptr->insert(
-                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_end, 0, params->params.time_scale));
+                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_end / common::exp10_i64(info.scale), info.win_end % common::exp10_i64(info.scale), info.scale)
+                        );
                     }
                     else
                     {

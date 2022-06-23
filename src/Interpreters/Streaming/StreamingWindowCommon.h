@@ -44,6 +44,7 @@ void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Ki
 std::pair<Int64, IntervalKind> extractInterval(const ASTFunction * ast);
 
 Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone);
+Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 time_scale);
 
 WindowType toWindowType(const String & func_name);
 

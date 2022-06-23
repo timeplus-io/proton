@@ -3207,11 +3207,9 @@ SessionStatus StreamingAggregator::processSessionRow(
     const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_column.get())->getData();
     const typename ColumnUInt32::Container & session_id_vec = checkAndGetColumn<ColumnUInt32>(session_id_column.get())->getData();
 
-    Int64 ts_secs = 0;
-    if (params.time_col_is_datetime64)
-        ts_secs = DecimalUtils::getWholePart(DateTime64(time_vec[offset]), params.time_scale);
-    else
-        ts_secs = time_vec[offset];
+    Int64 ts_secs = time_vec[offset];
+    Int64 scale = params.time_scale;
+
     UInt32 session_id = session_id_vec[offset];
 
     if (ts_secs >= max_ts)
@@ -3231,6 +3229,7 @@ SessionStatus StreamingAggregator::processSessionRow(
         /// Initial session window
         info.win_start = ts_secs;
         info.win_end = ts_secs + 1;
+        info.scale = scale;
         info.interval = params.window_interval;
         info.id = session_id;
         info.cur_session_id = 0;
@@ -3245,8 +3244,9 @@ void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, size_t sessi
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
     for (const auto & it : session_map.map32)
     {
-        Int64 low_bound = addTime(max_ts, params.kind, -1 * params.window_interval, time_zone);
-        Int64 max_bound = addTime(max_ts, params.kind, -1 * params.session_size, time_zone);
+        Int64 low_bound = addTime(max_ts, params.kind, -1 * params.window_interval, time_zone, params.time_scale);
+        Int64 max_bound = addTime(max_ts, params.kind, -1 * params.session_size, time_zone, params.time_scale);
+
         if (max_bound > it.second->win_start || (it.first == session_id && low_bound > it.second->win_end))
         {
             sessions.push_back(it.first);

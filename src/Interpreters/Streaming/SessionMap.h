@@ -60,6 +60,7 @@ struct SessionInfo
     size_t id = 0;
     Int64 win_start = 0;
     Int64 win_end = 0;
+    Int64 scale = 0;
     Int64 interval = 0;
     UInt64 cur_session_id = 0;
 

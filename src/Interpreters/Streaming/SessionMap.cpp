@@ -11,23 +11,23 @@ SessionStatus handleSession(const DateTime64 & tp_time, SessionInfo & info, Inte
 
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
 
-    if (addTime(tp_time, kind, session_size, time_zone) < info.win_start)
+    if (addTime(tp_time, kind, session_size, time_zone, info.scale) < info.win_start)
     {
         /// late session, ignore this event
         return SessionStatus::IGNORE;
     }
-    else if (addTime(tp_time, kind, window_interval, time_zone) < info.win_start)
+    else if (addTime(tp_time, kind, window_interval, time_zone, info.scale) < info.win_start)
     {
         /// with session_size, possible late event in current session
         /// TODO: append block into possible_session_end_list
         return SessionStatus::KEEP;
     }
-    else if (addTime(tp_time, kind, window_interval, time_zone) >= info.win_start && tp_time < info.win_end)
+    else if (addTime(tp_time, kind, window_interval, time_zone, info.scale) >= info.win_start && tp_time < info.win_end)
     {
         //            session_data[offeset] = cur_session_id;
         return SessionStatus::KEEP;
     }
-    else if (addTime(tp_time, kind, -1 * window_interval, time_zone) <= info.win_end)
+    else if (addTime(tp_time, kind, -1 * window_interval, time_zone, info.scale) <= info.win_end)
     {
         /// belongs to current session
         //            session_data[offeset] = cur_session_id;

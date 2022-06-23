@@ -5,6 +5,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Common/ProtonCommon.h>
+#include <Common/intExp.h>
 
 namespace DB
 {
@@ -352,6 +353,13 @@ ALWAYS_INLINE Int64 addTime(Int64 time_sec, IntervalKind::Kind kind, Int64 num_u
 #undef CASE_WINDOW_KIND
     }
     __builtin_unreachable();
+}
+
+ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const DateLUTImpl & time_zone, Int64 scale)
+{
+    auto time_sec = dt / common::exp10_i64(scale);
+    auto ts_fractional = dt % common::exp10_i64(scale);
+    return addTime(time_sec, kind, num_units, time_zone) * common::exp10_i64(scale) + ts_fractional;
 }
 
 ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind)
