@@ -71,7 +71,8 @@ class PlacementStrategy : private boost::noncopyable
 public:
     struct PlacementRequest
     {
-        size_t requested_nodes;
+        size_t min_requested_nodes;
+        size_t max_requested_nodes;
         String storage_policy;
     };
 

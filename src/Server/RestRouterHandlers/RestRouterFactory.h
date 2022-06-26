@@ -84,7 +84,7 @@ public:
             });
 
         factory.registerRouterHandler(
-            "/proton/v1/ddl/streams(\\?[\\w\\-=&#]+){0,1}",
+            "/proton/v1/ddl/streams(?:\\?\?[^/]*)",
             "GET/POST",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<TabularTableRestRouterHandler>(query_context);

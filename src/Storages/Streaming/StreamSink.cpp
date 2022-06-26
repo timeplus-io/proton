@@ -4,9 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <KafkaLog/KafkaWAL.h>
-#include <NativeLog/Server/NativeLog.h>
 #include <base/ClockUtils.h>
-
 
 namespace DB
 {
@@ -23,8 +21,6 @@ StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metada
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , query_context(query_context_)
-    , storage_id(storage.getStorageID())
-    , request{storage_id.getTableName(), storage_id.uuid, storage.shard, nullptr}
 {
     /// metadata_snapshot can contain only partial columns of the schema when light ingest feature is on
     /// Check this case here
@@ -41,12 +37,6 @@ StreamSink::StreamSink(StorageStream & storage_, const StorageMetadataPtr metada
         /// Figure out the column positions since we need encode them to file system
         for (const auto & col : sink_block_header)
             column_positions.push_back(full_header.getPositionByName(col.name));
-    }
-
-    if (!storage.kafka)
-    {
-        native_log = &nlog::NativeLog::instance(query_context);
-        assert(native_log->enabled());
     }
 }
 
@@ -102,8 +92,8 @@ inline IngestMode StreamSink::getIngestMode() const
     if (ingest_mode != IngestMode::None && ingest_mode != IngestMode::INVALID)
         return ingest_mode;
 
-    if (storage.default_ingest_mode != IngestMode::None && ingest_mode != IngestMode::INVALID)
-        return storage.default_ingest_mode;
+    if (storage.ingestMode() != IngestMode::None && ingest_mode != IngestMode::INVALID)
+        return storage.ingestMode();
 
     return IngestMode::ASYNC;
 }
@@ -116,7 +106,8 @@ void StreamSink::consume(Chunk chunk)
     assert(column_positions.empty() || column_positions.size() == chunk.getNumColumns());
 
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    /// 1) Split block by sharding key
+    /// 1) Split block by sharding key.
+    /// FIXME, when nativelog is distributed, we will need revisit the sharding logic
     BlocksWithShard blocks{shardBlock(std::move(block))};
 
     auto ingest_mode = getIngestMode();
@@ -137,88 +128,9 @@ void StreamSink::consume(Chunk chunk)
         if (!idem_key.empty())
             record->setIdempotentKey(idem_key);
 
-        if (native_log)
-            appendToNativeLog(record, ingest_mode);
-        else
-            appendToKafka(record, ingest_mode);
+        storage.append(record, ingest_mode, &StreamSink::writeCallback, this, query_context->getBlockBaseId(), outstanding);
+        ++outstanding;
     }
-}
-
-void StreamSink::appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/)
-{
-    assert(native_log);
-
-    request.stream_shard.shard = record->getShard();
-    request.record = record;
-
-    auto resp{native_log->append(storage_id.getDatabaseName(), request)};
-    if (resp.hasError())
-    {
-        LOG_ERROR(storage.log, "Failed to append record to native log, error={}", resp.errString());
-        throw DB::Exception(ErrorCodes::INTERNAL_ERROR, "Failed to append record to native log, error={}", resp.errString());
-    }
-}
-
-void StreamSink::appendToKafka(nlog::RecordPtr & record, IngestMode ingest_mode)
-{
-    assert(storage.kafka);
-
-    switch (ingest_mode)
-    {
-        case IngestMode::ASYNC: {
-            //                LOG_TRACE(
-            //                    storage.log,
-            //                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
-            //                    outstanding,
-            //                    record.block.rows(),
-            //                    current_block.shard,
-            //                    query_context->getQueryStatusPollId());
-
-            storage.appendAsync(*record, query_context->getBlockBaseId(), outstanding);
-            break;
-        }
-        case IngestMode::SYNC: {
-            //                LOG_TRACE(
-            //                    storage.log,
-            //                    "[sync] write a block={} rows={} shard={} committed={} ...",
-            //                    outstanding,
-            //                    record.block.rows(),
-            //                    current_block.shard,
-            //                    committed);
-
-            auto ret = storage.kafka->log->append(*record, &StreamSink::writeCallback, this, storage.kafka->append_ctx);
-            if (ret != 0)
-                throw Exception("Failed to insert data sync", ret);
-
-            break;
-        }
-        case IngestMode::FIRE_AND_FORGET: {
-            //                LOG_TRACE(
-            //                    storage.log,
-            //                    "[fire_and_forget] write a block={} rows={} shard={} ...",
-            //                    outstanding,
-            //                    record.block.rows(),
-            //                    current_block.shard);
-
-            auto ret = storage.kafka->log->append(*record, nullptr, nullptr, storage.kafka->append_ctx);
-            if (ret != 0)
-                throw Exception("Failed to insert data fire_and_forget", ret);
-
-            break;
-        }
-        case IngestMode::ORDERED: {
-            auto ret = storage.kafka->log->append(*record, storage.kafka->append_ctx);
-            if (ret.err != ErrorCodes::OK)
-                throw Exception("Failed to insert data ordered", ret.err);
-
-            break;
-        }
-        case IngestMode::None:
-            /// FALLTHROUGH
-        case IngestMode::INVALID:
-            throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
-    }
-    outstanding += 1;
 }
 
 void StreamSink::writeCallback(const klog::AppendResult & result)
@@ -241,7 +153,7 @@ void StreamSink::onFinish()
     /// We need wait for all outstanding ingesting block committed
     /// before dtor itself. Otherwise the if the registered callback is invoked
     /// after dtor, crash will happen
-    if (!storage.kafka || getIngestMode() != IngestMode::SYNC)
+    if (!storage.kafka_log || getIngestMode() != IngestMode::SYNC)
         return;
 
     /// 3) Inplace poll append result until either all of records have been committed
@@ -258,7 +170,7 @@ void StreamSink::onFinish()
         }
         else
         {
-            storage.kafka->log->poll(10, storage.kafka->append_ctx);
+            storage.poll(10);
         }
 
         if (MonotonicSeconds::now() - start >= 2)

@@ -4,6 +4,7 @@
 
 namespace DB
 {
+class StreamShard;
 class StreamingBlockReaderKafka;
 class StreamingBlockReaderNativeLog;
 
@@ -11,7 +12,7 @@ class StreamingStoreSource final : public StreamingStoreSourceBase
 {
 public:
     StreamingStoreSource(
-        std::shared_ptr<IStorage> storage_,
+        std::shared_ptr<StreamShard> stream_shard_,
         const Block & header,
         const StorageSnapshotPtr & storage_snapshot_,
         ContextPtr context_,

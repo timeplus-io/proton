@@ -1,9 +1,9 @@
 #include "StreamingBlockReaderKafka.h"
+#include "StreamShard.h"
 
 #include <Interpreters/StorageID.h>
 #include <KafkaLog/KafkaWALCommon.h>
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
-#include <Storages/IStorage.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -14,16 +14,16 @@ namespace ErrorCodes
 }
 
 StreamingBlockReaderKafka::StreamingBlockReaderKafka(
-    std::shared_ptr<IStorage> storage_,
+    std::shared_ptr<StreamShard> stream_shard_,
     Int32 shard_,
     Int64 offset,
     SourceColumnsDescription::PhysicalColumnPositions column_positions,
     klog::KafkaWALSimpleConsumerPtr consumer_,
     Poco::Logger * log_)
-    : storage(std::move(storage_))
-    , header(storage->getInMemoryMetadataPtr()->getSampleBlock())
+    : stream_shard(std::move(stream_shard_))
+    , schema(stream_shard->storageStream()->getInMemoryMetadataPtr()->getSampleBlock())
     , consumer(std::move(consumer_))
-    , consume_ctx(toString(storage->getStorageID().uuid), shard_, offset)
+    , consume_ctx(toString(stream_shard->storageStream()->getStorageID().uuid), shard_, offset)
     , log(log_)
 {
     if (offset == nlog::LATEST_SN)
@@ -57,7 +57,7 @@ StreamingBlockReaderKafka::~StreamingBlockReaderKafka()
 
 const Block & StreamingBlockReaderKafka::getSchema(UInt16 /*schema_version*/) const
 {
-    return header;
+    return schema;
 }
 
 nlog::RecordPtrs StreamingBlockReaderKafka::read(UInt32 count, Int32 timeout_ms)

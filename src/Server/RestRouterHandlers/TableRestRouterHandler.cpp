@@ -141,10 +141,10 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
             jsonErrorResponse(fmt::format("Stream {}.{} already exists.", database, table), ErrorCodes::STREAM_ALREADY_EXISTS),
             HTTPResponse::HTTP_BAD_REQUEST};
 
-    const auto & shard = getQueryParameter("shard");
+    const auto & host_shards = getQueryParameter("host_shards");
     const auto & uuid = getQueryParameter("uuid");
     const auto & synchronous_ddl = getQueryParameter("synchronous_ddl", "1");
-    const auto & query = getCreationSQL(payload, shard, uuid);
+    const auto & query = getCreationSQL(payload, host_shards, uuid);
 
     if (synchronous_ddl == "1")
         query_context->setSetting("synchronous_ddl", true);
@@ -232,9 +232,8 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
 
     std::multimap<int, String> nodes;
     for (const auto node : table_nodes)
-    {
-        nodes.emplace(node->shard, node->host);
-    }
+        for (auto shard : node->host_shards)
+            nodes.emplace(shard, node->host);
 
     Poco::JSON::Array shards;
     for (auto it = nodes.begin(); it != nodes.end(); it = nodes.upper_bound(it->first))
@@ -245,9 +244,8 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
         auto range = nodes.equal_range(it->first);
         Poco::JSON::Array replicas;
         while (range.first != range.second)
-        {
             replicas.add(range.first++->second);
-        }
+
         placement.set("replicas", replicas);
         shards.add(placement);
     }
@@ -274,7 +272,7 @@ String TableRestRouterHandler::getStringValueFrom(const Poco::JSON::Object::Ptr 
     return payload->has(key) ? payload->get(key).toString() : default_value;
 }
 
-String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & shard, const String & uuid) const
+String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & host_shards, const String & uuid) const
 {
     const auto & time_col = getStringValueFrom(payload, ProtonConsts::RESERVED_EVENT_TIME_API_NAME, ProtonConsts::RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
@@ -318,8 +316,8 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
 
     create_segments.push_back(fmt::format("SETTINGS subtype='{}'", subtype()));
 
-    if (!shard.empty())
-        create_segments.push_back(fmt::format(", shard={}", shard));
+    if (!host_shards.empty())
+        create_segments.push_back(fmt::format(", host_shards='{}'", host_shards));
 
     getAndValidateStorageSetting(
         [this](const auto & key) -> String {

@@ -1,14 +1,12 @@
 #include "StreamCallbackData.h"
-#include "StorageStream.h"
+#include "StreamShard.h"
 
 #include <base/logger_useful.h>
 
-/// proton: starts. Added for proton
-
 namespace DB
 {
-StreamCallbackData::StreamCallbackData(StorageStream * storage_, const SequenceRanges & missing_sequence_ranges_)
-    : storage(storage_), header(storage->getInMemoryMetadataPtr()->getSampleBlock()), missing_sequence_ranges(missing_sequence_ranges_)
+StreamCallbackData::StreamCallbackData(StreamShard * stream_shard_, const SequenceRanges & missing_sequence_ranges_)
+    : stream_shard(stream_shard_), header(stream_shard_->storage_stream->getInMemoryMetadataPtr()->getSampleBlock()), missing_sequence_ranges(missing_sequence_ranges_)
 {
 }
 
@@ -16,7 +14,7 @@ void StreamCallbackData::wait() const
 {
     while (outstanding_commits != 0)
     {
-        LOG_INFO(storage->log, "Waiting for outstanding commits={} to finish", outstanding_commits);
+        LOG_INFO(stream_shard->log, "Waiting for outstanding commits={} to finish", outstanding_commits);
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 }
@@ -44,19 +42,19 @@ void StreamCallbackData::commit(nlog::RecordPtrs records)
 
         /// Wait until we consume a record which has sequence number larger
         /// than max committed sn
-        if (recovery_records.back()->getSN() < storage->maxCommittedSN())
+        if (recovery_records.back()->getSN() < stream_shard->maxCommittedSN())
         {
             --outstanding_commits;
             return;
         }
 
-        auto range_buckets{categorizeRecordsAccordingToSequenceRanges(recovery_records, missing_sequence_ranges, storage->maxCommittedSN())};
+        auto range_buckets{categorizeRecordsAccordingToSequenceRanges(recovery_records, missing_sequence_ranges, stream_shard->maxCommittedSN())};
 
         for (auto & records_seqs_pair : range_buckets)
         {
             assert(!records_seqs_pair.first.empty());
 
-            LOG_INFO(storage->log, "Recovery phase. Committing missing_ranges={}", sequenceRangesToString(records_seqs_pair.second));
+            LOG_INFO(stream_shard->log, "Recovery phase. Committing missing_ranges={}", sequenceRangesToString(records_seqs_pair.second));
             doCommit(std::move(records_seqs_pair.first), std::move(records_seqs_pair.second));
 
             assert(records_seqs_pair.first.empty());
@@ -75,12 +73,12 @@ inline void StreamCallbackData::doCommit(nlog::RecordPtrs records, SequenceRange
 {
     try
     {
-        storage->commit(std::move(records), std::move(sequence_ranges));
+        stream_shard->commit(std::move(records), std::move(sequence_ranges));
     }
     catch (...)
     {
         LOG_ERROR(
-            storage->log, "Failed to commit data for shard={}, exception={}", storage->shard, getCurrentExceptionMessage(true, true));
+            stream_shard->log, "Failed to commit data for shard={}, exception={}", stream_shard->shard, getCurrentExceptionMessage(true, true));
     }
 }
 

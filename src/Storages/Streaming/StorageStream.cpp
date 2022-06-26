@@ -1,13 +1,11 @@
 #include "StorageStream.h"
+#include "StreamShard.h"
 #include "StreamSink.h"
-#include "StreamingBlockReaderKafka.h"
 #include "StreamingBlockReaderNativeLog.h"
 #include "StreamingStoreSource.h"
-#include "storageUtil.h"
+#include "parseHostShards.h"
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnDecimal.h>
-#include <DataTypes/DataTypeDateTime64.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ClusterProxy/DistributedSelectStreamFactory.h>
@@ -18,8 +16,6 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/createBlockSelector.h>
 #include <Interpreters/evaluateConstantExpression.h>
-#include <KafkaLog/KafkaWALCommon.h>
-#include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -27,14 +23,13 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
-#include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <base/logger_useful.h>
+#include <Common/ProtonCommon.h>
 #include <Common/randomSeed.h>
-#include <Common/setThreadName.h>
-#include <Common/timeScale.h>
 
 
 namespace DB
@@ -51,6 +46,8 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
     extern const int UNKNOWN_EXCEPTION;
+    extern const int INTERNAL_ERROR;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 
 namespace
@@ -212,43 +209,6 @@ namespace
 
         return buf.str();
     }
-
-    inline void assignSequenceID(nlog::RecordPtr & record)
-    {
-        auto * col = record->getBlock().findByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
-        if (!col)
-            return;
-
-        auto * seq_id_col = typeid_cast<ColumnInt64 *>(col->column->assumeMutable().get());
-        if (seq_id_col)
-        {
-            auto & data = seq_id_col->getData();
-            for (auto & item : data)
-                item = record->getSN();
-        }
-    }
-
-    inline void assignIndexTime(ColumnWithTypeAndName * index_time_col)
-    {
-        if (!index_time_col)
-            return;
-
-        /// index_time_col->column
-        ///    = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
-
-        const auto * type = typeid_cast<const DataTypeDateTime64 *>(index_time_col->type.get());
-        if (type)
-        {
-            auto scale = type->getScale();
-            auto * col = typeid_cast<ColumnDecimal<DateTime64> *>(index_time_col->column->assumeMutable().get());
-            assert(col);
-
-            auto now = nowSubsecond(scale).get<DateTime64>();
-            auto & data = col->getData();
-            for (auto & item : data)
-                item = now;
-        }
-    }
 }
 
 StorageStream::StorageStream(
@@ -271,44 +231,41 @@ StorageStream::StorageStream(
         context_,
         date_column_name_,
         merging_params_,
-        std::make_unique<MergeTreeSettings>(*settings_.get()), /// make a copy
+        std::make_unique<MergeTreeSettings>(*settings_), /// make a copy
         false, /// require_part_metadata
         attach_)
     , replication_factor(replication_factor_)
     , shards(shards_)
-    , part_commit_pool(context_->getPartCommitPool())
     , rng(randomSeed())
     , max_outstanding_blocks(context_->getSettingsRef().aysnc_ingest_max_outstanding_blocks)
 {
     cacheVirtualColumnNamesAndTypes();
 
-    if (!relative_data_path_.empty())
+    /// Init StreamShard
     {
-        storage = StorageMergeTree::create(
-            table_id_,
-            relative_data_path_,
-            metadata_,
-            attach_,
-            context_,
-            date_column_name_,
-            merging_params_,
-            std::move(settings_),
-            has_force_restore_data_flag_);
-
-        buildIdempotentKeysIndex(storage->lastIdempotentKeys());
-        auto sn = storage->committedSN();
-        if (sn >= 0)
-        {
-            std::lock_guard lock(sns_mutex);
-            last_sn = sn;
-            local_sn = sn;
-        }
-
-        LOG_INFO(log, "Load committed sn={}", sn);
+        auto ssettings = storage_settings.get();
+        auto host_shards = parseHostShards(ssettings->host_shards.value, shards);
+        stream_shards.reserve(host_shards.size());
+        for (auto shard : host_shards)
+            stream_shards.push_back(std::make_shared<StreamShard>(
+                replication_factor,
+                shards,
+                shard,
+                table_id_,
+                relative_data_path_,
+                metadata_,
+                attach_,
+                context_,
+                date_column_name_,
+                merging_params_,
+                std::make_unique<MergeTreeSettings>(*settings_),
+                has_force_restore_data_flag_,
+                this,
+                log));
     }
 
-    for (Int32 shardId = 0; shardId < shards; ++shardId)
-        slot_to_shard.push_back(shardId);
+    for (Int32 shard_id = 0; shard_id < shards; ++shard_id)
+        slot_to_shard.push_back(shard_id);
 
     if (sharding_key_)
     {
@@ -316,7 +273,7 @@ StorageStream::StorageStream(
         sharding_key_is_deterministic = isExpressionActionsDeterministics(sharding_key_expr);
         sharding_key_column_name = sharding_key_->getColumnName();
 
-        if (auto shard_func = sharding_key_->as<ASTFunction>())
+        if (auto * shard_func = sharding_key_->as<ASTFunction>())
             if (shard_func->name == "rand" || shard_func->name == "RAND")
                 rand_sharding_key = true;
     }
@@ -395,57 +352,64 @@ void StorageStream::readConcat(
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
 
-    auto create_streaming_source = [this, header, storage_snapshot, context_](Int64 & max_sn_in_parts) {
-        auto committed = storage->committedSN();
-        if (max_sn_in_parts < 0)
-        {
-            /// Fallback to seek streaming store
-            auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
-            LOG_INFO(log, "Fused read fallbacks to seek stream. shard={}", currentShard());
-            return std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, storage_snapshot, context_, currentShard(), offsets[currentShard()], log);
-        }
-        else if (committed < max_sn_in_parts)
-        {
-            /// This happens if there are sequence ID gaps in the parts and system is bootstrapping to fill the gap
-            /// Please refer to SequenceInfo.h for more details
-            /// Fallback to seek streaming store
-            auto offsets = getOffsets(context_->getSettingsRef().seek_to.value);
-            LOG_INFO(
-                log,
-                "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, "
-                "current_committed_sn={}",
-                currentShard(),
-                max_sn_in_parts,
-                committed);
+    for (auto & stream_shard : stream_shards)
+    {
+        auto create_streaming_source = [this, header, storage_snapshot, stream_shard, context_](Int64 & max_sn_in_parts) {
+            auto committed = stream_shard->storage->committedSN();
+            if (max_sn_in_parts < 0)
+            {
+                /// Fallback to seek streaming store
+                auto offsets = stream_shard->getOffsets(context_->getSettingsRef().seek_to.value);
+                LOG_INFO(log, "Fused read fallbacks to seek stream. shard={}", stream_shard->shard);
 
-            /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
-            max_sn_in_parts = -1;
-            return std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, storage_snapshot, context_, currentShard(), offsets[currentShard()], log);
-        }
-        else
-        {
-            LOG_INFO(
-                log,
-                "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}",
-                currentShard(),
-                max_sn_in_parts,
-                committed);
-            return std::make_shared<StreamingStoreSource>(
-                shared_from_this(), header, storage_snapshot, context_, currentShard(), max_sn_in_parts + 1, log);
-        }
-    };
+                return std::make_shared<StreamingStoreSource>(
+                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
+            }
+            else if (committed < max_sn_in_parts)
+            {
+                /// This happens if there are sequence ID gaps in the parts and system is bootstrapping to fill the gap
+                /// Please refer to SequenceInfo.h for more details
+                /// Fallback to seek streaming store
+                auto offsets = stream_shard->getOffsets(context_->getSettingsRef().seek_to.value);
+                LOG_INFO(
+                    log,
+                    "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, "
+                    "current_committed_sn={}",
+                    stream_shard->shard,
+                    max_sn_in_parts,
+                    committed);
 
-    storage->readConcat(
-        query_plan,
-        column_names,
-        storage_snapshot,
-        query_info,
-        context_,
-        processed_stage,
-        max_block_size,
-        std::move(create_streaming_source));
+                /// We need reset max_sn_in_parts to tell caller that we are seeking streaming store directly
+                max_sn_in_parts = -1;
+                return std::make_shared<StreamingStoreSource>(
+                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
+            }
+            else
+            {
+                LOG_INFO(
+                    log,
+                    "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}",
+                    stream_shard->shard,
+                    max_sn_in_parts,
+                    committed);
+
+                return std::make_shared<StreamingStoreSource>(
+                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, max_sn_in_parts + 1, log);
+            }
+        };
+
+        assert(stream_shard->storage);
+
+        stream_shard->storage->readConcat(
+            query_plan,
+            column_names,
+            storage_snapshot,
+            query_info,
+            context_,
+            processed_stage,
+            max_block_size,
+            std::move(create_streaming_source));
+    }
 }
 
 void StorageStream::readStreaming(
@@ -462,18 +426,19 @@ void StorageStream::readStreaming(
     auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
     if (share_resource_group)
     {
-        for (Int32 i = 0; i < shards; ++i)
+        for (auto & stream_shard : stream_shards)
         {
             if (!column_names.empty())
-                pipes.emplace_back(source_multiplexers->createChannel(shard, column_names, storage_snapshot, context_));
-            else
                 pipes.emplace_back(
-                    source_multiplexers->createChannel(shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
+                    stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
+            else
+                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
+                    stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
         }
     }
     else
     {
-        /// auto consumer = klog::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(streamingStorageClusterId());
+        /// auto consumer = klog::KafkaWALPool::instance(context_->getGlobalContext()).getOrCreateStreaming(eamingStorageClusterId());
 
         /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
         /// We will need add one
@@ -483,11 +448,11 @@ void StorageStream::readStreaming(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
 
-        auto offsets = getOffsets(settings_ref.seek_to.value);
+        auto offsets = stream_shards.back()->getOffsets(settings_ref.seek_to.value);
 
-        for (Int32 i = 0; i < shards; ++i)
-            pipes.emplace_back(
-                std::make_shared<StreamingStoreSource>(shared_from_this(), header, storage_snapshot, context_, i, offsets[i], log));
+        for (auto & stream_shard : stream_shards)
+            pipes.emplace_back(std::make_shared<StreamingStoreSource>(
+                stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log));
     }
 
     LOG_INFO(
@@ -496,6 +461,7 @@ void StorageStream::readStreaming(
         pipes.size(),
         settings_ref.seek_to.value,
         share_resource_group ? "shared" : "dedicated");
+
     auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
     query_plan.addStep(std::move(read_step));
 }
@@ -544,7 +510,40 @@ void StorageStream::readHistory(
     }
     else
     {
-        storage->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+        if (stream_shards.size() == 1)
+        {
+            stream_shards.back()->storage->read(
+                query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+        }
+        else
+        {
+            auto shard_num_streams = num_streams / stream_shards.size();
+            if (shard_num_streams == 0)
+                shard_num_streams = 1;
+
+            std::vector<QueryPlanPtr> plans;
+            plans.reserve(stream_shards.size());
+
+            for (auto & stream_shard : stream_shards)
+            {
+                auto plan = std::make_unique<QueryPlan>();
+
+                assert(stream_shard->storage);
+                stream_shard->storage->read(
+                    *plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, shard_num_streams);
+
+                plans.push_back(std::move(plan));
+            }
+
+            DataStreams input_streams;
+            input_streams.reserve(plans.size());
+
+            for (auto & plan : plans)
+                input_streams.emplace_back(plan->getCurrentDataStream());
+
+            auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
+            query_plan.unitePlans(std::move(union_step), std::move(plans));
+        }
     }
 }
 
@@ -567,45 +566,21 @@ void StorageStream::startup()
     if (inited.test_and_set())
         return;
 
-    source_multiplexers.reset(new StreamingStoreSourceMultiplexers(shared_from_this(), getContext(), log));
-
-    initLog();
-
-    if (!storage)
-        return;
-
     LOG_INFO(log, "Starting");
-    storage->startup();
 
-    if (storage_settings.get()->storage_type.value == "streaming")
+    for (auto & stream_shard : stream_shards)
+        stream_shard->startup();
+
+    if (stream_shards.back()->kafka)
     {
-        LOG_INFO(log, "Pure streaming storage mode, skip indexing data to historical store");
+        /// Always use last Kafka instance for ingestion
+        /// FIXME, per shard ingestion
+        kafka_log = stream_shards.back()->kafka.get();
     }
     else
     {
-        if (kafka)
-        {
-            if (storage_settings.get()->logstore_subscription_mode.value == "shared")
-            {
-                /// Shared mode, register callback
-                addSubscriptionKafka();
-                LOG_INFO(log, "Tailing streaming store in shared subscription mode");
-            }
-            else
-            {
-                /// Dedicated mode has dedicated poll thread
-                poller.emplace(1);
-                poller->scheduleOrThrowOnError([this] { backgroundPollKafka(); });
-                LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
-            }
-        }
-        else
-        {
-            /// Dedicated mode has dedicated poll thread. nativelog only supports dedicate mode for now
-            poller.emplace(1);
-            poller->scheduleOrThrowOnError([this] { backgroundPollNativeLog(); });
-            LOG_INFO(log, "Tailing streaming store in dedicated subscription mode");
-        }
+        native_log = &nlog::NativeLog::instance(getContext());
+        assert(native_log->enabled());
     }
 
     LOG_INFO(log, "Started");
@@ -622,7 +597,9 @@ StorageStream::~StorageStream()
         tryLogCurrentException(log, "Failed to shutdown");
     }
 
-    /// Wait for outstanding blocks
+    LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
+
+    /// Wait for outstanding ingested blocks
     while (outstanding_blocks != 0)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -638,25 +615,9 @@ void StorageStream::shutdown()
         return;
 
     LOG_INFO(log, "Stopping");
-    if (storage)
-    {
-        if (poller)
-        {
-            poller->wait();
-            /// Force delete pool
-            poller.reset();
-        }
-        else
-        {
-            removeSubscriptionKafka();
-        }
-        storage->shutdown();
-    }
 
-    if (kafka)
-        kafka->shutdown();
-
-    LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
+    for (auto & stream_shard : stream_shards)
+        stream_shard->shutdown();
 }
 
 String StorageStream::getName() const
@@ -666,30 +627,30 @@ String StorageStream::getName() const
 
 bool StorageStream::isRemote() const
 {
-    return !storage;
+    /// If there is no backing storage, it is remote
+    /// checking one shard is good enough
+    return stream_shards.back()->storage == nullptr;
 }
 
 bool StorageStream::requireDistributedQuery(ContextPtr context_) const
 {
-    if (!storage)
-    {
+    if (!stream_shards.back()->storage)
         return true;
-    }
 
     /// If it has backing storage and it is a single shard table
     if (shards == 1)
-    {
         return false;
-    }
 
     const auto & client_info = context_->getClientInfo();
     if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-    {
         /// If this query is a remote query already
         return false;
-    }
 
-    /// If it has backing storage and it is a multple shard table and
+    if (stream_shards.size() == static_cast<size_t>(shards))
+        /// Local host has all stream shards
+        return false;
+
+    /// If it has backing storage and it is a multiple shard stream and
     /// this query is an initial query, we need execute a distributed query
     return true;
 }
@@ -706,25 +667,72 @@ bool StorageStream::supportsIndexForIn() const
 
 bool StorageStream::supportsSubcolumns() const
 {
-    return storage && storage->supportsSubcolumns();
+    return true;
 }
 
 std::optional<UInt64> StorageStream::totalRows(const Settings & settings) const
 {
-    assert(storage);
-    return storage->totalRows(settings);
+    std::optional<UInt64> rows;
+    for (const auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto shard_rows = stream_shard->storage->totalRows(settings);
+
+            if (shard_rows.has_value())
+            {
+                if (rows.has_value())
+                    *rows += *shard_rows;
+                else
+                    rows = shard_rows;
+            }
+        }
+    }
+
+    return rows;
 }
 
 std::optional<UInt64> StorageStream::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
 {
-    assert(storage);
-    return storage->totalRowsByPartitionPredicate(query_info, context_);
+    std::optional<UInt64> rows;
+    for (const auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto shard_rows = stream_shard->storage->totalRowsByPartitionPredicate(query_info, context_);
+            if (shard_rows.has_value())
+            {
+                if (rows.has_value())
+                    *rows += *shard_rows;
+                else
+                    rows = shard_rows;
+            }
+        }
+    }
+
+    return rows;
 }
 
 std::optional<UInt64> StorageStream::totalBytes(const Settings & settings) const
 {
-    assert(storage);
-    return storage->totalBytes(settings);
+    std::optional<UInt64> bytes;
+
+    for (const auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto shard_bytes = stream_shard->storage->totalBytes(settings);
+            if (shard_bytes.has_value())
+            {
+                if (bytes.has_value())
+                    *bytes += *shard_bytes;
+                else
+                    bytes = shard_bytes;
+            }
+        }
+    }
+
+    return bytes;
 }
 
 SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
@@ -734,32 +742,33 @@ SinkToStoragePtr StorageStream::write(const ASTPtr & /*query*/, const StorageMet
 
 void StorageStream::checkTableCanBeDropped() const
 {
-    if (storage)
-        storage->checkTableCanBeDropped();
+    for (const auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->checkTableCanBeDropped();
 }
 
 void StorageStream::preDrop()
 {
     shutdown();
-    deinitNativeLog();
+
+    for (auto & stream_shard : stream_shards)
+        stream_shard->deinitNativeLog();
 }
 
 void StorageStream::drop()
 {
-    if (storage)
-        storage->drop();
+    for (const auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->drop();
 }
 
 void StorageStream::preRename(const StorageID & new_table_id)
 {
-    if (!kafka)
+    if (native_log)
     {
-        auto & native_log = nlog::NativeLog::instance(getContext());
-        assert(native_log.enabled());
-
         const auto & storage_id = getStorageID();
         nlog::RenameStreamRequest request(storage_id.getTableName(), new_table_id.getTableName());
-        auto response{native_log.renameStream(storage_id.getDatabaseName(), request)};
+        auto response{native_log->renameStream(storage_id.getDatabaseName(), request)};
         if (response.hasError())
             throw DB::Exception(response.error_code, "Failed to rename stream, error={}", response.error_message);
     }
@@ -768,15 +777,21 @@ void StorageStream::preRename(const StorageID & new_table_id)
 void StorageStream::truncate(
     const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
 {
-    assert(storage);
-    storage->truncate(query, metadata_snapshot, context_, holder);
+    for (const auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->truncate(query, metadata_snapshot, context_, holder);
 }
 
 void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
 {
-    assert(storage);
-    storage->alter(commands, context_, alter_lock_holder);
-    setInMemoryMetadata(storage->getInMemoryMetadata());
+    for (auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            stream_shard->storage->alter(commands, context_, alter_lock_holder);
+            setInMemoryMetadata(stream_shard->storage->getInMemoryMetadata());
+        }
+    }
 }
 
 bool StorageStream::optimize(
@@ -788,51 +803,96 @@ bool StorageStream::optimize(
     const Names & deduplicate_by_columns,
     ContextPtr context_)
 {
-    assert(storage);
-    return storage->optimize(query, metadata_snapshot, partition, finall, deduplicate, deduplicate_by_columns, context_);
+    bool result = true;
+    for (auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto optimized = stream_shard->storage->optimize(
+                query, metadata_snapshot, partition, finall, deduplicate, deduplicate_by_columns, context_);
+            if (!optimized)
+                result = false;
+        }
+    }
+    return result;
 }
 
 void StorageStream::mutate(const MutationCommands & commands, ContextPtr context_)
 {
-    assert(storage);
-    storage->mutate(commands, context_);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->mutate(commands, context_);
 }
 
 /// Return introspection information about currently processing or recently processed mutations.
 std::vector<MergeTreeMutationStatus> StorageStream::getMutationsStatus() const
 {
-    assert(storage);
-    return storage->getMutationsStatus();
+    std::vector<MergeTreeMutationStatus> results;
+    for (const auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto statuses = stream_shard->storage->getMutationsStatus();
+            for (auto & status : statuses)
+                results.push_back(std::move(status));
+        }
+    }
+    return results;
 }
 
 CancellationCode StorageStream::killMutation(const String & mutation_id)
 {
-    assert(storage);
-    return storage->killMutation(mutation_id);
+    for (auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto code = stream_shard->storage->killMutation(mutation_id);
+            if (code != CancellationCode::CancelSent)
+                return code;
+        }
+    }
+    return CancellationCode::CancelSent;
 }
 
 ActionLock StorageStream::getActionLock(StorageActionBlockType action_type)
 {
-    assert(storage);
-    return storage->getActionLock(action_type);
+    /// Grap the first shard's action lock as the whole storage stream action lock
+    return stream_shards.back()->storage->getActionLock(action_type);
 }
 
 void StorageStream::onActionLockRemove(StorageActionBlockType action_type)
 {
-    assert(storage);
-    storage->onActionLockRemove(action_type);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->onActionLockRemove(action_type);
 }
 
 CheckResults StorageStream::checkData(const ASTPtr & query, ContextPtr context_)
 {
-    assert(storage);
-    return storage->checkData(query, context_);
+    CheckResults results;
+    for (auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto check_results = stream_shard->storage->checkData(query, context_);
+            for (auto & check_result : check_results)
+                results.push_back(std::move(check_result));
+        }
+    }
+    return results;
 }
 
 bool StorageStream::scheduleDataProcessingJob(BackgroundJobsAssignee & assignee)
 {
-    assert(storage);
-    return storage->scheduleDataProcessingJob(assignee);
+    for (auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            if (!stream_shard->storage->scheduleDataProcessingJob(assignee))
+                return false;
+        }
+    }
+    return true;
 }
 
 QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
@@ -851,54 +911,70 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     }
     else
     {
-        return storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
+        /// Use the last shard is good enough
+        return stream_shards.back()->storage->getQueryProcessingStage(context_, to_stage, storage_snapshot, query_info);
     }
 }
 
 StorageSnapshotPtr StorageStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
 {
+    auto & storage = stream_shards.back()->storage;
     assert(storage);
     auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot)->clone();
     /// Add virtuals, such as `_tp_append_time` and `_tp_process_time
     storage_snapshot->addVirtuals(getVirtuals());
-    return storage_snapshot; 
+    return storage_snapshot;
 }
 
 void StorageStream::dropPartNoWaitNoThrow(const String & part_name)
 {
-    assert(storage);
-    storage->dropPartNoWaitNoThrow(part_name);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->dropPartNoWaitNoThrow(part_name);
 }
 
 void StorageStream::dropPart(const String & part_name, bool detach, ContextPtr context_)
 {
-    assert(storage);
-    storage->dropPart(part_name, detach, context_);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->dropPart(part_name, detach, context_);
 }
 
 void StorageStream::dropPartition(const ASTPtr & partition, bool detach, ContextPtr context_)
 {
-    assert(storage);
-    storage->dropPartition(partition, detach, context_);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->dropPartition(partition, detach, context_);
 }
 
 PartitionCommandsResultInfo
 StorageStream::attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context_)
 {
-    assert(storage);
-    return storage->attachPartition(partition, metadata_snapshot, part, context_);
+    PartitionCommandsResultInfo results;
+    for (auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto infos = stream_shard->storage->attachPartition(partition, metadata_snapshot, part, context_);
+            for (auto & info : infos)
+                results.push_back(std::move(info));
+        }
+    }
+    return results;
 }
 
 void StorageStream::replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context_)
 {
-    assert(storage);
-    storage->replacePartitionFrom(source_table, partition, replace, context_);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->replacePartitionFrom(source_table, partition, replace, context_);
 }
 
 void StorageStream::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context_)
 {
-    assert(storage);
-    storage->movePartitionToTable(dest_table, partition, context_);
+    for (auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->movePartitionToTable(dest_table, partition, context_);
 }
 
 /// If part is assigned to merge or mutation (possibly replicated)
@@ -906,8 +982,15 @@ void StorageStream::movePartitionToTable(const StoragePtr & dest_table, const AS
 /// mechanisms for parts locking
 bool StorageStream::partIsAssignedToBackgroundOperation(const DataPartPtr & part) const
 {
-    assert(storage);
-    return storage->partIsAssignedToBackgroundOperation(part);
+    for (const auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            if (stream_shard->storage->partIsAssignedToBackgroundOperation(part))
+                return true;
+        }
+    }
+    return false;
 }
 
 /// Return most recent mutations commands for part which weren't applied
@@ -916,14 +999,24 @@ bool StorageStream::partIsAssignedToBackgroundOperation(const DataPartPtr & part
 /// MergeTree because they store mutations in different way.
 MutationCommands StorageStream::getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const
 {
-    assert(storage);
-    return storage->getFirstAlterMutationCommandsForPart(part);
+    MutationCommands results;
+    for (const auto & stream_shard : stream_shards)
+    {
+        if (stream_shard->storage)
+        {
+            auto cmds = stream_shard->storage->getFirstAlterMutationCommandsForPart(part);
+            for (auto & cmd : cmds)
+                results.push_back(std::move(cmd));
+        }
+    }
+    return results;
 }
 
 void StorageStream::startBackgroundMovesIfNeeded()
 {
-    assert(storage);
-    return storage->startBackgroundMovesIfNeeded();
+    for (const auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            stream_shard->storage->startBackgroundMovesIfNeeded();
 }
 
 std::unique_ptr<StreamSettings> StorageStream::getDefaultSettings() const
@@ -946,19 +1039,13 @@ ClusterPtr StorageStream::skipUnusedShards(
     const auto & select = query_ptr->as<ASTSelectQuery &>();
 
     if (!select.prewhere() && !select.where())
-    {
         return nullptr;
-    }
 
     ASTPtr condition_ast;
     if (select.prewhere() && select.where())
-    {
         condition_ast = makeASTFunction("and", select.prewhere()->clone(), select.where()->clone());
-    }
     else
-    {
         condition_ast = select.prewhere() ? select.prewhere()->clone() : select.where()->clone();
-    }
 
     replaceConstantExpressions(
         condition_ast,
@@ -969,9 +1056,8 @@ ClusterPtr StorageStream::skipUnusedShards(
 
     size_t limit = context_->getSettingsRef().optimize_skip_unused_shards_limit;
     if (!limit || limit > LONG_MAX)
-    {
         throw Exception("optimize_skip_unused_shards_limit out of range (0, {}]", ErrorCodes::ARGUMENT_OUT_OF_BOUND, LONG_MAX);
-    }
+
     ++limit;
     const auto blocks = evaluateExpressionOverConstantCondition(condition_ast, sharding_key_expr, limit);
 
@@ -987,18 +1073,14 @@ ClusterPtr StorageStream::skipUnusedShards(
 
     /// Can't get definite answer if we can skip any shards
     if (!blocks)
-    {
         return nullptr;
-    }
 
     std::set<int> shard_ids;
 
     for (const auto & block : *blocks)
     {
         if (!block.has(sharding_key_column_name))
-        {
             throw Exception("sharding_key_expr should evaluate as a single row", ErrorCodes::TOO_MANY_ROWS);
-        }
 
         const ColumnWithTypeAndName & result = block.getByName(sharding_key_column_name);
         const auto selector = createSelector(result);
@@ -1021,9 +1103,7 @@ StorageStream::getOptimizedCluster(ContextPtr context_, const StorageSnapshotPtr
     {
         ClusterPtr optimized = skipUnusedShards(cluster, query_ptr, storage_snapshot, context_);
         if (optimized)
-        {
             return optimized;
-        }
     }
 
     UInt64 force = settings.force_optimize_skip_unused_shards;
@@ -1031,27 +1111,17 @@ StorageStream::getOptimizedCluster(ContextPtr context_, const StorageSnapshotPtr
     {
         WriteBufferFromOwnString exception_message;
         if (!sharding_key_expr)
-        {
             exception_message << "No sharding key";
-        }
         else if (!sharding_key_is_usable)
-        {
             exception_message << "Sharding key is not deterministic";
-        }
         else
-        {
             exception_message << "Sharding key " << sharding_key_column_name << " is not used";
-        }
 
         if (force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS)
-        {
             throw Exception(exception_message.str(), ErrorCodes::UNABLE_TO_SKIP_UNUSED_SHARDS);
-        }
 
         if (force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY && sharding_key_expr)
-        {
             throw Exception(exception_message.str(), ErrorCodes::UNABLE_TO_SKIP_UNUSED_SHARDS);
-        }
     }
 
     return {};
@@ -1187,24 +1257,102 @@ size_t StorageStream::getNextShardIndex() const
     return next_shard++ % shards;
 }
 
-nlog::RecordSN StorageStream::lastSN() const
+void StorageStream::append(
+    nlog::RecordPtr & record, IngestMode ingest_mode, klog::AppendCallback callback, void * data, UInt64 base_block_id, UInt64 sub_block_id)
 {
-    std::lock_guard lock(sns_mutex);
-    return last_sn;
+    if (native_log)
+        appendToNativeLog(record, ingest_mode);
+    else
+        appendToKafka(record, ingest_mode, callback, data, base_block_id, sub_block_id);
 }
 
-void StorageStream::appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id)
+inline void StorageStream::appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/)
 {
-    assert(kafka && kafka->log);
+    assert(native_log);
 
+    const auto & storage_id = getStorageID();
+    nlog::AppendRequest request(storage_id.getTableName(), storage_id.uuid, record->getShard(), record);
+
+    auto resp{native_log->append(storage_id.getDatabaseName(), request)};
+    if (resp.hasError())
+    {
+        LOG_ERROR(log, "Failed to append record to native log, error={}", resp.errString());
+        throw DB::Exception(ErrorCodes::INTERNAL_ERROR, "Failed to append record to native log, error={}", resp.errString());
+    }
+}
+
+inline void StorageStream::appendToKafka(
+    nlog::RecordPtr & record, IngestMode ingest_mode, klog::AppendCallback callback, void * data, UInt64 base_block_id, UInt64 sub_block_id)
+{
+    assert(kafka_log);
+
+    switch (ingest_mode)
+    {
+        case IngestMode::ASYNC: {
+            //                LOG_TRACE(
+            //                    storage.log,
+            //                    "[async] write a block={} rows={} shard={} query_status_poll_id={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard,
+            //                    query_context->getQueryStatusPollId());
+
+            appendAsync(*record, base_block_id, sub_block_id);
+            break;
+        }
+        case IngestMode::SYNC: {
+            //                LOG_TRACE(
+            //                    log,
+            //                    "[sync] write a block={} rows={} shard={} committed={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard,
+            //                    committed);
+
+            auto ret = kafka_log->log->append(*record, callback, data, kafka_log->append_ctx);
+            if (ret != 0)
+                throw Exception("Failed to insert data sync", ret);
+
+            break;
+        }
+        case IngestMode::FIRE_AND_FORGET: {
+            //                LOG_TRACE(
+            //                    log,
+            //                    "[fire_and_forget] write a block={} rows={} shard={} ...",
+            //                    outstanding,
+            //                    record.block.rows(),
+            //                    current_block.shard);
+
+            auto ret = kafka_log->log->append(*record, nullptr, nullptr, kafka_log->append_ctx);
+            if (ret != 0)
+                throw Exception("Failed to insert data fire_and_forget", ret);
+
+            break;
+        }
+        case IngestMode::ORDERED: {
+            auto ret = kafka_log->log->append(*record, kafka_log->append_ctx);
+            if (ret.err != ErrorCodes::OK)
+                throw Exception("Failed to insert data ordered", ret.err);
+
+            break;
+        }
+        case IngestMode::None:
+            /// FALLTHROUGH
+        case IngestMode::INVALID:
+            throw Exception("Failed to insert data, ingest mode is not setup", ErrorCodes::UNSUPPORTED_PARAMETER);
+    }
+}
+
+inline void StorageStream::appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id)
+{
     if (outstanding_blocks > max_outstanding_blocks)
         throw Exception("Too many request", ErrorCodes::RECEIVED_ERROR_TOO_MANY_REQUESTS);
 
-    [[maybe_unused]] auto added = kafka->ingesting_blocks.add(block_id, sub_block_id);
+    [[maybe_unused]] auto added = kafka_log->ingesting_blocks.add(block_id, sub_block_id);
     assert(added);
 
     auto data = std::make_unique<WriteCallbackData>(block_id, sub_block_id, this);
-    auto ret = kafka->log->append(record, &StorageStream::writeCallback, data.get(), kafka->append_ctx);
+    auto ret = kafka_log->log->append(record, &StorageStream::writeCallback, data.get(), kafka_log->append_ctx);
     if (ret == ErrorCodes::OK)
         /// The writeCallback takes over the ownership of callback data
         data.release();
@@ -1214,16 +1362,14 @@ void StorageStream::appendAsync(nlog::Record & record, UInt64 block_id, UInt64 s
 
 void StorageStream::writeCallback(const klog::AppendResult & result, UInt64 block_id, UInt64 sub_block_id)
 {
-    assert(kafka);
-
     if (result.err)
     {
-        kafka->ingesting_blocks.fail(block_id, result.err);
+        kafka_log->ingesting_blocks.fail(block_id, result.err);
         LOG_ERROR(log, "[async] Failed to write sub_block_id={} in block_id={} error={}", sub_block_id, block_id, result.err);
     }
     else
     {
-        kafka->ingesting_blocks.remove(block_id, sub_block_id);
+        kafka_log->ingesting_blocks.remove(block_id, sub_block_id);
         LOG_TRACE(log, "[async] Written sub_block_id={} in block_id={}", sub_block_id, block_id);
     }
 }
@@ -1235,802 +1381,41 @@ void StorageStream::writeCallback(const klog::AppendResult & result, void * data
     pdata->storage->writeCallback(result, pdata->block_id, pdata->sub_block_id);
 }
 
-/// Merge `rhs` block to `lhs`
-void StorageStream::mergeBlocks(Block & lhs, Block & rhs)
+IngestMode StorageStream::ingestMode() const
 {
-    /// FIXME, we are assuming schema is not changed
-    assert(blocksHaveEqualStructure(lhs, rhs));
-
-    /// auto lhs_rows = lhs.rows();
-
-    for (size_t pos = 0; auto & rhs_col : rhs)
-    {
-        auto & lhs_col = lhs.getByPosition(pos);
-        //        if (unlikely(lhs_col == nullptr))
-        //        {
-        //            /// lhs doesn't have this column
-        //            ColumnWithTypeAndName new_col{rhs_col.cloneEmpty()};
-        //
-        //            /// what about column with default expression
-        //            new_col.column->assumeMutable()->insertManyDefaults(lhs_rows);
-        //            lhs.insert(std::move(new_col));
-        //            lhs_col = lhs.findByName(rhs_col.name);
-        //        }
-
-        lhs_col.column->assumeMutable()->insertRangeFrom(*rhs_col.column.get(), 0, rhs_col.column->size());
-        ++pos;
-    }
-
-    /// lhs.checkNumberOfRows();
+    assert(!stream_shards.empty());
+    return stream_shards.back()->ingestMode();
 }
 
-Int64 StorageStream::maxCommittedSN() const
+void StorageStream::getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
 {
-    assert(storage);
-    return storage->maxCommittedSN();
+    if (kafka_log)
+        kafka_log->ingesting_blocks.getStatuses(block_ids, statuses);
 }
 
-void StorageStream::commitSNLocal(nlog::RecordSN commit_sn)
+UInt64 StorageStream::nextBlockId() const
 {
-    try
-    {
-        storage->commitSN(commit_sn);
-        last_commit_ts = MonotonicSeconds::now();
+    /// FIXME, per shard block ID ?
+    if (kafka_log)
+        return kafka_log->ingesting_blocks.nextId();
 
-        LOG_INFO(log, "Committed sn={} for shard={} to local file system", commit_sn, shard);
-
-        std::lock_guard lock(sns_mutex);
-        local_sn = commit_sn;
-    }
-    catch (...)
-    {
-        /// It is ok as next commit will override this commit if it makes through
-        LOG_ERROR(
-            log,
-            "Failed to commit sn={} for shard={} to local file system exception={}",
-            commit_sn,
-            shard,
-            getCurrentExceptionMessage(true, true));
-    }
+    return 0;
 }
 
-void StorageStream::commitSNRemote(nlog::RecordSN commit_sn)
+void StorageStream::poll(Int32 timeout_ms)
 {
-    if (!kafka)
-        return;
-
-    /// Commit sequence number to dwal
-    try
-    {
-        Int32 err = 0;
-        if (kafka->multiplexer)
-        {
-            klog::TopicPartitionOffset tpo{kafka->topic(), shard, commit_sn};
-            err = kafka->multiplexer->commit(tpo);
-        }
-        else
-        {
-            err = kafka->log->commit(commit_sn, kafka->consume_ctx);
-        }
-
-        if (unlikely(err != 0))
-            /// It is ok as next commit will override this commit if it makes through
-            LOG_ERROR(log, "Failed to commit sequence={} for shard={} to dwal error={}", commit_sn, shard, err);
-    }
-    catch (...)
-    {
-        LOG_ERROR(
-            log,
-            "Failed to commit sequence={} for shard={} to dwal exception={}",
-            commit_sn,
-            shard,
-            getCurrentExceptionMessage(true, true));
-    }
+    assert(kafka_log);
+    kafka_log->log->poll(timeout_ms, kafka_log->append_ctx);
 }
 
-void StorageStream::commitSN()
+std::vector<std::pair<Int32, Int64>> StorageStream::lastCommittedSequences() const
 {
-    size_t outstanding_sns_size = 0;
-    size_t local_committed_sns_size = 0;
-
-    nlog::RecordSN commit_sn = -1;
-    Int64 outstanding_commits = 0;
-    {
-        std::lock_guard lock(sns_mutex);
-        if (last_sn != prev_sn)
-        {
-            outstanding_commits = last_sn - local_sn;
-            commit_sn = last_sn;
-            prev_sn = last_sn;
-        }
-        outstanding_sns_size = outstanding_sns.size();
-        local_committed_sns_size = local_committed_sns.size();
-    }
-
-    LOG_DEBUG(
-        log,
-        "Sequence outstanding_sns_size={} local_committed_sns_size={} for shard={}",
-        outstanding_sns_size,
-        local_committed_sns_size,
-        shard);
-
-    if (commit_sn < 0)
-    {
-        return;
-    }
-
-    /// Commit sequence number to local file system every 100 records
-    if (outstanding_commits >= 100)
-    {
-        commitSNLocal(commit_sn);
-    }
-
-    commitSNRemote(commit_sn);
-}
-
-inline void StorageStream::progressSequencesWithoutLock(const SequencePair & seq)
-{
-    assert(!outstanding_sns.empty());
-
-    if (seq != outstanding_sns.front())
-    {
-        /// Out of order committed sn
-        local_committed_sns.insert(seq);
-        return;
-    }
-
-    last_sn = seq.second;
-
-    outstanding_sns.pop_front();
-
-    /// Find out the max offset we can commit
-    while (!local_committed_sns.empty())
-    {
-        auto & p = outstanding_sns.front();
-        if (*local_committed_sns.begin() == p)
-        {
-            /// sn shall be consecutive
-            assert(p.first == last_sn + 1);
-
-            last_sn = p.second;
-
-            local_committed_sns.erase(local_committed_sns.begin());
-            outstanding_sns.pop_front();
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    assert(outstanding_sns.size() >= local_committed_sns.size());
-    assert(last_sn >= prev_sn);
-}
-
-inline void StorageStream::progressSequences(const SequencePair & seq)
-{
-    std::lock_guard lock(sns_mutex);
-    progressSequencesWithoutLock(seq);
-}
-
-void StorageStream::doCommit(
-    Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges)
-{
-    {
-        std::lock_guard lock(sns_mutex);
-        assert(seq_pair.first > last_sn);
-        /// We are sequentially consuming records, so seq_pair is always increasing
-        outstanding_sns.push_back(seq_pair);
-
-        /// After deduplication, we may end up with empty block
-        /// We still mark these deduped blocks committed and moving forward
-        /// the offset checkpointing
-        if (!block)
-        {
-            progressSequencesWithoutLock(seq_pair);
-            return;
-        }
-
-        assert(outstanding_sns.size() >= local_committed_sns.size());
-    }
-
-    /// Commit blocks to file system async
-    part_commit_pool.scheduleOrThrowOnError([&,
-                                             moved_block = std::move(block),
-                                             moved_seq = std::move(seq_pair),
-                                             moved_keys = std::move(keys),
-                                             moved_sequence_ranges = std::move(missing_sequence_ranges),
-                                             this] {
-        while (!stopped.test())
-        {
-            try
-            {
-                auto sink = storage->write(nullptr, storage->getInMemoryMetadataPtr(), getContext());
-
-                /// Setup sequence numbers to persistent them to file system
-                auto merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
-                merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
-                merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
-
-                merge_tree_sink->onStart();
-
-                /// Reset index time here
-                assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(ProtonConsts::RESERVED_INDEX_TIME)));
-
-                merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
-                break;
-            }
-            catch (...)
-            {
-                LOG_ERROR(
-                    log,
-                    "Failed to commit rows={} for shard={} exception={} to file system",
-                    moved_block.rows(),
-                    shard,
-                    getCurrentExceptionMessage(true, true));
-                /// FIXME : specific error handling. When we sleep here, it occupied the current thread
-                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-            }
-        }
-
-        progressSequences(moved_seq);
-    });
-
-    assert(!block);
-    assert(!keys);
-
-    commitSN();
-}
-
-void StorageStream::buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_)
-{
-    idempotent_keys = idempotent_keys_;
-    for (const auto & key : idempotent_keys)
-    {
-        idempotent_keys_index.emplace(*key);
-    }
-}
-
-/// Add with lock held
-inline void StorageStream::addIdempotentKey(const String & key)
-{
-    if (idempotent_keys.size() >= getContext()->getSettingsRef().max_idempotent_ids)
-    {
-        auto removed = idempotent_keys_index.erase(*idempotent_keys.front());
-        (void)removed;
-        assert(removed == 1);
-
-        idempotent_keys.pop_front();
-    }
-
-    auto shared_key = std::make_shared<String>(key);
-    idempotent_keys.push_back(shared_key);
-
-    auto [iter, inserted] = idempotent_keys_index.emplace(*shared_key);
-    assert(inserted);
-    (void)inserted;
-    (void)iter;
-
-    assert(idempotent_keys.size() == idempotent_keys_index.size());
-}
-
-bool StorageStream::dedupBlock(const nlog::RecordPtr & record)
-{
-    if (!record->hasIdempotentKey())
-    {
-        return false;
-    }
-
-    auto & idem_key = record->idempotentKey();
-    auto key_exists = false;
-    {
-        std::lock_guard lock{sns_mutex};
-        key_exists = idempotent_keys_index.contains(idem_key);
-        if (!key_exists)
-        {
-            addIdempotentKey(idem_key);
-        }
-    }
-
-    if (key_exists)
-    {
-        LOG_INFO(log, "Skipping duplicate block, idempotent_key={} sn={}", idem_key, record->getSN());
-        return true;
-    }
-    return false;
-}
-
-void StorageStream::commit(nlog::RecordPtrs records, SequenceRanges missing_sequence_ranges)
-{
-    if (records.empty())
-        return;
-
-    Block block;
-    auto keys = std::make_shared<IdempotentKeys>();
-
-    for (auto & rec : records)
-    {
-        if (likely(rec->opcode() == nlog::OpCode::ADD_DATA_BLOCK))
-        {
-            if (dedupBlock(rec))
-                continue;
-
-            assignSequenceID(rec);
-
-            if (likely(block))
-            {
-                /// Merge next block
-                /// assign event sequence ID to block events
-                mergeBlocks(block, rec->getBlock());
-            }
-            else
-            {
-                /// First block
-                block.swap(rec->getBlock());
-                assert(!rec->getBlock());
-            }
-
-            if (rec->hasIdempotentKey())
-                keys->emplace_back(rec->getSN(), std::move(rec->idempotentKey()));
-        }
-        else if (rec->opcode() == nlog::OpCode::ALTER_DATA_BLOCK)
-        {
-            /// FIXME: execute the later before doing any ingestion
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Log opcode {} is not implemented", static_cast<uint8_t>(rec->opcode()));
-        }
-    }
-
-    LOG_DEBUG(
-        log, "Committing records={} rows={} bytes={} for shard={} to file system", records.size(), block.rows(), block.bytes(), shard);
-
-    doCommit(
-        std::move(block),
-        std::make_pair(records.front()->getSN(), records.back()->getSN()),
-        std::move(keys),
-        std::move(missing_sequence_ranges));
-    assert(!block);
-    assert(!keys);
-    assert(missing_sequence_ranges.empty());
-}
-
-nlog::RecordSN StorageStream::snLoaded() const
-{
-    std::lock_guard lock(sns_mutex);
-    if (local_sn >= 0)
-        /// Sequence number committed on disk is sequence of a record
-        /// `plus one` is the next sequence expecting
-        return local_sn + 1;
-
-    if (kafka)
-        return -1000; /// STORED
-    else
-        return nlog::toSN(storage_settings.get()->logstore_auto_offset_reset.value);
-}
-
-void StorageStream::backgroundPollNativeLog()
-{
-    setThreadName("StorageStream");
-
-    const auto & missing_sequence_ranges = storage->missingSequenceRanges();
-
-    auto ssettings = storage_settings.get();
-
-    LOG_INFO(
-        log,
-        "Start consuming records from shard={} sn={} distributed_flush_threshold_ms={} "
-        "distributed_flush_threshold_count={} "
-        "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
-        shard,
-        snLoaded(),
-        ssettings->distributed_flush_threshold_ms.value,
-        ssettings->distributed_flush_threshold_count.value,
-        ssettings->distributed_flush_threshold_bytes.value,
-        sequenceRangesToString(missing_sequence_ranges));
-
-    StreamCallbackData stream_commit{this, missing_sequence_ranges};
-
-    StreamingBlockReaderNativeLog block_reader(
-        shared_from_this(),
-        shard,
-        snLoaded(),
-        /*max_wait_ms*/ 1000,
-        /*read_buf_size*/ 4 * 1024 * 1024,
-        &stream_commit,
-        nlog::ALL_SCHEMA,
-        {},
-        log);
-
-    nlog::RecordPtrs batch;
-    size_t batch_size = 100;
-    batch.reserve(batch_size);
-
-    size_t rows_threshold = ssettings->distributed_flush_threshold_count.value;
-    size_t bytes_threshold = ssettings->distributed_flush_threshold_bytes.value;
-    Int64 interval_threshold = ssettings->distributed_flush_threshold_ms.value;
-
-    size_t current_bytes_in_batch = 0;
-    size_t current_rows_in_batch = 0;
-    auto last_batch_commit = MonotonicMilliseconds::now();
-
-    while (!stopped.test())
-    {
-        try
-        {
-            /// Check if we have something to commit
-            /// Every 10 seconds, flush the local file system checkpoint
-            if (MonotonicSeconds::now() - last_commit_ts >= 10)
-                periodicallyCommit();
-
-            auto records{block_reader.read()};
-            for (auto & record : records)
-            {
-                current_bytes_in_batch += record->totalSerializedBytes();
-                current_rows_in_batch += record->getBlock().rows();
-                batch.push_back(std::move(record));
-            }
-
-            if ((current_bytes_in_batch >= bytes_threshold) || (current_rows_in_batch >= rows_threshold)
-                || (MonotonicMilliseconds::now() - last_batch_commit >= interval_threshold))
-            {
-                if (!batch.empty())
-                {
-                    stream_commit.commit(std::move(batch));
-                    batch.reserve(batch_size);
-
-                    /// Reset
-                    last_batch_commit = MonotonicMilliseconds::now();
-                    current_bytes_in_batch = 0;
-                    current_rows_in_batch = 0;
-                }
-            }
-        }
-        catch (const DB::Exception & e)
-        {
-            LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, e.message());
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, fmt::format("Failed to consume data for shard={}", shard));
-        }
-    }
-
-    /// Final batch
-    if (!batch.empty())
-        stream_commit.commit(std::move(batch));
-
-    stream_commit.wait();
-
-    /// When tearing down, commit whatever it has
-    finalCommit();
-}
-
-void StorageStream::backgroundPollKafka()
-{
-    /// Sleep a while to let librdkafka to populate topic / partition metadata
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-    setThreadName("StorageStream");
-
-    const auto & missing_sequence_ranges = storage->missingSequenceRanges();
-
-    LOG_INFO(
-        log,
-        "Start consuming records from shard={} sn={} distributed_flush_threshold_ms={} "
-        "distributed_flush_threshold_count={} "
-        "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
-        shard,
-        kafka->consume_ctx.offset,
-        kafka->consume_ctx.consume_callback_timeout_ms,
-        kafka->consume_ctx.consume_callback_max_rows,
-        kafka->consume_ctx.consume_callback_max_bytes,
-        sequenceRangesToString(missing_sequence_ranges));
-
-    callback_data = std::make_unique<StreamCallbackData>(this, missing_sequence_ranges);
-
-    while (!stopped.test())
-    {
-        try
-        {
-            auto err = kafka->log->consume(&StorageStream::consumeCallback, callback_data.get(), kafka->consume_ctx);
-            if (err != ErrorCodes::OK)
-            {
-                LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, err);
-                /// FIXME, more error code handling
-                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-            }
-
-            /// Check if we have something to commit
-            /// Every 10 seconds, flush the local file system checkpoint
-            if (MonotonicSeconds::now() - last_commit_ts >= 10)
-                periodicallyCommit();
-        }
-        catch (const DB::Exception & e)
-        {
-            LOG_ERROR(log, "Failed to consume data for shard={}, error={}", shard, e.message());
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, fmt::format("Failed to consume data for shard={}", shard));
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        }
-    }
-
-    kafka->log->stopConsume(kafka->consume_ctx);
-
-    callback_data->wait();
-
-    /// When tearing down, commit whatever it has
-    finalCommit();
-}
-
-inline void StorageStream::finalCommit()
-{
-    commitSN();
-
-    nlog::RecordSN commit_sn = -1;
-    {
-        std::lock_guard lock(sns_mutex);
-        if (last_sn != local_sn)
-            commit_sn = last_sn;
-    }
-
-    if (commit_sn >= 0)
-        commitSNLocal(commit_sn);
-}
-
-inline void StorageStream::periodicallyCommit()
-{
-    nlog::RecordSN remote_commit_sn = -1;
-    nlog::RecordSN commit_sn = -1;
-    {
-        std::lock_guard lock(sns_mutex);
-        if (last_sn != local_sn)
-            commit_sn = last_sn;
-
-        if (prev_sn != last_sn)
-        {
-            remote_commit_sn = last_sn;
-            prev_sn = last_sn;
-        }
-    }
-
-    if (commit_sn >= 0)
-        commitSNLocal(commit_sn);
-
-    if (remote_commit_sn >= 0)
-        commitSNRemote(remote_commit_sn);
-
-    last_commit_ts = MonotonicSeconds::now();
-}
-
-void StorageStream::consumeCallback(nlog::RecordPtrs records, klog::ConsumeCallbackData * data)
-{
-    auto * cdata = dynamic_cast<StreamCallbackData *>(data);
-
-    if (records.empty())
-    {
-        cdata->storage->periodicallyCommit();
-        return;
-    }
-
-    cdata->commit(std::move(records));
-}
-
-void StorageStream::addSubscriptionKafka()
-{
-    const auto & missing_sequence_ranges = storage->missingSequenceRanges();
-    callback_data = std::make_unique<StreamCallbackData>(this, missing_sequence_ranges);
-
-    const auto & cluster_id = storage_settings.get()->logstore_cluster_id.value;
-    kafka->multiplexer = klog::KafkaWALPool::instance(getContext()).getOrCreateConsumerMultiplexer(cluster_id);
-
-    klog::TopicPartitionOffset tpo{kafka->topic(), shard, snLoaded()};
-    auto res = kafka->multiplexer->addSubscription(tpo, &StorageStream::consumeCallback, callback_data.get());
-    if (res.err != ErrorCodes::OK)
-        throw Exception("Failed to add subscription for shard=" + std::to_string(shard), res.err);
-
-    kafka->shared_subscription_ctx = res.ctx;
-
-    LOG_INFO(
-        log,
-        "Start consuming records from shard={} sn={} in shared mode "
-        "with missing_sequence_ranges={}",
-        shard,
-        tpo.offset,
-        sequenceRangesToString(missing_sequence_ranges));
-}
-
-void StorageStream::removeSubscriptionKafka()
-{
-    if (!kafka || !kafka->multiplexer)
-        /// It is possible that storage is called with `shutdown` without calling `startup`
-        /// during system startup and partially deleted table gets cleaned up
-        return;
-
-    klog::TopicPartitionOffset tpo{kafka->topic(), shard, snLoaded()};
-    auto res = kafka->multiplexer->removeSubscription(tpo);
-    if (res != ErrorCodes::OK)
-        throw Exception("Failed to remove subscription for shard=" + std::to_string(shard), res);
-
-    callback_data->wait();
-
-    while (!kafka->shared_subscription_ctx.expired())
-    {
-        LOG_INFO(log, "Waiting for subscription context to get away for shard={}", shard);
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-    LOG_INFO(log, "Removed subscription for shard={}", shard);
-
-    finalCommit();
-    kafka->multiplexer.reset();
-}
-
-String StorageStream::streamingStorageClusterId() const
-{
-    return storage_settings.get()->logstore_cluster_id.value;
-}
-
-void StorageStream::initLog()
-{
-    auto ssettings = storage_settings.get();
-    shard = ssettings->shard.value;
-    if (shard < 0)
-        shard = 0;
-
-    const auto & logstore = ssettings->logstore.value;
-
-    if (logstore == ProtonConsts::LOGSTORE_NATIVE_LOG || nlog::NativeLog::instance(getContext()).enabled())
-        initNativeLog();
-    else if (logstore == ProtonConsts::LOGSTORE_KAFKA || klog::KafkaWALPool::instance(getContext()).enabled())
-        initKafkaLog();
-    else
-        throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "Logstore type {} is not supported", logstore);
-}
-
-void StorageStream::initKafkaLog()
-{
-    if (!klog::KafkaWALPool::instance(getContext()).enabled())
-        return;
-
-    auto ssettings = storage_settings.get();
-
-    const auto & storage_id = getStorageID();
-    auto kafka_log = std::make_unique<KafkaLog>(
-        toString(storage_id.uuid), shards, ssettings->logstore_replication_factor, getContext()->getSettingsRef().async_ingest_block_timeout_ms, log);
-
-    kafka.swap(kafka_log);
-
-    const auto & offset_reset = ssettings->logstore_auto_offset_reset.value;
-    if (offset_reset != "earliest" && offset_reset != "latest")
-        throw Exception(
-            "Invalid logstore_auto_offset_reset, only 'earliest' and 'latest' are supported", ErrorCodes::INVALID_CONFIG_PARAMETER);
-
-    Int32 dwal_request_required_acks = 1;
-    auto acks = ssettings->logstore_request_required_acks.value;
-    if (acks >= -1 && acks <= ssettings->logstore_replication_factor)
-        dwal_request_required_acks = acks;
-    else
-        throw Exception(
-            "Invalid logstore_request_required_acks, shall be in [-1, " + std::to_string(ssettings->logstore_replication_factor) + "] range",
-            ErrorCodes::INVALID_CONFIG_PARAMETER);
-
-    Int32 dwal_request_timeout_ms = 30000;
-    auto timeout = ssettings->logstore_request_timeout_ms.value;
-    if (timeout > 0)
-        dwal_request_timeout_ms = timeout;
-
-    default_ingest_mode = toIngestMode(ssettings->distributed_ingest_mode.value);
-
-    kafka->log = klog::KafkaWALPool::instance(getContext()).get(ssettings->logstore_cluster_id.value);
-    assert(kafka->log);
-
-    if (storage)
-    {
-        /// Init consume context only when it has backing storage
-        kafka->consume_ctx.partition = shard;
-        kafka->consume_ctx.offset = snLoaded();
-        kafka->consume_ctx.auto_offset_reset = ssettings->logstore_auto_offset_reset.value;
-        kafka->consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
-        kafka->consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;
-        kafka->consume_ctx.consume_callback_max_bytes = ssettings->distributed_flush_threshold_bytes;
-        kafka->log->initConsumerTopicHandle(kafka->consume_ctx);
-    }
-
-    /// Init produce context
-    /// Cached ctx, reused by append. Multiple threads are accessing append context
-    /// since librdkafka topic handle is thread safe, so we are good
-    kafka->append_ctx.request_required_acks = dwal_request_required_acks;
-    kafka->append_ctx.request_timeout_ms = dwal_request_timeout_ms;
-    kafka->log->initProducerTopicHandle(kafka->append_ctx);
-}
-
-void StorageStream::initNativeLog()
-{
-    auto & native_log = nlog::NativeLog::instance(getContext());
-    if (!native_log.enabled())
-        return;
-
-    auto ssettings = storage_settings.get();
-    const auto & storage_id = getStorageID();
-
-    nlog::CreateStreamRequest request{storage_id.getTableName(), storage_id.uuid, shards, static_cast<UInt8>(replication_factor)};
-    request.flush_messages = ssettings->logstore_flush_messages.value;
-    request.flush_ms = ssettings->logstore_flush_ms.value;
-    request.retention_bytes = ssettings->logstore_retention_bytes;
-    request.retention_ms = ssettings->logstore_retention_ms;
-
-    auto list_resp{native_log.listStreams(storage_id.getDatabaseName(), nlog::ListStreamsRequest(storage_id.getTableName()))};
-    if (list_resp.hasError() || list_resp.streams.empty())
-    {
-        auto create_resp{native_log.createStream(storage_id.getDatabaseName(), request)};
-        if (create_resp.hasError())
-            throw DB::Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to create stream, error={}", create_resp.errString());
-        else
-            LOG_INFO(log, "Log was provisioned successfully");
-    }
-}
-
-void StorageStream::deinitNativeLog()
-{
-    auto & native_log = nlog::NativeLog::instance(getContext());
-    if (!native_log.enabled())
-        return;
-
-    const auto & storage_id = getStorageID();
-    nlog::DeleteStreamRequest request{storage_id.getTableName(), storage_id.uuid};
-    for (Int32 i = 0; i < 3; ++i)
-    {
-        auto resp{native_log.deleteStream(storage_id.getDatabaseName(), request)};
-        if (resp.hasError())
-        {
-            LOG_ERROR(log, "Failed to clean up log, error={}", resp.errString());
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-        else
-        {
-            LOG_INFO(log, "Cleaned up log");
-            break;
-        }
-    }
-}
-
-std::vector<Int64> StorageStream::getOffsets(const String & seek_to) const
-{
-    auto utc_ms = parseSeekTo(seek_to, true);
-
-    if (utc_ms == nlog::LATEST_SN || utc_ms == nlog::EARLIEST_SN)
-    {
-        return std::vector<Int64>(shards, utc_ms);
-    }
-    else
-    {
-        if (kafka)
-            return kafka->log->offsetsForTimestamps(kafka->topic(), utc_ms, shards);
-        else
-            return sequencesForTimestamps(utc_ms);
-    }
-}
-
-std::vector<Int64> StorageStream::sequencesForTimestamps(Int64 ts, bool append_time) const
-{
-    const auto & storage_id = getStorageID();
-
-    std::vector<int32_t> shard_ids;
-    shard_ids.reserve(shards);
-
-    for (Int32 i = 0; i < shards; ++i)
-        shard_ids.push_back(i);
-
-    nlog::TranslateTimestampsRequest request{
-        nlog::Stream{storage_id.getTableName(), storage_id.uuid}, std::move(shard_ids), ts, append_time};
-    auto & native_log = nlog::NativeLog::instance(getContext());
-    auto response{native_log.translateTimestamps(storage_id.getDatabaseName(), request)};
-    if (response.hasError())
-        throw Exception(response.error_code, "Failed to translate timestamps to record sequences");
-
-    return response.sequences;
+    std::vector<std::pair<Int32, Int64>> committed;
+    for (const auto & stream_shard : stream_shards)
+        if (stream_shard->storage)
+            committed.emplace_back(stream_shard->shard, stream_shard->lastSN());
+
+    return committed;
 }
 
 void StorageStream::cacheVirtualColumnNamesAndTypes()
@@ -2039,4 +1424,5 @@ void StorageStream::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
 }
+
 }

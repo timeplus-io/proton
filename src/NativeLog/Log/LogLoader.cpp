@@ -53,7 +53,7 @@ std::pair<int64_t, int64_t> LogLoader::load(
 
     /// Calculate new recovery point ond new next sn
     int64_t new_recovery_point = 0, new_next_sn = 0;
-    if (!log_dir.filename().string().ends_with(Log::DELETE_DIR_SUFFIX()))
+    if (log_dir.extension().string() != Log::DELETE_DIR_SUFFIX())
     {
         std::tie(new_recovery_point, new_next_sn)
             = recoverLog(log_dir, log_config, segments, had_clean_shutdown, log_start_sn, recovery_point, adhoc_scheduler, logger);
@@ -94,9 +94,8 @@ std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::pa
             if (filename.ends_with(Log::DELETED_FILE_SUFFIX()))
             {
                 /// Deleting stray temporary file
-                bool res = fs::remove(dir_entry.path());
+                [[maybe_unused]] bool res = fs::remove(dir_entry.path());
                 assert(res);
-                (void)res;
             }
             else if (filename.ends_with(Log::CLEANED_FILE_SUFFIX()))
             {

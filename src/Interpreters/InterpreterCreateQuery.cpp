@@ -184,7 +184,16 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         else if (create.uuid == UUIDHelpers::Nil)
             create.uuid = UUIDHelpers::generateV4();
 
+        /// proton : starts. FIXME, SINGLE_STREAM clean up this
+        auto old_metadata_path = metadata_path;
         metadata_path = metadata_path / "store" / DatabaseCatalog::getPathForUUID(create.uuid);
+        if (create.attach && !fs::exists(metadata_path))
+        {
+            old_metadata_path = old_metadata_path / "store" / DatabaseCatalog::getPathForUUIDLegacy(create.uuid);
+            if (fs::exists(old_metadata_path))
+                metadata_path = old_metadata_path;
+        }
+        /// proton : ends
 
         if (!create.attach && fs::exists(metadata_path))
             throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Metadata directory {} already exists", metadata_path.string());
@@ -922,7 +931,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
 
     assert(create.storage);
     auto stream_properties = StorageStreamProperties::create(*create.storage, properties.columns, ctx);
-    if (stream_properties->storage_settings->shard.value >= 0)
+    if (!stream_properties->storage_settings->host_shards.value.empty())
     {
         LOG_INFO(log, "Local stream creation with shard assigned");
         return false;

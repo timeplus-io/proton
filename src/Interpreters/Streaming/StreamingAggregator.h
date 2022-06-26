@@ -281,7 +281,7 @@ struct StreamingAggregatedDataVariants : private boost::noncopyable
     };
     Type type = Type::EMPTY;
 
-    StreamingAggregatedDataVariants(bool enable_recycle = true) : aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get()) { aggregates_pool->enableRecycle(enable_recycle); }
+    explicit StreamingAggregatedDataVariants(bool enable_recycle = true) : aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get()) { aggregates_pool->enableRecycle(enable_recycle); }
     bool empty() const { return type == Type::EMPTY; }
     void invalidate() { type = Type::EMPTY; }
 
@@ -758,7 +758,7 @@ public:
       */
     BlocksList convertToBlocks(StreamingAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
-    ManyStreamingAggregatedDataVariants prepareVariantsToMerge(ManyStreamingAggregatedDataVariants & data_variants) const;
+    ManyStreamingAggregatedDataVariantsPtr prepareVariantsToMerge(ManyStreamingAggregatedDataVariants & data_variants) const;
 
     using BucketToBlocks = std::map<Int32, BlocksList>;
     /// Merge partially aggregated blocks separated to buckets into one data structure.
@@ -1107,6 +1107,7 @@ private:
         MutableColumns & final_key_columns) const;
 
     /// proton: starts
+    inline void initStatesWithoutKey(StreamingAggregatedDataVariants & data_variants) const;
     void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, StreamingAggregatedDataVariants & result) const;
     void removeBucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
     void removeBucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id) const;

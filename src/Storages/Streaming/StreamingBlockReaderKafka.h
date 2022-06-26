@@ -10,14 +10,14 @@ namespace Poco
 
 namespace DB
 {
-class IStorage;
+class StreamShard;
 
 /// StreamingBlockReader read blocks from streaming storage
 class StreamingBlockReaderKafka final : nlog::SchemaProvider
 {
 public:
     StreamingBlockReaderKafka(
-        std::shared_ptr<IStorage> storage_,
+        std::shared_ptr<StreamShard> stream_shard_,
         Int32 shard_,
         Int64 offset,
         SourceColumnsDescription::PhysicalColumnPositions column_positions,
@@ -31,8 +31,8 @@ public:
     nlog::RecordPtrs read(UInt32 count, Int32 timeout_ms);
 
 private:
-    std::shared_ptr<IStorage> storage;
-    Block header;
+    std::shared_ptr<StreamShard> stream_shard;
+    Block schema;
 
     klog::KafkaWALSimpleConsumerPtr consumer;
     klog::KafkaWALContext consume_ctx;

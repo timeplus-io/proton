@@ -973,11 +973,22 @@ void DatabaseCatalog::dropTableFinally(const TableMarkedAsDropped & table)
     CurrentMetrics::sub(CurrentMetrics::TablesToDropQueueSize, 1);
 }
 
+/// proton : starts
 String DatabaseCatalog::getPathForUUID(const UUID & uuid)
 {
-    const size_t uuid_prefix_len = 3;
-    return toString(uuid).substr(0, uuid_prefix_len) + '/' + toString(uuid) + '/';
+    /// Path shall endswith "/"
+    return fmt::format("{}/", toString(uuid));
 }
+
+/// FIXME, SINGLE_STREAM clean up this
+String DatabaseCatalog::getPathForUUIDLegacy(const UUID & uuid)
+{
+    /// Path shall endswith "/"
+    const size_t uuid_prefix_len = 3;
+    auto uuid_str = toString(uuid);
+    return fmt::format("{}/{}/", uuid_str.substr(0, uuid_prefix_len), uuid_str);
+}
+/// proton : ends
 
 void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
 {

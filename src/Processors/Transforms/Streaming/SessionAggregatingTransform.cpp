@@ -10,9 +10,7 @@ namespace
     {
         assert(columns.size() == to_process.size());
         for (size_t i = 0; i < columns.size(); i++)
-        {
             to_process[i] = columns[i]->cut(start, size)->filter(filt, size - late_events);
-        }
     }
 }
 
@@ -144,20 +142,15 @@ void SessionAggregatingTransform::finalizeSession(std::vector<size_t> & sessions
         auto start = MonotonicMilliseconds::now();
 
         /// FIXME spill to disk, overflow_row etc cases
-        auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
-        auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
-
+        auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
         if (prepared_data_ptr->empty())
             return;
 
-        /// At least we need one arena in first data item per thread
         StreamingAggregatedDataVariantsPtr & first = prepared_data_ptr->at(0);
-        if (max_threads > first->aggregates_pools.size())
-        {
-            Arenas & first_pool = first->aggregates_pools;
-            for (size_t j = first_pool.size(); j < max_threads; j++)
-                first_pool.emplace_back(std::make_shared<Arena>());
-        }
+        /// At least we need one arena in first data item per thread
+        Arenas & first_pool = first->aggregates_pools;
+        for (size_t j = first_pool.size(); j < max_threads; j++)
+            first_pool.emplace_back(std::make_shared<Arena>());
 
         assert(prepared_data_ptr->at(0)->isTwoLevel());
         mergeTwoLevel(prepared_data_ptr, sessions, merged_block);

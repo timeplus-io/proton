@@ -1,26 +1,25 @@
 #pragma once
 
 #include "IngestingBlocks.h"
-#include "StreamCallbackData.h"
-#include "StreamingStoreSourceMultiplexer.h"
 
-#include <base/ClockUtils.h>
 #include <base/shared_ptr_helper.h>
 #include <pcg_random.hpp>
 
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
-#include <KafkaLog/KafkaWAL.h>
-#include <KafkaLog/KafkaWALConsumerMultiplexer.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/MergeTreeMutationEntry.h>
-#include <Storages/MergeTree/MergeTreeMutationStatus.h>
-#include <Common/ProtonCommon.h>
-#include <Common/ThreadPool.h>
+#include <KafkaLog/Results.h>
+#include <NativeLog/Record/Record.h>
 
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeMutationStatus.h>
+
+namespace nlog
+{
+class NativeLog;
+}
 
 namespace DB
 {
-class StorageMergeTree;
+class StreamShard;
+struct KafkaLogContext;
 
 /** A StorageStream is an table engine that uses merge tree and replicated via
   * distributed write ahead log which is now implemented by using Kafka. Users can issue
@@ -104,7 +103,7 @@ public:
     std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo &, ContextPtr) const override;
     std::optional<UInt64> totalBytes(const Settings &) const override;
 
-    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
+    SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
     /** Perform the next step in combining the parts.
       */
@@ -216,36 +215,15 @@ public:
     size_t getRandomShardIndex();
     size_t getNextShardIndex() const;
 
-    Int32 currentShard() const { return shard; }
-    void getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const
-    {
-        if (kafka)
-            kafka->ingesting_blocks.getStatuses(block_ids, statuses);
-    }
+    void getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const;
 
-    UInt64 nextBlockId() const
-    {
-        if (kafka)
-            return kafka->ingesting_blocks.nextId();
+    UInt64 nextBlockId() const;
 
-        return 0;
-    }
+    IngestMode ingestMode() const;
 
-    String logstoreType() const
-    {
-        if (kafka)
-            return ProtonConsts::LOGSTORE_KAFKA;
+    /// Return (shard_id, committed_sn) pairs
+    std::vector<std::pair<Int32, Int64>> lastCommittedSequences() const;
 
-        return ProtonConsts::LOGSTORE_NATIVE_LOG;
-    }
-
-    bool isLogstoreKafka() const { return kafka != nullptr; }
-
-    nlog::RecordSN lastSN() const;
-
-    String streamingStorageClusterId() const;
-
-    friend struct StreamCallbackData;
     friend class StreamSink;
     friend class MergeTreeData;
 
@@ -265,10 +243,6 @@ protected:
         bool has_force_restore_data_flag_);
 
 private:
-    void initLog();
-    void initKafkaLog();
-    void initNativeLog();
-    void deinitNativeLog();
     bool requireDistributedQuery(ContextPtr context_) const;
     std::vector<Int64> getOffsets(const String & seek_to) const;
 
@@ -289,47 +263,34 @@ private:
         ~WriteCallbackData() { --storage->outstanding_blocks; }
     };
 
+    /// FIXME, move ingest APIs to StreamShard
+    void append(
+        nlog::RecordPtr & record,
+        IngestMode ingest_mode,
+        klog::AppendCallback callback,
+        void * data,
+        UInt64 base_block_id,
+        UInt64 sub_block_id);
+
+    void appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/);
+
     void appendAsync(nlog::Record & record, UInt64 block_id, UInt64 sub_block_id);
 
-    void writeCallback(const klog::AppendResult & result, UInt64 block_id, UInt64 sub_block_id);
+    void appendToKafka(
+        nlog::RecordPtr & record,
+        IngestMode ingest_mode,
+        klog::AppendCallback callback,
+        void * data,
+        UInt64 base_block_id,
+        UInt64 sub_block_id);
+
+    void poll(Int32 timeout_ms);
+
+    void writeCallback(const klog::AppendResult & result, UInt64 base_block_id, UInt64 sub_block_id);
 
     static void writeCallback(const klog::AppendResult & result, void * data);
 
-    nlog::RecordSN snLoaded() const;
-    void mergeBlocks(Block & lhs, Block & rhs);
-    bool dedupBlock(const nlog::RecordPtr & record);
-    void addIdempotentKey(const String & key);
-    void buildIdempotentKeysIndex(const std::deque<std::shared_ptr<String>> & idempotent_keys_);
-
-    void commit(nlog::RecordPtrs records, SequenceRanges missing_sequence_ranges);
-
-    using SequencePair = std::pair<nlog::RecordSN, nlog::RecordSN>;
-
-    void doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges);
-    void commitSN();
-    void commitSNLocal(nlog::RecordSN commit_sn);
-    void commitSNRemote(nlog::RecordSN commit_sn);
-
-    void finalCommit();
-    void periodicallyCommit();
-
-    void progressSequences(const SequencePair & seq);
-    void progressSequencesWithoutLock(const SequencePair & seq);
-    Int64 maxCommittedSN() const;
-
-    static void consumeCallback(nlog::RecordPtrs records, klog::ConsumeCallbackData * data);
-
-    /// Dedicate thread consumption
-    void backgroundPollKafka();
-
-    /// Shared mode consumption
-    void addSubscriptionKafka();
-    void removeSubscriptionKafka();
-
-    void backgroundPollNativeLog();
     void cacheVirtualColumnNamesAndTypes();
-
-    std::vector<Int64> sequencesForTimestamps(Int64 ts, bool append_time = false) const;
 
 private:
     Int32 replication_factor;
@@ -337,10 +298,7 @@ private:
     ExpressionActionsPtr sharding_key_expr;
     bool rand_sharding_key = false;
 
-    /// Current shard. DWAL partition and table shard is 1:1 mapped
-    Int32 shard = -1;
-
-    IngestMode default_ingest_mode;
+    std::vector<std::shared_ptr<StreamShard>> stream_shards;
 
     /// For sharding
     bool sharding_key_is_deterministic = false;
@@ -349,74 +307,19 @@ private:
 
     NamesAndTypesList virtual_column_names_and_types;
 
-    /// Cached ctx for reuse
-    struct KafkaLog
-    {
-        KafkaLog(const String & topic_, Int32 shards_, Int32 replication_factor_, Int64 timeout_ms_, Poco::Logger * log_)
-            : append_ctx(topic_, shards_, replication_factor_)
-            , consume_ctx(topic_, shards_, replication_factor_)
-            , ingesting_blocks(timeout_ms_, log_)
-        {
-        }
-
-        ~KafkaLog() { shutdown(); }
-
-        void shutdown()
-        {
-            if (log)
-                log.reset();
-        }
-
-        String topic() const { return append_ctx.topic; }
-
-        klog::KafkaWALContext append_ctx;
-        klog::KafkaWALContext consume_ctx;
-
-        /// For Produce and dedicated consumption
-        klog::KafkaWALPtr log;
-
-        /// For shared consumption
-        klog::KafkaWALConsumerMultiplexerPtr multiplexer;
-        std::weak_ptr<klog::KafkaWALConsumerMultiplexer::CallbackContext> shared_subscription_ctx;
-
-        IngestingBlocks ingesting_blocks;
-    };
-
-    std::unique_ptr<KafkaLog> kafka;
-
-    /// Local checkpoint threshold timer
-    Int64 last_commit_ts = MonotonicSeconds::now();
-
-    /// Forwarding storage if it is not virtual
-    std::shared_ptr<StorageMergeTree> storage;
-    std::optional<ThreadPool> poller;
-
-    ThreadPool & part_commit_pool;
-
-    mutable std::mutex sns_mutex;
-    nlog::RecordSN last_sn = -1; /// To be committed to DWAL
-    nlog::RecordSN prev_sn = -1; /// Committed to DWAL
-    nlog::RecordSN local_sn = -1; /// Committed to `committed_sn.txt`
-    std::set<SequencePair> local_committed_sns; /// Committed to `Part` folder
-    std::deque<SequencePair> outstanding_sns;
-
-    /// Idempotent keys caching
-    std::deque<std::shared_ptr<String>> idempotent_keys;
-    std::unordered_set<StringRef, StringRefHash> idempotent_keys_index;
-
-    std::unique_ptr<StreamCallbackData> callback_data;
-
-    std::unique_ptr<StreamingStoreSourceMultiplexers> source_multiplexers;
-
     // For random shard index generation
     mutable std::mutex rng_mutex;
     pcg64 rng;
 
+    /// For ingest
     mutable std::atomic_uint_fast64_t next_shard = 0;
 
     /// Outstanding async ingest records
     UInt64 max_outstanding_blocks;
     std::atomic_uint_fast64_t outstanding_blocks = 0;
+
+    nlog::NativeLog * native_log = nullptr;
+    KafkaLogContext * kafka_log = nullptr;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;

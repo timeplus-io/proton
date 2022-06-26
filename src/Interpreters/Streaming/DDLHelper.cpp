@@ -111,6 +111,7 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
         create.storage->settings->changes.tryGet("replicas", replicas);
         create.storage->settings->changes.tryGet("sharding_expr", sharding_expr_field);
     }
+
     sharding_expr_field.tryGet<String>(expr);
     ASTPtr sharding_expr = functionToAST(expr);
 

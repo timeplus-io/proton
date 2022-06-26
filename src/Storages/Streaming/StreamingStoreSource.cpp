@@ -1,18 +1,17 @@
 #include "StreamingStoreSource.h"
-#include "StorageStream.h"
+#include "StreamShard.h"
 #include "StreamingBlockReaderKafka.h"
 #include "StreamingBlockReaderNativeLog.h"
 
 #include <Interpreters/Context.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
-
 #include <base/logger_useful.h>
 
 namespace DB
 {
 StreamingStoreSource::StreamingStoreSource(
-    std::shared_ptr<IStorage> storage_,
+    std::shared_ptr<StreamShard> stream_shard_,
     const Block & header,
     const StorageSnapshotPtr & storage_snapshot_,
     ContextPtr context_,
@@ -27,22 +26,21 @@ StreamingStoreSource::StreamingStoreSource(
     if (query_context->getSettingsRef().record_consume_timeout != 0)
         record_consume_timeout = query_context->getSettingsRef().record_consume_timeout;
 
-    auto stream_storage = static_cast<StorageStream *>(storage_.get());
-    if (stream_storage->isLogstoreKafka())
+    if (stream_shard_->isLogStoreKafka())
     {
         auto & kpool = klog::KafkaWALPool::instance(query_context);
         assert(kpool.enabled());
-        auto consumer = kpool.getOrCreateStreaming(stream_storage->streamingStorageClusterId());
+        auto consumer = kpool.getOrCreateStreaming(stream_shard_->logStoreClusterId());
         assert(consumer);
         kafka_reader = std::make_unique<StreamingBlockReaderKafka>(
-            std::move(storage_), shard, sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
+            std::move(stream_shard_), shard, sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
     }
     else
     {
         auto fetch_buffer_size = query_context->getSettingsRef().fetch_buffer_size;
         fetch_buffer_size = std::min<UInt64>(64 * 1024 * 1024, fetch_buffer_size);
         nativelog_reader = std::make_unique<StreamingBlockReaderNativeLog>(
-            std::move(storage_),
+            std::move(stream_shard_),
             shard_,
             sn,
             record_consume_timeout,
@@ -90,13 +88,11 @@ void StreamingStoreSource::readAndProcess()
         {
             switch (pos.type())
             {
-                case SourceColumnsDescription::ReadColumnType::PHYSICAL:
-                {
+                case SourceColumnsDescription::ReadColumnType::PHYSICAL: {
                     columns.push_back(block.getByPosition(pos.physicalPosition()).column);
                     break;
                 }
-                case SourceColumnsDescription::ReadColumnType::VIRTUAL:
-                {
+                case SourceColumnsDescription::ReadColumnType::VIRTUAL: {
                     /// The current column to return is a virtual column which needs be calculated lively
                     assert(columns_desc.virtual_time_columns_calc[pos.virtualPosition()]);
                     auto ts = columns_desc.virtual_time_columns_calc[pos.virtualPosition()](block.info);
@@ -104,10 +100,9 @@ void StreamingStoreSource::readAndProcess()
                     columns.push_back(std::move(time_column));
                     break;
                 }
-                case SourceColumnsDescription::ReadColumnType::SUB:
-                {
-                    columns.push_back(getSubcolumnFromblock(
-                        block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()]));
+                case SourceColumnsDescription::ReadColumnType::SUB: {
+                    columns.push_back(
+                        getSubcolumnFromblock(block, pos.parentPosition(), columns_desc.subcolumns_to_read[pos.subPosition()]));
                     break;
                 }
             }

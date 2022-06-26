@@ -261,7 +261,7 @@ StreamShard Loglet::streamShardFrom(const fs::path & log_dir_)
     auto throw_ex = [&stream_shard_str]() {
         throw DB::Exception(
             DB::ErrorCodes::BAD_FILE_NAME,
-            "Found directory {} is not in form of stream_uuid.shard or stream_uuid.shard.delete or stream_uuid.shard.future",
+            "Found directory {} is not in form of stream_uuid.shard or stream_uuid.shard.deleted or stream_uuid.shard.future",
             stream_shard_str);
     };
 

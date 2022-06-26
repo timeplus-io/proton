@@ -159,11 +159,11 @@ struct Settings;
     M(UInt64, replicas, 1, "Replicas number for Stream", 0) \
     M(String, sharding_expr, "rand()", "Sharding method of Stream. Default is 'rand()'.", 0) \
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
-    M(Int64, shard, -1, "Current shard number", 0) \
+    M(String, host_shards, "", "Stream shards the current proton instance is hosting", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
     M(String, logstore_cluster_id, "", "Backend streaming storage cluster id", 0) \
     M(String, logstore_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \
-    M(String, logstore_subscription_mode, "shared", "Mode of subscribing / polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \
+    M(String, logstore_subscription_mode, "dedicated", "Mode of subscribing / polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \
     M(Int64, logstore_request_required_acks, 1, "Waited ack during data ingestion to the backend write-ahead log", 0) \
     M(Int64, logstore_request_timeout_ms, 30000, "Time out value for an ingest request to the backend write-ahead log", 0) \
     M(Int64, logstore_retention_bytes, -1, "When this threshold reaches, streaming storage deletes old data", 0) \

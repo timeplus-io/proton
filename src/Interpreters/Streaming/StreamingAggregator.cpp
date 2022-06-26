@@ -27,7 +27,6 @@
 /// proton: starts
 #include <Columns/ColumnDecimal.h>
 #include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
 #include <Common/ProtonCommon.h>
@@ -303,9 +302,7 @@ StreamingAggregator::StreamingAggregator(const Params & params_)
 
     /// proton: starts
     if (params.group_by == Params::GroupBy::SESSION)
-    {
         session_map.init(SessionHashMap::Type::map32);
-    }
     /// proton: ends
 }
 
@@ -1062,12 +1059,7 @@ bool StreamingAggregator::executeOnBlock(Columns columns, UInt64 num_rows, Strea
     AggregateFunctionInstructions aggregate_functions_instructions;
     prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions, nested_columns_holder);
 
-    if ((params.overflow_row || result.type == StreamingAggregatedDataVariants::Type::without_key) && !result.without_key)
-    {
-        AggregateDataPtr place = result.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-        createAggregateStates(place);
-        result.without_key = place;
-    }
+    initStatesWithoutKey(result);
 
     /// We select one of the aggregation methods and call it.
 
@@ -1185,12 +1177,7 @@ void StreamingAggregator::writeToTemporaryFile(StreamingAggregatedDataVariants &
     data_variants.init(data_variants.type);
     data_variants.aggregates_pools = Arenas(1, std::make_shared<Arena>());
     data_variants.aggregates_pool = data_variants.aggregates_pools.back().get();
-    if (params.overflow_row || data_variants.type == StreamingAggregatedDataVariants::Type::without_key)
-    {
-        AggregateDataPtr place = data_variants.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-        createAggregateStates(place);
-        data_variants.without_key = place;
-    }
+    initStatesWithoutKey(data_variants);
 
     block_out.flush();
     compressed_buf.next();
@@ -1823,9 +1810,7 @@ Block StreamingAggregator::prepareBlockAndFillWithoutKey(StreamingAggregatedData
 
                 /// proton: starts
                 if (!params.keep_state)
-                {
                     data = nullptr;
-                }
                 /// proton: ends
             }
             else
@@ -2207,10 +2192,13 @@ void NO_INLINE StreamingAggregator::mergeWithoutKeyDataImpl(
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->merge(res_data + offsets_of_aggregate_states[i], current_data + offsets_of_aggregate_states[i], res->aggregates_pool);
 
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->destroy(current_data + offsets_of_aggregate_states[i]);
+        if (!params.keep_state)
+        {
+            for (size_t i = 0; i < params.aggregates_size; ++i)
+                aggregate_functions[i]->destroy(current_data + offsets_of_aggregate_states[i]);
 
-        current_data = nullptr;
+            current_data = nullptr;
+        }
     }
 }
 
@@ -2307,38 +2295,35 @@ void NO_INLINE StreamingAggregator::mergeBucketImpl(
     }
 }
 
-ManyStreamingAggregatedDataVariants StreamingAggregator::prepareVariantsToMerge(ManyStreamingAggregatedDataVariants & data_variants) const
+ManyStreamingAggregatedDataVariantsPtr StreamingAggregator::prepareVariantsToMerge(ManyStreamingAggregatedDataVariants & data_variants) const
 {
     if (data_variants.empty())
         throw Exception("Empty data passed to StreamingAggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
 
     LOG_TRACE(log, "Merging aggregated data");
 
-    ManyStreamingAggregatedDataVariants non_empty_data;
+    auto non_empty_data = std::make_shared<ManyStreamingAggregatedDataVariants>();
 
     /// proton: starts:
+    for (auto & data : data_variants)
+        if (!data->empty())
+            non_empty_data->push_back(data);
 
-    if (data_variants.size() == 1)
-        non_empty_data.reserve(data_variants.size());
-    else
+    if (non_empty_data->empty())
+        return non_empty_data;
+
+    if (non_empty_data->size() > 1)
     {
-        non_empty_data.reserve(data_variants.size() + 1);
-
         /// When do streaming merging, we shall not touch existing memory arenas and
         /// all memory arenas merge to the first empty one, so we need create a new resulting arena
         /// at position 0.
-        non_empty_data.emplace_back(std::make_shared<StreamingAggregatedDataVariants>(false));
-        non_empty_data.back()->keys_size = params.keys_size;
-        non_empty_data.back()->key_sizes = key_sizes;
-        non_empty_data.back()->init(method_chosen);
+        auto result_variants = std::make_shared<StreamingAggregatedDataVariants>(false);
+        result_variants->keys_size = params.keys_size;
+        result_variants->key_sizes = key_sizes;
+        result_variants->init(method_chosen);
+        initStatesWithoutKey(*result_variants);
+        non_empty_data->insert(non_empty_data->begin(), result_variants);
     }
-
-    for (auto & data : data_variants)
-        if (!data->empty())
-            non_empty_data.push_back(data);
-
-    if (non_empty_data.empty())
-        return {};
 
     /// for streaming query, we don't need sort the arenas
 //    if (non_empty_data.size() > 1)
@@ -2356,44 +2341,31 @@ ManyStreamingAggregatedDataVariants StreamingAggregator::prepareVariantsToMerge(
     /// Note - perhaps it would be more optimal not to convert single-level versions before the merge, but merge them separately, at the end.
 
     /// proton: starts. The first variant is for result aggregating
-    size_t idx = 0;
-    bool has_at_least_one_two_level = false;
-    for (const auto & variant : non_empty_data)
+    bool has_two_level
+        = std::any_of(non_empty_data->begin(), non_empty_data->end(), [](const auto & variant) { return variant->isTwoLevel(); });
+
+    if (has_two_level)
     {
-        if (data_variants.size() > 1 && idx == 0)
-            /// if there are more than 1 variants, then we have created a resulting variant in non_empty_data at idx 0
-            /// skip this resulting variant
-            continue;
-        ++idx;
-        /// proton: ends
-
-        if (variant->isTwoLevel())
-        {
-            has_at_least_one_two_level = true;
-            break;
-        }
-    }
-
-    if (has_at_least_one_two_level)
-        for (auto & variant : non_empty_data)
+        for (auto & variant : *non_empty_data)
             if (!variant->isTwoLevel())
                 variant->convertToTwoLevel();
+    }
 
-    StreamingAggregatedDataVariantsPtr & first = non_empty_data[0];
+    StreamingAggregatedDataVariantsPtr & first = non_empty_data->at(0);
 
-    for (size_t i = 1, size = non_empty_data.size(); i < size; ++i)
+    for (size_t i = 1, size = non_empty_data->size(); i < size; ++i)
     {
-        if (first->type != non_empty_data[i]->type)
+        if (first->type != non_empty_data->at(i)->type)
             throw Exception("Cannot merge different aggregated data variants.", ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS);
 
         /** Elements from the remaining sets can be moved to the first data set.
           * Therefore, it must own all the arenas of all other sets.
           */
         first->aggregates_pools.insert(first->aggregates_pools.end(),
-            non_empty_data[i]->aggregates_pools.begin(), non_empty_data[i]->aggregates_pools.end());
+            non_empty_data->at(i)->aggregates_pools.begin(), non_empty_data->at(i)->aggregates_pools.end());
     }
 
-    assert(first->aggregates_pools.size() == non_empty_data.size());
+    assert(first->aggregates_pools.size() == non_empty_data->size());
 
     return non_empty_data;
 }
@@ -2985,6 +2957,16 @@ void StreamingAggregator::destroyAllAggregateStates(StreamingAggregatedDataVaria
 }
 
 /// proton: starts. for streaming processing
+void StreamingAggregator::initStatesWithoutKey(StreamingAggregatedDataVariants & data_variants) const
+{
+    if (!data_variants.without_key && (params.overflow_row || data_variants.type == StreamingAggregatedDataVariants::Type::without_key))
+    {
+        AggregateDataPtr place = data_variants.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+        createAggregateStates(place);
+        data_variants.without_key = place;
+    }
+}
+
 /// Loop the window column to find out the lower bound and set this lower bound to aggregates pool
 /// Any new memory allocation (MemoryChunk) will attach this lower bound timestamp which means
 /// the MemoryChunk contains states which is at and beyond this lower bound timestamp
@@ -3260,6 +3242,7 @@ template SessionStatus StreamingAggregator::processSessionRow<ColumnDecimal<Date
 
 template SessionStatus StreamingAggregator::processSessionRow<ColumnVector<UInt32>>(
     SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+
 /// proton: ends
 }
 

@@ -92,7 +92,7 @@ private:
     /// The name will be in the following format: "stream_uuid.shard.delete"
     static std::string logDeleteDirName(const StreamShard & stream_shard_)
     {
-        return logDirNameWithSuffix(stream_shard_, DELETED_FILE_SUFFIX);
+        return logDirNameWithSuffix(stream_shard_, DELETE_DIR_SUFFIX);
     }
 
     /// Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
@@ -227,9 +227,9 @@ private:
     /// A directory that is used for future partition
     inline static const std::string FUTURE_DIR_SUFFIX = ".future";
 
-    inline static auto DELETE_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)\\.(\\S+)\\.delete$"};
-    inline static auto FUTURE_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)\\.(\\S+)\\.future$"};
     inline static auto LOG_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)$"};
+    inline static auto DELETE_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)\\.delete$"};
+    inline static auto FUTURE_DIR_PATTERN = re2::RE2{"^(\\S+)\\.(\\d+)\\.future$"};
 
     /// static constexpr int64_t UNKNOWN_SN = -1;
 

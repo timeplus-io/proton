@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Storages/IStorage_fwd.h>
 #include <NativeLog/Requests/FetchRequest.h>
 #include <NativeLog/Record/SchemaProvider.h>
 #include <NativeLog/Record/Record.h>
@@ -18,11 +17,13 @@ class TailCache;
 
 namespace DB
 {
+class StreamShard;
+
 class StreamingBlockReaderNativeLog final : nlog::SchemaProvider
 {
 public:
     StreamingBlockReaderNativeLog(
-        std::shared_ptr<IStorage> storage_,
+        std::shared_ptr<StreamShard> stream_shard_,
         Int32 shard_,
         Int64 sn,
         Int64 max_wait_ms,
@@ -32,7 +33,7 @@ public:
         SourceColumnsDescription::PhysicalColumnPositions column_positions_,
         Poco::Logger * logger_);
 
-    const Block & getSchema(UInt16 /*schema_version*/) const override { return header; }
+    const Block & getSchema(UInt16 /*schema_version*/) const override { return schema; }
 
     nlog::RecordPtrs read();
 
@@ -43,8 +44,8 @@ private:
     nlog::NativeLog & native_log;
     nlog::TailCache & tail_cache;
 
-    std::shared_ptr<IStorage> storage;
-    Block header;
+    std::shared_ptr<StreamShard> stream_shard;
+    Block schema;
 
     String ns;
     nlog::FetchRequest fetch_request;

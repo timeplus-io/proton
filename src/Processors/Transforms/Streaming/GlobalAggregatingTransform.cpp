@@ -62,34 +62,31 @@ void GlobalAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
 void GlobalAggregatingTransform::doFinalize(ChunkInfoPtr & chunk_info)
 {
     /// FIXME spill to disk, overflow_row etc cases
-    auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
-    auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
-
+    auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
     if (prepared_data_ptr->empty())
         return;
 
-    initialize(prepared_data_ptr, chunk_info);
+    SCOPE_EXIT({rows_since_last_finalization = 0;});
+
+    if (initialize(prepared_data_ptr, chunk_info))
+        /// Processed
+        return;
 
     if (prepared_data_ptr->at(0)->isTwoLevel())
         mergeTwoLevel(prepared_data_ptr, chunk_info);
     else
         mergeSingleLevel(prepared_data_ptr, chunk_info);
-
-    rows_since_last_finalization = 0;
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::initialize
-void GlobalAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
+bool GlobalAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
 {
     StreamingAggregatedDataVariantsPtr & first = data->at(0);
 
-    /// At least we need one arena in first data item per thread
-    if (max_threads > first->aggregates_pools.size())
-    {
-        Arenas & first_pool = first->aggregates_pools;
-        for (size_t j = first_pool.size(); j < max_threads; j++)
-            first_pool.emplace_back(std::make_shared<Arena>());
-    }
+    /// At least we need one arena in first data item per thread. FIXME, we are using 1 thread to do state merge
+//    Arenas & first_pool = first->aggregates_pools;
+//    for (size_t j = first_pool.size(); j < max_threads; j++)
+//        first_pool.emplace_back(std::make_shared<Arena>());
 
     if (first->type == StreamingAggregatedDataVariants::Type::without_key || params->params.overflow_row)
     {
@@ -101,7 +98,10 @@ void GlobalAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsP
             emitVersion(block);
 
         setCurrentChunk(convertToChunk(block), chunk_info);
+        return true;
     }
+
+    return false;
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel

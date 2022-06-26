@@ -12,7 +12,7 @@
   "test_suite_config":{
     "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
   },
-  "commments": "Tests covering the stream query smoke cases.",
+  "comments": "Tests covering the stream query smoke cases.",
   "tests": [
     {
       "id": 0,

@@ -25,7 +25,7 @@ private:
 
     inline void doFinalize(ChunkInfoPtr & chunk_info);
 
-    inline void initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    inline bool initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
 
     void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
 

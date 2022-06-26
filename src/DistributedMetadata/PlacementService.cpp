@@ -58,30 +58,40 @@ MetadataService::ConfigSettings PlacementService::configSettings() const
 }
 
 std::vector<NodeMetricsPtr> PlacementService::place(
-    Int32 shards, Int32 replication_factor, const String & storage_policy /*= "default"*/, const String & /* colocated_table */) const
+    size_t shards, size_t replication_factor, const String & storage_policy /*= "default"*/, const String & /* colocated_table */) const
 {
-    size_t total_replicas = static_cast<size_t>(shards * replication_factor);
-    PlacementStrategy::PlacementRequest request{total_replicas, storage_policy};
+    PlacementStrategy::PlacementRequest request{replication_factor, shards * replication_factor, storage_policy};
 
-    std::shared_lock guard{rwlock};
-
-    for (const auto & [node_identity, node_metrics] : nodes_metrics)
+    std::vector<NodeMetricsPtr> results;
+    std::vector<std::pair<String, NodeMetricsPtr>> stale_nodes;
     {
-        auto staleness = MonotonicMilliseconds::now() - node_metrics->last_update_time;
-        if (staleness > STALENESS_THRESHOLD_MS)
+        std::shared_lock guard{rwlock};
+
+        for (const auto & [node_identity, node_metrics] : nodes_metrics)
         {
-            node_metrics->staled = true;
-            LOG_WARNING(
-                log,
-                "Node identity={} host={} is staled. Didn't hear from it since last update={} for {}ms",
-                node_identity,
-                node_metrics->node.host,
-                node_metrics->last_update_time,
-                staleness);
+            auto staleness = MonotonicMilliseconds::now() - node_metrics->last_update_time;
+            if (staleness > STALENESS_THRESHOLD_MS)
+            {
+                node_metrics->staled = true;
+                stale_nodes.emplace_back(node_identity, node_metrics);
+            }
         }
+        results = strategy->qualifiedNodes(nodes_metrics, request);
     }
 
-    return strategy->qualifiedNodes(nodes_metrics, request);
+    for (const auto & stale_node : stale_nodes)
+    {
+        auto staleness = MonotonicMilliseconds::now() - stale_node.second->last_update_time;
+        LOG_WARNING(
+            log,
+            "Node identity={} host={} is staled. Didn't hear from it since last update={} for {}ms",
+            stale_node.first,
+            stale_node.second->node.host,
+            stale_node.second->last_update_time,
+            staleness);
+    }
+
+    return results;
 }
 
 std::vector<String> PlacementService::placed(const String & database, const String & table) const

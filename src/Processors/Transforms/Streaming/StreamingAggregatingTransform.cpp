@@ -508,7 +508,7 @@ void StreamingAggregatingTransform::work()
     }
     else
     {
-        const UInt64 num_rows = current_chunk.getNumRows();
+        auto num_rows = current_chunk.getNumRows();
         rows_since_last_finalization += num_rows;
         src_rows += num_rows;
         src_bytes += current_chunk.bytes();
@@ -624,8 +624,7 @@ void StreamingAggregatingTransform::initGenerate()
 
     if (!params->aggregator.hasTemporaryFiles())
     {
-        auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
-        auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
+        auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
         processors.emplace_back(
             std::make_shared<StreamingConvertingAggregatedToChunksTransform>(params, std::move(prepared_data_ptr), max_threads));
     }

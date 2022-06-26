@@ -255,6 +255,8 @@ private:
 
     /// proton: starts
     friend class StorageStream;
+    friend class StreamShard;
+
     void commitSN(Int64 sn);
     Int64 loadSN() const;
     const SequenceRanges & missingSequenceRanges() const { return missing_sequence_ranges; }

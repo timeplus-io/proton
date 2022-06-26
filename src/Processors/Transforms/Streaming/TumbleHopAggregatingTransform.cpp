@@ -100,9 +100,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
 void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
 {
     /// FIXME spill to disk, overflow_row etc cases
-    auto prepared_data = params->aggregator.prepareVariantsToMerge(many_data->variants);
-    auto prepared_data_ptr = std::make_shared<ManyStreamingAggregatedDataVariants>(std::move(prepared_data));
-
+    auto prepared_data_ptr = params->aggregator.prepareVariantsToMerge(many_data->variants);
     if (prepared_data_ptr->empty())
         return;
 
@@ -121,12 +119,9 @@ void TumbleHopAggregatingTransform::initialize(ManyStreamingAggregatedDataVarian
     assert(first->type != StreamingAggregatedDataVariants::Type::without_key && !params->params.overflow_row);
 
     /// At least we need one arena in first data item per thread
-    if (max_threads > first->aggregates_pools.size())
-    {
-        Arenas & first_pool = first->aggregates_pools;
-        for (size_t j = first_pool.size(); j < max_threads; j++)
-            first_pool.emplace_back(std::make_shared<Arena>());
-    }
+    Arenas & first_pool = first->aggregates_pools;
+    for (size_t j = first_pool.size(); j < max_threads; j++)
+        first_pool.emplace_back(std::make_shared<Arena>());
 }
 
 void TumbleHopAggregatingTransform::mergeTwoLevel(

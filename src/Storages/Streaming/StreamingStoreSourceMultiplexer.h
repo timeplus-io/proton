@@ -7,6 +7,8 @@
 
 namespace DB
 {
+class StreamShard;
+
 /// The multiplexer fans out one streaming store reader to different streaming queries. This has
 /// efficiency of disk read / TFF deserialization, memory allocation etc. But we may introduce
 /// new problems like one slow query processing pipeline will slow down other pipelines. So it
@@ -22,7 +24,7 @@ class StreamingStoreSourceMultiplexer final : public std::enable_shared_from_thi
 {
 public:
     StreamingStoreSourceMultiplexer(
-        UInt32 id_, Int32 shard, std::shared_ptr<IStorage> storage_, ContextPtr global_context, Poco::Logger * log_);
+        UInt32 id_, Int32 shard, std::shared_ptr<StreamShard> storage_, ContextPtr global_context, Poco::Logger * log_);
     ~StreamingStoreSourceMultiplexer();
 
     StreamingStoreSourceChannelPtr
@@ -42,7 +44,7 @@ private:
 private:
     UInt32 id;
     Int32 shard;
-    std::shared_ptr<IStorage> storage;
+    std::shared_ptr<StreamShard> stream_shard;
     std::shared_ptr<StreamingBlockReaderKafka> reader;
 
     std::unique_ptr<ThreadPool> poller;
@@ -70,13 +72,13 @@ using StreamingStoreSourceMultiplexerPtrs = std::list<StreamingStoreSourceMultip
 class StreamingStoreSourceMultiplexers final
 {
 public:
-    StreamingStoreSourceMultiplexers(std::shared_ptr<IStorage> storage_, ContextPtr global_context_, Poco::Logger * log_);
+    StreamingStoreSourceMultiplexers(std::shared_ptr<StreamShard> stream_shard_, ContextPtr global_context_, Poco::Logger * log_);
 
     StreamingStoreSourceChannelPtr
     createChannel(Int32 shard, const Names & column_names, const StorageSnapshotPtr & storage_snapshot, ContextPtr query_context);
 
 private:
-    std::shared_ptr<IStorage> storage;
+    std::shared_ptr<StreamShard> stream_shard;
     ContextPtr global_context;
     Poco::Logger * log;
 

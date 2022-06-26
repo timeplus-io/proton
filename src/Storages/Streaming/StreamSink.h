@@ -7,12 +7,6 @@
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
-
-namespace nlog
-{
-class NativeLog;
-}
-
 namespace DB
 {
 class Context;
@@ -44,10 +38,6 @@ private:
     BlocksWithShard doShardBlock(Block block) const;
     IngestMode getIngestMode() const;
 
-private:
-    void appendToKafka(nlog::RecordPtr & record, IngestMode ingest_mode);
-    void appendToNativeLog(nlog::RecordPtr & record, IngestMode ingest_mode);
-
     void writeCallback(const klog::AppendResult & result);
     static void writeCallback(const klog::AppendResult & result, void * data);
 
@@ -55,10 +45,6 @@ private:
     StorageStream & storage;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr query_context;
-
-    StorageID storage_id;
-    nlog::AppendRequest request;
-    nlog::NativeLog * native_log = nullptr;
 
     std::vector<UInt16> column_positions;
 

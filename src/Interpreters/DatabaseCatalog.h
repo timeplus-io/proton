@@ -200,6 +200,7 @@ public:
     void addUUIDMapping(const UUID & uuid);
 
     static String getPathForUUID(const UUID & uuid);
+    static String getPathForUUIDLegacy(const UUID & uuid);
 
     DatabaseAndTable tryGetByUUID(const UUID & uuid) const;
 

@@ -19,9 +19,12 @@ public:
     virtual ~PlacementService() override = default;
 
     void scheduleBroadcast();
+
     std::vector<NodeMetricsPtr>
-    place(Int32 shards, Int32 replication_factor, const String & storage_policy = "default", const String & colocated_table = "") const;
+    place(size_t shards, size_t replication_factor, const String & storage_policy = "default", const String & colocated_table = "") const;
+
     std::vector<String> placed(const String & database, const String & table) const;
+
     String getNodeIdentityByChannel(const String & channel) const;
     std::vector<NodeMetricsPtr> nodes() const;
 

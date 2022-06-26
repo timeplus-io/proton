@@ -40,20 +40,23 @@ public:
         String primary_key;
         String sampling_key;
         String storage_policy;
-        Int32 shard = 0;
+        std::vector<Int32> host_shards;
 
         Table(const String & node_identity_, const String & host_, const Block & block, size_t rows);
 
         friend bool operator==(const Table & lhs, const Table & rhs)
         {
-            return (lhs.node_identity == rhs.node_identity) && (lhs.host == rhs.host) && (lhs.database == rhs.database)
+            bool host_shards_equals = std::equal(lhs.host_shards.begin(), lhs.host_shards.end(), rhs.host_shards.begin(), rhs.host_shards.end());
+
+            return host_shards_equals && (lhs.node_identity == rhs.node_identity) && (lhs.host == rhs.host) && (lhs.database == rhs.database)
                 && (lhs.name == rhs.name) && (lhs.uuid == rhs.uuid) && (lhs.engine == rhs.engine)
                 && (lhs.metadata_path == rhs.metadata_path) && (lhs.data_paths == rhs.data_paths)
                 && (lhs.dependencies_database == rhs.dependencies_database) && (lhs.dependencies_table == rhs.dependencies_table)
                 && (lhs.create_table_query == rhs.create_table_query) && (lhs.engine_full == rhs.engine_full)
                 && (lhs.partition_key == rhs.partition_key) && (lhs.sorting_key == rhs.sorting_key) && (lhs.primary_key == rhs.primary_key)
-                && (lhs.sampling_key == rhs.sampling_key) && (lhs.storage_policy == rhs.storage_policy) && (lhs.shard == rhs.shard);
+                && (lhs.sampling_key == rhs.sampling_key) && (lhs.storage_policy == rhs.storage_policy);
         }
+
         friend bool operator!=(const Table & lhs, const Table & rhs) { return !(lhs == rhs); }
     };
 
@@ -87,6 +90,7 @@ public:
     TablePtrs tables() const;
     std::vector<String> databases() const;
 
+    /// Return the nodes addresses, which host the shards of the database table
     ClusterPtr tableCluster(const String & database, const String & table, Int32 replication_factor, Int32 shards);
 
     void deleteCatalogForNode(const NodePtr & node);
@@ -105,6 +109,9 @@ private:
     ConfigSettings configSettings() const override;
     std::pair<Int32, Int32> batchSizeAndTimeout() const override { return std::make_pair(1000, 200); }
 
+    TablePtrs findTableByName(const std::pair<String, String> & database_table) const;
+    void deleteTableStorageByName(const std::pair<String, String> & database_table);
+
 private:
     void doBroadcast();
     /// void processQuery(BlockInputStreamPtr & in);
@@ -112,34 +119,31 @@ private:
     void append(Block && block);
 
 private:
-    using NodeShard = std::pair<String, Int32>;
-    using TableShard = std::pair<String, Int32>;
     using DatabaseTable = std::pair<String, String>;
-    using DatabaseTableShard = std::pair<String, TableShard>;
 
-    /// In the cluster, (database, table, shard) is unique
-    using TableContainerPerNode = std::unordered_map<DatabaseTableShard, TablePtr, boost::hash<DatabaseTableShard>>;
+    using TableContainer = std::unordered_map<DatabaseTable, TablePtr, boost::hash<DatabaseTable>>;
+    using StorageContainer = std::unordered_map<DatabaseTable, StoragePtr, boost::hash<DatabaseTable>>;
+    using ClusterContainer = std::unordered_map<DatabaseTable, ClusterPtr, boost::hash<DatabaseTable>>;
 
-    TableContainerPerNode buildCatalog(const NodePtr & node, const Block & bock);
-    void mergeCatalog(const NodePtr & node, TableContainerPerNode snapshot);
+    TableContainer buildCatalog(const NodePtr & node, const Block & bock);
+    void mergeCatalog(const NodePtr & node, TableContainer snapshot);
 
 private:
-    using TableContainerByNodeShard = std::unordered_map<NodeShard, TablePtr, boost::hash<NodeShard>>;
+    using TableContainerByNode = std::unordered_map<String, TablePtr>;
 
     mutable std::shared_mutex catalog_rwlock;
-
-    /// (database, table) -> ((node_identity, shard) -> TablePtr))
-    std::unordered_map<DatabaseTable, TableContainerByNodeShard, boost::hash<DatabaseTable>> indexed_by_name;
-
-    /// node_identity -> ((database, table, shard) -> TablePtr))
-    std::unordered_map<String, TableContainerPerNode> indexed_by_node;
-    std::unordered_map<String, NodePtr> table_nodes;
+    /// (database, table) -> (node_identity -> TablePtr))
+    std::unordered_map<DatabaseTable, TableContainerByNode, boost::hash<DatabaseTable>> indexed_by_name;
+    /// node_identity -> ((database, table) -> TablePtr))
+    std::unordered_map<String, TableContainer> indexed_by_node;
+    std::unordered_map<String, NodePtr> cluster_nodes;
 
     mutable std::shared_mutex storage_rwlock;
     std::unordered_map<UUID, TablePtr> indexed_by_id;
-    std::unordered_map<DatabaseTable, StoragePtr, boost::hash<DatabaseTable>> storages;
+    /// Virtual storages
+    StorageContainer storages;
 
     mutable std::shared_mutex table_cluster_rwlock;
-    std::unordered_map<DatabaseTable, ClusterPtr, boost::hash<DatabaseTable>> table_clusters;
+    ClusterContainer table_clusters;
 };
 }

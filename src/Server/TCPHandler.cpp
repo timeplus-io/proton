@@ -749,18 +749,19 @@ void TCPHandler::processTablesStatusRequest()
             continue;
 
         TableStatus status;
-        if (auto * distributed_merge_tree = dynamic_cast<StorageStream *>(table.get())) /// proton: starts
+        if (auto * stream = dynamic_cast<StorageStream *>(table.get())) /// proton: starts
         {
             /// If it is just a virtual table, no table status
-            if (distributed_merge_tree->isRemote())
-            {
+            if (stream->isRemote())
                 continue;
-            }
 
             /// Please note for Stream, the absolute delay means the last 32 bits
             /// of the last sequence number it commits
+            /// FIXME, revise the protocol to support multiple shard
             status.is_replicated = true;
-            status.absolute_delay = distributed_merge_tree->lastSN() & 0XFFFFFFFF;
+            /// status.absolute_delay = distributed_merge_tree->lastSN() & 0XFFFFFFFF;
+            /// auto shard_sns = stream->lastCommittedSequences();
+            status.absolute_delay = 0;
         } /// proton: ends
         else
             status.is_replicated = false; //-V1048

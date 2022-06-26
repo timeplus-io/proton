@@ -1,9 +1,9 @@
 #include "StreamingBlockReaderNativeLog.h"
+#include "StreamShard.h"
 
 #include <Columns/ColumnObject.h>
 #include <NativeLog/Cache/TailCache.h>
 #include <NativeLog/Server/NativeLog.h>
-#include <Storages/IStorage.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -15,7 +15,7 @@ namespace ErrorCodes
 }
 
 StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
-    std::shared_ptr<IStorage> storage_,
+    std::shared_ptr<StreamShard> stream_shard_,
     Int32 shard_,
     Int64 sn,
     Int64 max_wait_ms,
@@ -26,25 +26,25 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     Poco::Logger * logger_)
     : native_log(nlog::NativeLog::instance(nullptr))
     , tail_cache(native_log.getCache())
-    , storage(std::move(storage_))
-    , header(storage->getInMemoryMetadataPtr()->getSampleBlock())
+    , stream_shard(std::move(stream_shard_))
+    , schema(stream_shard->storageStream()->getInMemoryMetadataPtr()->getSampleBlock())
     , fetch_request({})
     , read_buf_size(read_buf_size_)
     , read_buf(read_buf_size_, '\0')
     , schema_ctx(schema_provider == nullptr ? *this : *schema_provider, schema_version, std::move(column_positions_))
     , logger(logger_)
 {
-    auto storage_id{storage->getStorageID()};
+    auto storage_id{stream_shard->storageStream()->getStorageID()};
 
     ns = storage_id.getDatabaseName();
     fetch_request.fetch_descs.emplace_back(storage_id.getTableName(), storage_id.uuid, shard_, sn, max_wait_ms, read_buf_size_);
 
     /// FIXME
     for (auto pos : schema_ctx.column_positions.positions)
-        column_names.push_back(header.getByPosition(pos).name);
+        column_names.push_back(schema.getByPosition(pos).name);
 
     if (column_names.empty())
-        for (const auto & col : header)
+        for (const auto & col : schema)
             column_names.push_back(col.name);
 }
 
@@ -78,12 +78,12 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
         {
             if (fetched_desc.data.records)
             {
-//                LOG_INFO(
-//                    logger,
-//                    "fetched meta={} start_pos={} end_pos={}",
-//                    fetched_desc.data.fetch_sn_metadata.string(),
-//                    fetched_desc.data.records->startPosition(),
-//                    fetched_desc.data.records->endPosition());
+                //                LOG_INFO(
+                //                    logger,
+                //                    "fetched meta={} start_pos={} end_pos={}",
+                //                    fetched_desc.data.fetch_sn_metadata.string(),
+                //                    fetched_desc.data.records->startPosition(),
+                //                    fetched_desc.data.records->endPosition());
 
                 auto records{fetched_desc.data.records->deserialize(read_buf, schema_ctx)};
                 if (unlikely(records.empty()))
@@ -149,8 +149,9 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
                     if (iter != schema_ctx.column_positions.subcolumns.end())
                     {
                         const auto & column_object = assert_cast<const ColumnObject &>(*(col_with_type->column));
-                        block.insert(ColumnWithTypeAndName{column_object.cloneWithSubcolumns(iter->second), col_with_type->type, col_with_type->name});
-                        continue; 
+                        block.insert(ColumnWithTypeAndName{
+                            column_object.cloneWithSubcolumns(iter->second), col_with_type->type, col_with_type->name});
+                        continue;
                     }
                 }
 
@@ -161,7 +162,7 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::processCached(nlog::RecordPtrs r
             }
             else
             {
-                auto col{header.getByName(column_name)};
+                auto col{schema.getByName(column_name)};
                 col.column = col.type->createColumnConstWithDefaultValue(rows)->convertToFullColumnIfConst();
                 block.insert(std::move(col));
             }

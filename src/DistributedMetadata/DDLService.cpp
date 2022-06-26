@@ -142,11 +142,9 @@ namespace
         std::vector<Poco::URI> uris;
         uris.reserve(hosts.size());
 
-        for (auto host : hosts)
-        {
+        for (const auto & host : hosts)
             /// FIXME : HTTP for now
-            uris.emplace_back("http://" + host + path);
-        }
+            uris.emplace_back(fmt::format("http://{}{}", host, path));
 
         return uris;
     }
@@ -231,7 +229,7 @@ bool DDLService::validateSchema(const Block & block, const std::vector<String> &
             LOG_ERROR(log, "`{}` column is missing", col_name);
 
             String query_id = block.getByName("query_id").column->getDataAt(0).toString();
-            String user = "";
+            String user;
             if (block.has("user"))
                 user = block.getByName("user").column->getDataAt(0).toString();
 
@@ -373,18 +371,40 @@ void DDLService::createTable(nlog::Record & record)
         std::vector<Poco::URI> target_hosts{toURIs(hosts, getTableApiPath(record, table, Poco::Net::HTTPRequest::HTTP_POST))};
 
         /// Set the parameters in uris
-        for (Int32 i = 0; i < replication_factor; ++i)
+        if (target_hosts.size() == static_cast<size_t>(replication_factor * shards))
         {
-            for (Int32 j = 0; j < shards; ++j)
+            for (Int32 i = 0; i < replication_factor; ++i)
             {
-                auto & uri = target_hosts[i * shards + j];
+                for (Int32 j = 0; j < shards; ++j)
+                {
+                    auto & uri = target_hosts[i * shards + j];
+                    if (url_parameters != nullptr)
+                        uri.setRawQuery(*url_parameters);
+
+                    uri.addQueryParameter("host_shards", std::to_string(j));
+                    uri.addQueryParameter("logstore_replication_factor", std::to_string(logstore_replication_factor));
+                }
+            }
+        }
+        else
+        {
+            assert(target_hosts.size() == static_cast<size_t>(replication_factor));
+            for (Int32 i = 0; i < replication_factor; ++i)
+            {
+                auto & uri = target_hosts[i];
                 if (url_parameters != nullptr)
                     uri.setRawQuery(*url_parameters);
 
-                uri.addQueryParameter("shard", std::to_string(j));
-                uri.addQueryParameter("logstore_replication_factor", std::to_string(logstore_replication_factor));
+                std::vector<Int32> host_shards;
+                host_shards.reserve(shards);
+                for (Int32 j = 0; j < shards; ++j)
+                    host_shards.push_back(j);
+
+                uri.addQueryParameter("host_shards", fmt::format("{}", fmt::join(host_shards, ",")));
+                uri.addQueryParameter("logstore_replication_factor", fmt::format("{}", logstore_replication_factor));
             }
         }
+
         /// Create table on each target host according to placement
         doDDLOnHosts(target_hosts, payload, Poco::Net::HTTPRequest::HTTP_POST, query_id, user, uuid);
     }
@@ -566,7 +586,7 @@ void DDLService::commit(Int64 last_sn)
 
 void DDLService::processRecords(const nlog::RecordPtrs & records)
 {
-    for (auto & record : records)
+    for (const auto & record : records)
     {
         assert(!record->hasSchema());
         switch (record->opcode())
@@ -585,8 +605,8 @@ void DDLService::processRecords(const nlog::RecordPtrs & records)
                 if (block.has("database") && block.has("table") && block.has("uuid"))
                 {
                     String uuid = block.getByName("uuid").column->getDataAt(0).toString();
-                    auto finished_callback = [this, topic_ = std::move(uuid)]() {
-                        klog::KafkaWALContext ctx{topic_};
+                    auto finished_callback = [this, topic = std::move(uuid)]() {
+                        klog::KafkaWALContext ctx{topic};
                         this->doDeleteDWal(ctx);
                     };
                     mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE, std::move(finished_callback));

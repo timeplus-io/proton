@@ -600,24 +600,18 @@ StoragePtr DatabaseAtomic::tryGetTable(const String & table_name, ContextPtr ctx
 {
     auto storage = DatabaseOrdinary::tryGetTable(table_name, ctx);
     if (storage)
-    {
         return storage;
-    }
 
     /// Try `CatalogService`
     auto & catalog_service = CatalogService::instance(getContext()->getGlobalContext());
     auto [table, table_storage] = catalog_service.findTableStorageByName(getDatabaseName(), table_name);
 
     if (table_storage != nullptr)
-    {
         return table_storage;
-    }
 
     /// Table doesn't exist in CatalogService neither
     if (table == nullptr)
-    {
         return nullptr;
-    }
 
     return catalog_service.createVirtualTableStorage(table->create_table_query, table->database, table_name);
 }

@@ -9,6 +9,7 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
+#include <Storages/Streaming/parseHostShards.h>
 #include <base/logger_useful.h>
 #include <Common/Exception.h>
 
@@ -39,9 +40,9 @@ namespace
     const String CATALOG_KEY_PREFIX = "cluster_settings.system_catalogs.";
     const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 
-    std::regex PARSE_SHARD_REGEX{"shard\\s*=\\s*(\\d+)"};
-    std::regex PARSE_SHARDS_REGEX{"Stream\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
-    std::regex PARSE_REPLICATION_REGEX{"Stream\\(\\s*(\\d+),\\s*\\d+\\s*,"};
+    std::regex PARSE_HOST_SHARDS_REGEX{"host_shards\\s*=\\s*'([,|\\s|\\d]*)'"};
+    std::regex PARSE_SHARDS_REGEX{"Stream\\(\\s*(\\d+),\\s*\\d+\\s*,"};
+    std::regex PARSE_REPLICATION_REGEX{"Stream\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
 
     Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
     {
@@ -63,7 +64,6 @@ CatalogService & CatalogService::instance(const ContextMutablePtr & context)
     static CatalogService catalog{context};
     return catalog;
 }
-
 
 CatalogService::CatalogService(const ContextMutablePtr & global_context_) : MetadataService(global_context_, "CatalogService")
 {
@@ -287,19 +287,29 @@ std::pair<CatalogService::TablePtr, StoragePtr> CatalogService::findTableStorage
     return {table_p, nullptr};
 }
 
-inline void CatalogService::deleteTableStorageByName(const String & database, const String & table)
+void CatalogService::deleteTableStorageByName(const String & database, const String & table)
 {
-    std::shared_lock storage_guard{storage_rwlock};
-    storages.erase(std::make_pair(database, table));
+    deleteTableStorageByName({database, table});
+}
+
+inline void CatalogService::deleteTableStorageByName(const DatabaseTable & database_table)
+{
+    std::unique_lock storage_guard{storage_rwlock};
+    storages.erase(database_table);
 }
 
 CatalogService::TablePtrs CatalogService::findTableByName(const String & database, const String & table) const
+{
+    return findTableByName({database, table});
+}
+
+inline CatalogService::TablePtrs CatalogService::findTableByName(const DatabaseTable & database_table) const
 {
     std::vector<TablePtr> results;
 
     std::shared_lock guard{catalog_rwlock};
 
-    auto iter = indexed_by_name.find(std::make_pair(database, table));
+    auto iter = indexed_by_name.find(database_table);
     if (iter != indexed_by_name.end())
     {
         for (const auto & p : iter->second)
@@ -381,15 +391,14 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
 
     for (const auto & p : iter->second)
     {
-        auto iter_by_name = indexed_by_name.find(std::make_pair(p.second->database, p.second->name));
+        auto iter_by_name = indexed_by_name.find(p.first);
         assert(iter_by_name != indexed_by_name.end());
 
-        deleteTableStorageByName(p.second->database, p.second->name);
+        deleteTableStorageByName(p.first);
 
-        /// Deleted table, remove from `indexed_by_name` and `indexed_by_id`
-        auto removed = iter_by_name->second.erase(std::make_pair(p.second->node_identity, p.second->shard));
+        /// Deleted table, remove t from `indexed_by_name` and `indexed_by_id`
+        [[maybe_unused]] auto removed = iter_by_name->second.erase(p.second->node_identity);
         assert(removed == 1);
-        (void)removed;
 
         if (iter_by_name->second.empty())
             indexed_by_name.erase(iter_by_name);
@@ -398,10 +407,10 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
             std::unique_lock storage_guard{storage_rwlock};
             removed = indexed_by_id.erase(p.second->uuid);
             assert(removed == 1);
-            (void)removed;
         }
     }
 
+    /// After clear, we don't remove this `node` from `indexed_by_node` map
     iter->second.clear();
 }
 
@@ -410,9 +419,9 @@ std::vector<NodePtr> CatalogService::nodes(const String & role) const
     std::vector<NodePtr> result;
     {
         std::shared_lock guard{catalog_rwlock};
-        result.reserve(table_nodes.size());
+        result.reserve(cluster_nodes.size());
 
-        for (const auto & idem_node : table_nodes)
+        for (const auto & idem_node : cluster_nodes)
         {
             if (idem_node.second->roles.find(role) != String::npos)
                 result.push_back(idem_node.second);
@@ -425,8 +434,8 @@ NodePtr CatalogService::nodeByIdentity(const String & identity) const
 {
     std::shared_lock guard{catalog_rwlock};
 
-    auto iter = table_nodes.find(identity);
-    if (iter != table_nodes.end())
+    auto iter = cluster_nodes.find(identity);
+    if (iter != cluster_nodes.end())
         return iter->second;
 
     return nullptr;
@@ -436,7 +445,7 @@ NodePtr CatalogService::nodeByChannel(const String & channel) const
 {
     std::shared_lock guard(catalog_rwlock);
 
-    for (const auto & node : table_nodes)
+    for (const auto & node : cluster_nodes)
     {
         if (node.second->channel == channel)
             return node.second;
@@ -457,20 +466,24 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
             return iter->second;
     }
 
-    TablePtrs remote_tables{findTableByName(database, table)};
+    TablePtrs remote_tables{findTableByName(key)};
     if (remote_tables.empty())
     {
         LOG_WARNING(log, "Missing database={} table={} in CatalogService, can't build cluster", database, table);
         return nullptr;
     }
 
-    if (replication_factor * shards != static_cast<Int32>(remote_tables.size()))
+    Int32 total_replicas = 0;
+    for (const auto & t : remote_tables)
+        total_replicas += t->host_shards.size();
+
+    if (replication_factor * shards != total_replicas)
     {
         LOG_WARNING(
             log,
             "Missing total shard replicas, expected={} got={} for database={} table={}",
             replication_factor * shards,
-            remote_tables.size(),
+            total_replicas,
             database,
             table);
     }
@@ -478,9 +491,8 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
     /// Group table by shard ID
     std::unordered_map<Int32, TablePtrs> by_shard;
     for (auto & table_ptr : remote_tables)
-    {
-        by_shard[table_ptr->shard].push_back(table_ptr);
-    }
+        for (auto shard : table_ptr->host_shards)
+            by_shard[shard].push_back(table_ptr);
 
     std::vector<std::vector<String>> host_ports;
     for (const auto & shard_replicas : by_shard)
@@ -503,17 +515,17 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
         std::vector<String> replica_hosts;
         for (const auto & table_ptr : shard_replicas.second)
         {
-            auto iter = table_nodes.find(table_ptr->node_identity);
-            if (iter == table_nodes.end())
+            auto iter = cluster_nodes.find(table_ptr->node_identity);
+            if (iter == cluster_nodes.end())
             {
-                LOG_ERROR(log, "Missing node identity for node={}", table_ptr->node_identity);
+                LOG_ERROR(log, "Missing node in cluster for node_identity={}", table_ptr->node_identity);
                 continue;
             }
 
-            replica_hosts.push_back(iter->second->host + ":" + std::to_string(iter->second->tcp_port));
+            replica_hosts.push_back(fmt::format("{}:{}", iter->second->host, iter->second->tcp_port));
         }
+
         host_ports.push_back(std::move(replica_hosts));
-        assert(replica_hosts.empty());
     }
 
     /// FIXME, user/password/https etc
@@ -534,17 +546,16 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
     return table_cluster;
 }
 
-CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr & node, const Block & block)
+CatalogService::TableContainer CatalogService::buildCatalog(const NodePtr & node, const Block & block)
 {
-    TableContainerPerNode snapshot;
+    TableContainer snapshot;
+    snapshot.reserve(block.rows());
 
-    for (size_t row = 0; row < block.rows(); ++row)
+    for (size_t row = 0, rows = block.rows(); row < rows; ++row)
     {
         TablePtr table = std::make_shared<Table>(node->identity, node->host, block, row);
-        DatabaseTableShard key = std::make_pair(table->database, std::make_pair(table->name, table->shard));
+        DatabaseTable key = std::make_pair(table->database, table->name);
         snapshot.emplace(std::move(key), std::move(table));
-
-        assert(!table);
     }
 
     LOG_INFO(log, "Got {} tables from host={} identity={}", snapshot.size(), node->host, node->identity);
@@ -553,7 +564,7 @@ CatalogService::TableContainerPerNode CatalogService::buildCatalog(const NodePtr
 }
 
 /// Merge a snapshot of tables from one host
-void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode snapshot)
+void CatalogService::mergeCatalog(const NodePtr & node, TableContainer snapshot)
 {
     if (snapshot.empty())
         return deleteCatalogForNode(node);
@@ -569,9 +580,7 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
             if (p.second->engine == "View" && p.second->uuid == UUIDHelpers::Nil)
                 continue;
 
-
-            indexed_by_name[std::make_pair(p.second->database, p.second->name)].emplace(
-                std::make_pair(p.second->node_identity, p.second->shard), p.second);
+            indexed_by_name[p.first].emplace(p.second->node_identity, p.second);
 
             {
                 std::unique_lock storage_guard{storage_rwlock};
@@ -582,31 +591,31 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
         indexed_by_node.emplace(node->identity, snapshot);
 
         /// This is a new node
-        auto res = table_nodes.emplace(node->identity, node);
+        [[maybe_unused]] auto res = cluster_nodes.emplace(node->identity, node);
         assert(res.second);
-        (void)res;
         return;
     }
 
     /// Existing node, update it
     /// FIXME : support tcp/http port changes and dead node
-    table_nodes[node->identity] = node;
+    cluster_nodes[node->identity] = node;
 
     /// Merge existing tables from this node to `indexed_by_name`
     /// and delete `deleted` table entries from `indexed_by_name`
     for (const auto & p : iter->second)
     {
-        /// ((database, tablename, shard), table) pair
+        /// ((database, table), table_ptr) pair
         if (!snapshot.contains(p.first))
         {
-            auto iter_by_name = indexed_by_name.find(std::make_pair(p.second->database, p.second->name));
+            /// This is a deleted table since it doesn't exist in latest snapshot
+            auto iter_by_name = indexed_by_name.find(p.first);
             assert(iter_by_name != indexed_by_name.end());
 
-            deleteTableStorageByName(p.second->database, p.second->name);
+            deleteTableStorageByName(p.first);
+
             /// Deleted table, remove from `indexed_by_name` and `indexed_by_id`
-            auto removed = iter_by_name->second.erase(std::make_pair(p.second->node_identity, p.second->shard));
+            [[maybe_unused]] auto removed = iter_by_name->second.erase(p.second->node_identity);
             assert(removed == 1);
-            (void)removed;
 
             if (iter_by_name->second.empty())
                 indexed_by_name.erase(iter_by_name);
@@ -615,7 +624,6 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
                 std::unique_lock storage_guard{storage_rwlock};
                 removed = indexed_by_id.erase(p.second->uuid);
                 assert(removed == 1);
-                (void)removed;
             }
         }
     }
@@ -624,37 +632,32 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainerPerNode sn
     for (const auto & p : snapshot)
     {
         UUID uuid = UUIDHelpers::Nil;
-        auto node_shard = std::make_pair(p.second->node_identity, p.second->shard);
-
-        DatabaseTable db_table = std::make_pair(p.second->database, p.second->name);
-        auto iter_by_name = indexed_by_name.find(db_table);
+        auto iter_by_name = indexed_by_name.find(p.first);
         if (iter_by_name == indexed_by_name.end())
         {
             /// New table
-            indexed_by_name[db_table].emplace(std::move(node_shard), p.second);
+            indexed_by_name[p.first].emplace(node->identity, p.second);
         }
         else
         {
-            /// An existing table
-            auto node_shard_iter = iter_by_name->second.find(node_shard);
+            /// An existing table on that node by name
+            auto node_shard_iter = iter_by_name->second.find(node->identity);
             if (node_shard_iter != iter_by_name->second.end() && node_shard_iter->second->uuid != p.second->uuid)
-                /// If uuid changed (table with same name got deleted and recreatd), delete it from indexed_by_id
+                /// If uuid changed (table with same name got deleted and recreated), delete it from indexed_by_id
                 uuid = node_shard_iter->second->uuid;
 
             /// if table definition changed , delete the storage
             if (node_shard_iter != iter_by_name->second.end() && *node_shard_iter->second != *p.second)
-                deleteTableStorageByName(p.second->database, p.second->name);
+                deleteTableStorageByName(p.first);
 
-            iter_by_name->second.insert_or_assign(std::move(node_shard), p.second);
+            iter_by_name->second.insert_or_assign(node->identity, p.second);
         }
 
         {
             std::unique_lock storage_guard{storage_rwlock};
             if (uuid != UUIDHelpers::Nil)
             {
-                auto removed = indexed_by_id.erase(uuid);
-                (void)removed;
-                assert(removed);
+                [[maybe_unused]] auto removed = indexed_by_id.erase(uuid);
                 assert(removed == 1);
             }
             indexed_by_id[p.second->uuid] = p.second;
@@ -757,7 +760,21 @@ CatalogService::Table::Table(const String & node_identity_, const String & host_
     }
 
     if (engine == "Stream")
-        shard = searchIntValueByRegex(PARSE_SHARD_REGEX, engine_full);
+    {
+        auto shards = searchIntValueByRegex(PARSE_SHARDS_REGEX, engine_full);
+
+        std::smatch pattern_match;
+        auto m = std::regex_search(engine_full, pattern_match, PARSE_HOST_SHARDS_REGEX);
+        if (!m)
+        {
+            for (Int32 i = 0; i < shards; ++i)
+                host_shards.push_back(i);
+        }
+        else
+        {
+            host_shards = parseHostShards(pattern_match.str(1), shards);
+        }
+    }
 }
 
 }

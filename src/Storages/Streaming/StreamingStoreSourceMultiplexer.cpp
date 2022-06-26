@@ -1,8 +1,7 @@
 #include "StreamingStoreSourceMultiplexer.h"
-#include "StorageStream.h"
+#include "StreamShard.h"
 
 #include <KafkaLog/KafkaWALPool.h>
-#include <Storages/IStorage.h>
 #include <base/ClockUtils.h>
 
 namespace DB
@@ -14,19 +13,17 @@ namespace ErrorCodes
 }
 
 StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
-    UInt32 id_, Int32 shard_, std::shared_ptr<IStorage> storage_, ContextPtr global_context, Poco::Logger * log_)
+    UInt32 id_, Int32 shard_, std::shared_ptr<StreamShard> stream_shard_, ContextPtr global_context, Poco::Logger * log_)
     : id(id_)
     , shard(shard_)
-    , storage(std::move(storage_))
+    , stream_shard(std::move(stream_shard_))
     , poller(std::make_unique<ThreadPool>(1))
     , last_metrics_log_time(MonotonicMilliseconds::now())
     , log(log_)
 {
-    auto distributed = storage->as<StorageStream>();
-    assert(distributed);
-
-    auto consumer = klog::KafkaWALPool::instance(global_context).getOrCreateStreaming(distributed->streamingStorageClusterId());
-    reader = std::make_shared<StreamingBlockReaderKafka>(storage, shard, -1 /*latest*/, SourceColumnsDescription::PhysicalColumnPositions{}, std::move(consumer), log);
+    auto consumer = klog::KafkaWALPool::instance(global_context).getOrCreateStreaming(stream_shard->logStoreClusterId());
+    reader = std::make_shared<StreamingBlockReaderKafka>(
+        stream_shard, shard, -1 /*latest*/, SourceColumnsDescription::PhysicalColumnPositions{}, std::move(consumer), log);
 
     poller->scheduleOrThrowOnError([this] { backgroundPoll(); });
 }
@@ -174,8 +171,8 @@ size_t StreamingStoreSourceMultiplexer::totalChannels() const
 }
 
 StreamingStoreSourceMultiplexers::StreamingStoreSourceMultiplexers(
-    std::shared_ptr<IStorage> storage_, ContextPtr global_context_, Poco::Logger * log_)
-    : storage(std::move(storage_)), global_context(std::move(global_context_)), log(log_)
+    std::shared_ptr<StreamShard> stream_shard_, ContextPtr global_context_, Poco::Logger * log_)
+    : stream_shard(std::move(stream_shard_)), global_context(std::move(global_context_)), log(log_)
 {
 }
 
@@ -189,7 +186,8 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
     {
         multiplexers.emplace(
             shard,
-            StreamingStoreSourceMultiplexerPtrs{std::make_shared<StreamingStoreSourceMultiplexer>(0, shard, storage, global_context, log)});
+            StreamingStoreSourceMultiplexerPtrs{
+                std::make_shared<StreamingStoreSourceMultiplexer>(0, shard, stream_shard, global_context, log)});
         iter = multiplexers.find(shard);
     }
 
@@ -222,7 +220,8 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
         /// FIXME, make this configurable
         if (min_channels > global_context->getSettingsRef().max_channels_per_resource_group.value)
         {
-            best_multiplexer = std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), shard, storage, global_context, log);
+            best_multiplexer
+                = std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), shard, stream_shard, global_context, log);
             iter->second.push_back(best_multiplexer);
         }
 
@@ -231,7 +230,7 @@ StreamingStoreSourceChannelPtr StreamingStoreSourceMultiplexers::createChannel(
     else
     {
         /// All multiplexers are shutdown
-        auto multiplexer{std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), shard, storage, global_context, log)};
+        auto multiplexer{std::make_shared<StreamingStoreSourceMultiplexer>(iter->second.size(), shard, stream_shard, global_context, log)};
         iter->second.push_back(multiplexer);
         return multiplexer->createChannel(column_names, storage_snapshot, query_context);
     }

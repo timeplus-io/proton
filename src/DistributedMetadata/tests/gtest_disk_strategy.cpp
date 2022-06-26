@@ -40,14 +40,14 @@ TEST(PlacementService, PlaceNodesByDiskSpace)
 
     /// Case1: no node can fulfill the request
     {
-        PlacementStrategy::PlacementRequest non_request{20, "non-exists"};
+        PlacementStrategy::PlacementRequest non_request{20, 20, "non-exists"};
         auto nodes = strategy.qualifiedNodes(container, non_request);
         EXPECT_EQ(nodes.size(), 0);
     }
 
     /// Case2: nodes are not enough for the request
     {
-        PlacementStrategy::PlacementRequest big_request{1000, default_policy};
+        PlacementStrategy::PlacementRequest big_request{1000, 1000, default_policy};
         EXPECT_EQ(strategy.qualifiedNodes(container, big_request).size(), 0);
     }
 
@@ -55,7 +55,7 @@ TEST(PlacementService, PlaceNodesByDiskSpace)
     /// Case3: get nodes for default policy
     {
         size_t required = required_number(g);
-        PlacementStrategy::PlacementRequest default_request{required, default_policy};
+        PlacementStrategy::PlacementRequest default_request{required, required, default_policy};
         auto nodes = strategy.qualifiedNodes(container, default_request);
         EXPECT_EQ(nodes.size(), required);
         for (int i = 0; i < required; i++)
@@ -67,7 +67,7 @@ TEST(PlacementService, PlaceNodesByDiskSpace)
     /// Case4: get nodes for cold policy
     {
         size_t cold_required = required_number(g);
-        PlacementStrategy::PlacementRequest cold_request{cold_required, cold_policy};
+        PlacementStrategy::PlacementRequest cold_request{cold_required, cold_required, cold_policy};
         auto cold_nodes = strategy.qualifiedNodes(container, cold_request);
         EXPECT_EQ(cold_nodes.size(), cold_required);
         for (int i = 0; i < cold_required; i++)
@@ -106,14 +106,14 @@ TEST(PlacementService, PlaceNodesByTableCounts)
 
     /// Case1: no node can fulfill the request
     {
-        PlacementStrategy::PlacementRequest non_request{20, "non-exists"};
+        PlacementStrategy::PlacementRequest non_request{20, 20, "non-exists"};
         auto nodes = strategy.qualifiedNodes(container, non_request);
         EXPECT_EQ(nodes.size(), 0);
     }
 
     /// Case2: nodes are not enough for the request
     {
-        PlacementStrategy::PlacementRequest big_request{1000, default_policy};
+        PlacementStrategy::PlacementRequest big_request{1000, 1000, default_policy};
         EXPECT_EQ(strategy.qualifiedNodes(container, big_request).size(), 0);
     }
 
@@ -121,7 +121,7 @@ TEST(PlacementService, PlaceNodesByTableCounts)
     /// Case3: get nodes for default policy
     {
         size_t required = required_number(g);
-        PlacementStrategy::PlacementRequest default_request{required, default_policy};
+        PlacementStrategy::PlacementRequest default_request{required, required, default_policy};
         auto nodes = strategy.qualifiedNodes(container, default_request);
         EXPECT_EQ(nodes.size(), required);
         for (int i = 0; i < required; i++)
@@ -166,13 +166,13 @@ TEST(PlacementService, PlaceNodesByRoles)
     /// Case1: nodes are not enough for the request
     {
         size_t required = big_number(g);
-        PlacementStrategy::PlacementRequest big_request{required, default_policy};
+        PlacementStrategy::PlacementRequest big_request{required, required, default_policy};
         EXPECT_EQ(strategy.qualifiedNodes(container, big_request).size(), 0);
     }
 
     /// Case2: nodes are just enough for the request
     {
-        PlacementStrategy::PlacementRequest boundary_request{70, default_policy};
+        PlacementStrategy::PlacementRequest boundary_request{70, 70, default_policy};
         EXPECT_EQ(strategy.qualifiedNodes(container, boundary_request).size(), 70);
     }
 
@@ -180,7 +180,7 @@ TEST(PlacementService, PlaceNodesByRoles)
     /// Case3: get nodes for default policy
     {
         size_t required = required_number(g);
-        PlacementStrategy::PlacementRequest default_request{required, default_policy};
+        PlacementStrategy::PlacementRequest default_request{required, required, default_policy};
         auto nodes = strategy.qualifiedNodes(container, default_request);
         EXPECT_EQ(nodes.size(), required);
     }

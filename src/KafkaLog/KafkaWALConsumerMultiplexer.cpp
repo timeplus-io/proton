@@ -76,16 +76,12 @@ KafkaWALConsumerMultiplexer::addSubscription(const TopicPartitionOffset & tpo, C
             /// Found topic, check partition
             auto pos = std::find(iter->second->partitions.begin(), iter->second->partitions.end(), tpo.partition);
             if (pos != iter->second->partitions.end())
-            {
                 return {DB::ErrorCodes::INVALID_OPERATION, {}};
-            }
         }
 
         auto res = consumer->addSubscriptions({tpo});
         if (res != DB::ErrorCodes::OK)
-        {
             return {res, {}};
-        }
 
         if (iter == callbacks.end())
         {

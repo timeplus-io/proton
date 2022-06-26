@@ -93,7 +93,7 @@ private:
 
         UInt64 remaining() const { return sub_ids.size(); }
 
-        BlockIdInfo(UInt64 sub_block_id) : total(1), sub_ids(1, sub_block_id), ingest_timestamp_ms(MonotonicMilliseconds::now()) { }
+        explicit BlockIdInfo(UInt64 sub_block_id) : total(1), sub_ids(1, sub_block_id), ingest_timestamp_ms(MonotonicMilliseconds::now()) { }
     };
 
 private:
