@@ -34,6 +34,6 @@ install(FILES config.yaml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhou
 
 clickhouse_embed_binaries(
     TARGET clickhouse_server_configs
-    RESOURCES config.yaml users.yaml embedded.xml play.html
+    RESOURCES config.yaml users.yaml embedded.xml play.html grok-patterns
 )
 add_dependencies(clickhouse-server-lib clickhouse_server_configs)

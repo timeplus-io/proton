@@ -1923,7 +1923,6 @@
                 ["dev3", "123.3"]]}
             ]
         },
-
         {
             "id": 81,
             "tags": ["functions", "streaming functions"],
@@ -2015,6 +2014,46 @@
                     [3, "[2.0, 1.0, 0.0]", "[1.0, -1.0, -1.0, -1.0]"],
                     [4, "[3.0, 2.0, 1.0]", "[2.0, 1.0, -1.0, -1.0]"],
                     [5, "[4.0, 3.0, 2.0]", "[3.0, 2.0, 1.0, -1.0]"]
+                ]}]
+        },
+        {
+            "id": 84,
+            "tags": ["functions", "streaming functions"],
+            "name": "grok",
+            "description": "function grok",
+            "steps":[
+                {"statements": [
+                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from test"}]},
+                {"inputs": [
+                    {"table_name":"test", "depends_on":"102","wait":1, "data": [
+                        ["dev1", "ca", 1, "{\"id\": 1, \"type\": T1, \"ipv4\": 127.0.0.1, \"ipv6\": ::1, \"uuid\": feb540dc-c4e4-4c7e-a975-02f0304364a9}", "2020-02-02 20:00:01"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev2", "ca", 2, "{\"id\": 2, \"type\": T2, \"ipv4\": 199.101.192.190, \"ipv6\": 1050:0000:0000:0000:0005:0600:300c:326b, \"uuid\": Feb540dc-c4e4-4c7e-a975-02f0304364a9, \"data\": \"abc\"}", "2020-02-02 20:01:02"],
+                        ["dev2", "ca", 3, "{\"id\": 3, \"type\": T3, \"ipv4\": 0.0.0.0, \"ipv6\": 1050:0:0:0:5:600:300c:326b, \"uuid\": 0eb540dc-c4e4-4c7e-a975-02f0304364a9, \"data\": \"abc\"}", "2020-02-02 20:00:02"],
+                        ["dev2", "ca", 4, "{\"id\": 4, \"data\": \"abc\", \"type\": T4, \"ipv4\": 0.0.0.0, \"ipv6\": 1050:0:0:0:5:600:300c:326b, \"uuid\": feb540dc-C4e4-4c7e-a975-02f0304364a9", "2020-02-02 20:01:02"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev3", "ca", 5, "{\"id\": 5, \"type\": T5, \"ipv4\": 172.31.255.255, \"ipv6\": ff06::c3, \"uuid\": feb540dc-C4e4-4c7e-a975-02f0304364a9, \"data\": \"abc\"}", "2020-02-02 20:01:03"]
+                        ]}
+                ]},
+                {"statements": [
+                    {"client":"python","query_id":"103", "wait": 3, "query_type": "table", "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from table(test)"}]}
+            ],
+            "expected_results": [
+                {"query_id":"102", "expected_results": [
+                    ["{'id': '1', 'type': 'T1', 'ipv4': '127.0.0.1', 'ipv6': '::1', 'uuid': 'feb540dc-c4e4-4c7e-a975-02f0304364a9'}", "1", "T1"],
+                    ["{'id': '2', 'type': 'T2', 'ipv4': '199.101.192.190', 'ipv6': '1050:0000:0000:0000:0005:0600:300c:326b', 'uuid': 'Feb540dc-c4e4-4c7e-a975-02f0304364a9'}", "2", "T2"],
+                    ["{'id': '3', 'type': 'T3', 'ipv4': '0.0.0.0', 'ipv6': '1050:0:0:0:5:600:300c:326b', 'uuid': '0eb540dc-c4e4-4c7e-a975-02f0304364a9'}", "3", "T3"],
+                    ["{}", "", ""],
+                    ["{'id': '5', 'type': 'T5', 'ipv4': '172.31.255.255', 'ipv6': 'ff06::c3', 'uuid': 'feb540dc-C4e4-4c7e-a975-02f0304364a9'}", "5", "T5"]
+                ]},
+                {"query_id":"103", "expected_results": [
+                    ["{'id': '1', 'type': 'T1', 'ipv4': '127.0.0.1', 'ipv6': '::1', 'uuid': 'feb540dc-c4e4-4c7e-a975-02f0304364a9'}", "1", "T1"],
+                    ["{'id': '2', 'type': 'T2', 'ipv4': '199.101.192.190', 'ipv6': '1050:0000:0000:0000:0005:0600:300c:326b', 'uuid': 'Feb540dc-c4e4-4c7e-a975-02f0304364a9'}", "2", "T2"],
+                    ["{'id': '3', 'type': 'T3', 'ipv4': '0.0.0.0', 'ipv6': '1050:0:0:0:5:600:300c:326b', 'uuid': '0eb540dc-c4e4-4c7e-a975-02f0304364a9'}", "3", "T3"],
+                    ["{}", "", ""],
+                    ["{'id': '5', 'type': 'T5', 'ipv4': '172.31.255.255', 'ipv6': 'ff06::c3', 'uuid': 'feb540dc-C4e4-4c7e-a975-02f0304364a9'}", "5", "T5"]
                 ]}]
         },
         {

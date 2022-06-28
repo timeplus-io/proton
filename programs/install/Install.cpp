@@ -661,6 +661,25 @@ int mainInstall(int argc, char ** argv)
             fs::create_directories(pid_path);
         }
 
+        /// proton starts.
+        fs::path grok_patterns_file = config_dir / "grok-patterns";
+        if (!fs::exists(grok_patterns_file))
+        {
+            std::string_view grok_patterns_content = getResource("grok-patterns");
+            if (grok_patterns_content.empty())
+            {
+                fmt::print("There is no default grok-patterns, you have to download it and place to {}.\n", grok_patterns_file.string());
+            }
+            else
+            {
+                WriteBufferFromFile out(grok_patterns_file.string());
+                out.write(grok_patterns_content.data(), grok_patterns_content.size());
+                out.sync();
+                out.finalize();
+            }
+        }
+        /// proton ends.
+
         /// Chmod and chown data and log directories
         changeOwnership(log_path, user, group);
         changeOwnership(pid_path, user, group);

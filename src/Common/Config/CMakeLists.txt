@@ -5,6 +5,7 @@ set (SRCS
     ConfigReloader.cpp
     YAMLParser.cpp
     ConfigHelper.cpp
+    ExternalGrokPatterns.cpp
 )
 
 add_library(clickhouse_common_config ${SRCS})

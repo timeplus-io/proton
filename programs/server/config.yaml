@@ -900,6 +900,9 @@ send_crash_reports:
 #            column_family_options:
 #                num_levels: 2
 
+# User defined grok patterns file
+grok_patterns_file: /etc/proton-server/grok-patterns
+
 # Maximum number of concurrent queries.
 max_concurrent_queries: 100
 # Maximum number of concurrent insert queries.

@@ -86,6 +86,7 @@ void registerFunctionsSnowflake(FunctionFactory & factory);
 void registerFunctionsStreamingWindow(FunctionFactory &);
 void registerFunctionEmitVersion(FunctionFactory &);
 void registerFunctionDedup(FunctionFactory &);
+void registerFunctionGrok(FunctionFactory &);
 /// proton: ends
 
 #if !defined(ARCADIA_BUILD)
@@ -190,6 +191,7 @@ void registerFunctions()
     registerFunctionsStreamingWindow(factory);
     registerFunctionEmitVersion(factory);
     registerFunctionDedup(factory);
+    registerFunctionGrok(factory);
     /// proton: ends
 
 #if USE_SSL

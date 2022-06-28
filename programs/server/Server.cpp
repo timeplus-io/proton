@@ -81,6 +81,7 @@
 #include "Common/config_version.h"
 
 /// proton: starts
+#include <Common/Config/ExternalGrokPatterns.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DistributedMetadata/CatalogService.h>
 #include <DistributedMetadata/DDLService.h>
@@ -1384,6 +1385,7 @@ if (ThreadFuzzer::instance().isEffective())
     global_context->setupNodeIdentity();
     global_context->setConfigPath(config_path);
     initDistributedMetadataServices(global_context);
+    ExternalGrokPatterns::instance(global_context);
     /// proton: end.
 
     try

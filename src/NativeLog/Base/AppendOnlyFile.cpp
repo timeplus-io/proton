@@ -145,9 +145,9 @@ int64_t AppendOnlyFile::lastModified() const
 {
     struct stat buf = stat();
 #if defined(OS_DARWIN)
-    return buf.st_mtimespec.tv_sec + buf.st_mtimespec.tv_nsec / 1000000;
+    return buf.st_mtimespec.tv_sec * 1000 + buf.st_mtimespec.tv_nsec / 1000000;
 #else
-    return buf.st_mtim.tv_sec + buf.st_mtim.tv_nsec / 1000000;
+    return buf.st_mtim.tv_sec * 1000 + buf.st_mtim.tv_nsec / 1000000;
 #endif
 }
 
