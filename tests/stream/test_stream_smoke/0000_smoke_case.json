@@ -1956,6 +1956,68 @@
                 ]}]
         },
         {
+            "id": 82,
+            "tags": ["functions", "streaming functions"],
+            "name": "lag",
+            "description": "function lag",
+            "steps":[
+                {"statements": [
+                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from test"}]},
+                {"inputs": [
+                    {"table_name":"test", "depends_on":"102","wait":1, "data": [
+                        ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev2", "ca", 2, "2021-11-02 20:00:10", "2020-02-02 20:01:02"],
+                        ["dev2", "ca", 3, "2021-11-02 20:00:10", "2020-02-02 20:00:02"],
+                        ["dev2", "ca", 4, "2021-11-02 20:00:10", "2020-02-02 20:01:02"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev3", "ca", 5, "2021-11-02 20:00:10", "2020-02-02 20:01:03"]
+                        ]}
+                ]}
+            ],
+            "expected_results": [
+                {"query_id":"102", "expected_results": [
+                    [1, 0, 0],
+                    [2, 1, 0],
+                    [3, 2, 0],
+                    [4, 3, 1],
+                    [5, 4, 2]
+                ]}]
+        },
+        {
+            "id": 83,
+            "tags": ["functions", "streaming functions"],
+            "name": "lags",
+            "description": "function lags",
+            "steps":[
+                {"statements": [
+                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select value, lags(value, 1, 3) as prev_1_3, lags(value, 2, 5, -1) as `prev_2_5_-1` from test"}]},
+                {"inputs": [
+                    {"table_name":"test", "depends_on":"102","wait":1, "data": [
+                        ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev2", "ca", 2, "2021-11-02 20:00:10", "2020-02-02 20:01:02"],
+                        ["dev2", "ca", 3, "2021-11-02 20:00:10", "2020-02-02 20:00:02"],
+                        ["dev2", "ca", 4, "2021-11-02 20:00:10", "2020-02-02 20:01:02"]
+                        ]},
+                    {"table_name":"test", "data": [
+                        ["dev3", "ca", 5, "2021-11-02 20:00:10", "2020-02-02 20:01:03"]
+                        ]}
+                ]}
+            ],
+            "expected_results": [
+                {"query_id":"102", "expected_results": [
+                    [1, "[0.0, 0.0, 0.0]", "[-1.0, -1.0, -1.0, -1.0]"],
+                    [2, "[1.0, 0.0, 0.0]", "[-1.0, -1.0, -1.0, -1.0]"],
+                    [3, "[2.0, 1.0, 0.0]", "[1.0, -1.0, -1.0, -1.0]"],
+                    [4, "[3.0, 2.0, 1.0]", "[2.0, 1.0, -1.0, -1.0]"],
+                    [5, "[4.0, 3.0, 2.0]", "[3.0, 2.0, 1.0, -1.0]"]
+                ]}]
+        },
+        {
             "id": 90,
             "tags": ["tumble window", "functions", "func rename"],
             "name": "tumble w/funcs: json, to_date, replace_regex, to_time",
