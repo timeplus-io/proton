@@ -1,0 +1,11 @@
+version: "3.7"
+services:
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-enterprise:${GRAFANA_TAG}
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    #user: '104'
+    volumes:
+      - ./data:/var/lib/grafana
+

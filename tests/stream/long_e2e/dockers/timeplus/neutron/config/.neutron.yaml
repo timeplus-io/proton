@@ -1,0 +1,21 @@
+enable-authentication: false
+
+# uncomment/enable the following setting for playground
+#frontend-applications: playground
+#proton-username: demo
+#proton-password: demo@t+
+#proton-query-black-list:
+#  - insert
+#  - drop
+#  - system.
+#  - create
+#proton-query-timeout: 300
+
+# except playground, other deployments need thoses auth0
+auth0-domain: timeplus.us.auth0.com
+auth0-callback-url: https://FIXME/callback
+auth0-client-id:
+auth0-client-secret:
+auth0-audience: https://FIXME.beta.timeplus.com/api/v1beta1
+auth0-api-client-id:
+auth0-api-client-secret:

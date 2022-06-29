@@ -1,0 +1,54 @@
+filebeat.prospectors:
+- type: log
+  enabled: true
+  tags:
+    - proton-server-log
+  paths:
+    - /usr/share/services/proton/logs/proton-server.log
+  fields:
+    document_type: "proton_server_log"
+
+- type: log
+  enabled: true
+  tags:
+    - proton-server-err
+  paths:
+    - /usr/share/services/proton/logs/proton-server.err.log
+  fields:
+    document_type: "proton_server_err"
+
+- type: log
+  enabled: true
+  tags:
+    - neutron
+  paths:
+    - /usr/share/services/neutron/logs/neutron.log
+  fields:
+    document_type: "neutron_log"
+
+- type: log
+  enabled: true
+  tags:
+    - neutron_panic
+  paths:
+    - /usr/share/services/neutron/logs/neutron.log.panic
+  fields:
+    document_type: "neutron_Panic"
+
+
+output.kafka:
+  # specifying filebeat to take timestamp and message fields, other wise it
+  # take the lines as json and publish to kafka
+  #codec.format:
+  #  string: '%{[@timestamp]} %{[message]}'
+
+  # kafka
+  # 10.252.94.61 is my local machine ip address
+  # publishing to 'log' topic
+  hosts: ["kafka:29092"]
+  topic: '%{[fields.document_type]}'
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000

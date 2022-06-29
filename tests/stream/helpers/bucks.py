@@ -313,6 +313,7 @@ def query_run_py(
         loop_times = 1  # if no loop_times in statement, execute once at least
     logger.debug(f"loop_times = {loop_times}")
     result_keep = statement_2_run.get("result_keep")
+    interval = statement_2_run.get("interval")
 
     query_record_table = statement_2_run.get("query_record_table")
     query_result_table = statement_2_run.get("query_result_table")
@@ -349,10 +350,13 @@ def query_run_py(
                 query_type != None and query_type == "table" and loop_times < 0
             ):  # when table query in loop, have interval between table query run
                 time.sleep(2)  # todo: table query internval could be set in tests.json
+            #query_sub_id = query_sub_id + '@' + str(datetime.datetime.now())
             query_result_iter = pyclient.execute_iter(
                 query, with_column_types=True, query_id=query_sub_id, settings=settings
             )
             logger.debug(f"query = {query} is executed.")
+            if interval is not None:
+                time.sleep(interval)
             i = 0
             for element in query_result_iter:
                 # logger.debug(f"query_run_py: element in query_result_iter in query_id: {query_id} = {element}")
@@ -530,7 +534,7 @@ def query_execute(config, child_conn, query_results_queue, alive):
                     query_agent_id = "query_agent_" + str(
                         i
                     )  # the actual query_id for query execution and cancel
-                    query_sub_id = query_id + "_" + str(i)
+                    query_sub_id = str(uuid.uuid4()) + '@' + str(datetime.datetime.now())
                     statement_2_run_copy = copy.deepcopy(statement_2_run)
                     if "$" in query:
                         query_copy = statement_2_run_copy.get("query")
@@ -611,9 +615,7 @@ def query_walk_through(statements, query_conn=None):
         query_type = statement.get("query_type")
         terminate = statement.get("terminate")
         if query_id == None:
-            query_id = random.randint(
-                1, 10000
-            )  # unique query id, if no query_id specified in tests.json
+            query_id = str(uuid.uuid4())
             statement["query_id"] = query_id
 
         if query_type == "stream" and terminate == None:
