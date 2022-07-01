@@ -5,7 +5,6 @@
 #include <base/types.h>
 #include <base/wide_integer.h>
 
-
 using Int128 = wide::integer<128, signed>;
 using UInt128 = wide::integer<128, unsigned>;
 using Int256 = wide::integer<256, signed>;
@@ -71,6 +70,7 @@ struct make_unsigned
     typedef std::make_unsigned_t<T> type;
 };
 
+template <> struct make_unsigned<DB::Bool> { using type = UInt8; };
 template <> struct make_unsigned<Int128> { using type = UInt128; };
 template <> struct make_unsigned<UInt128> { using type = UInt128; };
 template <> struct make_unsigned<Int256>  { using type = UInt256; };

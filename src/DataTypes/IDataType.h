@@ -376,12 +376,13 @@ struct WhichDataType
     constexpr bool isSet() const { return idx == TypeIndex::Set; }
     constexpr bool isInterval() const { return idx == TypeIndex::Interval; }
     constexpr bool isObject() const { return idx == TypeIndex::Object; }
+    constexpr bool isBool() const { return idx == TypeIndex::Bool; }
 
     constexpr bool isNothing() const { return idx == TypeIndex::Nothing; }
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }
     constexpr bool isFunction() const { return idx == TypeIndex::Function; }
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
-    constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
+    constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString() || isBool(); }
 
     constexpr bool isLowCarnality() const { return idx == TypeIndex::LowCardinality; }
 };
@@ -412,6 +413,14 @@ inline bool isObject(const T & data_type)
 {
     return WhichDataType(data_type).isObject();
 }
+
+/// proton: starts. Support Bool
+template <typename T>
+inline bool isBool(const T & data_type)
+{
+    return WhichDataType(data_type).isBool();
+}
+/// proton: ends.
 
 template <typename T>
 inline bool isUInt8(const T & data_type)

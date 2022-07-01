@@ -25,20 +25,20 @@ namespace
 constexpr char str_true[5] = "true";
 constexpr char str_false[6] = "false";
 
-const ColumnUInt8 * checkAndGetSerializeColumnType(const IColumn & column)
+const ColumnBool * checkAndGetSerializeColumnType(const IColumn & column)
 {
-    const auto * col = checkAndGetColumn<ColumnUInt8>(&column);
-    if (!checkAndGetColumn<ColumnUInt8>(&column))
-        throw Exception("Bool type can only serialize columns of type uint8." + column.getName(),
+    const auto * col = checkAndGetColumn<ColumnBool>(&column);
+    if (!checkAndGetColumn<ColumnBool>(&column))
+        throw Exception("Bool type can only serialize columns of type bool." + column.getName(),
                         ErrorCodes::ILLEGAL_COLUMN);
     return col;
 }
 
-ColumnUInt8 * checkAndGetDeserializeColumnType(IColumn & column)
+ColumnBool * checkAndGetDeserializeColumnType(IColumn & column)
 {
-    auto * col =  typeid_cast<ColumnUInt8 *>(&column);
-    if (!checkAndGetColumn<ColumnUInt8>(&column))
-        throw Exception("Bool type can only deserialize columns of type uint8." + column.getName(),
+    auto * col =  typeid_cast<ColumnBool *>(&column);
+    if (!checkAndGetColumn<ColumnBool>(&column))
+        throw Exception("Bool type can only deserialize columns of type bool." + column.getName(),
                         ErrorCodes::ILLEGAL_COLUMN);
     return col;
 }
@@ -67,7 +67,7 @@ void serializeSimple(const IColumn & column, size_t row_num, WriteBuffer & ostr,
         ostr.write(str_false, sizeof(str_false) - 1);
 }
 
-bool tryDeserializeAllVariants(ColumnUInt8 * column, ReadBuffer & istr)
+bool tryDeserializeAllVariants(ColumnBool * column, ReadBuffer & istr)
 {
     if (checkCharCaseInsensitive('1', istr))
     {
@@ -154,7 +154,7 @@ bool tryDeserializeAllVariants(ColumnUInt8 * column, ReadBuffer & istr)
 void deserializeImpl(
     IColumn & column, ReadBuffer & istr, const FormatSettings & settings, std::function<bool(ReadBuffer &)> check_end_of_value)
 {
-    ColumnUInt8 * col = checkAndGetDeserializeColumnType(column);
+    ColumnBool * col = checkAndGetDeserializeColumnType(column);
 
     PeekableReadBuffer buf(istr);
     buf.setCheckpoint();
@@ -236,7 +236,7 @@ void SerializationBool::deserializeTextJSON(IColumn &column, ReadBuffer &istr, c
     if (istr.eof())
         throw Exception("Expected boolean value but get EOF.", ErrorCodes::CANNOT_PARSE_BOOL);
 
-    ColumnUInt8 * col = checkAndGetDeserializeColumnType(column);
+    ColumnBool * col = checkAndGetDeserializeColumnType(column);
     bool value = false;
 
     if (*istr.position() == 't' || *istr.position() == 'f')

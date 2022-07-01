@@ -233,7 +233,7 @@ template <> struct NearestFieldTypeImpl<Array> { using Type = Array; };
 template <> struct NearestFieldTypeImpl<Tuple> { using Type = Tuple; };
 template <> struct NearestFieldTypeImpl<Map> { using Type = Map; };
 template <> struct NearestFieldTypeImpl<Object> { using Type = Object; };
-template <> struct NearestFieldTypeImpl<bool> { using Type = UInt64; };
+template <> struct NearestFieldTypeImpl<Bool> { using Type = UInt64; };
 template <> struct NearestFieldTypeImpl<Null> { using Type = Null; };
 
 template <> struct NearestFieldTypeImpl<AggregateFunctionStateData> { using Type = AggregateFunctionStateData; };
@@ -612,7 +612,7 @@ public:
             case Types::Map:     return f(field.template get<Map>());
             case Types::Bool:
             {
-                bool value = bool(field.template get<UInt64>());
+                Bool value = Bool(field.template get<UInt64>());
                 return f(value);
             }
             case Types::Object:     return f(field.template get<Object>());
@@ -779,7 +779,7 @@ template <> struct Field::TypeToEnum<DecimalField<Decimal128>>{ static constexpr
 template <> struct Field::TypeToEnum<DecimalField<Decimal256>>{ static constexpr Types::Which value = Types::Decimal256; };
 template <> struct Field::TypeToEnum<DecimalField<DateTime64>>{ static constexpr Types::Which value = Types::Decimal64; };
 template <> struct Field::TypeToEnum<AggregateFunctionStateData>{ static constexpr Types::Which value = Types::AggregateFunctionState; };
-template <> struct Field::TypeToEnum<bool>{ static constexpr Types::Which value = Types::Bool; };
+template <> struct Field::TypeToEnum<Bool>{ static constexpr Types::Which value = Types::Bool; };
 
 template <> struct Field::EnumToType<Field::Types::Null>    { using Type = Null; };
 template <> struct Field::EnumToType<Field::Types::UInt64>  { using Type = UInt64; };
@@ -800,7 +800,7 @@ template <> struct Field::EnumToType<Field::Types::Decimal64> { using Type = Dec
 template <> struct Field::EnumToType<Field::Types::Decimal128> { using Type = DecimalField<Decimal128>; };
 template <> struct Field::EnumToType<Field::Types::Decimal256> { using Type = DecimalField<Decimal256>; };
 template <> struct Field::EnumToType<Field::Types::AggregateFunctionState> { using Type = DecimalField<AggregateFunctionStateData>; };
-template <> struct Field::EnumToType<Field::Types::Bool> { using Type = UInt64; };
+template <> struct Field::EnumToType<Field::Types::Bool> { using Type = Bool; };
 
 inline constexpr bool isInt64OrUInt64FieldType(Field::Types::Which t)
 {

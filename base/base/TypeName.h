@@ -8,6 +8,7 @@ namespace DB
 struct Array;
 struct Tuple;
 struct Map;
+struct Object;
 struct AggregateFunctionStateData;
 
 /**
@@ -43,6 +44,8 @@ TN_MAP(DateTime64, datetime64)
 TN_MAP(Array, array)
 TN_MAP(Tuple, tuple)
 TN_MAP(Map, map)
+TN_MAP(Object, json)
+TN_MAP(Bool, bool)
 
 /// Special case
 template <> constexpr inline std::string_view TypeName<AggregateFunctionStateData> = "AggregateFunctionState";

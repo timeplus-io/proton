@@ -9,6 +9,7 @@ namespace DB
 
 /** Columns with numbers. */
 
+using ColumnBool = ColumnVector<Bool>;
 using ColumnUInt8 = ColumnVector<UInt8>;
 using ColumnUInt16 = ColumnVector<UInt16>;
 using ColumnUInt32 = ColumnVector<UInt32>;

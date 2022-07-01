@@ -22,6 +22,10 @@
 #include <DataTypes/typeIndexToTypeName.h>
 #include <base/EnumReflection.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeBool.h>
+/// proton: ends.
+
 
 namespace DB
 {
@@ -80,7 +84,11 @@ DataTypePtr getNumericType(const TypeIndexSet & types, bool allow_conversion_to_
 
     for (const auto & type : types)
     {
-        if (type == TypeIndex::UInt8)
+        /// proton: starts. support bool
+        if (type == TypeIndex::Bool)
+            maximize(max_bits_of_unsigned_integer, 1);
+        /// proton: ends.
+        else if (type == TypeIndex::UInt8)
             maximize(max_bits_of_unsigned_integer, 8);
         else if (type == TypeIndex::UInt16)
             maximize(max_bits_of_unsigned_integer, 16);
@@ -174,7 +182,11 @@ DataTypePtr getNumericType(const TypeIndexSet & types, bool allow_conversion_to_
 
         /// All unsigned.
         {
-            if (min_bit_width_of_integer <= 8)
+            /// proton: starts. support bool
+            if (min_bit_width_of_integer <= 1)
+                return std::make_shared<DataTypeBool>();
+            /// proton: ends.
+            else if (min_bit_width_of_integer <= 8)
                 return std::make_shared<DataTypeUInt8>();
             else if (min_bit_width_of_integer <= 16)
                 return std::make_shared<DataTypeUInt16>();

@@ -164,6 +164,7 @@ void SerializationNumber<T>::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t
 }
 /// proton: ends
 
+template class SerializationNumber<Bool>;
 template class SerializationNumber<UInt8>;
 template class SerializationNumber<UInt16>;
 template class SerializationNumber<UInt32>;

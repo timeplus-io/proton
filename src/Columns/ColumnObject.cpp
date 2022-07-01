@@ -160,6 +160,14 @@ public:
         have_nulls = true;
     }
 
+    /// proton: starts.
+    void operator()(const Bool &)
+    {
+        field_types.insert(FieldType::Bool);
+        type_indexes.insert(TypeIndex::Bool);
+    }
+    /// proton: ends.
+
     template <typename T>
     void operator()(const T &)
     {

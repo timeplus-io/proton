@@ -121,7 +121,9 @@ private:
     struct equals;
 
 public:
-    using ValueType = T;
+    /// proton: starts. Store Bool as a UInt8 ValueType
+    using ValueType = std::conditional_t<std::is_same_v<T, Bool>, UInt8, T>;
+    /// proton: ends.
     using Container = PaddedPODArray<ValueType>;
 
 private:
@@ -131,7 +133,7 @@ private:
     ColumnVector(const ColumnVector & src) : data(src.data.begin(), src.data.end()) {}
 
     /// Sugar constructor.
-    ColumnVector(std::initializer_list<T> il) : data{il} {}
+    ColumnVector(std::initializer_list<ValueType> il) : data{il} {}
 
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }
@@ -363,12 +365,12 @@ public:
         return data;
     }
 
-    const T & getElement(size_t n) const
+    const ValueType & getElement(size_t n) const
     {
         return data[n];
     }
 
-    T & getElement(size_t n)
+    ValueType & getElement(size_t n)
     {
         return data[n];
     }
@@ -392,7 +394,7 @@ ColumnPtr ColumnVector<T>::indexImpl(const PaddedPODArray<Type> & indexes, size_
 }
 
 /// Prevent implicit template instantiation of ColumnVector for common types
-
+extern template class ColumnVector<Bool>;
 extern template class ColumnVector<UInt8>;
 extern template class ColumnVector<UInt16>;
 extern template class ColumnVector<UInt32>;

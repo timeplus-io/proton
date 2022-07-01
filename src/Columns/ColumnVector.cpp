@@ -72,8 +72,8 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash) const
         throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
                         ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
-    const T * begin = data.data();
-    const T * end = begin + s;
+    const ValueType * begin = data.data();
+    const ValueType * end = begin + s;
     UInt32 * hash_data = hash.getData().data();
 
     while (begin < end)
@@ -168,11 +168,11 @@ void ColumnVector<T>::getPermutation(bool reverse, size_t limit, int nan_directi
             /// Thresholds on size. Lower threshold is arbitrary. Upper threshold is chosen by the type for histogram counters.
             if (s >= 256 && s <= std::numeric_limits<UInt32>::max())
             {
-                PaddedPODArray<ValueWithIndex<T>> pairs(s);
+                PaddedPODArray<ValueWithIndex<ValueType>> pairs(s);
                 for (UInt32 i = 0; i < UInt32(s); ++i)
                     pairs[i] = {data[i], i};
 
-                RadixSort<RadixSortTraits<T>>::executeLSD(pairs.data(), s, reverse, res.data());
+                RadixSort<RadixSortTraits<ValueType>>::executeLSD(pairs.data(), s, reverse, res.data());
 
                 /// Radix sort treats all NaNs to be greater than all numbers.
                 /// If the user needs the opposite, we must move them accordingly.
@@ -307,7 +307,7 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 
     const UInt8 * filt_pos = filt.data();
     const UInt8 * filt_end = filt_pos + size;
-    const T * data_pos = data.data();
+    const ValueType * data_pos = data.data();
 
     /** A slightly more optimized version.
     * Based on the assumption that often pieces of consecutive values
@@ -358,7 +358,7 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
 template <typename T>
 void ColumnVector<T>::expand(const IColumn::Filter & mask, bool inverted)
 {
-    expandDataByMask<T>(data, mask, inverted);
+    expandDataByMask<ValueType>(data, mask, inverted);
 }
 
 template <typename T>
@@ -370,7 +370,7 @@ void ColumnVector<T>::applyZeroMap(const IColumn::Filter & filt, bool inverted)
 
     const UInt8 * filt_pos = filt.data();
     const UInt8 * filt_end = filt_pos + size;
-    T * data_pos = data.data();
+    ValueType * data_pos = data.data();
 
     if (inverted)
     {
@@ -521,6 +521,7 @@ ColumnPtr ColumnVector<T>::createWithOffsets(const IColumn::Offsets & offsets, c
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
+template class ColumnVector<Bool>;
 template class ColumnVector<UInt8>;
 template class ColumnVector<UInt16>;
 template class ColumnVector<UInt32>;
