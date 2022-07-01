@@ -51,6 +51,9 @@ ProxyStream::ProxyStream(
 
     validateProxyChain();
 
+    if (windowType() == WindowType::SESSION && !isStreaming())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "session window can only work with streaming query.");
+
     if (!subquery)
     {
         storage = DatabaseCatalog::instance().getTable(id_, context_);

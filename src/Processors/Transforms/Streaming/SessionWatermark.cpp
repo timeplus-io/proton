@@ -29,7 +29,8 @@ void SessionWatermark::doProcess(Block & block)
 
     /// Remember the columns we will work with
     for (size_t i = 0; i < keys_size; ++i)
-        key_columns[i] = block.safeGetByPosition(i).column.get();
+        key_columns[i]
+            = block.getByName(watermark_settings.window_desc->argument_names[watermark_settings.window_desc->keys[i]]).column.get();
 
     /// create '__tp_session_id' column
     MutableColumnPtr col;

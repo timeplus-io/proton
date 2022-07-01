@@ -173,7 +173,7 @@
             ],
 
             "expected_results": [{"query_id":"901", "expected_results":[
-                ["[(IPv4Address('192.168.168.161'), 2)]"],
+                ["[(IPv4Address('192.168.168.161'), 1)]"],
                 ["[(IPv4Address('192.168.168.161'), 1)]"]
                 ]}
             ]
