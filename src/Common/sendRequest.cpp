@@ -53,7 +53,8 @@ std::pair<String, Int32> sendRequest(
         /// add other headers
         if (!headers.empty())
             for(const auto & [k, v]: headers)
-                request.add(k, v);
+                if (!k.empty())
+                    request.add(k, v);
 
         if (!password.empty())
         {

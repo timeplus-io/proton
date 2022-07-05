@@ -126,7 +126,7 @@ public:
             throw Exception(
                 ErrorCodes::REMOTE_CALL_FAILED,
                 "Call remote uri {} failed, message: {}, http_status: {}",
-                configuration.command,
+                configuration.url.toString(),
                 resp,
                 http_status);
 
