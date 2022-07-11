@@ -379,13 +379,18 @@ namespace
             const ColumnWithTypeAndName & source_elem = arguments[0];
             ColumnPtr source_column_casted;
             if constexpr (std::is_same_v<NameToLags, Name>)
+            {
                 source_column_casted = castColumn(source_elem, assert_cast<const DataTypeArray &>(*result_type.get()).getNestedType());
+                if (input_rows_count == 0)
+                    return ColumnArray::create(source_column_casted);
+            }
             else
+            {
                 source_column_casted = castColumn(source_elem, result_type);
-
-            /// Degenerate case, just copy source column as is.
-            if (input_rows_count == 0)
-                return source_column_casted;
+                /// Degenerate case, just copy source column as is.
+                if (input_rows_count == 0)
+                    return source_column_casted;
+            }
 
             prev_offset_columns.add(source_column_casted);
 
