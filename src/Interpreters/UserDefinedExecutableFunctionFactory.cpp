@@ -34,6 +34,8 @@ namespace ErrorCodes
     extern const int UNSUPPORTED_METHOD;
     /// proton: starts
     extern const int REMOTE_CALL_FAILED;
+    extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
+    extern const int INVALID_DATA;
     /// proton: ends
 }
 
@@ -119,7 +121,7 @@ public:
             context->getUserName(),
             context->getPasswordByUserName(context->getUserName()),
             out,
-            {{configuration.auth_context.key_name, configuration.auth_context.key_value}},
+            {{configuration.auth_context.key_name, configuration.auth_context.key_value}, {"", context->getCurrentQueryId()}},
             &Poco::Logger::get("UserDefinedFunction"));
 
         if (http_status != Poco::Net::HTTPResponse::HTTP_OK)
@@ -135,7 +137,16 @@ public:
         Block result_header({result});
         ReadBufferFromString read_buffer(resp);
         auto input_format = context->getInputFormat("JSONColumns", read_buffer, result_header, input_rows_count);
-        return coordinator->pull(input_format, result_type, input_rows_count);
+        try
+        {
+            return coordinator->pull(input_format, result_type, input_rows_count);
+        }
+        catch (Exception & e)
+        {
+            if (e.code() == ErrorCodes::CANNOT_PARSE_INPUT_ASSERTION_FAILED)
+                e.addMessage("The result format is invalid, which should be 'JSONColumns'");
+            throw;
+        }
     }
     /// proton: ends
 
