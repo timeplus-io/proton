@@ -403,7 +403,7 @@
         },
         {
             "id": 19,
-            "tags": ["lags", "bug", "todo"],
+            "tags": ["lags"],
             "name": "lags on table as view, tail lags with array_sum",
             "description": "create a stream, and create a view with xirr check xirr",
             "steps":[
@@ -411,15 +411,15 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists lags_v"},
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_lags"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags(id int, income float, time datetime64(3))"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags", "wait":1, "query":"insert into t_lags(id, income, date)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
-                    {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists lags_v as select id, lags(income, 1, 10) as income_lags, array_sum(income_lags) from table(t_lags) order by time desc limit 1"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags", "wait":1, "query":"insert into t_lags(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table", "wait":3, "query":"create view if not exists lags_v as select id, lags(income, 1, 10) as income_lags, array_sum(income_lags) as lags_sum from table(t_lags) order by time desc limit 1"},
                     {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, income_lags, lags_sum from lags_v"}
 
                     ]}
             ],
 
             "expected_results": [{"query_id":"801", "expected_results":[
-                ["1", "[3100,-1000,-1000,-1000,0,0,0,0,0,0]", 100]
+                ["1", "[3100.0, -1000.0, -1000.0, -1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", 100.0]
                 ]}
             ]
         },
