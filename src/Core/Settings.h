@@ -184,7 +184,7 @@ class IColumn;
     \
     M(Bool, log_queries, true, "Log requests and write the log to the system table.", 0) \
     /** proton: starts */                       \
-    M(Bool, query_log_insert, false, "Log insert query to the system table.", 0) \
+    M(Bool, log_insert_query, false, "Log insert query to the system table.", 0) \
     /** proton: ends */                       \
     M(Bool, log_formatted_queries, false, "Log formatted queries and write the log to the system table.", 0) \
     M(LogQueriesType, log_queries_min_type, QueryLogElementType::QUERY_START, "Minimal type in query_log to log, possible values (from low to high): QUERY_START, QUERY_FINISH, EXCEPTION_BEFORE_START, EXCEPTION_WHILE_PROCESSING.", 0) \

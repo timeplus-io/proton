@@ -635,7 +635,7 @@ query_log:
     # event_date + INTERVAL 7 DAY DELETE
     # event_date + INTERVAL 2 WEEK TO DISK 'bbb'
 
-    # ttl: 'event_date + INTERVAL 30 DAY DELETE'
+    ttl: 'event_date + INTERVAL 30 DAY DELETE'
 
     # Instead of partition_by, you can provide full engine expression (starting with ENGINE = ) with parameters,
     # Example: engine: 'ENGINE = MergeTree PARTITION BY toYYYYMM(event_date) ORDER BY (event_date, event_time) SETTINGS index_granularity = 1024'
@@ -657,6 +657,7 @@ query_thread_log:
     database: system
     table: query_thread_log
     partition_by: to_YYYYMM(event_date)
+    ttl: 'event_date + INTERVAL 30 DAY DELETE'
     flush_interval_milliseconds: 7500
 
 # Query views log. Has information about all dependent views associated with a query.

@@ -329,7 +329,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextPtr 
     CurrentThread::finalizePerformanceCounters();
 
     /// proton : starts.
-    bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.query_log_insert) || !ast->as<ASTInsertQuery>());
+    bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.log_insert_query) || !ast->as<ASTInsertQuery>());
     auto log_queries = settings.log_queries && log_insert_queries;
     if (log_queries && elem.type >= settings.log_queries_min_type && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
         if (auto query_log = context->getQueryLog())
@@ -531,10 +531,17 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     /// (subqueries on remote nodes will receive these "collapsed" settings)
     if (!internal && settings.log_queries && settings.log_queries_probability < 1.0)
     {
-        std::bernoulli_distribution should_write_log{settings.log_queries_probability};
+        if (!ast->as<ASTInsertQuery>() || settings.log_insert_query)
+        {
+            std::bernoulli_distribution should_write_log{settings.log_queries_probability};
 
-        context->setSetting("log_queries", should_write_log(thread_local_rng));
-        context->setSetting("log_queries_probability", 1.0);
+            context->setSetting("log_queries", should_write_log(thread_local_rng));
+            context->setSetting("log_queries_probability", 1.0);
+        }
+        else
+        {
+            context->setSetting("log_queries", false);
+        }
     }
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
@@ -783,7 +790,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             elem.client_info = client_info;
 
             /// proton : starts.
-            bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.query_log_insert) || !ast->as<ASTInsertQuery>());
+            bool log_insert_queries = ast && ((ast->as<ASTInsertQuery>() && settings.log_insert_query) || !ast->as<ASTInsertQuery>());
             bool log_queries = settings.log_queries && !internal && log_insert_queries;
             /// proton : ends.
 
