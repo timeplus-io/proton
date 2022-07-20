@@ -53,7 +53,6 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Interpreters/Context.h>
 
-
 namespace DB
 {
 
@@ -188,16 +187,12 @@ struct ConvertImpl
                 vec_null_map_to = &col_null_map_to->getData();
             }
 
-            bool result_is_bool = isBool(result_type);
             for (size_t i = 0; i < input_rows_count; ++i)
             {
-                if constexpr (std::is_same_v<ToDataType, DataTypeUInt8>)
+                if constexpr (std::is_same_v<ToDataType, DataTypeBool>)
                 {
-                    if (result_is_bool)
-                    {
-                        vec_to[i] = vec_from[i] != FromFieldType(0);
-                        continue;
-                    }
+                    vec_to[i] = vec_from[i] != FromFieldType(0);
+                    continue;
                 }
 
                 if constexpr (std::is_same_v<FromDataType, DataTypeUUID> != std::is_same_v<ToDataType, DataTypeUUID>)
@@ -918,6 +913,21 @@ void parseImpl(typename DataType::FieldType & x, ReadBuffer & rb, const DateLUTI
 {
     readText(x, rb);
 }
+
+/// proton: starts.
+template <>
+inline void parseImpl<DataTypeBool>(DataTypeBool::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+{
+    Bool tmp{false};
+    /// Expect 1/0, true/false
+    if (*rb.position() == '1' || *rb.position() == '0')
+        readBoolText(tmp, rb);
+    else
+        readBoolTextWord(tmp, rb);
+
+    x = tmp;  /// Bool -> UInt8
+}
+/// proton: ends.
 
 template <>
 inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
@@ -2318,6 +2328,7 @@ struct ToStringMonotonicity
 };
 
 /// proton: starts
+struct NameToBool { static constexpr auto name = "to_bool"; };
 struct NameToInt { static constexpr auto name = "to_int"; };
 struct NameToFloat { static constexpr auto name = "to_float"; };
 /// proton: ends
@@ -2367,10 +2378,12 @@ using FunctionToDecimal256 = FunctionConvert<DataTypeDecimal<Decimal256>, NameTo
 using FunctionToInt = FunctionConvert<DataTypeInt32, NameToInt, ToNumberMonotonicity<Int32>>;
 using FunctionToFloat = FunctionConvert<DataTypeFloat32, NameToFloat, ToNumberMonotonicity<Float32>>;
 using FunctionToDecimal = FunctionConvert<DataTypeDecimal<Decimal32>, NameToDecimal, UnknownMonotonicity>;
+using FunctionToBool = FunctionConvert<DataTypeBool, NameToBool, ToNumberMonotonicity<Bool>>;
 /// proton: ends.
 
 template <typename DataType> struct FunctionTo;
 
+template <> struct FunctionTo<DataTypeBool> { using Type = FunctionToBool; };
 template <> struct FunctionTo<DataTypeUInt8> { using Type = FunctionToUInt8; };
 template <> struct FunctionTo<DataTypeUInt16> { using Type = FunctionToUInt16; };
 template <> struct FunctionTo<DataTypeUInt32> { using Type = FunctionToUInt32; };
@@ -2779,26 +2792,6 @@ private:
         }
 
         return createWrapper<ToDataType>(from_type, to_type, requested_result_is_nullable);
-    }
-
-    WrapperType createUInt8ToUInt8Wrapper(const DataTypePtr from_type, const DataTypePtr to_type) const
-    {
-        return [from_type, to_type] (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t /*input_rows_count*/) -> ColumnPtr
-        {
-            if (isBool(from_type) || !isBool(to_type))
-                return arguments.front().column;
-
-            /// Special case when we convert UInt8 column to Bool column.
-            /// both columns have type UInt8, but we shouldn't use identity wrapper,
-            /// because Bool column can contain only 0 and 1.
-            auto res_column = to_type->createColumn();
-            const auto & data_from = checkAndGetColumn<ColumnUInt8>(arguments[0].column.get())->getData();
-            auto & data_to = assert_cast<ColumnUInt8 *>(res_column.get())->getData();
-            data_to.resize(data_from.size());
-            for (size_t i = 0; i != data_from.size(); ++i)
-                data_to[i] = static_cast<bool>(data_from[i]);
-            return res_column;
-        };
     }
 
     static WrapperType createStringWrapper(const DataTypePtr & from_type)
@@ -3585,12 +3578,7 @@ private:
     WrapperType prepareImpl(const DataTypePtr & from_type, const DataTypePtr & to_type, bool requested_result_is_nullable) const
     {
         if (from_type->equals(*to_type))
-        {
-            if (isUInt8(from_type))
-                return createUInt8ToUInt8Wrapper(from_type, to_type);
-
             return createIdentityWrapper(from_type);
-        }
         else if (WhichDataType(from_type).isNothing())
             return createNothingWrapper(to_type.get());
 
@@ -3623,12 +3611,14 @@ private:
                 ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
                 return true;
             }
+            if constexpr (std::is_same_v<ToDataType, DataTypeBool>)
+            {
+                ret = createBoolWrapper<ToDataType>(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
+                return true;
+            }
             if constexpr (std::is_same_v<ToDataType, DataTypeUInt8>)
             {
-                if (isBool(to_type))
-                    ret = createBoolWrapper<ToDataType>(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
-                else
-                    ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
+                ret = createWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
                 return true;
             }
             if constexpr (
@@ -3728,6 +3718,8 @@ public:
 
     static MonotonicityForRange getMonotonicityInformation(const DataTypePtr & from_type, const IDataType * to_type)
     {
+        if (const auto * type = checkAndGetDataType<DataTypeBool>(to_type))
+            return monotonicityForType(type);
         if (const auto * type = checkAndGetDataType<DataTypeUInt8>(to_type))
             return monotonicityForType(type);
         if (const auto * type = checkAndGetDataType<DataTypeUInt16>(to_type))

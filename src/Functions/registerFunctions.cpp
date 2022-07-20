@@ -95,7 +95,6 @@ void registerFunctionBayesAB(FunctionFactory &);
 
 void registerFunctionTid(FunctionFactory & factory);
 void registerFunctionLogTrace(FunctionFactory & factory);
-void registerFunctionToBool(FunctionFactory &);
 
 #if USE_SSL
 #if USE_ENCRYPT_DECRYPT_FUNCS
@@ -185,7 +184,6 @@ void registerFunctions()
 #if USE_SNOWFLAKE_FUNCS
     registerFunctionsSnowflake(factory);
 #endif
-    registerFunctionToBool(factory);
 
     /// proton: starts
     registerFunctionsStreamingWindow(factory);

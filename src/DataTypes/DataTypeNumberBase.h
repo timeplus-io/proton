@@ -58,6 +58,7 @@ public:
 
 /// Prevent implicit template instantiation of DataTypeNumberBase for common numeric types
 
+extern template class DataTypeNumberBase<Bool>;
 extern template class DataTypeNumberBase<UInt8>;
 extern template class DataTypeNumberBase<UInt16>;
 extern template class DataTypeNumberBase<UInt32>;

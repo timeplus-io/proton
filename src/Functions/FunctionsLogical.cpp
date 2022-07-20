@@ -41,15 +41,15 @@ namespace
 {
 using namespace FunctionsLogicalDetail;
 
-using UInt8Container = ColumnUInt8::Container;
-using UInt8ColumnPtrs = std::vector<const ColumnUInt8 *>;
+using UInt8Container = ColumnBool::Container;
+using UInt8ColumnPtrs = std::vector<const ColumnBool *>;
 
 
 MutableColumnPtr buildColumnFromTernaryData(const UInt8Container & ternary_data, const bool make_nullable)
 {
     const size_t rows_count = ternary_data.size();
 
-    auto new_column = ColumnUInt8::create(rows_count);
+    auto new_column = ColumnBool::create(rows_count);
     std::transform(
             ternary_data.cbegin(), ternary_data.cend(), new_column->getData().begin(),
             [](const auto x) { return x == Ternary::True; });
@@ -57,7 +57,7 @@ MutableColumnPtr buildColumnFromTernaryData(const UInt8Container & ternary_data,
     if (!make_nullable)
         return new_column;
 
-    auto null_column = ColumnUInt8::create(rows_count);
+    auto null_column = ColumnBool::create(rows_count);
     std::transform(
             ternary_data.cbegin(), ternary_data.cend(), null_column->getData().begin(),
             [](const auto x) { return x == Ternary::Null; });
@@ -361,7 +361,7 @@ static ColumnPtr executeForTernaryLogicImpl(ColumnRawPtrs arguments, const DataT
     }
 
     const auto result_column = has_consts ?
-            ColumnUInt8::create(input_rows_count, const_3v_value) : ColumnUInt8::create(input_rows_count);
+            ColumnBool::create(input_rows_count, const_3v_value) : ColumnBool::create(input_rows_count);
 
     OperationApplier<Op, AssociativeGenericApplierImpl>::apply(arguments, result_column->getData(), has_consts);
 
@@ -374,7 +374,7 @@ struct TypedExecutorInvoker;
 
 template <typename Op>
 using FastApplierImpl =
-        TypedExecutorInvoker<Op, UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64>;
+        TypedExecutorInvoker<Op, Bool, UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64>;
 
 template <typename Op, typename Type, typename ... Types>
 struct TypedExecutorInvoker<Op, Type, Types ...>
@@ -439,7 +439,7 @@ static ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_cou
         has_consts = false;
 
     auto col_res = has_consts ?
-            ColumnUInt8::create(input_rows_count, const_val) : ColumnUInt8::create(input_rows_count);
+            ColumnBool::create(input_rows_count, const_val) : ColumnBool::create(input_rows_count);
 
     /// FastPath detection goes in here
     if (arguments.size() == (has_consts ? 1 : 2))
@@ -457,11 +457,11 @@ static ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_cou
     Columns converted_columns_holder;
     for (const IColumn * column : arguments)
     {
-        if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(column))
+        if (const auto * uint8_column = checkAndGetColumn<ColumnBool>(column))
             uint8_args.push_back(uint8_column);
         else
         {
-            auto converted_column = ColumnUInt8::create(input_rows_count);
+            auto converted_column = ColumnBool::create(input_rows_count);
             convertAnyColumnToBool(column, converted_column->getData());
             uint8_args.push_back(converted_column.get());
             converted_columns_holder.emplace_back(std::move(converted_column));
@@ -596,14 +596,14 @@ ColumnPtr FunctionAnyArityLogical<Impl, Name>::executeShortCircuit(ColumnsWithTy
     if (nulls)
         applyTernaryLogic<Name>(mask, *nulls);
 
-    MutableColumnPtr res = ColumnUInt8::create();
-    typeid_cast<ColumnUInt8 *>(res.get())->getData() = std::move(mask);
+    MutableColumnPtr res = ColumnBool::create();
+    typeid_cast<ColumnBool *>(res.get())->getData() = std::move(mask);
 
     if (!nulls)
         return res;
 
-    MutableColumnPtr bytemap = ColumnUInt8::create();
-    typeid_cast<ColumnUInt8 *>(bytemap.get())->getData() = std::move(*nulls);
+    MutableColumnPtr bytemap = ColumnBool::create();
+    typeid_cast<ColumnBool *>(bytemap.get())->getData() = std::move(*nulls);
     return ColumnNullable::create(std::move(res), std::move(bytemap));
 }
 
@@ -724,9 +724,9 @@ ColumnPtr functionUnaryExecuteType(const ColumnsWithTypeAndName & arguments)
 {
     if (auto col = checkAndGetColumn<ColumnVector<T>>(arguments[0].column.get()))
     {
-        auto col_res = ColumnUInt8::create();
+        auto col_res = ColumnBool::create();
 
-        typename ColumnUInt8::Container & vec_res = col_res->getData();
+        typename ColumnBool::Container & vec_res = col_res->getData();
         vec_res.resize(col->getData().size());
         UnaryOperationImpl<T, Impl<T>>::vector(col->getData(), vec_res);
 
@@ -740,7 +740,8 @@ template <template <typename> class Impl, typename Name>
 ColumnPtr FunctionUnaryLogical<Impl, Name>::executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const
 {
     ColumnPtr res;
-    if (!((res = functionUnaryExecuteType<Impl, UInt8>(arguments))
+    if (!((res = functionUnaryExecuteType<Impl, Bool>(arguments))
+        || (res = functionUnaryExecuteType<Impl, UInt8>(arguments))
         || (res = functionUnaryExecuteType<Impl, UInt16>(arguments))
         || (res = functionUnaryExecuteType<Impl, UInt32>(arguments))
         || (res = functionUnaryExecuteType<Impl, UInt64>(arguments))

@@ -30,10 +30,10 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
         const ColumnConst & column_const = assert_cast<const ColumnConst &>(column);
         ColumnPtr column_nested = column_const.getDataColumnPtr()->convertToFullColumnIfLowCardinality();
 
-        if (!typeid_cast<const ColumnUInt8 *>(column_nested.get()))
+        if (!typeid_cast<const ColumnBool *>(column_nested.get()))
         {
             const ColumnNullable * column_nested_nullable = checkAndGetColumn<ColumnNullable>(*column_nested);
-            if (!column_nested_nullable || !typeid_cast<const ColumnUInt8 *>(&column_nested_nullable->getNestedColumn()))
+            if (!column_nested_nullable || !typeid_cast<const ColumnBool *>(&column_nested_nullable->getNestedColumn()))
             {
                 throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be uint8 or nullable(uint8).",
                                 ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
@@ -59,6 +59,13 @@ FilterDescription::FilterDescription(const IColumn & column_)
 
     const auto & column = data_holder ? *data_holder : column_;
 
+    /// proton: starts.
+    if (const ColumnBool * concrete_column = typeid_cast<const ColumnBool *>(&column))
+    {
+        data = &concrete_column->getData();
+        return;
+    }
+
     if (const ColumnUInt8 * concrete_column = typeid_cast<const ColumnUInt8 *>(&column))
     {
         data = &concrete_column->getData();
@@ -70,13 +77,19 @@ FilterDescription::FilterDescription(const IColumn & column_)
         ColumnPtr nested_column = nullable_column->getNestedColumnPtr();
         MutableColumnPtr mutable_holder = IColumn::mutate(std::move(nested_column));
 
+        ColumnBool * bool_column = nullptr;
         ColumnUInt8 * concrete_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
         if (!concrete_column)
-            throw Exception("Illegal type " + column.getName() + " of column for filter. Must be uint8 or nullable(uint8).",
-                ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+        {
+            bool_column = typeid_cast<ColumnBool *>(mutable_holder.get());
+            if (!bool_column)
+                throw Exception("Illegal type " + column.getName() + " of column for filter. Must be bool, uint8, nullable(bool) or nullable(uint8).",
+                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+        }
 
         const NullMap & null_map = nullable_column->getNullMapData();
-        IColumn::Filter & res = concrete_column->getData();
+        IColumn::Filter & res = concrete_column ? concrete_column->getData() : bool_column->getData();
+        /// proton: ends.
 
         size_t size = res.size();
         for (size_t i = 0; i < size; ++i)
@@ -87,7 +100,7 @@ FilterDescription::FilterDescription(const IColumn & column_)
         return;
     }
 
-    throw Exception("Illegal type " + column.getName() + " of column for filter. Must be uint8 or nullable(uint8) or const variants of them.",
+    throw Exception("Illegal type " + column.getName() + " of column for filter. Must be bool, uint8, nullable(bool), nullable(uint8) or const variants of them.",
         ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 }
 

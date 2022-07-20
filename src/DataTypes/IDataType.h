@@ -327,14 +327,15 @@ struct WhichDataType
     // shared ptr -> is non-constexpr in gcc
     WhichDataType(const DataTypePtr & data_type) : idx(data_type->getTypeId()) {}
 
+    constexpr bool isBool() const { return idx == TypeIndex::Bool; }
     constexpr bool isUInt8() const { return idx == TypeIndex::UInt8; }
     constexpr bool isUInt16() const { return idx == TypeIndex::UInt16; }
     constexpr bool isUInt32() const { return idx == TypeIndex::UInt32; }
     constexpr bool isUInt64() const { return idx == TypeIndex::UInt64; }
     constexpr bool isUInt128() const { return idx == TypeIndex::UInt128; }
     constexpr bool isUInt256() const { return idx == TypeIndex::UInt256; }
-    constexpr bool isUInt() const { return isUInt8() || isUInt16() || isUInt32() || isUInt64() || isUInt128() || isUInt256(); }
-    constexpr bool isNativeUInt() const { return isUInt8() || isUInt16() || isUInt32() || isUInt64(); }
+    constexpr bool isUInt() const { return isBool() || isUInt8() || isUInt16() || isUInt32() || isUInt64() || isUInt128() || isUInt256(); }
+    constexpr bool isNativeUInt() const { return isBool() || isUInt8() || isUInt16() || isUInt32() || isUInt64(); }
 
     constexpr bool isInt8() const { return idx == TypeIndex::Int8; }
     constexpr bool isInt16() const { return idx == TypeIndex::Int16; }
@@ -376,7 +377,6 @@ struct WhichDataType
     constexpr bool isSet() const { return idx == TypeIndex::Set; }
     constexpr bool isInterval() const { return idx == TypeIndex::Interval; }
     constexpr bool isObject() const { return idx == TypeIndex::Object; }
-    constexpr bool isBool() const { return idx == TypeIndex::Bool; }
 
     constexpr bool isNothing() const { return idx == TypeIndex::Nothing; }
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }

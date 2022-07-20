@@ -39,6 +39,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToInt>();
     factory.registerFunction<FunctionToFloat>();
     factory.registerFunction<FunctionToDecimal>();
+    factory.registerFunction<FunctionToBool>();
     /// proton: ends
     factory.registerFunction<FunctionToDateTime>();
     factory.registerFunction<FunctionToDateTime32>();

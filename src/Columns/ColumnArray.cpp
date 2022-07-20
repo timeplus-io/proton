@@ -528,6 +528,7 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
 
 ColumnPtr ColumnArray::filter(const Filter & filt, ssize_t result_size_hint) const
 {
+    if (typeid_cast<const ColumnBool *>(data.get()))       return filterNumber<Bool>(filt, result_size_hint);
     if (typeid_cast<const ColumnUInt8 *>(data.get()))      return filterNumber<UInt8>(filt, result_size_hint);
     if (typeid_cast<const ColumnUInt16 *>(data.get()))     return filterNumber<UInt16>(filt, result_size_hint);
     if (typeid_cast<const ColumnUInt32 *>(data.get()))     return filterNumber<UInt32>(filt, result_size_hint);
@@ -584,7 +585,7 @@ ColumnPtr ColumnArray::filterNumber(const Filter & filt, ssize_t result_size_hin
     auto & res_elems = assert_cast<ColumnVector<T> &>(res->getData()).getData();
     Offsets & res_offsets = res->getOffsets();
 
-    filterArraysImpl<T>(assert_cast<const ColumnVector<T> &>(*data).getData(), getOffsets(), res_elems, res_offsets, filt, result_size_hint);
+    filterArraysImpl<typename ColumnVector<T>::ValueType>(assert_cast<const ColumnVector<T> &>(*data).getData(), getOffsets(), res_elems, res_offsets, filt, result_size_hint);
     return res;
 }
 
@@ -879,6 +880,7 @@ ColumnPtr ColumnArray::replicate(const Offsets & replicate_offsets) const
     if (replicate_offsets.empty())
         return cloneEmpty();
 
+    if (typeid_cast<const ColumnBool *>(data.get()))     return replicateNumber<Bool>(replicate_offsets);
     if (typeid_cast<const ColumnUInt8 *>(data.get()))    return replicateNumber<UInt8>(replicate_offsets);
     if (typeid_cast<const ColumnUInt16 *>(data.get()))   return replicateNumber<UInt16>(replicate_offsets);
     if (typeid_cast<const ColumnUInt32 *>(data.get()))   return replicateNumber<UInt32>(replicate_offsets);

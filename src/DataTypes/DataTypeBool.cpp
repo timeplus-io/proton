@@ -2,13 +2,15 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/Serializations/SerializationBool.h>
 
 namespace DB
 {
-MutableColumnPtr DataTypeBool::createColumn() const
+
+size_t DataTypeBool::getSizeOfValueInMemory() const
 {
-    return ColumnBool::create();
+    return sizeof(ColumnBool::ValueType);
 }
 
 SerializationPtr DataTypeBool::doGetDefaultSerialization() const

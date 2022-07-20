@@ -469,7 +469,7 @@
         },
         {
             "id": 22,
-            "tags": ["bool", "bug"],
+            "tags": ["bool"],
             "name": "tail with bool check in where",
             "description": "create a stream, tail with bool check in where",
             "steps":[
@@ -477,13 +477,13 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_v"},
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3,"query_id": "801", "query":"select id, value, bool_f from t_bool where bool_f=true limit 1 settings seek_to = 'earliest'"}
                     ]}
             ],
 
             "expected_results": [{"query_id":"801", "expected_results":[
-                ["1", -1000, true]
+                ["1", "-1000", "True"]
                 ]}
             ]
         },
@@ -497,7 +497,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_v"},
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3,"query":"create view if not exists bool_v as with transformed as (select id, value, bool_f, time from t_bool) select window_start, window_end, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
                     {"client":"python", "query_type": "stream", "query_end_timer":6,"wait":1,"query_id": "801", "query":"select id, bool_f, count() from bool_v group by id, bool_f"}
 
@@ -520,7 +520,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"drop view if exists bool_mv"},
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
-                    {"client":"python", "query_type": "table","depends_on_stream":"t_lags", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3,"query":" create materialized view if not exists bool_mv as with transformed as (select id, value, bool_f, time from t_bool) select window_start as ws, window_end as we, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
                     {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, bool_f, count() from table(bool_mv) group by id, bool_f"}
 
@@ -532,7 +532,49 @@
                 ["1", "True", 2]
                 ]}
             ]
-        }                                                                
+        },
+        {
+            "id": 25,
+            "tags": ["bool"],
+            "name": "comparison bool",
+            "description": "comparison operations == != > < >= <=  return bool result",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(id, value, bool_f,time) values(1, -1000, true, '2020-01-02 00:00:01')(1, 0,true, '2020-01-03 09:01:02')(1, 1, false, '2020-01-05 09:01:03')(1, 2, false, '2020-01-18 09:01:04')"},
+                    {"client":"python", "query_type": "table","wait":3, "query_id": "801", "query":"select 0 as v1, 'true' as v2, v1>0, v2='true', v1=true, v2=true, value=1, value!=1, value>1, value<=1, value<1, value>=1 from table(t_bool)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                [0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
+                [0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
+                [0, "true", "False", "True", "False", "True", "True", "False", "False", "True", "False", "True"],
+                [0, "true", "False", "True", "False", "True", "False", "True", "True", "False", "False", "True"]
+                ]}
+            ]
+        },
+        {
+            "id": 26,
+            "tags": ["func"],
+            "name": "to_bool",
+            "description": "convert uint, string to bool",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(bool_s string, bool_i uint8, bool_f bool)"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(bool_s, bool_i, bool_f) values('true', 0, true)('false', 1, false)"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select to_bool('true'), to_bool('false'), to_bool(1), to_bool(0), to_bool(true), to_bool(false), to_bool(bool_s), to_bool(bool_i), to_bool(bool_f) from table(t_bool)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["True", "False", "True", "False", "True", "False", "True", "False", "True"],
+                ["True", "False", "True", "False", "True", "False", "False", "True", "False"]
+                ]}
+            ]
+        }
     ]
 }
 
