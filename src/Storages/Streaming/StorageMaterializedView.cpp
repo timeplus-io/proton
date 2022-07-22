@@ -49,31 +49,6 @@ namespace
     }
 }
 
-StorageMaterializedView::InMemoryTable::InMemoryTable(size_t max_blocks_count_, size_t max_blocks_bytes_)
-    : max_blocks_count(max_blocks_count_), max_blocks_bytes(max_blocks_bytes_)
-{
-}
-
-void StorageMaterializedView::InMemoryTable::write(Block && block)
-{
-    std::lock_guard lock(mutex);
-    total_blocks_bytes += block.allocatedBytes();
-    data.push_back(std::make_shared<Block>(std::move(block)));
-
-    /// Limits by max blocks count and bytes
-    while (total_blocks_bytes > max_blocks_bytes || data.size() > max_blocks_count)
-    {
-        total_blocks_bytes -= data.front()->allocatedBytes();
-        data.pop_front();
-    }
-}
-
-StorageMaterializedView::Data StorageMaterializedView::InMemoryTable::get() const
-{
-    std::shared_lock lock(mutex);
-    return data;
-}
-
 class CheckMaterializedViewValidTransform : public ISimpleTransform
 {
 public:
@@ -91,49 +66,9 @@ private:
     const StorageMaterializedView & view;
 };
 
-class MaterializedViewMemorySource : public SourceWithProgress
-{
-public:
-    MaterializedViewMemorySource(const StorageMaterializedView & view_, const Block & header)
-        : SourceWithProgress(header)
-        , column_names_and_types(header.getNamesAndTypesList())
-        , data(view_.memory_table ? view_.memory_table->get() : StorageMaterializedView::Data())
-        , iter(data.begin())
-    {
-    }
-
-    String getName() const override { return "MaterializedViewMemory"; }
-
-protected:
-    Chunk generate() override
-    {
-        if (iter == data.end())
-            return {};
-
-        const Block & src = *(iter->get());
-        auto rows = src.rows();
-
-        Columns columns;
-        columns.reserve(column_names_and_types.size());
-
-        /// Add only required columns to `res`.
-        for (const auto & elem : column_names_and_types)
-            columns.emplace_back(getColumnFromBlock(src, elem));
-
-        ++iter;
-        return Chunk(std::move(columns), rows);
-    }
-
-private:
-    const NamesAndTypesList column_names_and_types;
-    StorageMaterializedView::Data data;
-    StorageMaterializedView::DataConstIterator iter;
-};
-
 class PushingToMaterializedViewMemorySink final : public ExceptionKeepingTransform
 {
 private:
-    StorageMaterializedView & view;
     const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns;
     size_t expected_virtual_num = 0;
 
@@ -141,10 +76,8 @@ public:
     PushingToMaterializedViewMemorySink(
         const Block & in_header,
         const Block & out_header,
-        StorageMaterializedView & view_,
         const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns_)
         : ExceptionKeepingTransform(in_header, out_header)
-        , view(view_)
         , to_calc_virtual_columns(to_calc_virtual_columns_)
         , expected_virtual_num(out_header.columns() - in_header.columns())
     {
@@ -171,11 +104,6 @@ protected:
         }
 
         chunk.setColumns(newest_block.getColumns(), rows);
-
-        /// Write newest data snapshot in memory
-        /// There may be some empty block(heart block) from tail mode, ignore it.
-        if (rows > 0 && view.memory_table)
-            view.memory_table->write(std::move(newest_block));
 
         cur_chunk = std::move(chunk);
     }
@@ -302,9 +230,6 @@ void StorageMaterializedView::shutdown()
         background_executor.reset();
         background_pipeline.reset();
     }
-
-    if (memory_table)
-        memory_table.reset();
 }
 
 Pipe StorageMaterializedView::read(
@@ -332,12 +257,7 @@ void StorageMaterializedView::read(
     const size_t max_block_size,
     const unsigned num_streams)
 {
-    /// There are two paths:
-    /// 1) read newest streaming data in target table.      [streaming query from target table]
-    ///     e.g. "select * from materialized_view;" <=> "select * from target_table" (streaming)
-    /// 2) read newest data snapshot in memory              [historical query from memory table]
-    ///     e.g. "select * from table(materialized_view);" <=> "select * from memory_table" (historical)
-
+    /// The behavior of querying a MV is same as querying the underlying stream`
     /// In some cases, the view background thread has exception, we check it before users access this view
     checkValid();
 
@@ -347,48 +267,36 @@ void StorageMaterializedView::read(
     else
         header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_VIEW_VERSION});
 
+    auto storage = getTargetTable();
+    auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
+    auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
+    auto target_storage_snapshot = storage->getStorageSnapshot(target_metadata_snapshot);
+
+    if (query_info.order_optimizer)
+        query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
+
+    auto pipe = storage->read(
+        column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+
     if (query_info.syntax_analyzer_result->streaming)
     {
-        auto storage = getTargetTable();
-        auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
-        auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
-        auto target_storage_snapshot = storage->getStorageSnapshot(target_metadata_snapshot);
-
-        if (query_info.order_optimizer)
-            query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
-
-        auto pipe = storage->read(
-            column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
-
         /// Add valid check of the view
         /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.
         pipe.addTransform(std::make_shared<CheckMaterializedViewValidTransform>(header, *this));
-
-        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Target");
-        query_plan.addStep(std::move(read_step));
-
-        StreamLocalLimits limits;
-        SizeLimits leaf_limits;
-
-        /// Add table lock for destination table.
-        auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
-            query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
-
-        /// proton: starts
-        adding_limits_and_quota->setStepDescription("Lock destination stream for MaterializedView");
-        /// proton: ends
-        query_plan.addStep(std::move(adding_limits_and_quota));
     }
-    else
-    {
-        Pipe pipe(std::make_shared<MaterializedViewMemorySource>(*this, header));
 
-        /// Materializing const column
-        pipe.addTransform(std::make_shared<MaterializingTransform>(header));
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Target");
+    query_plan.addStep(std::move(read_step));
 
-        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Memory");
-        query_plan.addStep(std::move(read_step));
-    }
+    StreamLocalLimits limits;
+    SizeLimits leaf_limits;
+
+    /// Add table lock for destination table.
+    auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
+        query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
+
+    adding_limits_and_quota->setStepDescription("Lock destination stream for MaterializedView");
+    query_plan.addStep(std::move(adding_limits_and_quota));
 }
 
 void StorageMaterializedView::drop()
@@ -458,10 +366,6 @@ NamesAndTypesList StorageMaterializedView::getVirtuals() const
 
 void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
-    /// Init in memory table
-    const auto & settings = local_context->getSettingsRef();
-    memory_table.reset(new InMemoryTable(1 /* only cache current block result */, settings.max_streaming_view_cached_block_bytes));
-
     /// If there is a Create request, then we need create the target inner table.
     assert(target_table_id);
     if (!is_attach)
@@ -532,7 +436,7 @@ void StorageMaterializedView::buildBackgroundPipeline(
     }
 
     background_pipeline.addSimpleTransform([&, this](const Block & cur_header, QueryPipelineBuilder::StreamType) -> ProcessorPtr {
-        return std::make_shared<PushingToMaterializedViewMemorySink>(cur_header, out_header, *this, virtual_columns);
+        return std::make_shared<PushingToMaterializedViewMemorySink>(cur_header, out_header, virtual_columns);
     });
 
     /// Materializing const columns

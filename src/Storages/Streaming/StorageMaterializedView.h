@@ -88,27 +88,6 @@ private:
 
     std::atomic_flag shutdown_called = ATOMIC_FLAG_INIT;
 
-    /// In memory table
-    using Data = std::deque<BlockPtr>;
-    using DataConstIterator = typename Data::const_iterator;
-    class InMemoryTable final
-    {
-    private:
-        /// When the cached blocks is full (count or bytes), push one and pop one (FIFO)
-        size_t max_blocks_count = 0;
-        size_t max_blocks_bytes = 0;
-        size_t total_blocks_bytes = 0;
-        Data data;
-        mutable std::shared_mutex mutex;
-
-    public:
-        explicit InMemoryTable(size_t max_blocks_count_, size_t max_blocks_bytes_);
-
-        void write(Block && block);
-        Data get() const;
-    };
-    std::unique_ptr<InMemoryTable> memory_table;
-
     /// Background update pipeline
     struct
     {
