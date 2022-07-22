@@ -37,7 +37,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        auto is_finite_type = FunctionFactory::instance().get("isFinite", context)->build({arguments[0]})->getResultType();
+        auto is_finite_type = FunctionFactory::instance().get("is_finite", context)->build({arguments[0]})->getResultType();
         auto if_type = FunctionFactory::instance().get("if", context)->build({{nullptr, is_finite_type, ""}, arguments[0], arguments[1]})->getResultType();
         return if_type;
     }
@@ -45,7 +45,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         ColumnsWithTypeAndName is_finite_columns{arguments[0]};
-        auto is_finite = FunctionFactory::instance().get("isFinite", context)->build(is_finite_columns);
+        auto is_finite = FunctionFactory::instance().get("is_finite", context)->build(is_finite_columns);
         auto res = is_finite->execute(is_finite_columns, is_finite->getResultType(), input_rows_count);
 
         ColumnsWithTypeAndName if_columns

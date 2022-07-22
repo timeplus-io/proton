@@ -84,10 +84,10 @@ if (NOT ENABLE_MISC_FUNCS)
             identity.cpp
             bar.cpp
             hasColumnInTable.cpp
-            isFinite.cpp
-            isInfinite.cpp
-            isNaN.cpp
-            ifNotFinite.cpp
+            # isFinite.cpp
+            # isInfinite.cpp
+            # isNaN.cpp
+            # ifNotFinite.cpp
             throwIf.cpp
             runningAccumulate.cpp
             runningDifference.cpp

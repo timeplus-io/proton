@@ -92,6 +92,12 @@ void registerFunctionFile(FunctionFactory & factory);
 /// proton: starts.
 void registerFunctionStreamingNeighbor(FunctionFactory &);
 void registerFunctionToConcreteType(FunctionFactory &);
+
+/// USE_MISC
+void registerFunctionIsFinite(FunctionFactory &);
+void registerFunctionIsInfinite(FunctionFactory &);
+void registerFunctionIsNaN(FunctionFactory &);
+void registerFunctionIfNotFinite(FunctionFactory &);
 /// proton: ends.
 
 #ifdef FUZZING_MODE
@@ -191,6 +197,12 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     /// proton: starts.
     registerFunctionStreamingNeighbor(factory);
     registerFunctionToConcreteType(factory);
+
+    /// USE_MISC
+    registerFunctionIsFinite(factory);
+    registerFunctionIsInfinite(factory);
+    registerFunctionIsNaN(factory);
+    registerFunctionIfNotFinite(factory);
     /// proton: ends.
 }
 

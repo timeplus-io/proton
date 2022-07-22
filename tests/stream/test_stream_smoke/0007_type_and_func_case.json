@@ -574,6 +574,22 @@
                 ["True", "False", "True", "False", "True", "False", "False", "True", "False"]
                 ]}
             ]
+        },
+        {
+            "id": 27,
+            "tags": ["bool"],
+            "name": "finite_nan",
+            "description": "check finite, nan",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"SELECT 1/0 as infimum, is_finite(infimum), is_infinite(infimum), if_not_finite(infimum, 42), is_nan(NaN)"}
+                    ]}
+            ],
+
+            "expected_results": [{"query_id":"801", "expected_results":[
+                ["inf", 0, 1, 42, 1]
+                ]}
+            ]
         }
     ]
 }
