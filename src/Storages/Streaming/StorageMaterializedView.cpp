@@ -278,15 +278,23 @@ void StorageMaterializedView::read(
     auto pipe = storage->read(
         column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
-    if (query_info.syntax_analyzer_result->streaming)
+    if (pipe.empty())
     {
-        /// Add valid check of the view
-        /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.
-        pipe.addTransform(std::make_shared<CheckMaterializedViewValidTransform>(header, *this));
+        /// Create step which reads from empty source if storage has no historical data.
+        assert(!query_info.syntax_analyzer_result->streaming);
+        InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, local_context);
     }
-
-    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Target");
-    query_plan.addStep(std::move(read_step));
+    else
+    {
+        if (query_info.syntax_analyzer_result->streaming)
+        {
+            /// Add valid check of the view
+            /// If not check, when the view go bad, the streaming query of the target table will be blocked indefinitely since there is no ingestion on background.
+            pipe.addTransform(std::make_shared<CheckMaterializedViewValidTransform>(header, *this));
+        }
+        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName() + "-Target");
+        query_plan.addStep(std::move(read_step));
+    }
 
     StreamLocalLimits limits;
     SizeLimits leaf_limits;
