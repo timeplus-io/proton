@@ -19,6 +19,9 @@
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 
+/// proton: starts.
+#include <DataTypes/DataTypeString.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -29,6 +32,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ZERO_ARRAY_OR_TUPLE_INDEX;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 namespace ArrayImpl
@@ -41,15 +45,21 @@ namespace ArrayImpl
   */
 class FunctionArrayElement : public IFunction
 {
+private:
+    ContextPtr context;
+
 public:
     static constexpr auto name = "array_element";
     static FunctionPtr create(ContextPtr context);
+
+    explicit FunctionArrayElement(ContextPtr ctx) : context(ctx) {}
 
     String getName() const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
-    size_t getNumberOfArguments() const override { return 2; }
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
 
@@ -453,9 +463,9 @@ struct ArrayElementGenericImpl
 }
 
 
-FunctionPtr FunctionArrayElement::create(ContextPtr)
+FunctionPtr FunctionArrayElement::create(ContextPtr ctx)
 {
-    return std::make_shared<FunctionArrayElement>();
+    return std::make_shared<FunctionArrayElement>(ctx);
 }
 
 
@@ -1046,25 +1056,39 @@ String FunctionArrayElement::getName() const
 
 DataTypePtr FunctionArrayElement::getReturnTypeImpl(const DataTypes & arguments) const
 {
+    size_t args_num = arguments.size();
+    if (args_num != 1 && args_num != 2)
+    throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Number of arguments for function {} doesn't match: passed {}, should be 1 or 2",
+            getName(),
+            args_num);
+
+    /// If args_num == 1, array_element(arr) will return directly to itself
     if (const auto * map_type = checkAndGetDataType<DataTypeMap>(arguments[0].get()))
-        return map_type->getValueType();
+        return args_num == 1 ? map_type->getPtr() : map_type->getValueType();
 
     const auto * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
     if (!array_type)
     {
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-            "First argument for function '{}' must be array, got '{}' instead",
-            getName(), arguments[0]->getName());
+        /// proton: starts. Support extended json string
+        if (!checkAndGetDataType<DataTypeString>(arguments[0].get()))
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "First argument for function '{}' must be array or string, got '{}' instead",
+                getName(), arguments[0]->getName());
+        /// proton: ends.
     }
 
-    if (!isInteger(arguments[1]))
+    if (args_num == 2 && !isInteger(arguments[1]))
     {
         throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
             "Second argument for function '{}' must be integer, got '{}' instead",
             getName(), arguments[1]->getName());
     }
 
-    return array_type->getNestedType();
+    if (args_num == 1)
+        return array_type ? array_type->getPtr() : std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
+    else
+        return array_type ? array_type->getNestedType() : std::make_shared<DataTypeString>();
 }
 
 ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
@@ -1073,7 +1097,12 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
     const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());
 
     if (col_map || col_const_map)
-        return executeMap(arguments, result_type, input_rows_count);
+    {
+        if (arguments.size() == 1)
+            return arguments[0].column;
+        else
+            return executeMap(arguments, result_type, input_rows_count);
+    }
 
     /// Check nullability.
     bool is_array_of_nullable = false;
@@ -1089,9 +1118,45 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
         if (col_const_array)
             is_array_of_nullable = isColumnNullable(col_const_array->getData());
         else
-            throw Exception("Illegal column " + arguments[0].column->getName()
-            + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+        {
+            /// proton: starts. Support extended json string
+            auto * col_string = checkAndGetColumn<ColumnString>(arguments[0].column.get());
+            auto * col_const_string = checkAndGetColumnConstData<ColumnString>(arguments[0].column.get());
+            if (col_string || col_const_string)
+            {
+                /// When the string is invalid, we will get a empty array
+                auto json_extract_array_builder = FunctionFactory::instance().get("json_extract_array", context);
+                ColumnsWithTypeAndName json_to_array_args{arguments[0]};
+                auto json_extract_array = json_extract_array_builder->build(json_to_array_args);
+                /// json_extract_array(json)
+                auto json_to_array_column_holder = json_extract_array->execute(json_to_array_args, result_type, input_rows_count, false);
+
+                if (arguments.size() == 1)
+                    return json_to_array_column_holder;
+
+                ArrayImpl::NullMapBuilder builder;
+                ColumnsWithTypeAndName source_columns{
+                    {
+                        json_to_array_column_holder,
+                        std::make_shared<DataTypeArray>(result_type),
+                        ""
+                    },
+                    arguments[1],
+                };
+                return perform(source_columns, result_type, builder, input_rows_count);
+            }
+            else
+                throw Exception(
+                    ErrorCodes::ILLEGAL_COLUMN,
+                    "Illegal column {} of first argument of function {}",
+                    arguments[0].column->getName(),
+                    getName());
+            /// proton: ends.
+        }
     }
+
+    if (arguments.size() == 1)
+        return arguments[0].column;
 
     if (!is_array_of_nullable)
     {

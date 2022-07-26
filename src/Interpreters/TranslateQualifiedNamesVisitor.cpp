@@ -168,6 +168,12 @@ void TranslateQualifiedNamesMatcher::visit(ASTFunction & node, const ASTPtr &, D
                 std::make_shared<ASTIdentifier>(std::vector<String>{{table_name, ProtonConsts::RESERVED_EVENT_TIME}}));
         }
     }
+
+    /// array_elemnt(arr, *) -> array_element(arr)
+    if (func_name_lowercase == "array_element" &&
+        func_arguments->children.size() == 2 &&
+        func_arguments->children[1]->as<ASTAsterisk>())
+        func_arguments->children.pop_back();
     /// proton : ends
 }
 

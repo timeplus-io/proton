@@ -1366,6 +1366,41 @@ public:
     }
 };
 
+/// proton: starts.
+template <typename JSONParser>
+class JSONExtractArrayImpl
+{
+public:
+    using Element = typename JSONParser::Element;
+
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
+    {
+        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
+    }
+
+    static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
+
+    static bool insertResultToColumn(IColumn & dest, const Element & element, const std::string_view &)
+    {
+        if (!element.isArray())
+            return false;
+
+        auto array = element.getArray();
+        ColumnArray & col_res = assert_cast<ColumnArray &>(dest);
+
+        for (auto value : array)
+        {
+            if (value.isString())
+                JSONExtractStringImpl<JSONParser>::insertResultToColumn(col_res.getData(), value, {});
+            else
+                JSONExtractRawImpl<JSONParser>::insertResultToColumn(col_res.getData(), value, {});
+        }
+
+        col_res.getOffsets().push_back(col_res.getOffsets().back() + array.size());
+        return true;
+    }
+};
+/// proton: ends.
 
 template <typename JSONParser>
 class JSONExtractKeysAndValuesRawImpl
@@ -1457,7 +1492,7 @@ void registerFunctionsJSON(FunctionFactory & factory)
     factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeysAndValuesRaw, JSONExtractKeysAndValuesRawImpl>>();
     factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeys, JSONExtractKeysImpl>>();
     /// proton: starts.
-    factory.registerFunction<JSONOverloadResolver<NameJSONExtractArray, JSONExtractArrayRawImpl>>();
+    factory.registerFunction<JSONOverloadResolver<NameJSONExtractArray, JSONExtractArrayImpl>>();
     /// proton: ends.
 }
 

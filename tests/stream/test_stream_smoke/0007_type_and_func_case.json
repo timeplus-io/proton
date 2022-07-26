@@ -590,6 +590,58 @@
                 ["inf", 0, 1, 42, 1]
                 ]}
             ]
+        },
+        {
+            "id": 28,
+            "tags": ["func"],
+            "name": "json_extrac_array",
+            "description": "extract array from json string",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_json_raw"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_json_raw(raw string)"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_json_raw", "wait":1, "query":"insert into t_json_raw(raw) values('')('[1, 2]')('[\"abc\", \"xyz\"]')"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select raw, json_extract_array(raw) as tags, tags[1], tags[2] from table(t_json_raw)"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "802", "query":"select '{\"a\":1,\"tags\":[\"x\",\"y\"]}' as raw, json_extract_array(raw:tags) as tags, tags[1], tags[2]"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"801", "expected_results":[
+                    ["", "[]", "", ""],
+                    ["[1, 2]", "['1', '2']", "1", "2"],
+                    ["[\"abc\", \"xyz\"]", "['abc', 'xyz']", "abc", "xyz"]
+                ]},
+                {"query_id":"802", "expected_results":[
+                    ["{\"a\":1,\"tags\":[\"x\",\"y\"]}", "['x', 'y']", "x", "y"]
+                ]}
+            ]
+        },
+        {
+            "id": 29,
+            "tags": ["func"],
+            "name": "array_element",
+            "description": "extract element from json array string",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_json_raw"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create stream t_json_raw(raw string)"},
+                    {"client":"python", "query_type": "table","depends_on_stream":"t_json_raw", "wait":1, "query":"insert into t_json_raw(raw) values('')('[1, 2]')('[\"abc\", \"xyz\"]')"},
+                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select raw, raw[*], raw[1], raw[2] from table(t_json_raw)"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "802", "query":"select '{\"a\":1,\"tags\":[\"x\",\"y\"]}' as raw, raw:tags[*], raw:tags[1], raw:tags[2]"}
+                    ]}
+            ],
+
+            "expected_results": [
+                {"query_id":"801", "expected_results":[
+                    ["", "[]", "", ""],
+                    ["[1, 2]", "['1', '2']", "1", "2"],
+                    ["[\"abc\", \"xyz\"]", "['abc', 'xyz']", "abc", "xyz"]
+                ]},
+                {"query_id":"802", "expected_results":[
+                    ["{\"a\":1,\"tags\":[\"x\",\"y\"]}", "['x', 'y']", "x", "y"]
+                ]}
+            ]
         }
     ]
 }
