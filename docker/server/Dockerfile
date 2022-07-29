@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 
 # FIXME, XXX, timeplus deb repo
 ARG repository="deb https://repo.timeplus/deb/stable/ main/"
-ARG version=1.0.67
+ARG version=1.0.68
 ARG gosu_ver=1.10
 
 # set non-empty deb_location_url url to create a docker image
