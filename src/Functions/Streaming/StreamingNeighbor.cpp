@@ -449,6 +449,14 @@ namespace
         String getName() const override { return Name::name; }
         size_t getNumberOfArguments() const override { return 0; }
         bool isVariadic() const override { return true; }
+        bool isStateful() const override { return true; }
+        bool isDeterministic() const override { return false; }
+        bool isDeterministicInScopeOfQuery() const override { return false; }
+        bool useDefaultImplementationForNulls() const override { return false; }
+
+        /// We do not use default implementation for LowCardinality because this is not a pure function.
+        /// If used, optimization for LC may execute function only for dictionary, which gives wrong result.
+        bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
         FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
         {
