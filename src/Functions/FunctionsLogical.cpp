@@ -41,11 +41,11 @@ namespace
 {
 using namespace FunctionsLogicalDetail;
 
-using UInt8Container = ColumnBool::Container;
-using UInt8ColumnPtrs = std::vector<const ColumnBool *>;
+using BoolContainer = ColumnBool::Container;
+using BoolColumnPtrs = std::vector<const ColumnBool *>;
 
 
-MutableColumnPtr buildColumnFromTernaryData(const UInt8Container & ternary_data, const bool make_nullable)
+MutableColumnPtr buildColumnFromTernaryData(const BoolContainer & ternary_data, const bool make_nullable)
 {
     const size_t rows_count = ternary_data.size();
 
@@ -66,7 +66,7 @@ MutableColumnPtr buildColumnFromTernaryData(const UInt8Container & ternary_data,
 }
 
 template <typename T>
-bool tryConvertColumnToBool(const IColumn * column, UInt8Container & res)
+bool tryConvertColumnToBool(const IColumn * column, BoolContainer & res)
 {
     const auto col = checkAndGetColumn<ColumnVector<T>>(column);
     if (!col)
@@ -79,9 +79,10 @@ bool tryConvertColumnToBool(const IColumn * column, UInt8Container & res)
     return true;
 }
 
-void convertAnyColumnToBool(const IColumn * column, UInt8Container & res)
+void convertAnyColumnToBool(const IColumn * column, BoolContainer & res)
 {
-    if (!tryConvertColumnToBool<Int8>(column, res) &&
+    if (!tryConvertColumnToBool<UInt8>(column,res) &&
+        !tryConvertColumnToBool<Int8>(column, res) &&
         !tryConvertColumnToBool<Int16>(column, res) &&
         !tryConvertColumnToBool<Int32>(column, res) &&
         !tryConvertColumnToBool<Int64>(column, res) &&
@@ -161,7 +162,7 @@ class AssociativeApplierImpl
 
 public:
     /// Remembers the last N columns from `in`.
-    explicit AssociativeApplierImpl(const UInt8ColumnPtrs & in)
+    explicit AssociativeApplierImpl(const BoolColumnPtrs & in)
         : vec(in[in.size() - N]->getData()), next(in) {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
@@ -175,7 +176,7 @@ public:
     }
 
 private:
-    const UInt8Container & vec;
+    const BoolContainer & vec;
     const AssociativeApplierImpl<Op, N - 1> next;
 };
 
@@ -185,13 +186,13 @@ class AssociativeApplierImpl<Op, 1>
     using ResultValueType = typename Op::ResultType;
 
 public:
-    explicit AssociativeApplierImpl(const UInt8ColumnPtrs & in)
+    explicit AssociativeApplierImpl(const BoolColumnPtrs & in)
         : vec(in[in.size() - 1]->getData()) {}
 
     inline ResultValueType apply(const size_t i) const { return !!vec[i]; }
 
 private:
-    const UInt8Container & vec;
+    const BoolContainer & vec;
 };
 
 
@@ -355,7 +356,7 @@ static ColumnPtr executeForTernaryLogicImpl(ColumnRawPtrs arguments, const DataT
     if (has_consts && (arguments.empty() || Op::isSaturatedValueTernary(const_3v_value)))
     {
         return ColumnConst::create(
-            buildColumnFromTernaryData(UInt8Container({const_3v_value}), result_type->isNullable()),
+            buildColumnFromTernaryData(BoolContainer({const_3v_value}), result_type->isNullable()),
             input_rows_count
         );
     }
@@ -452,23 +453,23 @@ static ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_cou
         return col_res;
     }
 
-    /// Convert all columns to UInt8
-    UInt8ColumnPtrs uint8_args;
+    /// Convert all columns to Bool
+    BoolColumnPtrs bool_args;
     Columns converted_columns_holder;
     for (const IColumn * column : arguments)
     {
-        if (const auto * uint8_column = checkAndGetColumn<ColumnBool>(column))
-            uint8_args.push_back(uint8_column);
+        if (const auto * bool_column = checkAndGetColumn<ColumnBool>(column))
+            bool_args.push_back(bool_column);
         else
         {
             auto converted_column = ColumnBool::create(input_rows_count);
             convertAnyColumnToBool(column, converted_column->getData());
-            uint8_args.push_back(converted_column.get());
+            bool_args.push_back(converted_column.get());
             converted_columns_holder.emplace_back(std::move(converted_column));
         }
     }
 
-    OperationApplier<Op, AssociativeApplierImpl>::apply(uint8_args, col_res->getData(), has_consts);
+    OperationApplier<Op, AssociativeApplierImpl>::apply(bool_args, col_res->getData(), has_consts);
 
     return col_res;
 }
