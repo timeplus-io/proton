@@ -93,10 +93,10 @@ public:
 };
 
 template <>
-const char * FunctionPolygonPerimeter<CartesianPoint>::name = "polygonPerimeterCartesian";
+const char * FunctionPolygonPerimeter<CartesianPoint>::name = "polygon_perimeter_cartesian";
 
 template <>
-const char * FunctionPolygonPerimeter<SphericalPoint>::name = "polygonPerimeterSpherical";
+const char * FunctionPolygonPerimeter<SphericalPoint>::name = "polygon_perimeter_spherical";
 
 
 void registerFunctionPolygonPerimeter(FunctionFactory & factory)

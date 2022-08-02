@@ -96,7 +96,7 @@ public:
 
 
 template <>
-const char * FunctionPolygonConvexHull<CartesianPoint>::name = "polygonConvexHullCartesian";
+const char * FunctionPolygonConvexHull<CartesianPoint>::name = "polygon_convex_hull_cartesian";
 
 
 void registerFunctionPolygonConvexHull(FunctionFactory & factory)

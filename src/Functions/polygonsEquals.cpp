@@ -105,7 +105,7 @@ public:
 
 
 template <>
-const char * FunctionPolygonsEquals<CartesianPoint>::name = "polygonsEqualsCartesian";
+const char * FunctionPolygonsEquals<CartesianPoint>::name = "polygons_equals_cartesian";
 
 
 void registerFunctionPolygonsEquals(FunctionFactory & factory)

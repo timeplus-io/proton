@@ -56,7 +56,7 @@ template <typename PointInConstPolygonImpl>
 class FunctionPointInPolygon : public IFunction
 {
 public:
-    static inline const char * name = "pointInPolygon";
+    static inline const char * name = "point_in_polygon";
 
     explicit FunctionPointInPolygon(bool validate_) : validate(validate_) {}
 

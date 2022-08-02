@@ -107,10 +107,10 @@ public:
 };
 
 template <>
-const char * FunctionPolygonsUnion<CartesianPoint>::name = "polygonsUnionCartesian";
+const char * FunctionPolygonsUnion<CartesianPoint>::name = "polygons_union_cartesian";
 
 template <>
-const char * FunctionPolygonsUnion<SphericalPoint>::name = "polygonsUnionSpherical";
+const char * FunctionPolygonsUnion<SphericalPoint>::name = "polygons_union_spherical";
 
 
 void registerFunctionPolygonsUnion(FunctionFactory & factory)

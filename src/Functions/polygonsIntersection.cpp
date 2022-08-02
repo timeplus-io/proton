@@ -109,10 +109,10 @@ public:
 
 
 template <>
-const char * FunctionPolygonsIntersection<CartesianPoint>::name = "polygonsIntersectionCartesian";
+const char * FunctionPolygonsIntersection<CartesianPoint>::name = "polygons_intersection_cartesian";
 
 template <>
-const char * FunctionPolygonsIntersection<SphericalPoint>::name = "polygonsIntersectionSpherical";
+const char * FunctionPolygonsIntersection<SphericalPoint>::name = "polygons_intersection_spherical";
 
 
 void registerFunctionPolygonsIntersection(FunctionFactory & factory)

@@ -103,10 +103,10 @@ public:
 };
 
 template <>
-const char * FunctionPolygonsDistance<CartesianPoint>::name = "polygonsDistanceCartesian";
+const char * FunctionPolygonsDistance<CartesianPoint>::name = "polygons_distance_cartesian";
 
 template <>
-const char * FunctionPolygonsDistance<SphericalPoint>::name = "polygonsDistanceSpherical";
+const char * FunctionPolygonsDistance<SphericalPoint>::name = "polygons_distance_spherical";
 
 
 void registerFunctionPolygonsDistance(FunctionFactory & factory)

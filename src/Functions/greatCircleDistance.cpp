@@ -237,9 +237,9 @@ class FunctionGeoDistance : public IFunction
 {
 public:
     static constexpr auto name =
-        (method == Method::SPHERE_DEGREES) ? "greatCircleAngle"
-        : ((method == Method::SPHERE_METERS) ? "greatCircleDistance"
-            : "geoDistance");
+        (method == Method::SPHERE_DEGREES) ? "great_circle_angle"
+        : ((method == Method::SPHERE_METERS) ? "great_circle_distance"
+            : "geo_distance");
 
 private:
     String getName() const override { return name; }

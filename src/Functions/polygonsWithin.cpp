@@ -106,10 +106,10 @@ public:
 
 
 template <>
-const char * FunctionPolygonsWithin<CartesianPoint>::name = "polygonsWithinCartesian";
+const char * FunctionPolygonsWithin<CartesianPoint>::name = "polygons_within_cartesian";
 
 template <>
-const char * FunctionPolygonsWithin<SphericalPoint>::name = "polygonsWithinSpherical";
+const char * FunctionPolygonsWithin<SphericalPoint>::name = "polygons_within_spherical";
 
 
 void registerFunctionPolygonsWithin(FunctionFactory & factory)

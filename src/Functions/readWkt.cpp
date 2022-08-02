@@ -78,22 +78,22 @@ public:
 
 struct ReadWKTPointNameHolder
 {
-    static constexpr const char * name = "readWKTPoint";
+    static constexpr const char * name = "read_wkt_point";
 };
 
 struct ReadWKTRingNameHolder
 {
-    static constexpr const char * name = "readWKTRing";
+    static constexpr const char * name = "read_wkt_ring";
 };
 
 struct ReadWKTPolygonNameHolder
 {
-    static constexpr const char * name = "readWKTPolygon";
+    static constexpr const char * name = "read_wkt_polygon";
 };
 
 struct ReadWKTMultiPolygonNameHolder
 {
-    static constexpr const char * name = "readWKTMultiPolygon";
+    static constexpr const char * name = "read_wkt_multi_polygon";
 };
 
 void registerFunctionReadWKT(FunctionFactory & factory)

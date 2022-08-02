@@ -94,10 +94,10 @@ public:
 };
 
 template <>
-const char * FunctionPolygonArea<CartesianPoint>::name = "polygonAreaCartesian";
+const char * FunctionPolygonArea<CartesianPoint>::name = "polygon_area_cartesian";
 
 template <>
-const char * FunctionPolygonArea<SphericalPoint>::name = "polygonAreaSpherical";
+const char * FunctionPolygonArea<SphericalPoint>::name = "polygon_area_spherical";
 
 
 void registerFunctionPolygonArea(FunctionFactory & factory)

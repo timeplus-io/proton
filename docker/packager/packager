@@ -225,6 +225,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DCMAKE_EXPORT_COMPILE_COMMANDS=ON')
         cmake_flags.append('-DENABLE_PARQUET=ON')
         cmake_flags.append('-DENABLE_THRIFT=ON')
+        cmake_flags.append('-DENABLE_GEO_FUNCS=ON')
     # proton: ends.
 
     cmake_flags.append('-DENABLE_NURAFT=1')
