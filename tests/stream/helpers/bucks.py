@@ -350,7 +350,7 @@ def query_run_py(
                 query_type != None and query_type == "table" and loop_times < 0
             ):  # when table query in loop, have interval between table query run
                 time.sleep(2)  # todo: table query internval could be set in tests.json
-            #query_sub_id = query_sub_id + '@' + str(datetime.datetime.now())
+            #query_sub_id = query_sub_id + ' @ ' + str(datetime.datetime.now())
             query_result_iter = pyclient.execute_iter(
                 query, with_column_types=True, query_id=query_sub_id, settings=settings
             )
@@ -534,7 +534,8 @@ def query_execute(config, child_conn, query_results_queue, alive):
                     query_agent_id = "query_agent_" + str(
                         i
                     )  # the actual query_id for query execution and cancel
-                    query_sub_id = str(uuid.uuid4()) + '@' + str(datetime.datetime.now())
+                    #query_sub_id = query_id + "_" + str(i)
+                    query_sub_id = query_id + ':' + str(uuid.uuid4()) + '@' +str(datetime.datetime.now())
                     statement_2_run_copy = copy.deepcopy(statement_2_run)
                     if "$" in query:
                         query_copy = statement_2_run_copy.get("query")
@@ -614,7 +615,7 @@ def query_walk_through(statements, query_conn=None):
         query_id = statement.get("query_id")
         query_type = statement.get("query_type")
         terminate = statement.get("terminate")
-        if query_id == None:
+        if query_id is None:
             query_id = str(uuid.uuid4())
             statement["query_id"] = query_id
 
@@ -923,7 +924,7 @@ def batch_input_from_data_set_py(
                     row_str = (
                         row_str + "'" + str(field) + "'" + ","
                     )  # python client does not support "", so put ' here
-                _perf_row_id = str(uuid.uuid1())
+                _perf_row_id = str(uuid.uuid4())
                 _perf_ingest_time = str(datetime.datetime.now())
                 row_str = (
                     "("
@@ -1006,7 +1007,7 @@ def batch_input_from_data_set_rest(
                         field = field.replace("\\", "\\\\").replace("'","\\'")
                         #field = field.replace('"', '//"')  # proton does
                         row_list.append(field)
-                _perf_row_id = str(uuid.uuid1())
+                _perf_row_id = str(uuid.uuid4())
                 row_list.append(_perf_row_id)
                 _perf_ingest_time = str(datetime.datetime.now())
                 row_list.append(_perf_row_id)

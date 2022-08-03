@@ -1652,15 +1652,17 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             if type != None:
                 table_schema.pop("type")  # type is not legal key/value for rest api
             event_time_column = table_schema.get("event_time_column")
+            ttl_expression = table_schema.get("ttl_expression")
             columns = table_schema.get("columns")
-            if event_time_column != None:
-                table_schema_for_rest = {
+            table_schema_for_rest = {
                     "name": table_name,
-                    "columns": columns,
-                    "event_time_column": event_time_column,
+                    "columns": columns
                 }
-            else:
-                table_schema_for_rest = {"name": table_name, "columns": columns}
+            if event_time_column is not None:
+                table_schema_for_rest["event_time_column"] = event_time_column
+            if ttl_expression is not None:
+                table_schema_for_rest["ttl_expression"] = ttl_expression
+
             post_data = json.dumps(table_schema_for_rest)
 
             logger.debug(
