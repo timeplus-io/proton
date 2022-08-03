@@ -27,7 +27,7 @@ struct ArraySplitImpl
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnUInt8 * column_cut = typeid_cast<const ColumnUInt8 *>(&*mapped);
+        const ColumnBool * column_cut = typeid_cast<const ColumnBool *>(&*mapped);
 
         const IColumn::Offsets & in_offsets = array.getOffsets();
         auto column_offsets_2 = ColumnArray::ColumnOffsets::create();
@@ -62,7 +62,7 @@ struct ArraySplitImpl
         }
         else
         {
-            const auto * column_cut_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
+            const auto * column_cut_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
 
             if (!column_cut_const)
                 throw Exception("Unexpected type of cut column", ErrorCodes::ILLEGAL_COLUMN);

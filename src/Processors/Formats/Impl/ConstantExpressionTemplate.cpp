@@ -624,10 +624,10 @@ ColumnPtr ConstantExpressionTemplate::evaluateAll(BlockMissingValues & nulls, si
     const auto & tuple = assert_cast<const ColumnTuple &>(*res.column);
     if (tuple.tupleSize() != 2)
         throw Exception("Invalid tuple size, it'a a bug", ErrorCodes::LOGICAL_ERROR);
-    const auto & is_null = assert_cast<const ColumnUInt8 &>(tuple.getColumn(1));
+    const auto & is_null = assert_cast<const ColumnBool &>(tuple.getColumn(1));
 
     for (size_t i = 0; i < is_null.size(); ++i)
-        if (is_null.getUInt(i))
+        if (is_null.getBool(i))
             nulls.setBit(column_idx, offset + i);
 
     res.column = tuple.getColumnPtr(0);

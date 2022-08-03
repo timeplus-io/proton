@@ -364,7 +364,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
             {
                 if (flags[i] && places[i])
@@ -412,7 +412,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
             {
                 if (flags[i])
@@ -449,7 +449,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
                 if (!null_map[i] && flags[i])
                     static_cast<const Derived *>(this)->add(place, columns, i, arena);
@@ -468,7 +468,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = batch_begin; i < batch_end; ++i)
             {
                 if (flags[i])

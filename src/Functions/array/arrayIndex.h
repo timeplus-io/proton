@@ -67,8 +67,8 @@ template <
 struct Main
 {
 private:
-    using Initial = IntegralInitial;
-    using Result = IntegralResult;
+    using Initial = typename ColumnVector<IntegralInitial>::ValueType;
+    using Result = typename ColumnVector<IntegralResult>::ValueType;
 
     using ResultType = typename ConcreteAction::ResultType;
     using ResultArr = PaddedPODArray<ResultType>;
@@ -572,7 +572,7 @@ private:
         }
     }
 
-#define INTEGRAL_TPL_PACK UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64
+#define INTEGRAL_TPL_PACK Bool, UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64
 
     ColumnPtr executeOnNonNullable(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const
     {

@@ -40,7 +40,7 @@ namespace
 using namespace GatherUtils;
 
 /** Selection function by condition: if(cond, then, else).
-  * cond - UInt8
+  * cond - Bool
   * then, else - numeric types for which there is a general type, or dates, datetimes, or strings, or arrays of these types.
   */
 
@@ -235,7 +235,7 @@ private:
 
     template <typename T0, typename T1, typename ColVecT0, typename ColVecT1>
     ColumnPtr executeRightType(
-        [[maybe_unused]] const ColumnUInt8 * cond_col,
+        [[maybe_unused]] const ColumnBool * cond_col,
         [[maybe_unused]] const ColumnsWithTypeAndName & arguments,
         [[maybe_unused]] const ColVecT0 * col_left) const
     {
@@ -267,7 +267,7 @@ private:
 
     template <typename T0, typename T1, typename ColVecT0, typename ColVecT1>
     ColumnPtr executeConstRightType(
-        [[maybe_unused]] const ColumnUInt8 * cond_col,
+        [[maybe_unused]] const ColumnBool * cond_col,
         [[maybe_unused]] const ColumnsWithTypeAndName & arguments,
         [[maybe_unused]] const ColumnConst * col_left) const
     {
@@ -299,7 +299,7 @@ private:
 
     template <typename T0, typename T1, typename ColVecT0, typename ColVecT1>
     ColumnPtr executeRightTypeArray(
-        [[maybe_unused]] const ColumnUInt8 * cond_col,
+        [[maybe_unused]] const ColumnBool * cond_col,
         [[maybe_unused]] const ColumnsWithTypeAndName & arguments,
         [[maybe_unused]] const DataTypePtr result_type,
         [[maybe_unused]] const ColumnArray * col_left_array,
@@ -356,7 +356,7 @@ private:
 
     template <typename T0, typename T1, typename ColVecT0, typename ColVecT1>
     ColumnPtr executeConstRightTypeArray(
-        [[maybe_unused]] const ColumnUInt8 * cond_col,
+        [[maybe_unused]] const ColumnBool * cond_col,
         [[maybe_unused]] const ColumnsWithTypeAndName & arguments,
         [[maybe_unused]] const DataTypePtr & result_type,
         [[maybe_unused]] const ColumnConst * col_left_const_array,
@@ -414,7 +414,7 @@ private:
 
     template <typename T0, typename T1>
     ColumnPtr executeTyped(
-        const ColumnUInt8 * cond_col, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
+        const ColumnBool * cond_col, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
     {
         using ColVecT0 = ColumnVectorOrDecimal<T0>;
         using ColVecT1 = ColumnVectorOrDecimal<T1>;
@@ -451,7 +451,7 @@ private:
         return right_column;
     }
 
-    static ColumnPtr executeString(const ColumnUInt8 * cond_col, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
+    static ColumnPtr executeString(const ColumnBool * cond_col, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
     {
         const IColumn * col_then_untyped = arguments[1].column.get();
         const IColumn * col_else_untyped = arguments[2].column.get();
@@ -540,7 +540,7 @@ private:
         return nullptr;
     }
 
-    static ColumnPtr executeGenericArray(const ColumnUInt8 * cond_col, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
+    static ColumnPtr executeGenericArray(const ColumnBool * cond_col, const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
     {
         /// For generic implementation, arrays must be of same type.
         if (!arguments[1].type->equals(*arguments[2].type))
@@ -626,7 +626,7 @@ private:
     }
 
     static ColumnPtr executeGeneric(
-        const ColumnUInt8 * cond_col, const ColumnsWithTypeAndName & arguments, size_t input_rows_count)
+        const ColumnBool * cond_col, const ColumnsWithTypeAndName & arguments, size_t input_rows_count)
     {
         /// Convert both columns to the common type (if needed).
         const ColumnWithTypeAndName & arg1 = arguments[1];
@@ -726,7 +726,7 @@ private:
 
             if (!data_column->empty())
             {
-                cond_is_true = !cond_is_null && checkAndGetColumn<ColumnUInt8>(*data_column)->getBool(0);
+                cond_is_true = !cond_is_null && checkAndGetColumn<ColumnBool>(*data_column)->getBool(0);
                 cond_is_false = !cond_is_null && !cond_is_true;
             }
         }
@@ -744,10 +744,10 @@ private:
             ColumnPtr new_cond_column = nullable->getNestedColumnPtr();
             size_t column_size = arg_cond.column->size();
 
-            if (checkAndGetColumn<ColumnUInt8>(*new_cond_column))
+            if (checkAndGetColumn<ColumnBool>(*new_cond_column))
             {
                 auto nested_column_copy = new_cond_column->cloneResized(new_cond_column->size());
-                typeid_cast<ColumnUInt8 *>(nested_column_copy.get())->applyZeroMap(nullable->getNullMapData());
+                typeid_cast<ColumnBool *>(nested_column_copy.get())->applyZeroMap(nullable->getNullMapData());
                 new_cond_column = std::move(nested_column_copy);
 
                 if (cond_is_const)
@@ -888,8 +888,8 @@ private:
         bool then_is_short = arg_then.column->size() < arg_cond.column->size();
         bool else_is_short = arg_else.column->size() < arg_cond.column->size();
 
-        const ColumnUInt8 * cond_col = typeid_cast<const ColumnUInt8 *>(arg_cond.column.get());
-        const ColumnConst * cond_const_col = checkAndGetColumnConst<ColumnVector<UInt8>>(arg_cond.column.get());
+        const ColumnBool * cond_col = typeid_cast<const ColumnBool *>(arg_cond.column.get());
+        const ColumnConst * cond_const_col = checkAndGetColumnConst<ColumnVector<Bool>>(arg_cond.column.get());
 
         /// If then is NULL, we create Nullable column with null mask OR-ed with condition.
         if (then_is_null)
@@ -902,7 +902,7 @@ private:
                     result_column->expand(cond_col->getData(), true);
                 if (isColumnNullable(*arg_else.column))
                 {
-                    assert_cast<ColumnNullable &>(*result_column).applyNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column));
+                    assert_cast<ColumnNullable &>(*result_column).applyNullMap(assert_cast<const ColumnBool &>(*arg_cond.column));
                     return result_column;
                 }
                 else
@@ -917,7 +917,7 @@ private:
             }
             else
                 throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                    + ". Must be ColumnUInt8 or ColumnConstUInt8.",
+                    + ". Must be ColumnBool or ColumnConstBool.",
                     ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -933,7 +933,7 @@ private:
 
                 if (isColumnNullable(*arg_then.column))
                 {
-                    assert_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column));
+                    assert_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(assert_cast<const ColumnBool &>(*arg_cond.column));
                     return result_column;
                 }
                 else
@@ -960,7 +960,7 @@ private:
             }
             else
                 throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                    + ". Must be ColumnUInt8 or ColumnConstUInt8.",
+                    + ". Must be ColumnBool or ColumnConstBool.",
                     ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -1018,8 +1018,8 @@ public:
             return getReturnTypeImpl({
                 removeNullable(arguments[0]), arguments[1], arguments[2]});
 
-        if (!WhichDataType(arguments[0]).isUInt8())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument (condition) of function if. Must be UInt8.",
+        if (!WhichDataType(arguments[0]).isBool())
+            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument (condition) of function if. Must be bool.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return getLeastSupertype(DataTypes{arguments[1], arguments[2]});
@@ -1046,8 +1046,8 @@ public:
             return arg_then.column;
         }
 
-        const ColumnUInt8 * cond_col = typeid_cast<const ColumnUInt8 *>(arg_cond.column.get());
-        const ColumnConst * cond_const_col = checkAndGetColumnConst<ColumnVector<UInt8>>(arg_cond.column.get());
+        const ColumnBool * cond_col = typeid_cast<const ColumnBool *>(arg_cond.column.get());
+        const ColumnConst * cond_const_col = checkAndGetColumnConst<ColumnVector<Bool>>(arg_cond.column.get());
         ColumnPtr materialized_cond_col;
 
         if (cond_const_col)
@@ -1061,13 +1061,13 @@ public:
             else
             {
                 materialized_cond_col = cond_const_col->convertToFullColumn();
-                cond_col = typeid_cast<const ColumnUInt8 *>(&*materialized_cond_col);
+                cond_col = typeid_cast<const ColumnBool *>(&*materialized_cond_col);
             }
         }
 
         if (!cond_col)
             throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                + ". Must be ColumnUInt8 or ColumnConstUInt8.",
+                + ". Must be ColumnBool or ColumnConstBool.",
                 ErrorCodes::ILLEGAL_COLUMN);
 
         auto call = [&](const auto & types) -> bool

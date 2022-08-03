@@ -48,7 +48,7 @@ public:
         if (!isNativeNumber(arguments.front()))
             throw Exception{"Argument for function " + getName() + " must be number", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -58,7 +58,8 @@ public:
         const auto * in = arguments.front().column.get();
 
         ColumnPtr res;
-        if (!((res = execute<UInt8>(in))
+        if (!((res = execute<Bool>(in))
+            || (res = execute<UInt8>(in))
             || (res = execute<UInt16>(in))
             || (res = execute<UInt32>(in))
             || (res = execute<UInt64>(in))
@@ -80,7 +81,7 @@ public:
         {
             const auto size = in->size();
 
-            auto out = ColumnUInt8::create(size);
+            auto out = ColumnBool::create(size);
 
             const auto & in_data = in->getData();
             auto & out_data = out->getData();

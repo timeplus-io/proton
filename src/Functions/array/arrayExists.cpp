@@ -22,16 +22,16 @@ struct ArrayExistsImpl
 
     static DataTypePtr getReturnType(const DataTypePtr & /*expression_return*/, const DataTypePtr & /*array_element*/)
     {
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnUInt8 * column_filter = typeid_cast<const ColumnUInt8 *>(&*mapped);
+        const ColumnBool * column_filter = typeid_cast<const ColumnBool *>(&*mapped);
 
         if (!column_filter)
         {
-            const auto * column_filter_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
+            const auto * column_filter_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
 
             if (!column_filter_const)
                 throw Exception("Unexpected type of filter column", ErrorCodes::ILLEGAL_COLUMN);
@@ -39,8 +39,8 @@ struct ArrayExistsImpl
             if (column_filter_const->getValue<UInt8>())
             {
                 const IColumn::Offsets & offsets = array.getOffsets();
-                auto out_column = ColumnUInt8::create(offsets.size());
-                ColumnUInt8::Container & out_exists = out_column->getData();
+                auto out_column = ColumnBool::create(offsets.size());
+                ColumnBool::Container & out_exists = out_column->getData();
 
                 size_t pos = 0;
                 for (size_t i = 0; i < offsets.size(); ++i)
@@ -52,13 +52,13 @@ struct ArrayExistsImpl
                 return out_column;
             }
             else
-                return DataTypeUInt8().createColumnConst(array.size(), 0u);
+                return DataTypeBool().createColumnConst(array.size(), 0u);
         }
 
         const IColumn::Filter & filter = column_filter->getData();
         const IColumn::Offsets & offsets = array.getOffsets();
-        auto out_column = ColumnUInt8::create(offsets.size());
-        ColumnUInt8::Container & out_exists = out_column->getData();
+        auto out_column = ColumnBool::create(offsets.size());
+        ColumnBool::Container & out_exists = out_column->getData();
 
         size_t pos = 0;
         for (size_t i = 0; i < offsets.size(); ++i)

@@ -452,7 +452,7 @@ public:
 private:
     Block read_result;
     Mapped result;
-    ColumnVector<UInt8>::Container found;
+    ColumnVector<Bool>::Container found;
     std::vector<size_t> positions;
 };
 

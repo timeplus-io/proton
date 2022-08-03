@@ -168,6 +168,7 @@ if (false) /* NOLINT */ \
 { \
     /* Do nothing, a starter condition. */ \
 } \
+APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<Bool>) \
 APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt8>) \
 APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt16>) \
 APPLY_FOR_ONE_TYPE(FUNCTION, ColumnVector<UInt32>) \

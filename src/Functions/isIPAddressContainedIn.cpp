@@ -163,7 +163,7 @@ namespace DB
                 throw Exception("The arguments of function " + getName() + " must be String",
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-            return std::make_shared<DataTypeUInt8>();
+            return std::make_shared<DataTypeBool>();
         }
 
         virtual size_t getNumberOfArguments() const override { return 2; }
@@ -192,8 +192,8 @@ namespace DB
             const auto addr = IPAddressVariant(col_addr.getDataAt(0));
             const auto cidr = parseIPWithCIDR(col_cidr.getDataAt(0));
 
-            ColumnUInt8::MutablePtr col_res = ColumnUInt8::create(1);
-            ColumnUInt8::Container & vec_res = col_res->getData();
+            ColumnBool::MutablePtr col_res = ColumnBool::create(1);
+            ColumnBool::Container & vec_res = col_res->getData();
 
             vec_res[0] = isAddressInRange(addr, cidr) ? 1 : 0;
 
@@ -207,8 +207,8 @@ namespace DB
 
             const auto addr = IPAddressVariant(col_addr.getDataAt   (0));
 
-            ColumnUInt8::MutablePtr col_res = ColumnUInt8::create(input_rows_count);
-            ColumnUInt8::Container & vec_res = col_res->getData();
+            ColumnBool::MutablePtr col_res = ColumnBool::create(input_rows_count);
+            ColumnBool::Container & vec_res = col_res->getData();
 
             for (size_t i = 0; i < input_rows_count; ++i)
             {
@@ -225,8 +225,8 @@ namespace DB
 
             const auto cidr = parseIPWithCIDR(col_cidr.getDataAt(0));
 
-            ColumnUInt8::MutablePtr col_res = ColumnUInt8::create(input_rows_count);
-            ColumnUInt8::Container & vec_res = col_res->getData();
+            ColumnBool::MutablePtr col_res = ColumnBool::create(input_rows_count);
+            ColumnBool::Container & vec_res = col_res->getData();
             for (size_t i = 0; i < input_rows_count; ++i)
             {
                 const auto addr = IPAddressVariant(col_addr.getDataAt(i));
@@ -238,8 +238,8 @@ namespace DB
         /// Neither are constant.
         static ColumnPtr executeImpl(const IColumn & col_addr, const IColumn & col_cidr, size_t input_rows_count)
         {
-            ColumnUInt8::MutablePtr col_res = ColumnUInt8::create(input_rows_count);
-            ColumnUInt8::Container & vec_res = col_res->getData();
+            ColumnBool::MutablePtr col_res = ColumnBool::create(input_rows_count);
+            ColumnBool::Container & vec_res = col_res->getData();
 
             for (size_t i = 0; i < input_rows_count; ++i)
             {

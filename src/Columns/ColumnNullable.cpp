@@ -624,6 +624,30 @@ void ColumnNullable::applyNullMapImpl(const ColumnUInt8 & map)
         arr1[i] |= negative ^ arr2[i];
 }
 
+/// proton: starts.
+template <bool negative>
+void ColumnNullable::applyNullMapImpl(const ColumnBool & map)
+{
+    NullMap & arr1 = getNullMapData();
+    const NullMap & arr2 = map.getData();
+
+    if (arr1.size() != arr2.size())
+        throw Exception{"Inconsistent sizes of ColumnNullable objects", ErrorCodes::LOGICAL_ERROR};
+
+    for (size_t i = 0, size = arr1.size(); i < size; ++i)
+        arr1[i] |= negative ^ arr2[i];
+}
+
+void ColumnNullable::applyNullMap(const ColumnBool & map)
+{
+    applyNullMapImpl<false>(map);
+}
+
+void ColumnNullable::applyNegatedNullMap(const ColumnBool & map)
+{
+    applyNullMapImpl<true>(map);
+}
+// proton: ends.
 
 void ColumnNullable::applyNullMap(const ColumnUInt8 & map)
 {

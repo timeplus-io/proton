@@ -35,7 +35,7 @@ public:
 
     DictionaryReader(const String & dictionary_name, const Names & src_column_names, const NamesAndTypesList & result_columns,
                      ContextPtr context);
-    void readKeys(const IColumn & keys, Block & out_block, ColumnVector<UInt8>::Container & found, std::vector<size_t> & positions) const;
+    void readKeys(const IColumn & keys, Block & out_block, ColumnVector<Bool>::Container & found, std::vector<size_t> & positions) const;
 
 private:
     Block result_header;

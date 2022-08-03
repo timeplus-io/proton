@@ -184,6 +184,11 @@ public:
     void applyNullMap(const ColumnUInt8 & map);
     void applyNegatedNullMap(const ColumnUInt8 & map);
 
+    /// proton: starts.
+    void applyNullMap(const ColumnBool & map);
+    void applyNegatedNullMap(const ColumnBool & map);
+    /// proton: ends.
+
     /// Check that size of null map equals to size of nested column.
     void checkConsistency() const;
 
@@ -193,6 +198,11 @@ private:
 
     template <bool negative>
     void applyNullMapImpl(const ColumnUInt8 & map);
+
+    /// proton: starts.
+    template <bool negative>
+    void applyNullMapImpl(const ColumnBool & map);
+    /// proton: ends.
 
     int compareAtImpl(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const Collator * collator=nullptr) const;
 

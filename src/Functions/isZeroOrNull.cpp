@@ -47,7 +47,7 @@ public:
         if (!isNumber(removeNullable(types.at(0))))
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "The argument of function {} must have simple numeric type, possibly Nullable", name);
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -60,13 +60,13 @@ public:
             const NullMap & null_map = input_column_nullable->getNullMapData();
             const IColumn * nested_column = &input_column_nullable->getNestedColumn();
 
-            if (!castTypeToEither<
+            if (!castTypeToEither<ColumnBool,
                 ColumnUInt8, ColumnUInt16, ColumnUInt32, ColumnUInt64,
                 ColumnInt8, ColumnInt16, ColumnInt32, ColumnInt64,
                 ColumnFloat32, ColumnFloat64>(
                 nested_column, [&](const auto & column)
                 {
-                    auto col = ColumnUInt8::create(input_rows_count);
+                    auto col = ColumnBool::create(input_rows_count);
                     processNullable(column.getData(), null_map, col->getData(), input_rows_count);
                     res = std::move(col);
                     return true;
@@ -77,13 +77,13 @@ public:
         }
         else
         {
-            if (!castTypeToEither<
+            if (!castTypeToEither<ColumnBool,
                 ColumnUInt8, ColumnUInt16, ColumnUInt32, ColumnUInt64,
                 ColumnInt8, ColumnInt16, ColumnInt32, ColumnInt64,
                 ColumnFloat32, ColumnFloat64>(
                 input_column.get(), [&](const auto & column)
                 {
-                    auto col = ColumnUInt8::create(input_rows_count);
+                    auto col = ColumnBool::create(input_rows_count);
                     processNotNullable(column.getData(), col->getData(), input_rows_count);
                     res = std::move(col);
                     return true;
@@ -98,7 +98,7 @@ public:
 
 private:
     template <typename InputData>
-    void processNotNullable(const InputData & input_data, ColumnUInt8::Container & result_data, size_t input_rows_count) const
+    void processNotNullable(const InputData & input_data, ColumnBool::Container & result_data, size_t input_rows_count) const
     {
         for (size_t i = 0; i < input_rows_count; ++i)
             result_data[i] = !input_data[i];
@@ -106,7 +106,7 @@ private:
 
     template <typename InputData>
     void processNullable(const InputData & input_data, const NullMap & input_null_map,
-        ColumnUInt8::Container & result_data, size_t input_rows_count) const
+        ColumnBool::Container & result_data, size_t input_rows_count) const
     {
         for (size_t i = 0; i < input_rows_count; ++i)
             result_data[i] = input_null_map[i] || !input_data[i];

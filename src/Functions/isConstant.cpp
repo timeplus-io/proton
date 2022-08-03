@@ -36,13 +36,13 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
     {
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const auto & elem = arguments[0];
-        return ColumnUInt8::create(input_rows_count, isColumnConst(*elem.column));
+        return ColumnBool::create(input_rows_count, isColumnConst(*elem.column));
     }
 };
 

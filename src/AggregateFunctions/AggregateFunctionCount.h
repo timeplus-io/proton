@@ -58,7 +58,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             data(place).count += countBytesInFilter(flags);
         }
         else
@@ -77,7 +77,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             data(place).count += countBytesInFilterWithNull(flags, null_map);
         }
         else
@@ -209,7 +209,7 @@ public:
         auto & nc = assert_cast<const ColumnNullable &>(*columns[0]);
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             data(place).count += countBytesInFilterWithNull(flags, nc.getNullMapData().data());
         }
         else

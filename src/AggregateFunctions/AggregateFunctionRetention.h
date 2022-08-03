@@ -127,7 +127,7 @@ public:
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        auto & data_to = assert_cast<ColumnUInt8 &>(assert_cast<ColumnArray &>(to).getData()).getData();
+        auto & data_to = assert_cast<ColumnBool &>(assert_cast<ColumnArray &>(to).getData()).getData();
         auto & offsets_to = assert_cast<ColumnArray &>(to).getOffsets();
 
         ColumnArray::Offset current_offset = data_to.size();

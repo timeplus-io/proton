@@ -65,7 +65,7 @@ public:
                 getName());
 
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     bool useDefaultImplementationForConstants() const override { return false; }
@@ -97,7 +97,8 @@ public:
         const auto * in = first_argument_column.get();
 
         ColumnPtr res;
-        if (!((res = execute<UInt8>(in, custom_message))
+        if (!((res = execute<Bool>(in, custom_message))
+            || (res = execute<UInt8>(in, custom_message))
             || (res = execute<UInt16>(in, custom_message))
             || (res = execute<UInt32>(in, custom_message))
             || (res = execute<UInt64>(in, custom_message))
@@ -132,7 +133,7 @@ public:
             }
 
             /// We return non constant to avoid constant folding.
-            return ColumnUInt8::create(in_data.size(), 0);
+            return ColumnBool::create(in_data.size(), 0);
         }
 
         return nullptr;

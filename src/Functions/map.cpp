@@ -418,8 +418,8 @@ public:
         if (!col_map || !map_type)
             throw Exception{"First argument for function " + getName() + " must be a map", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        auto col_res = ColumnVector<UInt8>::create();
-        typename ColumnVector<UInt8>::Container & vec_res = col_res->getData();
+        auto col_res = ColumnVector<Bool>::create();
+        typename ColumnVector<Bool>::Container & vec_res = col_res->getData();
 
         if (input_rows_count == 0)
             return col_res;
@@ -468,7 +468,7 @@ public:
                 };
 
             auto res = func_like.executeImpl(new_arguments, result_type, input_rows_count);
-            const auto & container = checkAndGetColumn<ColumnUInt8>(res.get())->getData();
+            const auto & container = checkAndGetColumn<ColumnBool>(res.get())->getData();
 
             const auto it = std::find_if(container.begin(), container.end(), [](int element){ return element == 1; });  // NOLINT
             vec_res[row] = it == container.end() ? 0 : 1;
@@ -498,7 +498,7 @@ public:
             throw Exception{"Key type of map for function " + getName() + " must be `string` or `fixed_string`",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     size_t getNumberOfArguments() const override { return 2; }
@@ -614,7 +614,7 @@ public:
                     };
 
             auto res = func_like.executeImpl(new_arguments, result_type, input_rows_count);
-            const auto & container = checkAndGetColumn<ColumnUInt8>(res.get())->getData();
+            const auto & container = checkAndGetColumn<ColumnBool>(res.get())->getData();
 
             for (size_t row_num = 0; row_num < element_size; ++row_num)
             {

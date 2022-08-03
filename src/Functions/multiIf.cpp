@@ -27,7 +27,7 @@ namespace
 /// Syntax: multiIf(cond_1, then_1, ..., cond_N, then_N, else)
 /// where N >= 1.
 ///
-/// For all 1 <= i <= N, "cond_i" has type UInt8.
+/// For all 1 <= i <= N, "cond_i" has type bool.
 /// Types of all the branches "then_i" and "else" have a common type.
 ///
 /// Additionally the arguments, conditions or branches, support nullable types
@@ -98,9 +98,9 @@ public:
                 nested_type = arg.get();
             }
 
-            if (!WhichDataType(nested_type).isUInt8())
+            if (!WhichDataType(nested_type).isBool())
                 throw Exception{"Illegal type " + arg->getName() + " of argument (condition) "
-                    "of function " + getName() + ". Must be uint8.",
+                    "of function " + getName() + ". Must be bool.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         });
 
@@ -233,11 +233,11 @@ public:
                 if (instruction.condition_always_true)
                     insert = true;
                 else if (!instruction.condition_is_nullable)
-                    insert = assert_cast<const ColumnUInt8 &>(*instruction.condition).getData()[condition_index];
+                    insert = assert_cast<const ColumnBool &>(*instruction.condition).getData()[condition_index];
                 else
                 {
                     const ColumnNullable & condition_nullable = assert_cast<const ColumnNullable &>(*instruction.condition);
-                    const ColumnUInt8 & condition_nested = assert_cast<const ColumnUInt8 &>(condition_nullable.getNestedColumn());
+                    const ColumnBool & condition_nested = assert_cast<const ColumnBool &>(condition_nullable.getNestedColumn());
                     const NullMap & condition_null_map = condition_nullable.getNullMapData();
 
                     insert = !condition_null_map[condition_index] && condition_nested.getData()[condition_index];

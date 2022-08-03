@@ -319,11 +319,11 @@ std::vector<IPolygonDictionary::Point> IPolygonDictionary::extractPoints(const C
     return result;
 }
 
-ColumnUInt8::Ptr IPolygonDictionary::hasKeys(const Columns & key_columns, const DataTypes &) const
+ColumnBool::Ptr IPolygonDictionary::hasKeys(const Columns & key_columns, const DataTypes &) const
 {
     std::vector<IPolygonDictionary::Point> points = extractPoints(key_columns);
 
-    auto result = ColumnUInt8::create(points.size());
+    auto result = ColumnBool::create(points.size());
     auto & out = result->getData();
 
     size_t keys_found = 0;

@@ -58,7 +58,7 @@ public:
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -84,7 +84,7 @@ public:
         else
             precision = getDecimalPrecision(*src_column.type);
 
-        auto result_column = ColumnUInt8::create();
+        auto result_column = ColumnBool::create();
 
         auto call = [&](const auto & types) -> bool //-V657
         {
@@ -118,7 +118,7 @@ public:
 
 private:
     template <typename T>
-    static void execute(const ColumnDecimal<T> & col, ColumnUInt8 & result_column, size_t rows_count, UInt32 precision)
+    static void execute(const ColumnDecimal<T> & col, ColumnBool & result_column, size_t rows_count, UInt32 precision)
     {
         const auto & src_data = col.getData();
         auto & dst_data = result_column.getData();

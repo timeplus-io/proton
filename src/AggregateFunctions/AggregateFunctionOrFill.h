@@ -47,9 +47,9 @@ public:
     String getName() const override
     {
         if constexpr (UseNull)
-            return nested_function->getName() + "OrNull";
+            return nested_function->getName() + "_or_null";
         else
-            return nested_function->getName() + "OrDefault";
+            return nested_function->getName() + "_or_default";
     }
 
     bool isVersioned() const override
@@ -118,7 +118,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
             {
                 if (flags[i] && places[i])
@@ -139,7 +139,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             nested_function->addBatchSinglePlace(batch_size, place, columns, arena, if_argument_pos);
             for (size_t i = 0; i < batch_size; ++i)
             {
@@ -170,7 +170,7 @@ public:
     {
         if (if_argument_pos >= 0)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             nested_function->addBatchSinglePlaceNotNull(batch_size, place, columns, null_map, arena, if_argument_pos);
             for (size_t i = 0; i < batch_size; ++i)
             {

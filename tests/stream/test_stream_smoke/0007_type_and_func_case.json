@@ -543,15 +543,15 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(id, value, bool_f,time) values(1, -1000, true, '2020-01-02 00:00:01')(1, 0,true, '2020-01-03 09:01:02')(1, 1, false, '2020-01-05 09:01:03')(1, 2, false, '2020-01-18 09:01:04')"},
-                    {"client":"python", "query_type": "table","wait":3, "query_id": "801", "query":"select 0 as v1, 'true' as v2, v1>0, v2='true', v1=true, v2=true, value=1, value!=1, value>1, value<=1, value<1, value>=1 from table(t_bool) where id = 1 and id != 0 and to_uint8(id)"}
+                    {"client":"python", "query_type": "table","wait":3, "query_id": "801", "query":"select if(1<2,'a','b'), 0 as v1, 'true' as v2, v1>0, v2='true', v1=true, v2=true, value=1, value!=1, value>1, value<=1, value<1, value>=1 from table(t_bool) where id = 1 and id != 0 and to_uint8(id)"}
                     ]}
             ],
 
             "expected_results": [{"query_id":"801", "expected_results":[
-                [0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
-                [0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
-                [0, "true", "False", "True", "False", "True", "True", "False", "False", "True", "False", "True"],
-                [0, "true", "False", "True", "False", "True", "False", "True", "True", "False", "False", "True"]
+                ["a", 0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
+                ["a", 0, "true", "False", "True", "False", "True", "False", "True", "False", "True", "True", "False"],
+                ["a", 0, "true", "False", "True", "False", "True", "True", "False", "False", "True", "False", "True"],
+                ["a", 0, "true", "False", "True", "False", "True", "False", "True", "True", "False", "False", "True"]
                 ]}
             ]
         },
@@ -587,7 +587,7 @@
             ],
 
             "expected_results": [{"query_id":"801", "expected_results":[
-                ["inf", 0, 1, 42, 1]
+                ["inf", "False", "True", 42, "True"]
                 ]}
             ]
         },
@@ -655,7 +655,7 @@
             ],
 
             "expected_results": [{"query_id":"801", "expected_results":[
-                [1]
+                ["True"]
                 ]}
             ]
         }

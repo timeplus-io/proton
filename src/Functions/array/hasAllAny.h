@@ -50,7 +50,7 @@ public:
                                 + arguments[i]->getName() + ".", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -81,8 +81,8 @@ public:
                 throw Exception{"Arguments for function " + getName() + " must be arrays.", ErrorCodes::LOGICAL_ERROR};
         }
 
-        auto result_column = ColumnUInt8::create(input_rows_count);
-        auto * result_column_ptr = typeid_cast<ColumnUInt8 *>(result_column.get());
+        auto result_column = ColumnBool::create(input_rows_count);
+        auto * result_column_ptr = typeid_cast<ColumnBool *>(result_column.get());
         GatherUtils::sliceHas(*sources[0], *sources[1], search_type, *result_column_ptr);
 
         return result_column;

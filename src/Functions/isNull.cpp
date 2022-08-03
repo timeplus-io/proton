@@ -36,22 +36,23 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const ColumnWithTypeAndName & elem = arguments[0];
         if (const auto * nullable = checkAndGetColumn<ColumnNullable>(*elem.column))
         {
-            /// Merely return the embedded null map.
-            return nullable->getNullMapColumnPtr();
+            auto res_column = ColumnBool::create(input_rows_count, 1u);
+            assert_cast<ColumnBool &>(*res_column).applyZeroMap(nullable->getNullMapData(), true);
+            return res_column;
         }
         else
         {
             /// Since no element is nullable, return a zero-constant column representing
             /// a zero-filled null map.
-            return DataTypeUInt8().createColumnConst(elem.column->size(), 0u);
+            return DataTypeBool().createColumnConst(elem.column->size(), 0u);
         }
     }
 };

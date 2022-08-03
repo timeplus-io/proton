@@ -409,7 +409,7 @@ ColumnPtr getKeysHierarchyArray(
 
 /// Returns is in hierarchy column for keys
 template <typename KeyType, typename IsKeyValidFunc, typename GetParentKeyFunc>
-ColumnUInt8::Ptr getKeysIsInHierarchyColumn(
+ColumnBool::Ptr getKeysIsInHierarchyColumn(
     const PaddedPODArray<KeyType> & hierarchy_keys,
     const PaddedPODArray<KeyType> & hierarchy_in_keys,
     const KeyType & hierarchy_null_value,
@@ -423,7 +423,7 @@ ColumnUInt8::Ptr getKeysIsInHierarchyColumn(
         std::forward<IsKeyValidFunc>(is_key_valid_func),
         std::forward<GetParentKeyFunc>(get_parent_func));
 
-    auto result = ColumnUInt8::create();
+    auto result = ColumnBool::create();
     result->getData() = std::move(is_in_hierarchy_data);
 
     return result;
@@ -469,9 +469,9 @@ ColumnPtr getKeysHierarchyDefaultImplementation(
   * Implementation will build such structure with getColumn calls, and then getHierarchy for such structure.
   *
   * @param valid_keys - number of keys (from @key_column) for which information about parent exists.
-  * @return UInt8 column if key from in_key_column is in key hierarchy from key_column.
+  * @return Bool column if key from in_key_column is in key hierarchy from key_column.
   */
-ColumnUInt8::Ptr getKeysIsInHierarchyDefaultImplementation(
+ColumnBool::Ptr getKeysIsInHierarchyDefaultImplementation(
     const IDictionary * dictionary,
     ColumnPtr key_column,
     ColumnPtr in_key_column,

@@ -65,7 +65,7 @@ public:
         if (!isStringOrFixedString(arguments[1]))
             throw Exception("Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -73,8 +73,8 @@ public:
         const IColumn * haystack_column = arguments[0].column.get();
         const IColumn * needle_column = arguments[1].column.get();
 
-        auto col_res = ColumnVector<UInt8>::create();
-        typename ColumnVector<UInt8>::Container & vec_res = col_res->getData();
+        auto col_res = ColumnVector<Bool>::create();
+        typename ColumnVector<Bool>::Container & vec_res = col_res->getData();
 
         vec_res.resize(input_rows_count);
 

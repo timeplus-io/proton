@@ -60,7 +60,7 @@ public:
                     arg->getName(), i, getName());
         }
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -68,7 +68,7 @@ public:
         const auto * col_id_first = arguments[0].column.get();
         const auto * col_id_second = arguments[1].column.get();
 
-        auto dst = ColumnUInt8::create();
+        auto dst = ColumnBool::create();
         auto & dst_data = dst->getData();
         dst_data.reserve(input_rows_count);
 

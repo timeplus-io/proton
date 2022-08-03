@@ -302,7 +302,7 @@ ColumnPtr RangeHashedDictionary<dictionary_key_type>::getColumnInternal(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnUInt8::Ptr RangeHashedDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnBool::Ptr RangeHashedDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     if (dictionary_key_type == DictionaryKeyType::Complex)
     {
@@ -322,7 +322,7 @@ ColumnUInt8::Ptr RangeHashedDictionary<dictionary_key_type>::hasKeys(const Colum
     DictionaryKeysExtractor<dictionary_key_type> keys_extractor(key_columns_copy, arena_holder.getComplexKeyArena());
     const size_t keys_size = keys_extractor.getKeysSize();
 
-    auto result = ColumnUInt8::create(keys_size);
+    auto result = ColumnBool::create(keys_size);
     auto & out = result->getData();
     size_t keys_found = 0;
 

@@ -151,13 +151,13 @@ ColumnPtr FlatDictionary::getColumn(
     return result;
 }
 
-ColumnUInt8::Ptr FlatDictionary::hasKeys(const Columns & key_columns, const DataTypes &) const
+ColumnBool::Ptr FlatDictionary::hasKeys(const Columns & key_columns, const DataTypes &) const
 {
     PaddedPODArray<UInt64> backup_storage;
     const auto & keys = getColumnVectorData(this, key_columns.front(), backup_storage);
     size_t keys_size = keys.size();
 
-    auto result = ColumnUInt8::create(keys_size);
+    auto result = ColumnBool::create(keys_size);
     auto & out = result->getData();
 
     size_t keys_found = 0;
@@ -207,7 +207,7 @@ ColumnPtr FlatDictionary::getHierarchy(ColumnPtr key_column, const DataTypePtr &
     return dictionary_hierarchy_array;
 }
 
-ColumnUInt8::Ptr FlatDictionary::isInHierarchy(
+ColumnBool::Ptr FlatDictionary::isInHierarchy(
     ColumnPtr key_column,
     ColumnPtr in_key_column,
     const DataTypePtr &) const

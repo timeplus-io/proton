@@ -145,7 +145,7 @@ Columns HashedArrayDictionary<dictionary_key_type>::getColumns(
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnUInt8::Ptr HashedArrayDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnBool::Ptr HashedArrayDictionary<dictionary_key_type>::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     if (dictionary_key_type == DictionaryKeyType::Complex)
         dict_struct.validateKeyTypes(key_types);
@@ -155,7 +155,7 @@ ColumnUInt8::Ptr HashedArrayDictionary<dictionary_key_type>::hasKeys(const Colum
 
     size_t keys_size = extractor.getKeysSize();
 
-    auto result = ColumnUInt8::create(keys_size, false);
+    auto result = ColumnBool::create(keys_size, false);
     auto & out = result->getData();
 
     size_t keys_found = 0;
@@ -226,7 +226,7 @@ ColumnPtr HashedArrayDictionary<dictionary_key_type>::getHierarchy(ColumnPtr key
 }
 
 template <DictionaryKeyType dictionary_key_type>
-ColumnUInt8::Ptr HashedArrayDictionary<dictionary_key_type>::isInHierarchy(
+ColumnBool::Ptr HashedArrayDictionary<dictionary_key_type>::isInHierarchy(
     ColumnPtr key_column [[maybe_unused]],
     ColumnPtr in_key_column [[maybe_unused]],
     const DataTypePtr &) const

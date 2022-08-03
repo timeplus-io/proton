@@ -241,7 +241,7 @@ class JSONExistsImpl
 public:
     using Element = typename JSONParser::Element;
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return std::make_shared<DataTypeUInt8>(); }
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return std::make_shared<DataTypeBool>(); }
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
@@ -261,7 +261,7 @@ public:
 
         /// insert result, status can be either Ok (if we found the item)
         /// or Exhausted (if we never found the item)
-        ColumnUInt8 & col_bool = assert_cast<ColumnUInt8 &>(dest);
+        ColumnBool & col_bool = assert_cast<ColumnBool &>(dest);
         if (status == VisitorStatus::Ok)
         {
             col_bool.insert(1);

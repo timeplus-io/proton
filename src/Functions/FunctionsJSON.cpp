@@ -495,13 +495,13 @@ class JSONHasImpl
 public:
     using Element = typename JSONParser::Element;
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return std::make_shared<DataTypeUInt8>(); }
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) { return std::make_shared<DataTypeBool>(); }
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
     static bool insertResultToColumn(IColumn & dest, const Element &, const std::string_view &)
     {
-        ColumnVector<UInt8> & col_vec = assert_cast<ColumnVector<UInt8> &>(dest);
+        ColumnVector<Bool> & col_vec = assert_cast<ColumnVector<Bool> &>(dest);
         col_vec.insertValue(1);
         return true;
     }
@@ -522,7 +522,7 @@ public:
             throw Exception{"Function " + String(function_name) + " needs exactly one argument",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
         }
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName &) { return 0; }
@@ -531,7 +531,7 @@ public:
     {
         /// This function is called only if JSON is valid.
         /// If JSON isn't valid then `FunctionJSON::Executor::run()` adds default value (=zero) to `dest` without calling this function.
-        ColumnVector<UInt8> & col_vec = assert_cast<ColumnVector<UInt8> &>(dest);
+        ColumnVector<Bool> & col_vec = assert_cast<ColumnVector<Bool> &>(dest);
         col_vec.insertValue(1);
         return true;
     }
@@ -727,7 +727,7 @@ public:
 
     static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
     {
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
@@ -737,8 +737,8 @@ public:
         if (!element.isBool())
             return false;
 
-        auto & col_vec = assert_cast<ColumnVector<UInt8> &>(dest);
-        col_vec.insertValue(static_cast<UInt8>(element.getBool()));
+        auto & col_vec = assert_cast<ColumnVector<Bool> &>(dest);
+        col_vec.insertValue(static_cast<Bool>(element.getBool()));
         return true;
     }
 };

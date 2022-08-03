@@ -27,11 +27,11 @@ struct ArrayFilterImpl
     /// If there are several arrays, the first one is passed here.
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnUInt8 * column_filter = typeid_cast<const ColumnUInt8 *>(&*mapped);
+        const ColumnBool * column_filter = typeid_cast<const ColumnBool *>(&*mapped);
 
         if (!column_filter)
         {
-            const auto * column_filter_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
+            const auto * column_filter_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
 
             if (!column_filter_const)
                 throw Exception("Unexpected type of filter column", ErrorCodes::ILLEGAL_COLUMN);

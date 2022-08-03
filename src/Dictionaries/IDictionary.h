@@ -199,11 +199,11 @@ public:
         return result;
     }
 
-    /** Subclass must validate key columns and key types and return ColumnUInt8 that
+    /** Subclass must validate key columns and key types and return ColumnBool that
       * is bitmask representation of is key in dictionary or not.
-      * If key is in dictionary then value of associated row will be 1, otherwise 0.
+      * If key is in dictionary then value of associated row will be true, otherwise false.
       */
-    virtual ColumnUInt8::Ptr hasKeys(
+    virtual ColumnBool::Ptr hasKeys(
         const Columns & key_columns,
         const DataTypes & key_types) const = 0;
 
@@ -218,7 +218,7 @@ public:
                         getDictionaryID().getNameForLogs());
     }
 
-    virtual ColumnUInt8::Ptr isInHierarchy(
+    virtual ColumnBool::Ptr isInHierarchy(
         ColumnPtr key_column [[maybe_unused]],
         ColumnPtr in_key_column [[maybe_unused]],
         const DataTypePtr & key_type [[maybe_unused]]) const

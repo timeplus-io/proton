@@ -81,13 +81,13 @@ public:
         const DataTypes & key_types,
         const ColumnPtr & default_values_column) const override;
 
-    ColumnUInt8::Ptr hasKeys(const Columns & key_columns, const DataTypes & key_types) const override;
+    ColumnBool::Ptr hasKeys(const Columns & key_columns, const DataTypes & key_types) const override;
 
     bool hasHierarchy() const override { return dict_struct.hierarchical_attribute_index.has_value(); }
 
     ColumnPtr getHierarchy(ColumnPtr key_column, const DataTypePtr & key_type) const override;
 
-    ColumnUInt8::Ptr isInHierarchy(
+    ColumnBool::Ptr isInHierarchy(
         ColumnPtr key_column,
         ColumnPtr in_key_column,
         const DataTypePtr & key_type) const override;

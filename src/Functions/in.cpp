@@ -71,13 +71,13 @@ public:
 
     /// Do not use default implementation for LowCardinality.
     /// For now, Set may be const or non const column, depending on how it was created.
-    /// But we will return UInt8 for any case.
+    /// But we will return Bool for any case.
     /// TODO: we could use special implementation later.
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
     {
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     bool useDefaultImplementationForConstants() const override
@@ -93,7 +93,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, [[maybe_unused]] size_t input_rows_count) const override
     {
         if constexpr (ignore_set)
-            return ColumnUInt8::create(input_rows_count, 0u);
+            return ColumnBool::create(input_rows_count, 0u);
 
         /// Second argument must be ColumnSet.
         ColumnPtr column_set_ptr = arguments[1].column;

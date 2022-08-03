@@ -30,7 +30,7 @@ struct ArrayFillImpl
 
     static ColumnPtr execute(const ColumnArray & array, ColumnPtr mapped)
     {
-        const ColumnUInt8 * column_fill = typeid_cast<const ColumnUInt8 *>(&*mapped);
+        const ColumnBool * column_fill = typeid_cast<const ColumnBool *>(&*mapped);
 
         const IColumn & in_data = array.getData();
         const IColumn::Offsets & in_offsets = array.getOffsets();
@@ -85,7 +85,7 @@ struct ArrayFillImpl
         }
         else
         {
-            const auto * column_fill_const = checkAndGetColumnConst<ColumnUInt8>(&*mapped);
+            const auto * column_fill_const = checkAndGetColumnConst<ColumnBool>(&*mapped);
 
             if (!column_fill_const)
                 throw Exception("Unexpected type of cut column", ErrorCodes::ILLEGAL_COLUMN);

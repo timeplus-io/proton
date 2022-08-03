@@ -141,7 +141,7 @@ public:
         typename Data::Events events;
         for (const auto i : collections::range(1, arg_count))
         {
-            const auto event = assert_cast<const ColumnUInt8 *>(columns[i])->getData()[row_num];
+            const auto event = assert_cast<const ColumnBool *>(columns[i])->getData()[row_num];
             events.set(i - 1, event);
         }
 
@@ -621,15 +621,15 @@ public:
 
     using AggregateFunctionSequenceBase<T, Data, AggregateFunctionSequenceMatch<T, Data>>::AggregateFunctionSequenceBase;
 
-    String getName() const override { return "sequenceMatch"; }
+    String getName() const override { return "sequence_match"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt8>(); }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeBool>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        auto & output = assert_cast<ColumnUInt8 &>(to).getData();
+        auto & output = assert_cast<ColumnBool &>(to).getData();
         if ((this->conditions_in_pattern & this->data(place).conditions_met) != this->conditions_in_pattern)
         {
             output.push_back(false);

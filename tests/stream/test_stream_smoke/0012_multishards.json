@@ -46,7 +46,7 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1301", "depends_on_stream":"multishards_stream","query_end_timer":6, "query_type": "stream", "query":"select sum(i) as s from multishards_stream emit periodic 4s;"},
+            {"client":"python","query_id":"1301", "depends_on_stream":"multishards_stream","query_end_timer":7, "query_type": "stream", "query":"select sum(i) as s from multishards_stream emit periodic 5s;"},
             {"client":"python", "query_type": "table","depends_on":1301, "wait":1, "query": "insert into multishards_stream(i) values (1)"},
             {"client":"python", "query_type": "table","depends_on":1301, "wait":1, "query": "insert into multishards_stream(i) values (2)"},
             {"client":"python", "query_type": "table","depends_on":1301, "wait":1, "query": "insert into multishards_stream(i) values (3)"}

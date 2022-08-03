@@ -96,7 +96,7 @@ namespace
                     "The types of deduplication keys of function '{}' shall be integer, float or string",
                     func_name);
 
-        return std::make_shared<DB::DataTypeUInt8>();
+        return std::make_shared<DB::DataTypeBool>();
     }
 
     class FunctionDedup : public IFunction
@@ -137,7 +137,7 @@ namespace
             if (input_rows_count == 0)
                 return result;
 
-            auto * col = assert_cast<ColumnVector<UInt8> *>(result.get());
+            auto * col = assert_cast<ColumnVector<Bool> *>(result.get());
             col->reserve(input_rows_count);
 
             return key_set.populateKeySetsAndCalculateResults(arguments, input_rows_count, std::move(result));

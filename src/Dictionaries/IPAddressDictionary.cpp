@@ -284,14 +284,14 @@ ColumnPtr IPAddressDictionary::getColumn(
 }
 
 
-ColumnUInt8::Ptr IPAddressDictionary::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
+ColumnBool::Ptr IPAddressDictionary::hasKeys(const Columns & key_columns, const DataTypes & key_types) const
 {
     validateKeyTypes(key_types);
 
     const auto first_column = key_columns.front();
     const auto rows = first_column->size();
 
-    auto result = ColumnUInt8::create(rows);
+    auto result = ColumnBool::create(rows);
     auto & out = result->getData();
 
     size_t keys_found = 0;

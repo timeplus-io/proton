@@ -150,7 +150,7 @@ public:
             }
         }
 
-        return std::make_shared<DataTypeUInt8>();
+        return std::make_shared<DataTypeBool>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
@@ -219,7 +219,7 @@ public:
                 throw Exception("Multi-argument version of function " + getName() + " works only with const polygon",
                     ErrorCodes::BAD_ARGUMENTS);
 
-            auto res_column = ColumnVector<UInt8>::create(input_rows_count);
+            auto res_column = ColumnVector<Bool>::create(input_rows_count);
             auto & data = res_column->getData();
 
             /// A polygon, possibly with holes, is represented by 2d array:

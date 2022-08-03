@@ -709,7 +709,7 @@ bool sliceHas(const NullableSlice<FirstArraySlice> & first, NullableSlice<Second
 }
 
 template <ArraySearchType search_type, typename FirstSource, typename SecondSource>
-void NO_INLINE arrayAllAny(FirstSource && first, SecondSource && second, ColumnUInt8 & result)
+void NO_INLINE arrayAllAny(FirstSource && first, SecondSource && second, ColumnBool & result)
 {
     auto size = result.size();
     auto & data = result.getData();
