@@ -7,7 +7,7 @@ namespace
 struct HorizontalImpl
 {
     static constexpr auto Kind = DB::ExtractAllGroupsResultKind::HORIZONTAL;
-    static constexpr auto Name = "extractAllGroupsHorizontal";
+    static constexpr auto Name = "extract_all_groups_horizontal";
 };
 
 }
