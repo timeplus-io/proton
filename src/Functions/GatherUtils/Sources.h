@@ -40,7 +40,7 @@ template <typename T>
 struct NumericArraySource : public ArraySourceImpl<NumericArraySource<T>>
 {
     using ColVecType = ColumnVectorOrDecimal<T>;
-    using Slice = NumericArraySlice<T>;
+    using Slice = NumericArraySlice<typename ColVecType::ValueType>;
     using Column = ColumnArray;
 
     using SinkType = NumericArraySink<T>;
@@ -724,12 +724,12 @@ struct NullableArraySource : public ArraySource
 template <typename T>
 struct NumericValueSource : ValueSourceImpl<NumericValueSource<T>>
 {
-    using Slice = NumericValueSlice<T>;
     using Column = ColumnVectorOrDecimal<T>;
+    using Slice = NumericValueSlice<typename Column::ValueType>;
 
     using SinkType = NumericArraySink<T>;
 
-    const T * begin;
+    const typename Column::ValueType * begin;
     size_t total_rows;
     size_t row_num = 0;
 
