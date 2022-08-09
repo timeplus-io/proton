@@ -51,6 +51,7 @@ enum SessionStatus
     END_EXTENDED,
     START_EXTENDED,
     EMIT,
+    EMIT_INCLUDED,
     KEEP,
     IGNORE,
 };
@@ -63,6 +64,11 @@ struct SessionInfo
     Int64 scale = 0;
     Int64 interval = 0;
     UInt64 cur_session_id = 0;
+
+    /// When some event meet the start condition, session window is active.
+    /// And an event which meet the end condition will make session window inactive.
+    /// Session window only accept event when it is active.
+    bool active = false;
 
     String toString() const
     {
@@ -186,7 +192,7 @@ struct SessionHashMap : private boost::noncopyable
         low_cardinality_keys256;
 
     /// no HashTable
-    std::map<UInt32, SessionInfoPtr> map32;
+    std::map<UInt64, SessionInfoPtr> map64;
 
 
 /// TODO: Support for nullable keys
@@ -226,7 +232,7 @@ struct SessionHashMap : private boost::noncopyable
     {
         EMPTY = 0,
         without_key,
-        map32,
+        map64,
 #define M(NAME) NAME,
         APPLY_FOR_CACHE_VARIANTS(M)
 #undef M
@@ -241,7 +247,7 @@ struct SessionHashMap : private boost::noncopyable
                 break;
             case Type::without_key:
                 break;
-            case Type::map32:
+            case Type::map64:
                 break;
 
 #define M(NAME) \
@@ -258,20 +264,20 @@ struct SessionHashMap : private boost::noncopyable
         method_ctx_ptr = createCache(type_, cache_settings);
     }
 
-    SessionInfoPtr getSessionInfo(UInt32 session_id)
+    SessionInfoPtr getSessionInfo(UInt64 session_id)
     {
-        auto it = map32.find(session_id);
-        if (it != map32.end())
+        auto it = map64.find(session_id);
+        if (it != map64.end())
             return it->second;
 
-        map32[session_id] = std::make_shared<SessionInfo>();
-        return map32[session_id];
+        map64[session_id] = std::make_shared<SessionInfo>();
+        return map64[session_id];
     }
 
     void removeSessionInfo(const std::vector<size_t> & sessions)
     {
         for (const auto & id : sessions)
-            map32.erase(id);
+            map64.erase(id);
     }
 
     template <typename Method>
@@ -281,7 +287,7 @@ struct SessionHashMap : private boost::noncopyable
         for (size_t i = 0; i < num_rows; i++)
         {
             size_t hash = state.getHash(method.data, i, arena);
-            session_id_column->insert(UInt32(hash));
+            session_id_column->insert(hash);
         }
     }
 
@@ -294,7 +300,7 @@ struct SessionHashMap : private boost::noncopyable
         {
             case Type::without_key:
                 return nullptr;
-            case Type::map32:
+            case Type::map64:
                 return nullptr;
 
 #define M(NAME) \
@@ -319,8 +325,8 @@ struct SessionHashMap : private boost::noncopyable
                 return 0;
             case Type::without_key:
                 return 1;
-            case Type::map32:
-                return map32.size();
+            case Type::map64:
+                return map64.size();
 
 #define M(NAME) \
     case Type::NAME: \

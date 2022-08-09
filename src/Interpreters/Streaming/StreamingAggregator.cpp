@@ -302,7 +302,7 @@ StreamingAggregator::StreamingAggregator(const Params & params_)
 
     /// proton: starts
     if (params.group_by == Params::GroupBy::SESSION)
-        session_map.init(SessionHashMap::Type::map32);
+        session_map.init(SessionHashMap::Type::map64);
     /// proton: ends
 }
 
@@ -3183,25 +3183,23 @@ std::vector<size_t> StreamingAggregator::bucketsOfSession(StreamingAggregatedDat
 
 template <typename TargetColumnType>
 SessionStatus StreamingAggregator::processSessionRow(
-    SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const
+    SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts)
 {
     Block block;
     const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_column.get())->getData();
-    const typename ColumnUInt32::Container & session_id_vec = checkAndGetColumn<ColumnUInt32>(session_id_column.get())->getData();
+    const typename ColumnUInt64::Container & session_id_vec = checkAndGetColumn<ColumnUInt64>(session_id_column.get())->getData();
+
+    /// session_start_column could be a ColumnConst object
+    const typename ColumnBool::Container & session_start_vec = checkAndGetColumn<ColumnBool>(session_start_column.get())->getData();
+    const typename ColumnBool::Container & session_end_vec = checkAndGetColumn<ColumnBool>(session_end_column.get())->getData();
 
     Int64 ts_secs = time_vec[offset];
     Int64 scale = params.time_scale;
 
-    UInt32 session_id = session_id_vec[offset];
+    UInt64 session_id = session_id_vec[offset];
 
-    if (ts_secs >= max_ts)
-    {
-        max_ts = ts_secs;
-        /// emit sessions if possible
-        emitSessionsIfPossible(max_ts, session_id, const_cast<std::vector<size_t> &>(sessions_to_emit));
-        if (!sessions_to_emit.empty())
-            return SessionStatus::EMIT;
-    }
+    Bool session_start = session_start_vec[offset];
+    Bool session_end = session_end_vec[offset];
 
     /// step1. handle session info
     SessionInfo & info = *(map.getSessionInfo(session_id));
@@ -3215,33 +3213,69 @@ SessionStatus StreamingAggregator::processSessionRow(
         info.interval = params.window_interval;
         info.id = session_id;
         info.cur_session_id = 0;
-        return SessionStatus::KEEP;
+        info.active = session_start;
+    }
+
+    if (ts_secs >= max_ts)
+    {
+        max_ts = ts_secs;
+        /// emit sessions if possible
+        emitSessionsIfPossible(max_ts, session_start, session_end, session_id);
+        if (!sessions_to_emit.empty())
+        {
+            if (session_end)
+            {
+                info.win_end = ts_secs;
+                return SessionStatus::EMIT_INCLUDED;
+            }
+            else
+                return SessionStatus::EMIT;
+        }
+    }
+
+    if (!has_session)
+    {
+        if (session_start)
+            return SessionStatus::KEEP;
+        else
+        {
+            info.win_start = 0;
+            info.win_end = 0;
+            return SessionStatus::IGNORE;
+        }
     }
 
     return handleSession(ts_secs, info, params.kind, params.session_size, params.window_interval);
 }
 
-void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, size_t session_id, std::vector<size_t> & sessions) const
+void StreamingAggregator::emitSessionsIfPossible(DateTime64 max_ts, bool session_start, bool session_end, UInt64 session_id)
 {
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
-    for (const auto & it : session_map.map32)
+    for (const auto & it : session_map.map64)
     {
         Int64 low_bound = addTime(max_ts, params.kind, -1 * params.window_interval, time_zone, params.time_scale);
         Int64 max_bound = addTime(max_ts, params.kind, -1 * params.session_size, time_zone, params.time_scale);
 
-        if (max_bound > it.second->win_start || (it.first == session_id && low_bound > it.second->win_end))
+        if (it.first == session_id && session_start)
+            it.second->active = true;
+
+        if (!it.second->active)
+            continue;
+
+        if (max_bound > it.second->win_start || (it.first == session_id && (low_bound > it.second->win_end || session_end)))
         {
-            sessions.push_back(it.first);
+            it.second->active = false;
+            sessions_to_emit.push_back(it.first);
             LOG_DEBUG(log, "emit session {}, watermark: <{}, {}>, info: {}", it.first, session_id, max_ts, it.second->toString());
         }
     }
 }
 
 template SessionStatus StreamingAggregator::processSessionRow<ColumnDecimal<DateTime64>>(
-    SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+    SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
 
 template SessionStatus StreamingAggregator::processSessionRow<ColumnVector<UInt32>>(
-    SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
+    SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
 
 /// proton: ends
 }

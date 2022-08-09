@@ -47,6 +47,8 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Streaming/OptimizeJsonValueVisitor.h>
 #include <Common/ProtonCommon.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Storages/Streaming/ProxyStream.h>
 /// proton: ends.
 
 namespace DB
@@ -949,6 +951,24 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
         source_column_names.insert(column.name);
 
     NameSet required = columns_context.requiredColumns();
+
+    if (storage)
+    {
+        if (auto * proxy = storage->as<DB::ProxyStream>())
+        {
+            /// We will need add session start/end columns to the required output column even though users doesn't explicitly SELECT them
+            /// because we will need access them for down stream processing like aggregation / filtering etc.
+            if (proxy->windowType() == DB::WindowType::SESSION)
+            {
+                if (std::find(required.begin(), required.end(), ProtonConsts::STREAMING_SESSION_START) == required.end())
+                    required.insert(ProtonConsts::STREAMING_SESSION_START);
+
+                if (std::find(required.begin(), required.end(), ProtonConsts::STREAMING_SESSION_END) == required.end())
+                    required.insert(ProtonConsts::STREAMING_SESSION_END);
+            }
+        }
+    }
+
     if (columns_context.has_table_join)
     {
         NameSet available_columns;

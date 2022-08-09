@@ -60,6 +60,8 @@
 /// proton: starts
 #include <Common/ProtonCommon.h>
 #include <Interpreters/Streaming/StreamingHashJoin.h>
+#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Storages/Streaming/ProxyStream.h>
 /// proton: ends
 
 namespace DB
@@ -1710,6 +1712,21 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 }
             }
             chain.addStep();
+
+            /// We will need propagate session start/end columns to the required output column even though users doesn't explicitly SELECT them
+            /// because we will need access them for down stream processing like aggregation
+            if (storage)
+            {
+                if (auto * proxy = storage->as<DB::ProxyStream>())
+                {
+                    if (proxy->windowType() == DB::WindowType::SESSION)
+                    {
+                        auto & step = chain.getLastStep();
+                        step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_START);
+                        step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_END);
+                    }
+                }
+            }
         }
 
         if (need_aggregate)

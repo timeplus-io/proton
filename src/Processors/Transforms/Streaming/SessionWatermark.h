@@ -10,7 +10,7 @@ namespace DB
 class SessionWatermark : public HopTumbleBaseWatermark
 {
 public:
-    explicit SessionWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log);
+    explicit SessionWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, ExpressionActionsPtr start_actions_, ExpressionActionsPtr end_actions_, Poco::Logger * log);
     ~SessionWatermark() override = default;
 
 private:
@@ -22,6 +22,13 @@ private:
 
     SessionHashMap session_map;
     SessionHashMap::Type method_chosen;
+
+    ExpressionActionsPtr start_actions;
+    ExpressionActionsPtr end_actions;
+
+    std::vector<size_t> start_required_pos;
+    std::vector<size_t> end_required_pos;
+
     Sizes key_sizes; /// sizes of key columns
 };
 }

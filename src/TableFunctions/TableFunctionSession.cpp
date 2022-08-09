@@ -1,5 +1,6 @@
 #include "TableFunctionSession.h"
 
+#include <DataTypes/DataTypeBool.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -23,6 +24,7 @@ TableFunctionSession::TableFunctionSession(const String & name_) : TableFunction
 
 void TableFunctionSession::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
+    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval, start_prediction, end_prediction], key_column1[, key_column2, ...])
     doParseArguments(func_ast, context, HOP_HELP_MESSAGE);
 }
 
@@ -61,10 +63,21 @@ void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_a
     }
 
     {
-        DataTypePtr element_type = std::make_shared<DataTypeUInt32>();
+        DataTypePtr element_type = std::make_shared<DataTypeUInt64>();
 
         ColumnDescription session_id(ProtonConsts::STREAMING_SESSION_ID, std::move(element_type));
         columns.add(session_id);
+    }
+
+    {
+        DataTypePtr session_start_type = std::make_shared<DataTypeBool>();
+
+        ColumnDescription session_start(ProtonConsts::STREAMING_SESSION_START, session_start_type);
+        columns.add(session_start);
+
+        DataTypePtr session_end_type = std::make_shared<DataTypeBool>();
+        ColumnDescription session_end(ProtonConsts::STREAMING_SESSION_END, session_end_type);
+        columns.add(session_end);
     }
 }
 

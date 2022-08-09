@@ -245,7 +245,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionSession(func_ast));
 
-    /// session(table, [timestamp_expr], timeout_interval, [key_column1, key_column2, ...])
+    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval, start_prediction, end_prediction], key_column1[, key_column2, ...])
     if (func_ast->children.size() != 1)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
@@ -257,33 +257,93 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
     ASTPtr table;
     ASTPtr time_expr;
     ASTPtr session_interval;
-    bool has_time_column = true;
+    ASTPtr max_emit_interval;
+    ASTPtr start_prediction;
+    ASTPtr end_prediction;
+    size_t keys_index = 2;
+    bool has_start_prediction = false;
 
     do
     {
         table = args[0];
+        size_t i = 1;
 
-        if (isTimeExprAST(args[1]) && isIntervalAST(args[2]))
+        /// Handle optional timestamp argument
+        if (isTimeExprAST(args[i]))
         {
             /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
-            time_expr = args[1];
-            session_interval = args[2];
-            if (args.size() == 3)
-                throw Exception("session(stream, ...) requires at least one session key column, provides zero", ErrorCodes::MISSING_SESSION_KEY); /// throw error, missing session key
-        }
-        else if (isIntervalAST(args[1]))
-        {
-            time_expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
-            session_interval = args[1];
-            has_time_column = false;
+            time_expr = args[i++];
+            keys_index++;
         }
         else
-            break; /// throw error
+        {
+            /// Case: session(stream, INTERVAL 5 SECOND, ...)
+            time_expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
+        }
+
+        if (isIntervalAST(args[i]))
+        {
+            /// Case: session(stream, INTERVAL 5 SECOND...)
+            session_interval = args[i++];
+        }
+        else
+        {
+            /// Must contains `session_interval`
+            throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+        }
+
+        /// Handle optional max_emit_interval
+        if (isIntervalAST(args[i]))
+        {
+            /// Case: session(stream, INTERVAL 5 SECOND, INTERVAL 4 HOUR)
+            /// When the timestamp of the latest event is larger than session window_start + max_emit_interval,
+            /// session will emit.
+            max_emit_interval = args[i++];
+            keys_index++;
+        }
+        else
+        {
+            /// nullptr will cause TreeRewriter crash, use INTERVAL 0 second to represent the parameter is not exist.
+            max_emit_interval = makeASTFunction("to_interval_second", std::make_shared<ASTLiteral>(static_cast<UInt64>(0)));
+        }
+
+        /// Handle optional start_prediction/end_prediction, start_prediction do not accept a Bool column which will be considered as a key.
+        if (args[i]->as<ASTFunction>())
+        {
+            start_prediction = args[i++];
+            keys_index++;
+            has_start_prediction = true;
+        }
+        else
+        {
+            /// If start_prediction is not assigned, any incoming event should be able to start a session window.
+            start_prediction = makeASTFunction("to_bool", std::make_shared<ASTLiteral>(true));
+        }
+
+        if (args[i]->as<ASTFunction>())
+        {
+            end_prediction = args[i++];
+            keys_index++;
+        }
+        else
+        {
+            if (has_start_prediction)
+                throw Exception("session window requires both start and end predictions or none, but only start or end prediction is specified", ErrorCodes::MISSING_SESSION_KEY);
+            /// If end_prediction is not assigned, only session_interval or max_emit_interval could close a session window.
+            end_prediction = makeASTFunction("to_bool", std::make_shared<ASTLiteral>(false));
+        }
+
+        if (args.size() == keys_index)
+             throw Exception("session(stream, ...) requires at least one session key column, provides zero", ErrorCodes::MISSING_SESSION_KEY); /// throw error, missing session key
 
         asts.emplace_back(table);
         asts.emplace_back(time_expr);
         asts.emplace_back(session_interval);
-        asts.insert(asts.end(), std::next(args.begin(), has_time_column ? 3 : 2), args.end());
+        asts.emplace_back(max_emit_interval);
+        asts.emplace_back(start_prediction);
+        asts.emplace_back(end_prediction);
+
+        asts.insert(asts.end(), std::next(args.begin(), keys_index), args.end());
         return asts;
 
     } while (false);

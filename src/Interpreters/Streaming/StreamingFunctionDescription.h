@@ -18,6 +18,8 @@ struct StreamingFunctionDescription
         Names argument_names_,
         DataTypes argument_types_,
         ExpressionActionsPtr expr_,
+        ExpressionActionsPtr session_start_,
+        ExpressionActionsPtr session_end_,
         Names input_columns_,
         ColumnNumbers keys_ = {},
         bool is_now = false)
@@ -26,6 +28,8 @@ struct StreamingFunctionDescription
         , argument_names(std::move(argument_names_))
         , argument_types(std::move(argument_types_))
         , expr(std::move(expr_))
+        , session_start(session_start_)
+        , session_end(session_end_)
         , input_columns(std::move(input_columns_))
         , keys(std::move(keys_))
         , is_now_func(is_now)
@@ -39,6 +43,10 @@ struct StreamingFunctionDescription
     DataTypes argument_types;
 
     ExpressionActionsPtr expr;
+
+    ExpressionActionsPtr session_start;
+    ExpressionActionsPtr session_end;
+
     Names input_columns;
 
     /// positions of key columns

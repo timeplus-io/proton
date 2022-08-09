@@ -13,8 +13,9 @@
 
 namespace DB
 {
-SessionWatermark::SessionWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_)
-    : HopTumbleBaseWatermark(std::move(watermark_settings_), proc_time_, log_)
+SessionWatermark::SessionWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, ExpressionActionsPtr start_actions_,
+    ExpressionActionsPtr end_actions_, Poco::Logger * log_)
+    : HopTumbleBaseWatermark(std::move(watermark_settings_), proc_time_, log_), start_actions(start_actions_), end_actions(end_actions_)
 {
     method_chosen = chooseBlockCacheMethod();
     session_map.keys_size = watermark_settings.window_desc->keys.size();
@@ -35,7 +36,7 @@ void SessionWatermark::doProcess(Block & block)
     /// create '__tp_session_id' column
     MutableColumnPtr col;
     auto rows = block.rows();
-    auto data_type = std::make_shared<DataTypeUInt32>();
+    auto data_type = std::make_shared<DataTypeUInt64>();
     col = data_type->createColumn();
     col->reserve(rows);
 
@@ -49,18 +50,101 @@ void SessionWatermark::doProcess(Block & block)
 #undef M
 
     block.insert(0, {std::move(col), data_type, ProtonConsts::STREAMING_SESSION_ID});
+
+    assert((start_actions && end_actions) || (!start_actions && !end_actions));
+
+    if (start_actions && end_actions)
+    {
+        Block start_block;
+        auto start_required_columns = start_actions->getRequiredColumns();
+
+        if (start_required_columns.empty())
+        {
+            /// const expression
+            start_block.insert(block.getByPosition(0));
+        }
+        else
+        {
+            start_block.reserve(start_required_columns.size());
+
+            if (start_required_pos.empty())
+            {
+                for (auto & name : start_required_columns)
+                    start_required_pos.push_back(block.getPositionByName(name));
+            }
+
+            for (auto pos : start_required_pos)
+                start_block.insert(block.getByPosition(pos));
+        }
+
+        start_actions->execute(start_block);
+        block.insert(1, {start_block.getColumns()[0], std::make_shared<DataTypeBool>(), ProtonConsts::STREAMING_SESSION_START});
+
+        Block end_block;
+        auto end_required_columns = end_actions->getRequiredColumns();
+
+        if (end_required_columns.empty())
+        {
+            /// const expression
+            end_block.insert(block.getByPosition(0));
+        }
+        else
+        {
+            end_block.reserve(end_required_columns.size());
+
+            if (end_required_pos.empty())
+            {
+                for (auto & name : end_required_columns)
+                    end_required_pos.push_back(block.getPositionByName(name));
+            }
+
+            for (auto pos : end_required_pos)
+                end_block.insert(block.getByPosition(pos));
+        }
+        end_actions->execute(end_block);
+        block.insert(2, {end_block.getColumns()[0], std::make_shared<DataTypeBool>(), ProtonConsts::STREAMING_SESSION_END});
+    }
+    else
+    {
+        auto start_data_type = std::make_shared<DataTypeBool>();
+        MutableColumnPtr col_start = start_data_type->createColumn();
+        col_start->reserve(rows);
+
+        for (size_t i = 0; i < rows; i++)
+            col_start->insert(true);
+
+        block.insert(1, {std::move(col_start), std::make_shared<DataTypeBool>(), ProtonConsts::STREAMING_SESSION_START});
+
+        auto end_data_type = std::make_shared<DataTypeBool>();
+        MutableColumnPtr col_end = end_data_type->createColumn();
+        col_end->reserve(rows);
+
+        for (size_t i = 0; i < rows; i++)
+            col_end->insert(true);
+
+        block.insert(2, {std::move(col_end), std::make_shared<DataTypeBool>(), ProtonConsts::STREAMING_SESSION_END});
+    }
 }
 
 void SessionWatermark::handleIdlenessWatermark(Block & block)
 {
     /// insert '__tp_session_id' column
-    MutableColumnPtr col;
     auto rows = block.rows();
     {
-        auto data_type = std::make_shared<DataTypeUInt32>();
-        col = data_type->createColumn();
-        col->reserve(rows);
-        block.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
+        auto id_data_type = std::make_shared<DataTypeUInt64>();
+        MutableColumnPtr col_id = id_data_type->createColumn();
+        col_id->reserve(rows);
+        block.insert(0, {id_data_type, ProtonConsts::STREAMING_SESSION_ID});
+
+        auto begin_data_type = std::make_shared<DataTypeBool>();
+        MutableColumnPtr col_begin = begin_data_type->createColumn();
+        col_begin->reserve(rows);
+        block.insert(1, {begin_data_type, ProtonConsts::STREAMING_SESSION_START});
+
+        auto end_data_type = std::make_shared<DataTypeBool>();
+        MutableColumnPtr col_end = end_data_type->createColumn();
+        col_end->reserve(rows);
+        block.insert(2, {end_data_type, ProtonConsts::STREAMING_SESSION_END});
     }
     /// TODO: add watermark
 }

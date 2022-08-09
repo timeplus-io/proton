@@ -20,7 +20,7 @@ namespace ErrorCodes
 namespace
 {
     StreamingFunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
-        ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix)
+        ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix, ExpressionActionsPtr streaming_start_expr, ExpressionActionsPtr streaming_end_expr)
     {
         ColumnNumbers keys;
         const auto & actions = streaming_func_expr->getActions();
@@ -34,14 +34,17 @@ namespace
 
                 DataTypes argument_types;
                 argument_types.reserve(action.node->children.size());
-                keys.reserve(action.node->children.size() - 2);
+
+                /// Skip the first six arguments in session function, session(stream, timestamp, session_interval, timeout, start, end, keys...)
+                /// The first argument `stream` is handled (and moved out) in method `doParseArguments`, so the keys size should be node size - 5.
+                keys.reserve(action.node->children.size() - 5);
 
                 size_t it = 0;
                 for (const auto * node : action.node->children)
                 {
                     argument_names.push_back(node->result_name);
                     argument_types.push_back(node->result_type);
-                    if (it > 1)
+                    if (it > 4)
                         keys.push_back(it);
                     it++;
                 }
@@ -51,6 +54,8 @@ namespace
                     std::move(argument_names),
                     std::move(argument_types),
                     std::move(streaming_func_expr),
+                    std::move(streaming_start_expr),
+                    std::move(streaming_end_expr),
                     std::move(required_columns),
                     std::move(keys));
             }
@@ -82,7 +87,7 @@ namespace
                     it++;
                 }
                 return std::make_shared<StreamingFunctionDescription>(
-                    ast, type, argument_names, argument_types, streaming_func_expr, std::move(required_columns));
+                    ast, type, argument_names, argument_types, streaming_func_expr, nullptr, nullptr, std::move(required_columns));
             }
         }
 
@@ -94,7 +99,7 @@ namespace
 
         /// Parse the argument names
         return std::make_shared<StreamingFunctionDescription>(
-            std::move(ast), type, Names{}, DataTypes{}, streaming_func_expr, std::move(required_columns), ColumnNumbers{}, true);
+            std::move(ast), type, Names{}, DataTypes{}, streaming_func_expr, nullptr, nullptr, std::move(required_columns), ColumnNumbers{}, true);
     }
 
     StreamingFunctionDescriptionPtr createStreamingFunctionDescription(
@@ -106,8 +111,19 @@ namespace
         WindowType type = toWindowType(ast->as<ASTFunction>()->name);
 
         if (type == WindowType::SESSION)
+        {
+            auto * node = ast->as<ASTFunction>();
+            const auto & args = node->arguments->children;
+
+            ExpressionAnalyzer streaming_start_analyzer(args[3], syntax_analyzer_result, context);
+            auto streaming_start_expr = streaming_start_analyzer.getActions(true, true);
+
+            ExpressionAnalyzer streaming_end_analyzer(args[4], syntax_analyzer_result, context);
+            auto streaming_end_expr = streaming_end_analyzer.getActions(true, true);
+
             return createStreamingFunctionDescriptionForSession(
-                std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);
+                std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix, std::move(streaming_start_expr), std::move(streaming_end_expr));
+        }
         else
             return createStreamingFunctionDescriptionForOther(
                 std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);

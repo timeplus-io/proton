@@ -2921,6 +2921,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     StreamingAggregator::Params::GroupBy streaming_group_by = StreamingAggregator::Params::GroupBy::OTHER;
     size_t time_col_pos = 0;
     String time_col_name;
+
+    size_t session_start_pos = 0;
+    size_t session_end_pos = 0;
+
     auto window_type = windowType();
     if (window_type == WindowType::SESSION)
     {
@@ -2933,6 +2937,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
         time_col_name = desc->argument_names[0];
         time_col_pos = header_before_aggregation.getPositionByName(desc->argument_names[0]);
+
+        session_start_pos = header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_START);
+        session_end_pos = header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_END);
 
         /// add STREAMING_SESSION_ID key into group by keys at the beginning
         keys.insert(keys.begin(), header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_ID));
@@ -2998,6 +3005,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         settings.keep_windows,
         streaming_group_by,
         time_col_pos,
+        session_start_pos,
+        session_end_pos,
         getStreamingFunctionDescription());
 
     auto merge_threads = max_streams;
@@ -3175,12 +3184,18 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
         if (windowType() == WindowType::SESSION)
         {
             /// insert _tp_session_id column for session window
-            auto data_type = std::make_shared<DataTypeUInt32>();
+            auto data_type = std::make_shared<DataTypeUInt64>();
             output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
+
+            auto session_start_type = std::make_shared<DataTypeBool>();
+            output_header.insert(1, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
+
+            auto session_end_type = std::make_shared<DataTypeBool>();
+            output_header.insert(2, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
         }
 
         query_plan.addStep(std::make_unique<WatermarkStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, nullptr, false, log));
+            query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, getStreamingFunctionDescription(), false, log));
     }
 }
 

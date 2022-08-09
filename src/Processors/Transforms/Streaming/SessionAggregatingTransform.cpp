@@ -50,6 +50,10 @@ void SessionAggregatingTransform::consume(Chunk chunk)
     /// Prepare for session window
     ColumnPtr time_column = columns.at(params->params.time_col_pos);
 
+    /// FIXME: Better to handle ColumnConst in method `processSessionRow`. The performance should be better.
+    ColumnPtr session_start_column = columns.at(params->params.session_start_pos)->convertToFullColumnIfConst();
+    ColumnPtr session_end_column = columns.at(params->params.session_end_pos)->convertToFullColumnIfConst();
+
     size_t prev = 0;
     size_t late_events = 0;
     IColumn::Filter filter(num_rows, 1);
@@ -69,6 +73,8 @@ void SessionAggregatingTransform::consume(Chunk chunk)
                 params->aggregator.session_map,
                 session_id_column,
                 time_column,
+                session_start_column,
+                session_end_column,
                 i,
                 params->aggregator.max_event_ts);
         }
@@ -78,6 +84,8 @@ void SessionAggregatingTransform::consume(Chunk chunk)
                 params->aggregator.session_map,
                 session_id_column,
                 time_column,
+                session_start_column,
+                session_end_column,
                 i,
                 params->aggregator.max_event_ts);
         }
@@ -92,12 +100,16 @@ void SessionAggregatingTransform::consume(Chunk chunk)
             late_events++;
         }
 
-        if (status == SessionStatus::EMIT)
+        if (status == SessionStatus::EMIT || status == SessionStatus::EMIT_INCLUDED)
         {
             /// if need to emit, first split rows before emit row to process,
             /// then finalizeSessio0 to emit sessions,
             /// last continue to process next row
             Columns to_process(columns.size());
+
+            if (status == SessionStatus::EMIT_INCLUDED)
+                i++;
+
             if (i > prev)
             {
                 filter.resize_fill(i - prev);

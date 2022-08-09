@@ -115,7 +115,8 @@ void ProxyStream::read(
     for (const auto & column_name : column_names)
     {
         if (column_name == ProtonConsts::STREAMING_WINDOW_START || column_name == ProtonConsts::STREAMING_WINDOW_END
-            || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS || column_name == ProtonConsts::STREAMING_SESSION_ID)
+            || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS || column_name == ProtonConsts::STREAMING_SESSION_ID
+            || column_name == ProtonConsts::STREAMING_SESSION_START || column_name == ProtonConsts::STREAMING_SESSION_END)
             continue;
 
         updated_column_names.push_back(column_name);
@@ -346,8 +347,14 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
     if (streaming_func_desc->type == WindowType::SESSION)
     {
         /// insert _tp_session_id column for session window
-        auto data_type = std::make_shared<DataTypeUInt32>();
+        auto data_type = std::make_shared<DataTypeUInt64>();
         output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
+
+        auto session_start_type = std::make_shared<DataTypeBool>();
+        output_header.insert(1, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
+
+        auto session_end_type = std::make_shared<DataTypeBool>();
+        output_header.insert(2, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
     }
 
     query_plan.addStep(std::make_unique<WatermarkStep>(

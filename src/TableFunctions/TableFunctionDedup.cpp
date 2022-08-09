@@ -59,13 +59,14 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
         dedup_func_ast, columns.getAll(), storage ? storage : nullptr, storage ? underlying_storage_snapshot : nullptr);
 
     ExpressionAnalyzer func_expr_analyzer(dedup_func_ast, syntax_analyzer_result, context);
-
     streaming_func_desc = std::make_shared<StreamingFunctionDescription>(
         dedup_func_ast,
         WindowType::NONE,
         Names{},
         DataTypes{},
         func_expr_analyzer.getActions(true),
+        nullptr,
+        nullptr,
         syntax_analyzer_result->requiredSourceColumns(),
         ColumnNumbers{},
         false);

@@ -11,6 +11,9 @@ SessionStatus handleSession(const DateTime64 & tp_time, SessionInfo & info, Inte
 
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
 
+    if (!info.active)
+        return SessionStatus::IGNORE;
+
     if (addTime(tp_time, kind, session_size, time_zone, info.scale) < info.win_start)
     {
         /// late session, ignore this event

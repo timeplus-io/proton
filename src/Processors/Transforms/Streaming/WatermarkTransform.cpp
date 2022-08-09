@@ -71,7 +71,7 @@ void WatermarkTransform::initWatermark(
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
-        watermark = std::make_shared<SessionWatermark>(std::move(watermark_settings), proc_time, log);
+        watermark = std::make_shared<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
     }
     else
     {

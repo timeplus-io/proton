@@ -644,9 +644,12 @@ public:
         /// Params for session window
         size_t session_id_col_pos = 0;
         size_t time_col_pos = 0;
+        size_t session_start_pos = 0;
+        size_t session_end_pos = 0;
         size_t time_scale = 0;
         bool time_col_is_datetime64 = false;
         Int64 window_interval = 0;
+        Int64 max_emit_timeout = 0;
         UInt64 session_size = 0;
         StreamingFunctionDescriptionPtr window_desc;
         IntervalKind::Kind kind = IntervalKind::Second;
@@ -669,6 +672,8 @@ public:
             size_t streaming_window_count_ = 0,
             GroupBy streaming_group_by_ = GroupBy::OTHER,
             size_t time_col_pos_ = 0,
+            size_t session_start_pos_ = 0,
+            size_t session_end_pos_ = 0,
             StreamingFunctionDescriptionPtr window_desc_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
@@ -685,6 +690,8 @@ public:
             streaming_window_count(streaming_window_count_),
             group_by(streaming_group_by_),
             time_col_pos(time_col_pos_),
+            session_start_pos(session_start_pos_),
+            session_end_pos(session_end_pos_),
             window_desc(window_desc_)
         {
             if (window_desc)
@@ -692,7 +699,9 @@ public:
                 time_col_is_datetime64 = isDateTime64(window_desc->argument_types[0]);
                 auto * func_ast = window_desc->func_ast->as<ASTFunction>();
                 extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), window_interval, kind);
-                session_size = window_interval * ProtonConsts::SESSION_SIZE_MULTIPLIER;
+                if (func_ast->name == ProtonConsts::SESSION_FUNC_NAME)
+                    extractInterval(func_ast->arguments->children[2]->as<ASTFunction>(), max_emit_timeout, kind);
+                session_size = max_emit_timeout == 0 ? window_interval * ProtonConsts::SESSION_SIZE_MULTIPLIER : max_emit_timeout;
                 if (time_col_is_datetime64)
                     time_scale = checkAndGetDataType<DataTypeDateTime64>(window_desc->argument_types[0].get())->getScale();
             }
@@ -1116,8 +1125,8 @@ private:
     static std::vector<size_t> bucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id);
     template <typename TargetColumnType>
     SessionStatus processSessionRow(
-        SessionHashMap & map, ColumnPtr session_id_column, ColumnPtr time_column, size_t offset, Int64 & max_ts) const;
-    void emitSessionsIfPossible(DateTime64 max_ts, size_t session_id, std::vector<size_t> & sessions) const;
+        SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
+    void emitSessionsIfPossible(DateTime64 max_ts, bool session_start, bool session_end, UInt64 session_id);
     /// proton: ends
 };
 
