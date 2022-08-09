@@ -9,7 +9,9 @@ static const size_t MAX_ROWS_IN_MULTIVERSION_QUEUE = 8192;
 
 VersionedCollapsingAlgorithm::VersionedCollapsingAlgorithm(
     const Block & header, size_t num_inputs,
-    SortDescription description_, const String & sign_column_,
+    SortDescription description_,
+    const String & sign_column_,
+    const String & version_column_,
     size_t max_block_size,
     WriteBuffer * out_row_sources_buf_,
     bool use_average_block_sizes)
@@ -21,6 +23,7 @@ VersionedCollapsingAlgorithm::VersionedCollapsingAlgorithm(
     , current_keys(max_rows_in_queue)
 {
     sign_column_number = header.getPositionByName(sign_column_);
+    version_column_number = header.getPositionByName(version_column_);
 }
 
 inline ALWAYS_INLINE static void writeRowSourcePart(WriteBuffer & buffer, RowSourcePart row_source)
@@ -81,7 +84,17 @@ IMergingAlgorithm::Status VersionedCollapsingAlgorithm::merge()
         size_t num_rows_to_insert = 0;
         if (!current_keys.empty())
         {
-            auto key_differs = !current_row.hasEqualSortColumnsWith(current_keys.back());
+            /// proton : starts. Skip version column comparison.
+            /// 1. `primary key` shall not contain `version` column
+            /// 2. `version` column is added to the sort columns automatically for CDC stream to make sure that
+            /// same primary key with ascending order are grouped together and read in sequence
+            /// Since in CDC stream, version column can be increasing always, when we like to `cancel` a previous row,
+            /// we don't need find back its previous `version` since this can be a burden.
+            /// For example, for existing row : (i, s, __tp_delta, version) : `1, 'a', 1, '2020-01-01 10:20:33'`
+            /// `version` column has datetime64 type. If we like to cancel this row, we do
+            /// `1, 'a', -1, '2020-01-02 11:10:47'`, the version column can be different than previous row. It is OK
+            /// as long as the record appended is exactly once, the version column in later update / cancel row is increasing
+            auto key_differs = !current_row.hasEqualSortColumnsWith(current_keys.back(), version_column_number);
 
             if (key_differs) /// Flush whole queue
                 num_rows_to_insert = current_keys.size();

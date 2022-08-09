@@ -135,11 +135,11 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     else if (name_part == "Aggregating")
         merging_params.mode = MergeTreeData::MergingParams::Aggregating;
     else if (name_part == "Replacing")
-        merging_params.mode = MergeTreeData::MergingParams::Replacing;
+        merging_params.mode = MergeTreeData::MergingParams::VersionedKV;
     else if (name_part == "Graphite")
         merging_params.mode = MergeTreeData::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
-        merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
+        merging_params.mode = MergeTreeData::MergingParams::ChangelogKV;
     else if (!name_part.empty())
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::UNKNOWN_STORAGE);
@@ -180,7 +180,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         case MergeTreeData::MergingParams::Summing:
             add_optional_param("list of columns to sum");
             break;
-        case MergeTreeData::MergingParams::Replacing:
+        case MergeTreeData::MergingParams::VersionedKV:
             add_optional_param("version");
             break;
         case MergeTreeData::MergingParams::Collapsing:
@@ -189,7 +189,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         case MergeTreeData::MergingParams::Graphite:
             add_mandatory_param("'config_element_for_graphite_schema'");
             break;
-        case MergeTreeData::MergingParams::VersionedCollapsing: {
+        case MergeTreeData::MergingParams::ChangelogKV: {
             add_mandatory_param("sign column");
             add_mandatory_param("version");
             break;
@@ -264,7 +264,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 ErrorCodes::BAD_ARGUMENTS);
         --arg_cnt;
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    else if (merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
     {
         /// If the last element is not index_granularity or replica_name (a literal), then this is the name of the version column.
         if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
@@ -305,7 +305,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         --arg_cnt;
         setGraphitePatternsFromConfig(args.getContext(), graphite_config_name, merging_params.graphite_params);
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
+    else if (merging_params.mode == MergeTreeData::MergingParams::ChangelogKV)
     {
         if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.version_column))
             throw Exception(
@@ -521,11 +521,11 @@ void registerStorageMergeTree(StorageFactory & factory)
     };
 
     factory.registerStorage("MergeTree", create, features);
-    factory.registerStorage("CollapsingMergeTree", create, features);
-    factory.registerStorage("ReplacingMergeTree", create, features);
-    factory.registerStorage("AggregatingMergeTree", create, features);
-    factory.registerStorage("SummingMergeTree", create, features);
-    factory.registerStorage("GraphiteMergeTree", create, features);
+    /// factory.registerStorage("CollapsingMergeTree", create, features);
+    /// factory.registerStorage("ReplacingMergeTree", create, features);
+    /// factory.registerStorage("AggregatingMergeTree", create, features);
+    /// factory.registerStorage("SummingMergeTree", create, features);
+    /// factory.registerStorage("GraphiteMergeTree", create, features);
     factory.registerStorage("VersionedCollapsingMergeTree", create, features);
 }
 

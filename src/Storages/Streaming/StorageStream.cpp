@@ -355,20 +355,50 @@ void StorageStream::readConcat(
     for (auto & stream_shard : stream_shards)
     {
         auto create_streaming_source = [this, header, storage_snapshot, stream_shard, context_](Int64 & max_sn_in_parts) {
-            auto committed = stream_shard->storage->committedSN();
             if (max_sn_in_parts < 0)
             {
                 /// Fallback to seek streaming store
                 auto offsets = stream_shard->getOffsets(context_->getSettingsRef().seek_to.value);
-                LOG_INFO(log, "Fused read fallbacks to seek stream. shard={}", stream_shard->shard);
+                LOG_INFO(log, "Fused read fallbacks to seek stream for shard={} since there are no historical data", stream_shard->shard);
 
                 return std::make_shared<StreamingStoreSource>(
                     stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
             }
-            else if (committed < max_sn_in_parts)
+
+            auto committed = stream_shard->storage->inMemoryCommittedSN();
+            if (committed < max_sn_in_parts)
             {
                 /// This happens if there are sequence ID gaps in the parts and system is bootstrapping to fill the gap
-                /// Please refer to SequenceInfo.h for more details
+                /// Please refer to SequenceInfo.h for more details.
+                /// There is a small race window in which is parts have been committed to fs and parts summaries have already updated in memory
+                /// but we didn't have chance to update in memory committed sn.
+                /// We sleep a while to hope we will get out of this situation
+
+                LOG_WARNING(
+                    log,
+                    "Fused read fallbacks to seek stream since sequence gaps are found for shard={}, max_sn_in_parts={}, "
+                    "current_committed_sn={}",
+                    stream_shard->shard,
+                    max_sn_in_parts,
+                    committed);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+
+            if (committed >= max_sn_in_parts)
+            {
+                LOG_INFO(
+                    log,
+                    "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}",
+                    stream_shard->shard,
+                    max_sn_in_parts,
+                    committed);
+
+                return std::make_shared<StreamingStoreSource>(
+                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, max_sn_in_parts + 1, log);
+            }
+            else
+            {
                 /// Fallback to seek streaming store
                 auto offsets = stream_shard->getOffsets(context_->getSettingsRef().seek_to.value);
                 LOG_INFO(
@@ -383,18 +413,7 @@ void StorageStream::readConcat(
                 max_sn_in_parts = -1;
                 return std::make_shared<StreamingStoreSource>(
                     stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
-            }
-            else
-            {
-                LOG_INFO(
-                    log,
-                    "Fused read for shard={}, read historical data up to sn={}, current_committed_sn={}",
-                    stream_shard->shard,
-                    max_sn_in_parts,
-                    committed);
 
-                return std::make_shared<StreamingStoreSource>(
-                    stream_shard, header, storage_snapshot, context_, stream_shard->shard, max_sn_in_parts + 1, log);
             }
         };
 
@@ -482,8 +501,8 @@ void StorageStream::read(
     if (query_info.syntax_analyzer_result->streaming)
     {
         /// FIXME, to support seek_to='-1h'
-        if (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value
-            && !requireDistributedQuery(context_))
+        bool back_fill_from_historical = isChangelogKvMode() || isVersionedKvMode() || (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
+        if (back_fill_from_historical && !requireDistributedQuery(context_))
             readConcat(query_plan, query_info, column_names, storage_snapshot, std::move(context_), processed_stage, max_block_size);
         else
             readStreaming(query_plan, query_info, column_names, storage_snapshot, std::move(context_));
@@ -1246,7 +1265,7 @@ const ExpressionActionsPtr & StorageStream::getShardingKeyExpr() const
     return sharding_key_expr;
 }
 
-size_t StorageStream::getRandomShardIndex()
+size_t StorageStream::getRandomShardIndex() const
 {
     std::lock_guard lock(rng_mutex);
     return std::uniform_int_distribution<size_t>(0, shards - 1)(rng);

@@ -1,6 +1,7 @@
 #include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/StorageStreamProperties.h>
 #include <Storages/StorageFactory.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -9,6 +10,32 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
+
+/// Storage stream has 4 modes:
+/// 1. append only
+/// CREATE STREAM append_only_stream(i int) or CREATE STREAM append_only_stream(i int) SETTINGS mode='append';
+/// 2. changelog
+/// CREATE STREAM append_only_stream(i int) SETTINGS mode='changelog';
+/// changelog stream has special `_tp_delta` column -> (i int, _tp_delta int8, ...).
+/// The same as append-only stream, it is append-only but with update / delete semantic.
+/// Different than append-only stream, during query processing, changelog stream has append/update/delete (retraction) semantic.
+/// Different than `keyed changelog` stream, its historical store doesn't do compaction since it doesn't have
+/// primary key explicitly specified.
+/// 3. changelog kv.
+/// CREATE STREAM changelog_kv_stream(i int, k string) PRIMARY KEY k SETTINGS mode='changelog_kv', version='_tp_time';
+/// `changelog kv stream` is `changelog stream + primary key`. Users has to specify `PRIMARY KEY` and can't specify `ORDER BY`
+/// at the same time or `ORDER BY` shall be exactly the same as `PRIMARY KEY`.
+/// Similar to `changelog stream`, `changelog kv stream` has special `_tp_delta` column as well.
+/// Different than `changelog stream`, Its historical store will do special compaction
+/// according to `_tp_delta` and primary key which eventually only persists the latest snapshot
+/// per primary key. The `changelog kv stream` is modeled for CDC data.
+/// 4. versioned kv stream
+/// CREATE STREAM versioned_stream(i int, k string) PRIMARY KEY k SETTINGS mode='versioned_kv', version='_tp_time', keep_versions=1;
+/// Similar to `changelog kv stream`, the historical store of a kv stream does background compaction per key.
+/// But it may keep multiple versions per key around. The compaction algorithm is different than `changelog kv`
+/// as well since it doesn't have `_tp_delta` special column. During compaction, it sorts the data according
+/// to (primary key, the version column) and than do compaction per key according to `keep_versions` setting.
+/// By default, kv stream only keeps the latest version around.
 
 void registerStorageStream(StorageFactory & factory)
 {
@@ -32,6 +59,8 @@ void registerStorageStream(StorageFactory & factory)
             * - shard_by_expr
 
             * Stream engine settings :
+            * - mode=changelog
+            * - version=_tp_time
             * - logstore=kafka
             * - logstore_cluster_id=<my_cluster>
             * - logstore_partition=<partition>
@@ -42,7 +71,7 @@ void registerStorageStream(StorageFactory & factory)
             */
 
             MergeTreeData::MergingParams merging_params;
-            merging_params.mode = MergeTreeData::MergingParams::Ordinary;
+
             /// NOTE Quite complicated.
 
             size_t min_num_params = 0;
@@ -84,9 +113,6 @@ void registerStorageStream(StorageFactory & factory)
                 throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
             }
 
-            /// This merging param maybe used as part of sorting key
-            std::optional<String> merging_param_key_arg;
-
             String date_column_name;
 
             StorageInMemoryMetadata metadata;
@@ -110,20 +136,32 @@ void registerStorageStream(StorageFactory & factory)
                 args.storage_def->set(args.storage_def->order_by, args.storage_def->primary_key->clone());
 
             if (!args.storage_def->order_by)
-                /// proton: starts
                 throw Exception(
                     "You must provide an ORDER BY or PRIMARY KEY expression in the stream definition. "
                     "If you don't want this stream to be sorted, use ORDER BY/PRIMARY KEY tuple()",
                     ErrorCodes::BAD_ARGUMENTS);
-            /// proton: ends
 
             /// Get sorting key from engine arguments.
             ///
             /// NOTE: store merging_param_key_arg as additional key column. We do it
             /// before storage creation. After that storage will just copy this
             /// column if sorting key will be changed.
-            metadata.sorting_key = KeyDescription::getSortingKeyFromAST(
-                args.storage_def->order_by->ptr(), metadata.columns, args.getContext(), merging_param_key_arg);
+
+            auto properties = StorageStreamProperties::create(*args.storage_def, args.columns, args.getLocalContext());
+
+            auto is_regular_storage = [&]() {
+                /// Changelog or append mode has ordinary mergetree storage
+                return properties->storage_settings->mode.value == ProtonConsts::APPEND_MODE
+                    || properties->storage_settings->mode.value == ProtonConsts::CHANGELOG_MODE;
+            };
+
+            if (is_regular_storage())
+                metadata.sorting_key = KeyDescription::getSortingKeyFromAST(
+                        args.storage_def->order_by->ptr(), metadata.columns, args.getContext(), {});
+            else
+                /// Add version column to sorting key
+                metadata.sorting_key = KeyDescription::getSortingKeyFromAST(
+                        args.storage_def->order_by->ptr(), metadata.columns, args.getContext(), {properties->storage_settings->version_column.value});
 
             /// If primary key explicitly defined, than get it from AST
             if (args.storage_def->primary_key)
@@ -160,11 +198,13 @@ void registerStorageStream(StorageFactory & factory)
                     metadata.secondary_indices.push_back(IndexDescription::getIndexFromAST(index, columns, args.getContext()));
 
             if (args.query.columns_list && args.query.columns_list->projections)
+            {
                 for (auto & projection_ast : args.query.columns_list->projections->children)
                 {
                     auto projection = ProjectionDescription::getProjectionFromAST(projection_ast, columns, args.getContext());
                     metadata.projections.add(std::move(projection));
                 }
+            }
 
             auto constraints = metadata.constraints.getConstraints();
             if (args.query.columns_list && args.query.columns_list->constraints)
@@ -179,7 +219,32 @@ void registerStorageStream(StorageFactory & factory)
                 metadata.column_ttls_by_name[name] = new_ttl_entry;
             }
 
-            auto properties = StorageStreamProperties::create(*args.storage_def, args.columns, args.getLocalContext());
+            if (is_regular_storage())
+            {
+                merging_params.mode = MergeTreeData::MergingParams::Ordinary;
+            }
+            else
+            {
+                /// Changelog with primary key or kv mode requires version column
+                if (properties->storage_settings->mode.value == ProtonConsts::CHANGELOG_KV_MODE)
+                {
+                    merging_params.mode = MergeTreeData::MergingParams::ChangelogKV;
+                    merging_params.sign_column = ProtonConsts::RESERVED_DELTA_FLAG;
+                }
+                else if (properties->storage_settings->mode.value == ProtonConsts::VERSIONED_KV_MODE)
+                {
+                    merging_params.mode = MergeTreeData::MergingParams::VersionedKV;
+                    merging_params.keep_versions = properties->storage_settings->keep_versions.value;
+                }
+                else
+                    throw Exception(ErrorCodes::SYNTAX_ERROR, "Invalid storage mode='{}'", properties->storage_settings->mode.value);
+
+                merging_params.version_column = properties->storage_settings->version_column.value;
+
+                /// We need make sure version_column is not in primary key
+                if (metadata.primary_key.has(merging_params.version_column))
+                    throw Exception(ErrorCodes::SYNTAX_ERROR, "Version column as primary key is not supported in Changelog KV or Versioned KV stream");
+            }
 
             // updates the default storage_settings with settings specified via SETTINGS arg in a query
             if (args.storage_def->settings)

@@ -212,7 +212,7 @@ public:
     Int32 getShards() const { return shards; }
     Int32 getReplicationFactor() const { return replication_factor; }
 
-    size_t getRandomShardIndex();
+    size_t getRandomShardIndex() const;
     size_t getNextShardIndex() const;
 
     void getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const;
@@ -309,7 +309,7 @@ private:
 
     // For random shard index generation
     mutable std::mutex rng_mutex;
-    pcg64 rng;
+    mutable pcg64 rng;
 
     /// For ingest
     mutable std::atomic_uint_fast64_t next_shard = 0;

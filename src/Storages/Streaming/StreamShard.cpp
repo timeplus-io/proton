@@ -485,6 +485,8 @@ inline void StreamShard::progressSequencesWithoutLock(const SequencePair & seq)
 
     assert(outstanding_sns.size() >= local_committed_sns.size());
     assert(last_sn >= prev_sn);
+
+    storage->setInMemoryCommittedSN(last_sn);
 }
 
 void StreamShard::doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges)

@@ -10,11 +10,20 @@ struct ChunkContext
 {
     static constexpr UInt64 WATERMARK_FLAG = 0x1;
     static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
+    static constexpr UInt64 HISTORICAL_DATA_START_FLAG = 0x4;
+    static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
 
     /// A pair of Int64, flags represent what they mean
     Int64 ts_1 = 0;
     Int64 ts_2 = 0;
     UInt64 flags = 0;
+
+    ALWAYS_INLINE Int64 isHistoricalDataStart() const { return flags & HISTORICAL_DATA_START_FLAG; }
+    ALWAYS_INLINE Int64 isHistoricalDataEnd() const { return flags & HISTORICAL_DATA_END_FLAG; }
+
+    ALWAYS_INLINE void setMark(UInt64 mark) { flags |= mark; }
+
+    ALWAYS_INLINE bool hasMark() const { return flags != 0; }
 
     ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
     ALWAYS_INLINE void setWatermark(Int64 watermark, Int64 watermark_lower_bound)
@@ -151,6 +160,11 @@ public:
     bool hasWatermark() const
     {
         return chunk_info && chunk_info->ctx.hasWatermark();
+    }
+
+    bool hasMark() const
+    {
+        return chunk_info && chunk_info->ctx.hasMark();
     }
     /// proton : ends
 

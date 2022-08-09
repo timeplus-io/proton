@@ -29,6 +29,10 @@
 #include <base/sort.h>
 #include <Common/JSONBuilder.h>
 
+/// proton : start
+#include <Processors/Sources/MarkSource.h>
+/// proton : ends
+
 namespace ProfileEvents
 {
     extern const Event SelectedParts;
@@ -224,8 +228,6 @@ Pipe ReadFromMergeTree::readInOrder(
     bool has_limit_below_one_block = read_type != ReadType::Default && limit && limit < max_block_size;
 
     /// proton: starts
-    Int64 max_sn = -1;
-
     for (const auto & part : parts_with_range)
     {
         auto source = (read_type == ReadType::InReverseOrder || create_streaming_source) /// proton: we like reverse read according to event timestamp
@@ -233,31 +235,7 @@ Pipe ReadFromMergeTree::readInOrder(
                     : createSource<MergeTreeInOrderSelectProcessor>(part, required_columns, use_uncompressed_cache, has_limit_below_one_block);
 
         pipes.emplace_back(std::move(source));
-
-        if (part.data_part->seq_info)
-        {
-            auto sn = part.data_part->seq_info->maxSequenceID();
-            if (sn > max_sn)
-                max_sn = sn;
-        }
     }
-
-    /// proton: starts. Add streaming source after historical source
-    if (create_streaming_source)
-    {
-        auto streaming_source = create_streaming_source(max_sn);
-        if (max_sn >= 0)
-        {
-            pipes.emplace_back(std::move(streaming_source));
-        }
-        else
-        {
-            /// We can't do fused query
-            pipes.clear();
-            return Pipe(std::move(streaming_source));
-        }
-    }
-    /// proton: ends
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
 
@@ -276,11 +254,6 @@ Pipe ReadFromMergeTree::read(
     RangesInDataParts parts_with_range, Names required_columns, ReadType read_type,
     size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache)
 {
-    /// proton: starts
-    /// For concat historical data and streaming data, max stream is always 1 and read type shall be PK ordered (default)
-    assert((max_streams == 1 && read_type == ReadType::Default && create_streaming_source) || !create_streaming_source);
-    /// proton: ends
-
     if (read_type == ReadType::Default && max_streams > 1)
         return readFromPool(parts_with_range, required_columns, max_streams,
                             min_marks_for_concurrent_read, use_uncompressed_cache);
@@ -550,7 +523,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                                         info.use_uncompressed_cache, input_order_info->limit));
     }
 
-    if (need_preliminary_merge && !create_streaming_source) /// proton: disable merge for streaming query
+    if (need_preliminary_merge)
     {
         SortDescription sort_description;
         for (size_t j = 0; j < input_order_info->order_key_prefix_descr.size(); ++j)
@@ -618,13 +591,13 @@ static void addMergingFinal(
                 return std::make_shared<AggregatingSortedTransform>(header, num_outputs,
                             sort_description, max_block_size);
 
-            case MergeTreeData::MergingParams::Replacing:
+            case MergeTreeData::MergingParams::VersionedKV:
                 return std::make_shared<ReplacingSortedTransform>(header, num_outputs,
                             sort_description, merging_params.version_column, max_block_size);
 
-            case MergeTreeData::MergingParams::VersionedCollapsing:
+            case MergeTreeData::MergingParams::ChangelogKV:
                 return std::make_shared<VersionedCollapsingTransform>(header, num_outputs,
-                            sort_description, merging_params.sign_column, max_block_size);
+                            sort_description, merging_params.sign_column, merging_params.version_column, max_block_size);
 
             case MergeTreeData::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedTransform>(header, num_outputs,
@@ -645,10 +618,29 @@ static void addMergingFinal(
 
     for (const auto & desc : sort_description)
     {
+        /// proton : starts. For changelog kv or versioned kv, we like to remove `version` from sort key since we
+        /// like group rows with same `primary key` together.
+        /// Removing `version` column helps AddingSelectorTransform to do the correct hashing
+        /// and distributed rows with same primary key to the same downstream processor
         if (!desc.column_name.empty())
+        {
+            if ((merging_params.mode == MergeTreeData::MergingParams::ChangelogKV
+                 || merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
+                && desc.column_name == merging_params.version_column)
+                continue;
+
             key_columns.push_back(header.getPositionByName(desc.column_name));
+        }
         else
+        {
+            if ((merging_params.mode == MergeTreeData::MergingParams::ChangelogKV
+                 || merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
+                && header.getByPosition(desc.column_number).name == merging_params.version_column)
+                continue;
+
             key_columns.emplace_back(desc.column_number);
+        }
+        /// proton : ends
     }
 
     pipe.addSimpleTransform([&](const Block & stream_header)
@@ -677,7 +669,7 @@ static void addMergingFinal(
             merge->setSelectorPosition(i);
             auto input = merge->getInputs().begin();
 
-            /// Connect i-th merge with i-th input port of every copier.
+            /// Connect i-th merge with i-th output port of every copier.
             for (size_t j = 0; j < ports.size(); ++j)
             {
                 connect(*output_ports[j], *input);
@@ -1054,6 +1046,20 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         init_default_pipeline();
         return;
     }
+
+    Int64 max_sn = -1;
+    if (create_streaming_source)
+    {
+        for (const auto & part : result.parts_with_ranges)
+        {
+            if (part.data_part->seq_info)
+            {
+                auto sn = part.data_part->seq_info->maxSequenceID();
+                if (sn > max_sn)
+                    max_sn = sn;
+            }
+        }
+    }
     /// proton: ends
 
     selected_marks = result.selected_marks;
@@ -1085,13 +1091,8 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
 
     const auto & settings = context->getSettingsRef();
 
-    if (select.final())
+    if (select.final() || ((data.isChangelogKvMode() || data.isVersionedKvMode()) && settings.compact_kv_stream.value)) /// proton : for changelog_kv or versioned_kv, we always enforce final
     {
-        /// proton: starts
-        if (create_streaming_source)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Final select for fused query is not supported");
-        /// proton: ends
-
         /// Add columns needed to calculate the sorting expression and the sign.
         std::vector<String> add_columns = metadata_for_reading->getColumnsRequiredForSortingKey();
         column_names_to_read.insert(column_names_to_read.end(), add_columns.begin(), add_columns.end());
@@ -1138,7 +1139,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         init_default_pipeline();
         return;
     }
-    /// proton: ends
+    /// proton : ends
 
     if (result.sampling.use_sampling)
     {
@@ -1198,6 +1199,36 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
             return std::make_shared<ExpressionTransform>(header, projection_actions);
         });
     }
+
+    /// proton : starts. Add streaming source after historical source
+    if (create_streaming_source)
+    {
+        Pipes pipes;
+
+        cur_header = pipe.getHeader();
+        pipes.emplace_back(Pipe(std::make_shared<MarkSource>(cur_header, ChunkContext::HISTORICAL_DATA_START_FLAG)));
+
+        pipes.emplace_back(std::move(pipe));
+
+        pipes.emplace_back(Pipe(std::make_shared<MarkSource>(cur_header, ChunkContext::HISTORICAL_DATA_END_FLAG)));
+
+        auto streaming_source = create_streaming_source(max_sn);
+        if (max_sn >= 0)
+        {
+            pipes.emplace_back(std::move(streaming_source));
+            pipe = Pipe::unitePipes(std::move(pipes));
+
+            /// Like to read historical data first and then stream data
+            pipe.addTransform(std::make_shared<ConcatProcessor>(pipe.getHeader(), pipe.numOutputPorts()));
+        }
+        else
+        {
+            /// We can't do fused query
+            pipes.clear();
+            pipe = Pipe(std::move(streaming_source));
+        }
+    }
+    /// proton: ends
 
     for (const auto & processor : pipe.getProcessors())
         processors.emplace_back(processor);

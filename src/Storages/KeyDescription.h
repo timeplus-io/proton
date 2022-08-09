@@ -74,6 +74,13 @@ struct KeyDescription
     KeyDescription(const KeyDescription & other);
     KeyDescription & operator=(const KeyDescription & other);
 
+    /// proton : starts
+    bool has(const String & column_name) const
+    {
+        return std::find(column_names.begin(), column_names.end(), column_name) != column_names.end();
+    }
+    /// proton : ends
+
     /// Substitute modulo with moduloLegacy. Used in KeyCondition to allow proper comparison with keys.
     static bool moduloToModuloLegacyRecursive(ASTPtr node_expr);
 };

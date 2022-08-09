@@ -36,6 +36,7 @@ const String RESERVED_INGEST_TIME = "_tp_ingest_time";
 const String RESERVED_EMIT_TIME = "_tp_emit_time";
 const String RESERVED_INDEX_TIME = "_tp_index_time";
 const String RESERVED_EVENT_SEQUENCE_ID = "_tp_sn";
+const String RESERVED_DELTA_FLAG = "_tp_delta";
 const String RESERVED_EVENT_TIME_API_NAME = "event_time_column";
 const std::vector<String> RESERVED_COLUMN_NAMES = {RESERVED_EVENT_TIME, RESERVED_INDEX_TIME};
 const String DEFAULT_EVENT_TIME = "now64(3, 'UTC')";
@@ -58,5 +59,11 @@ const String JSON_VALUES_PREFIX = "__json_values_";
 
 /// PREFIX of UDF config files
 const String UDF_XML_PATTERN = "*_function.xml";
+
+/// Storage modes
+const String APPEND_MODE = "append";
+const String CHANGELOG_MODE = "changelog";
+const String CHANGELOG_KV_MODE = "changelog_kv";
+const String VERSIONED_KV_MODE = "versioned_kv";
 }
 }

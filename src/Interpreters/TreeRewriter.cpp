@@ -2,8 +2,6 @@
 #include <Core/Settings.h>
 #include <Core/NamesAndTypes.h>
 
-#include <Common/checkStackSize.h>
-
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/LogicalExpressionsOptimizer.h>
 #include <Interpreters/QueryAliasesVisitor.h>

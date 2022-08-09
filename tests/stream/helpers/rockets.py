@@ -339,11 +339,13 @@ def request_rest(
         if rest_type == "raw":
             if data != None:
                 data = json.dumps(data)
+
         res = requests.request(
             http_method,
             url,
             params=params,
             data=data,
+            headers=headers,
             cookies=cookies,
             files=files,
             auth=auth,
@@ -487,7 +489,14 @@ def query_run_rest(rest_setting, statement_2_run):
         http_method = statement_2_run.get("http_method")
         data = statement_2_run.get("data")
         args = statement_2_run.get("args")
-        body = statement_2_run.get("body")
+
+        # When query ID is specified in REST case, honor it
+        headers = statement_2_run.get("headers")
+        if headers:
+            headers['x-proton-query-id'] = query_id
+        else:
+            headers = {'x-proton-query-id' : query_id}
+
         params = statement_2_run.get("params")
         depends_on = statement_2_run.get("depends_on")
         
@@ -524,7 +533,7 @@ def query_run_rest(rest_setting, statement_2_run):
             time.sleep(wait)
 
         logger.debug(f"rest_request({rest_request}) to be called.")
-        res = request_rest(http_method, url, rest_type, params, data)
+        res = request_rest(http_method, url, rest_type, params, data, headers)
         query_end_time_str = str(datetime.datetime.now())
         logger.debug(
             f"rest_request({rest_request}) called, res.status_code = {res.status_code}."

@@ -99,7 +99,6 @@ public:
 private:
     virtual void consume(Chunk chunk);
 
-    inline bool needsFinalization(const Chunk & chunk) const;
     virtual void finalize(ChunkInfoPtr) { }
 
     inline IProcessor::Status preparePushToOutput();

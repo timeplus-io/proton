@@ -553,7 +553,7 @@ void StreamingAggregatingTransform::consume(Chunk chunk)
         }
     }
 
-    if (needsFinalization(chunk))
+    if (chunk.hasWatermark())
         finalize(chunk.getChunkInfo());
 }
 
@@ -674,12 +674,6 @@ void StreamingAggregatingTransform::initGenerate()
 
         processors = Pipe::detachProcessors(std::move(pipe));
     }
-}
-
-bool StreamingAggregatingTransform::needsFinalization(const Chunk & chunk) const
-{
-    const auto & chunk_info = chunk.getChunkInfo();
-    return (chunk_info && chunk_info->ctx.hasWatermark() != 0);
 }
 
 void StreamingAggregatingTransform::emitVersion(Block & block)

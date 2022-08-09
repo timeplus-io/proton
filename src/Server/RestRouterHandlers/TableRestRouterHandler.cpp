@@ -186,7 +186,7 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
 {
     const String & table = getPathParameter("stream");
 
-    String query = "DROP STREAM " + database + ".`" + table + "`";
+    String query = fmt::format("DROP STREAM {}.`{}`", database, table);
     if (hasQueryParameter("mode"))
     {
         const auto & mode = getQueryParameter("mode");
@@ -263,6 +263,11 @@ String TableRestRouterHandler::getEngineExpr(const Poco::JSON::Object::Ptr & pay
 
 String TableRestRouterHandler::getPartitionExpr(const Poco::JSON::Object::Ptr & payload, const String & default_granularity)
 {
+    /// If `partition by` is explicitly specified, honor it
+    const auto & partition_by_expression = getStringValueFrom(payload, "partition_by_expression", String());
+    if (!partition_by_expression.empty())
+        return partition_by_expression;
+
     const auto & partition_by_granularity = getStringValueFrom(payload, "partition_by_granularity", default_granularity);
     return granularity_func_mapping[partition_by_granularity];
 }
@@ -272,7 +277,8 @@ String TableRestRouterHandler::getStringValueFrom(const Poco::JSON::Object::Ptr 
     return payload->has(key) ? payload->get(key).toString() : default_value;
 }
 
-String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & host_shards, const String & uuid) const
+String
+TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, const String & host_shards, const String & uuid) const
 {
     const auto & time_col = getStringValueFrom(payload, ProtonConsts::RESERVED_EVENT_TIME_API_NAME, ProtonConsts::RESERVED_EVENT_TIME);
     std::vector<String> create_segments;
@@ -286,28 +292,35 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
             getColumnsDefinition(payload),
             getSettings(payload));
     }
-    else if (uuid.empty())
+
+    const auto & order_by = getOrderByExpr(payload, time_col, getDefaultOrderByGranularity());
+    const auto & primary_key = payload->has("primary_key") ? payload->get("primary_key").toString() : order_by;
+    const auto & partition_by = getPartitionExpr(payload, getDefaultPartitionGranularity());
+
+    if (uuid.empty())
     {
         create_segments.push_back(fmt::format(
-            "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
+            "CREATE STREAM `{}`.`{}` ({}) ENGINE = {} PARTITION BY {} PRIMARY KEY ({}) ORDER BY ({})",
             database,
             payload->get("name").toString(),
             getColumnsDefinition(payload),
             getEngineExpr(payload),
-            getPartitionExpr(payload, getDefaultPartitionGranularity()),
-            getOrderByExpr(payload, time_col, getDefaultOrderByGranularity())));
+            partition_by,
+            primary_key,
+            order_by));
     }
     else
     {
         create_segments.push_back(fmt::format(
-            "CREATE STREAM `{}`.`{}` UUID '{}' ({}) ENGINE = {} PARTITION BY {} ORDER BY ({})",
+            "CREATE STREAM `{}`.`{}` UUID '{}' ({}) ENGINE = {} PARTITION BY {} PRIMARY KEY ({}) ORDER BY ({})",
             database,
             payload->get("name").toString(),
             uuid,
             getColumnsDefinition(payload),
             getEngineExpr(payload),
-            getPartitionExpr(payload, getDefaultPartitionGranularity()),
-            getOrderByExpr(payload, time_col, getDefaultOrderByGranularity())));
+            partition_by,
+            primary_key,
+            order_by));
     }
 
     if (payload->has("ttl_expression"))
@@ -315,6 +328,9 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
         create_segments.push_back(fmt::format("TTL {}", payload->get("ttl_expression").toString()));
 
     create_segments.push_back(fmt::format("SETTINGS subtype='{}'", subtype()));
+
+    if (payload->has("mode"))
+        create_segments.push_back(fmt::format(", mode='{}'", payload->get("mode").toString()));
 
     if (!host_shards.empty())
         create_segments.push_back(fmt::format(", host_shards='{}'", host_shards));
@@ -327,7 +343,7 @@ String TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & pa
             return "";
         },
         [&](const auto & key, const auto & value) {
-            if (key != "subtype")
+            if (key != "subtype" && key != "mode")
                 create_segments.push_back(fmt::format(", {}='{}'", key, value));
         });
 

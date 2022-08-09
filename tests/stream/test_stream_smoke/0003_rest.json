@@ -15,11 +15,7 @@
             ]
         }
     },
-    "commments": "test_rests covering the steam query smoke cases.",
-
-   
-
-
+    "comments": "test_rests covering the steam query smoke cases.",
     "tests": [
         {
             "id": 0,

@@ -27,7 +27,9 @@ public:
         static ExternalGrokPatterns inst(context_);
         return inst;
     }
+
     ~ExternalGrokPatterns();
+    void shutdown();
 
     std::optional<String> tryGetPattern(const String & pattern_name) const;
 
@@ -35,5 +37,8 @@ private:
     ExternalGrokPatterns(ContextPtr context_);
     void reloadPatternsFromFile();
     void loadPatternsFromFile();
+
+private:
+    std::atomic_flag is_shutdown = ATOMIC_FLAG_INIT;
 };
 }

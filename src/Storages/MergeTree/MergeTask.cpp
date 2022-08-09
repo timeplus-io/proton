@@ -4,7 +4,6 @@
 #include <fmt/format.h>
 
 #include <base/logger_useful.h>
-#include <Common/ActionBlocker.h>
 
 #include <DataTypes/ObjectUtils.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
@@ -23,7 +22,6 @@
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/VersionedCollapsingTransform.h>
 #include <Processors/Transforms/TTLTransform.h>
-#include <Processors/Transforms/TTLCalcTransform.h>
 #include <Processors/Transforms/DistinctSortedTransform.h>
 
 namespace DB
@@ -60,11 +58,11 @@ static void extractMergingAndGatheringColumns(
         key_columns.emplace(merging_params.sign_column);
 
     /// Force version column for Replacing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    if (merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
         key_columns.emplace(merging_params.version_column);
 
     /// Force sign column for VersionedCollapsing mode. Version is already in primary key.
-    if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
+    if (merging_params.mode == MergeTreeData::MergingParams::ChangelogKV)
         key_columns.emplace(merging_params.sign_column);
 
     /// Force to merge at least one column in case of empty key
@@ -849,7 +847,7 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
             merged_transform = std::make_shared<AggregatingSortedTransform>(header, pipes.size(), sort_description, merge_block_size);
             break;
 
-        case MergeTreeData::MergingParams::Replacing:
+        case MergeTreeData::MergingParams::VersionedKV:
             merged_transform = std::make_shared<ReplacingSortedTransform>(
                 header, pipes.size(), sort_description, ctx->merging_params.version_column,
                 merge_block_size, ctx->rows_sources_write_buf.get(), ctx->blocks_are_granules_size);
@@ -861,9 +859,9 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
                 ctx->merging_params.graphite_params, global_ctx->time_of_merge);
             break;
 
-        case MergeTreeData::MergingParams::VersionedCollapsing:
+        case MergeTreeData::MergingParams::ChangelogKV:
             merged_transform = std::make_shared<VersionedCollapsingTransform>(
-                header, pipes.size(), sort_description, ctx->merging_params.sign_column,
+                header, pipes.size(), sort_description, ctx->merging_params.sign_column, ctx->merging_params.version_column,
                 merge_block_size, ctx->rows_sources_write_buf.get(), ctx->blocks_are_granules_size);
             break;
     }
@@ -911,8 +909,9 @@ MergeAlgorithm MergeTask::ExecuteAndFinalizeHorizontalPart::chooseMergeAlgorithm
     bool is_supported_storage =
         ctx->merging_params.mode == MergeTreeData::MergingParams::Ordinary ||
         ctx->merging_params.mode == MergeTreeData::MergingParams::Collapsing ||
-        ctx->merging_params.mode == MergeTreeData::MergingParams::Replacing ||
-        ctx->merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing;
+        ctx->merging_params.mode == MergeTreeData::MergingParams::VersionedKV
+        ||
+        ctx->merging_params.mode == MergeTreeData::MergingParams::ChangelogKV;
 
     bool enough_ordinary_cols = global_ctx->gathering_columns.size() >= data_settings->vertical_merge_algorithm_min_columns_to_activate;
 

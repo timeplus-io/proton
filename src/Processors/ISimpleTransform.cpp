@@ -111,7 +111,7 @@ void ISimpleTransform::work()
     /// proton: starts. For case like SELECT count(*) FROM table WHERE expression EMIT STREAM PERIODIC INTERVAL 2 SECOND
     /// the output.header is empty. So we need explicitly check watermark chunk info here to propagate empty chunk
     /// with watermark
-    if (!skip_empty_chunks || output_data.chunk || output_data.chunk.hasWatermark())
+    if (!skip_empty_chunks || output_data.chunk || output_data.chunk.hasMark())
         has_output = true;
     /// proton: ends
 

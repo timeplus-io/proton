@@ -161,6 +161,9 @@ struct Settings;
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
     M(String, host_shards, "", "Stream shards the current proton instance is hosting", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
+    M(String, version_column, "_tp_time", "Changelog kv or versioned kv stream version column", 0) \
+    M(String, mode, "append", "Engine mode, 'append', 'changelog', 'changelog_kv' or 'versioned_kv'", 0) \
+    M(UInt64, keep_versions, 1, "For versioned_kv storage mode, this setting decides how many versions to keep in its historical store", 0) \
     M(String, logstore_cluster_id, "", "Backend streaming storage cluster id", 0) \
     M(String, logstore_auto_offset_reset, "earliest", "Default offset to consume messages from if there is no initial one", 0) \
     M(String, logstore_subscription_mode, "dedicated", "Mode of subscribing / polling data from streaming storage. `shared` means sharing poll threads across different tables. `dedicated` means dedicated poll thread for the table", 0) \

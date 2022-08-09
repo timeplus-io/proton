@@ -1736,15 +1736,14 @@ void StorageMergeTree::locateSNFile()
     }
 
     setCommittedSN(loadSN());
+    setInMemoryCommittedSN(committedSN());
 }
 
 /// Return -1 if failed to load SN
 Int64 StorageMergeTree::loadSN() const
 {
     if (!sn_file.second->exists(sn_file.first))
-    {
         return -1;
-    }
 
     auto buf = sn_file.second->readFile(sn_file.first);
     assertString("1\n", *buf);
@@ -1810,6 +1809,7 @@ void StorageMergeTree::populateCommittedSNFromParts()
         /// shows more recent than that in committed_sn.txt
         LOG_INFO(log, "Progressing committed_sn from {} to {}", committed, next_expecting_sn - 1);
         setCommittedSN(next_expecting_sn - 1);
+        setInMemoryCommittedSN(next_expecting_sn - 1);
     }
 
     max_committed_sn = max_expecting_sn - 1;

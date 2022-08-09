@@ -139,10 +139,15 @@ struct RowRef
         row_num = cursor.impl->getRow();
     }
 
-    static bool checkEquals(size_t size, const IColumn ** lhs, size_t lhs_row, const IColumn ** rhs, size_t rhs_row)
+    /// proton : starts. Add skip_column_pos
+    static bool checkEquals(size_t size, const IColumn ** lhs, size_t lhs_row, const IColumn ** rhs, size_t rhs_row, size_t skip_column_pos)
     {
         for (size_t col_number = 0; col_number < size; ++col_number)
         {
+            if (skip_column_pos < size && col_number == skip_column_pos)
+                continue;
+            /// proton : ends
+
             auto & cur_column = lhs[col_number];
             auto & other_column = rhs[col_number];
 
@@ -153,10 +158,17 @@ struct RowRef
         return true;
     }
 
+    /// proton : starts
     bool hasEqualSortColumnsWith(const RowRef & other)
     {
-        return checkEquals(num_columns, sort_columns, row_num, other.sort_columns, other.row_num);
+        return hasEqualSortColumnsWith(other, -1);
     }
+
+    bool hasEqualSortColumnsWith(const RowRef & other, size_t skip_column_pos)
+    {
+        return checkEquals(num_columns, sort_columns, row_num, other.sort_columns, other.row_num, skip_column_pos);
+    }
+    /// proton : ends
 };
 
 /// This class also represents a row in a chunk.
@@ -197,11 +209,18 @@ struct RowRefWithOwnedChunk
         sort_columns = &owned_chunk->sort_columns;
     }
 
+    /// proton : starts. If version_column_pos is not -1, then skip comparing it
     bool hasEqualSortColumnsWith(const RowRefWithOwnedChunk & other)
     {
-        return RowRef::checkEquals(sort_columns->size(), sort_columns->data(), row_num,
-                                   other.sort_columns->data(), other.row_num);
+        return hasEqualSortColumnsWith(other, -1);
     }
+
+    bool hasEqualSortColumnsWith(const RowRefWithOwnedChunk & other, size_t skip_column_pos)
+    {
+        return RowRef::checkEquals(sort_columns->size(), sort_columns->data(), row_num,
+                                   other.sort_columns->data(), other.row_num, skip_column_pos);
+    }
+    /// proton : ends
 };
 
 }

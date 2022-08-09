@@ -878,8 +878,9 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
                 if (ctx->isLocalQueryFromTCP())
                 {
                     /// it comes from TCPHandler, therefore update column definitions if required
-                    prepareCreateQueryForStream(create);
+                    /// First prepare settings, and then create query since the latter depends on the settings
                     prepareEngineSettings(create, ctx);
+                    prepareCreateQueryForStream(create);
                 }
                 return false;
             }

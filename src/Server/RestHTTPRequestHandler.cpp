@@ -8,7 +8,6 @@
 #include <Access/ExternalAuthenticators.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadBufferFromString.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/Session.h>
 #include <Common/setThreadName.h>
 

@@ -192,7 +192,7 @@ Chain InterpreterInsertQuery::buildChainImpl(
 
     /// The only case is system tables inserts. System tables are still merge tree
     /// we don't support in-memory table
-    assert(table->getName() == "MergeTree" || table->getName() == "Memory");
+    assert(table->getName().ends_with("MergeTree") || table->getName() == "Memory");
 
     const ASTInsertQuery * query = nullptr;
     if (query_ptr)

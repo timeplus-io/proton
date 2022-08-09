@@ -34,6 +34,10 @@
 #include <boost/range/iterator_range_core.hpp>
 
 
+/// proton : starts
+#include <Common/ProtonCommon.h>
+/// proton : ends
+
 namespace DB
 {
 
@@ -318,6 +322,7 @@ public:
     /// Parameters for various modes.
     struct MergingParams
     {
+        /// proton : starts
         /// Merging mode. See above.
         enum Mode
         {
@@ -325,9 +330,9 @@ public:
             Collapsing          = 1,
             Summing             = 2,
             Aggregating         = 3,
-            Replacing           = 5,
+            VersionedKV         = 5,
             Graphite            = 6,
-            VersionedCollapsing = 7,
+            ChangelogKV         = 7,
         };
 
         Mode mode;
@@ -338,8 +343,12 @@ public:
         /// For Summing mode. If empty - columns_to_sum is determined automatically.
         Names columns_to_sum;
 
-        /// For Replacing and VersionedCollapsing mode. Can be empty for Replacing.
+        /// For ChangelogKV and VersionedKV mode
         String version_column;
+
+        /// For VersionedKV
+        UInt64 keep_versions = 0;
+        /// proton : ends
 
         /// For Graphite mode.
         Graphite::Params graphite_params;
@@ -933,9 +942,15 @@ public:
     mutable std::mutex currently_submerging_emerging_mutex;
 
     /// proton: starts
+    bool isAppendOnlyMode() const { return storage_settings.get()->mode.value == ProtonConsts::APPEND_MODE; }
+    bool isChangelogMode() const { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_MODE; }
+    bool isChangelogKvMode() const { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_KV_MODE; }
+    bool isVersionedKvMode() const { return storage_settings.get()->mode.value == ProtonConsts::VERSIONED_KV_MODE; }
     bool isVirtual() const { return relative_data_path.empty(); }
-    virtual Int64 committedSN() const { return committed_sn; }
-    virtual void setCommittedSN(Int64 committed_sn_) { committed_sn = committed_sn_; }
+    Int64 committedSN() const { return committed_sn; }
+    void setCommittedSN(Int64 committed_sn_) { committed_sn = committed_sn_; }
+    Int64 inMemoryCommittedSN() const { return inmemory_committed_sn; }
+    void setInMemoryCommittedSN(Int64 committed_sn_) { inmemory_committed_sn = committed_sn_; }
     /// proton: ends
 
 protected:
@@ -1241,6 +1256,7 @@ private:
 
     /// proton: starts
     std::atomic<Int64> committed_sn = -1;
+    std::atomic<Int64> inmemory_committed_sn = -1;
     /// proton: ends
 
     void resetObjectColumnsFromActiveParts(const DataPartsLock & lock);

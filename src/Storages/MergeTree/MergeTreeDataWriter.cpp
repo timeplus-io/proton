@@ -217,7 +217,7 @@ Block MergeTreeDataWriter::mergeBlock(
             /// There is nothing to merge in single block in ordinary MergeTree
             case MergeTreeData::MergingParams::Ordinary:
                 return nullptr;
-            case MergeTreeData::MergingParams::Replacing:
+            case MergeTreeData::MergingParams::VersionedKV:
                 return std::make_shared<ReplacingSortedAlgorithm>(
                     block, 1, sort_description, merging_params.version_column, block_size + 1);
             case MergeTreeData::MergingParams::Collapsing:
@@ -230,9 +230,9 @@ Block MergeTreeDataWriter::mergeBlock(
                     partition_key_columns, block_size + 1);
             case MergeTreeData::MergingParams::Aggregating:
                 return std::make_shared<AggregatingSortedAlgorithm>(block, 1, sort_description, block_size + 1);
-            case MergeTreeData::MergingParams::VersionedCollapsing:
+            case MergeTreeData::MergingParams::ChangelogKV:
                 return std::make_shared<VersionedCollapsingAlgorithm>(
-                    block, 1, sort_description, merging_params.sign_column, block_size + 1);
+                    block, 1, sort_description, merging_params.sign_column, merging_params.version_column, block_size + 1);
             case MergeTreeData::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedAlgorithm>(
                     block, 1, sort_description, block_size + 1, merging_params.graphite_params, time(nullptr));

@@ -271,9 +271,9 @@ private:
         if (!compiled_regex->ok())
         {
             throw Exception(
-                "Cannot compile re2: " + expression + " for http handling rule, error: " + compiled_regex->error()
-                    + ". Look at https://github.com/google/re2/wiki/Syntax for reference.",
-                ErrorCodes::CANNOT_COMPILE_REGEXP);
+                ErrorCodes::CANNOT_COMPILE_REGEXP,
+                "Cannot compile re2: '{}' for http handling rule, error: {}. Look at https://github.com/google/re2/wiki/Syntax for reference.",
+                expression, compiled_regex->error());
         }
 
         return compiled_regex;

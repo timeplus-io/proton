@@ -484,7 +484,7 @@ class IColumn;
     M(Bool, asterisk_include_materialized_columns, false, "Include MATERIALIZED columns for wildcard query", 0) \
     M(Bool, asterisk_include_alias_columns, false, "Include ALIAS columns for wildcard query", 0) \
     M(Bool, optimize_skip_merged_partitions, false, "Skip partitions with one part with level > 0 in optimize final", 0) \
-    M(Bool, optimize_on_insert, true, "Do the same transformation for inserted block of data as if merge was done on this block.", 0) \
+    M(Bool, optimize_on_insert, false, "Do the same transformation for inserted block of data as if merge was done on this block.", 0) \
     M(Bool, allow_experimental_projection_optimization, false, "Enable projection optimization when processing SELECT queries", 0) \
     M(Bool, force_optimize_projection, false, "If projection optimization is enabled, SELECT queries need to use projection", 0) \
     M(Bool, async_socket_for_remote, true, "Asynchronously read from socket executing remote query", 0) \
@@ -694,6 +694,7 @@ class IColumn;
     M(UInt64, join_max_wait_rows, 100, "Max wait rows before doing stream to stream join", 0) \
     M(UInt64, join_max_cached_bytes, 524288000, "Max cached bytes for stream to stream join", 0) \
     M(Int64, max_join_range, 300, "Max join range", 0) \
+    M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

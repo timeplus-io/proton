@@ -385,7 +385,7 @@ public:
     void setCollectRequiredColumns(bool collect) { collect_required_columns = collect; }
 
     const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
-    void addRequiredColumns(RequiredColumnTuple && columnTuple) { required_columns.insert(std::move(columnTuple)); }
+    void addRequiredColumns(RequiredColumnTuple && column_tuple) { required_columns.insert(std::move(column_tuple)); }
     /// proton: end
 
     String getPath() const;

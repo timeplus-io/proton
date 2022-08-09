@@ -1,0 +1,163 @@
+{
+  "test_suite_name": "changelog_stream",
+  "tag": "smoke",
+  "setup": {
+    "statements": [
+      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream"},
+      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream(i int) settings mode='changelog'"},
+      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream"},
+      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_kv_stream(i int, k string) primary key k settings mode='changelog_kv'"},
+      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists versioned_kv_stream"},
+      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists versioned_kv_stream(i int, k string) primary key k settings mode='versioned_kv'"}
+    ]
+  },
+  "test_suite_config":{
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
+  },
+  "comments": "Tests covering the single shard changelog stream query smoke cases.",
+  "tests": [
+    {
+      "id": 0,
+      "tags": ["changelog_stream"],
+      "name": "single shard changelog stream",
+      "description": "single shard changelog stream creation and query",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_stream(i int) settings mode='changelog'"},
+            {"client":"python","query_id":"1400", "depends_on_stream":"changelog_stream","query_end_timer":5, "query_type": "stream", "query":"select i, _tp_delta from changelog_stream;"},
+            {"client":"python", "query_type": "table","depends_on":1400, "wait":1, "query": "insert into changelog_stream(i) values (1)"},
+            {"client":"python", "query_type": "table","depends_on":1400, "wait":1, "query": "insert into changelog_stream(i, _tp_delta) values (1, -1)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1400",
+          "expected_results":[
+            [1, 1], [1, -1]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["changelog_kv_stream"],
+      "name": "single shard changelog_kv stream",
+      "description": "single shard changelog_kv stream creation and query",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists changelog_kv_stream(i int, s string) primary key s settings mode='changelog_kv'"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(i, s) values (1, 'a')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(i, s) values (2, 'b')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(i, s, _tp_delta) values (1, 'a', -1), (2, 'b', -1), (3, 'b', 1), (4, 'c', 1)"},
+            {"client":"python","query_id":"1401", "wait":2, "depends_on_stream":"changelog_kv_stream","query_end_timer":5, "query_type": "stream", "query":"select i, s, _tp_delta from changelog_kv_stream;"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(i, s) values (5, 'd')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into changelog_kv_stream(i, s, _tp_delta) values (4, 'c', -1)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1401",
+          "expected_results":[
+            [3, "b", 1], [4, "c", 1], [5, "d", 1], [4, "c", -1]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "tags": ["versioned_kv_stream"],
+      "name": "single shard versioned_kv stream",
+      "description": "single shard versioned_kv stream creation and query",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists versioned_kv_stream"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists versioned_kv_stream(i int, s string) primary key s settings mode='versioned_kv'"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (1, 'a')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (2, 'b')"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (2, 'a'), (3, 'b'), (4, 'c')"},
+            {"client":"python","query_id":"1402", "wait":2, "depends_on_stream":"versioned_kv_stream","query_end_timer":5, "query_type": "stream", "query":"select i, s from versioned_kv_stream;"},
+            {"client":"python", "query_type": "table", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (5, 'd'), (6, 'c')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1402",
+          "expected_results":[
+            [2, "a"], [3, "b"], [4, "c"], [5, "d"], [6, "c"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["changelog_stream"],
+      "name": "single shard changelog stream via rest",
+      "description": "single shard changelog stream creation via rest",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_stream_rest"},
+            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1403,"http_method": "POST",
+              "data" : {"name": "changelog_stream_rest", "columns": [{"name": "i", "type": "int"}], "mode": "changelog"}}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1403",
+          "expected_results": {"request_id": "1403"}
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "tags": ["changelog_stream"],
+      "name": "single shard changelog_kv stream via rest",
+      "description": "single shard changelog_kv stream creation via rest",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists changelog_kv_stream_rest"},
+            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1404,"http_method": "POST",
+              "data" : {"name": "changelog_kv_stream_rest", "columns": [{"name": "i", "type": "int"}, {"name": "k", "type": "string"}], "mode": "changelog_kv", "primary_key": "k"}}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1404",
+          "expected_results": {"request_id": "1404"}
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "tags": ["changelog_stream"],
+      "name": "single shard versioned_kv stream via rest",
+      "description": "single shard versioned_kv stream creation via rest",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists versioned_kv_stream_rest"},
+            {"client":"rest", "query_type": "table", "wait": 2, "rest_type": "raw", "query_url":"/proton/v1/ddl/streams", "query_id": 1405,"http_method": "POST",
+              "data" : {"name": "versioned_kv_stream_rest", "columns": [{"name": "i", "type": "int"}, {"name": "k", "type": "string"}], "mode": "changelog_kv", "primary_key": "k"}}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1405",
+          "expected_results": {"request_id": "1405"}
+        }
+      ]
+    }
+  ]
+}

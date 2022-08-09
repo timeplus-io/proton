@@ -21,6 +21,14 @@ public:
 
     String getName() const override { return "ProxyStream"; }
 
+    bool supportsFinal() const override
+    {
+        if (storage)
+            return storage->supportsFinal();
+
+        return false;
+    }
+
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const override;
 

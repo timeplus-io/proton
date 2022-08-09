@@ -1,5 +1,6 @@
 #include "SchemaValidator.h"
 
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -12,7 +13,7 @@ bool validateSchema(const std::map<String, std::map<String, String>> & schema, c
         {
             if (!payload->has(required.first))
             {
-                error_msg = "Required param '" + required.first + "' is missing.";
+                error_msg = fmt::format("Required param '{}' is missing.", required.first);
                 return false;
             }
 
@@ -22,7 +23,7 @@ bool validateSchema(const std::map<String, std::map<String, String>> & schema, c
                 || (required.second == "double" && !payload->get(required.first).isNumeric())
                 || (required.second == "array" && !payload->get(required.first).isArray()))
             {
-                error_msg = "Invalid type of param '" + required.first + "'";
+                error_msg = fmt::format("Invalid type of param '{}'",  required.first);
                 return false;
             }
         }
@@ -39,7 +40,7 @@ bool validateSchema(const std::map<String, std::map<String, String>> & schema, c
                     || (optional.second == "bool" && !payload->get(optional.first).isBoolean())
                     || (optional.second == "double" && !payload->get(optional.first).isNumeric())))
             {
-                error_msg = "Invalid type of param '" + optional.first + "'";
+                error_msg = fmt::format("Invalid type of param '{}'", optional.first);
                 return false;
             }
         }

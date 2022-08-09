@@ -346,9 +346,9 @@ bool MergeTreeData::supportsFinal() const
     return merging_params.mode == MergingParams::Collapsing
         || merging_params.mode == MergingParams::Summing
         || merging_params.mode == MergingParams::Aggregating
-        || merging_params.mode == MergingParams::Replacing
+        || merging_params.mode == MergingParams::VersionedKV
         || merging_params.mode == MergingParams::Graphite
-        || merging_params.mode == MergingParams::VersionedCollapsing;
+        || merging_params.mode == MergingParams::ChangelogKV;
 }
 
 static void checkKeyExpression(const ExpressionActions & expr, const Block & sample_block, const String & key_name, bool allow_nullable_key)
@@ -393,6 +393,15 @@ void MergeTreeData::checkProperties(
         throw Exception("Primary key must be a prefix of the sorting key, but its length: "
             + toString(primary_key_size) + " is greater than the sorting key length: " + toString(sorting_key_size),
             ErrorCodes::BAD_ARGUMENTS);
+
+    /// proton : starts
+    if (merging_params.mode == MergingParams::ChangelogKV || merging_params.mode == MergingParams::VersionedKV)
+    {
+        /// We added `version` column to sorting key, so +1 here
+        if (primary_key_size + 1 != sorting_key_size)
+            throw Exception(ErrorCodes::SYNTAX_ERROR, "Primary key must be the same as sorting key for changelog_kv or versioned_kv stream");
+    }
+    /// proton : ends
 
     NameSet primary_key_columns_set;
 
@@ -670,23 +679,17 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
 {
     const auto columns = metadata.getColumns().getAllPhysical();
 
-    if (!sign_column.empty() && mode != MergingParams::Collapsing && mode != MergingParams::VersionedCollapsing)
-        /// proton: starts
-        throw Exception("Sign column for the current engine cannot be specified in modes except Collapsing or VersionedCollapsing.",
+    if (!sign_column.empty() && mode != MergingParams::Collapsing && mode != MergingParams::ChangelogKV)
+        throw Exception("Sign column cannot be specified in modes except Collapsing or Changelog.",
                         ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
-        /// proton: starts
-        throw Exception("Version column for the current engine cannot be specified in modes except Replacing or VersionedCollapsing.",
+    if (!version_column.empty() && mode != MergingParams::VersionedKV && mode != MergingParams::ChangelogKV)
+        throw Exception("Version column cannot be specified in modes except KV or Changelog.",
                         ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     if (!columns_to_sum.empty() && mode != MergingParams::Summing)
-        /// proton: starts
         throw Exception("List of columns to sum for the current engine cannot be specified in all modes except Summing.",
                         ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
 
     /// Check that if the sign column is needed, it exists and is of type Int8.
     auto check_sign_column = [this, & columns](bool is_optional, const std::string & storage)
@@ -712,9 +715,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
             }
         }
         if (miss_column)
-            /// proton: starts
             throw Exception("Sign column " + sign_column + " does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
-            /// proton: ends
     };
 
     /// that if the version_column column is needed, it exists and is of unsigned integer type.
@@ -743,9 +744,7 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
             }
         }
         if (miss_column)
-            /// proton: starts
             throw Exception("Version column " + version_column + " does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
-            /// proton: ends
     };
 
     if (mode == MergingParams::Collapsing)
@@ -761,10 +760,8 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
                 return column_to_sum == Nested::extractTableName(name_and_type.name);
             };
             if (columns.end() == std::find_if(columns.begin(), columns.end(), check_column_to_sum_exists))
-                /// proton: starts
                 throw Exception(
                         "Column " + column_to_sum + " listed in columns to sum does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
-                /// proton: ends
         }
 
         /// Check that summing columns are not in partition key.
@@ -783,13 +780,15 @@ void MergeTreeData::MergingParams::check(const StorageInMemoryMetadata & metadat
         }
     }
 
-    if (mode == MergingParams::Replacing)
-        check_version_column(true, "ReplacingMergeTree");
+    if (mode == MergingParams::VersionedKV)
+        /// proton : starts. Require version column
+        check_version_column(false, "KV");
+        /// proton : ends.
 
-    if (mode == MergingParams::VersionedCollapsing)
+    if (mode == MergingParams::ChangelogKV)
     {
-        check_sign_column(false, "VersionedCollapsingMergeTree");
-        check_version_column(false, "VersionedCollapsingMergeTree");
+        check_sign_column(false, "Changelog");
+        check_version_column(false, "Changelog");
     }
 
     /// TODO Checks for Graphite mode.
@@ -905,9 +904,9 @@ String MergeTreeData::MergingParams::getModeName() const
         case Collapsing:    return "Collapsing";
         case Summing:       return "Summing";
         case Aggregating:   return "Aggregating";
-        case Replacing:     return "Replacing";
+        case VersionedKV:   return "Replacing";
         case Graphite:      return "Graphite";
-        case VersionedCollapsing: return "VersionedCollapsing";
+        case ChangelogKV:   return "VersionedCollapsing";
     }
 
     __builtin_unreachable();

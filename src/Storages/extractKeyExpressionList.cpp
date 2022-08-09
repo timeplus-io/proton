@@ -11,7 +11,7 @@ namespace DB
 
         const auto * expr_func = node->as<ASTFunction>();
 
-        if (expr_func && expr_func->name == "tuple")
+        if (expr_func && expr_func->name == "tuple_cast")
         {
             if (expr_func->arguments)
                 /// Primary key is specified in tuple, extract its arguments.

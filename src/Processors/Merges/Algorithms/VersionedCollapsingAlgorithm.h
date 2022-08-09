@@ -16,10 +16,11 @@ namespace DB
 class VersionedCollapsingAlgorithm final : public IMergingAlgorithmWithSharedChunks
 {
 public:
-    /// Don't need version column. It's in primary key.
     VersionedCollapsingAlgorithm(
         const Block & header, size_t num_inputs,
-        SortDescription description_, const String & sign_column_,
+        SortDescription description_,
+        const String & sign_column_,
+        const String & version_column_,
         size_t max_block_size,
         WriteBuffer * out_row_sources_buf_ = nullptr,
         bool use_average_block_sizes = false);
@@ -30,6 +31,7 @@ private:
     MergedData merged_data;
 
     size_t sign_column_number = 0;
+    size_t version_column_number = -1;
 
     const size_t max_rows_in_queue;
 

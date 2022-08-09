@@ -47,7 +47,12 @@ ExternalGrokPatterns::ExternalGrokPatterns(ContextPtr context_)
 
 ExternalGrokPatterns::~ExternalGrokPatterns()
 {
-    if (reload_task)
+    shutdown();
+}
+
+void ExternalGrokPatterns::shutdown()
+{
+    if (!is_shutdown.test_and_set())
         reload_task->deactivate();
 }
 

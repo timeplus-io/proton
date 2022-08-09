@@ -1906,7 +1906,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readConcat(
     bool enable_parallel_reading,
     std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source) const
 {
-    /// For concat read, we don't want more than 1 thread concurrency for historical data read
+    /// For concat read, we don't want more than 1 thread concurrency for historical data read and we want read the data in order
     return doRead(column_names, storage_snapshot, query_info, std::move(context), max_block_size,
                   1, processed_stage, max_block_numbers_to_read, enable_parallel_reading, std::move(create_streaming_source));
 }

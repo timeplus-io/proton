@@ -99,6 +99,7 @@ public:
         /// proton: starts.
         auto start_ns = MonotonicNanoseconds::now();
         /// proton: ends.
+
         filterChunks();
 
         if (!state.init_chunks.empty())
