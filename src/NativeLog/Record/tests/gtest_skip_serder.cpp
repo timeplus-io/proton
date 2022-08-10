@@ -645,6 +645,34 @@ DB::Block createBlockBig(size_t rows)
     return block;
 }
 
+DB::Block createBlockForCompress(size_t rows, bool only_string)
+{
+    DB::Block block;
+
+    if (!only_string)
+    {
+        insertColumnNumber(block, rows);
+
+        /// insertColumnTuple(block, rows);
+
+        insertColumnUUID(block, rows);
+
+        insertColumnMap(block, rows);
+
+        /// insertColumnLowCardinality(block, rows);
+
+        insertColumnNullable(block, rows);
+
+        insertColumnArray(block, rows);
+
+        /// insertColumnSparse(block, rows);
+    }
+
+    insertColumnString(block, rows);
+
+    return block;
+}
+
 TEST(RecordSerder, Skip)
 {
     size_t rows = 3;

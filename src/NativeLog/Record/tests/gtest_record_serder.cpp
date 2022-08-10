@@ -17,6 +17,7 @@ using namespace nlog;
 using namespace std;
 
 extern Block createBlockBig(size_t rows);
+extern Block createBlockForCompress(size_t rows, bool only_string);
 
 namespace
 {
@@ -680,4 +681,74 @@ TEST(RecordSerde, Summary)
                       << "\n==========\n";
         }
     }
+}
+
+std::unique_ptr<Record> createRecordForCompress(size_t rows, bool only_string)
+{
+    Block block(createBlockForCompress(rows, only_string));
+    return std::make_unique<Record>(OpCode::ADD_DATA_BLOCK, move(block), nlog::NO_SCHEMA);
+}
+
+void compressTest(size_t rows, size_t n, bool only_string)
+{
+    auto r = createRecordForCompress(n, only_string);
+    r->setCodec(DB::CompressionMethodByte::NONE);
+
+    auto request_count = rows / n;
+    auto count = request_count;
+    size_t uncompressed_bytes = 0;
+    auto t = std::chrono::high_resolution_clock::now();
+    while (count--)
+        uncompressed_bytes += r->serialize().size();
+
+    std::chrono::duration<double> uncompressed_duration = std::chrono::high_resolution_clock::now() - t;
+    auto uncompressed_eps = static_cast<uint64_t>(rows/uncompressed_duration.count());
+    auto uncompressed_qps = static_cast<uint64_t>(request_count/uncompressed_duration.count());
+
+    r->setCodec(DB::CompressionMethodByte::LZ4);
+    count = request_count;
+    size_t compressed_lz4_bytes = 0;
+    t = std::chrono::high_resolution_clock::now();
+    while (count--)
+        compressed_lz4_bytes += r->serialize().size();
+
+    std::chrono::duration<double> compressed_lz4_duration = std::chrono::high_resolution_clock::now() - t;
+    auto lz4_ratio = static_cast<uint64_t>(static_cast<double>(compressed_lz4_bytes) * 10000 / uncompressed_bytes);
+    auto compressed_lz4_eps = static_cast<uint64_t>(rows/compressed_lz4_duration.count());
+    auto compressed_lz4_qps = static_cast<uint64_t>(request_count/compressed_lz4_duration.count());
+    auto lz4_eps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_lz4_eps) * 10000 / uncompressed_eps);
+    auto lz4_qps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_lz4_qps) * 10000 / uncompressed_qps);
+
+    r->setCodec(DB::CompressionMethodByte::ZSTD);
+    count = request_count;
+    size_t compressed_zstd_bytes = 0;
+    t = std::chrono::high_resolution_clock::now();
+    while (count--)
+        compressed_zstd_bytes += r->serialize().size();
+    std::chrono::duration<double> compressed_zstd_duration = std::chrono::high_resolution_clock::now() - t;
+    auto zstd_ratio = static_cast<uint64_t>(static_cast<double>(compressed_zstd_bytes) * 10000 / uncompressed_bytes);
+    auto compressed_zstd_eps = static_cast<uint64_t>(rows/compressed_zstd_duration.count());
+    auto zstd_eps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_zstd_eps) * 10000 / uncompressed_eps);
+    auto compressed_zstd_qps = static_cast<uint64_t>(request_count/compressed_zstd_duration.count());
+    auto zstd_qps_ratio = static_cast<uint64_t>(static_cast<double>(compressed_zstd_qps) * 10000 / uncompressed_qps);
+
+    std::cout << fmt::format("Total rows={}, per request block rows={}, ", rows, n) << "\n"
+              << fmt::format(" Non -compressed data total bytes: {}, eps: {}, qps: {}", uncompressed_bytes, uncompressed_eps, uncompressed_qps) << "\n"
+              << fmt::format(" LZ4 -compressed data total bytes: {}, eps: {}, qps: {}, compression ratio: {}.{}%, compression eps ratio: {}.{}%, compression qps ratio: {}.{}%", compressed_lz4_bytes, compressed_lz4_eps, compressed_lz4_qps, lz4_ratio/100, lz4_ratio%100, lz4_eps_ratio/100, lz4_eps_ratio%100, lz4_qps_ratio/100, lz4_qps_ratio%100) << "\n"
+              << fmt::format(" ZSTD-compressed data total bytes: {}, eps: {}, qps: {}, compression ratio: {}.{}%, compression eps ratio: {}.{}%, compression qps ratio: {}.{}%", compressed_zstd_bytes, compressed_zstd_eps, compressed_zstd_qps, zstd_ratio/100, zstd_ratio%100, zstd_eps_ratio/100, zstd_eps_ratio%100, zstd_qps_ratio/100, zstd_qps_ratio%100) << "\n\n";
+}
+
+TEST(RecordSerde, BenchmarkCompressionNative)
+{
+    /// Complex
+    compressTest(100000, 1, false);
+    compressTest(100000, 100, false);
+    compressTest(100000, 10000, false);
+    compressTest(100000, 100000, false);
+
+    /// String
+    compressTest(100000, 1, true);
+    compressTest(100000, 100, true);
+    compressTest(100000, 10000, true);
+    compressTest(100000, 100000, true);
 }

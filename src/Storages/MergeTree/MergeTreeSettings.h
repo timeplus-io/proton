@@ -186,6 +186,7 @@ struct Settings;
     M(String, logstore, "", "Backend streaming storage for write ahead log implementation", 1) \
     M(Int64, logstore_replication_factor, 1, "Replication number of logstore", 0) \
     M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store", 0) \
+    M(String, logstore_codec, "none", "Backend streaming storage compression mode. options `none` `lz4` `zstd`", 0) \
 // End of CONFIGURABLE_STREAM_SETTINGS
 
 #define LIST_STREAM_SETTINGS(M) \

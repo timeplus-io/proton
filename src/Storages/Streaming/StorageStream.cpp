@@ -277,6 +277,12 @@ StorageStream::StorageStream(
             if (shard_func->name == "rand" || shard_func->name == "RAND")
                 rand_sharding_key = true;
     }
+
+    /// TODO: For proton on kafka, disable compression in kafka topic if the settings is set:
+    /// 1) During creation, disable kafka topic compression and init
+    /// 2) After altered, reinit kafka wal.
+    /// For now, only works under nativelog
+    updateLogStoreCodec(settings_->logstore_codec);
 }
 
 NamesAndTypesList StorageStream::getVirtuals() const
@@ -826,6 +832,13 @@ void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, A
             setInMemoryMetadata(stream_shard->storage->getInMemoryMetadata());
         }
     }
+
+    /// Update native_log codec
+    if (commands.hasSettingsAlterCommand() && stream_shards.back()->storage)
+    {
+        const auto settings = stream_shards.back()->storage->getSettings();
+        updateLogStoreCodec(settings->logstore_codec);
+    }
 }
 
 bool StorageStream::optimize(
@@ -1304,7 +1317,10 @@ void StorageStream::append(
     nlog::RecordPtr & record, IngestMode ingest_mode, klog::AppendCallback callback, void * data, UInt64 base_block_id, UInt64 sub_block_id)
 {
     if (native_log)
+    {
+        record->setCodec(logstore_codec);
         appendToNativeLog(record, ingest_mode);
+    }
     else
         appendToKafka(record, ingest_mode, callback, data, base_block_id, sub_block_id);
 }
@@ -1466,6 +1482,16 @@ void StorageStream::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()));
+}
+
+void StorageStream::updateLogStoreCodec(const String & settings_codec)
+{
+    if (settings_codec == "lz4")
+        logstore_codec = CompressionMethodByte::LZ4;
+    else if (settings_codec == "zstd")
+        logstore_codec = CompressionMethodByte::ZSTD;
+    else
+        logstore_codec = CompressionMethodByte::NONE;
 }
 
 }

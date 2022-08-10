@@ -294,6 +294,8 @@ private:
 
     void cacheVirtualColumnNamesAndTypes();
 
+    void updateLogStoreCodec(const String & settings_codec);
+
 private:
     Int32 replication_factor;
     Int32 shards;
@@ -322,6 +324,8 @@ private:
 
     nlog::NativeLog * native_log = nullptr;
     KafkaLogContext * kafka_log = nullptr;
+
+    CompressionMethodByte logstore_codec = CompressionMethodByte::NONE;
 
     std::atomic_flag inited = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;

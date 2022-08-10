@@ -932,6 +932,7 @@ settings:
         logstore: ""
         logstore_replication_factor: 1
         storage_type: "hybrid"
+        logstore_codec: none
 
 cluster_settings:
     logstore:
