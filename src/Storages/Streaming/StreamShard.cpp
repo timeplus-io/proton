@@ -127,8 +127,11 @@ void StreamShard::startup()
 
     initLog();
 
-    if (storage)
-        storage->startup();
+    /// for virtual tables, there is no storage object
+    if (!storage)
+        return;
+
+    storage->startup();
 
     auto storage_settings = storage_stream->getSettings();
     if (storage_settings->storage_type.value == "streaming")

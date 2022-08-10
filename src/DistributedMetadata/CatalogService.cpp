@@ -180,7 +180,7 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
             return nullptr;
 
         /// Only support create virtual table storage for `Stream`
-        if (iter->second.begin()->second->engine != "Stream")
+        if (iter->second.begin()->second->engine != "Stream" && iter->second.begin()->second->engine != "View")
             return nullptr;
 
         uuid = iter->second.begin()->second->uuid;
@@ -536,6 +536,7 @@ ClusterPtr CatalogService::tableCluster(const String & database, const String & 
         /* password = */ "",
         tcp_port,
         /* treat_local_as_remote = */ false,
+        /* treat_local_port_as_remote = */ false,
         /* secure = */ false,
         /* priority = */ 1);
 

@@ -333,6 +333,7 @@ void DDLService::createTable(nlog::Record & record)
     String query_id = block.getByName("query_id").column->getDataAt(0).toString();
     String user = block.getByName("user").column->getDataAt(0).toString();
     String payload = block.getByName("payload").column->getDataAt(0).toString();
+    String database = block.getByName("database").column->getDataAt(0).toString();
     String table = block.getByName("table").column->getDataAt(0).toString();
     String uuid = block.getByName("uuid").column->getDataAt(0).toString();
     Int32 shards = block.getByName("shards").column->getInt(0);
@@ -410,31 +411,41 @@ void DDLService::createTable(nlog::Record & record)
     }
     else
     {
-        /// Ask placement service to do shard placement
-        const auto & qualified_nodes = placement.place(shards, replication_factor);
-        if (qualified_nodes.empty())
+        String hosts;
+        if (database == "system" && table == "tasks")
         {
-            LOG_ERROR(
-                log,
-                "Failed to create stream because there are not enough hosts to place its total={} shard replicas, payload={} "
-                "query_id={} user={}",
-                shards * replication_factor,
-                payload,
-                query_id,
-                user);
-            failDDL(query_id, user, payload, "There are not enough hosts to place the stream shard replicas");
-            return;
+            /// create system.tasks stream in the same node with DDLService, in the recommended configuration,
+            /// it is also the node hosting TaskService, therefore no need to call PlacementService to select nodes
+            hosts = fmt::format("localhost:{}", http_port);
         }
+        else
+        {
+            /// Ask placement service to do shard placement
+            const auto & qualified_nodes = placement.place(shards, replication_factor);
+            if (qualified_nodes.empty())
+            {
+                LOG_ERROR(
+                    log,
+                    "Failed to create stream because there are not enough hosts to place its total={} shard replicas, payload={} "
+                    "query_id={} user={}",
+                    shards * replication_factor,
+                    payload,
+                    query_id,
+                    user);
+                failDDL(query_id, user, payload, "There are not enough hosts to place the stream shard replicas");
+                return;
+            }
 
-        std::vector<String> target_hosts;
-        target_hosts.reserve(qualified_nodes.size());
-        for (const auto & node : qualified_nodes)
-            /// FIXME, https
-            target_hosts.push_back(node->node.host + ":" + std::to_string(node->node.http_port));
+            std::vector<String> target_hosts;
+            target_hosts.reserve(qualified_nodes.size());
+            for (const auto & node : qualified_nodes)
+                /// FIXME, https
+                target_hosts.push_back(fmt::format("{}:{}", node->node.host, node->node.http_port));
 
-        /// We got the placement, commit the placement decision
-        /// Add `hosts` into to record header
-        String hosts{boost::algorithm::join(target_hosts, ",")};
+            /// We got the placement, commit the placement decision
+            /// Add `hosts` into to record header
+            hosts = boost::algorithm::join(target_hosts, ",");
+        }
         record.addHeader("hosts", hosts);
 
         auto result = append(record);

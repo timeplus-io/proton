@@ -443,16 +443,31 @@ void StorageStream::readStreaming(
 
     const auto & settings_ref = context_->getSettingsRef();
     auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
+
+    std::vector<std::pair<std::shared_ptr<StreamShard>, Int32>> shard_info;
+    if (requireDistributedQuery(context_))
+    {
+        /// This is a distributed query on multi-shards
+        auto & shard = stream_shards.back();
+        for (Int32 i = 0; i < shards; ++i)
+            shard_info.emplace_back(shard, i);
+    }
+    else
+    {
+        /// multi-shards in single node for NativeLog
+        for (auto & stream_shard : stream_shards)
+            shard_info.emplace_back(stream_shard, stream_shard->shard);
+    }
+
     if (share_resource_group)
     {
-        for (auto & stream_shard : stream_shards)
+        for (auto & [stream_shard, shard] : shard_info)
         {
             if (!column_names.empty())
-                pipes.emplace_back(
-                    stream_shard->source_multiplexers->createChannel(stream_shard->shard, column_names, storage_snapshot, context_));
+                pipes.emplace_back(stream_shard->source_multiplexers->createChannel(shard, column_names, storage_snapshot, context_));
             else
                 pipes.emplace_back(stream_shard->source_multiplexers->createChannel(
-                    stream_shard->shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
+                    shard, {ProtonConsts::RESERVED_EVENT_TIME}, storage_snapshot, context_));
         }
     }
     else
@@ -469,9 +484,9 @@ void StorageStream::readStreaming(
 
         auto offsets = stream_shards.back()->getOffsets(settings_ref.seek_to.value);
 
-        for (auto & stream_shard : stream_shards)
+        for (auto & [stream_shard, shard] : shard_info)
             pipes.emplace_back(std::make_shared<StreamingStoreSource>(
-                stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log));
+                stream_shard, header, storage_snapshot, context_, shard, offsets[stream_shard->shard], log));
     }
 
     LOG_INFO(
@@ -938,8 +953,17 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
 StorageSnapshotPtr StorageStream::getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const
 {
     auto & storage = stream_shards.back()->storage;
-    assert(storage);
-    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot)->clone();
+
+    std::shared_ptr<StorageSnapshot> storage_snapshot;
+    if (!storage)
+    {
+        /// for virtual table
+        storage_snapshot = IStorage::getStorageSnapshot(metadata_snapshot)->clone();
+    }
+    else
+    {
+        storage_snapshot = storage->getStorageSnapshot(metadata_snapshot)->clone();
+    }
     /// Add virtuals, such as `_tp_append_time` and `_tp_process_time
     storage_snapshot->addVirtuals(getVirtuals());
     return storage_snapshot;
