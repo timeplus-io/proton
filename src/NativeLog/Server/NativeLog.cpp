@@ -380,4 +380,27 @@ TranslateTimestampsResponse NativeLog::translateTimestamps(const std::string & n
 
     return response;
 }
+
+std::optional<std::pair<uint64_t, std::vector<String>>> NativeLog::getLocalStreamInfo(const StreamDescription & desc) const noexcept
+{
+    /// Size in metastore skip, the value is small and difficult to get
+
+    /// Log size, for now all shards in one node.
+    /// TODO: Skip remote shards.
+    uint64_t bytes_size = 0;
+    std::vector<std::string> paths;
+    paths.reserve(desc.shards);
+    for (int32_t shard = 0; shard < desc.shards; ++shard)
+    {
+        StreamShard stream_shard{desc.stream, desc.id, shard};
+        auto log = log_manager->getLog(desc.ns, stream_shard);
+        if (!log)
+            return {}; /// failure.
+
+        bytes_size += log->size();
+        paths.push_back(log->logDir());
+    }
+    return std::pair{bytes_size, paths};
+}
+
 }

@@ -224,6 +224,8 @@ public:
     /// Return (shard_id, committed_sn) pairs
     std::vector<std::pair<Int32, Int64>> lastCommittedSequences() const;
 
+    const std::vector<std::shared_ptr<StreamShard>> & getStreamShards() const { return stream_shards; }
+
     friend class StreamSink;
     friend class MergeTreeData;
 

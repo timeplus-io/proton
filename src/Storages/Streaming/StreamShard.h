@@ -55,6 +55,8 @@ public:
 
     const IStorage * storageStream() const { return storage_stream; }
 
+    const StorageMergeTree * getStorage() const { return storage ? storage.get() : nullptr; }
+
     IngestMode ingestMode() const { return default_ingest_mode; }
 
     bool isLogStoreKafka() const { return kafka != nullptr; }

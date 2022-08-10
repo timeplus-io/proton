@@ -21,7 +21,7 @@ struct StoragesInfo
     String engine;
 
     bool need_inactive_parts = false;
-    MergeTreeData * data = nullptr;
+    const MergeTreeData * data = nullptr;
 
     operator bool() const { return storage != nullptr; }
     MergeTreeData::DataPartsVector

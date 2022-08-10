@@ -63,6 +63,9 @@ public:
 
     TailCache & getCache() const { return *cache; }
 
+    /// nullopt -> Not found
+    std::optional<std::pair<uint64_t, std::vector<std::string>>> getLocalStreamInfo(const StreamDescription & desc) const noexcept;
+
 private:
     bool init(const std::string & key);
 

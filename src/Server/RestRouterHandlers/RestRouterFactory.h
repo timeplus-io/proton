@@ -4,6 +4,8 @@
 #include "ClusterInfoHandler.h"
 #include "ColumnRestRouterHandler.h"
 #include "DatabaseRestRouterHandler.h"
+#include "StorageInfoHandler.h"
+#include "ExternalStreamRestRouterHandler.h"
 #include "IngestRawStoreHandler.h"
 #include "IngestRestRouterHandler.h"
 #include "IngestStatusHandler.h"
@@ -16,7 +18,6 @@
 #include "SQLFormatHandler.h"
 #include "SearchHandler.h"
 #include "TabularTableRestRouterHandler.h"
-#include "ExternalStreamRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
 #include "UDFHandler.h"
 
@@ -195,6 +196,14 @@ public:
             "GET",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::ClusterInfoHandler>(query_context);
+            });
+
+        /// GET: /proton/v1/storageinfo[/{database}[/{stream}]]
+        factory.registerRouterHandler(
+            "/proton/v1/storageinfo(/?(\\?[\\w\\-=&#]+){0,1}$|/(?P<database>[%\\w]+)(/?(\\?[\\w\\-=&#]+){0,1}$|/(?P<stream>[%\\-\\.\\w]+)(\\?[\\w\\-=&#]+){0,1})(\\?[\\w\\-=&#]+){0,1})",
+            "GET",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<DB::StorageInfoHandler>(query_context);
             });
 
         factory.registerRouterHandler(

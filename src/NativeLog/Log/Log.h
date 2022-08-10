@@ -114,6 +114,11 @@ public:
 
     size_t size() const { return loglet->size(); }
 
+    const fs::path & parentDir() const { return loglet->parentDir(); }
+    const fs::path & namespaceDir() const { return loglet->namespaceDir(); }
+    const fs::path & rootDir() const { return loglet->rootDir(); }
+    const fs::path & logDir() const { return loglet->logDir(); }
+
 private:
     inline LogAppendDescription analyzeAndValidateRecord(Record & record);
     inline void checkSize(int64_t record_size);
@@ -223,10 +228,6 @@ private:
 
 private:
     /// API calls forwarding to Loglet
-    const fs::path & parentDir() const { return loglet->parentDir(); }
-    const fs::path & namespaceDir() const { return loglet->namespaceDir(); }
-    const fs::path & rootDir() const { return loglet->rootDir(); }
-    const fs::path & logDir() const { return loglet->logDir(); }
     size_t numberOfSegments() const { return loglet->numberOfSegments(); }
     bool isFuture() const { return loglet->isFuture(); }
     LogSegmentPtr activeSegment() const { return loglet->activeSegment(); }
