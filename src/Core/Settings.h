@@ -695,6 +695,7 @@ class IColumn;
     M(UInt64, join_max_cached_bytes, 524288000, "Max cached bytes for stream to stream join", 0) \
     M(Int64, max_join_range, 300, "Max join range", 0) \
     M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
+    M(UInt64, keep_versions, 3, "Control how many versions for each key kept in memory when joining. Used in versioned_kv join", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

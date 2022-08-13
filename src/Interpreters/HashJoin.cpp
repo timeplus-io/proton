@@ -241,8 +241,9 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
     , log(&Poco::Logger::get("HashJoin"))
 {
     /// proton : starts
-    if (strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Range or range asof join is supported in table join");
+    if (strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof
+        || strictness == ASTTableJoin::Strictness::StreamingAsof)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Range or range asof join is not supported in table join");
     /// proton : ends
 
     LOG_DEBUG(log, "Right sample block: {}", right_sample_block.dumpStructure());
@@ -637,9 +638,12 @@ namespace
         HashJoin & join, Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, UInt8ColumnDataPtr join_mask, Arena & pool)
     {
+        /// proton : starts
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRef>;
         constexpr bool is_asof_join = (STRICTNESS == ASTTableJoin::Strictness::Asof) || (STRICTNESS == ASTTableJoin::Strictness::RangeAsof)
             || (STRICTNESS == ASTTableJoin::Strictness::Range);
+        constexpr bool is_streaming_asof_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAsof;
+        constexpr bool is_streaming_any_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAny;
 
         const IColumn * asof_column [[maybe_unused]] = nullptr;
         if constexpr (is_asof_join)
@@ -658,6 +662,8 @@ namespace
 
             if constexpr (is_asof_join)
                 Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, stored_block, i, pool, *asof_column);
+            else if constexpr (is_streaming_asof_join || is_streaming_any_join)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Streaming asof join is not supported in table join"); /// proton : starts
             else if constexpr (mapped_one)
                 Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, stored_block, i, pool);
             else
@@ -1039,8 +1045,12 @@ struct JoinFeatures
     static constexpr bool is_any_or_semi_join = STRICTNESS == ASTTableJoin::Strictness::Any || STRICTNESS == ASTTableJoin::Strictness::RightAny || (STRICTNESS == ASTTableJoin::Strictness::Semi && KIND == ASTTableJoin::Kind::Left);
     static constexpr bool is_all_join = STRICTNESS == ASTTableJoin::Strictness::All;
     static constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof;
+    /// proton : starts
     static constexpr bool is_range_asof_join = STRICTNESS == ASTTableJoin::Strictness::RangeAsof;
     static constexpr bool is_range_join = STRICTNESS == ASTTableJoin::Strictness::Range;
+    static constexpr bool is_streaming_asof_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAsof;
+    static constexpr bool is_streaming_any_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAny;
+    /// proton : ends
     static constexpr bool is_semi_join = STRICTNESS == ASTTableJoin::Strictness::Semi;
     static constexpr bool is_anti_join = STRICTNESS == ASTTableJoin::Strictness::Anti;
 
@@ -1273,6 +1283,14 @@ NO_INLINE IColumn::Filter joinRightColumns(
                     /// FIXME
                 }
                 else if constexpr (jf.is_range_asof_join)
+                {
+                    /// FIXME
+                }
+                else if constexpr (jf.is_streaming_asof_join)
+                {
+                    /// FIXME
+                }
+                else if constexpr (jf.is_streaming_any_join)
                 {
                     /// FIXME
                 }
@@ -1842,17 +1860,30 @@ struct AdderNonJoined
         constexpr bool mapped_asof = std::is_same_v<Mapped, AsofRowRefs>;
         /// proton : starts
         constexpr bool mapped_range_asof = std::is_same_v<Mapped, RangeAsofRowRefs>;
+        constexpr bool mapped_streaming_asof = std::is_same_v<Mapped, StreamingAsofRowRefs>;
+        constexpr bool mapped_streaming_any = std::is_same_v<Mapped, RowRefWithRefCount>;
         /// proton : ends
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<Mapped, RowRef>;
+
 
         if constexpr (mapped_asof)
         {
             /// Do nothing
         }
+        /// proton : starts
         else if constexpr (mapped_range_asof)
         {
             /// Do nothing
         }
+        else if constexpr (mapped_streaming_asof)
+        {
+            /// Do nothing
+        }
+        else if constexpr (mapped_streaming_any)
+        {
+            /// Do nothing
+        }
+        /// proton : ends
         else if constexpr (mapped_one)
         {
             for (size_t j = 0; j < columns_right.size(); ++j)

@@ -8,7 +8,6 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 
 #include <Interpreters/DictionaryReader.h>
@@ -181,11 +180,12 @@ namespace
             JoinTupleMap * joined_rows_,
             const RangeAsofJoinContext & range_join_ctx_,
             bool is_asof_join)
-            : join_on_keys(join_on_keys_)
+            : join_on_keys(std::move(join_on_keys_))
             , rows_to_add(block.rows())
             , joined_rows(joined_rows_)
             , range_join_ctx(range_join_ctx_)
             , src_block_id(block.info.blockId())
+            , buffer_left_stream(join.needBufferLeftStream())
             , asof_type(join.getAsofType())
             , asof_inequality(join.getAsofInequality())
         {
@@ -251,7 +251,7 @@ namespace
         }
 
         TypeIndex asofType() const { return *asof_type; }
-        /// ASOF::Inequality asofInequality() const { return asof_inequality; }
+        ASOF::Inequality asofInequality() const { return asof_inequality; }
         const IColumn & leftAsofKey() const { return *left_asof_key; }
 
         std::vector<JoinOnKeyColumns> join_on_keys;
@@ -264,6 +264,7 @@ namespace
         JoinTupleMap * joined_rows;
         const RangeAsofJoinContext & range_join_ctx;
         UInt64 src_block_id;
+        bool buffer_left_stream;
         /// proton : ends
 
     private:
@@ -287,14 +288,19 @@ namespace
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS>
     struct JoinFeatures
     {
+        static constexpr bool is_right_any_join = STRICTNESS == ASTTableJoin::Strictness::RightAny;
         static constexpr bool is_any_join = STRICTNESS == ASTTableJoin::Strictness::Any;
         static constexpr bool is_any_or_semi_join = STRICTNESS == ASTTableJoin::Strictness::Any
             || STRICTNESS == ASTTableJoin::Strictness::RightAny
             || (STRICTNESS == ASTTableJoin::Strictness::Semi && KIND == ASTTableJoin::Kind::Left);
         static constexpr bool is_all_join = STRICTNESS == ASTTableJoin::Strictness::All;
-        static constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof;
+        /// proton : starts
+        static constexpr bool is_asof_join
+            = (STRICTNESS == ASTTableJoin::Strictness::Asof) || (STRICTNESS == ASTTableJoin::Strictness::StreamingAsof);
         static constexpr bool is_range_asof_join = STRICTNESS == ASTTableJoin::Strictness::RangeAsof;
         static constexpr bool is_range_join = STRICTNESS == ASTTableJoin::Strictness::Range;
+        static constexpr bool is_streaming_any_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAny;
+        /// proton : ends
         static constexpr bool is_semi_join = STRICTNESS == ASTTableJoin::Strictness::Semi;
         static constexpr bool is_anti_join = STRICTNESS == ASTTableJoin::Strictness::Anti;
 
@@ -311,7 +317,11 @@ namespace
     };
 
     template <typename Map, bool add_missing>
-    bool addFoundRowAll(const typename Map::mapped_type & mapped, AddedColumns & added_columns, IColumn::Offset & current_offset, uint32_t row_num_in_left_block)
+    bool addFoundRowAll(
+        const typename Map::mapped_type & mapped,
+        AddedColumns & added_columns,
+        IColumn::Offset & current_offset,
+        uint32_t row_num_in_left_block)
     {
         if constexpr (add_missing)
             added_columns.applyLazyDefaults();
@@ -319,7 +329,8 @@ namespace
         bool added = false;
         for (auto it = mapped.begin(); it.ok(); ++it)
         {
-            auto result = added_columns.joined_rows->insert(JoinTuple{added_columns.src_block_id, it->block, row_num_in_left_block, it->row_num});
+            auto result
+                = added_columns.joined_rows->insert(JoinTuple{added_columns.src_block_id, it->block, row_num_in_left_block, it->row_num});
             if (result.second)
             {
                 /// Is not joined yet
@@ -440,7 +451,32 @@ namespace
                     }
                     else if constexpr (jf.is_asof_join)
                     {
-                        /// FIXME
+                        TypeIndex asof_type = added_columns.asofType();
+                        ASOF::Inequality asof_inequality = added_columns.asofInequality();
+                        const IColumn & left_asof_key = added_columns.leftAsofKey();
+
+                        if (const auto * found = mapped.findAsof(asof_type, asof_inequality, left_asof_key, i))
+                        {
+                            assert(added_columns.joined_rows);
+
+                            bool unjoined = true;
+                            if (added_columns.buffer_left_stream)
+                            {
+                                std::tie(std::ignore, unjoined) = added_columns.joined_rows->insert(
+                                    JoinTuple{added_columns.src_block_id, &*found->block, i, found->row_num});
+                            }
+
+                            /// If there are multiple same asof key elements, the current algorithm can pick the first one
+                            /// to join which may be already joined. So far we don't pass joined_rows to further
+                            /// filtering in `findAsof(...)` for perf concern.
+                            if (unjoined)
+                            {
+                                setUsed<need_filter>(filter, i);
+                                added_columns.appendFromBlock<jf.add_missing>(*found->block, found->row_num);
+                            }
+                        }
+                        else
+                            addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
                     }
                     else if constexpr (jf.is_all_join)
                     {
@@ -451,8 +487,11 @@ namespace
                     {
                         /// FIXME
                     }
-                    else if constexpr (jf.is_any_join && KIND == ASTTableJoin::Kind::Inner)
+                    else if constexpr (jf.is_streaming_any_join && KIND == ASTTableJoin::Kind::Inner)
                     {
+                        assert(!added_columns.buffer_left_stream);
+                        setUsed<need_filter>(filter, i);
+                        added_columns.appendFromBlock<jf.add_missing>(*mapped.block, mapped.row_num);
                         break;
                     }
                     else if constexpr (jf.is_any_join && jf.full)
@@ -547,7 +586,8 @@ namespace
     IColumn::Filter
     switchJoinRightColumns(const std::vector<const Maps *> & mapv, AddedColumns & added_columns, StreamingHashJoin::Type type)
     {
-        constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::Asof || STRICTNESS == ASTTableJoin::Strictness::Range || STRICTNESS == ASTTableJoin::Strictness::RangeAsof;
+        constexpr bool is_asof_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAsof || STRICTNESS == ASTTableJoin::Strictness::Range
+            || STRICTNESS == ASTTableJoin::Strictness::RangeAsof || STRICTNESS == ASTTableJoin::Strictness::Asof;
 
         switch (type)
         {
@@ -561,7 +601,8 @@ namespace
         { \
             const auto & join_on_key = added_columns.join_on_keys[d]; \
             a_map_type_vector[d] = mapv[d]->TYPE.get(); \
-            key_getter_vector.push_back(std::move(createKeyGetter<KeyGetter, is_asof_join>(join_on_key.key_columns, join_on_key.key_sizes))); \
+            key_getter_vector.push_back( \
+                std::move(createKeyGetter<KeyGetter, is_asof_join>(join_on_key.key_columns, join_on_key.key_sizes))); \
         } \
         return joinRightColumnsSwitchNullability<KIND, STRICTNESS, KeyGetter>( \
             std::move(key_getter_vector), a_map_type_vector, added_columns); \
@@ -595,10 +636,8 @@ namespace
             if (emplace_result.isInserted())
                 new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
             else
-            {
                 /// The first element of the list is stored in the value of the hash table, the rest in the pool.
                 emplace_result.getMapped().insert({stored_block, i}, pool);
-            }
         }
 
         static ALWAYS_INLINE void insertAsof(
@@ -618,6 +657,52 @@ namespace
                 time_series_map = new (time_series_map) typename Map::mapped_type(asof_type);
             time_series_map->insert(asof_type, asof_column, stored_block, i);
         }
+
+        static ALWAYS_INLINE void insertStreamingOne(
+            const StreamingHashJoin & join,
+            Map & map,
+            KeyGetter & key_getter,
+            BlocksList * blocks,
+            BlocksList::iterator & stored_block_iter,
+            size_t i,
+            Arena & pool)
+        {
+            auto emplace_result = key_getter.emplaceKey(map, i, pool);
+
+            if (emplace_result.isInserted())
+            {
+                new (&emplace_result.getMapped()) typename Map::mapped_type(blocks, stored_block_iter, i);
+            }
+            else if (join.anyTakeLastRow())
+            {
+                /// We need explicitly destroy for RowRefWithRefCount case
+                using T = typename Map::mapped_type;
+                emplace_result.getMapped().~T();
+
+                new (&emplace_result.getMapped()) typename Map::mapped_type(blocks, stored_block_iter, i);
+            }
+        }
+
+        static ALWAYS_INLINE void insertStreamingAsof(
+            StreamingHashJoin & join,
+            Map & map,
+            KeyGetter & key_getter,
+            /// Block * stored_block,
+            BlocksList * blocks,
+            BlocksList::iterator & stored_block_iter,
+            size_t i,
+            Arena & pool,
+            const IColumn & asof_column,
+            UInt64 keep_versions)
+        {
+            auto emplace_result = key_getter.emplaceKey(map, i, pool);
+            typename Map::mapped_type * time_series_map = &emplace_result.getMapped();
+
+            TypeIndex asof_type = *join.getAsofType();
+            if (emplace_result.isInserted())
+                time_series_map = new (time_series_map) typename Map::mapped_type(asof_type);
+            time_series_map->insert(asof_type, asof_column, blocks, stored_block_iter, i, join.getAsofInequality(), keep_versions);
+        }
     };
 
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
@@ -627,20 +712,28 @@ namespace
         size_t rows,
         const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes,
-        Block * stored_block,
+        /// Block * stored_block,
+        BlocksList * blocks,
+        BlocksList::iterator & stored_block_iter,
         ConstNullMapPtr null_map,
         UInt8ColumnDataPtr join_mask,
         Arena & pool)
     {
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRef>;
-        constexpr bool is_asof_join = (STRICTNESS == ASTTableJoin::Strictness::Asof) || (STRICTNESS == ASTTableJoin::Strictness::RangeAsof)
-                                      || (STRICTNESS == ASTTableJoin::Strictness::Range);
+        [[maybe_unused]] constexpr bool streaming_mapped_one = std::is_same_v<typename Map::mapped_type, RowRefWithRefCount>;
+
+        /// FIXME, separate STRICTNESS or design for streaming and table processing
+        /// STRICTNESS == Asof is never possible for streaming join since we override it as StreamingAsof
+        /// Move Asof to `is_range_asof_join` just to workaround template init
+        constexpr bool is_range_asof_join = (STRICTNESS == ASTTableJoin::Strictness::RangeAsof)
+            || (STRICTNESS == ASTTableJoin::Strictness::Range) || (STRICTNESS == ASTTableJoin::Strictness::Asof);
+        constexpr bool is_streaming_asof_join = STRICTNESS == ASTTableJoin::Strictness::StreamingAsof;
 
         const IColumn * asof_column [[maybe_unused]] = nullptr;
-        if constexpr (is_asof_join)
+        if constexpr (is_range_asof_join || is_streaming_asof_join)
             asof_column = key_columns.back();
 
-        auto key_getter = createKeyGetter<KeyGetter, is_asof_join>(key_columns, key_sizes);
+        auto key_getter = createKeyGetter < KeyGetter, is_range_asof_join || is_streaming_asof_join > (key_columns, key_sizes);
 
         for (size_t i = 0; i < rows; ++i)
         {
@@ -651,12 +744,17 @@ namespace
             if (join_mask && !(*join_mask)[i])
                 continue;
 
-            if constexpr (is_asof_join)
-                Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, stored_block, i, pool, *asof_column);
+            if constexpr (is_range_asof_join)
+                Inserter<Map, KeyGetter>::insertAsof(join, map, key_getter, &*stored_block_iter, i, pool, *asof_column);
+            else if constexpr (is_streaming_asof_join)
+                Inserter<Map, KeyGetter>::insertStreamingAsof(
+                    join, map, key_getter, blocks, stored_block_iter, i, pool, *asof_column, join.keepVersions());
+            else if constexpr (streaming_mapped_one)
+                Inserter<Map, KeyGetter>::insertStreamingOne(join, map, key_getter, blocks, stored_block_iter, i, pool);
             else if constexpr (mapped_one)
-                Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, stored_block, i, pool);
+                Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, &*stored_block_iter, i, pool);
             else
-                Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, stored_block, i, pool);
+                Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, &*stored_block_iter, i, pool);
         }
         return map.getBufferSizeInCells();
     }
@@ -668,17 +766,19 @@ namespace
         size_t rows,
         const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes,
-        Block * stored_block,
+        /// Block * stored_block,
+        BlocksList * blocks,
+        BlocksList::iterator & stored_block_iter,
         ConstNullMapPtr null_map,
         UInt8ColumnDataPtr join_mask,
         Arena & pool)
     {
         if (null_map)
             return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(
-                join, map, rows, key_columns, key_sizes, stored_block, null_map, join_mask, pool);
+                join, map, rows, key_columns, key_sizes, blocks, stored_block_iter, null_map, join_mask, pool);
         else
             return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(
-                join, map, rows, key_columns, key_sizes, stored_block, null_map, join_mask, pool);
+                join, map, rows, key_columns, key_sizes, blocks, stored_block_iter, null_map, join_mask, pool);
     }
 
     template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
@@ -689,7 +789,9 @@ namespace
         size_t rows,
         const ColumnRawPtrs & key_columns,
         const Sizes & key_sizes,
-        Block * stored_block,
+        /// Block * stored_block,
+        BlocksList * blocks,
+        BlocksList::iterator & stored_block_iter,
         ConstNullMapPtr null_map,
         UInt8ColumnDataPtr join_mask,
         Arena & pool)
@@ -706,39 +808,40 @@ namespace
                 assert(false);
                 return 0; /// No one should call it with Type::DICT.
 
-    #define M(TYPE) \
-        case StreamingHashJoin::Type::TYPE: \
-            return insertFromBlockImplType< \
-                STRICTNESS, \
-                typename KeyGetterForType<StreamingHashJoin::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
-                join, *maps.TYPE, rows, key_columns, key_sizes, stored_block, null_map, join_mask, pool); \
-            break;
-            APPLY_FOR_JOIN_VARIANTS(M)
-    #undef M
+#define M(TYPE) \
+    case StreamingHashJoin::Type::TYPE: \
+        return insertFromBlockImplType< \
+            STRICTNESS, \
+            typename KeyGetterForType<StreamingHashJoin::Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
+            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, stored_block_iter, null_map, join_mask, pool); \
+        break;
+                APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
         }
         __builtin_unreachable();
-        }
+    }
 }
 
-StreamingHashJoin::StreamingHashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_, bool any_take_last_row_)
+StreamingHashJoin::StreamingHashJoin(
+    std::shared_ptr<TableJoin> table_join_, JoinStreamDescription left_join_stream_desc_, JoinStreamDescription right_join_stream_desc_)
     : table_join(std::move(table_join_))
     , kind(table_join->kind())
     , strictness(table_join->strictness())
     , nullable_right_side(table_join->forceNullableRight())
     , nullable_left_side(table_join->forceNullableLeft())
-    , any_take_last_row(any_take_last_row_)
+    , any_take_last_row(false)
     , asof_inequality(table_join->getAsofInequality())
-    , right_sample_block(right_sample_block_)
+    , left_stream_desc(std::move(left_join_stream_desc_))
+    , right_stream_desc(std::move(right_join_stream_desc_))
     , log(&Poco::Logger::get("StreamingHashJoin"))
 {
-    /// if (strictness != ASTTableJoin::Strictness::RangeAsof && strictness != ASTTableJoin::Strictness::Range)
-    ///     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream to stream join requires range or range asof join");
-
     /// We support this combination
     /// 1. Range + inner + one disjunct join clause
     /// 2. All + left / inner + one or more disjunct join clause
-    if (strictness != ASTTableJoin::Strictness::Range && strictness != ASTTableJoin::Strictness::All)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only `range / all` joins are supported in stream to stream join");
+    /// 3. Asof join
+    if (strictness != ASTTableJoin::Strictness::Range && strictness != ASTTableJoin::Strictness::Asof
+        && strictness != ASTTableJoin::Strictness::All)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only `range / asof / all` joins are supported in stream to stream join");
 
     if (kind != ASTTableJoin::Kind::Left && kind != ASTTableJoin::Kind::Inner)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only `inner / left` type join are supported in stream to stream join");
@@ -746,20 +849,34 @@ StreamingHashJoin::StreamingHashJoin(std::shared_ptr<TableJoin> table_join_, con
     if (!table_join->oneDisjunct())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream to Stream join only supports only one disjunct join clause");
 
-    LOG_DEBUG(log, "Right sample block: {}", right_sample_block.dumpStructure());
+    LOG_DEBUG(log, "Right sample block: {}", right_stream_desc.sample_block.dumpStructure());
+
+    /// StreamingAsof and Asof in the current scenario means the same thing, we rewrite Asof to StreamingAsof to let it point
+    /// to the correct join hash map
+    if (strictness == ASTTableJoin::Strictness::Asof)
+        strictness = ASTTableJoin::Strictness::StreamingAsof;
+
+    /// For all join versioned kv, always keep the last version
+    if (right_stream_desc.hash_semantic == HashSemantic::VersionedKV && strictness == ASTTableJoin::Strictness::All)
+    {
+        /// Rewrite strictness to choose `HashJoin::MapsOne` hash table : left, inner + any => MapsOne
+        strictness = ASTTableJoin::Strictness::StreamingAny;
+        any_take_last_row = true; /// Always keep the last version
+    }
 
     initData();
 
     if (table_join->oneDisjunct())
     {
         const auto & key_names_right = table_join->getOnlyClause().key_names_right;
-        JoinCommon::splitAdditionalColumns(key_names_right, right_sample_block, right_table_keys, sample_block_with_columns_to_add);
+        JoinCommon::splitAdditionalColumns(
+            key_names_right, right_stream_desc.sample_block, right_table_keys, sample_block_with_columns_to_add);
         required_right_keys = table_join->getRequiredRightKeys(right_table_keys, required_right_keys_sources);
     }
     else
     {
         /// required right keys concept does not work well if multiple disjuncts, we need all keys
-        /// sample_block_with_columns_to_add = right_table_keys = materializeBlock(right_sample_block);
+        /// sample_block_with_columns_to_add = right_table_keys = materializeBlock(right_stream_desc.sample_block);
     }
 
     LOG_TRACE(
@@ -790,7 +907,8 @@ StreamingHashJoin::StreamingHashJoin(std::shared_ptr<TableJoin> table_join_, con
         const auto & key_names_right = clause.key_names_right;
         ColumnRawPtrs key_columns = JoinCommon::extractKeysForJoin(right_table_keys, key_names_right);
 
-        if (strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof)
+        if (strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof
+            || strictness == ASTTableJoin::Strictness::StreamingAsof || strictness == ASTTableJoin::Strictness::Asof)
         {
             assert(disjuncts_num == 1);
 
@@ -844,7 +962,7 @@ StreamingHashJoin::~StreamingHashJoin() noexcept
 {
     LOG_INFO(
         log,
-        "Left stream metrics: {}, Right stream metrics: {}, join metrics: {}",
+        "Left stream metrics: {}, right stream metrics: {}, join metrics: {}",
         left_data->metrics.string(),
         right_data->metrics.string(),
         join_metrics.string());
@@ -961,7 +1079,7 @@ void StreamingHashJoin::initRightBlockStructure(Block & saved_block_sample)
     }
     else if (
         strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof
-        || strictness == ASTTableJoin::Strictness::Asof)
+        || strictness == ASTTableJoin::Strictness::StreamingAsof || strictness == ASTTableJoin::Strictness::Asof)
     {
         /// Save ASOF key
         saved_block_sample.insert(right_table_keys.safeGetByPosition(right_table_keys.columns() - 1));
@@ -1078,7 +1196,8 @@ bool StreamingHashJoin::addJoinedBlock(const Block & source_block, bool check_li
         return table_join->sizeLimits().check(total_rows, total_bytes, "JOIN", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED);
     };
 
-    if (strictness == ASTTableJoin::Strictness::All)
+    if (strictness == ASTTableJoin::Strictness::All || strictness == ASTTableJoin::Strictness::StreamingAsof
+        || strictness == ASTTableJoin::Strictness::StreamingAny || strictness == ASTTableJoin::Strictness::Asof)
     {
         return do_add_block(-1, std::move(materialized_block));
     }
@@ -1237,21 +1356,32 @@ void StreamingHashJoin::checkTypesOfKeys(const Block & block) const
 
 void StreamingHashJoin::joinBlock(Block & block, ExtraBlockPtr & /*not_processed*/)
 {
-    assert(right_data->current_join_blocks && left_data->current_join_blocks);
+    /// assert(right_data && right_stream_desc.hash_semantic == HashSemantic::VersionedKV);
+    doJoinBlock(block);
+}
+
+void StreamingHashJoin::doJoinBlock(Block & block)
+{
+    assert(right_data->current_join_blocks);
 
     for (const auto & onexpr : table_join->getClauses())
     {
         auto cond_column_name = onexpr.condColumnNames();
         JoinCommon::checkTypesOfKeys(
-            block, onexpr.key_names_left, cond_column_name.first, right_sample_block, onexpr.key_names_right, cond_column_name.second);
+            block,
+            onexpr.key_names_left,
+            cond_column_name.first,
+            right_stream_desc.sample_block,
+            onexpr.key_names_right,
+            cond_column_name.second);
     }
 
-//    if (kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full)
-//    {
-//        materializeBlockInplace(block);
-//        if (nullable_left_side)
-//            JoinCommon::convertColumnsToNullable(block);
-//    }
+    //    if (kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full)
+    //    {
+    //        materializeBlockInplace(block);
+    //        if (nullable_left_side)
+    //            JoinCommon::convertColumnsToNullable(block);
+    //    }
 
     std::vector<const std::decay_t<decltype(right_data->current_join_blocks->maps[0])> *> maps_vector;
     for (size_t i = 0; i < table_join->getClauses().size(); ++i)
@@ -1327,16 +1457,18 @@ void StreamingHashJoin::initData()
 {
     if (strictness == ASTTableJoin::Strictness::Range || strictness == ASTTableJoin::Strictness::RangeAsof)
     {
-        const auto & left_asof_key_col = table_join->getOnlyClause().key_names_right.back();
-        const auto & right_asof_key_col = table_join->getOnlyClause().key_names_left.back();
+        const auto & right_asof_key_col = table_join->getOnlyClause().key_names_right.back();
+        const auto & left_asof_key_col = table_join->getOnlyClause().key_names_left.back();
 
         const auto & range_join_ctx = table_join->rangeAsofJoinContext();
 
-        right_data = std::make_shared<RightTableData>(range_join_ctx, left_asof_key_col, this);
-        left_data = std::make_shared<LeftTableData>(range_join_ctx, right_asof_key_col, this);
+        right_data = std::make_shared<RightTableData>(range_join_ctx, right_asof_key_col, this);
+        left_data = std::make_shared<LeftTableData>(range_join_ctx, left_asof_key_col, this);
     }
     else
     {
+        /// Although joining `versioned_kv` doesn't need hold left data in memory
+        /// we init the left_data to handle different case uniformly
         right_data = std::make_shared<RightTableData>(this);
         left_data = std::make_shared<LeftTableData>(this);
     }
@@ -1352,7 +1484,6 @@ void StreamingHashJoin::initHashMaps(std::vector<MapsVariant> & all_maps)
 Block StreamingHashJoin::joinBlocksAll(size_t & left_cached_bytes, size_t & right_cached_bytes)
 {
     Block result;
-    ExtraBlockPtr not_processed;
 
     std::scoped_lock lock(left_data->mutex, right_data->mutex);
 
@@ -1384,7 +1515,7 @@ Block StreamingHashJoin::joinBlocksAll(size_t & left_cached_bytes, size_t & righ
     {
         auto join_block{*left_block_start}; /// need a copy here since joinBlock will change the block passed-in in place
 
-        joinBlock(join_block, not_processed);
+        doJoinBlock(join_block);
 
         if (join_block.rows())
         {
@@ -1423,8 +1554,6 @@ Block StreamingHashJoin::joinBlocks(size_t & left_cached_bytes, size_t & right_c
         return joinBlocksAll(left_cached_bytes, right_cached_bytes);
 
     Block result;
-    ExtraBlockPtr not_processed;
-
     {
         std::scoped_lock lock(left_data->mutex, right_data->mutex);
 
@@ -1500,7 +1629,7 @@ Block StreamingHashJoin::joinBlocks(size_t & left_cached_bytes, size_t & right_c
                     /// auto join_block{left_block_start->deepClone()};
                     auto join_block{*left_block_start}; /// need a copy here since joinBlock will change the block passed-in in place
 
-                    joinBlock(join_block, not_processed);
+                    doJoinBlock(join_block);
 
                     if (join_block.rows())
                     {
@@ -1544,7 +1673,8 @@ Block StreamingHashJoin::joinBlocks(size_t & left_cached_bytes, size_t & right_c
 
 size_t StreamingHashJoin::insertLeftBlock(Block left_input_block)
 {
-    if (strictness == ASTTableJoin::Strictness::All)
+    if (strictness == ASTTableJoin::Strictness::All || strictness == ASTTableJoin::Strictness::StreamingAsof
+        || strictness == ASTTableJoin::Strictness::Asof)
         left_data->insertBlock(std::move(left_input_block));
     else
         left_data->insertBlockToTimeBucket(std::move(left_input_block));
@@ -1707,10 +1837,16 @@ void StreamingHashJoin::RightTableData::insertBlock(
         data = current_join_blocks.get();
     }
 
+    /// init ref count to row count for RowRefsWithCount case
+    /// When refcount drops to zero, which means nobody is referencing any row
+    /// in the block so the block will be GCed
+    block.rowCountAsRefCount();
+
     data->insertBlock(std::move(block));
     setHasNewData(true);
 
-    Block * stored_block = &data->blocks.back();
+    /// Block * stored_block = &data->blocks.back();
+    auto stored_block_iter = --data->blocks.end();
 
     joinDispatch(join->kind, join->strictness, data->maps[0], [&](auto /*kind_*/, auto strictness_, auto & map) {
         [[maybe_unused]] size_t size = insertFromBlockImpl<strictness_>(
@@ -1720,7 +1856,9 @@ void StreamingHashJoin::RightTableData::insertBlock(
             rows,
             key_columns,
             join->key_sizes[0],
-            stored_block,
+            /// stored_block,
+            &data->blocks,
+            stored_block_iter,
             null_map,
             /// If mask is false constant, rows are added to hashmap anyway. It's not a happy-flow, so this case is not optimized
             join_mask_col.getData(),
@@ -1728,10 +1866,10 @@ void StreamingHashJoin::RightTableData::insertBlock(
     });
 
     if (save_nullmap)
-        data->blocks_nullmaps.emplace_back(stored_block, null_map_holder);
+        data->blocks_nullmaps.emplace_back(&*stored_block_iter, null_map_holder);
 
     if (not_joined_map)
-        data->blocks_nullmaps.emplace_back(stored_block, std::move(not_joined_map));
+        data->blocks_nullmaps.emplace_back(&*stored_block_iter, std::move(not_joined_map));
 }
 /// proton : ends
 }

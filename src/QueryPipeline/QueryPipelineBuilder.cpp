@@ -630,6 +630,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     /// (right) ->   resize(1) ->
     /// (right) ->
 
+    /// FIXME : multi-substream co-partition join
     right->resize(1);
     left->resize(1);
 

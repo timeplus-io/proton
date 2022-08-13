@@ -110,6 +110,7 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
+    HashSemantic getHashSemantic() const override;
     bool hasStreamingWindowFunc() const override;
     WindowType windowType() const;
     StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const;

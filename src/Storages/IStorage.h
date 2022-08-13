@@ -631,6 +631,11 @@ public:
     virtual void preDrop() { }
 
     virtual void preRename(const StorageID & /*new_table_id*/) { }
+
+    virtual bool isAppendOnlyMode() const { return false; }
+    virtual bool isChangelogMode() const { return false; }
+    virtual bool isChangelogKvMode() const { return false; }
+    virtual bool isVersionedKvMode() const { return false; }
     /// proton: ends
 
     /// Creates a storage snapshot from given metadata.

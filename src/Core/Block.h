@@ -159,8 +159,14 @@ public:
     /// in-place sort columns according to positions
     void sortColumnInplace(const std::vector<UInt16> & positions);
 
-    /// Deep clone
+    /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;
+
+    /// Used in streaming join scenario for garbage collection
+    void ref() { info.ref(); }
+    void deref() { info.deref(); }
+    void rowCountAsRefCount() { info.ref(rows()); }
+    Int64 refCount() { return info.refCount(); }
     /// proton: ends
 
 private:

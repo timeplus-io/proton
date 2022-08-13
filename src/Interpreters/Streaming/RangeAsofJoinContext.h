@@ -1,19 +1,18 @@
 #pragma once
 
-#include "asof.h"
+#include <Interpreters/asof.h>
+#include <base/types.h>
 
 #include <fmt/format.h>
 
 namespace DB
 {
-/// proton : starts
 enum class RangeType : uint8_t
 {
     None,
     Interval,
     Integer,
 };
-/// proton : ends
 
 struct RangeAsofJoinContext
 {
@@ -21,10 +20,10 @@ struct RangeAsofJoinContext
     ASOF::Inequality left_inequality = ASOF::Inequality::GreaterOrEquals;
     ASOF::Inequality right_inequality = ASOF::Inequality::LessOrEquals;
 
+    /// For interval range, it is always in second
     Int64 lower_bound = 0;
     Int64 upper_bound = 0;
 
-    /// For interval range, it is always `second`
     RangeType type = RangeType::None;
 
     void validate(Int64 max_range) const;

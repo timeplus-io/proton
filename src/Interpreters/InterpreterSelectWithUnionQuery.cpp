@@ -304,6 +304,19 @@ bool InterpreterSelectWithUnionQuery::hasStreamingWindowFunc() const
     return false;
 }
 
+HashSemantic InterpreterSelectWithUnionQuery::getHashSemantic() const
+{
+    HashSemantic hash_semantic = nested_interpreters[0]->getHashSemantic();
+
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->getHashSemantic() != hash_semantic)
+            return HashSemantic::Append;
+    }
+
+    return hash_semantic;
+}
+
 ColumnsDescriptionPtr InterpreterSelectWithUnionQuery::getExtendedObjects() const
 {
     if (nested_interpreters.size() == 1)

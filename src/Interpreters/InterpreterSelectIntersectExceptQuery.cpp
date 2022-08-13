@@ -191,6 +191,19 @@ bool InterpreterSelectIntersectExceptQuery::hasStreamingWindowFunc() const
     return false;
 }
 
+HashSemantic InterpreterSelectIntersectExceptQuery::getHashSemantic() const
+{
+    HashSemantic hash_semantic = nested_interpreters[0]->getHashSemantic();
+
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->getHashSemantic() != hash_semantic)
+            return HashSemantic::Append;
+    }
+
+    return hash_semantic;
+}
+
 ColumnsDescriptionPtr InterpreterSelectIntersectExceptQuery::getExtendedObjects() const
 {
     if (nested_interpreters.size() == 1)

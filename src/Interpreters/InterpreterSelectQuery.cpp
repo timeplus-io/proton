@@ -3034,6 +3034,20 @@ bool InterpreterSelectQuery::isStreaming() const
     return *is_streaming;
 }
 
+HashSemantic InterpreterSelectQuery::getHashSemantic() const
+{
+    if (storage)
+    {
+        if (storage->isChangelogKvMode())
+            return HashSemantic::ChangeLogKV;
+        else if (storage->isVersionedKvMode())
+            return HashSemantic::VersionedKV;
+    }
+
+    /// FIXME, view, recurse into nested storage ?
+    return HashSemantic::Append;
+}
+
 bool InterpreterSelectQuery::hasStreamingWindowFunc() const
 {
     if (!isStreaming())

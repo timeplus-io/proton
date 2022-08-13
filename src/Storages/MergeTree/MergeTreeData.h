@@ -942,10 +942,10 @@ public:
     mutable std::mutex currently_submerging_emerging_mutex;
 
     /// proton: starts
-    bool isAppendOnlyMode() const { return storage_settings.get()->mode.value == ProtonConsts::APPEND_MODE; }
-    bool isChangelogMode() const { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_MODE; }
-    bool isChangelogKvMode() const { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_KV_MODE; }
-    bool isVersionedKvMode() const { return storage_settings.get()->mode.value == ProtonConsts::VERSIONED_KV_MODE; }
+    bool isAppendOnlyMode() const override { return storage_settings.get()->mode.value == ProtonConsts::APPEND_MODE; }
+    bool isChangelogMode() const override { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_MODE; }
+    bool isChangelogKvMode() const override { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_KV_MODE; }
+    bool isVersionedKvMode() const override { return storage_settings.get()->mode.value == ProtonConsts::VERSIONED_KV_MODE; }
     bool isVirtual() const { return relative_data_path.empty(); }
     Int64 committedSN() const { return committed_sn; }
     void setCommittedSN(Int64 committed_sn_) { committed_sn = committed_sn_; }

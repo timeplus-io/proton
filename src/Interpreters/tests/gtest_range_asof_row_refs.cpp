@@ -1,7 +1,8 @@
 #include <Columns/ColumnDecimal.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Interpreters/RowRefs.h>
+#include <Interpreters/Streaming/RangeAsofJoinContext.h>
+#include <Interpreters/Streaming/StreamingRowRefs.h>
 
 #include <gtest/gtest.h>
 
@@ -78,16 +79,15 @@ TEST(RowRefs, FindRangeGreaterOrEqualsAndLessOrEquals)
     range_ctx.upper_bound = 10 * 1000;
     range_ctx.type = DB::RangeType::Interval;
 
-    std::vector<Case> cases = {
-        {.row_num = 0, .expected_matching_rows = {0, 1, 2}},
-        {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
-        {.row_num = 2, .expected_matching_rows = {0, 1, 2, 3, 4}},
-        {.row_num = 3, .expected_matching_rows = {2, 3, 4, 5}},
-        {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
-        {.row_num = 5, .expected_matching_rows = {3, 4, 5}},
-        {.row_num = 6, .expected_matching_rows = {}},
-        {.row_num = 7, .expected_matching_rows = {}}
-    };
+    std::vector<Case> cases
+        = {{.row_num = 0, .expected_matching_rows = {0, 1, 2}},
+           {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
+           {.row_num = 2, .expected_matching_rows = {0, 1, 2, 3, 4}},
+           {.row_num = 3, .expected_matching_rows = {2, 3, 4, 5}},
+           {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
+           {.row_num = 5, .expected_matching_rows = {3, 4, 5}},
+           {.row_num = 6, .expected_matching_rows = {}},
+           {.row_num = 7, .expected_matching_rows = {}}};
 
     commonTest(cases, range_ctx);
 }
@@ -103,16 +103,15 @@ TEST(RowRefs, FindRangeGreateAndLess)
     range_ctx.upper_bound = 10 * 1000;
     range_ctx.type = DB::RangeType::Interval;
 
-    std::vector<Case> cases = {
-        {.row_num = 0, .expected_matching_rows = {0, 1}},
-        {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
-        {.row_num = 2, .expected_matching_rows = {1, 2, 3, 4}},
-        {.row_num = 3, .expected_matching_rows = {2, 3, 4}},
-        {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
-        {.row_num = 5, .expected_matching_rows = {4, 5}},
-        {.row_num = 6, .expected_matching_rows = {}},
-        {.row_num = 7, .expected_matching_rows = {}}
-    };
+    std::vector<Case> cases
+        = {{.row_num = 0, .expected_matching_rows = {0, 1}},
+           {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
+           {.row_num = 2, .expected_matching_rows = {1, 2, 3, 4}},
+           {.row_num = 3, .expected_matching_rows = {2, 3, 4}},
+           {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
+           {.row_num = 5, .expected_matching_rows = {4, 5}},
+           {.row_num = 6, .expected_matching_rows = {}},
+           {.row_num = 7, .expected_matching_rows = {}}};
 
     commonTest(cases, range_ctx);
 }
@@ -128,16 +127,15 @@ TEST(RowRefs, FindRangeGreaterOrEqualsAndLess)
     range_ctx.upper_bound = 10 * 1000;
     range_ctx.type = DB::RangeType::Interval;
 
-    std::vector<Case> cases = {
-        {.row_num = 0, .expected_matching_rows = {0, 1, 2}},
-        {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
-        {.row_num = 2, .expected_matching_rows = {1, 2, 3, 4}},
-        {.row_num = 3, .expected_matching_rows = {2, 3, 4, 5}},
-        {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
-        {.row_num = 5, .expected_matching_rows = {4, 5}},
-        {.row_num = 6, .expected_matching_rows = {}},
-        {.row_num = 7, .expected_matching_rows = {}}
-    };
+    std::vector<Case> cases
+        = {{.row_num = 0, .expected_matching_rows = {0, 1, 2}},
+           {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
+           {.row_num = 2, .expected_matching_rows = {1, 2, 3, 4}},
+           {.row_num = 3, .expected_matching_rows = {2, 3, 4, 5}},
+           {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
+           {.row_num = 5, .expected_matching_rows = {4, 5}},
+           {.row_num = 6, .expected_matching_rows = {}},
+           {.row_num = 7, .expected_matching_rows = {}}};
 
     commonTest(cases, range_ctx);
 }
@@ -153,16 +151,15 @@ TEST(RowRefs, FindRangeGreaterAndLessOrEquals)
     range_ctx.upper_bound = 10 * 1000;
     range_ctx.type = DB::RangeType::Interval;
 
-    std::vector<Case> cases = {
-        {.row_num = 0, .expected_matching_rows = {0, 1}},
-        {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
-        {.row_num = 2, .expected_matching_rows = {0, 1, 2, 3, 4}},
-        {.row_num = 3, .expected_matching_rows = {2, 3, 4}},
-        {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
-        {.row_num = 5, .expected_matching_rows = {3, 4, 5}},
-        {.row_num = 6, .expected_matching_rows = {}},
-        {.row_num = 7, .expected_matching_rows = {}}
-    };
+    std::vector<Case> cases
+        = {{.row_num = 0, .expected_matching_rows = {0, 1}},
+           {.row_num = 1, .expected_matching_rows = {0, 1, 2}},
+           {.row_num = 2, .expected_matching_rows = {0, 1, 2, 3, 4}},
+           {.row_num = 3, .expected_matching_rows = {2, 3, 4}},
+           {.row_num = 4, .expected_matching_rows = {2, 3, 4, 5}},
+           {.row_num = 5, .expected_matching_rows = {3, 4, 5}},
+           {.row_num = 6, .expected_matching_rows = {}},
+           {.row_num = 7, .expected_matching_rows = {}}};
 
     commonTest(cases, range_ctx);
 }

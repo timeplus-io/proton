@@ -25,6 +25,10 @@
 
 #include <Core/Block.h>
 
+/// proton : starts
+#include <Interpreters/Streaming/StreamingRowRefs.h>
+/// proton : ends
+
 namespace DB
 {
 
@@ -317,9 +321,13 @@ public:
     using MapsOne = MapsTemplate<RowRef>;
     using MapsAll = MapsTemplate<RowRefList>;
     using MapsAsof = MapsTemplate<AsofRowRefs>;
+    /// proton: starts
+    using MapsStreamingOne = MapsTemplate<RowRefWithRefCount>;
+    using MapsStreamingAsof = MapsTemplate<StreamingAsofRowRefs>;
     using MapsRangeAsof = MapsTemplate<RangeAsofRowRefs>;
+    /// proton:ends
 
-    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof>;
+    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof, MapsStreamingAsof, MapsStreamingOne>;
 
     using RawBlockPtr = const Block *;
     using BlockNullmapList = std::deque<std::pair<RawBlockPtr, ColumnPtr>>;

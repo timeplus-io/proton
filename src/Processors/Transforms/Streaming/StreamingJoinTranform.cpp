@@ -37,7 +37,7 @@ StreamingJoinTransform::StreamingJoinTransform(
     UInt64 join_max_cached_bytes_,
     FinishCounterPtr finish_counter_)
     : IProcessor({left_input_header, right_input_header}, {transformHeader(left_input_header, join_)})
-    , join_funcs({&StreamingHashJoin::insertLeftBlock, &StreamingHashJoin::insertRightBlock})
+    , insert_funcs({&StreamingHashJoin::insertLeftBlock, &StreamingHashJoin::insertRightBlock})
     , port_can_have_more_data{true, true}
     , header_chunk(outputs.front().getHeader().getColumns(), 0)
     , join(std::move(join_))
@@ -161,6 +161,34 @@ void StreamingJoinTransform::work()
         }
     }
 
+    if (!join->needBufferLeftStream())
+    {
+        /// First insert right block to update the build-side hash table
+        if (blocks[1])
+            join->insertRightBlock(std::move(blocks[1]));
+
+        /// Then use left block to join the right updated hash table
+        if (blocks[0])
+        {
+            ExtraBlockPtr extra_block;
+            join->joinBlock(blocks[0], extra_block);
+            if (blocks[0])
+            {
+                std::scoped_lock lock(mutex);
+                /// Piggy-back watermark in header's chunk info if there is
+                output_chunks.emplace_back(blocks[0].getColumns(), blocks[0].rows(), header_chunk.getChunkInfo());
+                header_chunk.setChunkInfo(nullptr);
+            }
+        }
+    }
+    else
+    {
+        bufferDataAndJoin(std::move(blocks));
+    }
+}
+
+void StreamingJoinTransform::bufferDataAndJoin(std::vector<Block> && blocks)
+{
     bool only_timer_blocks = true;
 
     /// FIXME, non_joined_blocks
@@ -171,7 +199,7 @@ void StreamingJoinTransform::work()
             continue;
 
         only_timer_blocks = false;
-        auto cached_bytes_so_far = std::invoke(join_funcs[i], join.get(), std::move(blocks[i]));
+        auto cached_bytes_so_far = std::invoke(insert_funcs[i], join.get(), std::move(blocks[i]));
         if (cached_bytes_so_far > join_max_cached_bytes)
             port_can_have_more_data[i] = false;
     }
@@ -231,7 +259,9 @@ bool StreamingJoinTransform::timeToJoin() const
 
 void StreamingJoinTransform::validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header)
 {
-    if (join->getStrictness() == ASTTableJoin::Strictness::All)
+    auto join_strictness = join->getStrictness();
+    if (join_strictness == ASTTableJoin::Strictness::All || join_strictness == ASTTableJoin::Strictness::StreamingAsof
+        || join_strictness == ASTTableJoin::Strictness::StreamingAny)
         return;
 
     const auto & table_join = join->getTableJoin();

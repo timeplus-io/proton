@@ -866,14 +866,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python","query_id":"1028", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream asof join right_stream on i=ii and s > ss"}
+            {"client":"python","query_id":"1029", "query_end_timer":1, "query_type": "stream", "query":"select s, ss from left_stream asof join right_stream on i=ii and s > ss"}
           ]
         }
       ],
       "expected_results": [
         {
-          "query_id":"1028",
-          "expected_results": "error_code:48"
+          "query_id":"1029",
+          "expected_results": "error_code:169"
         }
       ]
     },

@@ -1,9 +1,11 @@
 #pragma once
 
+#include "JoinStreamDescription.h"
+#include "join_tuple.h"
+
 #include <Core/SplitBlock.h>
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/TableJoin.h>
-#include <Interpreters/join_tuple.h>
 #include <Common/ColumnUtils.h>
 #include <Common/ProtonCommon.h>
 
@@ -85,7 +87,11 @@ namespace JoinCommon
 class StreamingHashJoin : public IJoin
 {
 public:
-    StreamingHashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block, bool any_take_last_row_ = false);
+    StreamingHashJoin(
+        std::shared_ptr<TableJoin> table_join_,
+        JoinStreamDescription left_join_stream_desc_,
+        JoinStreamDescription right_join_stream_desc_);
+
     ~StreamingHashJoin() noexcept override;
 
     /// proton : starts
@@ -96,6 +102,13 @@ public:
     size_t insertRightBlock(Block right_input_block);
 
     Block joinBlocks(size_t & left_cached_bytes, size_t & right_cached_bytes);
+
+    bool needBufferLeftStream() const { return right_stream_desc.hash_semantic != HashSemantic::VersionedKV; }
+
+    bool isRightStreamDataRefCounted() const { return right_stream_desc.hash_semantic == HashSemantic::VersionedKV || right_stream_desc.hash_semantic == HashSemantic::ChangeLogKV; }
+
+    UInt64 keepVersions() const { return right_stream_desc.keep_versions; }
+
     /// proton : ends
 
     const TableJoin & getTableJoin() const override { return *table_join; }
@@ -147,6 +160,7 @@ public:
     using MapsOne = HashJoin::MapsOne;
     using MapsAll = HashJoin::MapsAll;
     using MapsAsof = HashJoin::MapsAsof;
+    using MapsStreamingAsof = HashJoin::MapsStreamingAsof;
     using MapsVariant = HashJoin::MapsVariant;
     /// proton : ends
 
@@ -303,6 +317,7 @@ public:
                 stream_data->metrics.current_total_bytes -= total_bytes;
                 stream_data->metrics.total_blocks -= blocks.size();
                 stream_data->metrics.total_bytes -= total_bytes;
+                stream_data->metrics.gced_blocks += blocks.size();
             }
 
             void ALWAYS_INLINE updateMetrics(const Block & block)
@@ -317,6 +332,18 @@ public:
                 stream_data->metrics.current_total_bytes += bytes;
                 ++stream_data->metrics.total_blocks;
                 stream_data->metrics.total_bytes += bytes;
+            }
+
+            void ALWAYS_INLINE negateMetrics(const Block & block)
+            {
+                /// Update metrics
+                auto bytes = block.allocatedBytes();
+                total_bytes -= bytes;
+                --stream_data->metrics.current_total_blocks;
+                stream_data->metrics.current_total_bytes -= bytes;
+                --stream_data->metrics.total_blocks;
+                stream_data->metrics.total_bytes -= bytes;
+                ++stream_data->metrics.gced_blocks;
             }
 
             BlocksList blocks;
@@ -344,15 +371,17 @@ public:
             size_t current_total_bytes = 0;
             size_t total_blocks = 0;
             size_t total_bytes = 0;
+            size_t gced_blocks = 0;
 
             String string() const
             {
                 return fmt::format(
-                    "total_bytes={} total_blocks={} current_total_bytes={} current_total_blocks={}",
+                    "total_bytes={} total_blocks={} current_total_bytes={} current_total_blocks={} gced_blocks={}",
                     total_bytes,
                     total_blocks,
                     current_total_bytes,
-                    current_total_blocks);
+                    current_total_blocks,
+                    gced_blocks);
             }
         };
         Metrics metrics;
@@ -408,9 +437,9 @@ public:
         std::map<Int64, std::shared_ptr<RightTableBlocks>> hashed_blocks;
 
         /// `current_join_blocks` serves 3 purposes
-        /// 1) During query plan phase, we will need it to evaulate the header
-        /// 2) Workaround the `joinBlock` API interface for range join, it points the working right blocks in the time bucket
-        /// 3) For all join, it points the global blocks since there is no time bucket in this case
+        /// 1) During query plan phase, we will need it to evaluate the header
+        /// 2) Workaround the `joinBlock` API interface for range join, it points the current working right blocks in the time bucket
+        /// 3) For non-range join, it points the global blocks since there is no time bucket in this case
         std::shared_ptr<RightTableBlocks> current_join_blocks;
     };
 
@@ -517,6 +546,7 @@ private:
 
     /// For global join without time bucket
     Block joinBlocksAll(size_t & left_cached_bytes, size_t & right_cached_bytes);
+    void doJoinBlock(Block & block);
     /// proton : ends
 
 private:
@@ -535,6 +565,9 @@ private:
     std::optional<TypeIndex> asof_type;
     ASOF::Inequality asof_inequality;
 
+    JoinStreamDescription left_stream_desc;
+    JoinStreamDescription right_stream_desc;
+
     LeftTableDataPtr left_data;
 
     /// Right table data. StorageJoin shares it between many Join objects.
@@ -548,8 +581,6 @@ private:
 
     std::vector<Sizes> key_sizes;
 
-    /// Block with columns from the right-side table.
-    Block right_sample_block;
     /// Block with columns from the right-side table except key columns.
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table (duplicates appear once).

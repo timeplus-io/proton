@@ -55,6 +55,7 @@ public:
     static Block transformHeader(Block header, const StreamingHashJoinPtr & join);
 
 private:
+    void bufferDataAndJoin(std::vector<Block> && blocks);
     bool timeToJoin() const;
     void validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header);
 
@@ -70,7 +71,7 @@ private:
     };
 
     std::vector<PortContext> port_contexts;
-    std::vector<decltype(&StreamingHashJoin::insertLeftBlock)> join_funcs;
+    std::vector<decltype(&StreamingHashJoin::insertLeftBlock)> insert_funcs;
     std::array<std::atomic_bool , 2> port_can_have_more_data;
 
     Chunk header_chunk;

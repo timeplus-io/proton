@@ -191,7 +191,7 @@ void replaceForPositionalArguments(ASTPtr & argument, const ASTSelectQuery * sel
 void tryTranslateToParametricAggregateFunction(
     const ASTFunction * node, DataTypes & types, AggregateDescription & aggregate, ContextPtr context)
 {
-    if (aggregate.parameters.size() != 0 || aggregate.argument_names.size() == 0)
+    if (!aggregate.parameters.empty() || aggregate.argument_names.empty())
         return;
 
     assert(node->arguments);
@@ -394,7 +394,7 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
         {
             NameSet unique_keys;
             ASTs & group_asts = group_by_ast->children;
-            for (ssize_t i = 0; i < ssize_t(group_asts.size()); ++i)
+            for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
             {
                 ssize_t size = group_asts.size();
 
@@ -818,7 +818,7 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
 
         // Requiring a constant reference to a shared pointer to non-const AST
         // doesn't really look sane, but the visitor does indeed require it.
-        // Hence we clone the node (not very sane either, I know).
+        // Hence, we clone the node (not very sane either, I know).
         getRootActionsNoMakeSet(window_function.function_node->clone(),
             true, actions);
 
@@ -981,13 +981,8 @@ static ActionsDAGPtr createJoinedBlockActions(ContextPtr context, const TableJoi
     return ExpressionAnalyzer(expression_list, syntax_result, context).getActionsDAG(true, false);
 }
 
-/// proton : starts
-static std::shared_ptr<IJoin> chooseJoinAlgorithm(std::shared_ptr<TableJoin> analyzed_join, const Block & sample_block, bool streaming, ContextPtr context)
+static std::shared_ptr<IJoin> chooseJoinAlgorithm(std::shared_ptr<TableJoin> analyzed_join, const Block & sample_block, ContextPtr context)
 {
-    if (streaming)
-        return std::make_shared<StreamingHashJoin>(analyzed_join, sample_block);
-    /// proton : ends
-
     /// HashJoin with Dictionary optimisation
     if (analyzed_join->tryInitDictJoin(sample_block, context))
         return std::make_shared<HashJoin>(analyzed_join, sample_block);
@@ -1004,7 +999,8 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
     ContextPtr context,
     const ASTTablesInSelectQueryElement & join_element,
     TableJoin & analyzed_join,
-    SelectQueryOptions query_options)
+    SelectQueryOptions query_options,
+    HashSemantic & hash_semantic)
 {
     /// Actions which need to be calculated on joined block.
     auto joined_block_actions = createJoinedBlockActions(context, analyzed_join);
@@ -1025,6 +1021,9 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
         join_element.table_expression, context, original_right_columns, query_options.copy().setWithAllColumns().ignoreAlias(false));
     auto joined_plan = std::make_unique<QueryPlan>();
     interpreter->buildQueryPlan(*joined_plan);
+    /// proton : start
+    hash_semantic = interpreter->getHashSemantic();
+    /// proton : end
     {
         auto sample_block = interpreter->getSampleBlock();
         auto rename_dag = std::make_unique<ActionsDAG>(sample_block.getColumnsWithTypeAndName());
@@ -1072,7 +1071,8 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
         return storage->getJoinLocked(analyzed_join, getContext());
     }
 
-    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options);
+    HashSemantic right_hash_semantic = HashSemantic::Append;
+    joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options, right_hash_semantic);
 
     const ColumnsWithTypeAndName & right_columns = joined_plan->getCurrentDataStream().header.getColumnsWithTypeAndName();
     std::tie(left_convert_actions, right_convert_actions) = analyzed_join->createConvertingActions(left_columns, right_columns);
@@ -1087,7 +1087,30 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
     if (joined_plan->isStreaming() && !syntax->streaming)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Table to stream join is not supported. Use Stream to table join instead");
 
-    JoinPtr join = chooseJoinAlgorithm(analyzed_join, joined_plan->getCurrentDataStream().header, syntax->streaming && joined_plan->isStreaming(), getContext());
+    JoinPtr join;
+    if (syntax->streaming && joined_plan->isStreaming())
+    {
+        /// stream join stream case
+        /// Calculate left stream's hash semantic, FIXME, what about subquery ?
+        HashSemantic left_hash_semantic = HashSemantic::Append;
+        if (syntax->storage)
+        {
+            if (syntax->storage->isVersionedKvMode())
+                left_hash_semantic = HashSemantic::VersionedKV;
+            else if (syntax->storage->isChangelogKvMode())
+                left_hash_semantic = HashSemantic::ChangeLogKV;
+        }
+
+        auto keep_versions = getContext()->getSettingsRef().keep_versions;
+        return std::make_shared<StreamingHashJoin>(
+            analyzed_join,
+            JoinStreamDescription{Block{left_columns}, left_hash_semantic, keep_versions},
+            JoinStreamDescription{joined_plan->getCurrentDataStream().header, right_hash_semantic, keep_versions});
+    }
+    else
+    {
+        join = chooseJoinAlgorithm(analyzed_join, joined_plan->getCurrentDataStream().header, getContext());
+    }
     /// proton : ends
 
     /// Do not make subquery for join over dictionary.
@@ -1448,7 +1471,7 @@ bool SelectQueryExpressionAnalyzer::appendLimitBy(ExpressionActionsChain & chain
 
         auto child_name = child->getColumnName();
         if (!aggregated_names.count(child_name))
-            step.addRequiredOutput(std::move(child_name));
+            step.addRequiredOutput(child_name);
     }
 
     return true;
@@ -1717,7 +1740,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             /// because we will need access them for down stream processing like aggregation
             if (storage)
             {
-                if (auto * proxy = storage->as<DB::ProxyStream>())
+                if (const auto * proxy = storage->as<DB::ProxyStream>())
                 {
                     if (proxy->windowType() == DB::WindowType::SESSION)
                     {

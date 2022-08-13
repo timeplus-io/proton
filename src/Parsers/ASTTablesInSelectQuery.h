@@ -85,6 +85,8 @@ struct ASTTableJoin : public IAST
         /// proton : starts
         Range,
         RangeAsof,
+        StreamingAsof,
+        StreamingAny,
         /// proton : ends
     };
 

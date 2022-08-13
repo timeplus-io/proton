@@ -22,7 +22,7 @@
 #include <base/logger_useful.h>
 
 /// proton : starts
-#include "RangeAsofJoinContext.h"
+#include <Interpreters/Streaming/RangeAsofJoinContext.h>
 /// proton : ends
 
 namespace DB
@@ -243,7 +243,7 @@ public:
      * Only rows where conditions are met (where new columns have non-zero value) will be joined.
      *
      * NOTE: non-equi condition containing columns from different tables (like `... ON t1.id = t2.id AND t1.val > t2.val)
-     *     doesn't supported yet, it can be added later.
+     *     isn't supported yet, it can be added later.
      */
     void addJoinCondition(const ASTPtr & ast, bool is_left);
 
