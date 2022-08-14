@@ -90,7 +90,7 @@
 #include <Interpreters/Streaming/StreamingEmitInterpreter.h>
 #include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingJoinStep.h>
+#include <Processors/QueryPlan/Streaming/JoinStep.h>
 #include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
@@ -1388,7 +1388,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                     QueryPlanStepPtr join_step;
                     if (joined_plan->isStreaming())
                     {
-                        join_step = std::make_unique<StreamingJoinStep>(
+                        join_step = std::make_unique<Streaming::JoinStep>(
                             query_plan.getCurrentDataStream(),
                             joined_plan->getCurrentDataStream(),
                             expressions.join,
@@ -3034,18 +3034,18 @@ bool InterpreterSelectQuery::isStreaming() const
     return *is_streaming;
 }
 
-HashSemantic InterpreterSelectQuery::getHashSemantic() const
+Streaming::HashSemantic InterpreterSelectQuery::getHashSemantic() const
 {
     if (storage)
     {
         if (storage->isChangelogKvMode())
-            return HashSemantic::ChangeLogKV;
+            return Streaming::HashSemantic::ChangeLogKV;
         else if (storage->isVersionedKvMode())
-            return HashSemantic::VersionedKV;
+            return Streaming::HashSemantic::VersionedKV;
     }
 
     /// FIXME, view, recurse into nested storage ?
-    return HashSemantic::Append;
+    return Streaming::HashSemantic::Append;
 }
 
 bool InterpreterSelectQuery::hasStreamingWindowFunc() const

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RangeAsofJoinContext.h"
-#include "StreamingRowRefs.h"
+#include "RowRefs.h"
 #include "join_tuple.h"
 
 #include <Columns/IColumn.h>
@@ -19,6 +19,8 @@
 #include <variant>
 
 namespace DB
+{
+namespace Streaming
 {
 /**
  * This class is intended to push sortable data into.
@@ -63,10 +65,7 @@ struct RowRefWithRefCount
         return *this;
     }
 
-    ~RowRefWithRefCount()
-    {
-        deref();
-    }
+    ~RowRefWithRefCount() { deref(); }
 
 private:
     void ALWAYS_INLINE deref()
@@ -81,7 +80,7 @@ private:
 };
 
 template <typename TEntry>
-class StreamingSortedLookupVector
+class SortedLookupVector
 {
 public:
     using Base = std::vector<TEntry>;
@@ -129,13 +128,13 @@ private:
     static bool greater(const TEntry & a, const TEntry & b) { return a.asof_value > b.asof_value; }
 };
 
-class StreamingAsofRowRefs
+class AsofRowRefs
 {
 public:
     template <typename T>
     struct Entry
     {
-        using LookupType = StreamingSortedLookupVector<Entry<T>>;
+        using LookupType = SortedLookupVector<Entry<T>>;
         using LookupPtr = std::unique_ptr<LookupType>;
         T asof_value;
         RowRefWithRefCount row_ref;
@@ -160,15 +159,21 @@ public:
         Entry<Decimal128>::LookupPtr,
         Entry<DateTime64>::LookupPtr>;
 
-    StreamingAsofRowRefs() { }
+    AsofRowRefs() { }
 
-    StreamingAsofRowRefs(TypeIndex t);
+    AsofRowRefs(TypeIndex t);
 
     static std::optional<TypeIndex> getTypeSize(const IColumn & asof_column, size_t & type_size);
 
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
-    void
-    insert(TypeIndex type, const IColumn & asof_column, BlocksList * blocks, BlocksList::iterator block, size_t row_num, ASOF::Inequality inequality, size_t keep_versions);
+    void insert(
+        TypeIndex type,
+        const IColumn & asof_column,
+        BlocksList * blocks,
+        BlocksList::iterator block,
+        size_t row_num,
+        ASOF::Inequality inequality,
+        size_t keep_versions);
 
     /// This will be synchronized by the rwlock mutex in StreamingHashJoin.h
     const RowRefWithRefCount * findAsof(TypeIndex type, ASOF::Inequality inequality, const IColumn & asof_column, size_t row_num) const;
@@ -243,4 +248,5 @@ private:
     // Source: https://github.com/ClickHouse/ClickHouse/issues/4906
     Lookups lookups;
 };
+}
 }

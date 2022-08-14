@@ -4,6 +4,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 enum class HashSemantic
 {
     Append = 0,
@@ -27,4 +29,5 @@ struct JoinStreamDescription
     HashSemantic hash_semantic;
     UInt64 keep_versions;
 };
+}
 }

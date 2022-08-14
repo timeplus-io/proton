@@ -364,7 +364,7 @@ void CollectJoinOnKeysMatcher::handleRangeBetweenAsOfJoin(const ASTFunction & fu
 
     data.analyzed_join.setRangeAsofLowerBound(-range);
     data.analyzed_join.setRangeAsofUpperBound(range);
-    data.analyzed_join.setRangeType(RangeType::Interval);
+    data.analyzed_join.setRangeType(Streaming::RangeType::Interval);
     data.analyzed_join.setRangeAsofLeftInequality(ASOF::Inequality::GreaterOrEquals);
     data.analyzed_join.setRangeAsofRightInequality(ASOF::Inequality::LessOrEquals);
 
@@ -476,7 +476,7 @@ std::pair<Int64, bool> CollectJoinOnKeysMatcher::handleLeftAndRightArgumentsForR
 
         auto table_numbers = getTableNumbers(arg_func->arguments->children[0], arg_func->arguments->children[1], data);
         data.addAsofJoinKeys(arg_func->arguments->children[0], arg_func->arguments->children[1], table_numbers, ASOF::Inequality::RangeBetween);
-        data.analyzed_join.setRangeType(RangeType::Integer);
+        data.analyzed_join.setRangeType(Streaming::RangeType::Integer);
         return {range, isLeftIdentifier(table_numbers.first)};
     }
     else if (arg_func->name == "date_diff")
@@ -523,7 +523,7 @@ std::pair<Int64, bool> CollectJoinOnKeysMatcher::handleLeftAndRightArgumentsForR
 
         auto table_numbers = getTableNumbers(arg_func->arguments->children[1], arg_func->arguments->children[2], data);
         data.addAsofJoinKeys(arg_func->arguments->children[1], arg_func->arguments->children[2], table_numbers, ASOF::Inequality::RangeBetween);
-        data.analyzed_join.setRangeType(RangeType::Interval);
+        data.analyzed_join.setRangeType(Streaming::RangeType::Interval);
 
         return {range, isLeftIdentifier(table_numbers.first)};
     }

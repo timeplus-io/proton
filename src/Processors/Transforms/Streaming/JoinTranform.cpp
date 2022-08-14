@@ -1,4 +1,4 @@
-#include "StreamingJoinTranform.h"
+#include "JoinTranform.h"
 
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/FunctionHelpers.h>
@@ -17,27 +17,29 @@ namespace ErrorCodes
     extern const int TOO_MANY_BYTES;
 }
 
-Block StreamingJoinTransform::transformHeader(Block header, const StreamingHashJoinPtr & join)
+namespace Streaming
 {
-    /// LOG_DEBUG(&Poco::Logger::get("StreamingJoinTransform"), "Before join block: '{}'", header.dumpStructure());
+Block JoinTransform::transformHeader(Block header, const HashJoinPtr & join)
+{
+    /// LOG_DEBUG(&Poco::Logger::get("JoinTransform"), "Before join block: '{}'", header.dumpStructure());
     join->checkTypesOfKeys(header);
     ExtraBlockPtr tmp;
     join->joinBlock(header, tmp);
-    /// LOG_DEBUG(&Poco::Logger::get("StreamingJoinTransform"), "After join block: '{}'", header.dumpStructure());
+    /// LOG_DEBUG(&Poco::Logger::get("JoinTransform"), "After join block: '{}'", header.dumpStructure());
     return header;
 }
 
-StreamingJoinTransform::StreamingJoinTransform(
+JoinTransform::JoinTransform(
     Block left_input_header,
     Block right_input_header,
-    StreamingHashJoinPtr join_,
+    HashJoinPtr join_,
     size_t max_block_size_,
     UInt64 join_max_wait_ms_,
     UInt64 join_max_wait_rows_,
     UInt64 join_max_cached_bytes_,
     FinishCounterPtr finish_counter_)
     : IProcessor({left_input_header, right_input_header}, {transformHeader(left_input_header, join_)})
-    , insert_funcs({&StreamingHashJoin::insertLeftBlock, &StreamingHashJoin::insertRightBlock})
+    , insert_funcs({&HashJoin::insertLeftBlock, &HashJoin::insertRightBlock})
     , port_can_have_more_data{true, true}
     , header_chunk(outputs.front().getHeader().getColumns(), 0)
     , join(std::move(join_))
@@ -59,7 +61,7 @@ StreamingJoinTransform::StreamingJoinTransform(
     last_join = MonotonicMilliseconds::now();
 }
 
-IProcessor::Status StreamingJoinTransform::prepare()
+IProcessor::Status JoinTransform::prepare()
 {
     std::scoped_lock lock(mutex);
 
@@ -130,7 +132,7 @@ IProcessor::Status StreamingJoinTransform::prepare()
     return Status::NeedData;
 }
 
-void StreamingJoinTransform::work()
+void JoinTransform::work()
 {
     std::vector<Block> blocks(2, Block{});
     {
@@ -187,7 +189,7 @@ void StreamingJoinTransform::work()
     }
 }
 
-void StreamingJoinTransform::bufferDataAndJoin(std::vector<Block> && blocks)
+void JoinTransform::bufferDataAndJoin(std::vector<Block> && blocks)
 {
     bool only_timer_blocks = true;
 
@@ -242,7 +244,7 @@ void StreamingJoinTransform::bufferDataAndJoin(std::vector<Block> && blocks)
             ErrorCodes::TOO_MANY_BYTES, "There are too much data cached for both left stream and right stream in the stream join");
 }
 
-bool StreamingJoinTransform::timeToJoin() const
+bool JoinTransform::timeToJoin() const
 {
     std::scoped_lock lock(mutex);
 
@@ -257,7 +259,7 @@ bool StreamingJoinTransform::timeToJoin() const
     return false;
 }
 
-void StreamingJoinTransform::validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header)
+void JoinTransform::validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header)
 {
     auto join_strictness = join->getStrictness();
     if (join_strictness == ASTTableJoin::Strictness::All || join_strictness == ASTTableJoin::Strictness::StreamingAsof
@@ -308,5 +310,6 @@ void StreamingJoinTransform::validateAsofJoinKey(const Block & left_input_header
     }
 
     join->setAsofJoinColumnPositionAndScale(scale, left_col_pos, right_col_pos, left_col_with_type.type->getTypeId());
+}
 }
 }

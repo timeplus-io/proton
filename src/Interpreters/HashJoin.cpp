@@ -1859,9 +1859,9 @@ struct AdderNonJoined
     {
         constexpr bool mapped_asof = std::is_same_v<Mapped, AsofRowRefs>;
         /// proton : starts
-        constexpr bool mapped_range_asof = std::is_same_v<Mapped, RangeAsofRowRefs>;
-        constexpr bool mapped_streaming_asof = std::is_same_v<Mapped, StreamingAsofRowRefs>;
-        constexpr bool mapped_streaming_any = std::is_same_v<Mapped, RowRefWithRefCount>;
+        constexpr bool mapped_range_asof = std::is_same_v<Mapped, Streaming::RangeAsofRowRefs>;
+        constexpr bool mapped_streaming_asof = std::is_same_v<Mapped, Streaming::AsofRowRefs>;
+        constexpr bool mapped_streaming_any = std::is_same_v<Mapped, Streaming::RowRefWithRefCount>;
         /// proton : ends
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<Mapped, RowRef>;
 

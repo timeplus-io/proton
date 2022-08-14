@@ -2,7 +2,7 @@
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
-#include <Interpreters/Streaming/StreamingRowRefs.h>
+#include <Interpreters/Streaming/RowRefs.h>
 
 #include <gtest/gtest.h>
 
@@ -44,14 +44,14 @@ struct Case
     std::vector<uint32_t> expected_matching_rows;
 };
 
-void commonTest(const std::vector<Case> & cases, const DB::RangeAsofJoinContext & range_ctx)
+void commonTest(const std::vector<Case> & cases, const DB::Streaming::RangeAsofJoinContext & range_ctx)
 {
     auto right_block{prepareRightBlock()};
     auto left_block{prepareLeftBlock()};
 
     auto & asof_col = left_block.getByPosition(0);
 
-    DB::RangeAsofRowRefs row_refs(asof_col.type->getTypeId());
+    DB::Streaming::RangeAsofRowRefs row_refs(asof_col.type->getTypeId());
 
     for (size_t i = 0; i < right_block.rows(); ++i)
         row_refs.insert(asof_col.type->getTypeId(), *asof_col.column, &right_block, i);
@@ -71,13 +71,13 @@ void commonTest(const std::vector<Case> & cases, const DB::RangeAsofJoinContext 
 /// -10 <= x - y <= 10
 TEST(RowRefs, FindRangeGreaterOrEqualsAndLessOrEquals)
 {
-    DB::RangeAsofJoinContext range_ctx;
+    DB::Streaming::RangeAsofJoinContext range_ctx;
     range_ctx.left_inequality = DB::ASOF::Inequality::GreaterOrEquals;
     range_ctx.right_inequality = DB::ASOF::Inequality::LessOrEquals;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
-    range_ctx.type = DB::RangeType::Interval;
+    range_ctx.type = DB::Streaming::RangeType::Interval;
 
     std::vector<Case> cases
         = {{.row_num = 0, .expected_matching_rows = {0, 1, 2}},
@@ -95,13 +95,13 @@ TEST(RowRefs, FindRangeGreaterOrEqualsAndLessOrEquals)
 /// -10 < x - y < 10
 TEST(RowRefs, FindRangeGreateAndLess)
 {
-    DB::RangeAsofJoinContext range_ctx;
+    DB::Streaming::RangeAsofJoinContext range_ctx;
     range_ctx.left_inequality = DB::ASOF::Inequality::Greater;
     range_ctx.right_inequality = DB::ASOF::Inequality::Less;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
-    range_ctx.type = DB::RangeType::Interval;
+    range_ctx.type = DB::Streaming::RangeType::Interval;
 
     std::vector<Case> cases
         = {{.row_num = 0, .expected_matching_rows = {0, 1}},
@@ -119,13 +119,13 @@ TEST(RowRefs, FindRangeGreateAndLess)
 /// -10 <= x - y < 10
 TEST(RowRefs, FindRangeGreaterOrEqualsAndLess)
 {
-    DB::RangeAsofJoinContext range_ctx;
+    DB::Streaming::RangeAsofJoinContext range_ctx;
     range_ctx.left_inequality = DB::ASOF::Inequality::GreaterOrEquals;
     range_ctx.right_inequality = DB::ASOF::Inequality::Less;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
-    range_ctx.type = DB::RangeType::Interval;
+    range_ctx.type = DB::Streaming::RangeType::Interval;
 
     std::vector<Case> cases
         = {{.row_num = 0, .expected_matching_rows = {0, 1, 2}},
@@ -143,13 +143,13 @@ TEST(RowRefs, FindRangeGreaterOrEqualsAndLess)
 /// -10 < x - y <= 10
 TEST(RowRefs, FindRangeGreaterAndLessOrEquals)
 {
-    DB::RangeAsofJoinContext range_ctx;
+    DB::Streaming::RangeAsofJoinContext range_ctx;
     range_ctx.left_inequality = DB::ASOF::Inequality::Greater;
     range_ctx.right_inequality = DB::ASOF::Inequality::LessOrEquals;
 
     range_ctx.lower_bound = -10 * 1000;
     range_ctx.upper_bound = 10 * 1000;
-    range_ctx.type = DB::RangeType::Interval;
+    range_ctx.type = DB::Streaming::RangeType::Interval;
 
     std::vector<Case> cases
         = {{.row_num = 0, .expected_matching_rows = {0, 1}},

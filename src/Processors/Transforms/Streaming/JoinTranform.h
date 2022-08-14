@@ -1,22 +1,24 @@
 #pragma once
 
+#include <Interpreters/Streaming/HashJoin.h>
 #include <Processors/IProcessor.h>
-#include <Interpreters/Streaming/StreamingHashJoin.h>
 
 namespace DB
 {
-using StreamingHashJoinPtr = std::shared_ptr<StreamingHashJoin>;
-
 class NotJoinedBlocks;
+
+namespace Streaming
+{
+using HashJoinPtr = std::shared_ptr<HashJoin>;
 
 /// Streaming join rows from left stream to right stream
 /// It has 2 inputs, the first one is left stream and the second one is right stream.
 /// left stream -> ... ->
 ///                     \
-///                     StreamingJoinTransform
+///                     JoinTransform
 ///                     /
 /// left stream -> ... ->
-class StreamingJoinTransform final : public IProcessor
+class JoinTransform final : public IProcessor
 {
 public:
     /// Count streams and check which is last.
@@ -38,21 +40,21 @@ public:
 
     using FinishCounterPtr = std::shared_ptr<FinishCounter>;
 
-    StreamingJoinTransform(
+    JoinTransform(
         Block left_input_header,
         Block right_input_header,
-        StreamingHashJoinPtr join_,
+        HashJoinPtr join_,
         size_t max_block_size_,
         UInt64 join_max_wait_ms_,
         UInt64 join_max_wait_rows_,
         UInt64 join_max_cached_bytes_,
         FinishCounterPtr finish_counter_ = nullptr);
 
-    String getName() const override { return "StreamingJoinTransform"; }
+    String getName() const override { return "JoinTransform"; }
     Status prepare() override;
     void work() override;
 
-    static Block transformHeader(Block header, const StreamingHashJoinPtr & join);
+    static Block transformHeader(Block header, const HashJoinPtr & join);
 
 private:
     void bufferDataAndJoin(std::vector<Block> && blocks);
@@ -71,7 +73,7 @@ private:
     };
 
     std::vector<PortContext> port_contexts;
-    std::vector<decltype(&StreamingHashJoin::insertLeftBlock)> insert_funcs;
+    std::vector<decltype(&HashJoin::insertLeftBlock)> insert_funcs;
     std::array<std::atomic_bool , 2> port_can_have_more_data;
 
     Chunk header_chunk;
@@ -81,7 +83,7 @@ private:
     /// std::atomic_bool stop_reading = false;
     [[maybe_unused]] bool process_non_joined = true;
 
-    StreamingHashJoinPtr join;
+    HashJoinPtr join;
 
     /// ExtraBlockPtr left_not_processed;
     /// ExtraBlockPtr right_not_processed;
@@ -96,4 +98,5 @@ private:
     mutable UInt64 last_join = 0;
     mutable UInt64 added_rows_since_last_join = 0;
 };
+}
 }

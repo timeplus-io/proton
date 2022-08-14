@@ -130,7 +130,7 @@ private:
     ASOF::Inequality asof_inequality = ASOF::Inequality::GreaterOrEquals;
 
     /// proton : starts.
-    RangeAsofJoinContext range_asof_join_ctx;
+    Streaming::RangeAsofJoinContext range_asof_join_ctx;
     /// proton : ends
 
     /// All columns which can be read from joined table. Duplicating names are qualified.
@@ -277,8 +277,8 @@ public:
     void setRangeAsofRightInequality(ASOF::Inequality inequality) { range_asof_join_ctx.right_inequality = inequality; }
     void setRangeAsofLowerBound(Int64 lower_bound) { range_asof_join_ctx.lower_bound = lower_bound; }
     void setRangeAsofUpperBound(Int64 upper_bound) { range_asof_join_ctx.upper_bound = upper_bound; }
-    void setRangeType(RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
-    const RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
+    void setRangeType(Streaming::RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
+    const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
     void validateRangeAsof(Int64 max_range) const;
     /// proton : ends
 

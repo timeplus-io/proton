@@ -8,11 +8,13 @@ namespace DB
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
+namespace Streaming
+{
 /// Join two data streams.
-class StreamingJoinStep final : public IQueryPlanStep
+class JoinStep final : public IQueryPlanStep
 {
 public:
-    StreamingJoinStep(
+    JoinStep(
         const DataStream & left_stream_,
         const DataStream & right_stream_,
         JoinPtr join_,
@@ -37,4 +39,5 @@ private:
     UInt64 join_max_cached_bytes;
     Processors processors;
 };
+}
 }

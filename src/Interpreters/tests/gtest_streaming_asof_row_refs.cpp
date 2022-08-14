@@ -1,7 +1,7 @@
 #include <Columns/ColumnDecimal.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Interpreters/Streaming/StreamingRowRefs.h>
+#include <Interpreters/Streaming/RowRefs.h>
 
 #include <gtest/gtest.h>
 
@@ -96,7 +96,7 @@ void commonTest(const std::vector<Case> & cases)
         auto left_block{prepareLeftBlock()};
 
         auto & asof_col = left_block.getByPosition(0);
-        DB::StreamingAsofRowRefs row_refs(asof_col.type->getTypeId());
+        DB::Streaming::AsofRowRefs row_refs(asof_col.type->getTypeId());
 
         for (auto iter = right_blocks.begin(); iter != right_blocks.end(); ++iter)
         {

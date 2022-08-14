@@ -35,7 +35,7 @@ public:
     bool isStreaming() const override;
     bool hasGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
-    HashSemantic getHashSemantic() const override;
+    Streaming::HashSemantic getHashSemantic() const override;
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     /// proton: ends

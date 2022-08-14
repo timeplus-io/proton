@@ -16,6 +16,8 @@ namespace JoinCommon
     class JoinMask;
 }
 
+namespace Streaming
+{
 /** Data structure for implementation of Streaming JOIN which is always kind of ASOF join since its last join key
   * is always inequality of timestamps. This implementation is a copy of existing HashJoin and adapt to streaming scenario.
   * This implementation is a copy of existing HashJoin and adapted to streaming scenario. The following comments are copied
@@ -84,15 +86,16 @@ namespace JoinCommon
   * If it is true, we always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
-class StreamingHashJoin : public IJoin
+
+class HashJoin : public IJoin
 {
 public:
-    StreamingHashJoin(
+    HashJoin(
         std::shared_ptr<TableJoin> table_join_,
         JoinStreamDescription left_join_stream_desc_,
         JoinStreamDescription right_join_stream_desc_);
 
-    ~StreamingHashJoin() noexcept override;
+    ~HashJoin() noexcept override;
 
     /// proton : starts
     /// returns total bytes in left stream cache
@@ -156,12 +159,12 @@ public:
     const ColumnWithTypeAndName & rightAsofKeyColumn() const;
 
     /// proton : starts. Using types from HashJoin
-    using Type = HashJoin::Type;
-    using MapsOne = HashJoin::MapsOne;
-    using MapsAll = HashJoin::MapsAll;
-    using MapsAsof = HashJoin::MapsAsof;
-    using MapsStreamingAsof = HashJoin::MapsStreamingAsof;
-    using MapsVariant = HashJoin::MapsVariant;
+    using Type = DB::HashJoin::Type;
+    using MapsOne = DB::HashJoin::MapsOne;
+    using MapsAll = DB::HashJoin::MapsAll;
+    using MapsAsof = DB::HashJoin::MapsAsof;
+    using MapsStreamingAsof = DB::HashJoin::MapsStreamingAsof;
+    using MapsVariant = DB::HashJoin::MapsVariant;
     /// proton : ends
 
     using RawBlockPtr = const Block *;
@@ -169,9 +172,9 @@ public:
 
     struct StreamData
     {
-        explicit StreamData(StreamingHashJoin * join_) : join(join_) { }
+        explicit StreamData(HashJoin * join_) : join(join_) { }
 
-        StreamData(const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_, StreamingHashJoin * join_)
+        StreamData(const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_, HashJoin * join_)
             : range_asof_join_ctx(range_asof_join_ctx_), asof_col_name(asof_column_name_), join(join_)
         {
             updateBucketSize();
@@ -363,7 +366,7 @@ public:
         Int64 asof_col_pos = -1;
         BlockRangeSplitterPtr range_splitter;
         std::atomic_int64_t current_watermark = 0;
-        StreamingHashJoin * join;
+        HashJoin * join;
 
         struct Metrics
         {
@@ -621,5 +624,5 @@ private:
 
     Poco::Logger * log;
 };
-
+}
 }

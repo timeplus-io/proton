@@ -7,6 +7,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 enum class RangeType : uint8_t
 {
     None,
@@ -39,4 +41,5 @@ struct RangeAsofJoinContext
             magic_enum::enum_name(type));
     }
 };
+}
 }

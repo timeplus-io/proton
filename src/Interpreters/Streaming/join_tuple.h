@@ -9,6 +9,8 @@ namespace DB
 {
 class Block;
 
+namespace Streaming
+{
 struct JoinTuple
 {
     uint64_t left_block_id;
@@ -23,14 +25,14 @@ struct JoinTuple
     }
 };
 
-using JoinTupleMap = std::unordered_set<DB::JoinTuple>;
-
+using JoinTupleMap = std::unordered_set<DB::Streaming::JoinTuple>;
+}
 }
 
 template <>
-struct std::hash<DB::JoinTuple>
+struct std::hash<DB::Streaming::JoinTuple>
 {
-    std::size_t operator()(const DB::JoinTuple & join_tuple) const noexcept
+    std::size_t operator()(const DB::Streaming::JoinTuple & join_tuple) const noexcept
     {
         size_t v = 0;
         boost::hash_combine(v, std::hash<uint64_t>{}(join_tuple.left_block_id));

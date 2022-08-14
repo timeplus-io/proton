@@ -20,8 +20,8 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 
 /// proton : starts
-#include <Processors/Transforms/Streaming/StreamingJoinTranform.h>
-#include <Interpreters/Streaming/StreamingHashJoin.h>
+#include <Interpreters/Streaming/HashJoin.h>
+#include <Processors/Transforms/Streaming/JoinTranform.h>
 /// proton : ends
 
 namespace DB
@@ -625,7 +625,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     /// (left)  ->
     /// (left)  ->   resize(1) ->
     /// (left)  ->                \
-    ///                            -> StreamingJoinTransform
+    ///                            -> JoinTransform
     /// (right) ->                /
     /// (right) ->   resize(1) ->
     /// (right) ->
@@ -636,17 +636,17 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
     /// This counter is needed for every Joining except totals, to decide which Joining will generate non joined rows.
     /// FIXME FinishCounter
-    auto finish_counter = std::make_shared<StreamingJoinTransform::FinishCounter>(1);
+    auto finish_counter = std::make_shared<Streaming::JoinTransform::FinishCounter>(1);
 
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
 
     for (size_t i = 0; i < 1; ++i)
     {
-        auto joining = std::make_shared<StreamingJoinTransform>(
+        auto joining = std::make_shared<Streaming::JoinTransform>(
             left->getHeader(),
             right->getHeader(),
-            std::dynamic_pointer_cast<StreamingHashJoin>(join),
+            std::dynamic_pointer_cast<Streaming::HashJoin>(join),
             max_block_size,
             join_max_wait_ms,
             join_max_wait_rows,

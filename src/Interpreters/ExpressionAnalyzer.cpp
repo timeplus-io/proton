@@ -58,10 +58,10 @@
 #include <Parsers/formatAST.h>
 
 /// proton: starts
-#include <Common/ProtonCommon.h>
-#include <Interpreters/Streaming/StreamingHashJoin.h>
+#include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/StreamingWindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends
 
 namespace DB
@@ -1000,7 +1000,7 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
     const ASTTablesInSelectQueryElement & join_element,
     TableJoin & analyzed_join,
     SelectQueryOptions query_options,
-    HashSemantic & hash_semantic)
+    Streaming::HashSemantic & hash_semantic)
 {
     /// Actions which need to be calculated on joined block.
     auto joined_block_actions = createJoinedBlockActions(context, analyzed_join);
@@ -1071,7 +1071,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
         return storage->getJoinLocked(analyzed_join, getContext());
     }
 
-    HashSemantic right_hash_semantic = HashSemantic::Append;
+    Streaming::HashSemantic right_hash_semantic = Streaming::HashSemantic::Append;
     joined_plan = buildJoinedPlan(getContext(), join_element, *analyzed_join, query_options, right_hash_semantic);
 
     const ColumnsWithTypeAndName & right_columns = joined_plan->getCurrentDataStream().header.getColumnsWithTypeAndName();
@@ -1092,20 +1092,20 @@ JoinPtr SelectQueryExpressionAnalyzer::makeTableJoin(
     {
         /// stream join stream case
         /// Calculate left stream's hash semantic, FIXME, what about subquery ?
-        HashSemantic left_hash_semantic = HashSemantic::Append;
+        Streaming::HashSemantic left_hash_semantic = Streaming::HashSemantic::Append;
         if (syntax->storage)
         {
             if (syntax->storage->isVersionedKvMode())
-                left_hash_semantic = HashSemantic::VersionedKV;
+                left_hash_semantic = Streaming::HashSemantic::VersionedKV;
             else if (syntax->storage->isChangelogKvMode())
-                left_hash_semantic = HashSemantic::ChangeLogKV;
+                left_hash_semantic = Streaming::HashSemantic::ChangeLogKV;
         }
 
         auto keep_versions = getContext()->getSettingsRef().keep_versions;
-        return std::make_shared<StreamingHashJoin>(
+        return std::make_shared<Streaming::HashJoin>(
             analyzed_join,
-            JoinStreamDescription{Block{left_columns}, left_hash_semantic, keep_versions},
-            JoinStreamDescription{joined_plan->getCurrentDataStream().header, right_hash_semantic, keep_versions});
+            Streaming::JoinStreamDescription{Block{left_columns}, left_hash_semantic, keep_versions},
+            Streaming::JoinStreamDescription{joined_plan->getCurrentDataStream().header, right_hash_semantic, keep_versions});
     }
     else
     {

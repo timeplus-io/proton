@@ -1,4 +1,4 @@
-#include "StreamingRowRefs.h"
+#include "RowRefs.h"
 
 #include <base/types.h>
 #include <Common/typeid_cast.h>
@@ -12,69 +12,76 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_TYPE_OF_FIELD;
+extern const int BAD_TYPE_OF_FIELD;
 }
 
+namespace Streaming
+{
 namespace
 {
-    /// maps enum values to types
-    template <typename F>
-    void callWithType(TypeIndex which, F && f)
+/// maps enum values to types
+template <typename F>
+void callWithType(TypeIndex which, F && f)
+{
+    switch (which)
     {
-        switch (which)
-        {
-            case TypeIndex::UInt8:
-                return f(UInt8());
-            case TypeIndex::UInt16:
-                return f(UInt16());
-            case TypeIndex::UInt32:
-                return f(UInt32());
-            case TypeIndex::UInt64:
-                return f(UInt64());
-            case TypeIndex::Int8:
-                return f(Int8());
-            case TypeIndex::Int16:
-                return f(Int16());
-            case TypeIndex::Int32:
-                return f(Int32());
-            case TypeIndex::Int64:
-                return f(Int64());
-            case TypeIndex::Float32:
-                return f(Float32());
-            case TypeIndex::Float64:
-                return f(Float64());
-            case TypeIndex::Decimal32:
-                return f(Decimal32());
-            case TypeIndex::Decimal64:
-                return f(Decimal64());
-            case TypeIndex::Decimal128:
-                return f(Decimal128());
-            case TypeIndex::DateTime64:
-                return f(DateTime64());
-            default:
-                break;
-        }
-
-        __builtin_unreachable();
+        case TypeIndex::UInt8:
+            return f(UInt8());
+        case TypeIndex::UInt16:
+            return f(UInt16());
+        case TypeIndex::UInt32:
+            return f(UInt32());
+        case TypeIndex::UInt64:
+            return f(UInt64());
+        case TypeIndex::Int8:
+            return f(Int8());
+        case TypeIndex::Int16:
+            return f(Int16());
+        case TypeIndex::Int32:
+            return f(Int32());
+        case TypeIndex::Int64:
+            return f(Int64());
+        case TypeIndex::Float32:
+            return f(Float32());
+        case TypeIndex::Float64:
+            return f(Float64());
+        case TypeIndex::Decimal32:
+            return f(Decimal32());
+        case TypeIndex::Decimal64:
+            return f(Decimal64());
+        case TypeIndex::Decimal128:
+            return f(Decimal128());
+        case TypeIndex::DateTime64:
+            return f(DateTime64());
+        default:
+            break;
     }
+
+    __builtin_unreachable();
+}
 }
 
-StreamingAsofRowRefs::StreamingAsofRowRefs(TypeIndex type)
+AsofRowRefs::AsofRowRefs(TypeIndex type)
 {
-    auto call = [&](const auto & t)
-    {
-      using T = std::decay_t<decltype(t)>;
-      using LookupType = typename Entry<T>::LookupType;
-      lookups = std::make_unique<LookupType>();
+    auto call = [&](const auto & t) {
+        using T = std::decay_t<decltype(t)>;
+        using LookupType = typename Entry<T>::LookupType;
+        lookups = std::make_unique<LookupType>();
     };
 
     callWithType(type, call);
 }
 
-void StreamingAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, BlocksList * blocks, BlocksList::iterator block, size_t row_num, ASOF::Inequality inequality, size_t keep_versions)
+void AsofRowRefs::insert(
+    TypeIndex type,
+    const IColumn & asof_column,
+    BlocksList * blocks,
+    BlocksList::iterator block,
+    size_t row_num,
+    ASOF::Inequality inequality,
+    size_t keep_versions)
 {
-    auto call = [&](const auto & t)
-    {
+    auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using LookupPtr = typename Entry<T>::LookupPtr;
 
@@ -92,15 +99,15 @@ void StreamingAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, B
     callWithType(type, call);
 }
 
-const RowRefWithRefCount * StreamingAsofRowRefs::findAsof(TypeIndex type, ASOF::Inequality inequality, const IColumn & asof_column, size_t row_num) const
+const RowRefWithRefCount *
+AsofRowRefs::findAsof(TypeIndex type, ASOF::Inequality inequality, const IColumn & asof_column, size_t row_num) const
 {
     const RowRefWithRefCount * out = nullptr;
 
     bool ascending = (inequality == ASOF::Inequality::Less) || (inequality == ASOF::Inequality::LessOrEquals);
     bool is_strict = (inequality == ASOF::Inequality::Less) || (inequality == ASOF::Inequality::Greater);
 
-    auto call = [&](const auto & t)
-    {
+    auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using EntryType = Entry<T>;
         using LookupPtr = typename EntryType::LookupPtr;
@@ -120,7 +127,7 @@ const RowRefWithRefCount * StreamingAsofRowRefs::findAsof(TypeIndex type, ASOF::
     return out;
 }
 
-std::optional<TypeIndex> StreamingAsofRowRefs::getTypeSize(const IColumn & asof_column, size_t & size)
+std::optional<TypeIndex> AsofRowRefs::getTypeSize(const IColumn & asof_column, size_t & size)
 {
     TypeIndex idx = asof_column.getDataType();
 
@@ -178,8 +185,7 @@ std::optional<TypeIndex> StreamingAsofRowRefs::getTypeSize(const IColumn & asof_
 
 RangeAsofRowRefs::RangeAsofRowRefs(TypeIndex type)
 {
-    auto call = [&](const auto & t)
-    {
+    auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         lookups = std::make_unique<LookupType<T>>();
     };
@@ -189,8 +195,7 @@ RangeAsofRowRefs::RangeAsofRowRefs(TypeIndex type)
 
 void RangeAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, const Block * block, size_t row_num)
 {
-    auto call = [&](const auto & t)
-    {
+    auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
@@ -202,12 +207,17 @@ void RangeAsofRowRefs::insert(TypeIndex type, const IColumn & asof_column, const
     callWithType(type, call);
 }
 
-std::vector<RowRef> RangeAsofRowRefs::findRange(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id, JoinTupleMap * joined_rows) const
+std::vector<RowRef> RangeAsofRowRefs::findRange(
+    TypeIndex type,
+    const RangeAsofJoinContext & range_join_ctx,
+    const IColumn & asof_column,
+    size_t row_num,
+    UInt64 src_block_id,
+    JoinTupleMap * joined_rows) const
 {
     std::vector<RowRef> results;
 
-    auto call = [&](const auto & t)
-    {
+    auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
@@ -269,12 +279,17 @@ std::vector<RowRef> RangeAsofRowRefs::findRange(TypeIndex type, const RangeAsofJ
     return results;
 }
 
-const RowRef * RangeAsofRowRefs::findAsof(TypeIndex type, const RangeAsofJoinContext & range_join_ctx, const IColumn & asof_column, size_t row_num, UInt64 src_block_id, JoinTupleMap * joined_rows) const
+const RowRef * RangeAsofRowRefs::findAsof(
+    TypeIndex type,
+    const RangeAsofJoinContext & range_join_ctx,
+    const IColumn & asof_column,
+    size_t row_num,
+    UInt64 src_block_id,
+    JoinTupleMap * joined_rows) const
 {
     RowRef * result = nullptr;
 
-    auto call = [&](const auto & t)
-    {
+    auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
@@ -321,11 +336,14 @@ const RowRef * RangeAsofRowRefs::findAsof(TypeIndex type, const RangeAsofJoinCon
         assert(upper_iter->first <= key);
         assert(upper_iter->first >= lower_iter->first);
 
-        if (!joined_rows || !joined_rows->contains(JoinTuple{src_block_id, upper_iter->second.block, static_cast<uint32_t>(row_num), upper_iter->second.row_num}))
+        if (!joined_rows
+            || !joined_rows->contains(
+                JoinTuple{src_block_id, upper_iter->second.block, static_cast<uint32_t>(row_num), upper_iter->second.row_num}))
             result = &upper_iter->second;
     };
 
     callWithType(type, call);
     return result;
+}
 }
 }

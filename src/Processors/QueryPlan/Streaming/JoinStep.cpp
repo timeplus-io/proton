@@ -1,8 +1,8 @@
-#include "StreamingJoinStep.h"
+#include "JoinStep.h"
 
 #include <Interpreters/IJoin.h>
-#include <Interpreters/Streaming/StreamingHashJoin.h>
-#include <Processors/Transforms/Streaming/StreamingJoinTranform.h>
+#include <Interpreters/Streaming/HashJoin.h>
+#include <Processors/Transforms/Streaming/JoinTranform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace DB
@@ -12,7 +12,9 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-StreamingJoinStep::StreamingJoinStep(
+namespace Streaming
+{
+JoinStep::JoinStep(
     const DataStream & left_stream_,
     const DataStream & right_stream_,
     JoinPtr join_,
@@ -28,11 +30,11 @@ StreamingJoinStep::StreamingJoinStep(
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
-        .header = StreamingJoinTransform::transformHeader(left_stream_.header, std::dynamic_pointer_cast<StreamingHashJoin>(join)),
+        .header = JoinTransform::transformHeader(left_stream_.header, std::dynamic_pointer_cast<HashJoin>(join)),
     };
 }
 
-QueryPipelineBuilderPtr StreamingJoinStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &)
+QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &)
 {
     if (pipelines.size() != 2)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "StreamingJoinStep expect two input steps");
@@ -48,8 +50,9 @@ QueryPipelineBuilderPtr StreamingJoinStep::updatePipeline(QueryPipelineBuilders 
         &processors);
 }
 
-void StreamingJoinStep::describePipeline(FormatSettings & settings) const
+void JoinStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(processors, settings);
+}
 }
 }
