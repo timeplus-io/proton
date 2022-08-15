@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Interpreters/Aggregator.h"
-
 #include <mutex>
 #include <memory>
 #include <functional>
@@ -38,9 +36,9 @@
 
 /// proton: starts
 #include <DataTypes/DataTypeDateTime64.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Interpreters/Streaming/SessionMap.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/StreamingTwoLevelHashMap.h>
@@ -53,8 +51,11 @@
 /// layouts are as identical as the origins to easy future diff / merge
 namespace DB
 {
+class CompiledAggregateFunctionsHolder;
+class NativeWriter;
 
-
+namespace Streaming
+{
 /** Different data structures that can be used for aggregation
   * For efficiency, the aggregation data itself is put into the pool.
   * Data and pool ownership (states of aggregate functions)
@@ -90,9 +91,9 @@ using StreamingAggregatedDataWithStringKeyTwoLevel = StreamingTwoLevelHashMapWit
 using StreamingAggregatedDataWithKeys128TwoLevel = StreamingTwoLevelHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using StreamingAggregatedDataWithKeys256TwoLevel = StreamingTwoLevelHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
-class StreamingAggregator;
+class Aggregator;
 
-struct StreamingAggregatedDataVariants : private boost::noncopyable
+struct AggregatedDataVariants : private boost::noncopyable
 {
     /** Working with states of aggregate functions in the pool is arranged in the following (inconvenient) way:
       * - when aggregating, states are created in the pool using IAggregateFunction::create (inside - `placement new` of arbitrary structure);
@@ -111,7 +112,7 @@ struct StreamingAggregatedDataVariants : private boost::noncopyable
       * But this can hardly be done simply because it is planned to put variable-length strings into the same pool.
       * In this case, the pool will not be able to know with what offsets objects are stored.
       */
-    const StreamingAggregator * aggregator = nullptr;
+    const Aggregator * aggregator = nullptr;
 
     size_t keys_size{};  /// Number of keys. NOTE do we need this field?
     Sizes key_sizes;     /// Dimensions of keys, if keys of fixed length
@@ -281,11 +282,11 @@ struct StreamingAggregatedDataVariants : private boost::noncopyable
     };
     Type type = Type::EMPTY;
 
-    explicit StreamingAggregatedDataVariants(bool enable_recycle = true) : aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get()) { aggregates_pool->enableRecycle(enable_recycle); }
+    explicit AggregatedDataVariants(bool enable_recycle = true) : aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get()) { aggregates_pool->enableRecycle(enable_recycle); }
     bool empty() const { return type == Type::EMPTY; }
     void invalidate() { type = Type::EMPTY; }
 
-    ~StreamingAggregatedDataVariants();
+    ~AggregatedDataVariants();
 
     #define APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M) \
         M(streaming_key16_two_level, true) \
@@ -545,7 +546,7 @@ struct StreamingAggregatedDataVariants : private boost::noncopyable
             #define M(NAME, IS_TWO_LEVEL) \
             case Type::NAME: \
             { \
-                using TPtr ## NAME = decltype(StreamingAggregatedDataVariants::NAME); \
+                using TPtr ## NAME = decltype(AggregatedDataVariants::NAME); \
                 using T ## NAME = typename TPtr ## NAME ::element_type; \
                 return T ## NAME ::State::createContext(settings); \
             }
@@ -559,12 +560,9 @@ struct StreamingAggregatedDataVariants : private boost::noncopyable
     }
 };
 
-using StreamingAggregatedDataVariantsPtr = std::shared_ptr<StreamingAggregatedDataVariants>;
-using ManyStreamingAggregatedDataVariants = std::vector<StreamingAggregatedDataVariantsPtr>;
-using ManyStreamingAggregatedDataVariantsPtr = std::shared_ptr<ManyStreamingAggregatedDataVariants>;
-
-class CompiledAggregateFunctionsHolder;
-class NativeWriter;
+using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
+using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
+using ManyAggregatedDataVariantsPtr = std::shared_ptr<ManyAggregatedDataVariants>;
 
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingTransform.)
@@ -581,7 +579,7 @@ class NativeWriter;
 
 /** Aggregates the source of the blocks.
   */
-class StreamingAggregator final
+class Aggregator final
 {
 public:
     struct Params
@@ -598,7 +596,7 @@ public:
         const size_t aggregates_size;
 
         /// The settings of approximate calculation of GROUP BY.
-        const bool overflow_row;    /// Do we need to put into StreamingAggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.
+        const bool overflow_row;    /// Do we need to put into AggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.
         const size_t max_rows_to_group_by;
         const OverflowMode group_by_overflow_mode;
 
@@ -651,7 +649,7 @@ public:
         Int64 window_interval = 0;
         Int64 max_emit_timeout = 0;
         UInt64 session_size = 0;
-        StreamingFunctionDescriptionPtr window_desc;
+        FunctionDescriptionPtr window_desc;
         IntervalKind::Kind kind = IntervalKind::Second;
         /// proton: ends
 
@@ -674,7 +672,7 @@ public:
             size_t time_col_pos_ = 0,
             size_t session_start_pos_ = 0,
             size_t session_end_pos_ = 0,
-            StreamingFunctionDescriptionPtr window_desc_ = nullptr)
+            FunctionDescriptionPtr window_desc_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -739,7 +737,7 @@ public:
         void explain(JSONBuilder::JSONMap & map) const;
     };
 
-    explicit StreamingAggregator(const Params & params_);
+    explicit Aggregator(const Params & params_);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
@@ -747,16 +745,16 @@ public:
     using AggregateFunctionsPlainPtrs = std::vector<const IAggregateFunction *>;
 
     /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
-    bool executeOnBlock(const Block & block, StreamingAggregatedDataVariants & result,
+    bool executeOnBlock(const Block & block, AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
         bool & no_more_keys) const;
 
-    bool executeOnBlock(Columns columns, UInt64 num_rows, StreamingAggregatedDataVariants & result,
+    bool executeOnBlock(Columns columns, UInt64 num_rows, AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
         bool & no_more_keys) const;
 
     /// Used for aggregate projection.
-    bool mergeOnBlock(Block block, StreamingAggregatedDataVariants & result, bool & no_more_keys) const;
+    bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
 
     /** Convert the aggregation data structure into a block.
       * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
@@ -765,13 +763,13 @@ public:
       *  which can then be combined with other states (for distributed query processing).
       * If final = true, then columns with ready values are created as aggregate columns.
       */
-    BlocksList convertToBlocks(StreamingAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
+    BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
-    ManyStreamingAggregatedDataVariantsPtr prepareVariantsToMerge(ManyStreamingAggregatedDataVariants & data_variants) const;
+    ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants) const;
 
     using BucketToBlocks = std::map<Int32, BlocksList>;
     /// Merge partially aggregated blocks separated to buckets into one data structure.
-    void mergeBlocks(BucketToBlocks bucket_to_blocks, StreamingAggregatedDataVariants & result, size_t max_threads);
+    void mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads);
 
     /// Merge several partially aggregated blocks into one.
     /// Precondition: for all blocks block.info.is_overflows flag must be the same.
@@ -785,8 +783,8 @@ public:
     std::vector<Block> convertBlockToTwoLevel(const Block & block) const;
 
     /// For external aggregation.
-    void writeToTemporaryFile(StreamingAggregatedDataVariants & data_variants, const String & tmp_path) const;
-    void writeToTemporaryFile(StreamingAggregatedDataVariants & data_variants) const;
+    void writeToTemporaryFile(AggregatedDataVariants & data_variants, const String & tmp_path) const;
+    void writeToTemporaryFile(AggregatedDataVariants & data_variants) const;
 
     bool hasTemporaryFiles() const { return !temporary_files.empty(); }
 
@@ -813,7 +811,7 @@ public:
 
 private:
 
-    friend struct StreamingAggregatedDataVariants;
+    friend struct AggregatedDataVariants;
     friend class ConvertingAggregatedToChunksTransform;
     friend class ConvertingAggregatedToChunksSource;
     friend class AggregatingInOrderTransform;
@@ -821,7 +819,7 @@ private:
     /// proton: starts
     friend class StreamingConvertingAggregatedToChunksTransform;
     friend class StreamingConvertingAggregatedToChunksSource;
-    friend class StreamingAggregatingTransform;
+    friend class AggregatingTransform;
     friend class SessionAggregatingTransform;
     friend class GlobalAggregatingTransform;
     friend class TumbleHopAggregatingTransform;
@@ -833,7 +831,7 @@ private:
 
     Params params;
 
-    StreamingAggregatedDataVariants::Type method_chosen;
+    AggregatedDataVariants::Type method_chosen;
     Sizes key_sizes;
 
     HashMethodContextPtr aggregation_state_cache;
@@ -886,10 +884,10 @@ private:
     void compileAggregateFunctionsIfNeeded();
 
     /** Select the aggregation method based on the number and types of keys. */
-    StreamingAggregatedDataVariants::Type chooseAggregationMethod();
+    AggregatedDataVariants::Type chooseAggregationMethod();
 
     /// proton: starts
-    StreamingAggregatedDataVariants::Type chooseAggregationMethodStreaming(
+    AggregatedDataVariants::Type chooseAggregationMethodStreaming(
         const DataTypes & types_removed_nullable, bool has_nullable_key,
         bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes);
     /// proton: ends
@@ -902,7 +900,7 @@ private:
     /** Call `destroy` methods for states of aggregate functions.
       * Used in the exception handler for aggregation, since RAII in this case is not applicable.
       */
-    void destroyAllAggregateStates(StreamingAggregatedDataVariants & result) const;
+    void destroyAllAggregateStates(AggregatedDataVariants & result) const;
 
 
     /// Process one data block, aggregate the data into a hash table.
@@ -943,7 +941,7 @@ private:
 
     template <typename Method>
     void writeToTemporaryFileImpl(
-        StreamingAggregatedDataVariants & data_variants,
+        AggregatedDataVariants & data_variants,
         Method & method,
         NativeWriter & out) const;
 
@@ -977,11 +975,11 @@ private:
         Arena * arena) const;
 
     void mergeWithoutKeyDataImpl(
-        ManyStreamingAggregatedDataVariants & non_empty_data) const;
+        ManyAggregatedDataVariants & non_empty_data) const;
 
     template <typename Method>
     void mergeSingleLevelDataImpl(
-        ManyStreamingAggregatedDataVariants & non_empty_data) const;
+        ManyAggregatedDataVariants & non_empty_data) const;
 
     template <typename Method, typename Table>
     void convertToBlockImpl(
@@ -1016,33 +1014,33 @@ private:
 
     template <typename Filler>
     Block prepareBlockAndFill(
-        StreamingAggregatedDataVariants & data_variants,
+        AggregatedDataVariants & data_variants,
         bool final,
         size_t rows,
         Filler && filler) const;
 
     template <typename Method>
     Block convertOneBucketToBlock(
-        StreamingAggregatedDataVariants & data_variants,
+        AggregatedDataVariants & data_variants,
         Method & method,
         Arena * arena,
         bool final,
         size_t bucket) const;
 
     Block mergeAndConvertOneBucketToBlock(
-        ManyStreamingAggregatedDataVariants & variants,
+        ManyAggregatedDataVariants & variants,
         Arena * arena,
         bool final,
         size_t bucket,
         std::atomic<bool> * is_cancelled = nullptr) const;
 
-    Block prepareBlockAndFillWithoutKey(StreamingAggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
-    Block prepareBlockAndFillSingleLevel(StreamingAggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(StreamingAggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
+    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
+    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
-        StreamingAggregatedDataVariants & data_variants,
+        AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
         ThreadPool * thread_pool) const;
@@ -1066,11 +1064,11 @@ private:
 
     void mergeWithoutKeyStreamsImpl(
         Block & block,
-        StreamingAggregatedDataVariants & result) const;
+        AggregatedDataVariants & result) const;
 
     template <typename Method>
     void mergeBucketImpl(
-        ManyStreamingAggregatedDataVariants & data, size_t bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
+        ManyAggregatedDataVariants & data, size_t bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
 
     template <typename Method>
     void convertBlockToTwoLevelImpl(
@@ -1084,7 +1082,7 @@ private:
     void destroyImpl(Table & table) const;
 
     void destroyWithoutKey(
-        StreamingAggregatedDataVariants & result) const;
+        AggregatedDataVariants & result) const;
 
 
     /** Checks constraints on the maximum number of keys for aggregation.
@@ -1103,26 +1101,26 @@ private:
         NestedColumnsHolder & nested_columns_holder) const;
 
     void addSingleKeyToAggregateColumns(
-        const StreamingAggregatedDataVariants & data_variants,
+        const AggregatedDataVariants & data_variants,
         MutableColumns & aggregate_columns) const;
 
     void addArenasToAggregateColumns(
-        const StreamingAggregatedDataVariants & data_variants,
+        const AggregatedDataVariants & data_variants,
         MutableColumns & aggregate_columns) const;
 
     void createStatesAndFillKeyColumnsWithSingleKey(
-        StreamingAggregatedDataVariants & data_variants,
+        AggregatedDataVariants & data_variants,
         Columns & key_columns, size_t key_row,
         MutableColumns & final_key_columns) const;
 
     /// proton: starts
-    inline void initStatesWithoutKey(StreamingAggregatedDataVariants & data_variants) const;
-    void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, StreamingAggregatedDataVariants & result) const;
-    void removeBucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
-    void removeBucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id) const;
+    inline void initStatesWithoutKey(AggregatedDataVariants & data_variants) const;
+    void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, AggregatedDataVariants & result) const;
+    void removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    void removeBucketsOfSession(AggregatedDataVariants & result, size_t session_id) const;
     void clearInfoOfEmitSessions();
-    std::vector<size_t> bucketsBefore(StreamingAggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
-    static std::vector<size_t> bucketsOfSession(StreamingAggregatedDataVariants & result, size_t session_id);
+    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    static std::vector<size_t> bucketsOfSession(AggregatedDataVariants & result, size_t session_id);
     template <typename TargetColumnType>
     SessionStatus processSessionRow(
         SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
@@ -1132,13 +1130,13 @@ private:
 
 
 /** Get the aggregation variant by its type. */
-template <typename Method> Method & getDataVariant(StreamingAggregatedDataVariants & variants);
+template <typename Method> Method & getDataVariant(AggregatedDataVariants & variants);
 
 #define M(NAME, IS_TWO_LEVEL) \
-    template <> inline decltype(StreamingAggregatedDataVariants::NAME)::element_type & getDataVariant<decltype(StreamingAggregatedDataVariants::NAME)::element_type>(StreamingAggregatedDataVariants & variants) { return *variants.NAME; }
+    template <> inline decltype(AggregatedDataVariants::NAME)::element_type & getDataVariant<decltype(AggregatedDataVariants::NAME)::element_type>(AggregatedDataVariants & variants) { return *variants.NAME; }
 
 APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 
 #undef M
-
+}
 }

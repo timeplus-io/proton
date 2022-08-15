@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/IntervalKind.h>
@@ -19,10 +19,12 @@ namespace DB
 struct SelectQueryInfo;
 class Block;
 
+namespace Streaming
+{
 struct WatermarkSettings
 {
 public:
-    WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc);
+    WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc);
 
     enum class EmitMode
     {
@@ -50,7 +52,7 @@ public:
     IntervalKind::Kind emit_timeout_interval_kind = IntervalKind::Second;
 
     /// privates
-    StreamingFunctionDescriptionPtr window_desc;
+    FunctionDescriptionPtr window_desc;
 
 private:
     void initWatermarkForGlobalAggr();
@@ -109,4 +111,5 @@ protected:
 };
 
 using WatermarkPtr = std::shared_ptr<Watermark>;
+}
 }

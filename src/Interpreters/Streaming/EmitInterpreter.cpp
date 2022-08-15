@@ -1,8 +1,8 @@
-#include "StreamingEmitInterpreter.h"
+#include "EmitInterpreter.h"
 
 #include <Interpreters/GetAggregatesVisitor.h>
 #include <Interpreters/InterpreterSetQuery.h>
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Interpreters/getTableExpressions.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -24,27 +24,29 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
 }
 
+namespace Streaming
+{
 namespace
 {
-    /// Check if we have GROUP BY and / or aggregates function
-    /// We allow aggregate without group by like `SELECT count() FROM device_utils`
-    /// We also allow GROUP BY without aggregate like `SELECT device FROM device_utils GROUP BY device`
-    bool hasAggregates(const ASTPtr & query, const ASTSelectQuery & select_query)
-    {
-        GetAggregatesVisitor::Data data;
-        GetAggregatesVisitor(data).visit(query);
+/// Check if we have GROUP BY and / or aggregates function
+/// We allow aggregate without group by like `SELECT count() FROM device_utils`
+/// We also allow GROUP BY without aggregate like `SELECT device FROM device_utils GROUP BY device`
+bool hasAggregates(const ASTPtr & query, const ASTSelectQuery & select_query)
+{
+    GetAggregatesVisitor::Data data;
+    GetAggregatesVisitor(data).visit(query);
 
-        return !data.aggregates.empty() || select_query.groupBy() != nullptr;
-    }
+    return !data.aggregates.empty() || select_query.groupBy() != nullptr;
+}
 }
 
-StreamingEmitInterpreter::LastXRule::LastXRule(
+EmitInterpreter::LastXRule::LastXRule(
     const Settings & settings_, BaseScaleInterval & last_interval_bs_, bool & tail_, Poco::Logger * log_)
     : settings(settings_), last_interval_bs(last_interval_bs_), tail(tail_), log(log_)
 {
 }
 
-void StreamingEmitInterpreter::LastXRule::operator()(ASTPtr & query_)
+void EmitInterpreter::LastXRule::operator()(ASTPtr & query_)
 {
     query = query_;
     auto select_query = query_->as<ASTSelectQuery>();
@@ -74,7 +76,7 @@ void StreamingEmitInterpreter::LastXRule::operator()(ASTPtr & query_)
     handleTail(*select_query);
 }
 
-bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query) const
+bool EmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query) const
 {
     assert(last_interval);
     auto table_expression = getTableExpression(select_query, 0);
@@ -114,14 +116,14 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
             IntervalKind(last_interval_bs.src_kind).toString());
 
     /// calculate settings keep_windows = ceil(last_interval / window_interval)
-//    UInt64 keep_windows
-//        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
-//    if (keep_windows == 0 || keep_windows > settings.max_windows)
-//        throw Exception(
-//            "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
-//            "than or equal to "
-//                + std::to_string(settings.max_windows),
-//            ErrorCodes::SYNTAX_ERROR);
+    //    UInt64 keep_windows
+    //        = (std::abs(last_interval_bs.num_units) + std::abs(window_interval_bs.num_units) - 1) / std::abs(window_interval_bs.num_units);
+    //    if (keep_windows == 0 || keep_windows > settings.max_windows)
+    //        throw Exception(
+    //            "Too big range. Try make the last range smaller or make the hop/tumble window size bigger to make 'range / window_size' less "
+    //            "than or equal to "
+    //                + std::to_string(settings.max_windows),
+    //            ErrorCodes::SYNTAX_ERROR);
 
     const auto & old_settings = select_query.settings();
     ASTPtr new_settings = old_settings ? old_settings->clone() : std::make_shared<ASTSetQuery>();
@@ -131,7 +133,7 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
         throw Exception("The `emit last` policy conflicts with the existing 'keep_windows' setting", ErrorCodes::SYNTAX_ERROR);
 
     ast_set.is_standalone = false;
-//    ast_set.changes.emplace_back("keep_windows", keep_windows);
+    //    ast_set.changes.emplace_back("keep_windows", keep_windows);
 
     if (ast_set.changes.tryGet("seek_to"))
         throw Exception("The `emit last` policy conflicts with the existing 'seek_to' setting", ErrorCodes::SYNTAX_ERROR);
@@ -148,7 +150,7 @@ bool StreamingEmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & sele
     return true;
 }
 
-bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
+bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
 {
     assert(emit_query);
     assert(last_interval);
@@ -185,8 +187,8 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
                 IntervalKind(periodic_interval_bs.src_kind).toString(),
                 IntervalKind(last_interval_bs.src_kind).toString());
 
-        UInt64 keep_windows
-            = (std::abs(last_interval_bs.num_units) + std::abs(periodic_interval_bs.num_units) - 1) / std::abs(periodic_interval_bs.num_units);
+        UInt64 keep_windows = (std::abs(last_interval_bs.num_units) + std::abs(periodic_interval_bs.num_units) - 1)
+            / std::abs(periodic_interval_bs.num_units);
         if (keep_windows == 0 || keep_windows > settings.max_windows)
             throw Exception(
                 "Too big range or too small emit interval. Make sure 'range / emit_interval' is less or equal to "
@@ -200,7 +202,8 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     {
         /// if periodic_interval is omitted, we calculate a appropriate value by settings.max_windows.
         auto periodic_interval_bs = last_interval_bs / settings.max_windows;
-        periodic_interval = makeASTInterval(periodic_interval_bs.num_units == 0 ? 1 : periodic_interval_bs.num_units, periodic_interval_bs.scale);
+        periodic_interval
+            = makeASTInterval(periodic_interval_bs.num_units == 0 ? 1 : periodic_interval_bs.num_units, periodic_interval_bs.scale);
 
         /// To keep same scale between last interval and periodic interval.
         if (last_interval_bs.scale != last_interval_bs.src_kind)
@@ -260,7 +263,7 @@ bool StreamingEmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & sele
     return true;
 }
 
-void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query) const
+void EmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query) const
 {
     assert(last_interval);
     assert(emit_query);
@@ -295,7 +298,7 @@ void StreamingEmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_que
 }
 
 /// Add `_tp_time >= now64(3, 'UTC') to WHERE clause
-void StreamingEmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery & select_query) const
+void EmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery & select_query) const
 {
     auto now = makeASTFunction("now64", std::make_shared<ASTLiteral>(UInt64(3)), std::make_shared<ASTLiteral>("UTC"));
     auto minus = makeASTFunction("minus", now, last_interval);
@@ -310,7 +313,7 @@ void StreamingEmitInterpreter::LastXRule::addEventTimePredicate(ASTSelectQuery &
         select_query.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", where, greater));
 }
 
-void StreamingEmitInterpreter::checkEmitAST(ASTPtr & query)
+void EmitInterpreter::checkEmitAST(ASTPtr & query)
 {
     auto select_query = query->as<ASTSelectQuery>();
     if (!select_query)
@@ -336,4 +339,5 @@ void StreamingEmitInterpreter::checkEmitAST(ASTPtr & query)
         checkIntervalAST(emit->timeout_interval, "Invalid EMIT TIMEOUT interval");
 }
 
+}
 }

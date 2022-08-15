@@ -7,9 +7,9 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/Streaming/DedupTransformStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingWindowAssignmentStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/SelectQueryInfo.h>
@@ -21,13 +21,15 @@
 
 namespace DB
 {
+namespace Streaming
+{
 ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
     StorageSnapshotPtr underlying_storage_snapshot_,
     ContextPtr context_,
-    StreamingFunctionDescriptionPtr streaming_func_desc_,
-    StreamingFunctionDescriptionPtr timestamp_func_desc_,
+    FunctionDescriptionPtr streaming_func_desc_,
+    FunctionDescriptionPtr timestamp_func_desc_,
     StoragePtr nested_proxy_storage_,
     String internal_name_,
     ASTPtr subquery_,
@@ -374,7 +376,7 @@ void ProxyStream::processWindowAssignmentStep(
     {
         Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
 
-        query_plan.addStep(std::make_unique<StreamingWindowAssignmentStep>(
+        query_plan.addStep(std::make_unique<WindowAssignmentStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
     }
 }
@@ -388,5 +390,6 @@ StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & me
         return storage->getStorageSnapshot(metadata_snapshot);
 
     return IStorage::getStorageSnapshot(metadata_snapshot);
+}
 }
 }

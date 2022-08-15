@@ -1,10 +1,12 @@
 #pragma once
 
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
 namespace DB
+{
+namespace Streaming
 {
 /// Implement watermark assignment for streaming processing
 class WatermarkStep final : public ITransformingStep
@@ -15,7 +17,7 @@ public:
         Block output_header,
         ASTPtr query_,
         TreeRewriterResultPtr syntax_analyzer_result_,
-        StreamingFunctionDescriptionPtr desc_,
+        FunctionDescriptionPtr desc_,
         bool proc_time,
         Poco::Logger * log);
 
@@ -27,9 +29,10 @@ public:
 private:
     ASTPtr query;
     TreeRewriterResultPtr syntax_analyzer_result;
-    StreamingFunctionDescriptionPtr desc;
+    FunctionDescriptionPtr desc;
     bool proc_time;
     String partition_key;
     Poco::Logger * log;
 };
+}
 }

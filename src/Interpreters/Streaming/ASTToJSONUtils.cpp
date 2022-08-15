@@ -7,6 +7,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 void ColumnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const ASTColumnDeclaration & col_decl)
 {
     const auto & column_type = DataTypeFactory::instance().get(col_decl.type);
@@ -65,5 +67,6 @@ String JSONToString(const Poco::JSON::Object & json)
     std::stringstream str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     json.stringify(str_stream, 0);
     return str_stream.str();
+}
 }
 }

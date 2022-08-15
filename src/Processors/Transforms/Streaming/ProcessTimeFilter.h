@@ -1,11 +1,12 @@
 #pragma once
 
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Processors/ISimpleTransform.h>
 
 namespace DB
 {
-
+namespace Streaming
+{
 /// Implement process time filtering like WHERE _tp_time > now() - interval
 class ProcessTimeFilter  : public ISimpleTransform
 {
@@ -34,4 +35,5 @@ private:
     Int32 scale = 0;
     Int32 multiplier = 1;
 };
+}
 }

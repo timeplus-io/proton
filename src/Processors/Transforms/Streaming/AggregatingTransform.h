@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Streaming/StreamingAggregator.h>
+#include <Interpreters/Streaming/Aggregator.h>
 /// #include <Processors/IAccumulatingTransform.h>
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
@@ -8,28 +8,30 @@
 
 namespace DB
 {
-using StreamingAggregatorList = std::list<StreamingAggregator>;
-using StreamingAggregatorListPtr = std::shared_ptr<StreamingAggregatorList>;
-
-struct StreamingAggregatingTransformParams
+namespace Streaming
 {
-    StreamingAggregator::Params params;
+using AggregatorList = std::list<Aggregator>;
+using AggregatorListPtr = std::shared_ptr<AggregatorList>;
+
+struct AggregatingTransformParams
+{
+    Aggregator::Params params;
 
     /// Each params holds a list of aggregators which are used in query. It's needed because we need
     /// to use a pointer of aggregator to proper destroy complex aggregation states on exception
     /// (See comments in AggregatedDataVariants). However, this pointer might not be valid because
     /// we can have two different aggregators at the same time due to mixed pipeline of aggregate
     /// projections, and one of them might gets destroyed before used.
-    StreamingAggregatorListPtr aggregator_list_ptr;
-    StreamingAggregator & aggregator;
+    AggregatorListPtr aggregator_list_ptr;
+    Aggregator & aggregator;
     bool final;
     bool only_merge = false;
     bool emit_version = false;
     DataTypePtr version_type;
 
-    StreamingAggregatingTransformParams(const StreamingAggregator::Params & params_, bool final_, bool emit_version_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_)
         : params(params_)
-        , aggregator_list_ptr(std::make_shared<StreamingAggregatorList>())
+        , aggregator_list_ptr(std::make_shared<AggregatorList>())
         , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
         , final(final_)
         , emit_version(emit_version_)
@@ -47,9 +49,9 @@ struct WatermarkBound
     Int64 watermark_lower_bound = 0;
 };
 
-struct ManyStreamingAggregatedData
+struct ManyAggregatedData
 {
-    ManyStreamingAggregatedDataVariants variants;
+    ManyAggregatedDataVariants variants;
 
     /// Watermarks for all variants
     std::vector<WatermarkBound> watermarks;
@@ -61,36 +63,36 @@ struct ManyStreamingAggregatedData
     std::mutex finalizing_mutex;
     WatermarkBound arena_watermark;
 
-    explicit ManyStreamingAggregatedData(size_t num_threads = 0) : variants(num_threads), watermarks(num_threads)
+    explicit ManyAggregatedData(size_t num_threads = 0) : variants(num_threads), watermarks(num_threads)
     {
         for (auto & elem : variants)
-            elem = std::make_shared<StreamingAggregatedDataVariants>();
+            elem = std::make_shared<AggregatedDataVariants>();
     }
 };
 
-using ManyStreamingAggregatedDataPtr = std::shared_ptr<ManyStreamingAggregatedData>;
-using StreamingAggregatingTransformParamsPtr = std::shared_ptr<StreamingAggregatingTransformParams>;
+using ManyAggregatedDataPtr = std::shared_ptr<ManyAggregatedData>;
+using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
 
 /** It is for streaming query only. Streaming query never ends.
   * It aggregate streams of blocks in memory and finalize (project) intermediate
   * results periodically or on demand
   */
-class StreamingAggregatingTransform : public IProcessor
+class AggregatingTransform : public IProcessor
 {
 public:
-    StreamingAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_, const String & log_name);
+    AggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const String & log_name);
 
     /// For Parallel aggregating.
-    StreamingAggregatingTransform(
+    AggregatingTransform(
         Block header,
-        StreamingAggregatingTransformParamsPtr params_,
-        ManyStreamingAggregatedDataPtr many_data,
+        AggregatingTransformParamsPtr params_,
+        ManyAggregatedDataPtr many_data,
         size_t current_variant,
         size_t max_threads,
         size_t temporary_data_merge_threads,
         const String & log_name);
 
-    ~StreamingAggregatingTransform() override;
+    ~AggregatingTransform() override;
 
     Status prepare() override;
     void work() override;
@@ -113,7 +115,7 @@ protected:
     /// To read the data that was flushed into the temporary data file.
     Processors processors;
 
-    StreamingAggregatingTransformParamsPtr params;
+    AggregatingTransformParamsPtr params;
     Poco::Logger * log;
 
     ColumnRawPtrs key_columns;
@@ -126,8 +128,8 @@ protected:
      */
     bool no_more_keys = false;
 
-    ManyStreamingAggregatedDataPtr many_data;
-    StreamingAggregatedDataVariants & variants;
+    ManyAggregatedDataPtr many_data;
+    AggregatedDataVariants & variants;
     WatermarkBound & watermark_bound;
 
     size_t max_threads = 1;
@@ -151,4 +153,5 @@ protected:
     UInt64 rows_since_last_finalization = 0;
     bool has_input = false;
 };
+}
 }

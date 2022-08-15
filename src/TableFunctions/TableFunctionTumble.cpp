@@ -9,11 +9,13 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
+namespace Streaming
+{
 TableFunctionTumble::TableFunctionTumble(const String & name_) : TableFunctionWindow(name_)
 {
 }
@@ -50,5 +52,6 @@ DataTypePtr TableFunctionTumble::getElementType(const DataTypeTuple * tuple) con
 void registerTableFunctionTumble(TableFunctionFactory & factory)
 {
     factory.registerFunction("tumble", []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); });
+}
 }
 }

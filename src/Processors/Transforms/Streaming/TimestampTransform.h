@@ -3,7 +3,7 @@
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/ISimpleTransform.h>
 
@@ -15,11 +15,13 @@ namespace DB
 
 class ColumnTuple;
 
+namespace Streaming
+{
 class TimestampTransform final : public ISimpleTransform
 {
 public:
     TimestampTransform(
-        const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
+        const Block & input_header, const Block & output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
 
     ~TimestampTransform() override = default;
 
@@ -37,7 +39,7 @@ private:
 private:
     ContextPtr context;
 
-    StreamingFunctionDescriptionPtr timestamp_func_desc;
+    FunctionDescriptionPtr timestamp_func_desc;
 
     /// process time streaming processing
     bool backfill = false;
@@ -55,4 +57,5 @@ private:
     std::vector<size_t> input_column_positions;
     std::vector<size_t> expr_column_positions;
 };
+}
 }

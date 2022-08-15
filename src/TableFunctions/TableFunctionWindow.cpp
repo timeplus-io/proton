@@ -14,120 +14,141 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
+namespace Streaming
+{
 namespace
 {
-    StreamingFunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
-        ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix, ExpressionActionsPtr streaming_start_expr, ExpressionActionsPtr streaming_end_expr)
-    {
-        ColumnNumbers keys;
-        const auto & actions = streaming_func_expr->getActions();
+FunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
+    ASTPtr ast,
+    ExpressionActionsPtr streaming_func_expr,
+    Names required_columns,
+    WindowType type,
+    const String & func_name_prefix,
+    ExpressionActionsPtr streaming_start_expr,
+    ExpressionActionsPtr streaming_end_expr)
+{
+    ColumnNumbers keys;
+    const auto & actions = streaming_func_expr->getActions();
 
-        for (const auto & action : actions)
+    for (const auto & action : actions)
+    {
+        if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
         {
-            if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
+            Names argument_names;
+            argument_names.reserve(action.node->children.size());
+
+            DataTypes argument_types;
+            argument_types.reserve(action.node->children.size());
+
+            /// Skip the first six arguments in session function, session(stream, timestamp, session_interval, timeout, start, end, keys...)
+            /// The first argument `stream` is handled (and moved out) in method `doParseArguments`, so the keys size should be node size - 5.
+            keys.reserve(action.node->children.size() - 5);
+
+            size_t it = 0;
+            for (const auto * node : action.node->children)
             {
-                Names argument_names;
-                argument_names.reserve(action.node->children.size());
-
-                DataTypes argument_types;
-                argument_types.reserve(action.node->children.size());
-
-                /// Skip the first six arguments in session function, session(stream, timestamp, session_interval, timeout, start, end, keys...)
-                /// The first argument `stream` is handled (and moved out) in method `doParseArguments`, so the keys size should be node size - 5.
-                keys.reserve(action.node->children.size() - 5);
-
-                size_t it = 0;
-                for (const auto * node : action.node->children)
-                {
-                    argument_names.push_back(node->result_name);
-                    argument_types.push_back(node->result_type);
-                    if (it > 4)
-                        keys.push_back(it);
-                    it++;
-                }
-                return std::make_shared<StreamingFunctionDescription>(
-                    std::move(ast),
-                    type,
-                    std::move(argument_names),
-                    std::move(argument_types),
-                    std::move(streaming_func_expr),
-                    std::move(streaming_start_expr),
-                    std::move(streaming_end_expr),
-                    std::move(required_columns),
-                    std::move(keys));
+                argument_names.push_back(node->result_name);
+                argument_types.push_back(node->result_type);
+                if (it > 4)
+                    keys.push_back(it);
+                it++;
             }
+            return std::make_shared<FunctionDescription>(
+                std::move(ast),
+                type,
+                std::move(argument_names),
+                std::move(argument_types),
+                std::move(streaming_func_expr),
+                std::move(streaming_start_expr),
+                std::move(streaming_end_expr),
+                std::move(required_columns),
+                std::move(keys));
         }
-        __builtin_unreachable();
     }
+    __builtin_unreachable();
+}
 
-    StreamingFunctionDescriptionPtr createStreamingFunctionDescriptionForOther(
-        ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix)
+FunctionDescriptionPtr createStreamingFunctionDescriptionForOther(
+    ASTPtr ast, ExpressionActionsPtr streaming_func_expr, Names required_columns, WindowType type, const String & func_name_prefix)
+{
+    const auto & actions = streaming_func_expr->getActions();
+
+    /// Loop actions to figure out input argument types
+    for (const auto & action : actions)
     {
-        const auto & actions = streaming_func_expr->getActions();
-
-        /// Loop actions to figure out input argument types
-        for (const auto & action : actions)
+        if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
         {
-            if (action.node->type == ActionsDAG::ActionType::FUNCTION && action.node->result_name.starts_with(func_name_prefix))
+            Names argument_names;
+            argument_names.reserve(action.node->children.size());
+
+            DataTypes argument_types;
+            argument_types.reserve(action.node->children.size());
+
+            for (const auto * node : action.node->children)
             {
-                Names argument_names;
-                argument_names.reserve(action.node->children.size());
-
-                DataTypes argument_types;
-                argument_types.reserve(action.node->children.size());
-
-                size_t it = 0;
-                for (const auto * node : action.node->children)
-                {
-                    argument_names.push_back(node->result_name);
-                    argument_types.push_back(node->result_type);
-                    it++;
-                }
-                return std::make_shared<StreamingFunctionDescription>(
-                    ast, type, argument_names, argument_types, streaming_func_expr, nullptr, nullptr, std::move(required_columns));
+                argument_names.push_back(node->result_name);
+                argument_types.push_back(node->result_type);
             }
+            return std::make_shared<FunctionDescription>(
+                ast, type, argument_names, argument_types, streaming_func_expr, nullptr, nullptr, std::move(required_columns));
         }
-
-        /// The timestamp function ends up with const column, like toDateTime('2020-01-01 00:00:00') or now('UTC') or now64(3, 'UTC')
-        /// Check the function name is now or now64 since these are the only const function we support
-        const auto & func_name = ast->as<ASTFunction>()->name;
-        if (func_name != "now" && func_name != "now64")
-            throw Exception("Unsupported const timestamp func for timestamp column", ErrorCodes::BAD_ARGUMENTS);
-
-        /// Parse the argument names
-        return std::make_shared<StreamingFunctionDescription>(
-            std::move(ast), type, Names{}, DataTypes{}, streaming_func_expr, nullptr, nullptr, std::move(required_columns), ColumnNumbers{}, true);
     }
 
-    StreamingFunctionDescriptionPtr createStreamingFunctionDescription(
-        ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix)
+    /// The timestamp function ends up with const column, like toDateTime('2020-01-01 00:00:00') or now('UTC') or now64(3, 'UTC')
+    /// Check the function name is now or now64 since these are the only const function we support
+    const auto & func_name = ast->as<ASTFunction>()->name;
+    if (func_name != "now" && func_name != "now64")
+        throw Exception("Unsupported const timestamp func for timestamp column", ErrorCodes::BAD_ARGUMENTS);
+
+    /// Parse the argument names
+    return std::make_shared<FunctionDescription>(
+        std::move(ast),
+        type,
+        Names{},
+        DataTypes{},
+        streaming_func_expr,
+        nullptr,
+        nullptr,
+        std::move(required_columns),
+        ColumnNumbers{},
+        true);
+}
+
+FunctionDescriptionPtr createStreamingFunctionDescription(
+    ASTPtr ast, TreeRewriterResultPtr syntax_analyzer_result, ContextPtr context, const String & func_name_prefix)
+{
+    ExpressionAnalyzer func_expr_analyzer(ast, syntax_analyzer_result, context);
+    auto streaming_func_expr = func_expr_analyzer.getActions(true);
+
+    WindowType type = toWindowType(ast->as<ASTFunction>()->name);
+
+    if (type == WindowType::SESSION)
     {
-        ExpressionAnalyzer func_expr_analyzer(ast, syntax_analyzer_result, context);
-        auto streaming_func_expr = func_expr_analyzer.getActions(true);
+        auto * node = ast->as<ASTFunction>();
+        const auto & args = node->arguments->children;
 
-        WindowType type = toWindowType(ast->as<ASTFunction>()->name);
+        ExpressionAnalyzer streaming_start_analyzer(args[3], syntax_analyzer_result, context);
+        auto streaming_start_expr = streaming_start_analyzer.getActions(true, true);
 
-        if (type == WindowType::SESSION)
-        {
-            auto * node = ast->as<ASTFunction>();
-            const auto & args = node->arguments->children;
+        ExpressionAnalyzer streaming_end_analyzer(args[4], syntax_analyzer_result, context);
+        auto streaming_end_expr = streaming_end_analyzer.getActions(true, true);
 
-            ExpressionAnalyzer streaming_start_analyzer(args[3], syntax_analyzer_result, context);
-            auto streaming_start_expr = streaming_start_analyzer.getActions(true, true);
-
-            ExpressionAnalyzer streaming_end_analyzer(args[4], syntax_analyzer_result, context);
-            auto streaming_end_expr = streaming_end_analyzer.getActions(true, true);
-
-            return createStreamingFunctionDescriptionForSession(
-                std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix, std::move(streaming_start_expr), std::move(streaming_end_expr));
-        }
-        else
-            return createStreamingFunctionDescriptionForOther(
-                std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);
+        return createStreamingFunctionDescriptionForSession(
+            std::move(ast),
+            std::move(streaming_func_expr),
+            syntax_analyzer_result->requiredSourceColumns(),
+            type,
+            func_name_prefix,
+            std::move(streaming_start_expr),
+            std::move(streaming_end_expr));
     }
+    else
+        return createStreamingFunctionDescriptionForOther(
+            std::move(ast), std::move(streaming_func_expr), syntax_analyzer_result->requiredSourceColumns(), type, func_name_prefix);
+}
 }
 
 void TableFunctionWindow::doParseArguments(const ASTPtr & func_ast, ContextPtr context, const String & help_msg)
@@ -251,5 +272,6 @@ void TableFunctionWindow::handleResultType(const ColumnWithTypeAndName & type_an
 
     ColumnDescription wend(ProtonConsts::STREAMING_WINDOW_END, element_type);
     columns.add(wend);
+}
 }
 }

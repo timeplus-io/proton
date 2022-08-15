@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 
@@ -10,6 +10,8 @@ namespace DB
 class ColumnsDescription;
 struct StorageID;
 
+namespace Streaming
+{
 /// StreamingStream is pure in-memory representation
 /// when a stream query is executed. It is for read-query only
 class ProxyStream final : public shared_ptr_helper<ProxyStream>, public IStorage, WithContext
@@ -55,7 +57,7 @@ public:
 
     Names getAdditionalRequiredColumns() const;
 
-    StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
+    FunctionDescriptionPtr getStreamingFunctionDescription() const { return streaming_func_desc; }
 
     /// Whether it reads data from streaming store or historical store
     bool isStreaming() const { return streaming; }
@@ -97,16 +99,16 @@ private:
         const ColumnsDescription & columns_,
         StorageSnapshotPtr underlying_storage_snapshot_,
         ContextPtr context_,
-        StreamingFunctionDescriptionPtr streaming_func_desc_,
-        StreamingFunctionDescriptionPtr timestamp_func_desc_,
+        FunctionDescriptionPtr streaming_func_desc_,
+        FunctionDescriptionPtr timestamp_func_desc_,
         StoragePtr nested_proxy_storage_,
         String internal_name_,
         ASTPtr subquery_ = nullptr,
         bool streaming_ = false);
 
     StorageSnapshotPtr underlying_storage_snapshot;
-    StreamingFunctionDescriptionPtr streaming_func_desc;
-    StreamingFunctionDescriptionPtr timestamp_func_desc;
+    FunctionDescriptionPtr streaming_func_desc;
+    FunctionDescriptionPtr timestamp_func_desc;
     /// ProxyStream can wrap a ProxyStream
     StoragePtr nested_proxy_storage;
     String internal_name;
@@ -120,4 +122,5 @@ private:
 
     Poco::Logger * log;
 };
+}
 }

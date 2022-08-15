@@ -1,11 +1,13 @@
 #include "SessionMap.h"
 
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 
 namespace DB
 {
-
-SessionStatus handleSession(const DateTime64 & tp_time, SessionInfo & info, IntervalKind::Kind kind, Int64 session_size, Int64 window_interval)
+namespace Streaming
+{
+SessionStatus
+handleSession(const DateTime64 & tp_time, SessionInfo & info, IntervalKind::Kind kind, Int64 session_size, Int64 window_interval)
 {
     assert(info.win_start <= info.win_end);
 
@@ -68,5 +70,6 @@ void updateSessionInfo(DateTime64 /*timestamp*/, SessionBlockQueue & queue, size
             }
         }
     } while (result == SessionStatus::END_EXTENDED || result == SessionStatus::START_EXTENDED || result == SessionStatus::EMIT);
+}
 }
 }

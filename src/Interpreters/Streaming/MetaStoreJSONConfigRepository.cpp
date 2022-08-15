@@ -12,16 +12,18 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int OK;
-    extern const int INCORRECT_DATA;
-    extern const int NOT_A_LEADER;
-    extern const int TIMEOUT_EXCEEDED;
+extern const int OK;
+extern const int INCORRECT_DATA;
+extern const int NOT_A_LEADER;
+extern const int TIMEOUT_EXCEEDED;
 }
 
+namespace Streaming
+{
 namespace
 {
-    constexpr auto FUNC_PREFIX = "CFG";
-    constexpr auto STATUS_PREFIX = "STATUS";
+constexpr auto FUNC_PREFIX = "CFG";
+constexpr auto STATUS_PREFIX = "STATUS";
 }
 
 MetaStoreJSONConfigRepository::MetaStoreJSONConfigRepository(
@@ -150,5 +152,6 @@ Poco::JSON::Array::Ptr MetaStoreJSONConfigRepository::list() const
         }
     }
     return functions;
+}
 }
 }

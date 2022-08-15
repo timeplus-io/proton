@@ -4,6 +4,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class TableFunctionHist final : public TableFunctionProxyBase
 {
 public:
@@ -17,4 +19,5 @@ private:
 private:
     String help_message;
 };
+}
 }

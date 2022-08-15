@@ -3,6 +3,10 @@
 #include <Processors/Transforms/Streaming/DedupTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
+namespace DB
+{
+namespace Streaming
+{
 namespace
 {
 DB::ITransformingStep::Traits getTraits()
@@ -20,12 +24,10 @@ DB::ITransformingStep::Traits getTraits()
 }
 }
 
-namespace DB
-{
 DedupTransformStep::DedupTransformStep(
     const DataStream & input_stream_,
     Block output_header,
-    StreamingFunctionDescriptionPtr dedup_func_desc_)
+    FunctionDescriptionPtr dedup_func_desc_)
     : ITransformingStep(input_stream_, std::move(output_header), getTraits())
     , dedup_func_desc(std::move(dedup_func_desc_))
 {
@@ -38,3 +40,5 @@ void DedupTransformStep::transformPipeline(QueryPipelineBuilder & pipeline, cons
     });
 }
 }
+}
+

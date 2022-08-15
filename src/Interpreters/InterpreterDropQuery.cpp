@@ -13,7 +13,7 @@
 
 /// proton: starts
 #include <DistributedMetadata/CatalogService.h>
-#include <Interpreters/BlockUtils.h>
+#include <Interpreters/Streaming/BlockUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <base/ClockUtils.h>
 /// proton: ends
@@ -145,15 +145,15 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         /// Milliseconds since epoch
         std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
 
-        Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
         /// Schema: (payload, database, table, timestamp, query_id, user)
         nlog::OpCode op_code = query.kind == ASTDropQuery::Kind::Truncate ? nlog::OpCode::TRUNCATE_TABLE : nlog::OpCode::DELETE_TABLE;
-        appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
+        Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
 
         LOG_INFO(
             log, "Request of dropping stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
-        waitForDDLOps(log, ctx, false);
+        Streaming::waitForDDLOps(log, ctx, false);
         /// FIXME, project tasks status
         return true;
     }
@@ -200,10 +200,10 @@ bool InterpreterDropQuery::deleteDatabaseDistributed(const ASTDropQuery & query)
         /// Milliseconds since epoch
         std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
 
-        Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
         /// Schema: (payload, database, timestamp, query_id, user)
 
-        appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::DELETE_DATABASE, log);
+        Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::DELETE_DATABASE, log);
 
         LOG_INFO(log, "Request of dropping database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 

@@ -7,12 +7,14 @@
 namespace DB
 {
 
+namespace Streaming
+{
 /// Sort data stream
-class StreamingSortingStep : public ITransformingStep
+class SortingStep : public ITransformingStep
 {
 public:
     /// Full
-    StreamingSortingStep(
+    SortingStep(
         const DataStream & input_stream,
         const SortDescription & description_,
         size_t max_block_size_,
@@ -25,7 +27,7 @@ public:
         size_t min_free_disk_space_);
 
     /// FinishSorting
-    StreamingSortingStep(
+    SortingStep(
         const DataStream & input_stream_,
         SortDescription prefix_description_,
         SortDescription result_description_,
@@ -33,11 +35,7 @@ public:
         UInt64 limit_);
 
     /// MergingSorted
-    StreamingSortingStep(
-        const DataStream & input_stream,
-        SortDescription sort_description_,
-        size_t max_block_size_,
-        UInt64 limit_ = 0);
+    SortingStep(const DataStream & input_stream, SortDescription sort_description_, size_t max_block_size_, UInt64 limit_ = 0);
 
     String getName() const override { return "StreamingSorting"; }
 
@@ -50,7 +48,6 @@ public:
     void updateLimit(size_t limit_);
 
 private:
-
     enum class Type
     {
         Full,
@@ -72,5 +69,5 @@ private:
     VolumePtr tmp_volume;
     size_t min_free_disk_space = 0;
 };
-
+}
 }

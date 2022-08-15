@@ -22,36 +22,38 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int STREAM_ALREADY_EXISTS;
-    extern const int BAD_ARGUMENTS;
-    extern const int ILLEGAL_COLUMN;
-    extern const int INVALID_SETTING_VALUE;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int TIMEOUT_EXCEEDED;
-    extern const int SYNTAX_ERROR;
+extern const int STREAM_ALREADY_EXISTS;
+extern const int BAD_ARGUMENTS;
+extern const int ILLEGAL_COLUMN;
+extern const int INVALID_SETTING_VALUE;
+extern const int UNKNOWN_EXCEPTION;
+extern const int TIMEOUT_EXCEEDED;
+extern const int SYNTAX_ERROR;
 }
 
+namespace Streaming
+{
 namespace
 {
-    const std::vector<String> CREATE_TABLE_SETTINGS = {
-        "logstore_cluster_id",
-        "logstore_subscription_mode",
-        "logstore_auto_offset_reset",
-        "logstore_request_required_acks",
-        "logstore_request_timeout_ms",
-        "logstore_retention_bytes",
-        "logstore_retention_ms",
-        "logstore_flush_messages",
-        "logstore_flush_ms",
-        "logstore_replication_factor",
-        "distributed_ingest_mode",
-        "distributed_flush_threshold_ms",
-        "distributed_flush_threshold_count",
-        "distributed_flush_threshold_bytes",
-        "storage_type",
-        "logstore",
-        "mode",
-    };
+const std::vector<String> CREATE_TABLE_SETTINGS = {
+    "logstore_cluster_id",
+    "logstore_subscription_mode",
+    "logstore_auto_offset_reset",
+    "logstore_request_required_acks",
+    "logstore_request_timeout_ms",
+    "logstore_retention_bytes",
+    "logstore_retention_ms",
+    "logstore_flush_messages",
+    "logstore_flush_ms",
+    "logstore_replication_factor",
+    "distributed_ingest_mode",
+    "distributed_flush_threshold_ms",
+    "distributed_flush_threshold_count",
+    "distributed_flush_threshold_bytes",
+    "storage_type",
+    "logstore",
+    "mode",
+};
 }
 
 void getAndValidateStorageSetting(
@@ -171,7 +173,8 @@ void prepareColumns(ASTCreateQuery & create)
 
         /// Skip reserved internal columns
         if (column.name.starts_with("_tp_")
-            || std::find(ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.begin(), ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end(), column.name)
+            || std::find(
+                   ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.begin(), ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end(), column.name)
                 != ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end())
         {
             if (ProtonConsts::RESERVED_EVENT_TIME == column.name)
@@ -550,5 +553,6 @@ void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force
                 timeout);
         }
     }
+}
 }
 }

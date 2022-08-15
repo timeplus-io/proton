@@ -28,11 +28,14 @@ void registerTableFunctionView(TableFunctionFactory & factory);
 void registerTableFunctionDictionary(TableFunctionFactory & factory);
 
 /// proton: starts
+namespace Streaming
+{
 void registerTableFunctionHop(TableFunctionFactory & factory);
 void registerTableFunctionTumble(TableFunctionFactory & factory);
 void registerTableFunctionHist(TableFunctionFactory & factory);
 void registerTableFunctionSession(TableFunctionFactory & factory);
 void registerTableFunctionDedup(TableFunctionFactory & factory);
+}
 /// proton: ends
 
 void registerTableFunctions();

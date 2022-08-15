@@ -12,6 +12,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 void getAndValidateStorageSetting(
     std::function<String(const String &)> get_setting, std::function<void(const String &, const String &)> handle_setting);
 void prepareEngine(ASTCreateQuery & create, ContextPtr ctx);
@@ -27,5 +29,7 @@ nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
 String getJSONFromCreateQuery(const ASTCreateQuery & create);
 String getJSONFromAlterQuery(const ASTAlterQuery & alter);
 
-void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout = ProtonConsts::DEFAULT_DDL_TIMEOUT_MS);
+void waitForDDLOps(
+    Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout = ProtonConsts::DEFAULT_DDL_TIMEOUT_MS);
+}
 }

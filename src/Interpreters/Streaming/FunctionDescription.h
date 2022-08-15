@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamingWindowCommon.h"
+#include "WindowCommon.h"
 
 #include <Core/Names.h>
 #include <Core/Types.h>
@@ -10,9 +10,11 @@
 
 namespace DB
 {
-struct StreamingFunctionDescription
+namespace Streaming
 {
-    StreamingFunctionDescription(
+struct FunctionDescription
+{
+    FunctionDescription(
         ASTPtr func_ast_,
         WindowType type_,
         Names argument_names_,
@@ -55,7 +57,8 @@ struct StreamingFunctionDescription
     bool is_now_func = false;
 };
 
-using StreamingFunctionDescriptionPtr = std::shared_ptr<StreamingFunctionDescription>;
-using StreamingFunctionDescriptionPtrs = std::vector<StreamingFunctionDescriptionPtr>;
+using FunctionDescriptionPtr = std::shared_ptr<FunctionDescription>;
+using FunctionDescriptionPtrs = std::vector<FunctionDescriptionPtr>;
 
+}
 }

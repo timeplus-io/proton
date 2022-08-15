@@ -4,6 +4,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class HopWatermark final : public HopTumbleBaseWatermark
 {
 public:
@@ -16,4 +18,5 @@ private:
 private:
     Int64 hop_interval = 0;
 };
+}
 }

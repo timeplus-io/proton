@@ -78,7 +78,7 @@
 #include <Access/Authentication.h>
 #include <Coordination/MetaStoreDispatcher.h>
 #include <Core/SettingsUtil.h>
-#include <Interpreters/MetaStoreJSONConfigRepository.h>
+#include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <base/getFQDNOrHostName.h>
 #include <Common/ProtonCommon.h>
@@ -199,7 +199,7 @@ struct ContextSharedPart
     ExternalLoaderXMLConfigRepository * external_dictionaries_config_repository = nullptr;
     scope_guard dictionaries_xmls;
 
-    MetaStoreJSONConfigRepository * user_defined_executable_functions_config_repository = nullptr;
+    Streaming::MetaStoreJSONConfigRepository * user_defined_executable_functions_config_repository = nullptr;
     scope_guard user_defined_executable_functions_xmls;
 
 #if USE_NLP
@@ -1525,13 +1525,13 @@ void Context::loadOrReloadUserDefinedExecutableFunctions()
             shared->user_defined_executable_functions_config_repository->getName());
         return;
     }
-    auto repository = std::make_unique<MetaStoreJSONConfigRepository>(getMetaStoreDispatcher(), ProtonConsts::UDF_METASTORE_NAMESPACE);
+    auto repository = std::make_unique<Streaming::MetaStoreJSONConfigRepository>(getMetaStoreDispatcher(), ProtonConsts::UDF_METASTORE_NAMESPACE);
     shared->user_defined_executable_functions_config_repository = repository.get();
     shared->user_defined_executable_functions_xmls
         = external_user_defined_executable_functions_loader.addConfigRepository(std::move(repository));
 }
 
-MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigRepository() const
+Streaming::MetaStoreJSONConfigRepository * Context::getMetaStoreJSONConfigRepository() const
 {
     std::lock_guard lock(shared->metastore_dispatcher_mutex);
     if (!shared->user_defined_executable_functions_config_repository)

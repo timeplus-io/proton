@@ -14,10 +14,12 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
+namespace Streaming
+{
 TableFunctionSession::TableFunctionSession(const String & name_) : TableFunctionWindow(name_)
 {
 }
@@ -84,5 +86,6 @@ void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_a
 void registerTableFunctionSession(TableFunctionFactory & factory)
 {
     factory.registerFunction("session", []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); });
+}
 }
 }

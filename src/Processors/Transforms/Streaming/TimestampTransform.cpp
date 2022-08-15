@@ -13,8 +13,10 @@
 
 namespace DB
 {
+namespace Streaming
+{
 TimestampTransform::TimestampTransform(
-    const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
+    const Block & input_header, const Block & output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_)
     : ISimpleTransform(input_header, output_header, false)
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , backfill(backfill_)
@@ -264,5 +266,6 @@ void TimestampTransform::handleProcessingTimeFunc()
     multiplier = intExp10(std::abs(scale - 3));
 
     proc_time = true;
+}
 }
 }

@@ -1,17 +1,19 @@
-#include "StreamingAggregatingTransform.h"
+#include "AggregatingTransform.h"
 
 namespace DB
 {
-class GlobalAggregatingTransform final : public StreamingAggregatingTransform
+namespace Streaming
+{
+class GlobalAggregatingTransform final : public AggregatingTransform
 {
 public:
-    GlobalAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_);
+    GlobalAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
 
     /// For Parallel aggregating.
     GlobalAggregatingTransform(
         Block header,
-        StreamingAggregatingTransformParamsPtr params_,
-        ManyStreamingAggregatedDataPtr many_data,
+        AggregatingTransformParamsPtr params_,
+        ManyAggregatedDataPtr many_data,
         size_t current_variant,
         size_t max_threads,
         size_t temporary_data_merge_threads);
@@ -25,11 +27,12 @@ private:
 
     inline void doFinalize(ChunkInfoPtr & chunk_info);
 
-    inline bool initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    inline bool initialize(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
 
-    void mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
 
-    void mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
+    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info);
 };
 
+}
 }

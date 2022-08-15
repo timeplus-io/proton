@@ -10,26 +10,24 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Util/XMLConfiguration.h>
 
-using namespace DB;
-
-ASTPtr queryToAST(const String & query)
+DB::ASTPtr queryToAST(const DB::String & query)
 {
     const char * start = query.data();
     const char * end = start + query.size();
-    ParserQuery parser(end);
+    DB::ParserQuery parser(end);
     return parseQuery(parser, start, end, "", 0, 0);
 }
 
 static String queryToJSON(const String & query)
 {
-    ASTPtr ast = queryToAST(query);
+    DB::ASTPtr ast = queryToAST(query);
 
     Poco::JSON::Object::Ptr json_ptr;
     String json_str;
-    if (const auto * create = ast->as<ASTCreateQuery>())
-        json_str = getJSONFromCreateQuery(*create);
-    else if (const auto * alter = ast->as<ASTAlterQuery>())
-        json_str = getJSONFromAlterQuery(*alter);
+    if (const auto * create = ast->as<DB::ASTCreateQuery>())
+        json_str = DB::Streaming::getJSONFromCreateQuery(*create);
+    else if (const auto * alter = ast->as<DB::ASTAlterQuery>())
+        json_str = DB::Streaming::getJSONFromAlterQuery(*alter);
 
     return json_str;
 }
@@ -189,8 +187,8 @@ TEST(DDLHelper, getJSONFromAlterQuery)
 nlog::OpCode getOpCodeFromSQL(const String & query)
 {
     auto ast = queryToAST(query);
-    if (const auto * alter = ast->as<ASTAlterQuery>())
-        return getOpCodeFromQuery(*alter);
+    if (const auto * alter = ast->as<DB::ASTAlterQuery>())
+        return DB::Streaming::getOpCodeFromQuery(*alter);
 
     return nlog::OpCode::MAX_OPS_CODE;
 }
@@ -216,25 +214,25 @@ TEST(DDLHelper, getOpCodeFromQuery)
 TEST(DDLHelper, getAlterTableParamOpCode)
 {
     /// modify ttl
-    EXPECT_EQ(getAlterTableParamOpCode({{"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::ALTER_TABLE);
+    EXPECT_EQ(DB::Streaming::getAlterTableParamOpCode({{"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::ALTER_TABLE);
 
     /// add column
     EXPECT_EQ(
-        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::CREATE_COLUMN);
+        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::CREATE_COLUMN);
 
     /// modify column
     EXPECT_EQ(
-        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_PATCH}}), nlog::OpCode::ALTER_COLUMN);
+        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_PATCH}}), nlog::OpCode::ALTER_COLUMN);
 
     /// drop column
     EXPECT_EQ(
-        getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), nlog::OpCode::DELETE_COLUMN);
+        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), nlog::OpCode::DELETE_COLUMN);
 }
 
 TEST(DDLHelper, prepareCreateQueryForStream)
 {
     /// add _tp_time and _tp_index_time
-    ASTPtr ast = queryToAST(R"###(
+    DB::ASTPtr ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
     `device`         string,
@@ -244,14 +242,14 @@ CREATE STREAM default.tests
     `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(1, 1, rand())
 )###");
-    auto * create = ast->as<ASTCreateQuery>();
-    prepareCreateQueryForStream(*create);
+    auto * create = ast->as<DB::ASTCreateQuery>();
+    DB::Streaming::prepareCreateQueryForStream(*create);
     EXPECT_EQ(create->columns_list->columns->children.size(), 7);
 
-    ASTFunction * order_by = create->storage->order_by->as<ASTFunction>();
+    DB::ASTFunction * order_by = create->storage->order_by->as<DB::ASTFunction>();
     EXPECT_EQ(order_by->name, "to_start_of_hour");
 
-    ASTFunction * partition_by = create->storage->partition_by->as<ASTFunction>();
+    DB::ASTFunction * partition_by = create->storage->partition_by->as<DB::ASTFunction>();
     EXPECT_EQ(partition_by->name, "to_YYYYMMDD");
 
     /// throw exception if try to add _tp_xxx column
@@ -263,8 +261,8 @@ CREATE STREAM default.tests
     `_tp_xxxx`      uint64,
     `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand()))###");
-    create = ast->as<ASTCreateQuery>();
-    EXPECT_THROW(prepareCreateQueryForStream(*create), DB::Exception);
+    create = ast->as<DB::ASTCreateQuery>();
+    EXPECT_THROW(DB::Streaming::prepareCreateQueryForStream(*create), DB::Exception);
 
     /// ignore input 'order_by' and 'partition_by'
     ast = queryToAST(R"###(
@@ -276,12 +274,12 @@ PARTITION BY ttl
 ORDER BY ttl
 TTL ttl + to_interval_day(1)
 )###");
-    create = ast->as<ASTCreateQuery>();
-    prepareCreateQueryForStream(*create);
-    order_by = create->storage->order_by->as<ASTFunction>();
+    create = ast->as<DB::ASTCreateQuery>();
+    DB::Streaming::prepareCreateQueryForStream(*create);
+    order_by = create->storage->order_by->as<DB::ASTFunction>();
     EXPECT_EQ(order_by->name, "to_start_of_hour");
 
-    partition_by = create->storage->partition_by->as<ASTFunction>();
+    partition_by = create->storage->partition_by->as<DB::ASTFunction>();
     EXPECT_EQ(partition_by->name, "to_YYYYMMDD");
 
     /// add event_time_column
@@ -293,9 +291,9 @@ CREATE STREAM default.tests
 ) ENGINE = Stream(1, 1, rand())
 SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
-    create = ast->as<ASTCreateQuery>();
+    create = ast->as<DB::ASTCreateQuery>();
 
-    prepareCreateQueryForStream(*create);
+    DB::Streaming::prepareCreateQueryForStream(*create);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
 CREATE STREAM default.tests (
   `timestamp` datetime64(3) DEFAULT now64(3),
@@ -309,21 +307,21 @@ ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour
 
 TEST(DDLHelper, prepareEngine)
 {
-    auto shared_context = Context::createShared();
-    auto global_context = Context::createGlobal(shared_context.get());
+    auto shared_context = DB::Context::createShared();
+    auto global_context = DB::Context::createGlobal(shared_context.get());
     global_context->makeGlobalContext();
 
     Poco::AutoPtr<Poco::Util::AbstractConfiguration> config(new Poco::Util::XMLConfiguration());
     global_context->setConfig(config);
 
-    ASTPtr ast = queryToAST(R"###(
+    DB::ASTPtr ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
     `ttl`            datetime DEFAULT now()
 ))###");
-    auto * create = ast->as<ASTCreateQuery>();
+    auto * create = ast->as<DB::ASTCreateQuery>();
 
-    prepareEngine(*create, global_context);
+    DB::Streaming::prepareEngine(*create, global_context);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = Stream(1, 1, rand()))###"));
 
     ast = queryToAST(R"###(
@@ -333,8 +331,8 @@ CREATE STREAM default.tests
 )
 SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
 )###");
-    create = ast->as<ASTCreateQuery>();
-    prepareEngine(*create, global_context);
+    create = ast->as<DB::ASTCreateQuery>();
+    DB::Streaming::prepareEngine(*create, global_context);
     EXPECT_EQ(
         ignoreEmptyChars(queryToString(*create->storage)),
         ignoreEmptyChars(R"###(ENGINE=Stream(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));

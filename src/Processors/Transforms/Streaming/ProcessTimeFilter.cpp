@@ -7,11 +7,19 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int UNKNOWN_IDENTIFIER;
+    extern const int TYPE_MISMATCH;
+}
+
+using ColumnDateTime64 = ColumnDecimal<DateTime64>;
+using ColumnDateTime32 = ColumnVector<UInt32>;
+
+namespace Streaming
+{
 namespace
 {
-    using ColumnDateTime64 = ColumnDecimal<DateTime64>;
-    using ColumnDateTime32 = ColumnVector<UInt32>;
-
     template <typename TargetColumnType>
     ALWAYS_INLINE UInt64 filter(Columns & columns, const ColumnPtr & time_col, Int64 interval_ago)
     {
@@ -40,12 +48,6 @@ namespace
 
         return filtered;
     }
-}
-
-namespace ErrorCodes
-{
-    extern const int UNKNOWN_IDENTIFIER;
-    extern const int TYPE_MISMATCH;
 }
 
 ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInterval interval_bs_, const Block & header)
@@ -102,5 +104,6 @@ void ProcessTimeFilter::transform(Chunk & chunk)
     }
 
     chunk.setColumns(std::move(source_columns), rows - filtered_rows);
+}
 }
 }

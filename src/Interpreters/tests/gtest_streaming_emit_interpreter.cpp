@@ -1,18 +1,17 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Interpreters/InDepthNodeVisitor.h>
-#include <Interpreters/Streaming/StreamingEmitInterpreter.h>
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/EmitInterpreter.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <gtest/gtest.h>
 
-using namespace DB;
 class StreamingEmitInterpreterTest : public ::testing::Test
 {
 public:
-    static void SetUpTestSuite() { registerAggregateFunctions(); }
+    static void SetUpTestSuite() { DB::registerAggregateFunctions(); }
 };
 
 /// Collect Tree AST elems recursively
@@ -21,33 +20,33 @@ class TreeElemCollector
 public:
     struct Data
     {
-        std::unordered_map<std::string, ASTPtr> elems;
+        std::unordered_map<std::string, DB::ASTPtr> elems;
     };
 
-    static void visit(const ASTPtr & node, Data & data) { data.elems.emplace(node->getID(), node); }
-    static bool needChildVisit(const ASTPtr &, const ASTPtr &) { return true; }
+    static void visit(const DB::ASTPtr & node, Data & data) { data.elems.emplace(node->getID(), node); }
+    static bool needChildVisit(const DB::ASTPtr &, const DB::ASTPtr &) { return true; }
 };
 
 static bool checkLastXRule(const String & last_x_query, const String & check_query, UInt64 max_keep_windows = 100)
 {
-    Settings settings;
+    DB::Settings settings;
     settings.set("max_keep_windows", max_keep_windows);
 
     bool tail = false;
-    BaseScaleInterval last_interval_bs{};
+    DB::Streaming::BaseScaleInterval last_interval_bs{};
 
-    ParserQuery last_x_parser(last_x_query.end().base());
-    ASTPtr last_x_ast = parseQuery(last_x_parser, last_x_query.begin().base(), last_x_query.end().base(), "", 0, 0);
-    StreamingEmitInterpreter::handleRules(
-        last_x_ast->as<ASTSelectWithUnionQuery &>().list_of_selects->children.at(0),
-        StreamingEmitInterpreter::LastXRule(settings, last_interval_bs, tail));
+    DB::ParserQuery last_x_parser(last_x_query.end().base());
+    DB::ASTPtr last_x_ast = parseQuery(last_x_parser, last_x_query.begin().base(), last_x_query.end().base(), "", 0, 0);
+    DB::Streaming::EmitInterpreter::handleRules(
+        last_x_ast->as<DB::ASTSelectWithUnionQuery &>().list_of_selects->children.at(0),
+        DB::Streaming::EmitInterpreter::LastXRule(settings, last_interval_bs, tail));
 
-    ParserQuery check_parser(check_query.end().base());
-    ASTPtr check_ast = parseQuery(check_parser, check_query.begin().base(), check_query.end().base(), "", 0, 0);
+    DB::ParserQuery check_parser(check_query.end().base());
+    DB::ASTPtr check_ast = parseQuery(check_parser, check_query.begin().base(), check_query.end().base(), "", 0, 0);
 
     TreeElemCollector::Data last_x_data, check_data;
-    ConstInDepthNodeVisitor<TreeElemCollector, true>(last_x_data).visit(last_x_ast);
-    ConstInDepthNodeVisitor<TreeElemCollector, true>(check_data).visit(check_ast);
+    DB::ConstInDepthNodeVisitor<TreeElemCollector, true>(last_x_data).visit(last_x_ast);
+    DB::ConstInDepthNodeVisitor<TreeElemCollector, true>(check_data).visit(check_ast);
 
     if (last_x_data.elems.size() != check_data.elems.size())
         std::cerr << fmt::format(
@@ -77,7 +76,7 @@ static bool checkLastXRule(const String & last_x_query, const String & check_que
 
 static bool check_func = false;
 
-static void handle(ASTPtr &)
+static void handle(DB::ASTPtr &)
 {
     check_func = true;
 }
@@ -86,8 +85,8 @@ struct Foo
 {
     bool & check_pseudo_func;
     Foo(bool & check_pseudo_func_) : check_pseudo_func(check_pseudo_func_) { }
-    void operator()(ASTPtr &) { check_pseudo_func = true; }
-    void handle(ASTPtr &, bool * check_bind_func) { *check_bind_func = true; }
+    void operator()(DB::ASTPtr &) { check_pseudo_func = true; }
+    void handle(DB::ASTPtr &, bool * check_bind_func) { *check_bind_func = true; }
 };
 
 TEST_F(StreamingEmitInterpreterTest, HandleRules)
@@ -96,12 +95,12 @@ TEST_F(StreamingEmitInterpreterTest, HandleRules)
     bool check_lambada_func = false;
     bool check_bind_func = false;
     Foo obj(check_pseudo_func);
-    ASTPtr query;
-    StreamingEmitInterpreter::handleRules(
+    DB::ASTPtr query;
+    DB::Streaming::EmitInterpreter::handleRules(
         query,
         /* check_func */ handle,
         /* check_pseudo_func */ obj,
-        /* check_lambada_func */ [&check_lambada_func](ASTPtr &) { check_lambada_func = true; },
+        /* check_lambada_func */ [&check_lambada_func](DB::ASTPtr &) { check_lambada_func = true; },
         /* check_bind_func */ std::bind(&Foo::handle, &obj, std::placeholders::_1, &check_bind_func));
 
     EXPECT_TRUE(check_func);

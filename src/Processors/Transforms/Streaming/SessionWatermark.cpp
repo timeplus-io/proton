@@ -13,8 +13,14 @@
 
 namespace DB
 {
-SessionWatermark::SessionWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, ExpressionActionsPtr start_actions_,
-    ExpressionActionsPtr end_actions_, Poco::Logger * log_)
+namespace Streaming
+{
+SessionWatermark::SessionWatermark(
+    WatermarkSettings && watermark_settings_,
+    bool proc_time_,
+    ExpressionActionsPtr start_actions_,
+    ExpressionActionsPtr end_actions_,
+    Poco::Logger * log_)
     : HopTumbleBaseWatermark(std::move(watermark_settings_), proc_time_, log_), start_actions(start_actions_), end_actions(end_actions_)
 {
     method_chosen = chooseBlockCacheMethod();
@@ -316,4 +322,5 @@ SessionHashMap::Type SessionWatermark::chooseBlockCacheMethod()
     return SessionHashMap::Type::serialized;
 }
 
+}
 }

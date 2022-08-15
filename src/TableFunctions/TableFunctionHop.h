@@ -4,6 +4,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class TableFunctionHop final : public TableFunctionWindow
 {
 public:
@@ -17,4 +19,5 @@ private:
     void postArgs(ASTs & args) const override;
     String functionNamePrefix() const override;
 };
+}
 }

@@ -5,8 +5,8 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
-#include <Interpreters/BlockUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Streaming/BlockUtils.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <KafkaLog/KafkaWALCommon.h>
@@ -93,7 +93,7 @@ namespace
             }
         }
 
-        return DB::buildBlock(string_cols, int64_cols);
+        return Streaming::buildBlock(string_cols, int64_cols);
     }
 
     nlog::Record buildRecord(const TaskStatusService::TaskStatusPtr & task)

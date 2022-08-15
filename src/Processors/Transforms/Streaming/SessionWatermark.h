@@ -7,10 +7,17 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class SessionWatermark : public HopTumbleBaseWatermark
 {
 public:
-    explicit SessionWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, ExpressionActionsPtr start_actions_, ExpressionActionsPtr end_actions_, Poco::Logger * log);
+    explicit SessionWatermark(
+        WatermarkSettings && watermark_settings_,
+        bool proc_time_,
+        ExpressionActionsPtr start_actions_,
+        ExpressionActionsPtr end_actions_,
+        Poco::Logger * log);
     ~SessionWatermark() override = default;
 
 private:
@@ -31,4 +38,5 @@ private:
 
     Sizes key_sizes; /// sizes of key columns
 };
+}
 }

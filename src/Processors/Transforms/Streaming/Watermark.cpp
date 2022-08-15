@@ -2,7 +2,7 @@
 
 #include <Core/Block.h>
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
@@ -14,65 +14,65 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NOT_IMPLEMENTED;
-    extern const int SYNTAX_ERROR;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NOT_IMPLEMENTED;
+extern const int SYNTAX_ERROR;
 }
 
+namespace Streaming
+{
 namespace
 {
-    void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
+void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkSettings & watermark_settings)
+{
+    if (!emit_query)
     {
-        if (!emit_query)
-        {
-            return;
-        }
+        return;
+    }
 
-        auto emit = emit_query->as<ASTEmitQuery>();
-        assert(emit);
+    auto emit = emit_query->as<ASTEmitQuery>();
+    assert(emit);
 
-        watermark_settings.streaming = emit->streaming;
+    watermark_settings.streaming = emit->streaming;
 
-        if (emit->periodic_interval)
-        {
-            if (emit->after_watermark || emit->delay_interval)
-                throw Exception("Streaming doesn't support having both any watermark and periodic emit policy", ErrorCodes::SYNTAX_ERROR);
+    if (emit->periodic_interval)
+    {
+        if (emit->after_watermark || emit->delay_interval)
+            throw Exception("Streaming doesn't support having both any watermark and periodic emit policy", ErrorCodes::SYNTAX_ERROR);
 
-            extractInterval(
-                emit->periodic_interval->as<ASTFunction>(),
-                watermark_settings.emit_query_interval,
-                watermark_settings.emit_query_interval_kind);
+        extractInterval(
+            emit->periodic_interval->as<ASTFunction>(),
+            watermark_settings.emit_query_interval,
+            watermark_settings.emit_query_interval_kind);
 
-            watermark_settings.mode = WatermarkSettings::EmitMode::PERIODIC;
-        }
-        else if (emit->delay_interval)
-        {
-            extractInterval(
-                emit->delay_interval->as<ASTFunction>(),
-                watermark_settings.emit_query_interval,
-                watermark_settings.emit_query_interval_kind);
+        watermark_settings.mode = WatermarkSettings::EmitMode::PERIODIC;
+    }
+    else if (emit->delay_interval)
+    {
+        extractInterval(
+            emit->delay_interval->as<ASTFunction>(), watermark_settings.emit_query_interval, watermark_settings.emit_query_interval_kind);
 
-            watermark_settings.mode
-                = emit->after_watermark ? WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY : WatermarkSettings::EmitMode::DELAY;
-        }
-        else if (emit->after_watermark)
-        {
-            watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
-        }
-        else
-            watermark_settings.mode = WatermarkSettings::EmitMode::NONE;
+        watermark_settings.mode
+            = emit->after_watermark ? WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY : WatermarkSettings::EmitMode::DELAY;
+    }
+    else if (emit->after_watermark)
+    {
+        watermark_settings.mode = WatermarkSettings::EmitMode::WATERMARK;
+    }
+    else
+        watermark_settings.mode = WatermarkSettings::EmitMode::NONE;
 
-        if (emit->timeout_interval)
-        {
-            extractInterval(
-                emit->timeout_interval->as<ASTFunction>(),
-                watermark_settings.emit_timeout_interval,
-                watermark_settings.emit_timeout_interval_kind);
-        }
+    if (emit->timeout_interval)
+    {
+        extractInterval(
+            emit->timeout_interval->as<ASTFunction>(),
+            watermark_settings.emit_timeout_interval,
+            watermark_settings.emit_timeout_interval_kind);
     }
 }
+}
 
-WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc)
+WatermarkSettings::WatermarkSettings(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc)
 {
     window_desc = std::move(desc);
 
@@ -212,5 +212,6 @@ void Watermark::handleIdleness(Block & block)
             handleIdlenessWatermarkWithDelay(block);
             break;
     }
+}
 }
 }

@@ -4,11 +4,13 @@
 
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/StorageSnapshot.h>
 
 namespace DB
+{
+namespace Streaming
 {
 class TableFunctionProxyBase : public ITableFunction
 {
@@ -32,10 +34,10 @@ private:
 protected:
     String name;
 
-    StreamingFunctionDescriptionPtr streaming_func_desc;
+    FunctionDescriptionPtr streaming_func_desc;
 
     /// Timestamp column expression
-    StreamingFunctionDescriptionPtr timestamp_func_desc;
+    FunctionDescriptionPtr timestamp_func_desc;
     /// Names timestamp_expr_required_columns;
     /// ExpressionActionsPtr timestamp_expr;
 
@@ -49,4 +51,5 @@ protected:
 
     bool streaming = true;
 };
+}
 }

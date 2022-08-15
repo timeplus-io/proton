@@ -4,6 +4,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class TableFunctionSession final : public TableFunctionWindow
 {
 public:
@@ -17,4 +19,5 @@ private:
     ASTs checkAndExtractArguments(ASTFunction * node) const override;
     String functionNamePrefix() const override;
 };
+}
 }

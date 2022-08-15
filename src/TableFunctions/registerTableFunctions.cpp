@@ -29,11 +29,11 @@ void registerTableFunctions()
     registerTableFunctionDictionary(factory);
 
     /// proton: starts
-    registerTableFunctionHop(factory);
-    registerTableFunctionTumble(factory);
-    registerTableFunctionHist(factory);
-    registerTableFunctionSession(factory);
-    registerTableFunctionDedup(factory);
+    Streaming::registerTableFunctionHop(factory);
+    Streaming::registerTableFunctionTumble(factory);
+    Streaming::registerTableFunctionHist(factory);
+    Streaming::registerTableFunctionSession(factory);
+    Streaming::registerTableFunctionDedup(factory);
     /// proton: ends
 }
 

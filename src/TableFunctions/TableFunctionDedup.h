@@ -6,6 +6,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class TableFunctionDedup final : public TableFunctionProxyBase
 {
 public:
@@ -19,4 +21,5 @@ private:
 private:
     String help_message;
 };
+}
 }

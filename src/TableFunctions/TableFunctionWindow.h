@@ -6,6 +6,8 @@ namespace DB
 {
 class DataTypeTuple;
 
+namespace Streaming
+{
 class TableFunctionWindow : public TableFunctionProxyBase
 {
 public:
@@ -25,4 +27,5 @@ protected:
     virtual void handleResultType(const ColumnWithTypeAndName & type_and_name);
     virtual DataTypePtr getElementType(const DataTypeTuple *) const = 0;
 };
+}
 }

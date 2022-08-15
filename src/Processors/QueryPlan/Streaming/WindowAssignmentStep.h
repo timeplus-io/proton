@@ -1,27 +1,27 @@
 #pragma once
 
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
+namespace Streaming
+{
 /// Implement watermark assignment for streaming processing
-class StreamingWindowAssignmentStep final : public ITransformingStep
+class WindowAssignmentStep final : public ITransformingStep
 {
 public:
-    StreamingWindowAssignmentStep(
-        const DataStream & input_stream_,
-        Block output_header,
-        StreamingFunctionDescriptionPtr desc_);
+    WindowAssignmentStep(const DataStream & input_stream_, Block output_header, FunctionDescriptionPtr desc_);
 
-    ~StreamingWindowAssignmentStep() override = default;
+    ~WindowAssignmentStep() override = default;
 
     String getName() const override { return "StreamingWindowAssignmentStep"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    StreamingFunctionDescriptionPtr desc;
+    FunctionDescriptionPtr desc;
 };
+}
 }

@@ -6,11 +6,12 @@
 
 namespace DB
 {
-
-class StreamColumnValidateMatcher
+namespace Streaming
+{
+class ColumnValidateMatcher
 {
 public:
-    using Visitor = InDepthNodeVisitor<StreamColumnValidateMatcher, true, true>;
+    using Visitor = InDepthNodeVisitor<ColumnValidateMatcher, true, true>;
 
     struct Data
     {
@@ -26,6 +27,6 @@ private:
     static void visit(ASTColumnDeclaration & column, Data & data);
 };
 
-using StreamColumnValidateVisitor = StreamColumnValidateMatcher::Visitor;
-
+using ColumnValidateVisitor = ColumnValidateMatcher::Visitor;
+}
 }

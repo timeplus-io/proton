@@ -7,6 +7,11 @@
 
 namespace DB
 {
+
+class ASTFunction;
+
+namespace Streaming
+{
 enum class WindowType
 {
     NONE,
@@ -14,8 +19,6 @@ enum class WindowType
     TUMBLE,
     SESSION
 };
-
-class ASTFunction;
 
 const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 parameters: "
                                    "<name of the table>, [timestamp column], <tumble window size>, [time zone]";
@@ -138,4 +141,5 @@ ASTPtr makeASTInterval(Int64 num_units, IntervalKind kind);
 ASTPtr makeASTInterval(const std::pair<Int64, IntervalKind> & interval);
 
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2);
+}
 }

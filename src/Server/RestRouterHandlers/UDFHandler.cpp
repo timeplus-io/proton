@@ -1,7 +1,7 @@
 #include "UDFHandler.h"
 
-#include <Interpreters/MetaStoreJSONConfigRepository.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
+#include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
 #include "SchemaValidator.h"
 
 #include <numeric>

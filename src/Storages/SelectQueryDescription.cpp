@@ -8,7 +8,7 @@
 #include <Interpreters/Context.h>
 
 /// proton: starts.
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
 
 namespace DB
@@ -66,10 +66,10 @@ StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPt
         /// table_functoin
         if (auto * ast_func = table_expression->as<ASTFunction>())
         {
-            if (isTableFunctionSession(ast_func))
+            if (Streaming::isTableFunctionSession(ast_func))
                 throw Exception(
                     "Session window is not supported for MATERIALIZED VIEW", ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);
-            if ((isTableFunctionTumble(ast_func) || isTableFunctionHop(ast_func) || isTableFunctionTable(ast_func)))
+            if ((Streaming::isTableFunctionTumble(ast_func) || Streaming::isTableFunctionHop(ast_func) || Streaming::isTableFunctionTable(ast_func)))
             {
                 assert(ast_func->arguments);
                 table_expression = ast_func->arguments->children.at(0);

@@ -13,6 +13,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 /// JSON config repository via MetaStore used by ExternalLoader.
 class MetaStoreJSONConfigRepository : public IExternalLoaderConfigRepository
 {
@@ -50,5 +52,5 @@ private:
 
     const std::string main_config_path;
 };
-
+}
 }

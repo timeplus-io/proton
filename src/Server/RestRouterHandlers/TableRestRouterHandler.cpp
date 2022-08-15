@@ -219,7 +219,7 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
         Poco::JSON::Object column_mapping_json;
         const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
 
-        ColumnDeclarationToJSON(column_mapping_json, col_decl);
+        Streaming::ColumnDeclarationToJSON(column_mapping_json, col_decl);
         columns_mapping_json.add(column_mapping_json);
     }
     resp_table.set("columns", columns_mapping_json);
@@ -335,7 +335,7 @@ TableRestRouterHandler::getCreationSQL(const Poco::JSON::Object::Ptr & payload, 
     if (!host_shards.empty())
         create_segments.push_back(fmt::format(", host_shards='{}'", host_shards));
 
-    getAndValidateStorageSetting(
+    Streaming::getAndValidateStorageSetting(
         [this](const auto & key) -> String {
             if (hasQueryParameter(key))
                 return getQueryParameter(key);

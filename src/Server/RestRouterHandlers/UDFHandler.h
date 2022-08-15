@@ -35,7 +35,7 @@ private:
     bool streamingInput() const override { return false; }
 
 private:
-    MetaStoreJSONConfigRepository * metastore_repo;
+    Streaming::MetaStoreJSONConfigRepository * metastore_repo;
 };
 
 }

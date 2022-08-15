@@ -86,12 +86,12 @@
 
 /// proton: starts
 #include <DataTypes/ObjectUtils.h>
-#include <Interpreters/Streaming/StreamingAggregator.h>
-#include <Interpreters/Streaming/StreamingEmitInterpreter.h>
-#include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingAggregatingStep.h>
+#include <Interpreters/Streaming/Aggregator.h>
+#include <Interpreters/Streaming/EmitInterpreter.h>
+#include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
-#include <Processors/QueryPlan/Streaming/StreamingSortingStep.h>
+#include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
+#include <Processors/QueryPlan/Streaming/SortingStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
@@ -419,10 +419,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     /// we need to process before table storage generation (maybe has table function)
     if (getSelectQuery().emit())
     {
-        StreamingEmitInterpreter::handleRules(
+        Streaming::EmitInterpreter::handleRules(
                     /* streaming query */ query_ptr,
-                    /* rules */ StreamingEmitInterpreter::checkEmitAST,
-                                StreamingEmitInterpreter::LastXRule(settings, last_interval_bs, last_tail, log));
+                    /* rules */ Streaming::EmitInterpreter::checkEmitAST,
+                                Streaming::EmitInterpreter::LastXRule(settings, last_interval_bs, last_tail, log));
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
@@ -660,7 +660,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (storage)
         {
             /// proton: starts
-            if (auto * stream = storage->as<ProxyStream>())
+            if (auto * stream = storage->as<Streaming::ProxyStream>())
             {
                 /// We save the required columns to project (after streaming window)
                 required_columns_after_streaming_window = required_columns;
@@ -703,7 +703,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     };
 
     /// proton: starts. Add timestamp column and '__tp_session_id' to group by
-    if (windowType() == WindowType::SESSION && query.groupBy())
+    if (windowType() == Streaming::WindowType::SESSION && query.groupBy())
     {
         auto & group_exprs = query_ptr->as<ASTSelectQuery>()->groupBy()->children;
         auto desc = getStreamingFunctionDescription();
@@ -755,7 +755,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         analysis_result.prewhere_info->need_filter = true;
 
     /// proton: starts
-    if (windowType() == WindowType::SESSION && !query.groupBy())
+    if (windowType() == Streaming::WindowType::SESSION && !query.groupBy())
     {
         throw Exception("Missing GROUP BY clause for session window", ErrorCodes::MISSING_GROUP_BY);
     }
@@ -2258,7 +2258,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         /// proton: starts. Streaming Window
         /// Supports: TableFunction, Stream, MaterializedView
-        if (auto * proxy_stream = storage->as<ProxyStream>())
+        if (auto * proxy_stream = storage->as<Streaming::ProxyStream>())
             proxy_stream->buildStreamingProcessingQueryPlan(
                 query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context, shouldApplyWatermark());
         else
@@ -2865,12 +2865,12 @@ void InterpreterSelectQuery::initSettings()
 }
 
 /// proton: starts
-void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_) const
+void InterpreterSelectQuery::executeLastXTail(QueryPlan & query_plan, const Streaming::BaseScaleInterval & last_interval_bs_) const
 {
     if (!isStreaming())
         return;
 
-    auto proc_filter_step = std::make_unique<ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_bs_, ProtonConsts::RESERVED_EVENT_TIME);
+    auto proc_filter_step = std::make_unique<Streaming::ProcessTimeFilterStep>(query_plan.getCurrentDataStream(), last_interval_bs_, ProtonConsts::RESERVED_EVENT_TIME);
 
     proc_filter_step->setStepDescription("ProcessTimeFilter");
     query_plan.addStep(std::move(proc_filter_step));
@@ -2885,7 +2885,7 @@ void InterpreterSelectQuery::executeStreamingOrder(QueryPlan & query_plan)
     UInt64 limit = getLimitForSorting(query, context);
 
     /// Merge the sorted blocks.
-    auto sorting_step = std::make_unique<StreamingSortingStep>(
+    auto sorting_step = std::make_unique<Streaming::SortingStep>(
         query_plan.getCurrentDataStream(),
         output_order_descr,
         settings.max_block_size,
@@ -2918,7 +2918,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     /// If `window_start/end` are in aggregation columns, move them to the beginning
     /// of the aggregation columns for later window extraction
-    StreamingAggregator::Params::GroupBy streaming_group_by = StreamingAggregator::Params::GroupBy::OTHER;
+    Streaming::Aggregator::Params::GroupBy streaming_group_by = Streaming::Aggregator::Params::GroupBy::OTHER;
     size_t time_col_pos = 0;
     String time_col_name;
 
@@ -2926,14 +2926,14 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     size_t session_end_pos = 0;
 
     auto window_type = windowType();
-    if (window_type == WindowType::SESSION)
+    if (window_type == Streaming::WindowType::SESSION)
     {
-        streaming_group_by = StreamingAggregator::Params::GroupBy::SESSION;
+        streaming_group_by = Streaming::Aggregator::Params::GroupBy::SESSION;
         auto desc = getStreamingFunctionDescription();
 
         if (!desc)
             throw Exception(
-                "StreamingFunctionDescription should not be nullptr for session window", ErrorCodes::INVALID_STREAMING_FUNC_DESC);
+                "FunctionDescription should not be nullptr for session window", ErrorCodes::INVALID_STREAMING_FUNC_DESC);
 
         time_col_name = desc->argument_names[0];
         time_col_pos = header_before_aggregation.getPositionByName(desc->argument_names[0]);
@@ -2947,9 +2947,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     for (const auto & key : query_analyzer->aggregationKeys())
     {
-        /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because StreamingAggregator automatically add three session related columns.
+        /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because Aggregator automatically add three session related columns.
         /// Also ignore STREAMING_SESSION_ID, as it has already been added in group by keys.
-        if (window_type == WindowType::SESSION
+        if (window_type == Streaming::WindowType::SESSION
             && (key.name == ProtonConsts::STREAMING_WINDOW_START || key.name == ProtonConsts::STREAMING_WINDOW_END || key.name == ProtonConsts::STREAMING_SESSION_ID
                 || key.name == time_col_name))
             continue;
@@ -2957,16 +2957,16 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
-            streaming_group_by = StreamingAggregator::Params::GroupBy::WINDOW_END;
+            streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_END;
         }
         else if (
             (key.name == ProtonConsts::STREAMING_WINDOW_START) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type))
-            && (streaming_group_by != StreamingAggregator::Params::GroupBy::WINDOW_END))
+            && (streaming_group_by != Streaming::Aggregator::Params::GroupBy::WINDOW_END))
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
-            streaming_group_by = StreamingAggregator::Params::GroupBy::WINDOW_START;
+            streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_START;
         }
-        else if (window_type == WindowType::SESSION && key.name == ProtonConsts::STREAMING_SESSION_ID)
+        else if (window_type == Streaming::WindowType::SESSION && key.name == ProtonConsts::STREAMING_SESSION_ID)
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
         }
@@ -2982,7 +2982,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     const Settings & settings = context->getSettingsRef();
 
-    StreamingAggregator::Params params(
+    Streaming::Aggregator::Params params(
         header_before_aggregation,
         keys,
         aggregates,
@@ -3016,7 +3016,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
-    auto aggregating_step = std::make_unique<StreamingAggregatingStep>(
+    auto aggregating_step = std::make_unique<Streaming::AggregatingStep>(
         query_plan.getCurrentDataStream(),
         params,
         final,
@@ -3055,7 +3055,7 @@ bool InterpreterSelectQuery::hasStreamingWindowFunc() const
 
     if (storage)
     {
-        if (auto * proxy = storage->as<ProxyStream>())
+        if (auto * proxy = storage->as<Streaming::ProxyStream>())
         {
             if (proxy->hasStreamingWindowFunc())
                 return true;
@@ -3065,28 +3065,28 @@ bool InterpreterSelectQuery::hasStreamingWindowFunc() const
     return false;
 }
 
-StreamingFunctionDescriptionPtr InterpreterSelectQuery::getStreamingFunctionDescription() const
+Streaming::FunctionDescriptionPtr InterpreterSelectQuery::getStreamingFunctionDescription() const
 {
     if (storage)
     {
-        if (auto * proxy = storage->as<ProxyStream>())
+        if (auto * proxy = storage->as<Streaming::ProxyStream>())
             return proxy->getStreamingFunctionDescription();
     }
 
     return nullptr;
 }
 
-WindowType InterpreterSelectQuery::windowType() const
+Streaming::WindowType InterpreterSelectQuery::windowType() const
 {
     if (storage)
     {
-        if (auto * proxy = storage->as<ProxyStream>())
+        if (auto * proxy = storage->as<Streaming::ProxyStream>())
         {
             return proxy->windowType();
         }
     }
 
-    return WindowType::NONE;
+    return Streaming::WindowType::NONE;
 }
 
 bool InterpreterSelectQuery::hasGlobalAggregation() const
@@ -3107,7 +3107,7 @@ bool InterpreterSelectQuery::shouldApplyWatermark() const
         /// CTE subquery
         if (storage)
         {
-            if (auto * proxy = storage->as<ProxyStream>())
+            if (auto * proxy = storage->as<Streaming::ProxyStream>())
             {
                 if (proxy->hasGlobalAggregation())
                     return false;
@@ -3137,7 +3137,7 @@ bool InterpreterSelectQuery::shouldKeepState() const
         /// subquery
         if (storage)
         {
-            if (auto * proxy = storage->as<ProxyStream>())
+            if (auto * proxy = storage->as<Streaming::ProxyStream>())
                 if (proxy->hasGlobalAggregation())
                     return false;
         }
@@ -3159,7 +3159,7 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
         if (hasStreamingWindowFunc())
         {
             /// nested query
-            if (auto * proxy = storage->as<ProxyStream>())
+            if (auto * proxy = storage->as<Streaming::ProxyStream>())
                 if (proxy->hasGlobalAggregation())
                     throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
         }
@@ -3167,9 +3167,9 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
 
     if (storage)
     {
-        if (auto * proxy = storage->as<ProxyStream>())
+        if (auto * proxy = storage->as<Streaming::ProxyStream>())
         {
-            if (proxy->windowType() == WindowType::TUMBLE || proxy->windowType() == WindowType::HOP)
+            if (proxy->windowType() == Streaming::WindowType::TUMBLE || proxy->windowType() == Streaming::WindowType::HOP)
             {
                 bool has_win_col = false;
                 for (const auto & window_col : ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES)
@@ -3195,7 +3195,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
     if (shouldApplyWatermark())
     {
         Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
-        if (windowType() == WindowType::SESSION)
+        if (windowType() == Streaming::WindowType::SESSION)
         {
             /// insert _tp_session_id column for session window
             auto data_type = std::make_shared<DataTypeUInt64>();
@@ -3208,7 +3208,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
             output_header.insert(2, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
         }
 
-        query_plan.addStep(std::make_unique<WatermarkStep>(
+        query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
             query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, getStreamingFunctionDescription(), false, log));
     }
 }
@@ -3263,7 +3263,7 @@ void InterpreterSelectQuery::analyzeStreamingMode()
     }
     else if (storage)
     {
-        if (const auto * proxy = storage->as<ProxyStream>())
+        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
         {
             if (proxy->isStreaming())
                 streaming = true;

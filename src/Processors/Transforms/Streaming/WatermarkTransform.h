@@ -13,13 +13,15 @@ namespace DB
  * by observing the events in its input.
  */
 
+namespace Streaming
+{
 class WatermarkTransform final : public ISimpleTransform
 {
 public:
     WatermarkTransform(
         ASTPtr query,
         TreeRewriterResultPtr syntax_analyzer_result,
-        StreamingFunctionDescriptionPtr desc,
+        FunctionDescriptionPtr desc,
         bool proc_time,
         const Block & header,
         const Block & output_header,
@@ -36,10 +38,11 @@ private:
     void initWatermark(
         ASTPtr query,
         TreeRewriterResultPtr syntax_analyzer_result,
-        StreamingFunctionDescriptionPtr desc,
+        FunctionDescriptionPtr desc,
         bool proc_time,
         Poco::Logger * log);
 
     WatermarkPtr watermark;
 };
+}
 }

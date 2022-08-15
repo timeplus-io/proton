@@ -4,7 +4,9 @@
 
 namespace DB
 {
-DedupTransform::DedupTransform(const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr dedup_func_desc_)
+namespace Streaming
+{
+DedupTransform::DedupTransform(const Block & input_header, const Block & output_header, FunctionDescriptionPtr dedup_func_desc_)
     : ISimpleTransform(input_header, output_header, false)
     , dedup_func_desc(std::move(dedup_func_desc_))
     , chunk_header(output_header.getColumns(), 0)
@@ -56,5 +58,6 @@ void DedupTransform::calculateColumns(const Block & input_header, const Names & 
     /// Calculate the positions of dependent columns in input chunk
     for (const auto & col_name : input_columns)
         expr_column_positions.push_back(input_header.getPositionByName(col_name));
+}
 }
 }

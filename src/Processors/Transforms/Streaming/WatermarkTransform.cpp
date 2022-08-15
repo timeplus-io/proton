@@ -10,13 +10,15 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int INVALID_EMIT_MODE;
+extern const int INVALID_EMIT_MODE;
 }
 
+namespace Streaming
+{
 WatermarkTransform::WatermarkTransform(
     ASTPtr query,
     TreeRewriterResultPtr syntax_analyzer_result,
-    StreamingFunctionDescriptionPtr desc,
+    FunctionDescriptionPtr desc,
     bool proc_time,
     const Block & header,
     const Block & output_header,
@@ -46,7 +48,7 @@ void WatermarkTransform::transform(Chunk & chunk)
 }
 
 void WatermarkTransform::initWatermark(
-    ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, StreamingFunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
+    ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
 {
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
     if (watermark_settings.func_name == ProtonConsts::TUMBLE_FUNC_NAME)
@@ -71,11 +73,13 @@ void WatermarkTransform::initWatermark(
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
-        watermark = std::make_shared<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
+        watermark
+            = std::make_shared<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
     }
     else
     {
         watermark = std::make_shared<Watermark>(std::move(watermark_settings), proc_time, log);
     }
+}
 }
 }

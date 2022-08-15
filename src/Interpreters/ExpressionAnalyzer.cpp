@@ -59,7 +59,7 @@
 
 /// proton: starts
 #include <Interpreters/Streaming/HashJoin.h>
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
@@ -1740,9 +1740,9 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             /// because we will need access them for down stream processing like aggregation
             if (storage)
             {
-                if (const auto * proxy = storage->as<DB::ProxyStream>())
+                if (const auto * proxy = storage->as<Streaming::ProxyStream>())
                 {
-                    if (proxy->windowType() == DB::WindowType::SESSION)
+                    if (proxy->windowType() == Streaming::WindowType::SESSION)
                     {
                         auto & step = chain.getLastStep();
                         step.addRequiredOutput(ProtonConsts::STREAMING_SESSION_START);

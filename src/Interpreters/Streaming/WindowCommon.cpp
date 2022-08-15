@@ -1,4 +1,4 @@
-#include "StreamingWindowCommon.h"
+#include "WindowCommon.h"
 
 #include <Functions/Streaming/FunctionsStreamingWindow.h>
 #include <Parsers/ASTFunction.h>
@@ -11,52 +11,57 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int CANNOT_CONVERT_TYPE;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
-    extern const int BAD_ARGUMENTS;
-    extern const int MISSING_SESSION_KEY;
+extern const int CANNOT_CONVERT_TYPE;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
+extern const int BAD_ARGUMENTS;
+extern const int MISSING_SESSION_KEY;
 }
 
+namespace Streaming
+{
 namespace
 {
-    std::optional<IntervalKind> mapIntervalKind(const String & func_name)
-    {
-        if (func_name == "to_interval_second")
-            return IntervalKind::Second;
-        else if (func_name == "to_interval_minute")
-            return IntervalKind::Minute;
-        else if (func_name == "to_interval_hour")
-            return IntervalKind::Hour;
-        else if (func_name == "to_interval_day")
-            return IntervalKind::Day;
-        else if (func_name == "to_interval_week")
-            return IntervalKind::Week;
-        else if (func_name == "to_interval_month")
-            return IntervalKind::Month;
-        else if (func_name == "to_interval_quarter")
-            return IntervalKind::Quarter;
-        else if (func_name == "to_interval_year")
-            return IntervalKind::Year;
-        else
-            return {};
-    }
+std::optional<IntervalKind> mapIntervalKind(const String & func_name)
+{
+    if (func_name == "to_interval_second")
+        return IntervalKind::Second;
+    else if (func_name == "to_interval_minute")
+        return IntervalKind::Minute;
+    else if (func_name == "to_interval_hour")
+        return IntervalKind::Hour;
+    else if (func_name == "to_interval_day")
+        return IntervalKind::Day;
+    else if (func_name == "to_interval_week")
+        return IntervalKind::Week;
+    else if (func_name == "to_interval_month")
+        return IntervalKind::Month;
+    else if (func_name == "to_interval_quarter")
+        return IntervalKind::Quarter;
+    else if (func_name == "to_interval_year")
+        return IntervalKind::Year;
+    else
+        return {};
+}
 
-    ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
-    {
-        /// Assume it is a time or time_expr, we will check it later again
-        return (ast->as<ASTIdentifier>() || ast->as<ASTFunction>());
-    }
+ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
+{
+    /// Assume it is a time or time_expr, we will check it later again
+    return (ast->as<ASTIdentifier>() || ast->as<ASTFunction>());
+}
 
-    ALWAYS_INLINE bool isIntervalAST(const ASTPtr ast)
-    {
-        auto func_node = ast->as<ASTFunction>();
-        return (func_node && mapIntervalKind(func_node->name));
-    }
+ALWAYS_INLINE bool isIntervalAST(const ASTPtr ast)
+{
+    auto func_node = ast->as<ASTFunction>();
+    return (func_node && mapIntervalKind(func_node->name));
+}
 
-    ALWAYS_INLINE bool isTimeZoneAST(const ASTPtr ast) { return (ast->as<ASTLiteral>()); }
+ALWAYS_INLINE bool isTimeZoneAST(const ASTPtr ast)
+{
+    return (ast->as<ASTLiteral>());
+}
 }
 
 WindowType toWindowType(const String & func_name)
@@ -328,13 +333,17 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         else
         {
             if (has_start_prediction)
-                throw Exception("session window requires both start and end predictions or none, but only start or end prediction is specified", ErrorCodes::MISSING_SESSION_KEY);
+                throw Exception(
+                    "session window requires both start and end predictions or none, but only start or end prediction is specified",
+                    ErrorCodes::MISSING_SESSION_KEY);
             /// If end_prediction is not assigned, only session_interval or max_emit_interval could close a session window.
             end_prediction = makeASTFunction("to_bool", std::make_shared<ASTLiteral>(false));
         }
 
         if (args.size() == keys_index)
-             throw Exception("session(stream, ...) requires at least one session key column, provides zero", ErrorCodes::MISSING_SESSION_KEY); /// throw error, missing session key
+            throw Exception(
+                "session(stream, ...) requires at least one session key column, provides zero",
+                ErrorCodes::MISSING_SESSION_KEY); /// throw error, missing session key
 
         asts.emplace_back(table);
         asts.emplace_back(time_expr);
@@ -460,5 +469,6 @@ std::pair<Int64, IntervalKind> BaseScaleInterval::toIntervalKind(IntervalKind::K
 String BaseScaleInterval::toString() const
 {
     return fmt::format("{}{}", num_units, (scale == SCALE_SECOND ? "s" : "M"));
+}
 }
 }

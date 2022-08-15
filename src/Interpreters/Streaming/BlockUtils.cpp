@@ -17,6 +17,8 @@ namespace ErrorCodes
     extern const int OK;
 }
 
+namespace Streaming
+{
 Block buildBlock(
     const std::vector<std::pair<String, String>> & string_cols,
     const std::vector<std::pair<String, Int32>> & int32_cols,
@@ -95,10 +97,7 @@ Block buildBlock(
 }
 
 void appendDDLBlock(
-    Block && block,
-    ContextPtr context,
-    const std::vector<String> & parameter_names, nlog::OpCode opCode,
-    const Poco::Logger * log)
+    Block && block, ContextPtr context, const std::vector<String> & parameter_names, nlog::OpCode opCode, const Poco::Logger * log)
 {
     nlog::Record record{opCode, std::move(block), nlog::NO_SCHEMA};
     record.addHeader("_version", "1");
@@ -127,4 +126,5 @@ void appendDDLBlock(
     LOG_INFO(log, "Successfully append record to WAL, query_id={}", query_id);
 }
 
+}
 }

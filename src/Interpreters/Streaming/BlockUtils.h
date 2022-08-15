@@ -1,11 +1,13 @@
 #pragma once
 
-#include "Context_fwd.h"
+#include "Interpreters/Context_fwd.h"
 
 #include <Core/Block.h>
 #include <NativeLog/Record/OpCodes.h>
 
 namespace DB
+{
+namespace Streaming
 {
 Block buildBlock(
     const std::vector<std::pair<String, String>> & string_cols,
@@ -18,4 +20,5 @@ Block buildBlock(
 
 void appendDDLBlock(
     Block && block, ContextPtr context, const std::vector<String> & parameter_names, nlog::OpCode opCode, const Poco::Logger * log);
+}
 }

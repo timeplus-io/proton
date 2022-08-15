@@ -1,4 +1,4 @@
-#include "StreamingAggregatingStep.h"
+#include "AggregatingStep.h"
 
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
@@ -9,7 +9,11 @@
 
 namespace DB
 {
-static ITransformingStep::Traits getTraits()
+namespace Streaming
+{
+namespace
+{
+ITransformingStep::Traits getTraits()
 {
     return ITransformingStep::Traits{
         {
@@ -22,10 +26,11 @@ static ITransformingStep::Traits getTraits()
             .preserves_number_of_rows = false,
         }};
 }
+}
 
-StreamingAggregatingStep::StreamingAggregatingStep(
+AggregatingStep::AggregatingStep(
     const DataStream & input_stream_,
-    StreamingAggregator::Params params_,
+    Aggregator::Params params_,
     bool final_,
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
@@ -34,7 +39,7 @@ StreamingAggregatingStep::StreamingAggregatingStep(
     : ITransformingStep(
         input_stream_,
         params_.getHeader(
-            final_, params_.group_by == StreamingAggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
+            final_, params_.group_by == Aggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
         getTraits(),
         false)
     , params(std::move(params_))
@@ -46,7 +51,7 @@ StreamingAggregatingStep::StreamingAggregatingStep(
 {
 }
 
-void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
+void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
     QueryPipelineProcessorsCollector collector(pipeline, this);
 
@@ -64,7 +69,7 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
-    auto transform_params = std::make_shared<StreamingAggregatingTransformParams>(std::move(params), final, emit_version);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
@@ -73,15 +78,15 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
         if (!storage_has_evenly_distributed_read)
             pipeline.resize(pipeline.getNumStreams(), true, true);
 
-        auto many_data = std::make_shared<ManyStreamingAggregatedData>(pipeline.getNumStreams());
+        auto many_data = std::make_shared<ManyAggregatedData>(pipeline.getNumStreams());
 
         size_t counter = 0;
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_START
-                || transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_END)
+            if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+                || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
                 return std::make_shared<TumbleHopAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-            else if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
+            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
                 return std::make_shared<SessionAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
             else
@@ -98,10 +103,10 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
         pipeline.resize(1);
 
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_START
-                || transform_params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_END)
+            if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+                || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
                 return std::make_shared<TumbleHopAggregatingTransform>(header, transform_params);
-            else if (transform_params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION)
+            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
                 return std::make_shared<SessionAggregatingTransform>(header, transform_params);
             else
                 return std::make_shared<GlobalAggregatingTransform>(header, transform_params);
@@ -111,19 +116,19 @@ void StreamingAggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline
     }
 }
 
-void StreamingAggregatingStep::describeActions(FormatSettings & settings) const
+void AggregatingStep::describeActions(FormatSettings & settings) const
 {
     params.explain(settings.out, settings.offset);
 }
 
-void StreamingAggregatingStep::describeActions(JSONBuilder::JSONMap & map) const
+void AggregatingStep::describeActions(JSONBuilder::JSONMap & map) const
 {
     params.explain(map);
 }
 
-void StreamingAggregatingStep::describePipeline(FormatSettings & settings) const
+void AggregatingStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(aggregating, settings);
 }
-
+}
 }

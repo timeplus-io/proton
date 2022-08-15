@@ -6,11 +6,11 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/MutationsInterpreter.h>
 #include <Interpreters/QueryLog.h>
-#include <Interpreters/BlockUtils.h>
+#include <Interpreters/Streaming/BlockUtils.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
-#include <Parsers/ASTIdentifier_fwd.h>
 #include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/ASTIdentifier_fwd.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/MutationCommands.h>
@@ -201,7 +201,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         if (!table || table->getName() == "Stream")
         {
             /// Build json payload here from SQL statement
-            payload = getJSONFromAlterQuery(query);
+            payload = Streaming::getJSONFromAlterQuery(query);
             ctx->setDistributedDDLOperation(true);
         }
         else
@@ -251,12 +251,12 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         };
 
         /// Schema: (payload, database, table, timestamp, query_id, user)
-        Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
         setupColumnIfNotSet(ctx, query);
         nlog::OpCode op_code;
-        op_code = ctx->getQueryParameters().contains("_payload") ? getAlterTableParamOpCode(ctx->getQueryParameters())
-                                                                : getOpCodeFromQuery(query);
-        appendDDLBlock(
+        op_code = ctx->getQueryParameters().contains("_payload") ? Streaming::getAlterTableParamOpCode(ctx->getQueryParameters())
+                                                                : Streaming::getOpCodeFromQuery(query);
+        Streaming::appendDDLBlock(
             std::move(block), ctx, {"table_type", "column", "query_method"}, op_code, log);
 
         /// proton: starts

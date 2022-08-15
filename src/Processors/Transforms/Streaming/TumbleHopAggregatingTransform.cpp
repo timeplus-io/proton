@@ -4,19 +4,21 @@
 
 namespace DB
 {
-TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_)
-    : TumbleHopAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyStreamingAggregatedData>(1), 0, 1, 1)
+namespace Streaming
+{
+TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
+    : TumbleHopAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
 {
 }
 
 TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
     Block header,
-    StreamingAggregatingTransformParamsPtr params_,
-    ManyStreamingAggregatedDataPtr many_data_,
+    AggregatingTransformParamsPtr params_,
+    ManyAggregatedDataPtr many_data_,
     size_t current_variant,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
-    : StreamingAggregatingTransform(
+    : AggregatingTransform(
         std::move(header),
         std::move(params_),
         std::move(many_data_),
@@ -26,8 +28,8 @@ TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
         "TumbleHopAggregatingTransform")
 {
     assert(
-        (params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_START)
-        || (params->params.group_by == StreamingAggregator::Params::GroupBy::WINDOW_END));
+        (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
+        || (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END));
 }
 
 /// Finalize what we have in memory and produce a finalized Block
@@ -112,11 +114,11 @@ void TumbleHopAggregatingTransform::doFinalize(const WatermarkBound & watermark,
     rows_since_last_finalization = 0;
 }
 
-void TumbleHopAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data)
+void TumbleHopAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data)
 {
-    StreamingAggregatedDataVariantsPtr & first = data->at(0);
+    AggregatedDataVariantsPtr & first = data->at(0);
 
-    assert(first->type != StreamingAggregatedDataVariants::Type::without_key && !params->params.overflow_row);
+    assert(first->type != AggregatedDataVariants::Type::without_key && !params->params.overflow_row);
 
     /// At least we need one arena in first data item per thread
     Arenas & first_pool = first->aggregates_pools;
@@ -125,7 +127,7 @@ void TumbleHopAggregatingTransform::initialize(ManyStreamingAggregatedDataVarian
 }
 
 void TumbleHopAggregatingTransform::mergeTwoLevel(
-    ManyStreamingAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
+    ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -183,4 +185,5 @@ void TumbleHopAggregatingTransform::removeBuckets()
         variants, many_data->arena_watermark.watermark_lower_bound, many_data->arena_watermark.watermark);
 }
 
+}
 }

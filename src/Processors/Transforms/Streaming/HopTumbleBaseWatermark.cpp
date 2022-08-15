@@ -14,55 +14,57 @@
 
 namespace DB
 {
+namespace Streaming
+{
 namespace
 {
-    using ColumnDateTime64 = ColumnDecimal<DateTime64>;
-    using ColumnDateTime32 = ColumnVector<UInt32>;
+using ColumnDateTime64 = ColumnDecimal<DateTime64>;
+using ColumnDateTime32 = ColumnVector<UInt32>;
 
-    template <typename TargetColumnType>
-    ALWAYS_INLINE void doProcessBlock(
-        Block & block, const ColumnWithTypeAndName & time_col, Int64 last_project_watermark_ts, Int64 & max_event_ts, UInt64 & late_events)
+template <typename TargetColumnType>
+ALWAYS_INLINE void doProcessBlock(
+    Block & block, const ColumnWithTypeAndName & time_col, Int64 last_project_watermark_ts, Int64 & max_event_ts, UInt64 & late_events)
+{
+    /// FIXME, use simple FilterTransform to do this ?
+    const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
+    auto rows = time_vec.size();
+    IColumn::Filter filt(rows, 1);
+
+    UInt64 late_events_in_block = 0;
+    for (size_t i = 0; i < rows; ++i)
     {
-        /// FIXME, use simple FilterTransform to do this ?
-        const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
-        auto rows = time_vec.size();
-        IColumn::Filter filt(rows, 1);
-
-        UInt64 late_events_in_block = 0;
-        for (size_t i = 0; i < rows; ++i)
+        if (time_vec[i] > max_event_ts)
+            max_event_ts = time_vec[i];
+        if (time_vec[i] < last_project_watermark_ts)
         {
-            if (time_vec[i] > max_event_ts)
-                max_event_ts = time_vec[i];
-            if (time_vec[i] < last_project_watermark_ts)
-            {
-                filt[i] = 0;
-                late_events_in_block += 1;
-            }
-        }
-
-        if (late_events_in_block > 0)
-        {
-            late_events += late_events_in_block;
-            for (auto & col_with_name_type : block)
-            {
-                col_with_name_type.column = col_with_name_type.column->filter(filt, rows - late_events_in_block);
-            }
+            filt[i] = 0;
+            late_events_in_block += 1;
         }
     }
 
-    template <typename TargetColumnType>
-    Int64 minEventTimestampForBlock(const ColumnWithTypeAndName & time_col)
+    if (late_events_in_block > 0)
     {
-        const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
-
-        Int64 min_event_ts = std::numeric_limits<Int64>::max();
-        for (size_t i = 0; i < time_vec.size(); ++i)
+        late_events += late_events_in_block;
+        for (auto & col_with_name_type : block)
         {
-            if (time_vec[i] < min_event_ts)
-                min_event_ts = time_vec[i];
+            col_with_name_type.column = col_with_name_type.column->filter(filt, rows - late_events_in_block);
         }
-        return min_event_ts;
     }
+}
+
+template <typename TargetColumnType>
+Int64 minEventTimestampForBlock(const ColumnWithTypeAndName & time_col)
+{
+    const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_col.column.get())->getData();
+
+    Int64 min_event_ts = std::numeric_limits<Int64>::max();
+    for (size_t i = 0; i < time_vec.size(); ++i)
+    {
+        if (time_vec[i] < min_event_ts)
+            min_event_ts = time_vec[i];
+    }
+    return min_event_ts;
+}
 }
 
 HopTumbleBaseWatermark::HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_)
@@ -337,7 +339,8 @@ void HopTumbleBaseWatermark::handleIdlenessWatermark(Block & block)
     if (has_event_in_window && watermark_settings.emit_timeout_interval != 0 && last_event_seen_ts != 0)
     {
         auto now = UTCSeconds::now();
-        if (addTime(now, watermark_settings.emit_timeout_interval_kind, -1 * watermark_settings.emit_timeout_interval, *timezone) > last_event_seen_ts)
+        if (addTime(now, watermark_settings.emit_timeout_interval_kind, -1 * watermark_settings.emit_timeout_interval, *timezone)
+            > last_event_seen_ts)
         {
             has_event_in_window = false;
             last_event_seen_ts = now;
@@ -494,5 +497,6 @@ ALWAYS_INLINE std::pair<Int64, Int64> HopTumbleBaseWatermark::getWindow(Int64 ti
 #undef CASE_WINDOW_KIND
     }
     __builtin_unreachable();
+}
 }
 }

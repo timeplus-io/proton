@@ -12,9 +12,12 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int NOT_IMPLEMENTED;
+extern const int BAD_ARGUMENTS;
+extern const int NOT_IMPLEMENTED;
 }
+
+namespace Streaming
+{
 
 void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr context)
 {
@@ -124,5 +127,6 @@ StoragePtr TableFunctionProxyBase::executeImpl(
 ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /* context */) const
 {
     return columns;
+}
 }
 }

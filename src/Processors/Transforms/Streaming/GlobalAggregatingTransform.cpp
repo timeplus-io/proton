@@ -4,19 +4,21 @@
 
 namespace DB
 {
-GlobalAggregatingTransform::GlobalAggregatingTransform(Block header, StreamingAggregatingTransformParamsPtr params_)
-    : GlobalAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyStreamingAggregatedData>(1), 0, 1, 1)
+namespace Streaming
+{
+GlobalAggregatingTransform::GlobalAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
+    : GlobalAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
 {
 }
 
 GlobalAggregatingTransform::GlobalAggregatingTransform(
     Block header,
-    StreamingAggregatingTransformParamsPtr params_,
-    ManyStreamingAggregatedDataPtr many_data_,
+    AggregatingTransformParamsPtr params_,
+    ManyAggregatedDataPtr many_data_,
     size_t current_variant,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
-    : StreamingAggregatingTransform(
+    : AggregatingTransform(
         std::move(header),
         std::move(params_),
         std::move(many_data_),
@@ -25,7 +27,7 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
         temporary_data_merge_threads_,
         "GlobalAggregatingTransform")
 {
-    assert(params->params.group_by == StreamingAggregator::Params::GroupBy::OTHER);
+    assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
@@ -66,7 +68,7 @@ void GlobalAggregatingTransform::doFinalize(ChunkInfoPtr & chunk_info)
     if (prepared_data_ptr->empty())
         return;
 
-    SCOPE_EXIT({rows_since_last_finalization = 0;});
+    SCOPE_EXIT({ rows_since_last_finalization = 0; });
 
     if (initialize(prepared_data_ptr, chunk_info))
         /// Processed
@@ -79,20 +81,20 @@ void GlobalAggregatingTransform::doFinalize(ChunkInfoPtr & chunk_info)
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::initialize
-bool GlobalAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
+bool GlobalAggregatingTransform::initialize(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
 {
-    StreamingAggregatedDataVariantsPtr & first = data->at(0);
+    AggregatedDataVariantsPtr & first = data->at(0);
 
     /// At least we need one arena in first data item per thread. FIXME, we are using 1 thread to do state merge
-//    Arenas & first_pool = first->aggregates_pools;
-//    for (size_t j = first_pool.size(); j < max_threads; j++)
-//        first_pool.emplace_back(std::make_shared<Arena>());
+    //    Arenas & first_pool = first->aggregates_pools;
+    //    for (size_t j = first_pool.size(); j < max_threads; j++)
+    //        first_pool.emplace_back(std::make_shared<Arena>());
 
-    if (first->type == StreamingAggregatedDataVariants::Type::without_key || params->params.overflow_row)
+    if (first->type == AggregatedDataVariants::Type::without_key || params->params.overflow_row)
     {
         params->aggregator.mergeWithoutKeyDataImpl(*data);
         auto block = params->aggregator.prepareBlockAndFillWithoutKey(
-            *first, params->final, first->type != StreamingAggregatedDataVariants::Type::without_key);
+            *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
 
         if (params->emit_version)
             emitVersion(block);
@@ -105,15 +107,15 @@ bool GlobalAggregatingTransform::initialize(ManyStreamingAggregatedDataVariantsP
 }
 
 /// Logic borrowed from ConvertingAggregatedToChunksTransform::mergeSingleLevel
-void GlobalAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
+void GlobalAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
 {
-    StreamingAggregatedDataVariantsPtr & first = data->at(0);
+    AggregatedDataVariantsPtr & first = data->at(0);
 
-    if (first->type == StreamingAggregatedDataVariants::Type::without_key)
+    if (first->type == AggregatedDataVariants::Type::without_key)
         return;
 
 #define M(NAME) \
-    else if (first->type == StreamingAggregatedDataVariants::Type::NAME) \
+    else if (first->type == AggregatedDataVariants::Type::NAME) \
         params->aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(*data);
     if (false)
     {
@@ -133,11 +135,12 @@ void GlobalAggregatingTransform::mergeSingleLevel(ManyStreamingAggregatedDataVar
     setCurrentChunk(convertToChunk(block), chunk_info);
 }
 
-void GlobalAggregatingTransform::mergeTwoLevel(ManyStreamingAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
+void GlobalAggregatingTransform::mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, ChunkInfoPtr & chunk_info)
 {
     /// FIXME
     (void)data;
     (void)chunk_info;
 }
 
+}
 }

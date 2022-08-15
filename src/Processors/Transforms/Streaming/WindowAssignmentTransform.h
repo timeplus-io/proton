@@ -2,7 +2,7 @@
 
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/ISimpleTransform.h>
 
@@ -16,13 +16,14 @@ namespace DB
 
 class ColumnTuple;
 
-class StreamingWindowAssignmentTransform final : public ISimpleTransform
+namespace Streaming
+{
+class WindowAssignmentTransform final : public ISimpleTransform
 {
 public:
-    StreamingWindowAssignmentTransform(
-        const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr desc);
+    WindowAssignmentTransform(const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc);
 
-    ~StreamingWindowAssignmentTransform() override = default;
+    ~WindowAssignmentTransform() override = default;
 
     String getName() const override { return "StreamingWindowAssignmentTransform"; }
 
@@ -37,7 +38,7 @@ private:
 
 private:
     ContextPtr context;
-    StreamingFunctionDescriptionPtr func_desc;
+    FunctionDescriptionPtr func_desc;
 
     Chunk chunk_header;
 
@@ -48,4 +49,5 @@ private:
     Int32 wend_pos = -1;
     String func_name;
 };
+}
 }

@@ -4,6 +4,8 @@
 
 namespace DB
 {
+namespace Streaming
+{
 class HopTumbleBaseWatermark : public Watermark
 {
 public:
@@ -57,4 +59,6 @@ protected:
 
     bool has_event_in_window = false;
 };
+
+}
 }

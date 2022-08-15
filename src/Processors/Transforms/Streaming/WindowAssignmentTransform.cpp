@@ -1,4 +1,4 @@
-#include "StreamingWindowAssignmentTransform.h"
+#include "WindowAssignmentTransform.h"
 
 #include <Columns/ColumnArray.h>
 #include <Functions/FunctionFactory.h>
@@ -8,6 +8,8 @@
 #include <Common/ProtonCommon.h>
 
 namespace DB
+{
+namespace Streaming
 {
 namespace
 {
@@ -42,8 +44,8 @@ namespace
     }
 }
 
-StreamingWindowAssignmentTransform::StreamingWindowAssignmentTransform(
-    const Block & input_header, const Block & output_header, StreamingFunctionDescriptionPtr desc)
+WindowAssignmentTransform::WindowAssignmentTransform(
+    const Block & input_header, const Block & output_header, FunctionDescriptionPtr desc)
     : ISimpleTransform(input_header, output_header, false), func_desc(std::move(desc)), chunk_header(output_header.getColumns(), 0)
 {
     assert(func_desc);
@@ -53,7 +55,7 @@ StreamingWindowAssignmentTransform::StreamingWindowAssignmentTransform(
     func_name = func_desc->func_ast->as<ASTFunction>()->name;
 }
 
-void StreamingWindowAssignmentTransform::transform(Chunk & chunk)
+void WindowAssignmentTransform::transform(Chunk & chunk)
 {
     if (chunk.hasRows())
         assignWindow(chunk);
@@ -63,7 +65,7 @@ void StreamingWindowAssignmentTransform::transform(Chunk & chunk)
         chunk.setColumns(chunk_header.cloneEmptyColumns(), 0);
 }
 
-void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
+void WindowAssignmentTransform::assignWindow(Chunk & chunk)
 {
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 
@@ -120,7 +122,7 @@ void StreamingWindowAssignmentTransform::assignWindow(Chunk & chunk)
     chunk.setColumns(result.getColumns(), result.rows());
 }
 
-ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block & result, const ColumnTuple * col_tuple)
+ALWAYS_INLINE void WindowAssignmentTransform::assignTumbleWindow(Block & result, const ColumnTuple * col_tuple)
 {
     if (wstart_pos < wend_pos)
     {
@@ -134,7 +136,7 @@ ALWAYS_INLINE void StreamingWindowAssignmentTransform::assignTumbleWindow(Block 
     }
 }
 
-void StreamingWindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTuple * col_tuple)
+void WindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTuple * col_tuple)
 {
     bool replicated = false;
     if (wstart_pos < wend_pos)
@@ -149,7 +151,7 @@ void StreamingWindowAssignmentTransform::assignHopWindow(Block & result, const C
     }
 }
 
-void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_header, const Block & output_header)
+void WindowAssignmentTransform::calculateColumns(const Block & input_header, const Block & output_header)
 {
     expr_column_positions.reserve(func_desc->input_columns.size());
 
@@ -181,3 +183,5 @@ void StreamingWindowAssignmentTransform::calculateColumns(const Block & input_he
     }
 }
 }
+}
+

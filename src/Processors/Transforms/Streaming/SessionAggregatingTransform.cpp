@@ -4,33 +4,40 @@
 
 namespace DB
 {
+namespace Streaming
+{
 namespace
 {
-    void splitColumns(size_t start, size_t size, IColumn::Filter & filt, size_t late_events, Columns & columns, Columns & to_process)
-    {
-        assert(columns.size() == to_process.size());
-        for (size_t i = 0; i < columns.size(); i++)
-            to_process[i] = columns[i]->cut(start, size)->filter(filt, size - late_events);
-    }
+void splitColumns(size_t start, size_t size, IColumn::Filter & filt, size_t late_events, Columns & columns, Columns & to_process)
+{
+    assert(columns.size() == to_process.size());
+    for (size_t i = 0; i < columns.size(); i++)
+        to_process[i] = columns[i]->cut(start, size)->filter(filt, size - late_events);
+}
 }
 
-SessionAggregatingTransform::SessionAggregatingTransform(
-    Block header, StreamingAggregatingTransformParamsPtr params_)
-    : SessionAggregatingTransform(
-        std::move(header), std::move(params_), std::make_unique<ManyStreamingAggregatedData>(1), 0, 1, 1)
+SessionAggregatingTransform::SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
+    : SessionAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
 {
 }
 
 SessionAggregatingTransform::SessionAggregatingTransform(
     Block header,
-    StreamingAggregatingTransformParamsPtr params_,
-    ManyStreamingAggregatedDataPtr many_data_,
+    AggregatingTransformParamsPtr params_,
+    ManyAggregatedDataPtr many_data_,
     size_t current_variant,
     size_t max_threads_,
     size_t temporary_data_merge_threads_)
-    : StreamingAggregatingTransform(std::move(header), std::move(params_), std::move(many_data_), current_variant, max_threads_, temporary_data_merge_threads_, "SessionAggregatingTransform")
+    : AggregatingTransform(
+        std::move(header),
+        std::move(params_),
+        std::move(many_data_),
+        current_variant,
+        max_threads_,
+        temporary_data_merge_threads_,
+        "SessionAggregatingTransform")
 {
-    assert(params->params.group_by == StreamingAggregator::Params::GroupBy::SESSION);
+    assert(params->params.group_by == Aggregator::Params::GroupBy::SESSION);
 }
 
 void SessionAggregatingTransform::consume(Chunk chunk)
@@ -158,7 +165,7 @@ void SessionAggregatingTransform::finalizeSession(std::vector<size_t> & sessions
         if (prepared_data_ptr->empty())
             return;
 
-        StreamingAggregatedDataVariantsPtr & first = prepared_data_ptr->at(0);
+        AggregatedDataVariantsPtr & first = prepared_data_ptr->at(0);
         /// At least we need one arena in first data item per thread
         Arenas & first_pool = first->aggregates_pools;
         for (size_t j = first_pool.size(); j < max_threads; j++)
@@ -171,8 +178,7 @@ void SessionAggregatingTransform::finalizeSession(std::vector<size_t> & sessions
 
         auto end = MonotonicMilliseconds::now();
 
-        LOG_INFO(
-            log, "Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
+        LOG_INFO(log, "Took {} milliseconds to finalize {} shard aggregation", end - start, many_data->variants.size());
 
         // Clear the finalization count
         many_data->finalizations.store(0);
@@ -206,7 +212,7 @@ void SessionAggregatingTransform::finalizeSession(std::vector<size_t> & sessions
 }
 
 void SessionAggregatingTransform::mergeTwoLevel(
-    ManyStreamingAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & final_block)
+    ManyAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & final_block)
 {
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
@@ -267,12 +273,10 @@ void SessionAggregatingTransform::mergeTwoLevel(
                 {
                     if (params->params.time_col_is_datetime64)
                     {
-                        window_start_col_ptr->insert(
-                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_start / common::exp10_i64(info.scale), info.win_start % common::exp10_i64(info.scale), info.scale)
-                        );
-                        window_end_col_ptr->insert(
-                            DecimalUtils::decimalFromComponents<DateTime64>(info.win_end / common::exp10_i64(info.scale), info.win_end % common::exp10_i64(info.scale), info.scale)
-                        );
+                        window_start_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
+                            info.win_start / common::exp10_i64(info.scale), info.win_start % common::exp10_i64(info.scale), info.scale));
+                        window_end_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
+                            info.win_end / common::exp10_i64(info.scale), info.win_end % common::exp10_i64(info.scale), info.scale));
                     }
                     else
                     {
@@ -315,6 +319,8 @@ void SessionAggregatingTransform::removeBuckets(std::vector<size_t> & sessions)
     for (const size_t & session_id : sessions)
         variants.aggregator->removeBucketsOfSession(variants, session_id);
 
-    const_cast<StreamingAggregator *>(variants.aggregator)->clearInfoOfEmitSessions();
+    const_cast<Aggregator *>(variants.aggregator)->clearInfoOfEmitSessions();
+}
+
 }
 }

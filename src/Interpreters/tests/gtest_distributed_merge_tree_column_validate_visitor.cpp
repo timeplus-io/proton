@@ -1,19 +1,17 @@
-#include <Interpreters/Streaming/StreamColumnValidateVisitor.h>
+#include <Interpreters/Streaming/ColumnValidateVisitor.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 
 #include <gtest/gtest.h>
 
-using namespace DB;
-
 static void validateCreate(const String & query)
 {
     const char * start = query.data();
     const char * end = start + query.size();
-    ParserQuery parser(end);
-    ASTPtr ast = parseQuery(parser, start, end, "", 0, 0);
-    StreamColumnValidateMatcher::Data column_validate_data;
-    StreamColumnValidateVisitor column_validate_visitor(column_validate_data);
+    DB::ParserQuery parser(end);
+    DB::ASTPtr ast = DB::parseQuery(parser, start, end, "", 0, 0);
+    DB::Streaming::ColumnValidateMatcher::Data column_validate_data;
+    DB::Streaming::ColumnValidateVisitor column_validate_visitor(column_validate_data);
     column_validate_visitor.visit(ast);
 }
 

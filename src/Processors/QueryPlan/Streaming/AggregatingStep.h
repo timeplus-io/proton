@@ -1,21 +1,23 @@
 #pragma once
 
-#include <Interpreters/Streaming/StreamingAggregator.h>
+#include <Interpreters/Streaming/Aggregator.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
 
-struct StreamingAggregatingTransformParams;
-using StreamingAggregatingTransformParamsPtr = std::shared_ptr<StreamingAggregatingTransformParams>;
+namespace Streaming
+{
+struct AggregatingTransformParams;
+using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
 
 /// Streaming Aggregation. See StreamingAggregatingTransform.
-class StreamingAggregatingStep : public ITransformingStep
+class AggregatingStep : public ITransformingStep
 {
 public:
-    StreamingAggregatingStep(
+    AggregatingStep(
         const DataStream & input_stream_,
-        StreamingAggregator::Params params_,
+        Aggregator::Params params_,
         bool final_,
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
@@ -31,10 +33,10 @@ public:
     void describeActions(FormatSettings &) const override;
     void describePipeline(FormatSettings & settings) const override;
 
-    const StreamingAggregator::Params & getParams() const { return params; }
+    const Aggregator::Params & getParams() const { return params; }
 
 private:
-    StreamingAggregator::Params params;
+    Aggregator::Params params;
     bool final;
     size_t merge_threads;
     size_t temporary_data_merge_threads;
@@ -44,5 +46,5 @@ private:
 
     Processors aggregating;
 };
-
+}
 }

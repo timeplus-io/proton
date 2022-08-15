@@ -12,10 +12,12 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
+namespace Streaming
+{
 TableFunctionHop::TableFunctionHop(const String & name_) : TableFunctionWindow(name_)
 {
 }
@@ -63,5 +65,6 @@ DataTypePtr TableFunctionHop::getElementType(const DataTypeTuple * tuple) const
 void registerTableFunctionHop(TableFunctionFactory & factory)
 {
     factory.registerFunction("hop", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); });
+}
 }
 }

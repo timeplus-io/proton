@@ -56,12 +56,12 @@
 
 #include <Compression/CompressionFactory.h>
 
+#include <Interpreters/ApplyWithSubqueryVisitor.h>
+#include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/QueryLog.h>
+#include <Interpreters/Streaming/BlockUtils.h>
 #include <Interpreters/addTypeConversionToAST.h>
-#include <Interpreters/FunctionNameNormalizer.h>
-#include <Interpreters/ApplyWithSubqueryVisitor.h>
-#include <Interpreters/BlockUtils.h>
 
 #include <TableFunctions/TableFunctionFactory.h>
 #include <base/logger_useful.h>
@@ -70,8 +70,8 @@
 
 /// proton: starts.
 #include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/Streaming/ColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
-#include <Interpreters/Streaming/StreamColumnValidateVisitor.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Storages/Streaming/StorageStreamProperties.h>
 /// proton: ends.
@@ -863,7 +863,7 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
         return false;
 
     if (!create.storage || !create.storage->engine)
-        prepareEngine(create, ctx);
+        Streaming::prepareEngine(create, ctx);
 
     if (create.storage->engine->name != "Stream")
         /// We only support `Stream` table engine for now
@@ -879,8 +879,8 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
                 {
                     /// it comes from TCPHandler, therefore update column definitions if required
                     /// First prepare settings, and then create query since the latter depends on the settings
-                    prepareEngineSettings(create, ctx);
-                    prepareCreateQueryForStream(create);
+                    Streaming::prepareEngineSettings(create, ctx);
+                    Streaming::prepareCreateQueryForStream(create);
                 }
                 return false;
             }
@@ -900,16 +900,16 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     if (ctx->isLocalQueryFromTCP())
     {
         /// it comes from TCPHandler, therefore update column definitions if required
-        prepareCreateQueryForStream(create);
-        prepareEngineSettings(create, ctx);
+        Streaming::prepareCreateQueryForStream(create);
+        Streaming::prepareEngineSettings(create, ctx);
 
         /// Build json payload here from SQL statement
-        payload = getJSONFromCreateQuery(create);
+        payload = Streaming::getJSONFromCreateQuery(create);
         ctx->setDistributedDDLOperation(true);
     }
     else
     {
-        payload = getJSONFromCreateQuery(create);
+        payload = Streaming::getJSONFromCreateQuery(create);
     }
 
     if (payload.empty() || !ctx->isDistributedDDLOperation())
@@ -960,14 +960,14 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
 
     /// Schema: (payload, database, table, timestamp, query_id, user, shards, replication_factor, logstore_replication_factor)
-    Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+    Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
 
-    appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, nlog::OpCode::CREATE_TABLE, log);
+    Streaming::appendDDLBlock(std::move(block), ctx, {"table_type", "url_parameters"}, nlog::OpCode::CREATE_TABLE, log);
 
     LOG_INFO(log, "Request of creating stream query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
 
     /// If is a internal create query or synchronous DDL is enabled, sync create task status
-    waitForDDLOps(log, ctx, internal);
+    Streaming::waitForDDLOps(log, ctx, internal);
 
     /// FIXME, project tasks status
     return true;
@@ -1016,10 +1016,10 @@ bool InterpreterCreateQuery::createDatabaseDistributed(ASTCreateQuery & create)
         /// Milliseconds since epoch
         std::vector<std::pair<String, UInt64>> uint64_cols = {{"timestamp", MonotonicMilliseconds::now()}};
 
-        Block block = buildBlock(string_cols, int32_cols, uint64_cols);
+        Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
         /// Schema: (payload, database, timestamp, query_id, user)
 
-        appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::CREATE_DATABASE, log);
+        Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, nlog::OpCode::CREATE_DATABASE, log);
 
         LOG_INFO(log, "Request of create database query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
@@ -1517,8 +1517,8 @@ BlockIO InterpreterCreateQuery::execute()
     FunctionNameNormalizer().visit(query_ptr.get());
 
     /// proton: starts.
-    StreamColumnValidateMatcher::Data column_validate_data;
-    StreamColumnValidateVisitor column_validate_visitor(column_validate_data);
+    Streaming::ColumnValidateMatcher::Data column_validate_data;
+    Streaming::ColumnValidateVisitor column_validate_visitor(column_validate_data);
     column_validate_visitor.visit(query_ptr);
     /// proton: ends.
 

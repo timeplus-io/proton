@@ -7,7 +7,7 @@
 #include <base/ClockUtils.h>
 #include <pcg_random.hpp>
 
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 #include <KafkaLog/KafkaWAL.h>
 #include <KafkaLog/KafkaWALConsumerMultiplexer.h>
 #include <Storages/MergeTree/MergeTreeData.h>

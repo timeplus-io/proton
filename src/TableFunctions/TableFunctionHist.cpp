@@ -10,13 +10,14 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
+namespace Streaming
+{
 TableFunctionHist::TableFunctionHist(const String & name_) : TableFunctionProxyBase(name_)
 {
-    help_message = fmt::format(
-        "Function '{}' requires only 1 stream parameter", name);
+    help_message = fmt::format("Function '{}' requires only 1 stream parameter", name);
 }
 
 void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr context)
@@ -52,5 +53,6 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
 void registerTableFunctionHist(TableFunctionFactory & factory)
 {
     factory.registerFunction("table", []() -> TableFunctionPtr { return std::make_shared<TableFunctionHist>("table"); });
+}
 }
 }

@@ -16,8 +16,8 @@
 #include <Columns/FilterDescription.h>
 
 /// proton: starts.
-#include <Interpreters/Streaming/StreamingWindowCommon.h>
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
 
 namespace Poco
@@ -34,12 +34,6 @@ class QueryPlan;
 
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
-
-/// proton: starts
-class ProxyStream;
-class StorageStream;
-class BaseScaleInterval;
-/// proton: ends
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
@@ -112,8 +106,8 @@ public:
     bool isStreaming() const override;
     Streaming::HashSemantic getHashSemantic() const override;
     bool hasStreamingWindowFunc() const override;
-    WindowType windowType() const;
-    StreamingFunctionDescriptionPtr getStreamingFunctionDescription() const;
+    Streaming::WindowType windowType() const;
+    Streaming::FunctionDescriptionPtr getStreamingFunctionDescription() const;
     bool hasGlobalAggregation() const override;
     /// proton: ends
 
@@ -172,7 +166,7 @@ private:
     String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
 
     /// proton: starts
-    void executeLastXTail(QueryPlan & query_plan, const BaseScaleInterval & last_interval_bs_) const;
+    void executeLastXTail(QueryPlan & query_plan, const Streaming::BaseScaleInterval & last_interval_bs_) const;
     void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
@@ -223,7 +217,7 @@ private:
     /// A copy of required_columns before adding the additional ones for streaming processing
     Names required_columns_after_streaming_window;
     bool last_tail = false;
-    BaseScaleInterval last_interval_bs;
+    Streaming::BaseScaleInterval last_interval_bs;
     bool emit_version = false;
     std::optional<bool> is_streaming;
     /// proton: ends

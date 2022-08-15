@@ -16,9 +16,12 @@
 namespace DB
 {
 class ASTSelectQuery;
+
+namespace Streaming
+{
 class BaseScaleInterval;
 
-class StreamingEmitInterpreter final
+class EmitInterpreter final
 {
 public:
     template <typename... Rules>
@@ -73,4 +76,5 @@ public:
     /// To check emit ast
     static void checkEmitAST(ASTPtr & query);
 };
+}
 }

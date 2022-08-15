@@ -1,19 +1,18 @@
 #pragma once
 
-#include <Interpreters/Streaming/StreamingFunctionDescription.h>
+#include <Interpreters/Streaming/FunctionDescription.h>
 /// #include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
+namespace Streaming
+{
 class TimestampTransformStep final : public ITransformingStep
 {
 public:
     TimestampTransformStep(
-        const DataStream & input_stream_,
-        Block output_header,
-        StreamingFunctionDescriptionPtr timestamp_func_desc_,
-        bool backfill_);
+        const DataStream & input_stream_, Block output_header, FunctionDescriptionPtr timestamp_func_desc_, bool backfill_);
 
     ~TimestampTransformStep() override = default;
 
@@ -22,7 +21,8 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    StreamingFunctionDescriptionPtr timestamp_func_desc;
+    FunctionDescriptionPtr timestamp_func_desc;
     bool backfill;
 };
+}
 }
