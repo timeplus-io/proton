@@ -181,7 +181,6 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
         {
             case Strictness::Unspecified:
                 break;
-            case Strictness::StreamingAny: /// proton : starts
             case Strictness::RightAny:
             case Strictness::Any:
                 settings.ostr << "ANY ";
@@ -198,15 +197,6 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
             case Strictness::Anti:
                 settings.ostr << "ANTI ";
                 break;
-            /// proton : starts
-            case Strictness::Range:
-                break;
-            case Strictness::StreamingAsof:
-                /// fallthrough
-            case Strictness::RangeAsof:
-                settings.ostr << "ASOF ";
-                break;
-            /// proton : ends
         }
     }
 

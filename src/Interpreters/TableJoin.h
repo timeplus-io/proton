@@ -280,6 +280,7 @@ public:
     void setRangeType(Streaming::RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
     const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
     void validateRangeAsof(Int64 max_range) const;
+    bool isRangeJoin() const { return range_asof_join_ctx.type != Streaming::RangeType::None; }
     /// proton : ends
 
     ASTPtr leftKeysList() const;

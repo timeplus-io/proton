@@ -2,15 +2,17 @@
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Streaming/RowRefs.h>
+#include <Interpreters/Streaming/joinBlockList.h>
+#include <Interpreters/Streaming/joinMetrics.h>
 
 #include <gtest/gtest.h>
 
 namespace
 {
 /// TODO, other types
-DB::BlocksList prepareRightBlocks()
+std::shared_ptr<DB::Streaming::JoinBlockList> prepareRightBlocks(DB::Streaming::JoinMetrics & join_metrics)
 {
-    DB::BlocksList blocks;
+    auto blocks = std::make_shared<DB::Streaming::JoinBlockList>(join_metrics);
     {
         auto type = std::make_shared<DB::DataTypeDateTime64>(3);
         auto mutable_col = type->createColumn();
@@ -21,7 +23,7 @@ DB::BlocksList prepareRightBlocks()
 
         DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
 
-        blocks.push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
+        blocks->blocks.push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
     }
 
     {
@@ -34,7 +36,7 @@ DB::BlocksList prepareRightBlocks()
 
         DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
 
-        blocks.push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
+        blocks->blocks.push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
     }
 
     {
@@ -47,25 +49,25 @@ DB::BlocksList prepareRightBlocks()
 
         DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
 
-        blocks.push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
+        blocks->blocks.push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
     }
 
     return blocks;
 }
 
-DB::Block prepareLeftBlock()
+DB::Block prepareLeftBlock(DB::Streaming::JoinMetrics & join_metrics)
 {
-    auto blocks{prepareRightBlocks()};
+    auto blocks{prepareRightBlocks(join_metrics)};
     DB::Block block;
-    for (size_t i = 0; auto & b : blocks)
+    for (size_t i = 0; auto & b : blocks->blocks)
     {
         if (i++ == 0)
         {
-            block.swap(b);
+            block.swap(b.block);
         }
         else
         {
-            auto & col = b.getByPosition(0).column;
+            auto & col = b.block.getByPosition(0).column;
             block.getByPosition(0).column->assumeMutable()->insertRangeFrom(*col, 0, col->size());
         }
     }
@@ -90,23 +92,24 @@ struct Case
 
 void commonTest(const std::vector<Case> & cases)
 {
+    DB::Streaming::JoinMetrics join_metrics;
+
     for (const auto & test_case : cases)
     {
-        auto right_blocks{prepareRightBlocks()};
-        auto left_block{prepareLeftBlock()};
+        auto right_blocks{prepareRightBlocks(join_metrics)};
+        auto left_block{prepareLeftBlock(join_metrics)};
 
         auto & asof_col = left_block.getByPosition(0);
         DB::Streaming::AsofRowRefs row_refs(asof_col.type->getTypeId());
 
-        for (auto iter = right_blocks.begin(); iter != right_blocks.end(); ++iter)
+        for (auto iter = right_blocks->begin(); iter != right_blocks->end(); ++iter)
         {
-            iter->rowCountAsRefCount();
-            auto & right_asof_col = iter->getByPosition(0);
-            for (size_t i = 0; i < iter->rows(); ++i)
+            auto & right_asof_col = iter->block.getByPosition(0);
+            for (size_t i = 0; i < iter->block.rows(); ++i)
                 row_refs.insert(
                     asof_col.type->getTypeId(),
                     *right_asof_col.column,
-                    &right_blocks,
+                    right_blocks.get(),
                     iter,
                     i,
                     test_case.inequality,
@@ -115,9 +118,9 @@ void commonTest(const std::vector<Case> & cases)
 
         auto result{row_refs.findAsof(asof_col.type->getTypeId(), test_case.inequality, *asof_col.column, test_case.row_num)};
 
-        std::cout << "keep_versions=" << test_case.keep_versions << "\n";
+        /// std::cout << "keep_versions=" << test_case.keep_versions << "\n";
 
-        ASSERT_EQ(right_blocks.size(), test_case.expected_block_count);
+        ASSERT_EQ(right_blocks->size(), test_case.expected_block_count);
 
         if (test_case.expected_matching_row)
         {
@@ -125,9 +128,9 @@ void commonTest(const std::vector<Case> & cases)
             ASSERT_EQ(result->row_num, test_case.expected_matching_row.value());
 
             size_t block_idx = 0;
-            for (auto iter = right_blocks.begin(); iter != right_blocks.end(); ++iter)
+            for (auto iter = right_blocks->begin(); iter != right_blocks->end(); ++iter)
             {
-                if (iter == result->block)
+                if (iter == result->block_iter)
                     break;
 
                 ++block_idx;

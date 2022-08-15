@@ -1,9 +1,10 @@
 #pragma once
 
 #include "JoinStreamDescription.h"
-#include "join_tuple.h"
+#include "RowRefs.h"
+#include "joinData.h"
+#include "joinKind.h"
 
-#include <Core/SplitBlock.h>
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/TableJoin.h>
 #include <Common/ColumnUtils.h>
@@ -11,11 +12,6 @@
 
 namespace DB
 {
-namespace JoinCommon
-{
-    class JoinMask;
-}
-
 namespace Streaming
 {
 /** Data structure for implementation of Streaming JOIN which is always kind of ASOF join since its last join key
@@ -86,7 +82,6 @@ namespace Streaming
   * If it is true, we always generate Nullable column and substitute NULLs for non-joined rows,
   *  as in standard SQL.
   */
-
 class HashJoin : public IJoin
 {
 public:
@@ -108,7 +103,10 @@ public:
 
     bool needBufferLeftStream() const { return right_stream_desc.hash_semantic != HashSemantic::VersionedKV; }
 
-    bool isRightStreamDataRefCounted() const { return right_stream_desc.hash_semantic == HashSemantic::VersionedKV || right_stream_desc.hash_semantic == HashSemantic::ChangeLogKV; }
+    bool isRightStreamDataRefCounted() const
+    {
+        return right_stream_desc.hash_semantic == HashSemantic::VersionedKV || right_stream_desc.hash_semantic == HashSemantic::ChangeLogKV;
+    }
 
     UInt64 keepVersions() const { return right_stream_desc.keep_versions; }
 
@@ -152,363 +150,153 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
     ASTTableJoin::Strictness getStrictness() const { return strictness; }
+    Strictness getStreamingStrictness() const { return streaming_strictness; }
     const std::optional<TypeIndex> & getAsofType() const { return asof_type; }
     ASOF::Inequality getAsofInequality() const { return asof_inequality; }
     bool anyTakeLastRow() const { return any_take_last_row; }
 
     const ColumnWithTypeAndName & rightAsofKeyColumn() const;
 
-    /// proton : starts. Using types from HashJoin
-    using Type = DB::HashJoin::Type;
-    using MapsOne = DB::HashJoin::MapsOne;
-    using MapsAll = DB::HashJoin::MapsAll;
-    using MapsAsof = DB::HashJoin::MapsAsof;
-    using MapsStreamingAsof = DB::HashJoin::MapsStreamingAsof;
-    using MapsVariant = DB::HashJoin::MapsVariant;
-    /// proton : ends
+/// proton : starts. copied from from HashJoin
 
-    using RawBlockPtr = const Block *;
-    using BlockNullmapList = std::deque<std::pair<RawBlockPtr, ColumnPtr>>;
+/// Different types of keys for maps.
+#define APPLY_FOR_JOIN_VARIANTS(M) \
+    M(key8) \
+    M(key16) \
+    M(key32) \
+    M(key64) \
+    M(key_string) \
+    M(key_fixed_string) \
+    M(keys128) \
+    M(keys256) \
+    M(hashed)
 
-    struct StreamData
+
+/// Used for reading from StorageJoin and applying joinGet function
+#define APPLY_FOR_JOIN_VARIANTS_LIMITED(M) \
+    M(key8) \
+    M(key16) \
+    M(key32) \
+    M(key64) \
+    M(key_string) \
+    M(key_fixed_string)
+
+    enum class Type
     {
-        explicit StreamData(HashJoin * join_) : join(join_) { }
-
-        StreamData(const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_, HashJoin * join_)
-            : range_asof_join_ctx(range_asof_join_ctx_), asof_col_name(asof_column_name_), join(join_)
-        {
-            updateBucketSize();
-        }
-
-        void updateBucketSize()
-        {
-            bucket_size = (range_asof_join_ctx.upper_bound - range_asof_join_ctx.lower_bound + 1) / 2;
-
-            /// Given a left_bucket (base bucket 0), calculate the possible right buckets to join
-            /// Note
-            /// 1. We have always transformed the join expression in form of `left.column - right.column`,
-            /// like date_diff('second', left._tp_time, right._tp_time)
-            /// 2. range_join_ctx.lower_bound <= 0
-            /// 3. range_join_ctx.upper_bound >= 0
-            /// There are several cases in the following forms.
-            /// 1. -20 < left.column - right.column < 0 (left column is less than right column), right buckets to join [0, 1, 2]
-            /// 2. -18 < left.column - right.column < 2 (left column is generally less than right column), right buckets to join [-1, 0, 1, 2]
-            /// 3. -10 < left.column - right.column < 10 (left, right column is generally in the same range), right buckets to join [-1, 0, 1]
-            /// 4. -2 < left.column - right.column < 18 (left column is generally greater than right column), right buckets to join [-2, -1, 0, 1]
-            /// 5. 0 < left.column - right.column < 20 (left column is greater than right column), right buckets to join [-2, -1, 0]
-
-            join_start_bucket = 0; /// left_bucket - join_start_bucket * bucket_size
-            join_stop_bucket = 0; /// left_bucket + join_stop_bucket * bucket_size
-
-            /// Bucket join: given a left bucket, the right joined blocks can possibly fall in range : [left_bucket - 2 * bucket_size, left_bucket + 2 * bucket_size]
-
-            if (range_asof_join_ctx.upper_bound == 0)
-            {
-                /// case 1, [left_bucket, left_bucket + 2 * bucket_size]
-                join_start_bucket = 0;
-                join_stop_bucket = 2;
-            }
-            else if (range_asof_join_ctx.upper_bound < bucket_size)
-            {
-                /// case 2, [left_bucket - 1 * bucket_size, left_bucket + 2 * bucket_size]
-                join_start_bucket = 1;
-                join_stop_bucket = 2;
-            }
-            else if (range_asof_join_ctx.upper_bound == bucket_size)
-            {
-                /// case 3, [left_bucket - 1 * bucket_size, left_bucket + 1 * bucket_size]
-                join_start_bucket = 1;
-                join_stop_bucket = 1;
-            }
-            else if (range_asof_join_ctx.upper_bound > bucket_size && range_asof_join_ctx.lower_bound < 0)
-            {
-                /// case 4, [left_bucket - 2 * bucket_size, left_bucket + 1 * bucket_size]
-                join_start_bucket = 2;
-                join_stop_bucket = 1;
-            }
-            else if (
-                range_asof_join_ctx.lower_bound
-                == 0) /// we can't use upper_bound == 2 * bucket_size here for case like 0 < left - right < 13
-            {
-                /// case 5, [left_bucket - 2 * bucket_size, left_bucket]
-                join_start_bucket = 2;
-                join_stop_bucket = 0;
-            }
-            else
-                assert(0);
-        }
-
-        template <typename V>
-        size_t removeOldBuckets(std::map<Int64, V> & blocks, std::string_view stream)
-        {
-            Int64 watermark = join->combined_watermark;
-            watermark -= bucket_size;
-
-            size_t remaining_bytes = 0;
-
-            std::vector<Int64> buckets_to_remove;
-            {
-                std::scoped_lock lock(mutex);
-
-                for (auto iter = blocks.begin(); iter != blocks.end(); ++iter)
-                {
-                    if (iter->first <= watermark)
-                    {
-                        buckets_to_remove.push_back(iter->first);
-                        iter = blocks.erase(iter);
-                    }
-                    else
-                        break;
-                }
-
-                remaining_bytes = metrics.total_bytes;
-            }
-
-            if (!buckets_to_remove.empty())
-                LOG_INFO(
-                    join->log,
-                    "Removing data in time buckets={} in {} stream. Remaining bytes={} blocks={}",
-                    fmt::join(buckets_to_remove.begin(), buckets_to_remove.end(), ","),
-                    stream,
-                    metrics.total_bytes,
-                    metrics.total_blocks);
-
-            return remaining_bytes;
-        }
-
-        void updateAsofJoinColumnPositionAndScale(UInt16 scale, size_t asof_col_pos_, TypeIndex type_index)
-        {
-            range_asof_join_ctx.lower_bound *= intExp10(scale);
-            range_asof_join_ctx.upper_bound *= intExp10(scale);
-            asof_col_pos = asof_col_pos_;
-
-            updateBucketSize();
-
-            range_splitter = createBlockRangeSplitter(type_index, asof_col_pos, bucket_size, true);
-        }
-
-        void setHasNewData(bool has_new_data) { has_new_data_since_last_join = has_new_data; }
-        bool hasNewData() const { return has_new_data_since_last_join; }
-
-        /// Check if [min_ts, max_ts] intersects with time bucket [bucket_start_ts, bucket_start_ts + bucket_size]
-        /// The rational behind this is stream data is high temporal, we probably has a good chance to prune the
-        /// data up-front before the join
-        bool ALWAYS_INLINE intersect(Int64 left_min_ts, Int64 left_max_ts, Int64 right_min_ts, Int64 right_max_ts) const
-        {
-            assert(left_min_ts > 0 && left_max_ts >= left_min_ts);
-            assert(right_min_ts > 0 && right_max_ts >= right_min_ts);
-            /// left : [left_min_ts, right_max_ts]
-            /// right : [right_min_ts, right_max_ts]
-            /// lower_bound < left - right < upper_bound
-            /// There are 2 cases for non-intersect: iter min/max ts is way bigger or way smaller comparing to right time bucket
-            /// We can consider left inequality and right inequality to accurately prune non-intersected block,
-            /// but it is ok here as long as we don't miss any data. And since most of the time,
-            /// the timestamp subtraction is probably not aligned with lower_bound / upper bound, it is simpler / more efficient
-            /// to just loose the check here
-            return !(
-                ((left_max_ts - right_min_ts) < range_asof_join_ctx.lower_bound)
-                || (left_min_ts - right_max_ts > range_asof_join_ctx.upper_bound));
-        }
-
-        struct StreamBlocks
-        {
-            explicit StreamBlocks(StreamData * stream_data_) : stream_data(stream_data_) { }
-
-            ~StreamBlocks()
-            {
-                stream_data->metrics.current_total_blocks -= blocks.size();
-                stream_data->metrics.current_total_bytes -= total_bytes;
-                stream_data->metrics.total_blocks -= blocks.size();
-                stream_data->metrics.total_bytes -= total_bytes;
-                stream_data->metrics.gced_blocks += blocks.size();
-            }
-
-            void ALWAYS_INLINE updateMetrics(const Block & block)
-            {
-                min_ts = std::min(block.info.watermark_lower_bound, min_ts);
-                max_ts = std::max(block.info.watermark, max_ts);
-
-                /// Update metrics
-                auto bytes = block.allocatedBytes();
-                total_bytes += bytes;
-                ++stream_data->metrics.current_total_blocks;
-                stream_data->metrics.current_total_bytes += bytes;
-                ++stream_data->metrics.total_blocks;
-                stream_data->metrics.total_bytes += bytes;
-            }
-
-            void ALWAYS_INLINE negateMetrics(const Block & block)
-            {
-                /// Update metrics
-                auto bytes = block.allocatedBytes();
-                total_bytes -= bytes;
-                --stream_data->metrics.current_total_blocks;
-                stream_data->metrics.current_total_bytes -= bytes;
-                --stream_data->metrics.total_blocks;
-                stream_data->metrics.total_bytes -= bytes;
-                ++stream_data->metrics.gced_blocks;
-            }
-
-            BlocksList blocks;
-            Int64 min_ts = std::numeric_limits<Int64>::max();
-            Int64 max_ts = -1;
-            size_t total_bytes = 0;
-
-            StreamData * stream_data;
-        };
-
-        bool has_new_data_since_last_join = false;
-        RangeAsofJoinContext range_asof_join_ctx;
-        Int64 bucket_size = 0;
-        Int64 join_start_bucket = 0;
-        Int64 join_stop_bucket = 0;
-        String asof_col_name;
-        Int64 asof_col_pos = -1;
-        BlockRangeSplitterPtr range_splitter;
-        std::atomic_int64_t current_watermark = 0;
-        HashJoin * join;
-
-        struct Metrics
-        {
-            size_t current_total_blocks = 0;
-            size_t current_total_bytes = 0;
-            size_t total_blocks = 0;
-            size_t total_bytes = 0;
-            size_t gced_blocks = 0;
-
-            String string() const
-            {
-                return fmt::format(
-                    "total_bytes={} total_blocks={} current_total_bytes={} current_total_blocks={} gced_blocks={}",
-                    total_bytes,
-                    total_blocks,
-                    current_total_bytes,
-                    current_total_blocks,
-                    gced_blocks);
-            }
-        };
-        Metrics metrics;
-
-        std::mutex mutex;
+        EMPTY,
+        CROSS,
+        DICT,
+#define M(NAME) NAME,
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
     };
 
-    struct RightTableData : public StreamData
+    /** Different data structures, that are used to perform JOIN.
+      */
+    template <typename Mapped>
+    struct MapsTemplate
     {
-        using StreamData::StreamData;
+        using MappedType = Mapped;
+        std::unique_ptr<FixedHashMap<UInt8, Mapped>> key8;
+        std::unique_ptr<FixedHashMap<UInt16, Mapped>> key16;
+        std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
+        std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
+        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>> key_string;
+        std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
+        std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32>> keys128;
+        std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32>> keys256;
+        std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash>> hashed;
 
-        Type type = Type::EMPTY;
-
-        Block sample_block; /// Block as it would appear in the BlockList
-
-        struct RightTableBlocks : public StreamBlocks
+        void create(Type which)
         {
-            using StreamBlocks::StreamBlocks;
-
-            void insertBlock(Block && block)
+            switch (which)
             {
-                /// FIXME, there are hashmap memory as well
-                updateMetrics(block);
+                case Type::EMPTY:
+                    break;
+                case Type::CROSS:
+                    break;
+                case Type::DICT:
+                    break;
 
-                blocks.push_back(std::move(block));
-                has_new_data_since_last_join = true;
+#define M(NAME) \
+    case Type::NAME: \
+        NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
+        break;
+                    APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+            }
+        }
+
+        size_t getTotalRowCount(Type which) const
+        {
+            switch (which)
+            {
+                case Type::EMPTY:
+                    return 0;
+                case Type::CROSS:
+                    return 0;
+                case Type::DICT:
+                    return 0;
+
+#define M(NAME) \
+    case Type::NAME: \
+        return NAME ? NAME->size() : 0;
+                    APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
             }
 
-            std::vector<MapsVariant> maps;
-            BlockNullmapList blocks_nullmaps; /// Nullmaps for blocks of "right" table (if needed)
+            __builtin_unreachable();
+        }
 
-            bool has_new_data_since_last_join = false;
+        size_t getTotalByteCountImpl(Type which) const
+        {
+            switch (which)
+            {
+                case Type::EMPTY:
+                    return 0;
+                case Type::CROSS:
+                    return 0;
+                case Type::DICT:
+                    return 0;
 
-            /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-            Arena pool;
+#define M(NAME) \
+    case Type::NAME: \
+        return NAME ? NAME->getBufferSizeInBytes() : 0;
+                    APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+            }
 
-            bool hasNewData() const { return has_new_data_since_last_join; }
-            void markNoNewData() { has_new_data_since_last_join = false; }
-        };
+            __builtin_unreachable();
+        }
 
-        void insertBlock(
-            Int64 bucket,
-            Block block,
-            ColumnRawPtrs & key_columns,
-            JoinCommon::JoinMask & join_mask_col,
-            ConstNullMapPtr null_map,
-            UInt8 save_nullmap,
-            ColumnPtr null_map_holder,
-            ColumnUInt8::MutablePtr not_joined_map);
+        size_t getBufferSizeInCells(Type which) const
+        {
+            switch (which)
+            {
+                case Type::EMPTY:
+                    return 0;
+                case Type::CROSS:
+                    return 0;
+                case Type::DICT:
+                    return 0;
 
-        size_t removeOldData() { return removeOldBuckets(hashed_blocks, "right"); }
+#define M(NAME) \
+    case Type::NAME: \
+        return NAME ? NAME->getBufferSizeInCells() : 0;
+                    APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+            }
 
-        std::map<Int64, std::shared_ptr<RightTableBlocks>> hashed_blocks;
-
-        /// `current_join_blocks` serves 3 purposes
-        /// 1) During query plan phase, we will need it to evaluate the header
-        /// 2) Workaround the `joinBlock` API interface for range join, it points the current working right blocks in the time bucket
-        /// 3) For non-range join, it points the global blocks since there is no time bucket in this case
-        std::shared_ptr<RightTableBlocks> current_join_blocks;
+            __builtin_unreachable();
+        }
     };
 
-    using RightTableDataPtr = std::shared_ptr<RightTableData>;
-
-    /// proton : starts
-    struct LeftTableData : public StreamData
-    {
-        using StreamData::StreamData;
-
-        void insertBlock(Block && block);
-
-        void insertBlockToTimeBucket(Block && block);
-
-        size_t removeOldData() { return removeOldBuckets(blocks, "left"); }
-
-        struct LeftTableBlocks : public StreamBlocks
-        {
-            explicit LeftTableBlocks(StreamData * stream_data_) : StreamBlocks(stream_data_), new_data_iter(blocks.end()) { }
-
-            LeftTableBlocks(Block && block, StreamData * stream_data_) : StreamBlocks(stream_data_)
-            {
-                blocks.push_back(std::move(block));
-                new_data_iter = blocks.begin();
-                updateMetrics(*new_data_iter);
-            }
-
-            void insertBlock(Block && block)
-            {
-                updateMetrics(block);
-
-                if (new_data_iter != blocks.end())
-                {
-                    /// new_data_iter already points the earliest new data node
-                    blocks.push_back(std::move(block));
-                }
-                else
-                {
-                    blocks.push_back(std::move(block));
-
-                    /// point to the new block
-                    new_data_iter = --blocks.end();
-                }
-            }
-
-            /// point to the new data node if there is, otherwise blocks.end()
-            BlocksList::iterator new_data_iter;
-
-            JoinTupleMap joined_rows;
-
-            bool hasNewData() const { return new_data_iter != blocks.end(); }
-            void markNoNewData() { new_data_iter = blocks.end(); }
-        };
-        using LeftTableBlocksPtr = std::shared_ptr<LeftTableBlocks>;
-
-        UInt64 block_id = 0;
-        std::map<Int64, LeftTableBlocksPtr> blocks;
-
-        /// `current_join_blocks serves 2 different purpose
-        /// 1) Workaround the `joinBlock` interface. For range join, it points to the current working blocks in the time bucket
-        /// 2) For all join, it points to the global working blocks since there is not time bucket in this case
-        LeftTableBlocksPtr current_join_blocks;
-    };
-
-    using LeftTableDataPtr = std::shared_ptr<LeftTableData>;
-    /// proton : ends
+    using MapsOne = MapsTemplate<RowRefWithRefCount>;
+    using MapsAll = MapsTemplate<RowRefList>;
+    using MapsAsof = MapsTemplate<AsofRowRefs>;
+    using MapsRangeAsof = MapsTemplate<RangeAsofRowRefs>;
+    using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof>;
+    /// proton:ends
 
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
     /// bool isUsed(const Block * block_ptr, size_t row_idx) const { return used_flags.getUsedSafe(block_ptr, row_idx); }
@@ -519,6 +307,10 @@ public:
         right_data->updateAsofJoinColumnPositionAndScale(scale, right_asof_col_pos, type_index);
     }
 
+    friend struct StreamData;
+    friend struct LeftStreamData;
+    friend struct RightStreamData;
+
 private:
     void dataMapInit(MapsVariant &);
 
@@ -528,7 +320,7 @@ private:
     Block structureRightBlock(const Block & stored_block) const;
     void initRightBlockStructure(Block & saved_block_sample);
 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+    template <Kind KIND, Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Block & block_with_columns_to_add, const std::vector<const Maps *> & maps_) const;
 
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
@@ -562,6 +354,9 @@ private:
     ASTTableJoin::Kind kind;
     ASTTableJoin::Strictness strictness;
 
+    Kind streaming_kind;
+    Strictness streaming_strictness;
+
     bool nullable_right_side; /// In case of LEFT and FULL joins, if use_nulls, convert right-side columns to Nullable.
     bool nullable_left_side; /// In case of RIGHT and FULL joins, if use_nulls, convert left-side columns to Nullable.
     bool any_take_last_row; /// Overwrite existing values when encountering the same key again
@@ -571,7 +366,7 @@ private:
     JoinStreamDescription left_stream_desc;
     JoinStreamDescription right_stream_desc;
 
-    LeftTableDataPtr left_data;
+    LeftStreamDataPtr left_data;
 
     /// Right table data. StorageJoin shares it between many Join objects.
     /// Flags that indicate that particular row already used in join.
@@ -580,7 +375,8 @@ private:
     /// Changes in hash table broke correspondence,
     /// so we must guarantee constantness of hash table during HashJoin lifetime (using method setLock)
     /// mutable JoinStuff::JoinUsedFlags used_flags;
-    RightTableDataPtr right_data;
+    RightStreamDataPtr right_data;
+    Type right_hash_method_type;
 
     std::vector<Sizes> key_sizes;
 
@@ -597,32 +393,15 @@ private:
 
     std::atomic_int64_t combined_watermark = 0;
 
-    struct JoinMetrics
-    {
-        size_t total_join = 0;
-        size_t no_new_data_skip = 0;
-        size_t time_bucket_no_new_data_skip = 0;
-        size_t time_bucket_no_intersection_skip = 0;
-        size_t left_block_and_right_time_bucket_no_intersection_skip = 0;
-        size_t only_join_new_data = 0;
-
-        String string() const
-        {
-            return fmt::format(
-                "total_join={} no_new_data_skip={} time_bucket_no_new_data_skip={} time_bucket_no_intersection_skip={}  "
-                "left_block_and_right_time_bucket_no_intersection_skip={} only_join_new_data={}",
-                total_join,
-                no_new_data_skip,
-                time_bucket_no_new_data_skip,
-                time_bucket_no_intersection_skip,
-                left_block_and_right_time_bucket_no_intersection_skip,
-                only_join_new_data);
-        }
-    };
-
-    JoinMetrics join_metrics;
+    JoinGlobalMetrics join_metrics;
 
     Poco::Logger * log;
 };
+
+struct HashJoinMapsVariants
+{
+    std::vector<HashJoin::MapsVariant> map_variants;
+};
+
 }
 }

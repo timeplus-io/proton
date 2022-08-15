@@ -75,8 +75,8 @@ AsofRowRefs::AsofRowRefs(TypeIndex type)
 void AsofRowRefs::insert(
     TypeIndex type,
     const IColumn & asof_column,
-    BlocksList * blocks,
-    BlocksList::iterator block,
+    JoinBlockList * blocks,
+    JoinBlockList::iterator block,
     size_t row_num,
     ASOF::Inequality inequality,
     size_t keep_versions)

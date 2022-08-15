@@ -261,9 +261,8 @@ bool JoinTransform::timeToJoin() const
 
 void JoinTransform::validateAsofJoinKey(const Block & left_input_header, const Block & right_input_header)
 {
-    auto join_strictness = join->getStrictness();
-    if (join_strictness == ASTTableJoin::Strictness::All || join_strictness == ASTTableJoin::Strictness::StreamingAsof
-        || join_strictness == ASTTableJoin::Strictness::StreamingAny)
+    auto join_strictness = join->getStreamingStrictness();
+    if (join_strictness == Strictness::All || join_strictness == Strictness::Asof || join_strictness == Strictness::Any)
         return;
 
     const auto & table_join = join->getTableJoin();

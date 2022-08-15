@@ -51,17 +51,11 @@ struct BlockInfo
     /// Milliseconds since UTC
     Int64 append_time = 0;
 
-    /// FIXME, refcount
-    Int64 refcount = 0;
-
     /// Here we try to reuse existing data members for different purposes
     /// since they work at different stage, it shall be fine
     /// We shall fix it.
     void setBlockId(Int64 block_id) { append_time = block_id; }
     Int64 blockId() const { return append_time; }
-    void ref(Int64 n = 1) { refcount += n; }
-    void deref() { --refcount; }
-    Int64 refCount() { return refcount; }
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.

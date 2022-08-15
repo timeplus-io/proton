@@ -1,14 +1,6 @@
 {
   "test_suite_name": "stream_join_versioned_kv",
   "tag":"smoke",
-  "setup": {
-    "statements": [
-      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
-      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream "},
-      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists left_stream (i int, s string)"},
-      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists right_stream (ii int, ss string) primary key ss settings mode='versioned_kv'"}
-    ]
-  },
   "test_suite_config":{
     "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
   },
@@ -23,7 +15,7 @@
         {
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream "},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists left_stream (i int, s string)"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists right_stream (ii int, ss string) primary key ss settings mode='versioned_kv'"},
             {"client":"python","query_id":"1500", "depends_on_stream":"right_stream","query_end_timer":6, "query_type": "stream", "query":"select i, ii, s from left_stream inner join right_stream on s=ss"},
@@ -52,7 +44,7 @@
         {
           "statements": [
             {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream "},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists left_stream (i int, s string)"},
             {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists right_stream (ii int, ss string) primary key ss settings mode='versioned_kv'"},
             {"client":"python","query_id":"1501", "depends_on_stream":"right_stream","query_end_timer":6, "query_type": "stream", "query":"select i, ii, s from left_stream asof join right_stream on s=ss and i < ii settings keep_versions=2"},

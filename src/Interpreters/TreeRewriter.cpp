@@ -698,13 +698,6 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
                     "Range join requires specifying a range on join clause, but only lower bound or upper bound of a range is specified");
 
             analyzed_join.validateRangeAsof(context->getSettingsRef().max_join_range);
-
-            /// Revise strictness
-            if (is_asof)
-                table_join.strictness = ASTTableJoin::Strictness::RangeAsof;
-            else
-                table_join.strictness = ASTTableJoin::Strictness::Range;
-
             analyzed_join.setStrictness(table_join.strictness);
         }
         /// proton : ends

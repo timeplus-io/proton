@@ -1,8 +1,8 @@
 #pragma once
 
 #include "RangeAsofJoinContext.h"
-#include "RowRefs.h"
-#include "join_tuple.h"
+#include "joinBlockList.h"
+#include "joinTuple.h"
 
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
@@ -33,21 +33,21 @@ struct RowRefWithRefCount
 {
     using SizeT = uint32_t; /// Do not use size_t cause of memory economy
 
-    BlocksList * blocks;
-    BlocksList::iterator block;
+    JoinBlockList * blocks;
+    JoinBlockList::iterator block_iter;
     SizeT row_num;
 
     RowRefWithRefCount() : blocks(nullptr), row_num(0) { }
-    RowRefWithRefCount(BlocksList * blocks_, BlocksList::iterator block_, size_t row_num_)
-        : blocks(blocks_), block(block_), row_num(row_num_)
+    RowRefWithRefCount(JoinBlockList * blocks_, JoinBlockList::iterator block_iter_, size_t row_num_)
+        : blocks(blocks_), block_iter(block_iter_), row_num(row_num_)
     {
         assert(blocks_);
     }
 
-    RowRefWithRefCount(const RowRefWithRefCount & other) : blocks(other.blocks), block(other.block), row_num(other.row_num)
+    RowRefWithRefCount(const RowRefWithRefCount & other) : blocks(other.blocks), block_iter(other.block_iter), row_num(other.row_num)
     {
         if (likely(blocks))
-            block->ref();
+            block_iter->ref();
     }
 
     RowRefWithRefCount & operator=(const RowRefWithRefCount & other)
@@ -56,11 +56,11 @@ struct RowRefWithRefCount
         deref();
 
         blocks = other.blocks;
-        block = other.block;
+        block_iter = other.block_iter;
         row_num = other.row_num;
 
         if (likely(blocks))
-            block->ref();
+            block_iter->ref();
 
         return *this;
     }
@@ -72,9 +72,9 @@ private:
     {
         if (likely(blocks))
         {
-            block->deref();
-            if (block->refCount() == 0)
-                blocks->erase(block);
+            block_iter->deref();
+            if (block_iter->refCount() == 0)
+                blocks->erase(block_iter);
         }
     }
 };
@@ -169,8 +169,8 @@ public:
     void insert(
         TypeIndex type,
         const IColumn & asof_column,
-        BlocksList * blocks,
-        BlocksList::iterator block,
+        JoinBlockList * blocks,
+        JoinBlockList::iterator block,
         size_t row_num,
         ASOF::Inequality inequality,
         size_t keep_versions);

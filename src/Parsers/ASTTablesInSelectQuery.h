@@ -82,12 +82,6 @@ struct ASTTableJoin : public IAST
         Asof,   /// For the last JOIN column, pick the latest value
         Semi,   /// LEFT or RIGHT. SEMI LEFT JOIN filters left table by values exists in right table. SEMI RIGHT - otherwise.
         Anti,   /// LEFT or RIGHT. Same as SEMI JOIN but filter values that are NOT exists in other table.
-        /// proton : starts
-        Range,
-        RangeAsof,
-        StreamingAsof,
-        StreamingAny,
-        /// proton : ends
     };
 
     /// Join method.

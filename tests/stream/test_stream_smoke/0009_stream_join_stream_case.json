@@ -1,15 +1,15 @@
 {
   "test_suite_name": "stream_join_stream",
   "tag":"smoke",
-  "setup": {
-    "statements": [
-      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
-      {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
-      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
-      {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"}
-    ]
-  },
   "test_suite_config":{
+    "setup": {
+      "statements": [
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
+        {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
+        {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"}
+      ]
+    },
     "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample"]}
   },
   "comments": "Tests covering the stream query smoke cases.",
@@ -22,10 +22,6 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists left_stream"},
-            {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists right_stream"},
-            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists left_stream (i int, s string, ts datetime)"},
-            {"client":"python", "query_type": "table", "wait":4, "query":"create stream if not exists right_stream (ii int, ss string, tts datetime)"},
             {"client":"python","query_id":"1001", "depends_on_stream":"right_stream","query_end_timer":8, "query_type": "stream", "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s, ts, tts)"},
             {"client":"python", "query_type": "table","depends_on":1001, "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
