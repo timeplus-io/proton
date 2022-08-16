@@ -1843,7 +1843,8 @@ def test_suite_env_setup(client, rest_setting, test_suite_config):
     for table_schema in table_schemas:
         table_type = table_schema.get("type")
         table_name = table_schema.get("name")
-        if table_exist_py(client, table_name):
+        #if table_exist_py(client, table_name):
+        if table_exist(table_ddl_url, table_name):
             pass
         else:
             if table_type == "table":

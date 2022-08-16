@@ -89,7 +89,7 @@ def upload_proton_logs(
 def proton_python_driver_install():
     s3_helper = S3Helper("https://s3.amazonaws.com")
     command = "pip3 list | grep clickhouse-driver"
-    ret = ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=600)
+    ret = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=600)
     if PROTON_PYTHON_DRIVER_NANME not in ret.stdout:
         s3_helper.client.download_file(PROTON_PYTHON_DRIVER_S3_BUCKET_NAME, PROTON_PYTHON_DIRVER_S3_OBJ_NAME, PROTON_PYTHON_DRIVER_FILE_NAME)
         logger.debug(f"{PROTON_PYTHON_DRIVER_FILE_NAME} is downloaded")
@@ -117,9 +117,13 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
         
     else:
         os.environ["PROTON_SETTING"] = setting
-        print(f'os.environ["PROTON_SETTING] = {setting}')        
-        proton_log_in_container = f"proton-{setting}:/var/log/proton-server/proton-server.log"
-        proton_err_log_in_container = f"proton-{setting}:/var/log/proton-server/proton-server.err.log"        
+        print(f'os.environ["PROTON_SETTING] = {setting}')
+        if setting == 'nativelog': #todo: find container name for different settings from config file and use
+            container_name = "proton-server"
+        elif setting == 'redp':
+            container_name = "proton-redp"        
+        proton_log_in_container = f"{container_name}:/var/log/proton-server/proton-server.log"
+        proton_err_log_in_container = f"{container_name}:/var/log/proton-server/proton-server.err.log"        
         retcode = pytest.main(
             ["-s", "-v", pytest_logging_level_set, '--log-cli-format=%(asctime)s.%(msecs)03d [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)', '--log-cli-date-format=%Y-%m-%d %H:%M:%S', f"--html={report_file_path}", "--self-contained-html"]
         )
@@ -156,7 +160,10 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
             commit_sha,
             *downloaded_log_files_paths,
         )
-        print(f"::notice ::Report url: {report_url}")
+        report_url = report_url.replace('https://s3.amazonaws.com/', 's3://')
+        report_url = report_url.replace('%20',' ')
+        print(f"::notice ::Report s3 uri: {report_url}")
+        print(f"::notice ::Report download command: aws s3 cp '{report_url}' ./" )
 
         proton_log_folder_url = upload_proton_logs(
             s3_helper,
@@ -199,7 +206,7 @@ if __name__ == "__main__":
         
         if name in ("--settings"):
             if value == None or value == '':
-                print(f"usage: python3 ci_runner.py --settings=native,redp")
+                print(f"usage: python3 ci_runner.py --settings=nativelog,redp")
                 sys.exit(1)
             else:
                 settings = value.split(",")

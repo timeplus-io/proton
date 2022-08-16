@@ -114,7 +114,7 @@
                     "name": "test_mv_join_v",
                     "type": "view",
                     "create_sql": "create view if not exists test_mv_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time, _tp_index_time from test_mv as a join table(test_mv_d) as b on a.id =b.id",
-                    "drop_sql": "drop view test_mv_v"
+                    "drop_sql": "drop view test_mv_join_v"
                 }
 
         ],
