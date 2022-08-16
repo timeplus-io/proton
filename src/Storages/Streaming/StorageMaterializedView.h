@@ -82,6 +82,7 @@ private:
     StorageID target_table_id = StorageID::createEmpty();
     StoragePtr target_table_storage = nullptr;
     bool is_attach = false;
+    bool is_virtual = false;
 
     VirtualColumns virtual_columns;
     bool is_global_aggr_query = false;
@@ -97,6 +98,7 @@ private:
     PipelineExecutorPtr background_executor;
     QueryPipelineBuilder background_pipeline;
     ThreadFromGlobalPool background_thread;
+    ThreadFromGlobalPool start_thread;
 
 protected:
     StorageMaterializedView(
@@ -104,7 +106,8 @@ protected:
         ContextPtr local_context,
         const ASTCreateQuery & query,
         const ColumnsDescription & columns_,
-        bool attach_);
+        bool attach_,
+        bool is_virtual_);
 };
 
 }

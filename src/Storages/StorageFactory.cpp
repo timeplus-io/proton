@@ -192,6 +192,9 @@ StoragePtr StorageFactory::get(
         .columns = columns,
         .constraints = constraints,
         .attach = query.attach,
+        /// proton: starts
+        .is_virtual = query.is_virtual,
+        /// proton: ends
         .has_force_restore_data_flag = has_force_restore_data_flag,
         .comment = comment};
 

@@ -345,7 +345,7 @@ TaskStatusService::TaskStatusPtr TaskStatusService::findByIdInTable(const String
     constexpr auto * query_template = "SELECT DISTINCT id, status, progress, "
                                       "reason, user, context, created, last_modified "
                                       "FROM table(system.tasks) "
-                                      "WHERE user <> '' AND id == '{}' "
+                                      "WHERE id == '{}' "
                                       "ORDER BY last_modified DESC";
     auto query = fmt::format(query_template, id);
 
@@ -376,8 +376,8 @@ void TaskStatusService::findByUserInMemory(const String & user, std::vector<Task
     if (user_map_iter == indexed_by_user.end())
         return;
 
-    for (auto it = user_map_iter->second.begin(); it != user_map_iter->second.end(); ++it)
-        res.push_back(it->second);
+    for (const auto & it : user_map_iter->second)
+        res.push_back(it.second);
 }
 
 void TaskStatusService::findByUserInTable(const String & user, std::vector<TaskStatusService::TaskStatusPtr> & res)

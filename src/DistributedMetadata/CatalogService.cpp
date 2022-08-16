@@ -40,9 +40,9 @@ namespace
     const String CATALOG_KEY_PREFIX = "cluster_settings.system_catalogs.";
     const String CATALOG_DEFAULT_TOPIC = "__system_catalogs";
 
-    std::regex PARSE_HOST_SHARDS_REGEX{"host_shards\\s*=\\s*'([,|\\s|\\d]*)'"};
-    std::regex PARSE_SHARDS_REGEX{"Stream\\(\\s*(\\d+),\\s*\\d+\\s*,"};
-    std::regex PARSE_REPLICATION_REGEX{"Stream\\(\\s*\\d+,\\s*(\\d+)\\s*,"};
+    std::regex PARSE_HOST_SHARDS_REGEX{R"(host_shards\s*=\s*'([,|\s|\d]*)')"};
+    std::regex PARSE_SHARDS_REGEX{R"(Stream\(\s*(\d+),\s*\d+\s*,)"};
+    std::regex PARSE_REPLICATION_REGEX{R"(Stream\(\s*\d+,\s*(\d+)\s*,)"};
 
     Int32 searchIntValueByRegex(const std::regex & pattern, const String & str)
     {
@@ -180,7 +180,8 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
             return nullptr;
 
         /// Only support create virtual table storage for `Stream`
-        if (iter->second.begin()->second->engine != "Stream" && iter->second.begin()->second->engine != "View")
+        if (iter->second.begin()->second->engine != "Stream" && iter->second.begin()->second->engine != "View"
+            && iter->second.begin()->second->engine != "MaterializedView")
             return nullptr;
 
         uuid = iter->second.begin()->second->uuid;
@@ -354,9 +355,9 @@ std::pair<bool, bool> CatalogService::columnExists(const String & database, cons
     const auto & create = query_ptr->as<const ASTCreateQuery &>();
     const auto & columns_ast = create.columns_list->columns;
 
-    for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
+    for (auto & ast_it : columns_ast->children)
     {
-        const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
+        const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
         if (col_decl.name == column)
             return {true, true};
     }
@@ -371,9 +372,9 @@ String CatalogService::getColumnType(const String & database, const String & tab
     const auto & create = query_ptr->as<const ASTCreateQuery &>();
     const auto & columns_ast = create.columns_list->columns;
 
-    for (auto ast_it = columns_ast->children.begin(); ast_it != columns_ast->children.end(); ++ast_it)
+    for (auto & ast_it : columns_ast->children)
     {
-        const auto & col_decl = (*ast_it)->as<ASTColumnDeclaration &>();
+        const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
         if (col_decl.name == column)
             return queryToString(col_decl.type);
     }
@@ -585,8 +586,9 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainer snapshot)
 
             {
                 std::unique_lock storage_guard{storage_rwlock};
-                assert(!indexed_by_id.contains(p.second->uuid));
-                indexed_by_id[p.second->uuid] = p.second;
+                /// A multi-shard table use the same uuid in various replicas
+                if (!indexed_by_id.contains(p.second->uuid))
+                    indexed_by_id[p.second->uuid] = p.second;
             }
         }
         indexed_by_node.emplace(node->identity, snapshot);
@@ -624,7 +626,6 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainer snapshot)
             {
                 std::unique_lock storage_guard{storage_rwlock};
                 removed = indexed_by_id.erase(p.second->uuid);
-                assert(removed == 1);
             }
         }
     }

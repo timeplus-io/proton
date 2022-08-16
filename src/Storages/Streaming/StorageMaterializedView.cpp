@@ -37,6 +37,7 @@ namespace ErrorCodes
     extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
     extern const int NOT_IMPLEMENTED;
     extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
+    extern const int RESOURCE_NOT_INITED;
 }
 
 namespace
@@ -74,9 +75,7 @@ private:
 
 public:
     PushingToMaterializedViewMemorySink(
-        const Block & in_header,
-        const Block & out_header,
-        const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns_)
+        const Block & in_header, const Block & out_header, const StorageMaterializedView::VirtualColumns & to_calc_virtual_columns_)
         : ExceptionKeepingTransform(in_header, out_header)
         , to_calc_virtual_columns(to_calc_virtual_columns_)
         , expected_virtual_num(out_header.columns() - in_header.columns())
@@ -98,7 +97,7 @@ protected:
         /// Calc and add virtual columns if expected
         for (size_t i = 0; i < expected_virtual_num; ++i)
         {
-            auto & [name, type, calc_func] = to_calc_virtual_columns[i];
+            const auto & [name, type, calc_func] = to_calc_virtual_columns[i];
             auto virtual_column = rows > 0 ? type->createColumnConst(rows, calc_func()) : type->createColumn();
             newest_block.insert({virtual_column, type, name});
         }
@@ -119,12 +118,19 @@ protected:
 };
 
 StorageMaterializedView::StorageMaterializedView(
-    const StorageID & table_id_, ContextPtr local_context, const ASTCreateQuery & query, const ColumnsDescription & columns_, bool attach_)
+    const StorageID & table_id_,
+    ContextPtr local_context,
+    const ASTCreateQuery & query,
+    const ColumnsDescription & columns_,
+    bool attach_,
+    bool is_virtual_)
     : IStorage(table_id_)
     , WithMutableContext(local_context->getGlobalContext())
     , log(&Poco::Logger::get("StorageMaterializedView (" + table_id_.database_name + "." + table_id_.table_name + ")"))
     , is_attach(attach_)
-    , virtual_columns({{ProtonConsts::RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
+    , is_virtual(is_virtual_)
+    , virtual_columns(
+          {{ProtonConsts::RESERVED_VIEW_VERSION, std::make_shared<DataTypeInt64>(), []() -> Int64 { return UTCMilliseconds::now(); }}})
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -164,62 +170,89 @@ StorageMaterializedView::~StorageMaterializedView()
 /// others:         (view_properties)                               (view_properties)
 void StorageMaterializedView::startup()
 {
-    try
-    {
+    start_thread = ThreadFromGlobalPool{[this]() {
+        /// Init inner memory table and inner target table
+        auto metadata_snapshot = getInMemoryMetadataPtr();
         auto local_context = Context::createCopy(getContext());
         local_context->makeQueryContext();
         local_context->setCurrentQueryId(""); // generate random query_id
-
-        auto metadata_snapshot = getInMemoryMetadataPtr();
-        InterpreterSelectQuery select_interpreter(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
-        if (!select_interpreter.isStreaming())
-            throw Exception(ErrorCodes::INCORRECT_QUERY, "Streaming View doesn't support historical query");
-
-        is_global_aggr_query = select_interpreter.hasGlobalAggregation();
-
-        /// Init inner memory table and inner target table
-        initInnerTable(metadata_snapshot, local_context);
-
-        /// Build inner background query pipeline and keep it alive during the lifetime of Proton
-        buildBackgroundPipeline(select_interpreter, metadata_snapshot, local_context);
-
-        /// Run background pipeline
-        executeBackgroundPipeline();
-
-        /// Update metadata in memory since we want to show version column for global aggr (select *)
-        if (is_global_aggr_query)
+        int max_retries = 10;
+        while (max_retries-- > 0)
         {
-            auto new_metadata = getInMemoryMetadata();
-            auto new_names_and_types = metadata_snapshot->getColumns().getAll();
-            const auto & virtuals = getVirtuals();
-            new_names_and_types.insert(new_names_and_types.end(), virtuals.begin(), virtuals.end());
-            new_metadata.setColumns(ColumnsDescription(new_names_and_types));
-            setInMemoryMetadata(new_metadata);
+            try
+            {
+                initInnerTable(metadata_snapshot, local_context);
+                break;
+            }
+            catch (...)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                LOG_DEBUG(log, "'{}' waiting for inner table ready", getStorageID().getFullTableName());
+            }
         }
-    }
-    catch (...)
-    {
-        background_status.exception = std::current_exception();
-        background_status.has_exception = true;
 
-        LOG_ERROR(log, "MaterializedView '{}' startup error: {}", getName(), getExceptionMessage(background_status.exception, false));
+        if (max_retries <= 0)
+        {
+            background_status.has_exception = true;
+            background_status.exception
+                = std::make_exception_ptr(Exception(ErrorCodes::RESOURCE_NOT_INITED, "init inner table '{}' failed", getStorageID().getFullTableName()));
+            LOG_ERROR(log, "Init inner table '{}' failed", getStorageID().getFullTableName());
+            return;
+        }
 
-        /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
-        /// And it should be able to safely destroy table after exception in "startup" method.
-        /// It means that failed "startup" must not create any background tasks that we will have to wait.
-        shutdown();
+        try
+        {
+            InterpreterSelectQuery select_interpreter(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
+            if (!select_interpreter.isStreaming())
+                throw Exception(ErrorCodes::INCORRECT_QUERY, "Streaming View doesn't support historical query");
 
-        /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
-        /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
-        if (!is_attach)
-            throw;
-    }
+            if (!is_virtual)
+            {
+                /// Build inner background query pipeline and keep it alive during the lifetime of Proton
+                buildBackgroundPipeline(select_interpreter, metadata_snapshot, local_context);
+
+                /// Run background pipeline
+                executeBackgroundPipeline();
+            }
+
+            /// Update metadata in memory since we want to show version column for global aggr (select *)
+            if (is_global_aggr_query)
+            {
+                auto new_metadata = getInMemoryMetadata();
+                auto new_names_and_types = metadata_snapshot->getColumns().getAll();
+                const auto & virtuals = getVirtuals();
+                new_names_and_types.insert(new_names_and_types.end(), virtuals.begin(), virtuals.end());
+                new_metadata.setColumns(ColumnsDescription(new_names_and_types));
+                setInMemoryMetadata(new_metadata);
+            }
+        }
+        catch (...)
+        {
+            background_status.exception = std::current_exception();
+            background_status.has_exception = true;
+
+            LOG_ERROR(log, "MaterializedView '{}' startup error: {}", getName(), getExceptionMessage(background_status.exception, false));
+
+            /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
+            /// And it should be able to safely destroy table after exception in "startup" method.
+            /// It means that failed "startup" must not create any background tasks that we will have to wait.
+            shutdown();
+
+            /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
+            /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
+            if (!is_attach)
+                throw;
+        }
+    }};
 }
 
 void StorageMaterializedView::shutdown()
 {
     if (shutdown_called.test_and_set())
         return;
+
+    if (start_thread.joinable())
+        start_thread.join();
 
     if (background_executor)
     {
@@ -275,8 +308,8 @@ void StorageMaterializedView::read(
     if (query_info.order_optimizer)
         query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
 
-    auto pipe = storage->read(
-        column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    auto pipe
+        = storage->read(column_names, target_storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
     if (pipe.empty())
     {
@@ -314,7 +347,7 @@ void StorageMaterializedView::drop()
 
 void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr local_context)
 {
-    /// So far, the target tabel is always inner table
+    /// So far, the target table is always inner table
     if (target_table_id)
         InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind::Drop, getContext(), local_context, target_table_id, no_delay);
 
@@ -324,7 +357,7 @@ void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr loca
 void StorageMaterializedView::checkTableCanBeRenamed() const
 {
     auto dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
-    if (dependencies.size() > 0)
+    if (!dependencies.empty())
     {
         WriteBufferFromOwnString ss;
         ss << dependencies.begin()->getFullTableName();
@@ -376,7 +409,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
 {
     /// If there is a Create request, then we need create the target inner table.
     assert(target_table_id);
-    if (!is_attach)
+    if (!is_attach && !is_virtual)
     {
         /// Create inner target table query
         ///   create table <inner_target_table_id> (view_properties[, ProtonConsts::RESERVED_VIEW_VERSION]) engine = Stream(1, 1, rand());
@@ -438,7 +471,7 @@ void StorageMaterializedView::buildBackgroundPipeline(
     auto out_header = current_header;
     if (is_global_aggr_query)
     {
-        assert(virtual_columns.size() > 0);
+        assert(!virtual_columns.empty());
         const auto & [name, type, calc_func] = virtual_columns.front();
         out_header.insert({type->createColumn(), type, name});
     }
@@ -510,7 +543,8 @@ void registerStorageMaterializedView(StorageFactory & factory)
 {
     factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args) {
         /// Pass local_context here to convey setting for inner table
-        return StorageMaterializedView::create(args.table_id, args.getLocalContext(), args.query, args.columns, args.attach);
+        return StorageMaterializedView::create(
+            args.table_id, args.getLocalContext(), args.query, args.columns, args.attach, args.is_virtual);
     });
 }
 

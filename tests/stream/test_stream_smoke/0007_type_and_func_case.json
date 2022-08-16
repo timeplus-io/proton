@@ -233,7 +233,7 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_timeout"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_timeout(id int, value int, time datetime64(3,'UTC'))"},
                     {"client":"python", "query_type": "table", "wait":1,"depends_on_stream":"t_timeout", "query":"create materialized view if not exists timeout_v as select emit_version(), id, count() from  tumble(t_timeout, time, 5s) group by id, window_end emit timeout 5s"},
-                    {"client":"python", "query_type": "stream","wait":1, "depends_on_stream":"timeout_v","query_id": "801", "query_end_timer": 11, "query":"select * from timeout_v settings seek_to='earliest'"},
+                    {"client":"python", "query_type": "stream","wait":5, "depends_on_stream":"timeout_v","query_id": "801", "query_end_timer": 11, "query":"select * from timeout_v settings seek_to='earliest'"},
                     {"client":"python", "query_type": "table", "wait":1,"depends_on":"801", "query":"insert into t_timeout(id, value, time)values(1, 10, '2020-01-01 00:00:00')(2, 10, '2020-01-01 00:00:00') (3, 10, '2020-01-01 00:00:00') (1, 20, '2020-01-01 00:00:00') (2, 20, '2020-01-01 00:00:00')(3, 20, '2020-01-01 00:00:00') (1, 30, '2020-01-01 00:00:05')(1, 10, '2020-01-01 00:00:06')"},
                     {"client":"python", "query_type": "table", "wait":6, "query":"select 1"}
                     ]}
@@ -457,7 +457,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_lags(id int, income float, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_lags", "wait":1, "query":"insert into t_lags(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1, -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18 09:01:04')(1, 100, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table", "wait":3, "query":"create materialized view if not exists lags_mv as select id, latest(lags(income, 1, 10)) as income_lags_latest, array_sum(income_lags_latest) as income_lags_sum from t_lags group by id settings seek_to='earliest'"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "801", "query":"select id, income_lags_latest, income_lags_sum from lags_mv limit 1"}
+                    {"client":"python", "query_type": "table","depends_on_stream":"lags_mv","wait":5,"query_id": "801", "query":"select id, income_lags_latest, income_lags_sum from lags_mv limit 1"}
 
                     ]}
             ],
@@ -521,8 +521,8 @@
                     {"client":"python", "query_type": "table","wait":2, "query":"drop stream if exists t_bool"},
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":1, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
-                    {"client":"python", "query_type": "table", "wait":3,"query":" create materialized view if not exists bool_mv as with transformed as (select id, value, bool_f, time from t_bool) select window_start as ws, window_end as we, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
-                    {"client":"python", "query_type": "table","wait":3,"query_id": "801", "query":"select id, bool_f, count() from table(bool_mv) group by id, bool_f"}
+                    {"client":"python", "query_type": "table","wait":3,"query":" create materialized view if not exists bool_mv as with transformed as (select id, value, bool_f, time from t_bool) select window_start as ws, window_end as we, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
+                    {"client":"python", "query_type": "table","wait":5, "depends_on_stream":"bool_mv","query_id": "801", "query":"select id, bool_f, count() from table(bool_mv) group by id, bool_f"}
 
                     ]}
             ],
