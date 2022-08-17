@@ -121,7 +121,9 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
         if setting == 'nativelog': #todo: find container name for different settings from config file and use
             container_name = "proton-server"
         elif setting == 'redp':
-            container_name = "proton-redp"        
+            container_name = "proton-redp"
+        elif setting == 'cluster':
+            container_name = "proton-cluster-node1" #todo: support multiple nodes log collection        
         proton_log_in_container = f"{container_name}:/var/log/proton-server/proton-server.log"
         proton_err_log_in_container = f"{container_name}:/var/log/proton-server/proton-server.err.log"        
         retcode = pytest.main(

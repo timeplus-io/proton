@@ -114,7 +114,7 @@
                     "name": "test_join_v",
                     "type": "view",
                     "create_sql": "create view if not exists test_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time, _tp_index_time from test as a join table(test_d) as b on a.id =b.id",
-                    "drop_sql": "drop view test_v"
+                    "drop_sql": "drop view test_join_v"
                 }
 
         ],
@@ -132,7 +132,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":["todo", "to_support", "change", "bug", "sample", "native_not_support"]}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"], "cluster": ["view", "materialized view"]}}
     },
 
     "tests": [

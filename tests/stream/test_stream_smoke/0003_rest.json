@@ -6,14 +6,14 @@
                 "all"
             ],
             "tags_2_run": [],
-            "tags_2_skip": [
+            "tags_2_skip": {"default":[
                 "todo",
                 "to_support",
                 "change",
                 "bug",
                 "sample"
             ]
-        }
+        }}
     },
     "comments": "test_rests covering the steam query smoke cases.",
     "tests": [

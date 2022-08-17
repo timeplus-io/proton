@@ -42,13 +42,13 @@
 },
 "cluster": {
     "rest_setting": {
-        "host_url":"http://localhost:3218",
-        "http_snapshot_url":"http://localhost:8123",
-        "table_ddl_url": "http://localhost:3218/proton/v1/ddl/streams",
-        "ingest_url": "http://localhost:3218/proton/v1/ingest/streams",
-        "query_url": "http://localhost:3218/proton/v1/search",
-        "health_check_url": "http://localhost:3218/proton/ping",
-        "info_url": "http://localhost:3218/proton/info",
+        "host_url":"http://localhost:23218",
+        "http_snapshot_url":"http://localhost:28123",
+        "table_ddl_url": "http://localhost:23218/proton/v1/ddl/streams",
+        "ingest_url": "http://localhost:23218/proton/v1/ingest/streams",
+        "query_url": "http://localhost:23218/proton/v1/search",
+        "health_check_url": "http://localhost:23218/proton/ping",
+        "info_url": "http://localhost:23218/proton/info",
         "params": {
             "headers": {
                 "Content-Type": "application/json"
