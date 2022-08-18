@@ -750,7 +750,7 @@ def query_run_py(
 
             if isinstance(element, list) or isinstance(element, tuple):
                 element = list(element)
-                element.append({"timestamp": str(datetime.datetime.now())})
+                #element.append({"timestamp": str(datetime.datetime.now())})
 
             if i == 0:
                 query_result_column_types = element
@@ -1568,7 +1568,7 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
             f"input_batch_rest: response of requests.post of input_url = {input_url}, data = {input_rest_body} request res = {res}"
         )
 
-        assert res.status_code == 200
+        assert res.status_code == 200, f"res.status_code = {res.status_code}"
         input_batch_record["input_batch"] = input_rest_body_data
         input_batch_record["timestamp"] = str(datetime.datetime.now())
         logger.debug(f"input_batch done succesfully...")
