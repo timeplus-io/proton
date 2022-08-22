@@ -1396,13 +1396,13 @@ def query_exists(
 ):  # todo: adopt query_id_exists_py and query_id_exists_rest
     logger = mp.get_logger()
     query_id_list = []
-    query_exists = False
+    query_id_exists = False
     retry = 200
     logger.debug(f"checking query_id = {query_id} if exists...")
-    while not query_exists and retry > 0:
+    while not query_id_exists and retry > 0:
         if client == None:
             try:
-                query_exists = query_id_exists_rest(query_url, query_id)
+                query_id_exists = query_id_exists_rest(query_url, query_id)
             except (BaseException) as error:
                 logger.debug(
                     f"query_exist exception, query_url = {query_url}, query_id = {query_id}, error = {error}"
@@ -1412,7 +1412,7 @@ def query_exists(
                 )
         else:
             try:
-                query_exists = query_id_exists_py(client, query_id)
+                query_id_exists = query_id_exists_py(client, query_id)
             except (BaseException) as error:
                 logger.debug(
                     f"query_exist exception, query_id = {query_id}, error = {error}"
@@ -1420,13 +1420,13 @@ def query_exists(
                 raise Exception(
                     f"query_exist exception, query_id = {query_id}, error = {error}"
                 )
-        if query_exists:
+        if query_id_exists:
             return True
         else:
             time.sleep(0.05)
             retry -= 1
 
-    if query_exists:
+    if query_id_exists:
         return True
     else:
         return False
