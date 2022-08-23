@@ -109,7 +109,6 @@ extern const int UNSUPPORTED;
 #endif
 
 #if USE_SSL
-#    include <Compression/CompressionCodecEncrypted.h>
 #    include <Poco/Net/Context.h>
 #    include <Poco/Net/SecureServerSocket.h>
 #endif

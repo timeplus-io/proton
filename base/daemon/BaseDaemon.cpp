@@ -67,6 +67,15 @@
 
 namespace fs = std::filesystem;
 
+namespace DB
+{
+    namespace ErrorCodes
+    {
+        extern const int CANNOT_SET_SIGNAL_HANDLER;
+        extern const int CANNOT_SEND_SIGNAL;
+    }
+}
+
 DB::PipeFDs signal_pipe;
 
 
@@ -75,8 +84,10 @@ DB::PipeFDs signal_pipe;
   */
 static void call_default_signal_handler(int sig)
 {
-    signal(sig, SIG_DFL);
-    raise(sig);
+    if (SIG_ERR == signal(sig, SIG_DFL))
+        DB::throwFromErrno("Cannot set signal handler.", DB::ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+    if (0 != raise(sig))
+        DB::throwFromErrno("Cannot send signal.", DB::ErrorCodes::CANNOT_SEND_SIGNAL);
 }
 
 static constexpr size_t max_query_id_size = 127;

@@ -39,6 +39,6 @@ private:
     void loadPatternsFromFile();
 
 private:
-    std::atomic_flag is_shutdown = ATOMIC_FLAG_INIT;
+    std::atomic_flag is_shutdown;
 };
 }

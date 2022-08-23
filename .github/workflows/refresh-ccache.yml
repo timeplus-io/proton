@@ -24,7 +24,7 @@ jobs:
 
         # compiling
         echo "compiling"
-        ./docker/packager/packager --package-type binary --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-14 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         # upload build cache
         echo "upload cache.tar.gz"
@@ -37,7 +37,7 @@ jobs:
 
         # compiling sanitizer=address
         echo "compiling sanitizer=address"
-        ./docker/packager/packager --package-type binary --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-14 --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
         
         # upload build cache
         echo "upload cache-address.tar.gz"

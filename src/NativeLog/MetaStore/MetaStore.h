@@ -63,7 +63,7 @@ private:
 private:
     MetaStoreConfig config;
 
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag stopped;
 
     mutable std::mutex mlock;
     std::unique_ptr<rocksdb::DB> metadb;

@@ -209,7 +209,7 @@ static void incrementProfileEventsBlock(Block & dst, const Block & src)
 }
 
 
-std::atomic_flag exit_on_signal = ATOMIC_FLAG_INIT;
+std::atomic_flag exit_on_signal;
 
 class QueryInterruptHandler : private boost::noncopyable
 {

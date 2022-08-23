@@ -104,7 +104,7 @@ private:
     TimestampSequence last_indexed_etimestamp;
     TimestampSequence last_indexed_atimestamp;
 
-    std::atomic_flag closed = ATOMIC_FLAG_INIT;
+    std::atomic_flag closed;
 
     Poco::Logger * logger;
 };

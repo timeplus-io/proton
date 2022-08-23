@@ -35,7 +35,7 @@
 	url = https://github.com/ClickHouse-Extras/llvm
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
-	url = https://github.com/ClickHouse-Extras/jemalloc.git
+	url = https://github.com/jemalloc/jemalloc.git
 [submodule "contrib/protobuf"]
 	path = contrib/protobuf
 	url = https://github.com/ClickHouse-Extras/protobuf.git
@@ -125,7 +125,7 @@
 	url = https://github.com/ClickHouse-Extras/flatbuffers.git
 [submodule "contrib/replxx"]
 	path = contrib/replxx
-	url = https://github.com/ClickHouse-Extras/replxx.git
+	url = https://github.com/ClickHouse/replxx.git
 [submodule "contrib/avro"]
 	path = contrib/avro
 	url = https://github.com/ClickHouse-Extras/avro.git

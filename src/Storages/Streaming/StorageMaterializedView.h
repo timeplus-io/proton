@@ -87,7 +87,7 @@ private:
     VirtualColumns virtual_columns;
     bool is_global_aggr_query = false;
 
-    std::atomic_flag shutdown_called = ATOMIC_FLAG_INIT;
+    std::atomic_flag shutdown_called;
 
     /// Background update pipeline
     struct

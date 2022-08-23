@@ -327,7 +327,7 @@ private:
 
     CompressionMethodByte logstore_codec = CompressionMethodByte::NONE;
 
-    std::atomic_flag inited = ATOMIC_FLAG_INIT;
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag inited;
+    std::atomic_flag stopped;
 };
 }

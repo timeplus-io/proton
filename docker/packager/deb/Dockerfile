@@ -1,12 +1,12 @@
 # rebuild in #33610
-# docker build -t clickhouse/deb-builder .
+# docker build -t timeplus/proton-deb-builder .
 FROM ubuntu:20.04
 
 # ARG for quick switch to a given ubuntu mirror
 ARG apt_archive="http://archive.ubuntu.com"
 RUN sed -i "s|http://archive.ubuntu.com|$apt_archive|g" /etc/apt/sources.list
 
-ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=13
+ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=14
 
 RUN apt-get update \
     && apt-get install ca-certificates lsb-release wget gnupg apt-transport-https \

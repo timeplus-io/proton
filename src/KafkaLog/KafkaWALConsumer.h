@@ -62,9 +62,9 @@ private:
 private:
     std::unique_ptr<KafkaWALSettings> settings;
 
-    std::atomic_flag inited = ATOMIC_FLAG_INIT;
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
-    std::atomic_flag consume_stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag inited;
+    std::atomic_flag stopped;
+    std::atomic_flag consume_stopped;
 
     KafkaWALStatsPtr stats;
 

@@ -291,7 +291,7 @@ private:
 
     TailCachePtr cache;
 
-    std::atomic_flag closed = ATOMIC_FLAG_INIT;
+    std::atomic_flag closed;
 
     /// The earliest sn which is part of an incomplete transaction. This is used to compute the
     /// last stable sn (LSN) in ReplicaManager

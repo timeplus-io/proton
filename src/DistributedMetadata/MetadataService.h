@@ -85,8 +85,8 @@ protected:
     klog::KafkaWALContext dwal_consume_ctx;
     klog::KafkaWALPtr dwal;
 
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
-    std::atomic_flag started = ATOMIC_FLAG_INIT;
+    std::atomic_flag stopped;
+    std::atomic_flag started;
     std::optional<ThreadPool> pool;
 
     String node_roles;

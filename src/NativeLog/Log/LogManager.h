@@ -247,7 +247,7 @@ private:
     DB::NLOG::BackgroundSchedulePool::TaskHolder log_start_sn_checkpoint_task;
     DB::NLOG::BackgroundSchedulePool::TaskHolder log_delete_task;
 
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag stopped;
     Poco::Logger * logger;
 };
 }

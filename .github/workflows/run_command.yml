@@ -4,7 +4,7 @@ on:
       ec2-image-id:
         type: string
         required: false
-        default: ami-038c7551f4646121c
+        default: ami-045a86d6d301ab637
       ec2-instance-type:
         type: string
         required: false

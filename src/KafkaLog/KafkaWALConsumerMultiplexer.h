@@ -108,8 +108,8 @@ private:
     void flush() const;
 
 private:
-    std::atomic_flag inited = ATOMIC_FLAG_INIT;
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag inited;
+    std::atomic_flag stopped;
 
     int32_t shared_subscription_flush_threshold_count;
     int32_t shared_subscription_flush_threshold_bytes;
