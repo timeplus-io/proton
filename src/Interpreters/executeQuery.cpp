@@ -529,18 +529,16 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     /// If it is used - do the random sampling and "collapse" the settings.
     /// It allows to consistently log queries with all the subqueries in distributed query processing
     /// (subqueries on remote nodes will receive these "collapsed" settings)
-    if (!internal && settings.log_queries && settings.log_queries_probability < 1.0)
+    if (!internal && settings.log_queries)
     {
-        if (!ast->as<ASTInsertQuery>() || settings.log_insert_query)
+        if (ast->as<ASTInsertQuery>() && !settings.log_insert_query)
+            context->setSetting("log_queries", false);
+        else if (settings.log_queries_probability < 1.0)
         {
             std::bernoulli_distribution should_write_log{settings.log_queries_probability};
 
             context->setSetting("log_queries", should_write_log(thread_local_rng));
             context->setSetting("log_queries_probability", 1.0);
-        }
-        else
-        {
-            context->setSetting("log_queries", false);
         }
     }
 
