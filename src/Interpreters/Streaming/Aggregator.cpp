@@ -3245,7 +3245,7 @@ SessionStatus Aggregator::processSessionRow(
         }
     }
 
-    return handleSession(ts_secs, info, params.kind, params.session_size, params.window_interval);
+    return handleSession(ts_secs, info);
 }
 
 void Aggregator::emitSessionsIfPossible(DateTime64 max_ts, bool session_start, bool session_end, UInt64 session_id)
@@ -3253,8 +3253,8 @@ void Aggregator::emitSessionsIfPossible(DateTime64 max_ts, bool session_start, b
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
     for (const auto & it : session_map.map64)
     {
-        Int64 low_bound = addTime(max_ts, params.kind, -1 * params.window_interval, time_zone, params.time_scale);
-        Int64 max_bound = addTime(max_ts, params.kind, -1 * params.session_size, time_zone, params.time_scale);
+        Int64 low_bound = addTime(max_ts, params.interval_kind, -1 * params.window_interval, time_zone, params.time_scale);
+        Int64 max_bound = addTime(max_ts, params.timeout_kind, -1 * params.session_size, time_zone, params.time_scale);
 
         if (it.first == session_id && session_start)
             it.second->active = true;
@@ -3270,6 +3270,48 @@ void Aggregator::emitSessionsIfPossible(DateTime64 max_ts, bool session_start, b
         }
     }
 }
+
+SessionStatus Aggregator::handleSession(const DateTime64 & tp_time, SessionInfo & info) const
+{
+    assert(info.win_start <= info.win_end);
+
+    const DateLUTImpl & time_zone = DateLUT::instance("UTC");
+
+    if (!info.active)
+        return SessionStatus::IGNORE;
+
+    if (addTime(tp_time, params.timeout_kind, params.session_size, time_zone, info.scale) < info.win_start)
+    {
+        /// late session, ignore this event
+        return SessionStatus::IGNORE;
+    }
+
+    auto session_end = addTime(tp_time, params.interval_kind, params.window_interval, time_zone, info.scale);
+    if (session_end < info.win_start)
+    {
+        /// with session_size, possible late event in current session
+        /// TODO: append block into possible_session_end_list
+        return SessionStatus::KEEP;
+    }
+    else if (session_end >= info.win_start && tp_time < info.win_end)
+    {
+        //            session_data[offeset] = cur_session_id;
+        return SessionStatus::KEEP;
+    }
+    else if (addTime(tp_time, params.interval_kind, -1 * params.window_interval, time_zone, info.scale) <= info.win_end)
+    {
+        /// belongs to current session
+        //            session_data[offeset] = cur_session_id;
+        info.win_end = tp_time;
+        return SessionStatus::END_EXTENDED;
+    }
+    else
+    {
+        /// possible belongs to current session, cache it
+        return SessionStatus::KEEP;
+    }
+}
+
 
 template SessionStatus Aggregator::processSessionRow<ColumnDecimal<DateTime64>>(
     SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);

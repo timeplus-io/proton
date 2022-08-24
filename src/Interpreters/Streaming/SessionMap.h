@@ -341,9 +341,5 @@ struct SessionHashMap : private boost::noncopyable
     }
 };
 
-SessionStatus
-handleSession(const DateTime64 & tp_time, SessionInfo & info, IntervalKind::Kind kind, Int64 session_size, Int64 window_interval);
-void updateSessionInfo(DateTime64 /*timestamp*/, SessionBlockQueue & queue, size_t session_size, UInt64 window_interval);
-
 }
 }

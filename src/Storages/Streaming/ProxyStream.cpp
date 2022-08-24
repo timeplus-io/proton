@@ -372,7 +372,7 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
 void ProxyStream::processWindowAssignmentStep(
     QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageSnapshotPtr & storage_snapshot) const
 {
-    if (streaming_func_desc->type == WindowType::TUMBLE || streaming_func_desc->type == WindowType::HOP)
+    if (streaming_func_desc->type == WindowType::TUMBLE || streaming_func_desc->type == WindowType::HOP || streaming_func_desc->type == WindowType::SESSION)
     {
         Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
 

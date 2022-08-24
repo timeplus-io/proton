@@ -1,6 +1,8 @@
 #include "WindowAssignmentTransform.h"
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnConst.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
@@ -13,6 +15,8 @@ namespace Streaming
 {
 namespace
 {
+    using ColumnDateTime64 = ColumnDecimal<DateTime64>;
+
     ALWAYS_INLINE void setWindowColumnTumble(Block & block, const ColumnTuple * col_tuple, size_t src_pos, Int32 target_pos)
     {
         if (target_pos >= 0)
@@ -42,6 +46,22 @@ namespace
             block.getByPosition(target_pos).column = src_win_col->getDataPtr();
         }
     }
+
+    ALWAYS_INLINE void setWindowColumnSession(Block & block, Int32 target_pos)
+    {
+        if (target_pos >= 0)
+        {
+            auto length = block.rows();
+            auto time_placeholder = ColumnDateTime64::create(0, 3);
+
+            assert(length > 0);
+
+            time_placeholder->insert(DateTime64(0));
+
+            auto time_col = ColumnConst::create(time_placeholder->getPtr(), length);
+            block.getByPosition(target_pos).column = std::move(time_col);
+        }
+    }
 }
 
 WindowAssignmentTransform::WindowAssignmentTransform(
@@ -50,9 +70,9 @@ WindowAssignmentTransform::WindowAssignmentTransform(
 {
     assert(func_desc);
 
-    calculateColumns(input_header, output_header);
-
     func_name = func_desc->func_ast->as<ASTFunction>()->name;
+
+    calculateColumns(input_header, output_header);
 }
 
 void WindowAssignmentTransform::transform(Chunk & chunk)
@@ -97,10 +117,19 @@ void WindowAssignmentTransform::assignWindow(Chunk & chunk)
     for (Int32 i = wmin_pos + 1; i < wmax_pos; ++i)
         result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i]).column);
 
-    /// Insert columns after window_begin or window_end
-    size_t delta = wmin_pos >= 0 ? 2 : 1;
-    for (size_t i = wmax_pos + 1, num_columns = chunk_header.getNumColumns(); i < num_columns; ++i)
-        result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i - delta]).column);
+    if (wmax_pos >= 0)
+    {
+        /// Insert columns after window_begin or window_end
+        size_t delta = wmin_pos >= 0 ? 2 : 1;
+        for (size_t i = wmax_pos + 1, num_columns = chunk_header.getNumColumns(); i < num_columns; ++i)
+            result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i - delta]).column);
+    }
+    else
+    {
+        /// session window can be executed without group by window_start/window_end column
+        for (size_t i = 0, num_columns = chunk_header.getNumColumns(); i < num_columns; ++i)
+            result.getByPosition(i).column = std::move(block.getByPosition(input_column_positions[i]).column);
+    }
 
     /// Result column
     auto & col_with_type = expr_block.getByPosition(0);
@@ -116,6 +145,8 @@ void WindowAssignmentTransform::assignWindow(Chunk & chunk)
         assignTumbleWindow(result, col_tuple);
     else if (func_name == ProtonConsts::HOP_FUNC_NAME)
         assignHopWindow(result, col_tuple);
+    else if (func_name == ProtonConsts::SESSION_FUNC_NAME)
+        assignSessionWindow(result);
     else
         throw Exception(func_name + " is not supported", ErrorCodes::NOT_IMPLEMENTED);
 
@@ -151,6 +182,20 @@ void WindowAssignmentTransform::assignHopWindow(Block & result, const ColumnTupl
     }
 }
 
+void WindowAssignmentTransform::assignSessionWindow(Block & result)
+{
+    if (wstart_pos < wend_pos)
+    {
+        setWindowColumnSession(result, wstart_pos);
+        setWindowColumnSession(result, wend_pos);
+    }
+    else
+    {
+        setWindowColumnSession(result, wend_pos);
+        setWindowColumnSession(result, wstart_pos);
+    }
+}
+
 void WindowAssignmentTransform::calculateColumns(const Block & input_header, const Block & output_header)
 {
     expr_column_positions.reserve(func_desc->input_columns.size());
@@ -168,7 +213,8 @@ void WindowAssignmentTransform::calculateColumns(const Block & input_header, con
         ++pos;
     }
 
-    assert(wstart_pos >= 0 || wend_pos >= 0);
+    if (func_desc->type != WindowType::SESSION)
+        assert(wstart_pos >= 0 || wend_pos >= 0);
 
     auto input_begin = func_desc->input_columns.begin();
     auto input_end = func_desc->input_columns.end();

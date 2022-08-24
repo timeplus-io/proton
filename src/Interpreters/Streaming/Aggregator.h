@@ -650,7 +650,8 @@ public:
         Int64 max_emit_timeout = 0;
         UInt64 session_size = 0;
         FunctionDescriptionPtr window_desc;
-        IntervalKind::Kind kind = IntervalKind::Second;
+        IntervalKind::Kind interval_kind = IntervalKind::Second;
+        IntervalKind::Kind timeout_kind = IntervalKind::Second;
         /// proton: ends
 
         /// proton: starts
@@ -696,9 +697,11 @@ public:
             {
                 time_col_is_datetime64 = isDateTime64(window_desc->argument_types[0]);
                 auto * func_ast = window_desc->func_ast->as<ASTFunction>();
-                extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), window_interval, kind);
+                extractInterval(func_ast->arguments->children[1]->as<ASTFunction>(), window_interval, interval_kind);
                 if (func_ast->name == ProtonConsts::SESSION_FUNC_NAME)
-                    extractInterval(func_ast->arguments->children[2]->as<ASTFunction>(), max_emit_timeout, kind);
+                    extractInterval(func_ast->arguments->children[2]->as<ASTFunction>(), max_emit_timeout, timeout_kind);
+                else
+                    timeout_kind = interval_kind;
                 session_size = max_emit_timeout == 0 ? window_interval * ProtonConsts::SESSION_SIZE_MULTIPLIER : max_emit_timeout;
                 if (time_col_is_datetime64)
                     time_scale = checkAndGetDataType<DataTypeDateTime64>(window_desc->argument_types[0].get())->getScale();
@@ -1125,6 +1128,7 @@ private:
     SessionStatus processSessionRow(
         SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
     void emitSessionsIfPossible(DateTime64 max_ts, bool session_start, bool session_end, UInt64 session_id);
+    SessionStatus handleSession(const DateTime64 & tp_time, SessionInfo & info) const;
     /// proton: ends
 };
 

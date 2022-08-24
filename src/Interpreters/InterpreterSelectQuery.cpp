@@ -3169,7 +3169,8 @@ void InterpreterSelectQuery::checkForStreamingQuery() const
     {
         if (auto * proxy = storage->as<Streaming::ProxyStream>())
         {
-            if (proxy->windowType() == Streaming::WindowType::TUMBLE || proxy->windowType() == Streaming::WindowType::HOP)
+            if (proxy->windowType() == Streaming::WindowType::TUMBLE || 
+                proxy->windowType() == Streaming::WindowType::HOP)
             {
                 bool has_win_col = false;
                 for (const auto & window_col : ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES)

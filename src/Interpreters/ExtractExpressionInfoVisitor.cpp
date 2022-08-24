@@ -6,6 +6,38 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSubquery.h>
 
+#include <Common/ProtonCommon.h>
+
+/// proton: starts.
+namespace
+{
+    bool hasSessionWindowColumn(const DB::ASTPtr & ast)
+    {
+        if (const auto * function = ast->as<DB::ASTFunction>())
+        {
+            if (const auto * args = function->arguments->as<DB::ASTExpressionList>())
+            {
+                if (args->children.empty())
+                    return false;
+
+                for (const auto & arg : args->children)
+                    if (hasSessionWindowColumn(arg))
+                        return true;
+                return false;
+            }
+            else
+                return false;
+        }
+        else if (const auto * identifier = ast->as<DB::ASTIdentifier>())
+        {
+            return std::find(DB::ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.begin(), DB::ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end(), identifier->name())
+                != DB::ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end();
+        }
+        else
+            return false;
+    }
+}
+/// proton: ends.
 
 namespace DB
 {
@@ -18,7 +50,7 @@ void ExpressionInfoMatcher::visit(const ASTPtr & ast, Data & data)
         visit(*identifier, ast, data);
 }
 
-void ExpressionInfoMatcher::visit(const ASTFunction & ast_function, const ASTPtr &, Data & data)
+void ExpressionInfoMatcher::visit(const ASTFunction & ast_function, const ASTPtr & ast, Data & data)
 {
     if (ast_function.name == "array_join")
     {
@@ -53,6 +85,13 @@ void ExpressionInfoMatcher::visit(const ASTFunction & ast_function, const ASTPtr
             if (!function->isDeterministicInScopeOfQuery())
                 data.is_deterministic_function = false;
         }
+
+        /// proton: starts.
+        /// For session window, window_start/window_end are not generated before aggregation step.
+        /// The predication statement which contains window_start/window_end could not be moved to where clause.
+        if (hasSessionWindowColumn(ast))
+            data.is_aggregate_function = true;
+        /// proton: ends.
     }
 }
 

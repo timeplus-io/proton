@@ -49,7 +49,7 @@
             {"client":"python", "query_type": "table","depends_on_stream":"multishards_stream","depends_on":1301, "wait":2, "query": "insert into multishards_stream(i) values (1)"},
             {"client":"python", "query_type": "table","depends_on_stream":"multishards_stream","depends_on":1301, "wait":1, "query": "insert into multishards_stream(i) values (2)"},
             {"client":"python", "query_type": "table","depends_on_stream":"multishards_stream","depends_on":1301, "wait":1, "query": "insert into multishards_stream(i) values (3)"},
-            {"client":"python", "wait": 6, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1301'"}             
+            {"client":"python", "wait": 8, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1301'"}
           ]
         }
       ],
