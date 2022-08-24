@@ -14,14 +14,14 @@ jobs:
       ec2-image-id: ami-045a86d6d301ab637
       submodules: 'true'
       command: |
-        echo "download cache-address.tar.gz"
+        echo "download cache_address.tar.gz"
         cd $GITHUB_WORKSPACE
-        aws s3 cp --no-progress s3://tp-internal/proton/cache-address.tar.gz .
+        aws s3 cp --no-progress s3://tp-internal/proton/cache_address.tar.gz .
 
-        echo "uncompress cache-address.tar.gz"
+        echo "uncompress cache_address.tar.gz"
         mkdir $GITHUB_WORKSPACE/ccache
-        tar -zxf ./cache-address.tar.gz -C $GITHUB_WORKSPACE/ccache
-        rm cache-address.tar.gz
+        tar -zxf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache
+        rm cache_address.tar.gz
 
         echo "build proton binary"
         ./docker/packager/packager --package-type binary --docker-image-version clang-14 --sanitizer address --proton-build  --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
@@ -41,10 +41,10 @@ jobs:
         pip3 install -r helpers/requirements.txt
         python3 ci_runner.py --debug --settings=redp,nativelog
 
-        echo "upload cache-address.tar.gz"
-        tar -zcf ./cache-address.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        echo "upload cache_address.tar.gz"
+        tar -zcf ./cache_address.tar.gz -C $GITHUB_WORKSPACE/ccache .
         ls -al .
-        aws s3 cp --no-progress ./cache-address.tar.gz s3://tp-internal/proton/
+        aws s3 cp --no-progress ./cache_address.tar.gz s3://tp-internal/proton/
 
         echo "check test result"
         cat $GITHUB_WORKSPACE/tests/stream/.status
