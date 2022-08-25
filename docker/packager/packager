@@ -204,6 +204,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DUSE_DEBUG_HELPERS=ON')
         cmake_flags.append('-DENABLE_LIBRARIES=OFF')
         cmake_flags.append('-DENABLE_KAFKA=ON')
+        cmake_flags.append('-DENABLE_GRPC=ON')
         cmake_flags.append('-DENABLE_NURAFT=ON')
         cmake_flags.append('-DENABLE_RAPIDJSON=ON')
         cmake_flags.append('-DENABLE_YAML_CPP=ON')

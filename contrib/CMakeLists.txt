@@ -137,6 +137,7 @@ endif()
 
 # add_contrib (sqlite-cmake sqlite-amalgamation)
 add_contrib (s2geometry-cmake s2geometry)
+add_contrib (c-ares-cmake c-ares)
 
 # proton: starts
 add_contrib (liburing-cmake liburing)
