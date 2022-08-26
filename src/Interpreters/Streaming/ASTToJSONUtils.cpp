@@ -1,5 +1,7 @@
 #include "ASTToJSONUtils.h"
 
+#include <Common/ProtonCommon.h>
+
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Parsers/queryToString.h>
@@ -9,7 +11,7 @@ namespace DB
 {
 namespace Streaming
 {
-void ColumnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const ASTColumnDeclaration & col_decl)
+void columnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const ASTColumnDeclaration & col_decl)
 {
     const auto & column_type = DataTypeFactory::instance().get(col_decl.type);
 
@@ -62,7 +64,15 @@ void ColumnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const AST
     }
 }
 
-String JSONToString(const Poco::JSON::Object & json)
+void settingsToJSON(Poco::JSON::Object & settings_json, const SettingsChanges & changes)
+{
+    for (const auto & change : changes)
+        for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
+            if (change.name == k)
+                settings_json.set(change.name, toString(change.value));
+}
+
+String jsonToString(const Poco::JSON::Object & json)
 {
     std::stringstream str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     json.stringify(str_stream, 0);

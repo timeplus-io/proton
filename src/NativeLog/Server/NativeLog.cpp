@@ -274,6 +274,22 @@ CreateStreamResponse NativeLog::createStream(const std::string & ns, const Creat
     return response;
 }
 
+UpdateStreamResponse NativeLog::updateStream(const std::string & ns, const UpdateStreamRequest & request)
+{
+    /// First commit the metadata into kvstore
+    auto response = meta_store->updateStream(ns, request);
+
+    /// Secondly, update shards' config in memory
+    std::vector<StreamShard> shards;
+    shards.reserve(response.shards);
+    for (uint32_t i = 0; i < response.shards; ++i)
+        shards.emplace_back(response.stream, response.id, i);
+
+    log_manager->updateConfig(ns, shards, request.flush_settings, request.retention_settings);
+
+    return response;
+}
+
 DeleteStreamResponse NativeLog::deleteStream(const std::string & ns, const DeleteStreamRequest & request)
 {
     auto list_response{meta_store->listStreams(ns, ListStreamsRequest{request.stream})};

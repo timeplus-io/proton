@@ -59,6 +59,11 @@ public:
 
     void close();
 
+    /// Update the retention and flush settings
+    /// @param flush_settings for flush settings, 'flush_ms' and 'flush_messages'
+    /// @param retention_settings for retention settings, 'retention_ms' and 'retention_bytes'
+    void updateConfig(const std::map<String, int32_t> & flush_settings, const std::map<String, int64_t> & retention_settings);
+
 public:
     static StreamShard streamShardFrom(const fs::path & log_dir_);
 
@@ -66,7 +71,12 @@ public:
     /// Prior to the deletion, the index and log files are renamed by appending .deleted to the
     /// respective file name. Allows these files to be optionally deleted asynchronously
     /// This method assumes the file exists.
-    static void removeSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason, std::shared_ptr<ThreadPool> adhoc_scheduler_, Poco::Logger * logger_);
+    static void removeSegmentFiles(
+        const std::vector<LogSegmentPtr> & segments_to_delete,
+        bool async,
+        const std::string & reason,
+        std::shared_ptr<ThreadPool> adhoc_scheduler_,
+        Poco::Logger * logger_);
 
 private:
     /// Construct a log file name in the given dir with the given base offset and the given suffix

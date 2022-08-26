@@ -159,7 +159,7 @@ LogSegmentPtr Log::rollWithoutLock(std::optional<int64_t> expected_next_sn)
 }
 
 /// Update the sns for this record batch
-void Log::assignSequence(RecordPtr & record, ByteVector & byte_vec, LogAppendDescription & append_info)
+void Log::assignSequence(RecordPtr & record, ByteVector & byte_vec, LogAppendDescription & append_info) const
 {
     auto initial_sn = logEndSequence();
     append_info.seq_metadata = initial_sn;

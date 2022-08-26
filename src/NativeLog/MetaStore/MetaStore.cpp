@@ -119,6 +119,66 @@ CreateStreamResponse MetaStore::createStream(const std::string & ns, const Creat
     return CreateStreamResponse::from(desc.id, ns, desc.version, desc.create_timestamp_ms, desc.last_modify_timestamp_ms, req, 0);
 }
 
+UpdateStreamResponse MetaStore::updateStream(const std::string & ns, const UpdateStreamRequest & req)
+{
+    assert(!ns.empty());
+    assert(!req.stream.empty());
+
+    auto key = namespaceKey(ns, req.stream);
+    std::string rvalue;
+
+    std::scoped_lock guard{mlock};
+
+    /// Rocks don't have conditional put
+    auto status = metadb->Get(rocksdb::ReadOptions{}, key, &rvalue);
+    if (!status.ok())
+    {
+        LOG_ERROR(logger, "Failed to find stream={} error={}", key, status.ToString());
+
+        UpdateStreamResponse response{req.id, ns, req.stream};
+        response.error_code = DB::ErrorCodes::RESOURCE_NOT_FOUND;
+        response.error_message = "Stream not found";
+        return response;
+    }
+
+    auto desc = StreamDescription::deserialize(rvalue.data(), rvalue.size());
+
+    /// flush settings
+    for (const auto & [k, v] : req.flush_settings)
+    {
+        if (k == "flush_messages")
+            desc.flush_messages = v;
+        else if (k == "flush_ms")
+            desc.flush_ms = v;
+    }
+
+    /// retention settings
+    for (const auto & [k, v] : req.retention_settings)
+    {
+        if (k == "retention_bytes")
+            desc.retention_bytes = v;
+        else if (k == "retention_ms")
+            desc.retention_ms = v;
+    }
+    desc.last_modify_timestamp_ms = DB::UTCMilliseconds::now();
+
+    rocksdb::WriteOptions write_options;
+    write_options.sync = true;
+    auto data{desc.serialize()};
+
+    status = metadb->Put(write_options, key, rocksdb::Slice(data.data(), data.size()));
+    if (!status.ok())
+    {
+        LOG_ERROR(logger, "Failed to update stream={} error={}", key, status.ToString());
+        UpdateStreamResponse response{req.id, ns, req.stream};
+        response.error_code = mapRocksStatus(status);
+        response.error_message = "Fail to update stream";
+        return response;
+    }
+
+    return UpdateStreamResponse::from(req.id, ns, req.stream, desc);
+}
+
 DeleteStreamResponse MetaStore::deleteStream(const std::string & ns, const DeleteStreamRequest & req)
 {
     assert(!ns.empty());

@@ -6,6 +6,7 @@
 
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Streaming/DDLHelper.h>
 #include <KafkaLog/KafkaWAL.h>
 #include <KafkaLog/KafkaWALCommon.h>
 #include <Common/ErrorCodes.h>
@@ -505,7 +506,26 @@ void DDLService::mutateTable(nlog::Record & record, const String & method, CallB
         return;
     }
 
-    doDDLOnHosts(target_hosts, payload, method, query_id, user, uuid, std::move(finished_callback));
+    /// Table mutation can contain different operations. We branch the code here according to the payload
+    if (const auto & ttl_settings = Streaming::parseLogStoreTTLSettings(payload); !ttl_settings.empty())
+    {
+        auto res = dwal->alter(uuid, ttl_settings);
+        if (res != ErrorCodes::OK)
+            failDDL(query_id, user, payload, "Set log store TTL failed");
+    }
+    else if (!payload.empty())
+    {
+        /// Historic store TTL
+        doDDLOnHosts(target_hosts, payload, method, query_id, user, uuid, std::move(finished_callback));
+    }
+    else if (record.opcode() == nlog::OpCode::DELETE_TABLE)
+    {
+        doDDLOnHosts(target_hosts, payload, method, query_id, user, uuid, std::move(finished_callback));
+    }
+    else
+    {
+        LOG_ERROR(log, "Unknown mutation task");
+    }
 }
 
 void DDLService::mutateDatabase(nlog::Record & record, const String & method) const
@@ -708,5 +728,4 @@ void DDLService::createDWAL(const String & uuid, Int32 shards, Int32 replication
 
     doCreateDWal(ctx);
 }
-
 }

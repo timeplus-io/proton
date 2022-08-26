@@ -79,6 +79,14 @@ public:
     /// @return The very start sn for the timestamp ts
     int64_t sequenceForTimestamp(int64_t ts, bool append_time) const;
 
+    /// Update the retention and flush settings
+    /// @param flush_settings for flush settings, 'flush_ms' and 'flush_messages'
+    /// @param retention_settings for retention settings, 'retention_ms' and 'retention_bytes'
+    void updateConfig(const std::map<String, int32_t> & flush_settings, const std::map<String, int64_t> & retention_settings)
+    {
+        loglet->updateConfig(flush_settings, retention_settings);
+    }
+
     /// Close the log. The memory mapped buffer for index files and this log will be left open
     /// until the log is deleted
     void close();
@@ -122,7 +130,7 @@ public:
 private:
     inline LogAppendDescription analyzeAndValidateRecord(Record & record);
     inline void checkSize(int64_t record_size);
-    inline void assignSequence(RecordPtr & record, ByteVector & byte_vec, LogAppendDescription & append_info);
+    inline void assignSequence(RecordPtr & record, ByteVector & byte_vec, LogAppendDescription & append_info) const;
 
     LogSegmentPtr maybeRoll(uint32_t records_size, const LogAppendDescription & append_info);
     LogSegmentPtr rollWithoutLock(std::optional<int64_t> expected_next_sn);
@@ -174,13 +182,13 @@ private:
     inline void checkLogStartSequence(int64_t sn) const;
     LogSequenceMetadata convertToSequenceMetadataOrThrow(int64_t sn) const;
 
-//    int64_t highWatermark() const
-//    {
-//        std::scoped_lock lock(lmutex);
-//        return high_watermark_metadata.record_sn;
-//    }
-//
-//    int64_t highWatermarkWithoutLock() const { return high_watermark_metadata.record_sn; }
+    //    int64_t highWatermark() const
+    //    {
+    //        std::scoped_lock lock(lmutex);
+    //        return high_watermark_metadata.record_sn;
+    //    }
+    //
+    //    int64_t highWatermarkWithoutLock() const { return high_watermark_metadata.record_sn; }
 
     /// Update the high watermark to a new sn. The new high watermark will be
     /// lower bounded by the log start sn and upper bounded by the log end sn.
@@ -203,7 +211,7 @@ private:
 
     LogSequenceMetadata fetchLastStableMetadata() const;
     inline LogSequenceMetadata fetchLastStableMetadataWithoutLock() const;
-    inline LogSequenceMetadata maxSequenceMetadata(FetchIsolation isolation, bool with_committed_lock_held=false) const;
+    inline LogSequenceMetadata maxSequenceMetadata(FetchIsolation isolation, bool with_committed_lock_held = false) const;
     LogSequenceMetadata waitForMoreDataIfNeeded(int64_t & sn, int64_t max_wait_ms, FetchIsolation isolation) const;
 
     /// If stream deletion is enabled, delete any local log segments that either expired due to time based

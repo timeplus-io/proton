@@ -983,4 +983,28 @@ nlog::RecordSN StreamShard::lastSN() const
     std::lock_guard lock(sns_mutex);
     return last_sn;
 }
+
+void StreamShard::updateNativeLog()
+{
+    auto & native_log = nlog::NativeLog::instance(storage_stream->getContext());
+    if (!native_log.enabled())
+        return;
+
+    const auto ssettings = storage->getSettings();
+    const auto & storage_id = storage->getStorageID();
+
+    std::map<std::string, std::int32_t> flush_settings
+        = {{"flush_messages", ssettings->logstore_flush_messages}, {"flush_ms", ssettings->logstore_flush_ms}};
+
+    std::map<std::string, std::int64_t> retention_settings
+        = {{"retention_bytes", ssettings->logstore_retention_bytes}, {"retention_ms", ssettings->logstore_retention_ms}};
+
+    nlog::UpdateStreamRequest request{storage_id.getTableName(), storage_id.uuid, std::move(flush_settings), std::move(retention_settings)};
+
+    auto update_resp{native_log.updateStream(storage_id.getDatabaseName(), request)};
+    if (update_resp.hasError())
+        throw DB::Exception(update_resp.error_code, "Failed to update stream, error={}", update_resp.errString());
+    else
+        LOG_INFO(log, "NativeLog has been updated successfully");
+}
 }

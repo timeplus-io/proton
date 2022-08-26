@@ -91,6 +91,8 @@ public:
 
     int32_t remove(const std::string & name, const KafkaWALContext & ctx) const;
 
+    int32_t alter(const std::string & name, const std::vector<std::pair<String, String>> & params) const;
+
     DescribeResult describe(const std::string & name) const;
 
     KafkaWALClusterPtr cluster(const KafkaWALContext & ctx) const;
@@ -101,6 +103,7 @@ private:
     using FreeRdKafka = void (*)(struct rd_kafka_s *);
     using RdKafkaHandlePtr = std::unique_ptr<struct rd_kafka_s, FreeRdKafka>;
 
+private:
     struct DeliveryReport
     {
         std::atomic_int32_t partition = -1;

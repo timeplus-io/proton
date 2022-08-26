@@ -18,6 +18,8 @@
 #include <NativeLog/Requests/TranslateTimestampsResponse.h>
 #include <NativeLog/Requests/TruncateRequest.h>
 #include <NativeLog/Requests/TruncateResponse.h>
+#include <NativeLog/Requests/UpdateStreamRequest.h>
+#include <NativeLog/Requests/UpdateStreamResponse.h>
 
 #include <Interpreters/Context_fwd.h>
 #include <Common/BackgroundSchedulePool.h>
@@ -49,6 +51,7 @@ public:
 
     /// Admin APIs
     CreateStreamResponse createStream(const std::string & ns, const CreateStreamRequest & request);
+    UpdateStreamResponse updateStream(const std::string & ns, const UpdateStreamRequest & request);
     DeleteStreamResponse deleteStream(const std::string & ns, const DeleteStreamRequest & request);
     ListStreamsResponse listStreams(const std::string & ns, const ListStreamsRequest & request);
     RenameStreamResponse renameStream(const std::string & ns, const RenameStreamRequest & request);

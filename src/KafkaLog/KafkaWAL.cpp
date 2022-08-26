@@ -2,9 +2,9 @@
 #include "KafkaWALCommon.h"
 #include "KafkaWALStats.h"
 
+#include <base/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-#include <base/logger_useful.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 
@@ -65,7 +65,7 @@ namespace
         do_topic(handle, options.get(), admin_queue.get());
 
         /// poll result
-        auto rkev = rd_kafka_queue_poll(admin_queue.get(), request_timeout + 500);
+        auto * rkev = rd_kafka_queue_poll(admin_queue.get(), request_timeout + 500);
         if (rkev == nullptr)
         {
             LOG_ERROR(log, "Failed to {} topic={} timeout", action, name);
@@ -80,7 +80,7 @@ namespace
             return mapErrorCode(err);
         }
 
-        auto res = topics_result_func(rkev);
+        const auto * res = topics_result_func(rkev);
         if (res == nullptr)
         {
             LOG_ERROR(log, "Failed to {} topic={}, unknown error", action, name);
@@ -90,7 +90,7 @@ namespace
         if (topics_func)
         {
             size_t cnt = 0;
-            auto result_topics = topics_func(res, &cnt);
+            auto * result_topics = topics_func(res, &cnt);
             if (cnt != 1 || result_topics == nullptr)
             {
                 LOG_ERROR(log, "Failed to {} topic={}, unknown error", action, name);
@@ -118,18 +118,99 @@ namespace
 
         return DB::ErrorCodes::OK;
     }
-}
 
-void KafkaWAL::initConsumerTopicHandle(KafkaWALContext & ctx) const
+    std::unique_ptr<rd_kafka_ConfigResource_t, void (*)(rd_kafka_ConfigResource_t *)>
+    getTopicConfig(const String & name, rd_kafka_t * handler, Poco::Logger * log)
+    {
+        rd_kafka_ConfigResource_t * configs[1];
+        configs[0] = rd_kafka_ConfigResource_new(RD_KAFKA_RESOURCE_TOPIC, name.c_str());
+        if (configs[0] == nullptr)
+        {
+            LOG_ERROR(log, "Failed to describe topic, invalid arguments");
+            return {configs[0], rd_kafka_ConfigResource_destroy};
+        }
+
+        auto describeTopics = [&](rd_kafka_t * handle,
+                                  rd_kafka_AdminOptions_t * options,
+                                  rd_kafka_queue_t * admin_queue) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            rd_kafka_DescribeConfigs(handle, configs, 1, options, admin_queue);
+        };
+
+        auto get_config = [&name, &configs, &log](const rd_kafka_event_t * event) -> int32_t {
+            /// Validate result resources
+            size_t cnt = 0;
+            auto * rconfigs = rd_kafka_DescribeConfigs_result_resources(event, &cnt);
+            if (cnt != 1 || rconfigs == nullptr)
+            {
+                LOG_ERROR(log, "Failed to describe topic={}, unknown error", name);
+                return DB::ErrorCodes::UNKNOWN_EXCEPTION;
+            }
+
+            auto err = rd_kafka_ConfigResource_error(rconfigs[0]);
+            if (err == RD_KAFKA_RESP_ERR__UNKNOWN_TOPIC || err == RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART)
+            {
+                return DB::ErrorCodes::RESOURCE_NOT_FOUND;
+            }
+
+            if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+            {
+                LOG_ERROR(
+                    log,
+                    "Failed to describe topic={}, error={} detail={}",
+                    name,
+                    rd_kafka_err2str(err),
+                    rd_kafka_ConfigResource_error_string(rconfigs[0]));
+
+                return mapErrorCode(err);
+            }
+
+            cnt = 0;
+            const rd_kafka_ConfigEntry_t ** entries = rd_kafka_ConfigResource_configs(rconfigs[0], &cnt);
+            if (cnt == 0)
+            {
+                return DB::ErrorCodes::RESOURCE_NOT_FOUND;
+            }
+
+            /* Apply all existing configuration entries to resource object that
+         * will later be passed to AlterConfigs. */
+            for (size_t i = 0; i < cnt; i++)
+            {
+                err = rd_kafka_ConfigResource_set_config(
+                    configs[0], rd_kafka_ConfigEntry_name(entries[i]), rd_kafka_ConfigEntry_value(entries[i]));
+
+                if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+                {
+                    LOG_ERROR(
+                        log,
+                        "Failed to set read-back config {}={} on local resource object",
+                        rd_kafka_ConfigEntry_name(entries[i]),
+                        rd_kafka_ConfigEntry_value(entries[i]));
+                    return mapErrorCode(err);
+                }
+            }
+
+            return DB::ErrorCodes::OK;
+        };
+
+        auto err
+            = doTopic(name, describeTopics, rd_kafka_event_DescribeConfigs_result, nullptr, get_config, handler, 4000, log, "describe");
+        if (err != DB::ErrorCodes::OK)
+            return {nullptr, rd_kafka_ConfigResource_destroy};
+
+        return {configs[0], rd_kafka_ConfigResource_destroy};
+    }
+    }
+
+    void KafkaWAL::initConsumerTopicHandle(KafkaWALContext & ctx) const
 {
-    assert (inited.test());
+    assert(inited.test());
 
     consumer->initTopicHandle(ctx);
 }
 
 void KafkaWAL::initProducerTopicHandle(KafkaWALContext & ctx) const
 {
-    assert (inited.test());
+    assert(inited.test());
 
     std::string acks;
     if (settings->enable_idempotence)
@@ -304,8 +385,7 @@ void KafkaWAL::initProducerHandle()
         producer_params.emplace_back("sasl.password", settings->auth.password.c_str());
     }
 
-    auto cb_setup = [](rd_kafka_conf_t * kconf)
-    {
+    auto cb_setup = [](rd_kafka_conf_t * kconf) {
         rd_kafka_conf_set_stats_cb(kconf, &KafkaWALStats::logStats);
         rd_kafka_conf_set_error_cb(kconf, &KafkaWALStats::logErr);
         rd_kafka_conf_set_throttle_cb(kconf, &KafkaWALStats::logThrottle);
@@ -365,12 +445,12 @@ int32_t KafkaWAL::doAppend(nlog::Record & record, DeliveryReport * dr, const Kaf
     nlog::ByteVector data{record.serialize()};
 
 #ifdef __GNUC__
-#pragma GCC diagnostic push
+#    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif /// __GNUC__
 
 #ifdef __clang__
-#pragma clang diagnostic push
+#    pragma clang diagnostic push
 #    pragma clang diagnostic ignored "-Wgnu-statement-expression"
 #    pragma clang diagnostic ignored "-Wreserved-identifier"
 #endif /// __clang__
@@ -407,7 +487,7 @@ int32_t KafkaWAL::doAppend(nlog::Record & record, DeliveryReport * dr, const Kaf
 
 #ifdef __GNUC__
 #    pragma GCC diagnostic pop
-#endif  /// __GNUC__
+#endif /// __GNUC__
 
     if (!err)
         /// release the ownership as data will be moved to librdkafka
@@ -419,12 +499,7 @@ int32_t KafkaWAL::doAppend(nlog::Record & record, DeliveryReport * dr, const Kaf
 AppendResult KafkaWAL::handleError(int err, const nlog::Record & record, const KafkaWALContext & ctx) const
 {
     auto kerr = static_cast<rd_kafka_resp_err_t>(err);
-    LOG_ERROR(
-        log,
-        "Failed to write record to topic={} shard={} error={}",
-        ctx.topic,
-        record.getShard(),
-        rd_kafka_err2str(kerr));
+    LOG_ERROR(log, "Failed to write record to topic={} shard={} error={}", ctx.topic, record.getShard(), rd_kafka_err2str(kerr));
 
     return {.err = mapErrorCode(kerr)};
 }
@@ -544,6 +619,59 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
         "create");
 }
 
+int32_t KafkaWAL::alter(const String & name, const std::vector<std::pair<String, String>> & params) const
+{
+    /// prepare config
+    std::unique_ptr<rd_kafka_ConfigResource_t, void (*)(rd_kafka_ConfigResource_t *)> config
+        = getTopicConfig(name, producer_handle.get(), log);
+
+    if (!config)
+        return DB::ErrorCodes::RESOURCE_NOT_FOUND;
+
+    for (const auto & param : params)
+    {
+        auto err = rd_kafka_ConfigResource_set_config(config.get(), param.first.c_str(), param.second.c_str());
+        if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+        {
+            LOG_ERROR(log, "Failed to set config for topic={} error={}", name, rd_kafka_err2str(err));
+            return mapErrorCode(err);
+        }
+    }
+
+    rd_kafka_ConfigResource_t * pconfig = config.get();
+    auto alter_topic = [&](rd_kafka_t * handle,
+                           rd_kafka_AdminOptions_t * options,
+                           rd_kafka_queue_t * admin_queue) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+        rd_kafka_AlterConfigs(handle, &pconfig, 1, options, admin_queue);
+    };
+
+    auto validate = [this, &name](const rd_kafka_event_t * event) -> int32_t {
+        /// Validate result resources
+        size_t cnt = 0;
+        auto * cres = rd_kafka_AlterConfigs_result_resources(event, &cnt);
+        assert(cnt == 1);
+
+        rd_kafka_resp_err_t err = RD_KAFKA_RESP_ERR_NO_ERROR;
+        for (size_t i = 0; i < cnt; i++)
+        {
+            if (rd_kafka_ConfigResource_error(cres[i]))
+            {
+                LOG_ERROR(
+                    log,
+                    "Failed to alter topic={}, ConfigResource result: {}, {}: error: {}",
+                    name,
+                    rd_kafka_ConfigResource_type(cres[i]),
+                    rd_kafka_ConfigResource_name(cres[i]),
+                    rd_kafka_ConfigResource_error_string(cres[i]));
+                err = rd_kafka_ConfigResource_error(cres[i]);
+            }
+        }
+        return mapErrorCode(err);
+    };
+
+    return doTopic(name, alter_topic, rd_kafka_event_AlterConfigs_result, nullptr, validate, producer_handle.get(), 60000, log, "alter");
+}
+
 int32_t KafkaWAL::remove(const String & name, const KafkaWALContext &) const
 {
     rd_kafka_DeleteTopic_t * topics[1] = {nullptr};
@@ -573,70 +701,9 @@ DescribeResult KafkaWAL::describe(const String & name) const
     return describeTopic(name, producer_handle.get(), log);
 }
 
-#if 0
-int32_t KafkaWAL::describe(const String & name, const KafkaWALContext &) const
-{
-    rd_kafka_ConfigResource_t * configs[1];
-    configs[0] = rd_kafka_ConfigResource_new(RD_KAFKA_RESOURCE_TOPIC, name.c_str());
-    if (configs[0] == nullptr)
-    {
-        LOG_ERROR(log, "Failed to describe topic, invalid arguments");
-        return DB::ErrorCodes::BAD_ARGUMENTS;
-    }
-    std::shared_ptr<rd_kafka_ConfigResource_t> config_holder{configs[0], rd_kafka_ConfigResource_destroy};
-
-    auto describeTopics = [&](rd_kafka_t * handle,
-                              rd_kafka_AdminOptions_t * options,
-                              rd_kafka_queue_t * admin_queue) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        rd_kafka_DescribeConfigs(handle, configs, 1, options, admin_queue);
-    };
-
-    auto validate = [this, &name](const rd_kafka_event_t * event) -> int32_t {
-        /// Validate result resources
-        size_t cnt = 0;
-        auto rconfigs = rd_kafka_DescribeConfigs_result_resources(event, &cnt);
-        if (cnt != 1 || rconfigs == nullptr)
-        {
-            LOG_ERROR(log, "Failed to describe topic={}, unknown error", name);
-            return DB::ErrorCodes::UNKNOWN_EXCEPTION;
-        }
-
-        auto err = rd_kafka_ConfigResource_error(rconfigs[0]);
-        if (err == RD_KAFKA_RESP_ERR__UNKNOWN_TOPIC || err == RD_KAFKA_RESP_ERR_UNKNOWN_TOPIC_OR_PART)
-        {
-            return DB::ErrorCodes::RESOURCE_NOT_FOUND;
-        }
-
-        if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        {
-            LOG_ERROR(
-                log,
-                "Failed to describe topic={}, error={} detail={}",
-                name,
-                rd_kafka_err2str(err),
-                rd_kafka_ConfigResource_error_string(rconfigs[0]));
-
-            return mapErrorCode(err);
-        }
-
-        cnt = 0;
-        rd_kafka_ConfigResource_configs(rconfigs[0], &cnt);
-        if (cnt == 0)
-        {
-            return DB::ErrorCodes::RESOURCE_NOT_FOUND;
-        }
-
-        return DB::ErrorCodes::OK;
-    };
-
-    return doTopic(
-        name, describeTopics, rd_kafka_event_DescribeConfigs_result, nullptr, validate, producer_handle.get(), 4000, log, "describe");
-}
-#endif
-
 KafkaWALClusterPtr KafkaWAL::cluster(const KafkaWALContext & ctx) const
 {
-    const struct rd_kafka_metadata *metadata = nullptr;
+    const struct rd_kafka_metadata * metadata = nullptr;
 
     auto err = rd_kafka_metadata(producer_handle.get(), 0, ctx.topic_handle.get(), &metadata, 5000);
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)

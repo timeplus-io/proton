@@ -1282,6 +1282,28 @@ LogPtr LogManager::remove(const std::string & ns, const StreamShard & stream_sha
     return log;
 }
 
+void LogManager::updateConfig(
+    const std::string & ns,
+    const std::vector<StreamShard> & stream_shards,
+    const std::map<std::string, int32_t> & flush_settings,
+    const std::map<std::string, int64_t> & retention_settings)
+{
+    for (const auto & stream_shard : stream_shards)
+    {
+        auto log = getLog(ns, stream_shard);
+        if (log)
+        {
+            log->updateConfig(flush_settings, retention_settings);
+        }
+        else if (log = getLog(ns, stream_shard, true); log)
+        {
+            log->updateConfig(flush_settings, retention_settings);
+        }
+        else
+            LOG_WARNING(logger, "Shard={} in namespace={} is not found", stream_shard.string(), ns);
+    }
+}
+
 void LogManager::removeSequenceCheckpoints(const fs::path & root_dir, const std::string & ns, const Stream & stream)
 {
     auto iter = checkpoints.find(root_dir);

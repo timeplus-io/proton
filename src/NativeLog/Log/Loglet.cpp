@@ -215,6 +215,27 @@ void Loglet::close()
     segments->close();
 }
 
+void Loglet::updateConfig(const std::map<String, int32_t> & flush_settings, const std::map<String, int64_t> & retention_settings)
+{
+    /// flush settings
+    for(const auto & [k, v] : flush_settings)
+    {
+        if (k == "flush_messages")
+            log_config->flush_interval_records = v;
+        else if (k == "flush_ms")
+            log_config->flush_interval_ms = v;
+    }
+
+    /// retention settings
+    for(const auto & [k, v] : retention_settings)
+    {
+        if (k == "retention_bytes")
+            log_config->retention_size = v;
+        else if (k == "retention_ms")
+            log_config->retention_ms = v;
+    }
+}
+
 std::vector<LogSegmentPtr> Loglet::trim(int64_t target_sn)
 {
     auto segments_to_delete = segments->lowerEqualSegments(target_sn);
@@ -380,7 +401,7 @@ std::vector<LogSegmentPtr> Loglet::deletableSegments(std::function<bool(LogSegme
     std::vector<LogSegmentPtr> deletable;
     LogSegmentPtr current_segment;
 
-    segments->apply([&](LogSegmentPtr & segment){
+    segments->apply([&](LogSegmentPtr & segment) {
         if (!current_segment)
         {
             current_segment = segment;
@@ -404,9 +425,14 @@ void Loglet::removeSegments(const std::vector<LogSegmentPtr> & segments_to_delet
     removeSegmentFiles(segments_to_delete, async, reason);
 }
 
-void Loglet::removeSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_delete, bool async, const std::string & reason, std::shared_ptr<ThreadPool> adhoc_scheduler_, Poco::Logger * logger_)
+void Loglet::removeSegmentFiles(
+    const std::vector<LogSegmentPtr> & segments_to_delete,
+    bool async,
+    const std::string & reason,
+    std::shared_ptr<ThreadPool> adhoc_scheduler_,
+    Poco::Logger * logger_)
 {
-    for (auto & segment : segments_to_delete)
+    for (const auto & segment : segments_to_delete)
         segment->changeFileSuffix(DELETED_FILE_SUFFIX);
 
     if (async)
@@ -414,18 +440,28 @@ void Loglet::removeSegmentFiles(const std::vector<LogSegmentPtr> & segments_to_d
         std::vector<LogSegmentPtr> copy{segments_to_delete};
         /// We will need pay close attention to the lifecycle here
         adhoc_scheduler_->scheduleOrThrow([moved_segments = std::move(copy), reason = reason, logger_]() {
-            for (auto & segment : moved_segments)
+            for (const auto & segment : moved_segments)
             {
-                LOG_INFO(logger_, "Deleting segment file={} base_sequence={} reason={}", segment->filename().c_str(), segment->baseSequence(), reason);
+                LOG_INFO(
+                    logger_,
+                    "Deleting segment file={} base_sequence={} reason={}",
+                    segment->filename().c_str(),
+                    segment->baseSequence(),
+                    reason);
                 segment->remove();
             }
         });
     }
     else
     {
-        for (auto & segment : segments_to_delete)
+        for (const auto & segment : segments_to_delete)
         {
-            LOG_INFO(logger_, "Deleting segment file={} base_sequence={} reason={}", segment->filename().c_str(), segment->baseSequence(), reason);
+            LOG_INFO(
+                logger_,
+                "Deleting segment file={} base_sequence={} reason={}",
+                segment->filename().c_str(),
+                segment->baseSequence(),
+                reason);
             segment->remove();
         }
     }

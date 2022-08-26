@@ -22,7 +22,6 @@
 
 namespace nlog
 {
-
 class MetaStore;
 
 /// The entry point of NativeLog management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -87,6 +86,12 @@ public:
     void maybeUpdatePreferredLogDir(const std::string & ns, const StreamShard & stream_shard, const fs::path & log_dir);
 
     void reconfigureDefaultLogConfig(LogConfigPtr log_config_) { default_config = log_config_; }
+
+    void updateConfig(
+        const std::string & ns,
+        const std::vector<StreamShard> & stream_shards,
+        const std::map<std::string, int32_t> & flush_settings,
+        const std::map<std::string, int64_t> & retention_settings);
 
     const LogConfig & currentDefaultConfig() const { return *default_config; }
 

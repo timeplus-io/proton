@@ -23,6 +23,7 @@ void prepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
 void prepareCreateQueryForStream(ASTCreateQuery & create);
 void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list);
+std::vector<std::pair<String, String>> parseLogStoreTTLSettings(String & payload);
 nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);
 nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
 

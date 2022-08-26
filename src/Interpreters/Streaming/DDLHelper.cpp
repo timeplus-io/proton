@@ -6,7 +6,6 @@
 #include <DistributedMetadata/CatalogService.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTColumnDeclaration.h>
-#include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -354,7 +353,7 @@ void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * column
     {
         const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
         Poco::JSON::Object column_mapping_json;
-        ColumnDeclarationToJSON(column_mapping_json, col_decl);
+        columnDeclarationToJSON(column_mapping_json, col_decl);
         columns_mapping_json.add(column_mapping_json);
     }
     resp_table.set("columns", columns_mapping_json);
@@ -388,11 +387,12 @@ nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std:
     return nlog::OpCode::ALTER_TABLE;
 }
 
-std::map<ASTAlterCommand::Type, nlog::OpCode> command_type_to_opCode
+const std::map<ASTAlterCommand::Type, nlog::OpCode> command_type_to_opcode
     = {{ASTAlterCommand::Type::ADD_COLUMN, nlog::OpCode::CREATE_COLUMN},
        {ASTAlterCommand::Type::MODIFY_COLUMN, nlog::OpCode::ALTER_COLUMN},
        {ASTAlterCommand::Type::RENAME_COLUMN, nlog::OpCode::ALTER_COLUMN},
        {ASTAlterCommand::Type::MODIFY_TTL, nlog::OpCode::ALTER_TABLE},
+       {ASTAlterCommand::Type::MODIFY_SETTING, nlog::OpCode::ALTER_TABLE},
        {ASTAlterCommand::Type::DROP_COLUMN, nlog::OpCode::DELETE_COLUMN}};
 
 nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
@@ -404,8 +404,8 @@ nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
     {
         if (auto * cmd = child->as<ASTAlterCommand>())
         {
-            auto iter = command_type_to_opCode.find(cmd->type);
-            if (iter != command_type_to_opCode.end())
+            auto iter = command_type_to_opcode.find(cmd->type);
+            if (iter != command_type_to_opcode.end())
             {
                 return iter->second;
             }
@@ -462,7 +462,7 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
 
     buildColumnsJSON(payload, create.columns_list);
 
-    return JSONToString(payload);
+    return jsonToString(payload);
 }
 
 String getJSONFromAlterQuery(const ASTAlterQuery & alter)
@@ -483,7 +483,7 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
                 const auto & column = cmd->col_decl->as<ASTColumnDeclaration &>();
                 if (!column.name.starts_with("_tp_"))
                 {
-                    ColumnDeclarationToJSON(payload_json, column);
+                    columnDeclarationToJSON(payload_json, column);
                     has_payload = true;
                 }
             }
@@ -510,13 +510,42 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
                 payload_json.set("ttl_expression", queryToString(cmd->ttl));
                 has_payload = true;
             }
+            else if (cmd->type == ASTAlterCommand::Type::MODIFY_SETTING)
+            {
+                settingsToJSON(payload_json, cmd->settings_changes->as<ASTSetQuery &>().changes);
+                if (payload_json.size() > 0)
+                    has_payload = true;
+            }
         }
     }
 
     if (has_payload)
-        payload = JSONToString(payload_json);
+        payload = jsonToString(payload_json);
 
     return payload;
+}
+
+std::vector<std::pair<String, String>> parseLogStoreTTLSettings(String & payload)
+{
+    std::vector<std::pair<String, String>> settings;
+    Poco::JSON::Parser parser;
+    auto json = parser.parse(payload).extract<Poco::JSON::Object::Ptr>();
+
+    for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
+    {
+        if (json->has(k))
+        {
+            settings.emplace_back(v, json->get(k).toString());
+            json->remove(k);
+        }
+    }
+
+    if (json->size() > 0)
+        payload = jsonToString(*json);
+    else
+        payload = "";
+
+    return settings;
 }
 
 void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout)

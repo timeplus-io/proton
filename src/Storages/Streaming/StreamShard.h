@@ -61,6 +61,8 @@ public:
 
     bool isLogStoreKafka() const { return kafka != nullptr; }
 
+    void updateNativeLog();
+
 private:
     void initLog();
     void initKafkaLog();

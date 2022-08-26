@@ -92,7 +92,7 @@ Poco::JSON::Object::Ptr MetaStoreJSONConfigRepository::readConfigKey(const std::
 void MetaStoreJSONConfigRepository::save(const std::string & key, const Poco::JSON::Object::Ptr & config)
 {
     std::vector<std::pair<String, String>> kv_pairs;
-    String cfg_json = JSONToString(*config);
+    String cfg_json = jsonToString(*config);
     kv_pairs.emplace_back(fmt::format("{}/{}", FUNC_PREFIX, key), cfg_json);
 
     /// create status

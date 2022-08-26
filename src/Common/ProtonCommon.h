@@ -46,7 +46,7 @@ const String LOGSTORE_KAFKA = "kafka";
 const String LOGSTORE_NATIVE_LOG = "nativelog";
 
 /// Default settings for DDL
-const UInt64 DEFAULT_DDL_TIMEOUT_MS = 10000;
+const UInt64 DEFAULT_DDL_TIMEOUT_MS = 15000;
 
 /// Default settings for session window
 const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeout_interval of session window
@@ -65,5 +65,11 @@ const String APPEND_MODE = "append";
 const String CHANGELOG_MODE = "changelog";
 const String CHANGELOG_KV_MODE = "changelog_kv";
 const String VERSIONED_KV_MODE = "versioned_kv";
+
+const std::map<String, String> LOG_STORE_SETTING_NAME_TO_KAFKA
+    = {{"logstore_retention_bytes", "retention.bytes"},
+       {"logstore_retention_ms", "retention.ms"},
+       {"logstore_flush_messages", "flush.messages"},
+       {"logstore_flush_ms", "flush_ms"}};
 }
 }

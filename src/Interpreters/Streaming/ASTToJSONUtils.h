@@ -9,7 +9,8 @@ namespace DB
 {
 namespace Streaming
 {
-void ColumnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const ASTColumnDeclaration & col_decl);
-String JSONToString(const Poco::JSON::Object & json);
+void columnDeclarationToJSON(Poco::JSON::Object & column_mapping_json, const ASTColumnDeclaration & col_decl);
+void settingsToJSON(Poco::JSON::Object & settings_json, const SettingsChanges & changes);
+String jsonToString(const Poco::JSON::Object & json);
 }
 }

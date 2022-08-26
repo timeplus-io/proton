@@ -45,7 +45,11 @@ namespace
 }
 
 std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema
-    = {{"required", {}}, {"optional", {{"ttl_expression", "string"}}}};
+    = {{"required", {}},
+       {"optional",
+        {{"ttl_expression", "string"},
+         {"logstore_retention_bytes", "int"},
+         {"logstore_retention_ms", "int"}}}};
 
 std::map<String, String> TableRestRouterHandler::granularity_func_mapping
     = {{"M", "to_YYYYMM(`" + ProtonConsts::RESERVED_EVENT_TIME + "`)"},
@@ -171,15 +175,32 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
     }
 
     LOG_INFO(log, "Updating stream {}.{}", database, table);
-    std::vector<String> create_segments;
-    create_segments.push_back("ALTER STREAM " + database + ".`" + table + "`");
-    create_segments.push_back(" MODIFY TTL " + payload->get("ttl_expression").toString());
-
-    const String & query = boost::algorithm::join(create_segments, " ");
 
     setupDistributedQueryParameters({}, payload);
+    String resp;
 
-    return {processQuery(query), HTTPResponse::HTTP_OK};
+    /// TTL
+    if (payload->has("ttl_expression"))
+    {
+        const String & query
+            = fmt::format("ALTER STREAM {}.`{}` MODIFY TTL {}", database, table, payload->get("ttl_expression").toString());
+        resp = processQuery(query);
+    }
+
+    /// stream store TTL
+    std::vector<String> settings;
+    for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
+        if (payload->has(k))
+            settings.push_back(fmt::format("{}={}", k, payload->get(k).toString()));
+
+    if (!settings.empty())
+    {
+        const auto query
+            = fmt::format("ALTER STREAM {}.`{}` MODIFY SETTING {}", database, table, boost::algorithm::join(settings, ","));
+        resp = processQuery(query);
+    }
+
+    return {resp, HTTPResponse::HTTP_OK};
 }
 
 std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
@@ -219,7 +240,7 @@ void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, c
         Poco::JSON::Object column_mapping_json;
         const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
 
-        Streaming::ColumnDeclarationToJSON(column_mapping_json, col_decl);
+        Streaming::columnDeclarationToJSON(column_mapping_json, col_decl);
         columns_mapping_json.add(column_mapping_json);
     }
     resp_table.set("columns", columns_mapping_json);
@@ -231,8 +252,8 @@ void TableRestRouterHandler::buildTablePlacements(Poco::JSON::Object & resp_tabl
     const auto & table_nodes = catalog_service.findTableByName(database, table);
 
     std::multimap<int, String> nodes;
-    for (const auto node : table_nodes)
-        for (auto shard : node->host_shards)
+    for (const auto & node : table_nodes)
+        for (auto & shard : node->host_shards)
             nodes.emplace(shard, node->host);
 
     Poco::JSON::Array shards;

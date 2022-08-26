@@ -4,6 +4,8 @@
 
 #include <NativeLog/Requests/CreateStreamRequest.h>
 #include <NativeLog/Requests/CreateStreamResponse.h>
+#include <NativeLog/Requests/UpdateStreamRequest.h>
+#include <NativeLog/Requests/UpdateStreamResponse.h>
 #include <NativeLog/Requests/DeleteStreamRequest.h>
 #include <NativeLog/Requests/DeleteStreamResponse.h>
 #include <NativeLog/Requests/ListStreamsRequest.h>
@@ -40,6 +42,11 @@ public:
     /// information in MetaStore
     /// return nothing on success, otherwise throw an exception
     CreateStreamResponse createStream(const std::string & ns, const CreateStreamRequest & req);
+
+    //// `updateStream` updates flush or retention settings of a stream
+    /// information in MetaStore
+    /// return nothing on success, otherwise throw an exception
+    UpdateStreamResponse updateStream(const std::string & ns, const UpdateStreamRequest & req);
 
     //// `deleteStream` deletes a stream according to the request and clears the metadata
     /// information from MetaStore

@@ -419,7 +419,6 @@ void StorageStream::readConcat(
                 max_sn_in_parts = -1;
                 return std::make_shared<StreamingStoreSource>(
                     stream_shard, header, storage_snapshot, context_, stream_shard->shard, offsets[stream_shard->shard], log);
-
             }
         };
 
@@ -522,7 +521,8 @@ void StorageStream::read(
     if (query_info.syntax_analyzer_result->streaming)
     {
         /// FIXME, to support seek_to='-1h'
-        bool back_fill_from_historical = isChangelogKvMode() || isVersionedKvMode() || (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
+        bool back_fill_from_historical = isChangelogKvMode() || isVersionedKvMode()
+            || (settings_ref.seek_to.value == "earliest" && settings_ref.enable_backfill_from_historical_store.value);
         if (back_fill_from_historical && !requireDistributedQuery(context_))
             readConcat(query_plan, query_info, column_names, storage_snapshot, std::move(context_), processed_stage, max_block_size);
         else
@@ -833,11 +833,15 @@ void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, A
         }
     }
 
-    /// Update native_log codec
+    /// Update native_log codec, retention or flush settings
     if (commands.hasSettingsAlterCommand() && stream_shards.back()->storage)
     {
-        const auto settings = stream_shards.back()->storage->getSettings();
+        auto & shard = stream_shards.back();
+        const auto settings = shard->storage->getSettings();
         updateLogStoreCodec(settings->logstore_codec);
+
+        if (!shard->isLogStoreKafka())
+            shard->updateNativeLog();
     }
 }
 
