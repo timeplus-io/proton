@@ -7,6 +7,9 @@
         "setup": {
             "statements": [
                 {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_d"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_str"},
+                {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test_json_obj"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_str (json string, timestamp datetime64(3) default now64(3))"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_obj (json json, timestamp datetime64(3) default now64(3))"},
                 {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists test_json_d (id int, location string)"},
