@@ -250,7 +250,7 @@ private:
     static std::string logFutureDirName(const StreamShard & stream_shard) { return Loglet::logFutureDirName(stream_shard); }
     static std::string logDirName(const StreamShard & stream_shard) { return Loglet::logDirName(stream_shard); }
     static std::string logDeleteDirName(const StreamShard & stream_shard) { return Loglet::logDeleteDirName(stream_shard); }
-    static int64_t snFromFileName(const std::string & filename) { return Loglet::sequenceFromFileName(filename); }
+    static int64_t sequenceFromFileName(const std::string & filename) { return Loglet::sequenceFromFileName(filename); }
     static bool isLogFile(const std::string & filename) { return Loglet::isLogFile(filename); }
     static bool isIndexFile(const std::string & filename) { return Loglet::isIndexFile(filename); }
     static fs::path logFile(const fs::path & log_dir, int64_t sn, const std::string & suffix = "")

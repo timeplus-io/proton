@@ -21,15 +21,15 @@ template <typename Str, typename Integer>
 Integer parseIntStrict(const Str & s, String::size_type lpos, String::size_type rpos)
 {
     if (rpos <= lpos || rpos > s.size())
-        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_INTEGER_STRING);
+        throw Exception(ErrorCodes::INVALID_INTEGER_STRING, "Invalid params s={} lpos={} rpos={} size={}", s, lpos, rpos, s.size());
 
     Integer n = 0;
     /// Note for string_view, indexing beyond the very end throws exception
     auto [p, ec] = std::from_chars(&s[lpos], &s[rpos], n);
     if (ec != std::errc())
-        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_INTEGER_STRING);
+        throw Exception(ErrorCodes::INVALID_INTEGER_STRING, "Invalid number '{}' string, lpos={} rpos={} size={}", s, lpos, rpos, s.size());
     else if (p != &s[rpos])
-        throw Exception("Invalid number " + String{s, lpos, rpos - lpos}, ErrorCodes::INVALID_INTEGER_STRING);
+        throw Exception(ErrorCodes::INVALID_INTEGER_STRING, "Invalid number '{}' string, only parse partial of it, lpos={} rpos={} size={}", s, lpos, rpos, s.size());
 
     return n;
 }

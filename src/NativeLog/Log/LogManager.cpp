@@ -430,6 +430,7 @@ std::shared_ptr<ThreadPool> LogManager::loadLogsInDir(
                 {
                     /// FIXME, is it safe to exclude the root log dir if one stream-shard failed to load
                     DB::tryLogCurrentException(logger, fmt::format("Error while loading log dir {}", stream_shard_dir.c_str()));
+                    return;
                 }
                 auto elapsed = DB::MonotonicMilliseconds::now() - start_ms;
 

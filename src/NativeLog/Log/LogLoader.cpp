@@ -99,7 +99,7 @@ std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::pa
             }
             else if (filename.ends_with(Log::CLEANED_FILE_SUFFIX()))
             {
-                min_cleaned_file_sn = std::min(Log::snFromFileName(filename), min_cleaned_file_sn);
+                min_cleaned_file_sn = std::min(Log::sequenceFromFileName(filename), min_cleaned_file_sn);
                 cleaned_files.push_back(dir_entry.path());
             }
             else if (filename.ends_with(Log::SWAP_FILE_SUFFIX()))
@@ -114,7 +114,7 @@ std::vector<fs::path> LogLoader::removeTempFilesAndCollectSwapFiles(const fs::pa
     std::vector<fs::path> valid_swap_files;
     for (auto & file : swap_files)
     {
-        if (Log::snFromFileName(file.filename().string()) >= min_cleaned_file_sn)
+        if (Log::sequenceFromFileName(file.filename().string()) >= min_cleaned_file_sn)
         {
             /// Delete invalid swap file
             bool res = fs::remove(file);
@@ -149,7 +149,7 @@ LogLoader::minMaxSwapFileOffsets(const std::vector<fs::path> & swap_files, const
         /// replaceSuffix(filename, SWAP_FILE_SUFFIX, "");
         if (Log::isLogFile(filename))
         {
-            auto base_sn = Log::snFromFileName(filename);
+            auto base_sn = Log::sequenceFromFileName(filename);
             auto segment
                 = std::make_shared<LogSegment>(file.parent_path(), base_sn, log_config, logger, false, false, Log::SWAP_FILE_SUFFIX());
             LOG_INFO(
@@ -166,24 +166,35 @@ LogLoader::minMaxSwapFileOffsets(const std::vector<fs::path> & swap_files, const
 
 void LogLoader::removeSegmentFilesBetween(const fs::path & log_dir, int64_t min_sn, int64_t max_sn, Poco::Logger * logger)
 {
+    if (max_sn < min_sn)
+        return;
+
     for (const auto & dir_entry : fs::directory_iterator{log_dir})
     {
-        if (dir_entry.is_regular_file())
+        if (!dir_entry.is_regular_file())
+            continue;
+
+        const auto & filepath = dir_entry.path();
+        const auto & filename = filepath.filename().string();
+        if (filename.ends_with(Log::SWAP_FILE_SUFFIX()) || !Log::isLogFile(filename))
+            continue;
+
+        int64_t sn = -1;
+        try
         {
-            const auto & filepath = dir_entry.path();
-            const auto & filename = filepath.filename().string();
-            if (!filename.ends_with(Log::SWAP_FILE_SUFFIX()))
-            {
-                /// FIXME, more robust error handling, like a filename which we don't recognizes
-                auto sn = Log::snFromFileName(filename);
-                if (sn >= min_sn & sn < max_sn)
-                {
-                    LOG_INFO(logger, "Deleting segment files {} that is compacted but has not been deleted yet", filepath.c_str());
-                    auto res = fs::remove(filepath);
-                    assert(res);
-                    (void)res;
-                }
-            }
+            sn = Log::sequenceFromFileName(filename);
+        }
+        catch (const DB::Exception & e)
+        {
+            LOG_ERROR(logger, "Failed to parse sequence number out of file='{}, error={}'", filename, e.what());
+            continue;
+        }
+
+        if (sn >= min_sn & sn < max_sn)
+        {
+            LOG_INFO(logger, "Deleting segment files {} that is compacted but has not been deleted yet", filepath.c_str());
+            [[maybe_unused]] auto res = fs::remove(filepath);
+            assert(res);
         }
     }
 }
@@ -204,7 +215,7 @@ void LogLoader::loadSegmentFiles(const fs::path & log_dir, const LogConfig & log
         if (Log::isIndexFile(filename))
         {
             /// If it is an index file, make sure it has a corresponding .log file
-            auto sn = Log::snFromFileName(filename);
+            auto sn = Log::sequenceFromFileName(filename);
             auto log_file = Log::logFile(log_dir, sn);
             if (!fs::exists(log_file))
             {
@@ -217,7 +228,7 @@ void LogLoader::loadSegmentFiles(const fs::path & log_dir, const LogConfig & log
         else if (Log::isLogFile(filename))
         {
             /// Load the log segment
-            auto base_sn = Log::snFromFileName(filename);
+            auto base_sn = Log::sequenceFromFileName(filename);
             auto segment = std::make_shared<LogSegment>(log_dir, base_sn, log_config, logger, /*file_already_exists*/ true);
             assert(segment);
             auto success = segment->sanityCheck();
