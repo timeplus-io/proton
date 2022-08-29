@@ -1,0 +1,187 @@
+version: "3.7"
+
+# this is an extension field, its name must start with `x-`
+x-logging: &default-logging
+  driver: local
+  options: # https://docs.docker.com/config/containers/logging/local/#options
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
+services:
+
+  neutron:
+    container_name: neutron
+    extra_hosts: 
+        - "kafka:${KAFKA_IP}"    
+    logging: *default-logging
+    image: timeplus/neutron:${NEUTRON_TAG}
+    pull_policy: always
+    command:
+      # Make sure your log file is under /timeplus/logs, otherwise there will be permission issue
+      --config=/timeplus/config/.neutron.yaml --show-api-doc --log-file-path=/timeplus/logs/neutron.log ${NEUTRON_EXTRA_OPTION}
+    environment:
+      - PROTON_ADDR=proton-cluster-node1 
+      - PROTON_KV_ADDR=proton-cluster-node1 
+      - PROTON_STATS_ADDR=proton-cluster-node1 
+      - TLS=false
+    volumes:
+      - ./neutron/certificate:/certificate/
+      - ./neutron/config:/timeplus/config/
+      - ./neutron/logs:/timeplus/logs/
+      # - ./neutron/axion/console:/timeplus/console/          # Un-comment this line to deploy UI separately
+      # - ./neutron/axion/playground:/timeplus/playground/    # Un-comment this line to deploy UI separately
+    ports:
+      - "${NEUTRON_PORT}:8000"
+    depends_on:
+      - proton-cluster-node1 
+  
+  demoapp:
+    container_name: demoapp
+    logging: *default-logging
+    image: timeplus/neutron:${NEUTRON_TAG}
+    pull_policy: always
+    command:
+      demo --config=/timeplus/config/.neutron.yaml --log-file-path=/timeplus/logs/neutron.log
+    environment:
+      - PROTON_ADDR=proton-cluster-node1 
+      - PROTON_KV_ADDR=proton-cluster-node1 
+      - PROTON_STATS_ADDR=proton-cluster-node1 
+      - TLS=false
+      # - DEMO_SHOW_CASE=true
+      - METRICS_STORE_TYPE=none
+      # - RUN_WEB_SERVER=false
+      - METADATA_STORE_TYPE=memory
+    volumes:
+      - ./demoapp/config:/timeplus/config/
+      - ./demoapp/logs:/timeplus/logs/
+    depends_on:
+      - proton-cluster-node1  
+
+  proton-cluster-node1:
+    image: timeplus/proton:${PROTON_TAG:-prestage}
+    logging: *default-logging
+    extra_hosts: 
+        - "kafka:${KAFKA_IP}"      
+    pull_policy: always
+    container_name: proton-cluster-node1
+    hostname: proton-cluster-node1
+    volumes:
+      - ./proton-cluster-node1/datas:/var/lib/proton
+      - ./proton-cluster-node1/log:/var/log/proton-server
+      - ./proton-cluster-node1/config:/etc/proton-server
+    ports:
+      - "23218:3218" # HTTP Streaming
+      - "28123:8123" # HTTP Snapshot
+      - "28463:8463" # TCP Streaming
+      - "27587:7587" # TCP Snapshot
+      - "29444:9444" # KV port
+
+    deploy:
+      replicas: 1
+
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+      - STREAM_STORAGE_BROKERS=kafka:29092
+      - LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_TYPE=kafka
+      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+
+  proton-cluster-node2:
+    image: timeplus/proton:${PROTON_TAG:-prestage}
+    logging: *default-logging
+    extra_hosts: 
+        - "kafka:${KAFKA_IP}"      
+    pull_policy: always
+    container_name: proton-cluster-node2
+    hostname: proton-cluster-node2
+    volumes:
+      - ./proton-cluster-node2/datas:/var/lib/proton
+      - ./proton-cluster-node2/log:/var/log/proton-server
+      - ./proton-cluster-node2/config:/etc/proton-server
+    ports:
+      - "33218:3218" # HTTP Streaming
+      - "38123:8123" # HTTP Snapshot
+      - "38463:8463" # TCP Streaming
+      - "37587:7587" # TCP Snapshot
+      - "39444:9444" # KV port
+
+    deploy:
+      replicas: 1
+
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+      - STREAM_STORAGE_BROKERS=kafka:29092
+      - LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_TYPE=kafka
+      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+
+
+  proton-cluster-node3:
+    image: timeplus/proton:${PROTON_TAG:-prestage}
+    logging: *default-logging
+    extra_hosts: 
+        - "kafka:${KAFKA_IP}"      
+    pull_policy: always
+    container_name: proton-cluster-node3
+    hostname: proton-cluster-node3
+    volumes:
+      - ./proton-cluster-node3/datas:/var/lib/proton
+      - ./proton-cluster-node3/log:/var/log/proton-server
+      - ./proton-cluster-node3/config:/etc/proton-server
+    ports:
+      - "53218:3218" # HTTP Streaming
+      - "58123:8123" # HTTP Snapshot
+      - "58463:8463" # TCP Streaming
+      - "57587:7587" # TCP Snapshot
+      - "59444:9444" # KV port
+
+    deploy:
+      replicas: 1
+
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+      - STREAM_STORAGE_BROKERS=kafka:29092
+      - LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_TYPE=kafka
+      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
+
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+
+
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "192.168.12.0/24"

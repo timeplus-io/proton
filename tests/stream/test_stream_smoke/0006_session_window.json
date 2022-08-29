@@ -37,7 +37,7 @@
 
         ],
 
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
     },
 
     "tests": [
@@ -304,7 +304,7 @@
         },
         {
             "id": 8,
-            "tags": ["session window"],
+            "tags": ["session window", "cluster_table_bug"],
             "name": "stream session window with join",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, joins with test_session_d",
             "steps":[
@@ -374,7 +374,7 @@
         },
         {
             "id": 10,
-            "tags": ["session window"],
+            "tags": ["session window", "cluster_table_bug"],
             "name": "stream session window as sub query",
             "description": "stream session window with multiple session keys, triggered by interval, 2s interval with session_size 10, session as subquery",
             "steps":[

@@ -132,7 +132,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"], "cluster": ["view", "materialized view"]}}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample", "native_not_support"], "cluster": ["view", "cluster_table_bug"]}}
     },
 
     "tests": [
@@ -203,7 +203,7 @@
             "description": "expected exception",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id": 101, "query_type": "stream", "terminate":"auto", "query":"SELECT * FROM test WHERE value >25 EMIT STREAM PERIODIC INTERVAL 2 SECOND"}
+                    {"client":"python", "query_id": 101, "query_type": "stream","depends_on_stream":"test", "terminate":"auto", "query":"SELECT * FROM test WHERE value >25 EMIT STREAM PERIODIC INTERVAL 2 SECOND"}
                 ]}
             ],
 
@@ -229,7 +229,7 @@
             "description": "stream tumble window with designated 5 sec timestamp.",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": 101, "query_type": "stream", "terminate":"auto", "query_end_timer": 3, "query":"select max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by window_start, window_end emit stream"}
+                    {"client":"python", "query_id": 101, "query_type": "stream", "terminate":"auto", "depends_on_stream":"test", "query_end_timer": 3, "query":"select max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by window_start, window_end emit stream"}
                 ]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "wait":1, "data": [
@@ -254,7 +254,7 @@
             "description": "stream tumble window query and send 3 inptus in the first batch, the window_start of the next window should be based on the minimal timestamp of the first batch",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id": 101, "query_type": "stream","query_end_timer": 1, "query":"select window_start, window_end, max(timestamp), min(timestamp) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id": 101, "query_type": "stream","depends_on_stream":"test", "query_end_timer": 1, "query":"select window_start, window_end, max(timestamp), min(timestamp) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
                 {"inputs": [
                         {"table_name":"test", "wait":1, "depends_on":"101","data": [
                             ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:20"],
@@ -278,7 +278,7 @@
             "description": "stream query aggregate by max is created and then ingest data w/ timestamp early than latest timestamp in stream table, projection based on the inputs should be emitted. ",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id": "101", "query_type": "stream", "query_end_timer": 1,"query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id": "101", "query_type": "stream", "depends_on_stream":"test","query_end_timer": 1,"query":"select id, max(value), window_start, window_end from tumble(test, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1, "data":[
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
@@ -306,7 +306,7 @@
             "description": "an example positive test that uses insert into w/o column",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id":"101" ,"query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 2 second"}]},
+                    {"client":"python", "query_id":"101" ,"query_type": "stream","depends_on_stream":"test", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 2 second"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:30"]]},
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:31"]]},
@@ -329,7 +329,7 @@
             "description": "stream tumble w/inputs across multiple windows for window start alignment and the last input in the middle of latest window - #101",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 3,"query":"select emit_version() as emit_version, window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer": 3,"query":"select emit_version() as emit_version, window_start, window_end, count(*) from tumble(test, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:50"]]},
                     {"table_name":"test", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:51"]]},
@@ -350,7 +350,7 @@
             "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -370,7 +370,7 @@
             "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer": 1,"query":"select window_start, window_end, count(*) from tumble(test, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -393,7 +393,7 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps": [
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer": 1,"query":"select emit_version(), id, max(value), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer": 1,"query":"select emit_version(), id, max(value), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
@@ -424,7 +424,7 @@
             "description": "tranform function in subquery to extract timestamp from a json and run hopping on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 2 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 2 second, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -463,7 +463,7 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 5 second, interval 3 second) group by id, window_start, window_end emit stream"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "depends_on_stream":"test", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from hop(test, timestamp, interval 5 second, interval 3 second) group by id, window_start, window_end emit stream"}]},
                 {"inputs": [
                     {"table_name":"test","wait":1, "data": [
                         ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
@@ -487,7 +487,7 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream","query_end_timer": 1, "query":"select location, count(*), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark and delay interval 2 second"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer": 1, "query":"select location, count(*), window_start, window_end from hop(test, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark and delay interval 2 second"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 51, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                     ["dev1", "ca", 99, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:02"],
@@ -518,7 +518,7 @@
             "description": "global aggregation by max and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, max(value) from test group by id limit 4 emit periodic 5s"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":6, "query":"select id, max(value) from test group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -549,7 +549,7 @@
             "description": "global aggregation sum distinct and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select id, sum(distinct value), count(distinct value) from test group by id limit 4 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":6, "query":"select id, sum(distinct value), count(distinct value) from test group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -599,7 +599,7 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":1, "query_type": "stream", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 limit 5 emit last 5s"}]}
+                    {"client":"python","query_id":"101", "wait":1, "query_type": "stream","depends_on_stream":"test", "query_end_timer":6, "query":"select count(*) from test_no_default_tp_time where value >60 limit 5 emit last 5s"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["8"],
@@ -650,7 +650,7 @@
             "description": "last 20s tumble 5s count(*)",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":8, "query":"select id, sum(distinct value), window_end from tumble(test_no_default_tp_time, timestamp, 5s) group by id, window_end emit after watermark and delay 2s and last 1s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":8, "query":"select id, sum(distinct value), window_end from tumble(test_no_default_tp_time, timestamp, 5s) group by id, window_end emit after watermark and delay 2s and last 1s"}]},
                 {"inputs": [
                     {"table_name":"test_no_default_tp_time","depends_on":"101","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -684,7 +684,7 @@
             "description": "extract timestamp from json and run tumble on it",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_end from tumble(test, to_datetime(json_extract_string(json, 'create_time')), interval 5 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":5, "query":"select id, max(value), window_end from tumble(test, to_datetime(json_extract_string(json, 'create_time')), interval 5 second) group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -715,7 +715,7 @@
             "description": "tranform function in hopping window query",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_end from hop(test, to_time(json_extract_string(json, 'create_time')), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":5, "query":"select id, max(value), window_end from hop(test, to_time(json_extract_string(json, 'create_time')), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -744,12 +744,12 @@
 
         {
             "id": 22,
-            "tags": ["join"],
+            "tags": ["join", "cluster_table_bug"],
             "name": "stream tail join table",
             "description": "stream tail join table",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select a.id, b.type, a.value from test as a join table(test_d) as b on a.id = b.id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":1, "query":"select a.id, b.type, a.value from test as a join table(test_d) as b on a.id = b.id"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -781,7 +781,7 @@
         },
         {
             "id": 23,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream table join table w/o aggregation",
             "description": "stream table join table w/o aggregation",
             "steps":[
@@ -791,7 +791,7 @@
                     ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":3, "query_type": "table", "query":"select a.id, b.type, a.value from table(test) as a join table(test_d) as b on a.id = b.id where a.value < 70"}]}
+                    {"client":"python","query_id":"101", "wait":3, "query_type": "table","depends_on_stream":"test", "query":"select a.id, b.type, a.value from table(test) as a join table(test_d) as b on a.id = b.id where a.value < 70"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["dev1", "roof", 57.3],
@@ -800,7 +800,7 @@
         },
         {
             "id": 24,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream table join table w/ aggregation",
             "description": "stream table join table w/ aggregation",
             "steps":[
@@ -819,7 +819,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 { "statements": [
-                    {"client":"python","query_id":"101", "wait":5, "query_type": "table", "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id group by a.id, b.type"}]}
+                    {"client":"python","query_id":"101", "wait":5, "query_type": "table","depends_on_stream":"test", "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id group by a.id, b.type"}]}
             ],
             "expected_results": [{"query_id":"101", "expected_results":
                     [["dev1", "roof", 66],
@@ -833,7 +833,7 @@
         },
         {
             "id": 25,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream table join table w/ aggregation and where",
             "description": "stream table join table w/ aggregation and where",
             "steps":[
@@ -852,7 +852,7 @@
                     ["dev9", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "table", "wait":10, "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
+                    {"client":"python","query_id":"101", "query_type": "table", "depends_on_stream":"test","wait":10, "query":"select a.id, b.type, max(value) from table(test) as a join table(test_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type"}]}
             ],
 
             "expected_results": [{"query_id":"101","expected_results":
@@ -863,12 +863,12 @@
         },
         {
             "id": 26,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream global aggregation join table",
             "description": "global stream aggregation join table",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream","query_end_timer":8, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":8, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -896,12 +896,12 @@
         },
         {
             "id": 27,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream global aggregation join table w/where",
             "description": "global stream aggregation join table w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type limit 3 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":6, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' group by a.id, b.type limit 3 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -926,12 +926,12 @@
         },
         {
             "id": 28,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream tumble aggregation join table",
             "description": "stream stream aggregation join",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join table(test_d) as b on a.id = b.id group by a.id, b.type, window_start, window_end"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join table(test_d) as b on a.id = b.id group by a.id, b.type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -961,12 +961,12 @@
         },
         {
             "id": 29,
-            "tags": ["join"],
+            "tags": ["join","cluster_table_bug"],
             "name": "stream tumble aggregation join table w/where",
             "description": "stream stream aggregation join table w/where",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":1, "query":"select a.id, b.type, max(a.value), window_start, window_end from tumble(test, timestamp, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -997,7 +997,7 @@
             "description": "tranform function in subquery and run tumble on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value), window_start, window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value), window_start, window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1029,7 +1029,7 @@
             "description": "tranform function in subquery to extract timestamp from a json and run hopping on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value), window_start, window_end from hop(transformed, tranformed_timestamp, interval 2 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value), window_start, window_end from hop(transformed, tranformed_timestamp, interval 2 second, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1069,7 +1069,7 @@
 
                 {
                 "statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id limit 6 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":6, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test) select id, max(value) from transformed group by id limit 6 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1102,7 +1102,7 @@
             "description": "tail based on tumble subquery extracts timestamp from json",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, value_avg, avg_time from transformed_a"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, value_avg, avg_time from transformed_a"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1140,7 +1140,7 @@
             "description": "tranform function in subquery to extract timestamp from a json and run tumble aggregation on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, max(value_avg), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, max(value_avg), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1170,7 +1170,7 @@
             "description": "tumble minK based on tumble subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, min_k(value_avg, 1), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with transformed_a as (select id, avg(value) as value_avg, window_end as avg_time from tumble(test, timestamp, interval 2 second) group by id, window_end) select id, min_k(value_avg, 1), window_end from tumble(transformed_a, avg_time, interval 5 second) group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -1200,7 +1200,7 @@
             "description": "hopping avg based on tumble sum subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":2, "query":"with transformed_a as (select id, sum(value) as value_q, window_end as q_time from tumble(test, timestamp, interval 1 second) group by id, window_end) select id, avg(value_q), window_end from hop(transformed_a, q_time, interval 2 second, interval 5 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":2, "query":"with transformed_a as (select id, sum(value) as value_q, window_end as q_time from tumble(test, timestamp, interval 1 second) group by id, window_end) select id, avg(value_q), window_end from hop(transformed_a, q_time, interval 2 second, interval 5 second) group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1237,7 +1237,7 @@
             "description": "tumble avg based on hopping sum subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed_a as (select id, sum(value) as value_s, window_end as s_time from hop(test, timestamp, interval 1 second, interval 5 second) group by id, window_end) select id, avg(value_s), window_end from tumble(transformed_a, s_time, interval 3 second) group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with transformed_a as (select id, sum(value) as value_s, window_end as s_time from hop(test, timestamp, interval 1 second, interval 5 second) group by id, window_end) select id, avg(value_s), window_end from tumble(transformed_a, s_time, interval 3 second) group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101", "wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1266,7 +1266,7 @@
 
         {
             "id": 38,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "tumble avg based on hist subquery",
             "description": "tumble avg based on hist subquery",
             "steps":[
@@ -1285,7 +1285,7 @@
                     ["dev9", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "wait":5, "query_type": "table", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
+                    {"client":"python","query_id":"101", "wait":5, "query_type": "table","depends_on_stream":"test", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, max(value), window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1301,7 +1301,7 @@
 
         {
             "id": 39,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "hop count based on table subquery",
             "description": "hop count based on table subquery",
             "steps":[
@@ -1317,7 +1317,7 @@
                     ["dev4", "ca", 76, "{\"create_time\":\"2021-11-02 20:00:07\"}", "2021-11-02 20:00:07"]]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
+                    {"client":"python", "wait": 5, "query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from table(test)) select id, count(*), window_start, window_end from hop(transformed, tranformed_timestamp, interval 4 second, interval 5 second) group by id, window_start, window_end"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1333,12 +1333,12 @@
 
         {
             "id": 40,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "tumble count based on tumble join table subquery",
             "description": "tumble count based on tumble join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1364,12 +1364,12 @@
 
         {
             "id": 41,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "hop count based on tumble join table subquery",
             "description": "hop count based on tumble join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from tumble(test, timestamp, interval 3 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end"}]},
                 { "inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1396,12 +1396,12 @@
 
         {
             "id": 42,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "tumble count based on hop join table subquery",
             "description": "tumble count based on hop join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 3 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from tumble(joined_stream, joined_w_end, interval 3 second) group by id, window_start, window_end"}]},
                 { "inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1432,7 +1432,7 @@
             "description": "hop count based on hopping sum subquery",
             "steps":[
                 { "statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":10, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end emit timeout 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":10, "query":"with joined_stream as (select a.id, b.type, max(a.value), window_start as joined_w_start, window_end as joined_w_end from hop(test, timestamp, interval 3 second, interval 5 second) as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall' group by a.id, b.type, window_start, window_end) select id, count(*), window_start, window_end from hop(joined_stream, joined_w_end, interval 3 second, interval 5 second) group by id, window_start, window_end emit timeout 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1461,7 +1461,7 @@
             "description": "global count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "terminate":"manuel", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "terminate":"manuel", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*) from joined_stream group by id"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1489,12 +1489,12 @@
 
         {
             "id": 45,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "tumble count based on tail join table subquery",
             "description": "tumble count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1519,12 +1519,12 @@
 
         {
             "id": 46,
-            "tags": ["subquery"],
+            "tags": ["subquery","cluster_table_bug"],
             "name": "hop count based on tail join table subquery",
             "description": "hop count based on tail join table subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from hop(joined_stream,timestamp, 2s, 5s) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test as a join table(test_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from hop(joined_stream,timestamp, 2s, 5s) group by id, window_start, window_end"}]},
                 { "inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1556,7 +1556,7 @@
             "description": "tumble sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select id, type, sum(value), window_start, window_end from tumble(test_join_v, timestamp, 5s) group by id, type, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":1, "query":"select id, type, sum(value), window_start, window_end from tumble(test_join_v, timestamp, 5s) group by id, type, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1589,7 +1589,7 @@
             "description": "global sum based on tail join table view",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream",  "query_end_timer":7, "query":"select type, count(value) from test_join_v group by type limit 5 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test",  "query_end_timer":7, "query":"select type, count(value) from test_join_v group by type limit 5 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2021-11-02 20:00:01"],
                     ["dev1", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2021-11-02 20:00:03"],
@@ -1617,7 +1617,7 @@
 
         {
             "id": 49,
-            "tags": ["settings", "query_mode"],
+            "tags": ["settings", "query_mode", "cluster_table_bug"],
             "name": "query_mode='table'",
             "description": "query_mode='table'",
             "steps":[
@@ -1636,7 +1636,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101", "query_type": "table", "query_end_timer":1, "query":"select id, avg(value) from test group by id settings query_mode='table'"}]}
+                    {"client":"python","wait": 4,"query_id":"101", "query_type": "table","depends_on_stream":"test","query_end_timer":1, "query":"select id, avg(value) from test group by id settings query_mode='table'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1651,7 +1651,7 @@
 
         {
             "id": 50,
-            "tags": ["settings", "asterisk_include_reserved_columns"],
+            "tags": ["settings", "asterisk_include_reserved_columns", "cluster_table_bug"],
             "name": "asterisk_include_reserved_columns = false",
             "description": "asterisk_include_reserved_columns = false",
             "steps":[
@@ -1670,7 +1670,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "table", "wait":1, "query":"select *  from test where id = 'dev1' settings query_mode='table', asterisk_include_reserved_columns=false"}]}
+                    {"client":"python","query_id":"101", "query_type": "table","depends_on_stream":"test", "wait":1, "query":"select *  from test where id = 'dev1' settings query_mode='table', asterisk_include_reserved_columns=false"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1700,7 +1700,7 @@
                     ["dev1", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101", "query_type": "stream", "query_end_timer":2, "query":"select id, count(*), window_start, window_end from tumble(test, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest'"}]}
+                    {"client":"python","wait": 4,"query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":2, "query":"select id, count(*), window_start, window_end from tumble(test, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1724,7 +1724,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, value from test settings seek_to='-5s'"}]}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, value from test settings seek_to='-5s'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1755,7 +1755,7 @@
                         ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, count(*), window_end from tumble(test,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'"}]}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, count(*), window_end from tumble(test,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1785,7 +1785,7 @@
                     ["dev1", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 8,"query_id":"101", "query_type": "table", "query":"select id, count(*), window_start, window_end from tumble(test, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest', query_mode = 'table'"}]}
+                    {"client":"python","wait": 8,"query_id":"101", "query_type": "table","depends_on_stream":"test", "query":"select id, count(*), window_start, window_end from tumble(test, timestamp, 5s) where id = 'dev1' group by id, window_start, window_end settings seek_to = 'earliest', query_mode = 'table'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1797,7 +1797,7 @@
 
         {
             "id": 55,
-            "tags": ["snapshot seek to"],
+            "tags": ["snapshot seek to", "cluster_table_bug"],
             "name": "snapshot seek to ago interval",
             "description": "seek to ago interval",
             "steps":[
@@ -1810,7 +1810,7 @@
                     ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:06\"}", "2021-11-02 20:00:06"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101","wait":2, "query_type": "table", "query":"select id, value from test_no_default_tp_time settings seek_to='-30s', query_mode = 'table'"}]}
+                    {"client":"python","query_id":"101","wait":2, "query_type": "table","depends_on_stream":"test", "query":"select id, value from test_no_default_tp_time settings seek_to='-30s', query_mode = 'table'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1826,7 +1826,7 @@
 
         {
             "id": 56,
-            "tags": ["snapshot seek to"],
+            "tags": ["snapshot seek to", "cluster_table_bug"],
             "name": "snapshot seek to specific time",
             "description": "seek to specific time",
             "steps":[
@@ -1845,7 +1845,7 @@
                         ["dev8", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "table", "wait":2, "query":"select id, count(*), window_end from tumble(test,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05', query_mode = 'table'"}]}
+                    {"client":"python","query_id":"101", "query_type": "table","depends_on_stream":"test", "wait":2, "query":"select id, count(*), window_end from tumble(test,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05', query_mode = 'table'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1873,7 +1873,7 @@
                     ["dev1", "ca", 77, "{\"create_time\":\"2021-11-02 20:00:10\"}", "2021-11-02 20:00:10"]]}
                 ]},
                 {"statements": [
-                    {"client":"python","wait": 4,"query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"select emit_version() as emit_version, id, count(*) from tumble(test, timestamp, 5s)  group by id, window_end order by emit_version, id settings seek_to = 'earliest'"}]}
+                    {"client":"python","wait": 4,"query_id":"101", "query_type": "stream","depends_on_stream":"test","query_end_timer":1, "query":"select emit_version() as emit_version, id, count(*) from tumble(test, timestamp, 5s)  group by id, window_end order by emit_version, id settings seek_to = 'earliest'"}]}
             ],
 
             "expected_results": [{"query_id":"101", "expected_results":
@@ -1930,7 +1930,7 @@
             "description": "function neighbor for streaming",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select value, neighbor(value, -3) as prev_3, neighbor(value, -3, 0) as prev_3_0 from test"}]},
+                    {"client":"python","query_id":"102", "query_type": "stream","depends_on_stream":"test","query_end_timer":1, "query":"select value, neighbor(value, -3) as prev_3, neighbor(value, -3, 0) as prev_3_0 from test"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"102","wait":1, "data": [
                         ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
@@ -1961,7 +1961,7 @@
             "description": "function lag",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from test"}]},
+                    {"client":"python","query_id":"102", "query_type": "stream","depends_on_stream":"test","query_end_timer":1, "query":"select value, lag(value) as prev_1, lag(value, 3, 0) as prev_3_0 from test"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"102","wait":1, "data": [
                         ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
@@ -1992,7 +1992,7 @@
             "description": "function lags",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select value, lags(value, 1, 3) as prev_1_3, lags(value, 2, 5, -1) as `prev_2_5_-1` from test"}]},
+                    {"client":"python","query_id":"102", "query_type": "stream","depends_on_stream":"test","query_end_timer":1, "query":"select value, lags(value, 1, 3) as prev_1_3, lags(value, 2, 5, -1) as `prev_2_5_-1` from test"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"102","wait":1, "data": [
                         ["dev1", "ca", 1, "2021-11-02 20:00:01", "2020-02-02 20:00:01"]
@@ -2018,12 +2018,12 @@
         },
         {
             "id": 84,
-            "tags": ["functions", "streaming functions"],
+            "tags": ["functions", "streaming functions","cluster_table_bug"],
             "name": "grok",
             "description": "function grok",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"102", "query_type": "stream","query_end_timer":1, "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from test"}]},
+                    {"client":"python","query_id":"102", "query_type": "stream","depends_on_stream":"test","query_end_timer":1, "query":"select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from test"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"102","wait":1, "data": [
                         ["dev1", "ca", 1, "{\"id\": 1, \"type\": T1, \"ipv4\": 127.0.0.1, \"ipv6\": ::1, \"uuid\": feb540dc-c4e4-4c7e-a975-02f0304364a9}", "2020-02-02 20:00:01"]
@@ -2063,7 +2063,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5,"depends_on_stream":"test", "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
 
                 ]},
 
@@ -2097,7 +2097,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end"}
 
                 ]},
                 {"inputs": [
@@ -2130,7 +2130,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
 
                 ]},
 
@@ -2165,7 +2165,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
 
                 ]},
 
@@ -2200,7 +2200,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), to_int8(json_extract_string(json, 'int8')) as to_int8, to_int16(json_extract_string(json, 'int16')) as to_int16, to_int32(json_extract_string(json, 'int32')) as to_int32, to_int64(json_extract_string(json, 'int64')) as to_int64, to_int128(json_extract_string(json, 'int128')) as to_int128, to_int256(json_extract_string(json, 'int256')) as to_int256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_int8, to_int16, to_int32, to_int64, to_int128, to_int256, window_end"}
 
                 ]},
 
@@ -2234,7 +2234,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), to_decimal(json_extract_string(json, 'decimal32'), 5) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 10) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 20) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),30) as to_decimal256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":5, "query":"select id, max(value), to_decimal(json_extract_string(json, 'decimal32'), 5) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 10) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 20) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),30) as to_decimal256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
 
                 ]},
 
@@ -2268,7 +2268,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), to_decimal32(json_extract_string(json, 'decimal32'), 8) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 17) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 37) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),75) as to_decimal256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), to_decimal32(json_extract_string(json, 'decimal32'), 8) as to_decimal32, to_decimal64(json_extract_string(json, 'decimal64'), 17) as to_decimal64, to_decimal128(json_extract_string(json, 'decimal128'), 37) as to_decimal128, to_decimal256(json_extract_string(json, 'decimal256'),75) as to_decimal256, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, to_decimal32, to_decimal64, to_decimal128, to_decimal256, window_end"}
 
                 ]},
 
@@ -2301,7 +2301,7 @@
             "description": "extract timestamp from json and run tumble on it, and run all func rename.",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), json_extract_array_raw(json, 'array1') as array1, json_extract_array_raw(json, 'array1') as array2 , array_concat(array1, array2) as array_concat, length(array_concat) as array_length, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, array1, array2, array_concat, array_length, window_end"}
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), json_extract_array_raw(json, 'array1') as array1, json_extract_array_raw(json, 'array1') as array2 , array_concat(array1, array2) as array_concat, length(array_concat) as array_length, window_end from tumble(test, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, array1, array2, array_concat, array_length, window_end"}
 
                 ]},
 
@@ -2339,7 +2339,7 @@
             "description": "tranform function in subquery and run tumble on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test settings seek_to='earliest') select id, max(value), window_start, window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_start, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":1, "query":"with transformed as (select id, value, to_datetime(json_extract_string(json, 'create_time')) as tranformed_timestamp from test settings seek_to='earliest') select id, max(value), window_start, window_end from tumble(transformed, tranformed_timestamp, interval 5 second) group by id, window_start, window_end"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -2370,7 +2370,7 @@
             "description": "tranform function in subquery and run tumble on the subquery",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "query_end_timer":5, "query":"select id, max(value), window_end from hop(test, to_datetime64(_tp_append_time, 3, 'UTC'), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test", "query_end_timer":5, "query":"select id, max(value), window_end from hop(test, to_datetime64(_tp_append_time, 3, 'UTC'), interval 2 second, interval 5 second) where window_end < '2021-11-02 20:00:09' group by id, window_end"}]},
                 {"inputs": [
                     {"table_name":"test","depends_on":"101","wait":1, "data": [["dev1", "ca", 60, "{\"create_time\":\"2021-11-02 20:00:01\"}", "2020-02-02 20:01:00"],
                     ["dev2", "ca", 66, "{\"create_time\":\"2021-11-02 20:00:03\"}", "2020-02-02 20:01:01"],
@@ -2410,7 +2410,7 @@
 
                     ]},
                 {"statements": [
-                    {"client":"python","query_id":"103", "wait": 5, "query_type": "table", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(test)"}]}
+                    {"client":"python","query_id":"103", "wait": 5, "query_type": "table","depends_on_stream":"test", "query_end_timer":5, "query":"select id, location, value,json, timestamp from table(test)"}]}
 
                 ],
             "expected_results": [{"query_id":"103", "expected_results":

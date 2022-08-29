@@ -211,10 +211,6 @@
             ],
             "expected_results": [
                 {
-                    "query_id": "401",
-                    "expected_results": "test_rest\n"
-                },
-                {
                     "query_id": "402",
                     "expected_results": {
                         "meta": [

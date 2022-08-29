@@ -132,7 +132,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug"]}}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug"],"cluster": ["cluster_table_bug"]}}
     },
 
     "tests": [
@@ -252,7 +252,7 @@
 
         {
             "id": 64,
-            "tags": ["materialized view","tumble window"],
+            "tags": ["materialized view","tumble window","cluster_table_bug"],
             "name": "table tail from materialized view as 5s tumble window aggregation by sum and group by id, designate eventtime colume in tumble sql",
             "description": "create materialized view as materialized view as 5s tumble window aggregation by sum and group by id, select id, sum_value from table(mv), designated timestamp as eventtime column in tumble sql",
             "steps":[

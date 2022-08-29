@@ -1,7 +1,7 @@
 {
     "test_suite_name": "type_and_func",
     "test_suite_config":{
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
     },
     "commments":
         "Tests covering the steam query smoke cases.",
@@ -295,7 +295,7 @@
         },
         {
             "id": 14,
-            "tags": ["dedup"],
+            "tags": ["dedup", "cluster_table_bug"],
             "name": "dedup on table as view",
             "description": "create a stream t_dedup, and create a view with dedup on key with func as to_string(time) and check dedup ",
             "steps":[
@@ -319,7 +319,7 @@
         },
         {
             "id": 15,
-            "tags": ["xirr"],
+            "tags": ["xirr", "cluster_table_bug"],
             "name": "xirr on table as view",
             "description": "create a stream, and create a view with xirr check xirr",
             "steps":[
@@ -403,7 +403,7 @@
         },
         {
             "id": 19,
-            "tags": ["lags"],
+            "tags": ["lags", "cluster_table_bug"],
             "name": "lags on table as view, tail lags with array_sum",
             "description": "create a stream, and create a view with xirr check xirr",
             "steps":[
@@ -425,7 +425,7 @@
         },
         {
             "id": 20,
-            "tags": ["lags"],
+            "tags": ["lags", "cluster_table_bug"],
             "name": "lags on table as view, latest lags with array_sum",
             "description": "create a stream, and create a view with lags check arry_sum of latest lags",
             "steps":[
@@ -512,7 +512,7 @@
         },
         {
             "id": 24,
-            "tags": ["bool"],
+            "tags": ["bool", "cluster_table_bug"],
             "name": "materialized view with bool",
             "description": "create a materialized view with subquery and have tumble window, and count() group by id, bool_f on the mv",
             "steps":[
@@ -535,7 +535,7 @@
         },
         {
             "id": 25,
-            "tags": ["bool"],
+            "tags": ["bool", "cluster_table_bug"],
             "name": "comparison bool",
             "description": "comparison operations == != > < >= <=  return bool result",
             "steps":[
@@ -557,7 +557,7 @@
         },
         {
             "id": 26,
-            "tags": ["func"],
+            "tags": ["func", "cluster_table_bug"],
             "name": "to_bool",
             "description": "convert uint, string to bool",
             "steps":[
@@ -593,7 +593,7 @@
         },
         {
             "id": 28,
-            "tags": ["func"],
+            "tags": ["func", "cluster_table_bug"],
             "name": "json_extrac_array",
             "description": "extract array from json string",
             "steps":[
@@ -619,7 +619,7 @@
         },
         {
             "id": 29,
-            "tags": ["func"],
+            "tags": ["func", "cluster_table_bug"],
             "name": "array_element",
             "description": "extract element from json array string",
             "steps":[
@@ -661,7 +661,7 @@
         },
         {
             "id": 31,
-            "tags": ["type"],
+            "tags": ["type", "cluster_table_bug"],
             "name": "low_cardinality(bool)",
             "description": "low_cardinality(bool)",
             "steps":[

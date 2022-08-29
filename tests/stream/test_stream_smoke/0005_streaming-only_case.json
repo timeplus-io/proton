@@ -133,7 +133,7 @@
                 }
             ]
         },
-        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample","native_not_support", "func rename"]}}
+        "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample","native_not_support", "func rename"],"cluster": ["view", "cluster_table_bug"]}}
     },
 
     "tests": [

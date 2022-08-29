@@ -1,0 +1,107 @@
+version: "3.7"
+
+# this is an extension field, its name must start with `x-`
+x-logging: &default-logging
+  driver: local
+  options: # https://docs.docker.com/config/containers/logging/local/#options
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:${KAFKA_TAG}
+    user: "0:0"
+    container_name: zookeeper
+    ports:
+      - 2181:2181
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - ./zoo/data:/var/lib/zookeeper/data
+      - ./zoo/log:/var/lib/zookeeper/log  
+
+  kafka1:
+    image: confluentinc/cp-kafka:${KAFKA_TAG}
+    user: "0:0"
+    container_name: kafka1
+    ports:
+    # To learn about configuring Kafka for access across networks see
+    # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "29092:29092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CLUSTER_ID: kafkacluster
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, CONNECTIONS_FROM_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092, CONNECTIONS_FROM_HOST://kafka:29092
+      #KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    volumes: 
+      - ./kafka_data:/var/lib/kafka/data
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  kafka2:
+    image: confluentinc/cp-kafka:${KAFKA_TAG}
+    user: "0:0"
+    container_name: kafka2
+    ports:
+    # To learn about configuring Kafka for access across networks see
+    # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "39092:39092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_CLUSTER_ID: kafkacluster
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, CONNECTIONS_FROM_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092, CONNECTIONS_FROM_HOST://kafka:39092
+      #KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    volumes: 
+      - ./kafka1_data:/var/lib/kafka/data
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144     
+
+  kafka3:
+    image: confluentinc/cp-kafka:${KAFKA_TAG}
+    user: "0:0"
+    container_name: kafka3
+    ports:
+    # To learn about configuring Kafka for access across networks see
+    # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "49092:49092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_CLUSTER_ID: kafkacluster
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, CONNECTIONS_FROM_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9092, CONNECTIONS_FROM_HOST://kafka:49092
+      #KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    volumes: 
+      - ./kafka2_data:/var/lib/kafka/data
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144 

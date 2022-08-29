@@ -13,7 +13,7 @@
         {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists versioned_kv_stream(i int, s string) primary key s settings mode='versioned_kv'"}
       ]
     },    
-    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"]}}
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
   },
   "comments": "Tests covering the single shard changelog stream query smoke cases.",
   "tests": [

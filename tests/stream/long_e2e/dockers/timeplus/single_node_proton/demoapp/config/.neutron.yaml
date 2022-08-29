@@ -1,0 +1,23 @@
+cardemo:
+  app:
+    schedule:
+      interval: 1000
+  user:
+    count: 100
+  car:
+    count: 100
+    update:
+      interval: 1000 # by default,how frequently(in ms) to send event to car_live_data
+    recharge:
+      mileage: 5000 #to get lower gas percentage
+  trip:
+    target:
+      max: 25 # set max trip is 25KM, default 50KM which can take half an hour or more
+  book:
+    cancel:
+      rate: 0.1
+  type:
+    trips:
+      amount: Decimal(10, 2)
+    car_live_data:
+      gas_percent: Decimal(10, 2)
