@@ -10,6 +10,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
 
@@ -20,7 +21,7 @@ StorageID MergePlainMergeTreeTask::getStorageID()
 
 void MergePlainMergeTreeTask::onCompleted()
 {
-    bool delay = state == State::SUCCESS;
+    bool delay = (state == State::SUCCESS) || force_delay;
     task_result_callback(delay);
 }
 
@@ -50,6 +51,20 @@ bool MergePlainMergeTreeTask::executeStep()
                 state = State::NEED_FINISH;
                 return true;
             }
+            /// proton : starts.
+            catch (DB::Exception & e)
+            {
+                /// issue-973, when memory limit is hit, we shall not retry merge anymore. Flag it and rethrow,
+                /// the `onCompleted()` logic will try merge next time
+                e.addMessage(storage.getName());
+
+                if (e.code() == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
+                    force_delay = true;
+
+                write_part_log(ExecutionStatus::fromCurrentException());
+                throw;
+            }
+            /// proton : ends
             catch (...)
             {
                 write_part_log(ExecutionStatus::fromCurrentException());

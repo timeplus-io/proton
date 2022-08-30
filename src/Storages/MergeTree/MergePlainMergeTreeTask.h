@@ -54,6 +54,7 @@ private:
     };
 
     State state{State::NEED_PREPARE};
+    bool force_delay = false;
 
     StorageMergeTree & storage;
 
