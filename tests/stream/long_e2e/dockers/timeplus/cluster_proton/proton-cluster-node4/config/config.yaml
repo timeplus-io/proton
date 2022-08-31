@@ -14,7 +14,7 @@ logger:
     # - debug
     # - trace
     # [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
-    level: information
+    level: debug
     log: /var/log/proton-server/proton-server.log
     errorlog: /var/log/proton-server/proton-server.err.log
     # Rotation policy
@@ -1058,7 +1058,7 @@ cluster_settings:
 # Metastore server config
 metastore_server:
     http_port: 9444
-    server_id: 3
+    server_id: 1
 
     namespace_whitelist:
         namespace:
@@ -1131,3 +1131,11 @@ metastore_server:
             id: 3
             hostname: proton-cluster-node3
             port: 94444
+        server:
+            id: 4
+            hostname: proton-cluster-node4
+            port: 94444
+        server:
+            id: 5
+            hostname: proton-cluster-node5
+            port: 94444            

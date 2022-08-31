@@ -7,6 +7,7 @@ services:
     volumes:
       - ../../proton-server/datas:/var/lib/proton
       - ../../proton-server/log:/var/log/proton-server
+      - /Users/jameshao/projects/proton:/usr/proton
     ports:
       - "3218:3218" # HTTP Streaming
       - "8123:8123" # HTTP Snapshot

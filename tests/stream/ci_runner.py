@@ -192,10 +192,10 @@ if __name__ == "__main__":
     proton_python_driver_install()
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "settings=", "test_suites=", "loop=", "id=", "cluster_query_route_mode="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "settings=", "test_suites=", "loop=", "id=", "cluster_query_route_mode=", "query_node="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3 --cluster_query_route_mode=none_stream_node_first")
+        print(f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3 --cluster_query_route_mode=none_stream_node_first/--query_node=proton-cluster-node1")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -227,6 +227,9 @@ if __name__ == "__main__":
 
         if name in ("--cluster_query_route_mode"):
             os.environ["PROTON_CLUSTER_QUERY_ROUTE_MODE"] = value
+        
+        if name in ("--cluster_query_node"):
+            os.environ["PROTON_CLUSTER_QUERY_NODE"] = value
 
     print(f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}")
     console_handler = logging.StreamHandler(sys.stderr)

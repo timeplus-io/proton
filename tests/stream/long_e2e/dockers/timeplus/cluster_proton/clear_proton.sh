@@ -4,3 +4,7 @@ rm -rf ./proton-cluster-node2/datas
 rm -rf ./proton-cluster-node2/log
 rm -rf ./proton-cluster-node3/datas
 rm -rf ./proton-cluster-node3/log
+rm -rf ./proton-cluster-node4/datas
+rm -rf ./proton-cluster-node4/log
+rm -rf ./proton-cluster-node5/datas
+rm -rf ./proton-cluster-node5/log

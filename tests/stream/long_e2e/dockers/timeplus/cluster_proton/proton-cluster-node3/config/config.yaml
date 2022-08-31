@@ -1131,3 +1131,11 @@ metastore_server:
             id: 3
             hostname: proton-cluster-node3
             port: 94444
+        server:
+            id: 4
+            hostname: proton-cluster-node4
+            port: 94444
+        server:
+            id: 5
+            hostname: proton-cluster-node5
+            port: 94444 

@@ -55,10 +55,10 @@
             }
         }
     },
-    "proton_servers": [{"node":"proton-cluster-node1", "host": "localhost", "port":28463},{"node":"proton-cluster-node2","host": "localhost", "port":38463},{"node":"proton-cluster-node3","host": "localhost", "port":58463}],
-    "proton_server_native_port": [{"node":"proton-cluster_node1", "port":28463}, {"node":"proton-cluster-node2", "port":38463}, {"node":"proton-cluster_node3", "port":58463}],
+    "proton_servers": [{"node":"proton-cluster-node1", "host": "localhost", "port":28463},{"node":"proton-cluster-node2","host": "localhost", "port":38463},{"node":"proton-cluster-node3","host": "localhost", "port":38423}, {"node":"proton-cluster-node4","host": "localhost", "port":38433}, {"node":"proton-cluster-node5","host": "localhost", "port":38453}],
+    "proton_server_native_port": [{"node":"proton-cluster_node1", "port":28463}, {"node":"proton-cluster-node2", "port":38463}, {"node":"proton-cluster_node3", "port":38423}, {"node":"proton-cluster_node4", "port":38433}, {"node":"proton-cluster_node5", "port":38453}],
     "proton_admin": {"name":"proton", "password":"proton@t+"},
-    "proton_server_container_name":"proton-cluster-node1, proton-cluster-node2, proton-cluster-node3"
+    "proton_server_container_name":"proton-cluster-node1, proton-cluster-node2, proton-cluster-node3, proton-cluster-node4, proton-cluster-node5"
 },    
 "redp": {
     "rest_setting": {

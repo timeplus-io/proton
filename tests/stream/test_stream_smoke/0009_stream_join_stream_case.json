@@ -57,7 +57,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1002", "terminate":"manuel", "query_type": "stream","depends_on_stream":"left_stream,right_stream", "wait":1, "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s)"},
-            {"client":"python", "query_type": "table","depends_on":1002, "wait":3, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":1002, "wait":2, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),
@@ -203,7 +203,7 @@
               (2, 's9', '2022-05-23 15:46:10'),
               (2, 's10', '2022-05-23 15:46:11')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1006'"}            
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1006'"}            
           ]
         }
       ],
@@ -314,7 +314,7 @@
               (2, 's9', '2022-05-23 15:46:10'),
               (2, 's10', '2022-05-23 15:46:11')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1009'"}             
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1009'"}             
           ]
         }
       ],
@@ -499,7 +499,7 @@
               (2, 's9', '2022-05-23 15:46:20'),
               (2, 's10', '2022-05-23 15:46:21')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1014'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1014'"}  
           ]
         }
       ],
@@ -573,7 +573,7 @@
               (2, 's9', '2022-05-23 15:46:18'),
               (2, 's10', '2022-05-23 15:46:19')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1016'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1016'"}  
           ]
         }
       ],
@@ -688,7 +688,7 @@
             },
             {"client":"python", "query_type": "table", "wait":3,
               "query": "insert into left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'), (2, 'new', '2022-05-23 15:46:10')"},
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1019'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1019'"}  
           ]
         }
       ],
@@ -1044,7 +1044,7 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1035'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1035'"}  
           ]
         }
       ],
@@ -1152,7 +1152,7 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1038'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1038'"}  
           ]
         }
       ],
@@ -1219,7 +1219,7 @@
               (1, 's2', '2022-05-23 15:44:59', '2022-05-25 23:59:06.204'),
               (1, 's3', '2022-05-23 15:44:59', '2022-05-25 23:59:39.204')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1040'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1040'"}  
           ]
         }
       ],
@@ -1249,7 +1249,7 @@
               (1, 's3', '2022-05-23 15:45:09')"
             },
             {"client":"python", "query_type": "table", "wait":1, "query": "insert into left_stream(i, s, ts) values (1, 'ss', '2022-05-23 15:45:10')"},
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1041'"} 
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1041'"} 
           ]
         }
       ],
@@ -1281,7 +1281,7 @@
               (1, 's2', '2022-05-23 15:45:00'),
               (1, 's3', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1042'"} 
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1042'"} 
           ]
         }
       ],

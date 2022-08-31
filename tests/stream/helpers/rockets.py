@@ -175,6 +175,7 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     )  # a list of map of test_sutie_name and test_suite_query_result_queue
     proton_setting = os.getenv("PROTON_SETTING", "default")
     proton_cluster_query_route_mode = os.getenv("PROTON_CLUSTER_QUERY_ROUTE_MODE", "default")
+    proton_cluster_query_node = os.getenv("PROTON_CLUSTER_QUERY_NODE", "default")
 
     root_logger = logging.getLogger()
     logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
@@ -196,7 +197,9 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
 
     config["proton_setting"] = proton_setting # put proton_setting into config
     
+    
     if proton_setting == "cluster": # if running under cluster mode and proton_cluster_query_mode, take proton_cluster_query_route_mode as part of config
+        config["proton_cluster_query_node"] = proton_cluster_query_node # put proton_cluster_query_node into config
         config["proton_cluster_query_route_mode"] = proton_cluster_query_route_mode 
 
     res_scan_tests_file_path = scan_tests_file_path(tests_file_path)
@@ -672,8 +675,10 @@ def query_run_py(
 
     try:
         logger = mp.get_logger()
+        proton_server = None
         proton_setting = config.get('proton_setting')  
         proton_cluster_query_route_mode = config.get('proton_cluster_query_route_mode')
+        proton_cluster_query_node = config.get('proton_cluster_query_node')
         if proton_setting != 'cluster': 
             proton_server = config.get("proton_server")
             proton_server_native_ports = config.get("proton_server_native_port")
@@ -681,6 +686,15 @@ def query_run_py(
             proton_server_native_port = proton_server_native_ports[
                 0
             ]  # todo: get proton_server and port from statement
+        elif proton_setting == 'cluster' and proton_cluster_query_node != "default":
+            proton_servers = config.get("proton_servers")
+            for item in proton_servers:
+                node = item.get("node")
+                if node == proton_cluster_query_node:
+                    proton_server = item.get("host")
+                    proton_server_native_port = item.get("port")
+            logger.debug(f"proton_cluster_query_node = {proton_cluster_query_node}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}")
+
         else: #if proton_setting == 'cluster', go through the list and get the 1st node as default proton
             proton_servers = config.get("proton_servers")
             proton_server = proton_servers[0].get("host")
@@ -699,6 +713,7 @@ def query_run_py(
             )
 
             settings = {"max_block_size": 100000}
+            logger.debug(f"pyclient create, proton_server = {proton_server}, port = {proton_server_native_port}")
             pyclient = Client(
                 host=proton_server, port=proton_server_native_port
             )  # create python client
@@ -760,7 +775,7 @@ def query_run_py(
             depends_on_stream_list = depends_on_stream.split(",")
             depends_on_stream_info_list = depends_on_stream_exist(table_ddl_url, depends_on_stream_list, query_id)
 
-            if proton_setting == 'cluster' and proton_cluster_query_route_mode == NONE_STREAM_NODE_FIRST: #if cluster mode and proton_cluster_query_route_mode is set to NONE_STREAM_NODE_FIRST, get none stream node and change pyclient to that node.
+            if proton_setting == 'cluster' and proton_cluster_query_node == "default" and proton_cluster_query_route_mode == NONE_STREAM_NODE_FIRST: #if cluster mode and proton_cluster_query_route_mode is set to NONE_STREAM_NODE_FIRST, get none stream node and change pyclient to that node.
                 none_stream_nodes = get_none_stream_nodes(proton_servers, depends_on_stream_info_list)
                 
                 if len(none_stream_nodes) != 0: #if none_stream_nodes list is not empty, chose the 1st as the proton_server to issue query, if it's empty that means no none_stream_node, so no change to the default proton_server
@@ -774,6 +789,9 @@ def query_run_py(
                     pyclient = Client(
                         host=proton_server, port=proton_server_native_port
                     )  # create python client
+            
+
+         
 
 
         if depends_on != None:
@@ -787,9 +805,22 @@ def query_run_py(
                     f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
                 )
 
-        query_result_iter = pyclient.execute_iter(
-            query, with_column_types=True, query_id=query_id, settings=settings
-        )
+        #if query_type == "table" and not ("select" in query or "SELECT" in query):
+        if query_type == "table":
+            query_result_iter = []
+            res = pyclient.execute(
+                query, with_column_types=True, query_id=query_id, settings=settings
+            )
+            query_result_iter.append(res[-1])
+            if len(res[0]) > 0:
+                for item in res[0]:
+                    query_result_iter.append(item)
+            logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")
+            
+        else:
+            query_result_iter = pyclient.execute_iter(
+                query, with_column_types=True, query_id=query_id, settings=settings
+            )
 
         logger.debug(
             f"query_run_py: query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
@@ -989,6 +1020,8 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     #     0
     # ]  # todo: support assign proton_server/port from statement, that means client need to be created inside query_run_py but not in query_execute
     proton_setting = config.get('proton_setting')
+    proton_cluster_query_node = config.get('proton_cluster_query_node')
+    proton_server = None
     if proton_setting != 'cluster': 
         proton_server = config.get("proton_server")
         proton_server_native_ports = config.get("proton_server_native_port")
@@ -996,6 +1029,14 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
         proton_server_native_port = proton_server_native_ports[
             0
         ]  # todo: get proton_server and port from statement
+    elif proton_setting == 'cluster' and proton_cluster_query_node != "default":
+        proton_servers = config.get("proton_servers")
+        for item in proton_servers:
+            node = item.get("node")
+            if node == proton_cluster_query_node:
+                proton_server = item.get("host")
+                proton_server_native_port = item.get("port")
+
     else: #if proton_setting == 'cluster', go through the list and get the 1st node as default proton
         proton_servers = config.get("proton_servers")
         proton_server = proton_servers[0].get("host")
@@ -2397,7 +2438,8 @@ def test_suite_run(
     # proton_server_native_port = proton_server_native_ports[
     #     0
     # ]  # todo: assign proton_server and port at config for test_suite reset_tables_of_test_inputs
-
+    proton_cluster_query_node = config.get('proton_cluster_query_node')
+    proton_server = None
     if proton_setting != 'cluster': 
         proton_server = config.get("proton_server")
         proton_server_native_ports = config.get("proton_server_native_port")
@@ -2405,6 +2447,14 @@ def test_suite_run(
         proton_server_native_port = proton_server_native_ports[
             0
         ]  # todo: get proton_server and port from statement
+    elif proton_setting == 'cluster' and proton_cluster_query_node != "default":
+        proton_servers = config.get("proton_servers")
+        for item in proton_servers:
+            node = item.get("node")
+            if node == proton_cluster_query_node:
+                proton_server = item.get("host")
+                proton_server_native_port = item.get("port")
+
     else: #if proton_setting == 'cluster', go through the list and get the 1st node as default proton
         proton_servers = config.get("proton_servers")
         proton_server = proton_servers[0].get("host")

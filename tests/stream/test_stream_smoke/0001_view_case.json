@@ -145,7 +145,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_stream_sum_view"},
-                    {"client":"python","query_id":"300", "wait":2, "query_type": "table", "query":"create materialized view test_mv_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id limit 4"},
+                    {"client":"python","query_id":"300", "wait":1, "query_type": "table", "query":"create materialized view test_mv_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id limit 4"},
                     {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_mv_stream_sum_view","wait":5,"query_end_timer":5, "query":"select id, sum_value from test_mv_stream_sum_view settings seek_to='earliest'"}
 
                     ]},
@@ -180,7 +180,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_stream_tumble_v"},
-                    {"client":"python", "query_type": "table", "query":"create materialized view test_mv_stream_tumble_v as select id, sum(value) as sum_value, to_datetime(window_start, 'UTC') as win_start, to_datetime(window_end, 'UTC') as win_end from tumble(test_mv, interval 5 second) group by id, window_start, window_end"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create materialized view test_mv_stream_tumble_v as select id, sum(value) as sum_value, to_datetime(window_start, 'UTC') as win_start, to_datetime(window_end, 'UTC') as win_end from tumble(test_mv, interval 5 second) group by id, window_start, window_end"},
                     {"client":"python", "query_id":"301", "query_type": "stream", "depends_on_stream":"test_mv_stream_tumble_v","wait":5,"terminate":"manual", "query":"select * from test_mv_stream_tumble_v"}]},
                 {"inputs": [
                     {"table_name":"test_mv", "wait":1, "depends_on":"301", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00+00:00"],
@@ -219,7 +219,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_stream_tumble_v"},
-                    {"client":"python", "query_type": "table", "query":"create materialized view test_mv_stream_tumble_v as select id, sum(value) as sum_value, window_start as win_start, window_end as win_end from tumble(test_mv, timestamp, interval 5 second) group by id, win_start, win_end"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create materialized view test_mv_stream_tumble_v as select id, sum(value) as sum_value, window_start as win_start, window_end as win_end from tumble(test_mv, timestamp, interval 5 second) group by id, win_start, win_end"},
                     {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_mv_stream_tumble_v","wait":5, "terminate":"manual", "query":"select * from test_mv_stream_tumble_v"}]},
                 {"inputs": [
                     {"table_name":"test_mv", "wait":1, "depends_on":"301", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -300,7 +300,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_stream_session_v"},
-                    {"client":"python","query_id":"300", "query_type": "table", "query":"create materialized view if not exists test_mv_stream_session_v as select id, count(value) as count_value, window_start as s, window_end as e from session(test_mv, timestamp, 2s, id, location) group by __tp_session_id, window_start, window_end, id, location"}
+                    {"client":"python","query_id":"300", "query_type": "table","wait":1, "query":"create materialized view if not exists test_mv_stream_session_v as select id, count(value) as count_value, window_start as s, window_end as e from session(test_mv, timestamp, 2s, id, location) group by __tp_session_id, window_start, window_end, id, location"}
                 ]},
                 {"inputs": [
                     {"table_name":"test_mv","test_mv_stream_tumble_v":"test_mv_stream_session_v", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -339,7 +339,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_stream_sum_view"},
-                    {"client":"python", "query_type": "table", "query":"create materialized view test_mv_stream_hop_v as select id, count(value) as sum_value, window_start as s, window_end as e from hop(test_mv, timestamp, 2s, 5s) group by id, window_start, window_end"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create materialized view test_mv_stream_hop_v as select id, count(value) as sum_value, window_start as s, window_end as e from hop(test_mv, timestamp, 2s, 5s) group by id, window_start, window_end"},
                     {"client":"python", "query_id":"301", "query_type": "stream", "depends_on_stream":"test_mv_stream_hop_v","wait":5, "terminate":"manual", "query":"select * from test_mv_stream_hop_v"}]},
                 {"inputs": [
                     {"table_name":"test_mv", "depends_on":"301", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
@@ -377,7 +377,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_sum_view"},
-                    {"client":"python","query_id":"300", "query_type": "table", "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id limit 4 emit periodic 5s"},
+                    {"client":"python","query_id":"300", "query_type": "table","wait":1, "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id limit 4 emit periodic 5s"},
                     {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_v_stream_sum_view", "wait":1, "terminate":"manual", "query":"select * from test_v_stream_sum_view"}]},                    
 
                 {"inputs": [
@@ -415,7 +415,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_sum_view"},
-                    {"client":"python","query_id":"300", "query_type": "table", "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id order by id limit 4 emit periodic 5s"},
+                    {"client":"python","query_id":"300", "query_type": "table","wait":1, "query":"create view test_v_stream_sum_view as select id, sum(value) as sum_value from test_mv group by id order by id limit 4 emit periodic 5s"},
                     {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_v_stream_sum_view", "wait":1, "terminate":"manual", "query":"select * from test_v_stream_sum_view"}]},                    
 
                 {"inputs": [
@@ -454,7 +454,7 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test_v_stream_tumble_v"},
-                    {"client":"python", "query_type": "table", "query":"create view test_v_stream_tumble_v as select id, value, lag(id) as last_id, lag(value) as last_value, to_datetime(window_start, 'UTC') as win_start, to_datetime(window_end, 'UTC') as win_end from tumble(test_mv, interval 5 second) group by id, value, window_start, window_end having last_value < value"},
+                    {"client":"python", "query_type": "table","wait":1, "query":"create view test_v_stream_tumble_v as select id, value, lag(id) as last_id, lag(value) as last_value, to_datetime(window_start, 'UTC') as win_start, to_datetime(window_end, 'UTC') as win_end from tumble(test_mv, interval 5 second) group by id, value, window_start, window_end having last_value < value"},
                     {"client":"python", "query_id":"301", "query_type": "stream", "terminate":"manual", "query":"select id, count() from test_v_stream_tumble_v group by id limit 3"}]},
                 {"inputs": [
                     {"table_name":"test_mv", "wait":3, "depends_on":"301", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00+00:00"],
