@@ -72,7 +72,7 @@ struct MatchImpl
     static constexpr bool supports_start_pos = false;
     static constexpr auto name = Name::name;
 
-    using ResultType = UInt8;
+    using ResultType = Bool;
 
     using Searcher = std::conditional_t<case_insensitive,
           VolnitskyCaseInsensitiveUTF8,

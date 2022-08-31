@@ -32,6 +32,8 @@ struct MultiMatchAnyImpl
 {
     static_assert(static_cast<int>(FindAny) + static_cast<int>(FindAnyIndex) == 1);
     using ResultType = Type;
+    using Container = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
+
     static constexpr bool is_using_hyperscan = true;
     /// Variable for understanding, if we used offsets for the output, most
     /// likely to determine whether the function returns ColumnVector of ColumnArray.
@@ -40,14 +42,17 @@ struct MultiMatchAnyImpl
 
     static auto getReturnType()
     {
-        return std::make_shared<DataTypeNumber<ResultType>>();
+        if constexpr (std::is_same_v<ResultType, Bool>)
+            return std::make_shared<DataTypeBool>();
+        else
+            return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
     static void vectorConstant(
         const ColumnString::Chars & haystack_data,
         const ColumnString::Offsets & haystack_offsets,
         const std::vector<StringRef> & needles,
-        PaddedPODArray<Type> & res,
+        Container & res,
         PaddedPODArray<UInt64> & offsets)
     {
         vectorConstant(haystack_data, haystack_offsets, needles, res, offsets, std::nullopt);
@@ -57,7 +62,7 @@ struct MultiMatchAnyImpl
         const ColumnString::Chars & haystack_data,
         const ColumnString::Offsets & haystack_offsets,
         const std::vector<StringRef> & needles,
-        PaddedPODArray<Type> & res,
+        Container & res,
         [[maybe_unused]] PaddedPODArray<UInt64> & offsets,
         [[maybe_unused]] std::optional<UInt32> edit_distance)
     {

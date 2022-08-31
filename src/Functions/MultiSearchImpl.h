@@ -10,14 +10,14 @@ namespace DB
 template <typename Name, typename Impl>
 struct MultiSearchImpl
 {
-    using ResultType = UInt8;
+    using ResultType = Bool;
     static constexpr bool is_using_hyperscan = false;
     /// Variable for understanding, if we used offsets for the output, most
     /// likely to determine whether the function returns ColumnVector of ColumnArray.
     static constexpr bool is_column_array = false;
     static constexpr auto name = Name::name;
 
-    static auto getReturnType() { return std::make_shared<DataTypeNumber<ResultType>>(); }
+    static auto getReturnType() { return std::make_shared<DataTypeBool>(); }
 
     static void vectorConstant(
         const ColumnString::Chars & haystack_data,

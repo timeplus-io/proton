@@ -57,7 +57,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1002", "terminate":"manuel", "query_type": "stream","depends_on_stream":"left_stream,right_stream", "wait":1, "query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff_within(10s)"},
-            {"client":"python", "query_type": "table","depends_on":1002, "wait":2, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
+            {"client":"python", "query_type": "table","depends_on":1002, "wait":3, "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
               (1, 's1', '2022-05-23 15:44:59'),

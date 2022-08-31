@@ -99,7 +99,10 @@ public:
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
+        if constexpr (std::is_same_v<typename Impl::ResultType, Bool>)
+            return std::make_shared<DataTypeBool>();
+        else
+            return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override

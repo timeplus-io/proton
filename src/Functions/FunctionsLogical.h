@@ -77,7 +77,7 @@ namespace Ternary
 
 struct AndImpl
 {
-    using ResultType = UInt8;
+    using ResultType = Bool;
 
     static inline constexpr bool isSaturable() { return true; }
 
@@ -95,7 +95,7 @@ struct AndImpl
 
 struct OrImpl
 {
-    using ResultType = UInt8;
+    using ResultType = Bool;
 
     static inline constexpr bool isSaturable() { return true; }
     static inline constexpr bool isSaturatedValue(bool a) { return a; }
@@ -106,7 +106,7 @@ struct OrImpl
 
 struct XorImpl
 {
-    using ResultType = UInt8;
+    using ResultType = Bool;
 
     static inline constexpr bool isSaturable() { return false; }
     static inline constexpr bool isSaturatedValue(bool) { return false; }
@@ -125,7 +125,7 @@ struct XorImpl
 template <typename A>
 struct NotImpl
 {
-    using ResultType = UInt8;
+    using ResultType = Bool;
 
     static inline ResultType apply(A a)
     {

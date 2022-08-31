@@ -810,7 +810,7 @@ struct BitmapAndnotCardinalityImpl
 template <typename T>
 struct BitmapHasAllImpl
 {
-    using ReturnType = UInt8;
+    using ReturnType = Bool;
     static UInt8 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data_1, const AggregateFunctionGroupBitmapData<T> & bitmap_data_2)
     {
         return bitmap_data_1.rbs.rb_is_subset(bitmap_data_2.rbs);
@@ -820,7 +820,7 @@ struct BitmapHasAllImpl
 template <typename T>
 struct BitmapHasAnyImpl
 {
-    using ReturnType = UInt8;
+    using ReturnType = Bool;
     static UInt8 apply(const AggregateFunctionGroupBitmapData<T> & bitmap_data_1, const AggregateFunctionGroupBitmapData<T> & bitmap_data_2)
     {
         return bitmap_data_1.rbs.rb_intersect(bitmap_data_2.rbs);
