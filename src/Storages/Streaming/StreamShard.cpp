@@ -844,6 +844,8 @@ void StreamShard::initKafkaLog()
         /// Init consume context only when it has backing storage
         kafka->consume_ctx.partition = shard;
         kafka->consume_ctx.offset = snLoaded();
+        /// To ensure the replica can consume records inserted after its down time.
+        kafka->consume_ctx.enforce_offset = true;
         kafka->consume_ctx.auto_offset_reset = ssettings->logstore_auto_offset_reset.value;
         kafka->consume_ctx.consume_callback_timeout_ms = ssettings->distributed_flush_threshold_ms.value;
         kafka->consume_ctx.consume_callback_max_rows = ssettings->distributed_flush_threshold_count;

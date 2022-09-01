@@ -149,6 +149,37 @@ namespace
 
         return uris;
     }
+
+    bool checkNumOfReplicas(
+        CatalogService & catalog,
+        nlog::OpCode op_code,
+        const String & database,
+        const String & table,
+        size_t actual_size,
+        Poco::Logger * log)
+    {
+        auto [replication_factor, shards] = catalog.shardAndReplicationFactor(database, table);
+        size_t total_replicas = replication_factor * shards;
+        auto tables = catalog.findTableByName(database, table);
+
+        if (unlikely(tables.empty()))
+            return false;
+
+        if (op_code == nlog::OpCode::DELETE_TABLE || tables[0]->engine != "Stream")
+            return true;
+
+        if (actual_size != total_replicas)
+        {
+            LOG_ERROR(
+                log,
+                "The number of stream '{}.{}' definitions is inconsistent with the actual obtained, total_replicas={} hosts_size={}",
+                database,
+                table,
+                total_replicas,
+                actual_size);
+        }
+        return true;
+    }
 }
 
 DDLService & DDLService::instance(const ContextMutablePtr & global_context_)
@@ -486,23 +517,8 @@ void DDLService::mutateTable(nlog::Record & record, const String & method, CallB
         return;
     }
 
-    auto [replication_factor, shards] = catalog.shardAndReplicationFactor(database, table);
-    auto total_replicas = replication_factor * shards;
-    int hosts_size = target_hosts.size();
-    auto tables = catalog.findTableByName(database, table);
-
-    if (hosts_size != total_replicas && !tables.empty() && tables[0]->engine == "Stream")
+    if (!checkNumOfReplicas(catalog, record.opcode(), database, table, target_hosts.size(), log))
     {
-        LOG_ERROR(
-            log,
-            "The number of stream {} definitions is inconsistent with the actual obtained, payload={} query_id={} user={} "
-            "total_replicas={} hosts_size={}",
-            table,
-            payload,
-            query_id,
-            user,
-            total_replicas,
-            hosts_size);
         failDDL(query_id, user, payload, "Stream number obtained error");
         return;
     }
