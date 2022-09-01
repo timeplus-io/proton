@@ -131,7 +131,16 @@ void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, Form
         if (name.empty() && !children.empty())
             children.front()->formatImpl(settings, state, frame);
         else
+        {
+            /// proton: starts. For remote join query, the table name is required
+            if (!semantic->table.empty())
+            {
+                format_element(semantic->table);
+                settings.ostr << ".";
+            }
+            /// proton: ends
             format_element(name);
+        }
     }
 }
 

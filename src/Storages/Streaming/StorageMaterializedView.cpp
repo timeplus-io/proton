@@ -225,6 +225,7 @@ void StorageMaterializedView::startup()
                 new_metadata.setColumns(ColumnsDescription(new_names_and_types));
                 setInMemoryMetadata(new_metadata);
             }
+            LOG_INFO(log, "'{}' inner table is ready and background query started", getStorageID().getFullTableName());
         }
         catch (...)
         {
@@ -251,9 +252,6 @@ void StorageMaterializedView::shutdown()
     if (shutdown_called.test_and_set())
         return;
 
-    if (start_thread.joinable())
-        start_thread.join();
-
     if (background_executor)
     {
         background_executor->cancel();
@@ -263,6 +261,9 @@ void StorageMaterializedView::shutdown()
         background_executor.reset();
         background_pipeline.reset();
     }
+
+    if (start_thread.joinable())
+        start_thread.join();
 }
 
 Pipe StorageMaterializedView::read(
@@ -511,6 +512,7 @@ void StorageMaterializedView::executeBackgroundPipeline()
     background_thread = ThreadFromGlobalPool{[this]() {
         try
         {
+            LOG_INFO(log, "Background pipeline started for materialized view {}", getStorageID().getFullTableName());
             assert(background_executor);
             background_executor->execute(background_pipeline.getNumThreads());
         }

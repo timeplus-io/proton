@@ -303,7 +303,16 @@ void StorageStream::readRemote(
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage)
 {
-    Block header = InterpreterSelectQuery(query_info.query, context_, SelectQueryOptions(processed_stage)).getSampleBlock();
+    Block header;
+    if (!column_names.empty())
+        header = storage_snapshot->getSampleBlockForColumns(column_names, /* use_extended_objects */ false);
+    else
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME}, /* use_extended_objects */ false);
+
+    /// sometimes 'getQueryProcessingStage' has not been called before 'read', get cluster info first before creating pipes
+    /// by calling 'getQueryProcessingStageRemote'
+    if (!query_info.getCluster())
+        getQueryProcessingStageRemote(context_, processed_stage, storage_snapshot, query_info);
 
     /// Return directly (with correct header) if no shard to query.
     if (query_info.getCluster()->getShardsInfo().empty())
@@ -1232,12 +1241,12 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStageRemote(
     /// Nested distributed query cannot return Complete stage,
     /// since the parent query need to aggregate the results after.
     if (to_stage == QueryProcessingStage::WithMergeableState)
-        return QueryProcessingStage::WithMergeableState;
+        return QueryProcessingStage::FetchColumns;
 
     /// If there is only one node, the query can be fully processed by the
     /// shard, initiator will work as a proxy only.
-    if (getClusterQueriedNodes(settings, cluster) == 1)
-        return QueryProcessingStage::Complete;
+//    if (getClusterQueriedNodes(settings, cluster) == 1)
+//        return QueryProcessingStage::Complete;
 
     if (settings.optimize_skip_unused_shards && settings.optimize_distributed_group_by_sharding_key && sharding_key_expr
         && (settings.allow_nondeterministic_optimize_skip_unused_shards || sharding_key_is_deterministic))
@@ -1251,7 +1260,7 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStageRemote(
         }
     }
 
-    return QueryProcessingStage::WithMergeableState;
+    return QueryProcessingStage::FetchColumns;
 }
 
 /// New functions

@@ -1,3 +1,4 @@
+#include <Access/Common/AccessRightsElement.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -90,7 +91,7 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
         /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
         auto table = DatabaseCatalog::instance().tryGetTable({database, query.getTable()}, ctx);
-        if (!table || table->getName() == "Stream")
+        if (!table || table->getName() == "Stream" || table->getName() == "View" || table->getName() == "MaterializedView")
             ctx->setDistributedDDLOperation(true);
         else
             return false;
@@ -114,8 +115,8 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
                 /// proton: ends
         }
 
-        if (tables[0]->engine != "Stream")
-            /// FIXME:  We only support `Stream` table engine for now
+        if (tables[0]->engine != "Stream" && tables[0]->engine != "View" && tables[0]->engine != "MaterializedView")
+            /// FIXME:  We only support 'Stream', 'View', 'MaterializedView' table engine for now
             return false;
 
         /// Check Access
@@ -129,13 +130,19 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
 
         auto query_str = queryToString(query);
         /// proton: starts
-        LOG_INFO(log, "Drop stream query={} query_id={}", query_str, ctx->getCurrentQueryId());
+        LOG_INFO(
+            log,
+            "[{}]Drop stream query={} query_id={}",
+            ctx->isDistributedDDLOperation() ? "Distributed" : "Local",
+            query_str,
+            ctx->getCurrentQueryId());
         /// proton: ends
 
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
                {"database", database},
                {"table", query.getTable()},
+               {"engine", tables[0]->engine},
                {"uuid", toString(tables[0]->uuid)},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};
@@ -150,10 +157,10 @@ bool InterpreterDropQuery::deleteTableDistributed(const ASTDropQuery & query)
         nlog::OpCode op_code = query.kind == ASTDropQuery::Kind::Truncate ? nlog::OpCode::TRUNCATE_TABLE : nlog::OpCode::DELETE_TABLE;
         Streaming::appendDDLBlock(std::move(block), ctx, {"table_type"}, op_code, log);
 
-        LOG_INFO(
-            log, "Request of dropping stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
+        LOG_INFO(log, "Request of dropping stream query={} query_id={} has been accepted", query_str, ctx->getCurrentQueryId());
 
         Streaming::waitForDDLOps(log, ctx, false);
+        LOG_INFO(log, "Drop query={} succeeded， query_id={}", query_str, ctx->getCurrentQueryId());
         /// FIXME, project tasks status
         return true;
     }
@@ -568,6 +575,9 @@ void InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind kind, ContextPtr 
         /// looks like expected behaviour and we have tests for it.
         auto drop_context = Context::createCopy(global_context);
         drop_context->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+        /// ensure it does not wait for DDL task for internal drop query, like drop inner table for materialized view
+        /// which will cause dead-lock.
+        drop_context->setSetting("synchronous_ddl", false);
         InterpreterDropQuery drop_interpreter(ast_drop_query, drop_context);
         drop_interpreter.execute();
     }

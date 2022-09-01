@@ -104,6 +104,7 @@ void CatalogService::doBroadcast()
     query_context->makeQueryContext();
     /// CurrentThread::QueryScope query_scope{query_context};
 
+    LOG_INFO(log, "broadcast metadata of streams of {}", global_context->getNodeIdentity());
     queryStreams(query_context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         append(std::move(block));
         assert(!block);
@@ -212,8 +213,14 @@ StoragePtr CatalogService::createVirtualTableStorage(const String & query, const
 
     /// `table_data_path_relative = ""` means virtual. There is no data / metadata bound to
     /// the storage engine
+    auto * create = ast->as<ASTCreateQuery>();
+    if (!create)
+        return nullptr;
+
+    /// required for materialized view, virtual table does not execute background query
+    create->calculateVirtual();
     auto [table_name, storage]
-        = createTableFromAST(ast->as<ASTCreateQuery &>(), database, /* table_data_path_relative = */ "", global_context, false);
+        = createTableFromAST(*create, database, /* table_data_path_relative = */ "", global_context, false);
 
     /// Setup UUID
     auto storage_id = storage->getStorageID();

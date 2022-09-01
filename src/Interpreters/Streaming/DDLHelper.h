@@ -14,6 +14,8 @@ namespace DB
 {
 namespace Streaming
 {
+using TTLSettings = std::pair<String, std::vector<std::pair<String, String>>>;
+
 void getAndValidateStorageSetting(
     std::function<String(const String &)> get_setting, std::function<void(const String &, const String &)> handle_setting);
 void prepareEngine(ASTCreateQuery & create, ContextPtr ctx);
@@ -23,7 +25,7 @@ void prepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
 void prepareCreateQueryForStream(ASTCreateQuery & create);
 void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list);
-std::vector<std::pair<String, String>> parseLogStoreTTLSettings(String & payload);
+TTLSettings parseTTLSettings(const String & payload);
 nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);
 nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
 

@@ -489,8 +489,9 @@ void DDLService::mutateTable(nlog::Record & record, const String & method, CallB
     auto [replication_factor, shards] = catalog.shardAndReplicationFactor(database, table);
     auto total_replicas = replication_factor * shards;
     int hosts_size = target_hosts.size();
+    auto tables = catalog.findTableByName(database, table);
 
-    if (hosts_size != total_replicas)
+    if (hosts_size != total_replicas && !tables.empty() && tables[0]->engine == "Stream")
     {
         LOG_ERROR(
             log,
@@ -507,15 +508,30 @@ void DDLService::mutateTable(nlog::Record & record, const String & method, CallB
     }
 
     /// Table mutation can contain different operations. We branch the code here according to the payload
-    if (const auto & ttl_settings = Streaming::parseLogStoreTTLSettings(payload); !ttl_settings.empty())
+    if (const auto & [ttl_expr, stream_settings] = Streaming::parseTTLSettings(payload); (!stream_settings.empty() || !ttl_expr.empty()))
     {
-        auto res = dwal->alter(uuid, ttl_settings);
-        if (res != ErrorCodes::OK)
-            failDDL(query_id, user, payload, "Set log store TTL failed");
+        if (!stream_settings.empty())
+        {
+            /// stream store TTL
+            auto res = dwal->alter(uuid, stream_settings);
+            if (res != ErrorCodes::OK)
+                failDDL(query_id, user, payload, "Set log store TTL failed");
+        }
+
+        if (!ttl_expr.empty())
+            /// historic store TTL
+            doDDLOnHosts(
+                target_hosts,
+                R"###({ "ttl_expression": ")###" + ttl_expr + "\"}",
+                method,
+                query_id,
+                user,
+                uuid,
+                std::move(finished_callback));
     }
     else if (!payload.empty())
     {
-        /// Historic store TTL
+        /// other Alter commands
         doDDLOnHosts(target_hosts, payload, method, query_id, user, uuid, std::move(finished_callback));
     }
     else if (record.opcode() == nlog::OpCode::DELETE_TABLE)
@@ -632,15 +648,21 @@ void DDLService::processRecords(const nlog::RecordPtrs & records)
             }
             case nlog::OpCode::DELETE_TABLE: {
                 Block & block = record->getBlock();
-                /// We need delete table DWAL after done delete operation
-                if (block.has("database") && block.has("table") && block.has("uuid"))
+                if (block.has("database") && block.has("table") && block.has("uuid") && block.has("engine"))
                 {
                     String uuid = block.getByName("uuid").column->getDataAt(0).toString();
-                    auto finished_callback = [this, topic = std::move(uuid)]() {
-                        klog::KafkaWALContext ctx{topic};
-                        this->doDeleteDWal(ctx);
-                    };
-                    mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE, std::move(finished_callback));
+                    String engine = block.getByName("engine").column->getDataAt(0).toString();
+                    if (engine == "Stream")
+                    {
+                        /// We need delete table DWAL after done delete operation
+                        auto finished_callback = [this, topic = std::move(uuid)]() {
+                            klog::KafkaWALContext ctx{topic};
+                            this->doDeleteDWal(ctx);
+                        };
+                        mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE, std::move(finished_callback));
+                    }
+                    else
+                        mutateTable(*record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 }
                 break;
             }

@@ -199,9 +199,9 @@ namespace
 
         return {configs[0], rd_kafka_ConfigResource_destroy};
     }
-    }
+}
 
-    void KafkaWAL::initConsumerTopicHandle(KafkaWALContext & ctx) const
+void KafkaWAL::initConsumerTopicHandle(KafkaWALContext & ctx) const
 {
     assert(inited.test());
 
@@ -601,7 +601,7 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
 
     std::shared_ptr<rd_kafka_NewTopic_t> topics_holder{topics[0], rd_kafka_NewTopic_destroy};
 
-    auto createTopics = [&](rd_kafka_t * handle,
+    auto create_topics = [&](rd_kafka_t * handle,
                             rd_kafka_AdminOptions_t * options,
                             rd_kafka_queue_t * admin_queue) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         rd_kafka_CreateTopics(handle, topics, 1, options, admin_queue);
@@ -609,7 +609,7 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
 
     return doTopic(
         name,
-        createTopics,
+        create_topics,
         rd_kafka_event_CreateTopics_result,
         rd_kafka_CreateTopics_result_topics,
         nullptr,
@@ -622,8 +622,7 @@ int32_t KafkaWAL::create(const std::string & name, const KafkaWALContext & ctx) 
 int32_t KafkaWAL::alter(const String & name, const std::vector<std::pair<String, String>> & params) const
 {
     /// prepare config
-    std::unique_ptr<rd_kafka_ConfigResource_t, void (*)(rd_kafka_ConfigResource_t *)> config
-        = getTopicConfig(name, producer_handle.get(), log);
+    auto config = getTopicConfig(name, producer_handle.get(), log);
 
     if (!config)
         return DB::ErrorCodes::RESOURCE_NOT_FOUND;
@@ -678,7 +677,7 @@ int32_t KafkaWAL::remove(const String & name, const KafkaWALContext &) const
     topics[0] = rd_kafka_DeleteTopic_new(name.c_str());
     std::shared_ptr<rd_kafka_DeleteTopic_t> topics_holder{topics[0], rd_kafka_DeleteTopic_destroy};
 
-    auto deleteTopics = [&](rd_kafka_t * handle,
+    auto delete_topics = [&](rd_kafka_t * handle,
                             rd_kafka_AdminOptions_t * options,
                             rd_kafka_queue_t * admin_queue) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         rd_kafka_DeleteTopics(handle, topics, 1, options, admin_queue);
@@ -686,7 +685,7 @@ int32_t KafkaWAL::remove(const String & name, const KafkaWALContext &) const
 
     return doTopic(
         name,
-        deleteTopics,
+        delete_topics,
         rd_kafka_event_DeleteTopics_result,
         rd_kafka_DeleteTopics_result_topics,
         nullptr,

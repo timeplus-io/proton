@@ -525,27 +525,21 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
     return payload;
 }
 
-std::vector<std::pair<String, String>> parseLogStoreTTLSettings(String & payload)
+TTLSettings parseTTLSettings(const String & payload)
 {
-    std::vector<std::pair<String, String>> settings;
+    std::vector<std::pair<String, String>> stream_settings;
+    String ttl_expr = "";
     Poco::JSON::Parser parser;
     auto json = parser.parse(payload).extract<Poco::JSON::Object::Ptr>();
 
     for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
-    {
         if (json->has(k))
-        {
-            settings.emplace_back(v, json->get(k).toString());
-            json->remove(k);
-        }
-    }
+            stream_settings.emplace_back(v, json->get(k).toString());
 
-    if (json->size() > 0)
-        payload = jsonToString(*json);
-    else
-        payload = "";
+    if (json->has("ttl_expression"))
+        ttl_expr = json->get("ttl_expression").toString();
 
-    return settings;
+    return {ttl_expr, stream_settings};
 }
 
 void waitForDDLOps(Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout)

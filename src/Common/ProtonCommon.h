@@ -46,7 +46,7 @@ const String LOGSTORE_KAFKA = "kafka";
 const String LOGSTORE_NATIVE_LOG = "nativelog";
 
 /// Default settings for DDL
-const UInt64 DEFAULT_DDL_TIMEOUT_MS = 15000;
+const UInt64 DEFAULT_DDL_TIMEOUT_MS = 25000;
 
 /// Default settings for session window
 const Int64 SESSION_SIZE_MULTIPLIER = 5; /// multiplier of session_size to timeout_interval of session window

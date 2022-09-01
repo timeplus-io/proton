@@ -698,6 +698,17 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         result_header = getSampleBlockImpl();
         /// proton, FIXME. For distributed streaming query in future, we may need conditionally remove __tp_ts from result header
         /// depending on the query stage
+
+        /// for distributed historic query, remove 'window_start', 'window_end' column
+        if (context->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+        {
+            if (result_header.findByName(ProtonConsts::STREAMING_WINDOW_START))
+                result_header.erase(ProtonConsts::STREAMING_WINDOW_START);
+
+            if (result_header.findByName(ProtonConsts::STREAMING_WINDOW_END))
+                result_header.erase(ProtonConsts::STREAMING_WINDOW_END);
+        }
+
         if (result_header.findByName(ProtonConsts::STREAMING_TIMESTAMP_ALIAS))
             result_header.erase(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
     };
@@ -2258,7 +2269,10 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         /// proton: starts. Streaming Window
         /// Supports: TableFunction, Stream, MaterializedView
-        if (auto * proxy_stream = storage->as<Streaming::ProxyStream>())
+        ///
+        /// For distributed query, so far as tumble, hop need to be calculated in initial node, therefore skip 'Watermark' and 'WindowsAssignment' steps
+        if (auto * proxy_stream = storage->as<Streaming::ProxyStream>();
+            proxy_stream && context->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY)
             proxy_stream->buildStreamingProcessingQueryPlan(
                 query_plan, required_columns_after_streaming_window, query_info, storage_snapshot, context, shouldApplyWatermark());
         else
