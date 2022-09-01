@@ -2062,21 +2062,61 @@ void NO_INLINE Aggregator::mergeDataImpl(
 
     table_src.mergeToViaEmplace(table_dst, [&](AggregateDataPtr & __restrict dst, AggregateDataPtr & __restrict src, bool inserted)
     {
-        if (!inserted)
+        /// proton: starts
+        if (inserted)
         {
+            /// If there are multiple sources, there are more than one AggregatedDataVariant. Aggregator always creates a new AggregatedDataVariant and merge all other
+            /// AggregatedDataVariants to the new created one. After finalize(), it does not clean up aggregate state except the new create AggregatedDataVariant.
+            /// If it does not alloc new memory for the 'dst' (i.e. aggregate state of the new AggregatedDataVariant which get destoryed after finalize()) but reuse
+            /// that from the 'src' to store the final aggregated result, it will cause the data from other AggregatedDataVariant will be merged multiple times and
+            /// generate incorrect aggregated result.
+            dst = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
 #if USE_EMBEDDED_COMPILER
             if constexpr (use_compiled_functions)
             {
-                const auto & compiled_functions = compiled_aggregate_functions_holder->compiled_aggregate_functions;
-                compiled_functions.merge_aggregate_states_function(dst, src);
-
-                if (compiled_aggregate_functions_holder->compiled_aggregate_functions.functions_count != params.aggregates_size)
+                const auto & compiled_aggregate_functions = compiled_aggregate_functions_holder->compiled_aggregate_functions;
+                compiled_aggregate_functions.create_aggregate_states_function(dst);
+                if (compiled_aggregate_functions.functions_count != aggregate_functions.size())
                 {
-                    for (size_t i = 0; i < params.aggregates_size; ++i)
-                    {
-                        if (!is_aggregate_function_compiled[i])
-                            aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
-                    }
+                    static constexpr bool skip_compiled_aggregate_functions = true;
+                    createAggregateStates<skip_compiled_aggregate_functions>(dst);
+                }
+
+#if defined(MEMORY_SANITIZER)
+
+                /// We compile only functions that do not allocate some data in Arena. Only store necessary state in AggregateData place.
+                for (size_t aggregate_function_index = 0; aggregate_function_index < aggregate_functions.size(); ++aggregate_function_index)
+                {
+                    if (!is_aggregate_function_compiled[aggregate_function_index])
+                        continue;
+
+                    auto aggregate_data_with_offset = dst + offsets_of_aggregate_states[aggregate_function_index];
+                    auto data_size = params.aggregates[aggregate_function_index].function->sizeOfData();
+                    __msan_unpoison(aggregate_data_with_offset, data_size);
+                }
+#endif
+            }
+            else
+#endif
+            {
+                createAggregateStates(dst);
+            }
+        }
+        /// proton: ends
+
+#if USE_EMBEDDED_COMPILER
+        if constexpr (use_compiled_functions)
+        {
+            const auto & compiled_functions = compiled_aggregate_functions_holder->compiled_aggregate_functions;
+            compiled_functions.merge_aggregate_states_function(dst, src);
+
+            if (compiled_aggregate_functions_holder->compiled_aggregate_functions.functions_count != params.aggregates_size)
+            {
+                for (size_t i = 0; i < params.aggregates_size; ++i)
+                {
+                    if (!is_aggregate_function_compiled[i])
+                        aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
+                }
 
 //                    for (size_t i = 0; i < params.aggregates_size; ++i)
 //                    {
@@ -2085,24 +2125,19 @@ void NO_INLINE Aggregator::mergeDataImpl(
 //                            aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
 //                        /// proton: ends
 //                    }
-                }
-            }
-            else
-#endif
-            {
-                for (size_t i = 0; i < params.aggregates_size; ++i)
-                    aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
-
-                for (size_t i = 0; i < params.aggregates_size; ++i)
-                    /// proton: starts
-                    if (!params.keep_state)
-                        aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
-                    /// proton: ends
             }
         }
         else
+#endif
         {
-            dst = src;
+            for (size_t i = 0; i < params.aggregates_size; ++i)
+                aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
+
+            for (size_t i = 0; i < params.aggregates_size; ++i)
+                /// proton: starts
+                if (!params.keep_state)
+                    aggregate_functions[i]->destroy(src + offsets_of_aggregate_states[i]);
+                /// proton: ends
         }
 
         /// proton: starts

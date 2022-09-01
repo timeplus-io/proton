@@ -510,7 +510,11 @@ void StorageStream::readStreaming(
         settings_ref.seek_to.value,
         share_resource_group ? "shared" : "dedicated");
 
-    auto read_step = std::make_unique<ReadFromStorageStep>(Pipe::unitePipes(std::move(pipes)), getName());
+    auto pipe = Pipe::unitePipes(std::move(pipes));
+    /// In cluster deployment, if there are multiple souces, there will be multiple thread conducting aggregation which cannot finalize
+    /// the aggregated result correctly. To avoid multi-thread aggregation, resize the source to 1 stream here.
+    pipe.resize(1);
+    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
     query_plan.addStep(std::move(read_step));
 }
 
