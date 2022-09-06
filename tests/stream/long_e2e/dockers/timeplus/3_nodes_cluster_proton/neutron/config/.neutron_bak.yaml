@@ -1,0 +1,22 @@
+#enable-authentication: false
+enable-authentication: true
+
+# uncomment/enable the following setting for playground
+#frontend-applications: playground
+#proton-username: demo
+#proton-password: demo@t+
+#proton-query-black-list:
+#  - insert
+#  - drop
+#  - system.
+#  - create
+#proton-query-timeout: 300
+
+# except playground, other deployments need thoses auth0
+auth0-domain: timeplus.us.auth0.com
+auth0-callback-url: "http://localhost:8000/callback"
+auth0-client-id: 9kNHzTDPXgkF5onSqoCywFxFgqap0QdW
+auth0-client-secret: T8TZw3n9AXUILd-kgpIhkY8lxFltc657iInUfQ4yZ62nm1hqsi1jyArGNNmwiGN0
+auth0-audience: http://localhost:8000/api/v1beta1
+auth0-api-client-id: xvOo28ckCacFeN2ypXgP2ibAeKTzEm3A
+auth0-api-client-secret: 0ndgG1ztnI2oWhFZpGOX4sqVicw-rtzRJ3vR_oheAaf2QDmIo3Q45GtPlyJbIiBB

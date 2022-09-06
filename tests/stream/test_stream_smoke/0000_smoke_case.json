@@ -118,7 +118,7 @@
                 }
 
         ],
-        "setup": {
+        "setup": {            
             "inputs": [
                 {"table_name":"test_d", "data": [
                 ["dev1", "roof"],
@@ -159,7 +159,7 @@
                 ]},
 
                 {"statements": [
-                    {"client":"python", "wait": 4, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '101'"},
+                    {"client":"python", "wait": 4, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '101'"},
                     {"client":"python", "query_type": "table", "query":"select id, max(value) from table(test) group by id, location"}
                 ]
                 }
@@ -1910,7 +1910,7 @@
                     ]}
                 ]},
                 {"statements": [
-                    {"client":"python", "wait": 5, "depends":{"query_id":101}, "query_type": "batch", "query":"kill query where query_id = '101'"},
+                    {"client":"python", "wait": 5, "depends":{"query_id":101}, "query_type": "table", "query":"kill query where query_id = '101'"},
                     {"client":"python", "wait": 1, "query_type": "table", "query_end_timer": 3, "query":"drop view if exists test_stream_sum_view"}
                 ]
                 }

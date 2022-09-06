@@ -122,7 +122,7 @@ def ci_runner(local_all_results_folder_path, run_mode = 'local', pr_number="0", 
             container_name = "proton-server"
         elif setting == 'redp':
             container_name = "proton-redp"
-        elif setting == 'cluster':
+        elif 'cluster' in setting:
             container_name = "proton-cluster-node1" #todo: support multiple nodes log collection        
         proton_log_in_container = f"{container_name}:/var/log/proton-server/proton-server.log"
         proton_err_log_in_container = f"{container_name}:/var/log/proton-server/proton-server.err.log"        
@@ -192,10 +192,10 @@ if __name__ == "__main__":
     proton_python_driver_install()
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "settings=", "test_suites=", "loop=", "id=", "cluster_query_route_mode=", "query_node="])
+        opts, args = getopt.getopt(sys.argv[1:], '', ["local", "debug", "settings=", "test_suites=", "loop=", "id=", "cluster_query_route_mode=", "cluster_query_node=", "create_stream_shards=", "create_stream_replicas="])
     except(getopt.GetoptError) as error:
         print(f"command error: {error}")
-        print(f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3 --cluster_query_route_mode=none_stream_node_first/--query_node=proton-cluster-node1")
+        print(f"usage: python3 ci_runner.py --local --debug --test_suites=smoke,materilize --loop=30 --id=1,2,3 --cluster_query_route_mode=none_stream_node_first/--query_node=proton-cluster-node1 --create_stream_shards=2, --create_stream_replicas=2'")
         sys.exit(1)
     print(f"opts = {opts}")
     for name, value in opts:
@@ -230,6 +230,12 @@ if __name__ == "__main__":
         
         if name in ("--cluster_query_node"):
             os.environ["PROTON_CLUSTER_QUERY_NODE"] = value
+
+        if name in ("--create_stream_shards"):
+            os.environ["PROTON_CREATE_STREAM_SHARDS"] = value
+
+        if name in ("--create_stream_replicas"):
+            os.environ["PROTON_CREATE_STREAM_REPLICAS"] = value            
 
     print(f"ci_runner: run_mode = {run_mode}, loop = {loop}, logging_level={logging_level}")
     console_handler = logging.StreamHandler(sys.stderr)

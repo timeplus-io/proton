@@ -77,8 +77,8 @@
             {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (1, 'a')"},
             {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream","wait":1, "query": "insert into versioned_kv_stream(i, s) values (2, 'b')"},
             {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream","wait":1, "query": "insert into versioned_kv_stream(i, s) values (2, 'a'), (3, 'b'), (4, 'c')"},
-            {"client":"python","query_id":"1402", "wait":2, "depends_on_stream":"versioned_kv_stream","query_end_timer":5, "query_type": "stream", "query":"select i, s from versioned_kv_stream;"},
-            {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream", "wait":1, "query": "insert into versioned_kv_stream(i, s) values (5, 'd'), (6, 'c')"}
+            {"client":"python","query_id":"1402", "wait":2, "depends_on_stream":"versioned_kv_stream","query_end_timer":10, "query_type": "stream", "query":"select i, s from versioned_kv_stream;"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"versioned_kv_stream", "wait":3, "query": "insert into versioned_kv_stream(i, s) values (5, 'd'), (6, 'c')"}
           ]
         }
       ],

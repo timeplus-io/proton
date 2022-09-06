@@ -67,6 +67,12 @@ VIEW_CREATE_RECORDS = []
 QUERY_RUN_RECORDS = []
 
 NONE_STREAM_NODE_FIRST = 'none_stream_node_first'
+SINGLE_STREAM_ONLY_NODE_FIRST = 'single_stream_only_node_first'
+STREAM_ONLY_NODE_FIRST = 'stream_only_node_first'
+VIEW_ONLY_NODE_FIRST = 'view_only_node_first'
+HOST_ALL_NODE_FIRST = 'host_all_node_first'
+HOST_NONE_NODE_FIRST = 'host_none_node_first'
+
 
 # alive = mp.Value('b', True)
 
@@ -176,6 +182,8 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
     proton_setting = os.getenv("PROTON_SETTING", "default")
     proton_cluster_query_route_mode = os.getenv("PROTON_CLUSTER_QUERY_ROUTE_MODE", "default")
     proton_cluster_query_node = os.getenv("PROTON_CLUSTER_QUERY_NODE", "default")
+    proton_create_stream_shards = os.getenv("PROTON_CREATE_STREAM_SHARDS")
+    proton_create_stream_replicas = os.getenv("PROTON_CREATE_STREAM_REPLICAS")
 
     root_logger = logging.getLogger()
     logger.info(f"rockets_run starts..., root_logger.level={root_logger.level}")
@@ -196,9 +204,10 @@ def rockets_context(config_file=None, tests_file_path=None, docker_compose_file=
         raise Exception("No config env vars nor config file")
 
     config["proton_setting"] = proton_setting # put proton_setting into config
+    config["proton_create_stream_shards"] = proton_create_stream_shards
+    config["proton_create_stream_replicas"] = proton_create_stream_replicas
     
-    
-    if proton_setting == "cluster": # if running under cluster mode and proton_cluster_query_mode, take proton_cluster_query_route_mode as part of config
+    if 'cluster' in proton_setting: # if running under cluster mode and proton_cluster_query_mode, take proton_cluster_query_route_mode as part of config
         config["proton_cluster_query_node"] = proton_cluster_query_node # put proton_cluster_query_node into config
         config["proton_cluster_query_route_mode"] = proton_cluster_query_route_mode 
 
@@ -625,27 +634,211 @@ def query_run_rest(rest_setting, statement_2_run):
         return query_results
 
 
-def get_none_stream_nodes(cluster_node_list, cluster_stream_info_list): #streams: a string seperated by "," 
+
+def get_depends_nodes_by_engine(config, depends_stream_info_list, engine='All'):
+    proton_servers = config.get("proton_servers")
+    resource_nodes =[]
+    view_nodes = []
+
+    for depends_stream_info in depends_stream_info_list:
+        resource_name = depends_stream_info.get("name")
+        engine_info = depends_stream_info.get("engine")        
+        if engine_info == "Stream":
+            shards = depends_stream_info.get("shards")
+            if shards is not None:
+                for shard in shards:
+                    replicas = shard.get("replicas")
+                    if replicas is not None:
+                        for replica in replicas:
+                            resource_nodes.append({"name":resource_name, "engine": engine_info, "node":replica})
+        if "View" in engine_info:
+            for item in proton_servers:
+                proton_server = item.get("host")
+                proton_server_native_port = item.get("port")
+                node_name = item.get("node")
+                pyclient = Client(
+                    host=proton_server, port=proton_server_native_port
+                )
+                if table_exist_py(pyclient, resource_name):
+                    resource_nodes.append({"name":resource_name, "engine": engine_info, "node":node_name})
+                pyclient.disconnect()
+    
+    if engine == 'All':
+        return resource_nodes
+    else:
+        node_list = []
+        for item in resource_nodes:
+            engine_info = item.get("engine")
+            if engine in engine_info:
+                node_list.append(item)
+        resource_nodes = node_list
+
+    logger.debug(f"resoruce_nodes = {resource_nodes}")        
+
+    return resource_nodes    
+
+
+
+def get_none_stream_nodes(config, depends_stream_info_list): #streams: a string seperated by "," 
     logger = mp.get_logger()
     stream_nodes = []
+    node_name_list = []
     none_stream_nodes = []
-    for cluster_stream_info in cluster_stream_info_list:
-        shards = cluster_stream_info.get("shards")
-        if shards is not None:
-            for shard in shards:
-                replicas = shard.get("replicas")
-                if replicas is not None:
-                    for replica in replicas:
-                        if replica not in stream_nodes:
-                            stream_nodes.append(replica)
+    proton_servers = config.get('proton_servers')
+
+    stream_nodes = get_depends_nodes_by_engine(config, depends_stream_info_list, "Stream")
     
-    for item in cluster_node_list:
+    for item in stream_nodes:
         node_name = item.get("node")
-        if node_name not in stream_nodes:
+        node_name_list.append(node_name)
+    for item in proton_servers:
+        node_name = item.get("node")
+        if node_name not in node_name_list:
             none_stream_nodes.append(node_name)
-    logger.debug(f"stream_nodes={stream_nodes}, cluster_node_list = {cluster_node_list}, cluster_stream_info = {cluster_stream_info}, none_stream_nodes = {none_stream_nodes}")
+    logger.debug(f"stream_nodes={stream_nodes}, proton_servers = {proton_servers}, depends_stream_info_list = {depends_stream_info_list}, none_stream_nodes = {none_stream_nodes}")
     return none_stream_nodes
-                        
+
+
+def get_host_none_node(config, depends_stream_info_list):
+    logger = mp.get_logger()
+    proton_servers = config.get('proton_servers')
+    all_depends = get_depends_nodes_by_engine(config, depends_stream_info_list)
+    none_depends_nodes = []
+    depend_node_list = []
+
+    for item in all_depends:
+        node_name = item.get("node")
+        depend_node_list.append(node_name)    
+
+    for item in proton_servers:
+        node_name = item.get("node")
+        if node_name not in depend_node_list:
+            none_depends_nodes.append(node_name)
+    logger.debug(f"proton_servers = {proton_servers}, depends_stream_info_list = {depends_stream_info_list}, none_depends_nodes = {none_depends_nodes}")
+    return none_depends_nodes
+
+def get_host_all_node(config, depends_stream_info_list):
+    logger = mp.get_logger()
+    proton_servers = config.get('proton_servers')
+    all_depends = get_depends_nodes_by_engine(config, depends_stream_info_list)
+    logger.debug(f"all_depends = {all_depends}")
+    resource_list = []
+    depend_node_list = []
+    depend_node_info_list = []
+    host_all_nodes = []
+    
+    for item in all_depends:
+        resource_on_item = item.get("name")
+        node_name = item.get("node")
+        if resource_on_item not in resource_list:
+            resource_list.append(resource_on_item)
+        if node_name not in depend_node_list:
+            depend_node_list.append(node_name)
+            depend_node_info_list.append({"node": node_name, "resources": [resource_on_item]})
+        else:
+            for depend_node_info in depend_node_info_list:
+                depend_node = depend_node_info.get("node")
+                if depend_node == node_name:
+                    depend_node_info["resources"].append(resource_on_item)
+    
+    
+    for depend_node in depend_node_info_list:#go through the depend_node_info_list, get the resources on the node and check if all the resoruces are in the list
+        host_all_flag=1
+        depend_node_name = depend_node.get("node")
+        resources_on_depend_node = depend_node.get("resources")
+        for resource in resource_list:
+            if resource in resources_on_depend_node:
+                host_all_flag *= 1
+            else:
+                host_all_flag *= 0
+        if host_all_flag:
+            host_all_nodes.append(depend_node_name)
+            
+
+    logger.debug(f"proton_servers = {proton_servers}, depends_stream_info_list = {depends_stream_info_list}, host_all_nodes = {host_all_nodes}")
+    return host_all_nodes       
+
+def get_single_stream_only_nodes(config, depends_stream_info_list):
+    logger = mp.get_logger()
+    proton_servers = config.get('proton_servers')
+    stream_depends = get_depends_nodes_by_engine(config, depends_stream_info_list, "Stream")
+    all_depends = get_depends_nodes_by_engine(config, depends_stream_info_list)
+    single_steam_only_depend_nodes = []
+    
+
+    for stream_depend in stream_depends:
+        stream_name = stream_depend.get("name")
+        stream_node = stream_depend.get("node")
+        other_depend_nodes = []
+        for item in all_depends: #go through the all_depends list to put node of other depends into other_depends_nodes list
+            item_name = item.get("name")
+            item_node_name = item.get("node")
+            item_engine = item.get("engine")
+            if item_node_name != stream_node:
+                other_depend_nodes.append(item_node_name)
+            elif item_name != stream_name:
+                other_depend_nodes.append(item_node_name)
+        
+        for proton_server in proton_servers: # go through the proton_servers, if the host == stream_node(the host hosts stream_depend) and not in other_depend_nodes(host does not host any other depends)
+            node_name = proton_server.get("host")
+            if node_name == stream_node and (node_name not in other_depend_nodes):
+                single_steam_only_depend_nodes.append(node_name)       
+
+    logger.debug(f"proton_servers = {proton_servers}, depends_stream_info_list = {depends_stream_info_list}, single_steam_only_depend_nodes = {single_steam_only_depend_nodes}")
+    return single_steam_only_depend_nodes
+
+def get_stream_only_nodes(config, depends_stream_info_list): #todo: consolidte get_stream_only_node logic and get_view_only_node logic
+    logger = mp.get_logger()
+    proton_servers = config.get('proton_servers')
+    stream_depends = get_depends_nodes_by_engine(config, depends_stream_info_list, "Stream")
+    view_depends = get_depends_nodes_by_engine(config, depends_stream_info_list, "View")
+    stream_only_depend_nodes = []
+    stream_depend_nodes = []
+    view_depend_nodes = []
+    
+    for stream_depend in stream_depends: # get a list of node hosts stream
+        stream_name = stream_depend.get("name")
+        stream_node = stream_depend.get("node")
+        stream_depend_nodes.append(stream_node)
+
+    for view_depend in view_depends: # get a list of node hosts view
+        view_name = view_depend.get("name")
+        view_node = view_depend.get("node")
+        view_depend_nodes.append(view_node)
+
+    for item in stream_depend_nodes:
+        if item  not in view_depend_nodes:
+            stream_only_depend_nodes.append(item)     
+
+    logger.debug(f"proton_servers = {proton_servers}, depends_stream_info_list = {depends_stream_info_list}, stream_only_depend_nodes = {stream_only_depend_nodes}")
+    return stream_only_depend_nodes 
+
+def get_view_only_nodes(config, depends_stream_info_list): #todo: consolidte get_stream_only_node logic and get_view_only_node logic
+    logger = mp.get_logger()
+    proton_servers = config.get('proton_servers')
+    stream_depends = get_depends_nodes_by_engine(config, depends_stream_info_list, "Stream")
+    view_depends = get_depends_nodes_by_engine(config, depends_stream_info_list, "View")
+    logger.debug(f"view_depends = {view_depends}")
+    view_only_depend_nodes = []
+    stream_depend_nodes = []
+    view_depend_nodes = []
+    
+    for stream_depend in stream_depends: # get a list of node hosts stream
+        stream_name = stream_depend.get("name")
+        stream_node = stream_depend.get("node")
+        stream_depend_nodes.append(stream_node)
+
+    for view_depend in view_depends: # get a list of node hosts view
+        view_name = view_depend.get("name")
+        view_node = view_depend.get("node")
+        view_depend_nodes.append(view_node)
+
+    for item in view_depend_nodes:
+        if item  not in stream_depend_nodes:
+            view_only_depend_nodes.append(item)     
+
+    logger.debug(f"proton_servers = {proton_servers}, depends_stream_info_list = {depends_stream_info_list}, view_only_depend_nodes = {view_only_depend_nodes}")
+    return view_only_depend_nodes 
 
 def query_run_py(
     statement_2_run,
@@ -679,14 +872,17 @@ def query_run_py(
         proton_setting = config.get('proton_setting')  
         proton_cluster_query_route_mode = config.get('proton_cluster_query_route_mode')
         proton_cluster_query_node = config.get('proton_cluster_query_node')
-        if proton_setting != 'cluster': 
+        proton_create_stream_shards = config.get("proton_create_stream_shards")
+        proton_create_stream_replicas = config.get("proton_create_stream_replicas")
+
+        if 'cluster' not in proton_setting: 
             proton_server = config.get("proton_server")
             proton_server_native_ports = config.get("proton_server_native_port")
             proton_server_native_ports = proton_server_native_ports.split(",")
             proton_server_native_port = proton_server_native_ports[
                 0
             ]  # todo: get proton_server and port from statement
-        elif proton_setting == 'cluster' and proton_cluster_query_node != "default":
+        elif 'cluster' in proton_setting and proton_cluster_query_node != "default":
             proton_servers = config.get("proton_servers")
             for item in proton_servers:
                 node = item.get("node")
@@ -695,7 +891,7 @@ def query_run_py(
                     proton_server_native_port = item.get("port")
             logger.debug(f"proton_cluster_query_node = {proton_cluster_query_node}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}")
 
-        else: #if proton_setting == 'cluster', go through the list and get the 1st node as default proton
+        else: #if 'cluster' in proton_setting 'cluster', go through the list and get the 1st node as default proton
             proton_servers = config.get("proton_servers")
             proton_server = proton_servers[0].get("host")
             proton_server_native_port = proton_servers[0].get("port")        
@@ -736,6 +932,7 @@ def query_run_py(
         run_mode = statement_2_run.get("run_mode")
         depends_on_stream = statement_2_run.get("depends_on_stream")
         depends_on = statement_2_run.get("depends_on")
+        wait = statement_2_run.get("wait")
         query_start_time_str = str(datetime.datetime.now())
         query_end_time_str = str(datetime.datetime.now())
         element_json_str = ""
@@ -744,11 +941,12 @@ def query_run_py(
         query_result_list = []
 
         logger.debug(
-            f"query_run_py: query_id = {query_id}, query = {query} to be execute @ {str(datetime.datetime.now())}........."
+            f"default proton_server = {proton_server}, proton_server_native_port={proton_server_native_port}, query_run_py: query_id = {query_id}, query = {query} to be execute @ {str(datetime.datetime.now())}........."
         )
 
         streams = pyclient.execute("show streams")
         logger.debug(f"show streams = {streams}")
+         
 
         if depends_on_stream != None and isinstance(depends_on_stream, str): #depends_on_stream: a string seperated by "," to indicated streams the query or input depends on
             # retry = 500
@@ -774,25 +972,36 @@ def query_run_py(
 
             depends_on_stream_list = depends_on_stream.split(",")
             depends_on_stream_info_list = depends_on_stream_exist(table_ddl_url, depends_on_stream_list, query_id)
+            logger.debug(f"proton_cluster_query_node = {proton_cluster_query_node},proton_cluster_query_route_mode= {proton_cluster_query_route_mode} ")
 
-            if proton_setting == 'cluster' and proton_cluster_query_node == "default" and proton_cluster_query_route_mode == NONE_STREAM_NODE_FIRST: #if cluster mode and proton_cluster_query_route_mode is set to NONE_STREAM_NODE_FIRST, get none stream node and change pyclient to that node.
-                none_stream_nodes = get_none_stream_nodes(proton_servers, depends_on_stream_info_list)
-                
-                if len(none_stream_nodes) != 0: #if none_stream_nodes list is not empty, chose the 1st as the proton_server to issue query, if it's empty that means no none_stream_node, so no change to the default proton_server
+            if 'cluster' in proton_setting:
+                selected_nodes = [] #selected_nodes
+                if proton_cluster_query_node == "default" and proton_cluster_query_route_mode == NONE_STREAM_NODE_FIRST: #if cluster mode and proton_cluster_query_route_mode is set to NONE_STREAM_NODE_FIRST, get none stream node and change pyclient to that node.
+                    selected_nodes = get_none_stream_nodes(config, depends_on_stream_info_list)
+                elif proton_cluster_query_node == "default" and proton_cluster_query_route_mode == SINGLE_STREAM_ONLY_NODE_FIRST:#try to find the node host only one stream the test case depends on, if can't find the node host only one stream, try to find a node host only stream if the test case depends on streams and views, if can't find initial the query from the default node.
+                    selected_nodes = get_single_stream_only_nodes(config, depends_on_stream_info_list)
+                elif proton_cluster_query_node == "default" and proton_cluster_query_route_mode == STREAM_ONLY_NODE_FIRST:#try to find the node host only stream the test case depends on, if can't find the node host only one stream, try to find a node host only stream if the test case depends on streams and views, if can't find initial the query from the default node.
+                    selected_nodes = get_stream_only_nodes(config, depends_on_stream_info_list)                
+                elif proton_cluster_query_node == "default" and proton_cluster_query_route_mode == VIEW_ONLY_NODE_FIRST: #try to find a node host only view to initial the query if the test case depends on streams and views, if can't find initial query from the default node
+                    selected_nodes = get_view_only_nodes(config, depends_on_stream_info_list)
+                elif proton_cluster_query_node == "default" and proton_cluster_query_route_mode == HOST_ALL_NODE_FIRST: #try to find a node host all the streams, views the test case depends on, if can't find initial query from the default node.
+                    selected_nodes = get_host_all_node(config, depends_on_stream_info_list)
+                elif proton_cluster_query_node == "default" and proton_cluster_query_route_mode == HOST_NONE_NODE_FIRST: #try to find a node does not host any stream or view the test case depends on, if can't find initial query from the default node.
+                    selected_nodes = get_host_none_node(config, depends_on_stream_info_list)
+         
+                if len(selected_nodes) != 0: #if none_stream_nodes list is not empty, chose the 1st as the proton_server to issue query, if it's empty that means no none_stream_node, so no change to the default proton_server
+                    pyclient.disconnect()
+                    logger.debug(f"pyclient disconnected")
                     for item in proton_servers:
                         node = item.get('node')
-                        if none_stream_nodes[0] == node:
+                        if selected_nodes[0] == node:
                             proton_server = item.get("host")
                             proton_server_native_port = item.get("port")
                     settings = {"max_block_size": 100000}
-                    logger.debug(f"none_stream_nodes = {none_stream_nodes}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}")
+                    logger.debug(f"selected_nodes = {selected_nodes}, proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}")
                     pyclient = Client(
                         host=proton_server, port=proton_server_native_port
                     )  # create python client
-            
-
-         
-
 
         if depends_on != None:
             depends_on_exists = False
@@ -805,17 +1014,105 @@ def query_run_py(
                     f"depends_on = {depends_on} of query_id = {query_id} does not exist, raise exception"
                 )
 
+
+        if proton_create_stream_shards is not None and len(proton_create_stream_shards) >0 and ("create stream" in query or "CREATE STREAM" in query):
+            q = query.split("settings ")
+            if len(q) > 1:
+                shards_str = q[-1] + "," + "shards=" + proton_create_stream_shards
+            else:
+                shards_str = "shards=" + proton_create_stream_shards
+            query = q[0] + "settings " +  shards_str 
+
+        if proton_create_stream_replicas is not None and len(proton_create_stream_replicas) >0 and ("create stream" in query or "CREATE STREAM" in query):
+            q = query.split("settings ")
+            if len(q) > 1:
+                replicas_str = q[-1] + "," + "replicas=" + proton_create_stream_replicas
+            else:
+                replicas_str = "replicas=" + proton_create_stream_replicas
+            query = q[0] + "settings " +  replicas_str         
+
+
+        if wait != None:
+            wait = int(wait)
+            print(
+                f"query_execute: wait for {wait} to start run query = {query}"
+            )
+            time.sleep(wait)
+
+
         #if query_type == "table" and not ("select" in query or "SELECT" in query):
         if query_type == "table":
             query_result_iter = []
-            res = pyclient.execute(
-                query, with_column_types=True, query_id=query_id, settings=settings
-            )
-            query_result_iter.append(res[-1])
-            if len(res[0]) > 0:
-                for item in res[0]:
-                    query_result_iter.append(item)
-            logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")
+            if 'cluster' in proton_setting and ('kill query' in query or 'KILL QUERY' in query):
+                if 'kill query' in query or 'KILL QUERY' in query: #todo: better logic for the manual kill query in cluster
+                    for item in proton_servers:
+                        proton_server = item.get("host")
+                        proton_server_native_port = item.get("port")
+                        if pyclient is not None:
+                            pyclient.disconnect()
+                        logger.debug(f"pyclient disonnected.")
+                        pyclient = Client(
+                            host=proton_server, port=proton_server_native_port
+                        )  # create python client                        
+                        logger.debug(f"query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}")
+                        res = pyclient.execute(
+                            query, with_column_types=True, query_id=query_id, settings=settings
+                        )
+                        query_result_iter.append(res[-1])
+                        if len(res[0]) > 0:
+                            for item in res[0]:
+                                query_result_iter.append(item)
+                    logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")                        
+                    pyclient.disconnect()
+            else:
+                res = pyclient.execute(
+                    query, with_column_types=True, query_id=query_id, settings=settings
+                )
+                query_result_iter.append(res[-1])
+                if len(res[0]) > 0:
+                    for item in res[0]:
+                        query_result_iter.append(item)
+                logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")                                   
+
+            # if 'cluster' not in proton_setting:
+            #     res = pyclient.execute(
+            #         query, with_column_types=True, query_id=query_id, settings=settings
+            #     )
+            #     query_result_iter.append(res[-1])
+            #     if len(res[0]) > 0:
+            #         for item in res[0]:
+            #             query_result_iter.append(item)
+            #     logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")                
+            # else:
+            #     if 'kill query' in query or 'KILL QUERY' in query: #todo: better logic for the manual kill query in cluster
+            #         for item in proton_servers:
+            #             proton_server = item.get("host")
+            #             proton_server_native_port = item.get("port")
+            #             if pyclient is not None:
+            #                 pyclient.disconnect()
+            #             logger.debug(f"pyclient disonnected.")
+            #             pyclient = Client(
+            #                 host=proton_server, port=proton_server_native_port
+            #             )  # create python client                        
+            #             logger.debug(f"query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}")
+            #             res = pyclient.execute(
+            #                 query, with_column_types=True, query_id=query_id, settings=settings
+            #             )
+            #             query_result_iter.append(res[-1])
+            #             if len(res[0]) > 0:
+            #                 for item in res[0]:
+            #                     query_result_iter.append(item)
+            #         logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")                        
+            #         pyclient.disconnect()
+            #     else:
+            #         res = pyclient.execute(
+            #             query, with_column_types=True, query_id=query_id, settings=settings
+            #         )                                            
+            #         query_result_iter.append(res[-1])
+            #         if len(res[0]) > 0:
+            #             for item in res[0]:
+            #                 query_result_iter.append(item)
+            #         logger.debug(f"query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}")
             
         else:
             query_result_iter = pyclient.execute_iter(
@@ -823,7 +1120,7 @@ def query_run_py(
             )
 
         logger.debug(
-            f"query_run_py: query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
+            f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}, query_run_py: query_run_py: query_id = {query_id}, executed @ {str(datetime.datetime.now())}, query = {query}......"
         )
 
         if (query_type != None and query_type == "table") and (iter_wait != None):
@@ -1022,14 +1319,14 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     proton_setting = config.get('proton_setting')
     proton_cluster_query_node = config.get('proton_cluster_query_node')
     proton_server = None
-    if proton_setting != 'cluster': 
+    if 'cluster' not in proton_setting: 
         proton_server = config.get("proton_server")
         proton_server_native_ports = config.get("proton_server_native_port")
         proton_server_native_ports = proton_server_native_ports.split(",")
         proton_server_native_port = proton_server_native_ports[
             0
         ]  # todo: get proton_server and port from statement
-    elif proton_setting == 'cluster' and proton_cluster_query_node != "default":
+    elif 'cluster' in proton_setting and proton_cluster_query_node != "default":
         proton_servers = config.get("proton_servers")
         for item in proton_servers:
             node = item.get("node")
@@ -1037,7 +1334,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                 proton_server = item.get("host")
                 proton_server_native_port = item.get("port")
 
-    else: #if proton_setting == 'cluster', go through the list and get the 1st node as default proton
+    else: #if 'cluster' in proton_setting, go through the list and get the 1st node as default proton
         proton_servers = config.get("proton_servers")
         proton_server = proton_servers[0].get("host")
         proton_server_native_port = proton_servers[0].get("port")
@@ -1101,14 +1398,35 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                             logger.debug(
                                 f"query_id = {query_id}, process = {process}, process.exitcode = {process.exitcode}"
                             )
-                            retry = 500
-                            while (
-                                not query_id_exists_py(client, query_id)
-                                and process.exitcode == None
-                                and retry > 0
-                            ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
-                                time.sleep(0.05)
-                                retry -= 1
+                            retry = 200
+                            if 'cluster' not in proton_setting:
+                                while (
+                                    not query_id_exists_py(client, query_id)
+                                    and process.exitcode == None
+                                    and retry > 0
+                                ):  # process.exitcode is checked when another retry to identify if the query_run_py if already exist due to exception or other reasons.
+                                    time.sleep(0.1)
+                                    retry -= 1
+                            else: #todo: consolidate the cluster query_id exists logic into a standalone function or query_exists()
+                                proton_servers = config.get("proton_servers")
+                                depends_on_exists = False
+                                depends_on_exists_flag = 0
+                                while not depends_on_exists and retry > 0: #todo: consolidate this cluster query exist into a cluster_query_exists function or query_exists()
+                                    for item in proton_servers:
+                                        proton_server = item.get("host")
+                                        proton_server_native_port = item.get("port")
+                                        logger.debug(f"proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}")
+                                        pyclient = Client(host=proton_server, port=proton_server_native_port)
+                                        if query_id_exists_py(pyclient, query_id):
+                                            depends_on_exists_flag += 1
+                                        pyclient.disconnect()
+                                    if depends_on_exists_flag > 0:
+                                        depends_on_exists = True
+                                    else:
+                                        depends_on_exists = False
+                                    time.sleep(0.1)
+                                    retry -= 1                                
+
                             if retry > 0:
                                 logger.debug(
                                     f"check and wait for query exist to kill, query_2_kill = {query_id} is found, continue"
@@ -1126,10 +1444,29 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                             logger.debug(
                                 f"query_end_timer sleep {query_end_timer} end start to call kill_query..."
                             )
-                            kill_query(client, query_id)
-                            logger.debug(
-                                f"kill_query() was called, query_id={query_id}"
-                            )
+                            
+                            
+                            if 'cluster' not in proton_setting:
+                                kill_query(client, query_id)
+                                logger.debug(
+                                    f"kill_query() was called, query_id={query_id}"
+                                )
+                            else:
+                                for item in proton_servers:
+                                    proton_server = item.get("host")
+                                    proton_server_native_port = item.get("port")
+                                    logger.debug(f"proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}")
+                                    if pyclient is not None:
+                                        pyclient.disconnect()
+                                        logger.debug(f"pyclient disconnect")
+                                    pyclient = Client(host=proton_server, port=proton_server_native_port)
+                                    kill_query(pyclient, query_id)
+                                    logger.debug(
+                                        f"kill_query() was called, query_id={query_id}"
+                                    )
+                                    pyclient.disconnect()
+
+                            
                         logger.debug(
                             f"query_execute: query_procs = {query_procs} after trying to remove"
                         )
@@ -1190,12 +1527,12 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         telemetry_shared_list,
                         logging_level,
                     )
-                    if wait != None:
-                        wait = int(wait)
-                        print(
-                            f"query_execute: wait for {wait} to start run query = {query}"
-                        )
-                        time.sleep(wait)
+                    # if wait != None:
+                    #     wait = int(wait)
+                    #     print(
+                    #         f"query_execute: wait for {wait} to start run query = {query}"
+                    #     )
+                    #     time.sleep(wait)
 
                     query_proc = mp.Process(target=query_run_py, args=query_run_args)
                     query_procs.append(
@@ -1230,15 +1567,15 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         logger.debug(
                             f"query_execute: query_run_py run local for query_id = {query_id}..."
                         )
-                        if wait != None:
-                            wait = int(wait)
-                            logger.debug(
-                                f"query_id = {query_id}, start wait for {wait}s"
-                            )
-                            time.sleep(wait)
-                            logger.debug(
-                                f"query_id = {query_id}, end wait for {wait}s continue"
-                            )
+                        # if wait != None:
+                        #     wait = int(wait)
+                        #     logger.debug(
+                        #         f"query_id = {query_id}, start wait for {wait}s"
+                        #     )
+                        #     time.sleep(wait)
+                        #     logger.debug(
+                        #         f"query_id = {query_id}, end wait for {wait}s continue"
+                        #     )
                         logger.debug(f"query_id = {query_id}, to call query_run_py")
 
                         if user_name != None and password != None:
@@ -1254,7 +1591,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
                         else:
                             statement_client = client
                             logger.debug(
-                                f"statement_client={client}, statement_2_run={statement_2_run}"
+                                f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}, statement_client={client}, statement_2_run={statement_2_run}"
                             )
                         logger.debug(f"statement_2_run = {statement_2_run}, settings= {settings}, config={config}, statement_client={statement_client}")
                         query_results = query_run_py(
@@ -1487,7 +1824,7 @@ def query_id_exists_rest(query_url, query_id, query_body=None):
             }
         )
         res = requests.post(query_url, data=query_body)
-        logger.debug(f"query_id exists check: res.status_code = {res.status_code}")
+        logger.debug(f"query_id exists check: query_url = {query_url}, res.status_code = {res.status_code}")
         if res.status_code != 200:
             return False
         res_json = res.json()
@@ -1549,7 +1886,7 @@ def query_exists(
         return False
 
 
-def input_batch_rest(rest_setting, input_batch, table_schema):
+def input_batch_rest(config, input_batch, table_schema):
     # todo: complete the input by rest
     logger = mp.get_logger()
     input_batch_record = {}
@@ -1557,6 +1894,8 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
         logger.debug(
             f"input_batch_rest: input_batch = {input_batch}, table_schema = {table_schema}"
         )
+        rest_setting = config.get("rest_setting")
+        proton_setting = config.get("proton_setting")
         input_url = rest_setting.get("ingest_url")
         query_url = rest_setting.get("query_url")
         table_ddl_url = rest_setting.get("table_ddl_url")
@@ -1599,7 +1938,28 @@ def input_batch_rest(rest_setting, input_batch, table_schema):
 
         if depends_on != None:
             logger.debug(f"depends_on = {depends_on}, checking...")
-            depends_on_exists = query_exists(depends_on, query_url)
+            if 'cluster' not in proton_setting:
+                depends_on_exists = query_exists(depends_on, query_url)
+            else: #if proton_setting == 'cluster', go through all the proton_servers to check if query exists
+                proton_servers = config.get("proton_servers")
+                depends_on_exists_flag = 0
+                retry = 100
+                while not depends_on_exists and retry > 0: #todo: consolidate this cluster query exist into a cluster_query_exists function or query_exists()
+                    for item in proton_servers:
+                        proton_server = item.get("host")
+                        proton_server_native_port = item.get("port")
+                        logger.debug(f"proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}")
+                        pyclient = Client(host=proton_server, port=proton_server_native_port)
+                        if  query_id_exists_py(pyclient, depends_on):
+                            depends_on_exists_flag += 1
+                    if depends_on_exists_flag > 0:
+                        depends_on_exists = True
+                    else:
+                        depends_on_exists = False
+                    time.sleep(0.2)
+                    retry -= 1
+
+                     
             if not depends_on_exists:
                 logger.debug(
                     f"depends_on = {depends_on} for input does not exist, raise exception"
@@ -1715,16 +2075,17 @@ def find_schema(table_name, table_schemas):
 
 
 def input_walk_through_rest(
-    rest_setting,
+    config,
     inputs,
     table_schemas,
     wait_before_inputs=1,  # todo: remove all the sleep
     sleep_after_inputs=1.5,  # todo: remove all the sleep (current stable set wait_before_inputs=1, sleep_after_inputs=1.5)
 ):
     logger = mp.get_logger()
+    rest_setting = config.get("rest_setting")
     logger.debug(
         f"rest_setting = {rest_setting}, table_schemas = {table_schemas}"
-    )
+    )    
     wait_before_inputs = wait_before_inputs  # the seconds sleep before inputs starts to ensure the query is run on proton.
     sleep_after_inputs = sleep_after_inputs  # the seconds sleep after evary inputs of a case to ensure the stream query result was emmited by proton and received by the query execute
     time.sleep(wait_before_inputs)
@@ -1743,7 +2104,7 @@ def input_walk_through_rest(
                 logger.info(f"sleep {batch_sleep_before_input} before input")
                 time.sleep(int(batch_sleep_before_input))
 
-            input_batch_record = input_batch_rest(rest_setting, batch, table_schema)
+            input_batch_record = input_batch_rest(config, batch, table_schema)
             inputs_record.append(input_batch_record)
 
         if isinstance(sleep_after_inputs, int):
@@ -1892,7 +2253,13 @@ def table_exist(table_ddl_url, table_name):
         )
 
 
-def create_table_rest(table_ddl_url, table_schema, retry=3):
+def create_table_rest(config, table_schema, retry=3):
+    logger = mp.get_logger()
+    rest_setting = config.get("rest_setting")
+    table_ddl_url = rest_setting.get("table_ddl_url")
+    proton_create_stream_shards = config.get("proton_create_stream_shards")
+    proton_create_stream_replicas = config.get("proton_create_stream_replicas")
+   
     while retry > 0:
         res = None
         try:
@@ -1910,6 +2277,10 @@ def create_table_rest(table_ddl_url, table_schema, retry=3):
             ttl_expression = table_schema.get("ttl_expression")
             columns = table_schema.get("columns")
             table_schema_for_rest = {"name": table_name, "columns": columns}
+            if proton_create_stream_shards is not None:
+                table_schema_for_rest["shards"] = int(proton_create_stream_shards) #if proton_create_stream_shards is not None, put it into table_schema for rest api to create stream with shards setting
+            if proton_create_stream_replicas is not None:
+                table_schema_for_rest['replication_factor'] = int(proton_create_stream_replicas)                
             if event_time_column is not None:
                 table_schema_for_rest["event_time_column"] = event_time_column
             if ttl_expression is not None:
@@ -2056,6 +2427,9 @@ def drop_view_if_exist_py(client, table_name):
 def test_suite_env_setup(client, config, test_suite_config):
     logger = mp.get_logger()
     rest_setting = config.get('rest_setting')
+    proton_create_stream_shards = config.get('proton_create_stream_shards')
+    proton_create_stream_replicas = config.get('proton_create_stream_replicas')
+
     if test_suite_config == None:
         return []
     tables_setup = []
@@ -2070,6 +2444,7 @@ def test_suite_env_setup(client, config, test_suite_config):
         logger.debug(f"env_setup: table_name = {table_name}, reset = {reset}")
 
         table_type = table_schema.get("type")
+
         if reset != None and reset == "False":
             pass
         else:
@@ -2091,12 +2466,13 @@ def test_suite_env_setup(client, config, test_suite_config):
     for table_schema in table_schemas:
         table_type = table_schema.get("type")
         table_name = table_schema.get("name")
+        
         # if table_exist_py(client, table_name):
         if table_exist(table_ddl_url, table_name):
             pass
         else:
             if table_type == "table":
-                create_table_rest(table_ddl_url, table_schema)
+                create_table_rest(config, table_schema)
             elif table_type == "view":
                 create_view_if_not_exit_py(client, table_schema)
 
@@ -2107,7 +2483,7 @@ def test_suite_env_setup(client, config, test_suite_config):
         if setup_inputs != None:
             logger.debug(f"input_walk_through_rest to be started.")
             setup_input_res = input_walk_through_rest(
-                rest_setting, setup_inputs, table_schemas
+                config, setup_inputs, table_schemas
             )
         setup_statements = setup.get(
             "statements"
@@ -2212,7 +2588,12 @@ def find_table_reset_in_table_schemas(table, table_schemas):
     return True
 
 
-def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case):
+def reset_tables_of_test_inputs(client, config, table_schemas, test_case):
+    logger = mp.get_logger()
+    rest_setting = config.get('rest_setting')
+    proton_create_stream_shards = config.get('proton_create_stream_shards')
+    proton_create_stream_replicas = config.get('proton_create_stream_replicas')
+    table_ddl_url = rest_setting.get("table_ddl_url")
     steps = test_case.get("steps")
     tables_recreated = []
     for step in steps:
@@ -2265,7 +2646,8 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                                 logger.debug(
                                     f"drop stream and re-create once case starts, table {table} is dropped"
                                 )
-                                create_table_rest(table_ddl_url, table_schema)
+                                
+                                create_table_rest(config, table_schema)
                                 while table_exist(table_ddl_url, table) is None:
                                     logger.debug(
                                         f"{name} not recreated successfully yet, wait ..."
@@ -2275,7 +2657,8 @@ def reset_tables_of_test_inputs(client, table_ddl_url, table_schemas, test_case)
                             elif name == table and not table_exist(
                                 table_ddl_url, table
                             ):
-                                create_table_rest(table_ddl_url, table_schema)
+                             
+                                create_table_rest(config, table_schema)
                                 while table_exist(table_ddl_url, table) is None:
                                     logger.debug(
                                         f"{name} not recreated successfully yet, wait ..."
@@ -2440,14 +2823,14 @@ def test_suite_run(
     # ]  # todo: assign proton_server and port at config for test_suite reset_tables_of_test_inputs
     proton_cluster_query_node = config.get('proton_cluster_query_node')
     proton_server = None
-    if proton_setting != 'cluster': 
+    if 'cluster' not in proton_setting: 
         proton_server = config.get("proton_server")
         proton_server_native_ports = config.get("proton_server_native_port")
         proton_server_native_ports = proton_server_native_ports.split(",")
         proton_server_native_port = proton_server_native_ports[
             0
         ]  # todo: get proton_server and port from statement
-    elif proton_setting == 'cluster' and proton_cluster_query_node != "default":
+    elif 'cluster' in proton_setting and proton_cluster_query_node != "default":
         proton_servers = config.get("proton_servers")
         for item in proton_servers:
             node = item.get("node")
@@ -2455,11 +2838,12 @@ def test_suite_run(
                 proton_server = item.get("host")
                 proton_server_native_port = item.get("port")
 
-    else: #if proton_setting == 'cluster', go through the list and get the 1st node as default proton
+    else: #if 'cluster' in proton_setting, go through the list and get the 1st node as default proton
         proton_servers = config.get("proton_servers")
         proton_server = proton_servers[0].get("host")
         proton_server_native_port = proton_servers[0].get("port")
 
+    logger.debug(f"proton_server = {proton_server}, proton_server_native_port = {proton_server_native_port}")
 
     test_ids_set = os.getenv("PROTON_TEST_IDS", None)
 
@@ -2518,9 +2902,9 @@ def test_suite_run(
                     step_id = 0
                     auto_terminate_queries = []
                     # scan steps to find out tables used in inputs and truncate all the tables
-
+                    logger.debug("reset_table_of_test_inputs to be starts...")
                     tables_recreated = reset_tables_of_test_inputs(
-                        client, table_ddl_url, table_schemas, test_case
+                        client, config, table_schemas, test_case
                     )
                     logger.info(
                         f"tables: {tables_recreated} are dropted and recreated."
@@ -2566,7 +2950,7 @@ def test_suite_run(
                             )
 
                             inputs_record = input_walk_through_rest(
-                                rest_setting, inputs, table_schemas
+                                config, inputs, table_schemas
                             )  # inputs walk through rest_client
                             logger.info(
                                 f"test_id_run = {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id} input_walk_through done"
