@@ -119,6 +119,7 @@ add_contrib (fmtlib-cmake fmtlib)
 add_contrib (krb5-cmake krb5)
 add_contrib (cyrus-sasl-cmake cyrus-sasl) # for krb5
 add_contrib (libgsasl-cmake libgsasl) # requires krb5
+add_contrib (libhdfs3-cmake libhdfs3) # requires: protobuf, krb5
 add_contrib (librdkafka-cmake librdkafka) # requires: libgsasl
 add_contrib (libpqxx-cmake libpqxx)
 add_contrib (libpq-cmake libpq)

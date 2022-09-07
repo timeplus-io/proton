@@ -236,3 +236,6 @@
 [submodule "contrib/c-ares"]
 	path = contrib/c-ares
 	url = https://github.com/ClickHouse/c-ares.git
+[submodule "contrib/libhdfs3"]
+	path = contrib/libhdfs3
+	url = https://github.com/ClickHouse/libhdfs3.git

@@ -20,7 +20,7 @@ endif()
 option (ENABLE_PARQUET "Enable parquet" ${ENABLE_PARQUET_DEFAULT})
 
 if (NOT ENABLE_PARQUET)
-    message(STATUS "Building without Parquet support")
+    message(STATUS "Not using parquet")
     return()
 endif()
 
@@ -96,6 +96,10 @@ else()
     target_link_libraries(_flatbuffers INTERFACE flatbuffers_shared)
 endif()
 target_include_directories(_flatbuffers INTERFACE ${FLATBUFFERS_INCLUDE_DIR})
+
+# ===  hdfs
+# NOTE: cannot use ch_contrib::hdfs since it's INCLUDE_DIRECTORIES does not includes trailing "hdfs/"
+set(HDFS_INCLUDE_DIR "${proton_SOURCE_DIR}/contrib/libhdfs3/include/hdfs/")
 
 # arrow-cmake cmake file calling orc cmake subroutine which detects certain compiler features.
 # Apple Clang compiler failed to compile this code without specifying c++11 standard.
@@ -218,6 +222,8 @@ set(ARROW_SRCS
         "${LIBRARY_DIR}/io/caching.cc"
         "${LIBRARY_DIR}/io/compressed.cc"
         "${LIBRARY_DIR}/io/file.cc"
+        "${LIBRARY_DIR}/io/hdfs.cc"
+        "${LIBRARY_DIR}/io/hdfs_internal.cc"
         "${LIBRARY_DIR}/io/interfaces.cc"
         "${LIBRARY_DIR}/io/memory.cc"
         "${LIBRARY_DIR}/io/slow.cc"
@@ -358,10 +364,8 @@ SET(ARROW_SRCS "${LIBRARY_DIR}/util/compression_snappy.cc" ${ARROW_SRCS})
 add_definitions(-DARROW_WITH_ZLIB)
 SET(ARROW_SRCS "${LIBRARY_DIR}/util/compression_zlib.cc" ${ARROW_SRCS})
 
-if (ARROW_WITH_ZSTD)
-    add_definitions(-DARROW_WITH_ZSTD)
-    SET(ARROW_SRCS "${LIBRARY_DIR}/util/compression_zstd.cc" ${ARROW_SRCS})
-endif ()
+add_definitions(-DARROW_WITH_ZSTD)
+SET(ARROW_SRCS "${LIBRARY_DIR}/util/compression_zstd.cc" ${ARROW_SRCS})
 
 
 add_library(_arrow ${ARROW_SRCS})
@@ -459,5 +463,7 @@ foreach (TOOL ${PARQUET_TOOLS})
 endforeach ()
 
 # The library is large - avoid bloat.
-target_compile_options (_arrow PRIVATE -g0)
-target_compile_options (_parquet PRIVATE -g0)
+if (OMIT_HEAVY_DEBUG_SYMBOLS)
+    target_compile_options (_arrow PRIVATE -g0)
+    target_compile_options (_parquet PRIVATE -g0)
+endif()

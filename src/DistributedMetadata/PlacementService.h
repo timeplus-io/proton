@@ -16,7 +16,10 @@ public:
 
     explicit PlacementService(const ContextMutablePtr & global_context_);
     PlacementService(const ContextMutablePtr & global_context_, PlacementStrategyPtr strategy_);
-    virtual ~PlacementService() override = default;
+    virtual ~PlacementService() override
+    {
+        preShutdown();
+    }
 
     void scheduleBroadcast();
 
@@ -31,7 +34,7 @@ public:
     bool ready() const override { return started.test() && nodes().size(); }
 
 private:
-    void preShutdown() override;
+    void preShutdown();
     void processRecords(const nlog::RecordPtrs & records) override;
     String role() const override { return "placement"; }
     String cleanupPolicy() const override { return "compact"; }

@@ -54,7 +54,7 @@ if (COMPILER_CLANG)
         no_warning(vla)
         no_warning(weak-template-vtables)
         no_warning(weak-vtables)
-
+        no_warning(thread-safety-negative) # experimental flag, too many false positives
         # TODO Enable conversion, sign-conversion, double-promotion warnings.
     else ()
         add_warning(comma)

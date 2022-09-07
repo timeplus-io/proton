@@ -277,7 +277,7 @@
               (2, 's9', '2022-05-23 15:46:10'),
               (2, 's10', '2022-05-23 15:46:11')"
             },
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1008'"}             
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1008'"}             
           ]
         }
       ],
@@ -607,7 +607,7 @@
             },
             {"client":"python", "query_type": "table", "wait":1,
               "query": "insert into left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'), (2, 'new', '2022-05-23 15:46:10')"},
-            {"client":"python", "wait": 1, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1017'"}  
+            {"client":"python", "wait": 3, "run_mode":"process", "query_type": "batch", "query":"kill query where query_id = '1017'"}  
           ]
         }
       ],

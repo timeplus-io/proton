@@ -57,6 +57,9 @@ RUN apt-get update \
 # This symlink required by gcc to find lld compiler
 RUN ln -s /usr/bin/lld-${LLVM_VERSION} /usr/bin/ld.lld
 
+# This symlink is required by packager script
+RUN ln -s /usr/bin/clang-tidy-${LLVM_VERSION} /usr/bin/clang-tidy
+
 ENV CC=clang-${LLVM_VERSION}
 ENV CXX=clang++-${LLVM_VERSION}
 

@@ -208,17 +208,14 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_NURAFT=ON')
         cmake_flags.append('-DENABLE_RAPIDJSON=ON')
         cmake_flags.append('-DENABLE_YAML_CPP=ON')
-        cmake_flags.append('-DENABLE_NURAFT=ON')
         cmake_flags.append('-DENABLE_SIMDJSON=ON')
         cmake_flags.append('-DENABLE_ROCKSDB=ON')
         cmake_flags.append('-DENABLE_REPLXX=ON')
         cmake_flags.append('-DENABLE_SSL=ON')
-        cmake_flags.append('-DENABLE_BZIP2=OFF')
+        cmake_flags.append('-DENABLE_BZIP2=ON')
         cmake_flags.append('-DENABLE_PROTOBUF=ON')
         cmake_flags.append('-DENABLE_URING=ON')
-        cmake_flags.append('-DENABLE_UTILS=OFF')
-        cmake_flags.append('-DENABLE_THINLTO=OFF')
-        cmake_flags.append('-DENABLE_CLANG_TIDY=OFF')
+        cmake_flags.append('-DENABLE_UTILS=ON')
         cmake_flags.append('-DENABLE_TESTS=ON')
         cmake_flags.append('-DENABLE_MATH_FUNCS=ON')
         cmake_flags.append('-DENABLE_HIGH_ORDER_ARRAY_FUNCS=ON')
@@ -227,9 +224,12 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_PARQUET=ON')
         cmake_flags.append('-DENABLE_THRIFT=ON')
         cmake_flags.append('-DENABLE_GEO_FUNCS=ON')
-    # proton: ends.
+        cmake_flags.append('-DENABLE_CYRUS_SASL=ON')
+        cmake_flags.append('-DENABLE_KRB5=ON')
 
-    cmake_flags.append('-DENABLE_NURAFT=1')
+    if build_type == "release":
+        cmake_flags.append('-DENABLE_THINLTO=ON')
+    # proton: ends.
 
     result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')
 

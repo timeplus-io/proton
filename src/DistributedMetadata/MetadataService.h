@@ -33,7 +33,6 @@ private:
     void doTailingRecords();
 
     virtual void postStartup() { started.test_and_set(); }
-    virtual void preShutdown() {}
 
     virtual void processRecords(const nlog::RecordPtrs & records) = 0;
 

@@ -60,8 +60,6 @@ void MetadataService::shutdown()
 
     LOG_INFO(log, "Stopping");
 
-    preShutdown();
-
     if (pool)
         pool->wait();
 

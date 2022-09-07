@@ -5801,10 +5801,10 @@ void MergeTreeData::setDataVolume(size_t bytes, size_t rows, size_t parts)
 bool MergeTreeData::insertQueryIdOrThrow(const String & query_id, size_t max_queries) const
 {
     std::lock_guard lock(query_id_set_mutex);
-    return insertQueryIdOrThrowNoLock(query_id, max_queries, lock);
+    return insertQueryIdOrThrowNoLock(query_id, max_queries);
 }
 
-bool MergeTreeData::insertQueryIdOrThrowNoLock(const String & query_id, size_t max_queries, const std::lock_guard<std::mutex> &) const
+bool MergeTreeData::insertQueryIdOrThrowNoLock(const String & query_id, size_t max_queries) const
 {
     if (query_id_set.find(query_id) != query_id_set.end())
         return false;
@@ -5820,10 +5820,10 @@ bool MergeTreeData::insertQueryIdOrThrowNoLock(const String & query_id, size_t m
 void MergeTreeData::removeQueryId(const String & query_id) const
 {
     std::lock_guard lock(query_id_set_mutex);
-    removeQueryIdNoLock(query_id, lock);
+    removeQueryIdNoLock(query_id);
 }
 
-void MergeTreeData::removeQueryIdNoLock(const String & query_id, const std::lock_guard<std::mutex> &) const
+void MergeTreeData::removeQueryIdNoLock(const String & query_id) const
 {
     if (query_id_set.find(query_id) == query_id_set.end())
         LOG_WARNING(log, "We have query_id removed but it's not recorded. This is a bug");

@@ -213,7 +213,7 @@ namespace
                         ErrorCodes::ARGUMENT_OUT_OF_BOUND,
                         "Invalid offset: {} in function {}, expected [1, {}]",
                         offset_,
-                        getName(),
+                        Name::name,
                         1 << 30);
 
                 if (count_ <= 0 || count_ > (1 << 30))
@@ -221,7 +221,7 @@ namespace
                         ErrorCodes::ARGUMENT_OUT_OF_BOUND,
                         "Invalid offset: {} in function {}, expected [1, {}]",
                         offset_,
-                        getName(),
+                        Name::name,
                         1 << 30);
             }
             else
@@ -232,7 +232,7 @@ namespace
                         ErrorCodes::ARGUMENT_OUT_OF_BOUND,
                         "Invalid offset: {} in function {}, expected [{}, -1]",
                         offset_,
-                        getName(),
+                        Name::name,
                         -(1 << 30));
             }
         }

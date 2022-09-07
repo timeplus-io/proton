@@ -870,11 +870,11 @@ public:
     /// Record current query id where querying the table. Throw if there are already `max_queries` queries accessing the same table.
     /// Returns false if the `query_id` already exists in the running set, otherwise return true.
     bool insertQueryIdOrThrow(const String & query_id, size_t max_queries) const;
-    bool insertQueryIdOrThrowNoLock(const String & query_id, size_t max_queries, const std::lock_guard<std::mutex> &) const;
+    bool insertQueryIdOrThrowNoLock(const String & query_id, size_t max_queries) const;
 
     /// Remove current query id after query finished.
     void removeQueryId(const String & query_id) const;
-    void removeQueryIdNoLock(const String & query_id, const std::lock_guard<std::mutex> &) const;
+    void removeQueryIdNoLock(const String & query_id) const;
 
     /// Return the partition expression types as a Tuple type. Return DataTypeUInt8 if partition expression is empty.
     DataTypePtr getPartitionValueType() const;

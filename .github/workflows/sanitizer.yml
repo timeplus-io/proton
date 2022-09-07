@@ -25,7 +25,7 @@ jobs:
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-045a86d6d301ab637
-      submodules: 'true'
+      submodules: 'recursive'
       sanitizer: ${{ github.event.inputs.sanitizer }}
       tag: ${{ github.event.inputs.tag }}
       command: |
