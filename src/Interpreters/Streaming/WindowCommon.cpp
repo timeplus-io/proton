@@ -274,7 +274,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         size_t i = 1;
 
         /// Handle optional timestamp argument
-        if (isTimeExprAST(args[i]))
+        if (isTimeExprAST(args[i]) && !isIntervalAST(args[i]))
         {
             /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
             time_expr = args[i++];

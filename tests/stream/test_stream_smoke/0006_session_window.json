@@ -593,6 +593,36 @@
                     ["69", "2020-02-02 20:00:10.263000+00:00", "2020-02-02 20:00:21.262000+00:00", "11777699014679255699","dev1"]
                 ]}
             ]
+        },
+        {
+            "id": 17,
+            "tags": ["session window"],
+            "name": "start/end predictions",
+            "description": "insert event with tp_time in milliseconds",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select max(value), window_start, window_end, __tp_session_id, id from session(test_session, 5s, location='ca', location<>'ca', id) group by __tp_session_id, window_start, window_end, id"}
+                ]},
+                {"inputs": [
+                    {"table_name":"test_session","depends_on":"701", "wait":2, "data": [
+                        ["dev1", "sh", 60.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 19:59:55.262+00:00"],
+                        ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:00.262+00:00"],
+                        ["dev1", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:05.262+00:00"],
+                        ["dev1", "sh", 59.3, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:08.262+00:00"],
+                        ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:04\"", "2020-02-02 20:00:10.263+00:00"],
+                        ["dev1", "ca", 67, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:13.262+00:00"],
+                        ["dev1", "ca", 68, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:16.262+00:00"],
+                        ["dev1", "sh", 69, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:21.262+00:00"]
+                    ]}
+                ]
+                }
+            ],
+            "expected_results": [{"query_id" : 701, "expected_results":
+                [
+                    ["59.3", "2020-02-02 20:00:00.262000+00:00", "2020-02-02 20:00:08.262000+00:00", "11777699014679255699", "dev1"],
+                    ["69", "2020-02-02 20:00:10.263000+00:00", "2020-02-02 20:00:21.262000+00:00", "11777699014679255699","dev1"]
+                ]}
+            ]
         }
     ]
 }
