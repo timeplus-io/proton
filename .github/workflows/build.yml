@@ -12,7 +12,7 @@ jobs:
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-045a86d6d301ab637
-      submodules: 'true'
+      submodules: 'recursive'
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -21,7 +21,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # update version
-        ./release --version patch
+        # ./release --version patch
         
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
@@ -51,6 +51,49 @@ jobs:
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
         aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal/proton/
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  BuildArm:
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6g.4xlarge
+      ec2-image-id: ami-08076d7610b11c9f7
+      submodules: 'recursive'
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+        
+        # prepare build cache
+        aws s3 cp --no-progress s3://tp-internal/proton/cache-arm.tar.gz .
+        mkdir $GITHUB_WORKSPACE/ccache
+        tar -zxf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache
+        rm cache-arm.tar.gz
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version aarch64 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
+        cd $GITHUB_WORKSPACE/docker/server
+
+        # build docker image
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage
+
+        # push docker image
+        docker push timeplus/proton:$GITHUB_SHA
+        docker push timeplus/proton:prestage
+
+        # upload build cache
+        tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache-arm.tar.gz s3://tp-internal/proton/
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
