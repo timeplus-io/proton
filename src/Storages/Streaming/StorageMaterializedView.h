@@ -74,6 +74,7 @@ private:
     void initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void buildBackgroundPipeline(InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void executeBackgroundPipeline();
+    void cancelBackgroundPipeline();
 
 private:
     Poco::Logger * log;

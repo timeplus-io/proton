@@ -237,7 +237,7 @@ void StorageMaterializedView::startup()
             /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
             /// And it should be able to safely destroy table after exception in "startup" method.
             /// It means that failed "startup" must not create any background tasks that we will have to wait.
-            shutdown();
+            cancelBackgroundPipeline();
 
             /// Note: after failed "startup", the stream will be in a state that only allows to destroy the object.
             /// If is an Attach request, we didn't throw exception to avoid the system fail to setup.
@@ -252,6 +252,14 @@ void StorageMaterializedView::shutdown()
     if (shutdown_called.test_and_set())
         return;
 
+    cancelBackgroundPipeline();
+
+    if (start_thread.joinable())
+        start_thread.join();
+}
+
+void StorageMaterializedView::cancelBackgroundPipeline()
+{
     if (background_executor)
     {
         background_executor->cancel();
@@ -261,9 +269,6 @@ void StorageMaterializedView::shutdown()
         background_executor.reset();
         background_pipeline.reset();
     }
-
-    if (start_thread.joinable())
-        start_thread.join();
 }
 
 Pipe StorageMaterializedView::read(
