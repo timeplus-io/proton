@@ -87,6 +87,7 @@ void ExternalGrokPatterns::loadPatternsFromFile()
     if (!ifs)
     {
         LOG_WARNING(log, "External grok patterns file '{}' is not exist", file_name);
+        patterns = std::make_unique<std::unordered_map<String, String>>();
         return;
     }
 
