@@ -650,6 +650,7 @@ trace_log:
     table: trace_log
     partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
+    ttl: 'event_date + INTERVAL 7 DAY DELETE'
 
 # Query thread log. Has information about all threads participated in query execution.
 # Used only for queries with setting log_query_threads = 1.
@@ -667,6 +668,7 @@ query_views_log:
     table: query_views_log
     partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
+    ttl: 'event_date + INTERVAL 30 DAY DELETE'
 
 # Uncomment if use part log.
 # Part log contains information about all actions with parts in MergeTree tables (creation, deletion, merges, downloads).
@@ -675,6 +677,7 @@ part_log:
     table: part_log
     partition_by: to_YYYYMM(event_date)
     flush_interval_milliseconds: 7500
+    ttl: 'event_date + INTERVAL 30 DAY DELETE'
 
 # Uncomment to write text log into table.
 # Text log contains all information from usual server log but stores it in structured and efficient way.
@@ -691,6 +694,7 @@ metric_log:
     table: metric_log
     flush_interval_milliseconds: 7500
     collect_interval_milliseconds: 1000
+    ttl: 'event_date + INTERVAL 30 DAY DELETE'
 
 # Asynchronous metric log contains values of metrics from
 # system.asynchronous_metrics.
@@ -701,6 +705,7 @@ asynchronous_metric_log:
     # Asynchronous metrics are updated once a minute, so there is
     # no need to flush more often.
     flush_interval_milliseconds: 60000
+    ttl: 'event_date + INTERVAL 7 DAY DELETE'
 
 # OpenTelemetry log contains OpenTelemetry trace spans.
 opentelemetry_span_log:
@@ -717,6 +722,7 @@ opentelemetry_span_log:
         engine MergeTree
              partition by to_YYYYMM(finish_date)
              order by (finish_date, finish_time_us, trace_id)
+             ttl finish_date + INTERVAL 7 DAY DELETE
     database: system
     table: opentelemetry_span_log
     flush_interval_milliseconds: 7500

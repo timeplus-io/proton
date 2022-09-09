@@ -11,7 +11,6 @@
 #include <base/logger_useful.h>
 
 #include <atomic>
-#include <cmath>
 #include <random>
 #include <cstdlib>
 
@@ -39,6 +38,18 @@ bool inline memoryTrackerCanThrow(VariableContext level, bool fault_injection)
     return !LockMemoryExceptionInThread::isBlocked(level, fault_injection) && !std::uncaught_exceptions();
 }
 
+const char * variableContextString(VariableContext level)
+{
+    switch (level)
+    {
+        case VariableContext::Global : return "Global";
+        case VariableContext::User: return "User";
+        case VariableContext::Process: return "Process";
+        case VariableContext::Thread: return "Thread";
+    }
+
+    __builtin_unreachable();
+}
 }
 
 namespace DB
@@ -193,12 +204,14 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
         amount.fetch_sub(size, std::memory_order_relaxed);
         throw DB::Exception(
             DB::ErrorCodes::MEMORY_LIMIT_EXCEEDED,
-            "Memory limit{}{} exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
+            "Memory limit{}{} exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}, level={}. Global={}",
             description ? " " : "",
             description ? description : "",
             formatReadableSizeWithBinarySuffix(will_be),
             size,
-            formatReadableSizeWithBinarySuffix(current_hard_limit));
+            formatReadableSizeWithBinarySuffix(current_hard_limit),
+            variableContextString(level),
+            formatReadableSizeWithBinarySuffix(total_memory_tracker.amount.load(std::memory_order_relaxed)));
     }
 
     bool peak_updated;

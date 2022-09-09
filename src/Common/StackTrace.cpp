@@ -1,6 +1,5 @@
 #include <Common/StackTrace.h>
 
-#include <Core/Defines.h>
 #include <Common/Dwarf.h>
 #include <Common/Elf.h>
 #include <Common/SymbolIndex.h>

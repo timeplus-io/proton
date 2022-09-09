@@ -1,4 +1,3 @@
-#include <mutex>
 #include <Common/ThreadStatus.h>
 
 #include <Processors/Transforms/buildPushingToViewsChain.h>
@@ -7,7 +6,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryThreadLog.h>
 #include <Interpreters/QueryViewsLog.h>
-#include <Interpreters/TraceCollector.h>
 #include <Parsers/formatAST.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -22,7 +20,6 @@
 #if defined(OS_LINUX)
 #   include <Common/hasLinuxCapability.h>
 
-#   include <sys/time.h>
 #   include <sys/resource.h>
 #endif
 

@@ -81,7 +81,7 @@ OpenTelemetrySpanHolder::OpenTelemetrySpanHolder(const std::string & _operation_
     if (!CurrentThread::isInitialized())
     {
         // There may be no thread context if we're running inside the
-        // clickhouse-client, e.g. reading an external table provided with the
+        // proton-client, e.g. reading an external table provided with the
         // `--external` option.
         return;
     }
