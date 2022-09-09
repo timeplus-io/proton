@@ -165,10 +165,11 @@ def input_from_csv_by_row_reader(
 
 
 def systest_env_setup(
-    rest_setting, test_suite_config
+    config, test_suite_config
 ):  # create talbes according to test_suite_config
     # check the test env, if table w/ table_name is found, drop it
     # create table w/ table_name and table_schema to get the  table for query verification ready
+    rest_setting = config.get("rest_setting")
     table_ddl_url = rest_setting.get("table_ddl_url")
     params = rest_setting.get("params")
     table_schemas = test_suite_config.get("table_schemas")
@@ -177,7 +178,7 @@ def systest_env_setup(
         rockets.drop_table_if_exist_rest(table_ddl_url, table_name)
 
     for table_schema in table_schemas:
-        rockets.create_table_rest(table_ddl_url, table_schema)
+        rockets.create_table_rest(config, table_schema)
     return
 
 
@@ -203,7 +204,7 @@ def systest_context(config_file=None, tests_file=None):
     return rockets_context
 
 
-def create_table_from_column_list(table_ddl_url, table_name, column_list):
+def create_table_from_column_list(config, table_name, column_list):
     # create table based on a given column_list like: [('id', 'String'), ('location', 'String'), ('value', 'Float32'), ('json', 'String'), ('timestamp', 'DateTime64(3)'), ('_tp_time', 'DateTime64(3)'), ('_tp_index_time', 'DateTime64(3)')])
     # print(f"create_table_from_column_list: table_ddl_url = {table_ddl_url}, table_name = {table_name}, column_list = {column_list}")
     table_schema_columns = []
@@ -227,7 +228,7 @@ def create_table_from_column_list(table_ddl_url, table_name, column_list):
 
     table_schema = {"name": table_name, "columns": table_schema_columns}
     print(f"create_table_from_column_list: table_schema = {table_schema}")
-    res = create_table_rest(table_ddl_url, table_schema)
+    res = create_table_rest(config, table_schema)
     print(f"create_table_from_column_list: res of create_table_rest = {res}")
     return {"res": res, "table_column_headers": table_column_headers}
 
@@ -350,7 +351,7 @@ def query_run_py(
                 query_type != None and query_type == "table" and loop_times < 0
             ):  # when table query in loop, have interval between table query run
                 time.sleep(2)  # todo: table query internval could be set in tests.json
-            #query_sub_id = query_sub_id + ' @ ' + str(datetime.datetime.now())
+            # query_sub_id = query_sub_id + ' @ ' + str(datetime.datetime.now())
             query_result_iter = pyclient.execute_iter(
                 query, with_column_types=True, query_id=query_sub_id, settings=settings
             )
@@ -534,8 +535,14 @@ def query_execute(config, child_conn, query_results_queue, alive):
                     query_agent_id = "query_agent_" + str(
                         i
                     )  # the actual query_id for query execution and cancel
-                    #query_sub_id = query_id + "_" + str(i)
-                    query_sub_id = query_id + ':' + str(uuid.uuid4()) + '@' +str(datetime.datetime.now())
+                    # query_sub_id = query_id + "_" + str(i)
+                    query_sub_id = (
+                        query_id
+                        + ":"
+                        + str(uuid.uuid4())
+                        + "@"
+                        + str(datetime.datetime.now())
+                    )
                     statement_2_run_copy = copy.deepcopy(statement_2_run)
                     if "$" in query:
                         query_copy = statement_2_run_copy.get("query")
@@ -660,8 +667,10 @@ def result_collect():
     print()  # collect all the data from files and write to database for ultra data analytics.
 
 
-def clear_case_env(client, test, table_schemas, table_ddl_url):
+def clear_case_env(client, test, table_schemas, config):
     steps = test.get("steps")
+    rest_setting = config.get("rest_setting")
+    table_ddl_url = rest_setting.get("table_ddl_url")
     tables = []
     for step in steps:
         if "inputs" in step:
@@ -681,19 +690,21 @@ def clear_case_env(client, test, table_schemas, table_ddl_url):
 
                     for table_schema in table_schemas:
                         name = table_schema.get("name")
-                        if name == table and table_exist(table_ddl_url, table):
+                        table_info = table_exist(table_ddl_url, table)
+                        if name == table and table_info is not None:
                             logger.debug(
                                 f"rockets_run, drop table and re-create once case starts, table_ddl_url = {table_ddl_url}, table_schema = {table_schema}"
                             )
-                            while table_exist(table_ddl_url, table):
+                            while table_info is not None:
                                 logger.debug(
                                     f"{name} not dropped succesfully yet, wait ..."
                                 )
                                 time.sleep(0.2)
+                                table_info = table_exist(table_ddl_url, table)
                             logger.debug(
                                 f"rockets_run: drop table and re-create once case starts, table {table} is dropped"
                             )
-                            res = create_table_rest(table_ddl_url, table_schema)
+                            res = create_table_rest(config, table_schema)
         if len(tables) > 0:
             logger.debug(f"tables: {tables} are dropted and recreated.")
 
@@ -709,14 +720,22 @@ def data_prep_csv_2_list(
     time_incre_interval=1,
     batch_size=1,
     data_set_file_format="csv",
-    json_column = "event"
+    json_column="event",
+    random_fields=None,
+    random_ranges=None,
 ):
 
-    logger.debug(f"data_prep_csv_2_list: copies = {copies}")
-
+    logger = mp.get_logger()
+    default_random_range = 1000  # if no random_range, default range is 1000
     data_set_seed = []  # list, read csv_file and put all lines in
     _list = []  # list created based on data_set seed, add row_id, perf_event_time
-
+    if random_fields is not None:
+        random_field_list = random_fields.split(",")
+    if random_ranges is not None:
+        random_range_list = random_ranges.split(",")
+    print(
+        f"data_prep_csv_2_list: copies = {copies}, random_fields={random_fields}, random_ranges = {random_ranges}"
+    )
     _data_sets_list = (
         []
     )  # list of data_sets for all the input workers, based on _list, agent_id is added.
@@ -724,18 +743,20 @@ def data_prep_csv_2_list(
         []
     )  # list of input_info to link the unique perf_row_id to input_record and query_resutl and etc. for perf analytics.
 
-    print(f"row_reader: data_file_path = {data_file_path}")
+    print(f"data_prep_csv_2_list: data_file_path = {data_file_path}")
     perf_event_time = datetime.datetime.fromisoformat(perf_event_time_start)
 
-    if data_set_file_format == 'json':
-        #read json and read into data_set_seed a list of lines, for json format, only support one field
-        with open(data_file_path) as f:   
+    if data_set_file_format == "json":
+        # read json and read into data_set_seed a list of lines, for json format, only support one field
+        with open(data_file_path) as f:
             json_batch = json.load(f, strict=False)
-            line = [json_column] #for the json input, no header in json file, so put the json_column as header line, todo: optimize
+            line = [
+                json_column
+            ]  # for the json input, no header in json file, so put the json_column as header line, todo: optimize
             data_set_seed.append(line)
             for item in json_batch:
                 line = [json.dumps(item)]
-                data_set_seed.append(line)         
+                data_set_seed.append(line)
     else:
         with open(data_file_path) as csv_file:
             for line in csv.reader(csv_file):
@@ -753,8 +774,12 @@ def data_prep_csv_2_list(
     perf_batch_id = 0
     logger.debug(f"data_prep_2_list: perf_batch_id = {perf_batch_id} ")
 
+    random_field_setting_list = (
+        []
+    )  # random_field_setting_list to store the random field and settings
     row_count = 0
     j = 0
+
     while j <= seed_play_times:  # prepare the data_set list based on the seed csv file.
         i = 0  # line counter, identify the header line
         copy_of_data_set_seed = [i[:] for i in data_set_seed]
@@ -765,14 +790,66 @@ def data_prep_csv_2_list(
                     i == 0
                 ):  # only when the 1st time, the header line need to be appended to the list
                     line.append("perf_event_time")
+                    if random_fields is not None:
+                        i = 0
+                        field_random_range = 0
+                        for random_field in random_field_list:
+                            field_index = random_field_list.index(random_field)
+                            if random_ranges is not None and i < len(random_range_list):
+                                field_random_range = int(random_range_list[i])
+                            else:
+                                field_random_range = default_random_range
+                            random_field_setting = {
+                                "field": random_field,
+                                "index": field_index,
+                                "random_range": field_random_range,
+                            }
+                            random_field_setting_list.append(random_field_setting)
 
                 else:
                     line.append(str(perf_event_time))
+                    if (
+                        random_field_setting_list is not None
+                        and len(random_field_setting_list) > 0
+                    ):
+                        for (
+                            random_field_setting
+                        ) in (
+                            random_field_setting_list
+                        ):  # todo: support more random calculation, so far only supports put random ingeter in
+                            random_field_index = random_field_setting.get("index")
+                            if field_random_range > 0:
+                                field_random_range = random_field_setting.get(
+                                    "random_range"
+                                )
+                                line[random_field_index] = random.randrange(
+                                    field_random_range
+                                )
                     row_count += 1
+                print(
+                    f"data_prep_csv_2_list: random_field_setting_list = {random_field_setting_list}"
+                )
             else:
                 if i == 0:
                     pass
                 else:
+                    if (
+                        random_field_setting_list is not None
+                        and len(random_field_setting_list) > 0
+                    ):
+                        for (
+                            random_field_setting
+                        ) in (
+                            random_field_setting_list
+                        ):  # todo: support more random calculation, so far only supports put random ingeter in
+                            random_field_index = random_field_setting.get("index")
+                            if field_random_range > 0:
+                                field_random_range = random_field_setting.get(
+                                    "random_range"
+                                )
+                                line[random_field_index] = random.randrange(
+                                    field_random_range
+                                )
                     line.append(str(perf_event_time))
                     row_count += 1
             if j == 0:
@@ -919,8 +996,8 @@ def batch_input_from_data_set_py(
                 for field in row:
                     # print("input_walk_through: field:", field)
                     if isinstance(field, str):
-                        field = field.replace("\\", "\\\\").replace("'","\\'")
-                        #field = field.replace('"', '//"')  # proton does
+                        field = field.replace("\\", "\\\\").replace("'", "\\'")
+                        # field = field.replace('"', '//"')  # proton does
                     row_str = (
                         row_str + "'" + str(field) + "'" + ","
                     )  # python client does not support "", so put ' here
@@ -1004,8 +1081,8 @@ def batch_input_from_data_set_rest(
             else:
                 for field in row:
                     if isinstance(field, str):
-                        field = field.replace("\\", "\\\\").replace("'","\\'")
-                        #field = field.replace('"', '//"')  # proton does
+                        field = field.replace("\\", "\\\\").replace("'", "\\'")
+                        # field = field.replace('"', '//"')  # proton does
                         row_list.append(field)
                 _perf_row_id = str(uuid.uuid4())
                 row_list.append(_perf_row_id)
@@ -1079,7 +1156,7 @@ def input_client(
 
     test_id = source.get("test_id")
     input_id = source.get("input_id")
-    #table_name = source.get("table_name")
+    # table_name = source.get("table_name")
     result_keep = source.get("result_keep")
     loop_times = int(source.get("loop_times"))
 
@@ -1094,11 +1171,9 @@ def input_client(
     if end_at is None:
         end_at = 0
 
-
     worker_mode = source.get("worker_mode")
 
     print(f"worker_mode = {worker_mode}, start_from = {start_from}, end_at = {end_at}")
-
 
     logger.debug(
         f"worker for input_id = {input_id}, input_sub_id = {input_sub_id}, agend_id = {agent_id} started... input_tear_down.value = {input_tear_down.value}"
@@ -1123,15 +1198,23 @@ def input_client(
                     logger.debug(
                         f"input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: batch_input_from_data_set_py to be executed"
                     )
-                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                    if (
+                        worker_mode is not None
+                        and worker_mode == "round_robin"
+                        and "$" in table_name
+                    ):
                         table_name_copy = table_name.replace("$", str(i))
                     else:
-                        table_name_copy = table_name                    
+                        table_name_copy = table_name
                     batch_input_from_data_set_py(
                         config, table_name_copy, py_client, data_set, batch_size
                     )
 
-                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                    if (
+                        worker_mode is not None
+                        and worker_mode == "round_robin"
+                        and "$" in table_name
+                    ):
                         i += 1
                         if i > end_at:
                             i = 0
@@ -1146,14 +1229,17 @@ def input_client(
                         host=proton_server, port=proton_server_native_port
                     )  # create python client
 
-                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                    if (
+                        worker_mode is not None
+                        and worker_mode == "round_robin"
+                        and "$" in table_name
+                    ):
                         i += 1
                         if i > end_at:
                             i = 0
 
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
-
 
             input_done.value = True  # set input_done mp.Value to True to indicate all the inputs are executed.
 
@@ -1173,25 +1259,42 @@ def input_client(
                     logger.debug(
                         f"input_id = {input_id}, input_sub_id = {input_sub_id}, client = {client}: batch_input_from_data_set_rest to be executed"
                     )
-                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                    if (
+                        worker_mode is not None
+                        and worker_mode == "round_robin"
+                        and "$" in table_name
+                    ):
                         table_name_copy = table_name.replace("$", str(i))
                     else:
-                        table_name_copy = table_name                    
+                        table_name_copy = table_name
                     batch_input_from_data_set_rest(
-                        config, table_name_copy, table_schema, session, data_set, batch_size
+                        config,
+                        table_name_copy,
+                        table_schema,
+                        session,
+                        data_set,
+                        batch_size,
                     )
-                    if worker_mode is not None and worker_mode == "round_robin" and "$" in table_name:
+                    if (
+                        worker_mode is not None
+                        and worker_mode == "round_robin"
+                        and "$" in table_name
+                    ):
                         i += 1
                         if i > end_at:
-                            i = 0                    
+                            i = 0
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
                 except (BaseException) as error:
                     logger.debug(f"exception, error = {error}")
-                    if worker_mode is not None and worker_mode == 'round_robin' and "$" in table_name:
+                    if (
+                        worker_mode is not None
+                        and worker_mode == "round_robin"
+                        and "$" in table_name
+                    ):
                         i += 1
                         if i > end_at:
-                            i = 0                    
+                            i = 0
                     if loop_times > 0:
                         loop_count += 1  # if loop_times < 0, run infinitely
             input_done.value = True
@@ -1220,7 +1323,8 @@ def input_walk_through(
     data_set_abspath = None
     proc_workers = []
     data_set_file_format = None
-    json_column = None #set the default json column to 'event'
+    json_column = None  # set the default json column to 'event'
+    test_suite_path = config.get("test_suite_path")
 
     for source in inputs:
         table_name = source.get("table_name")
@@ -1228,11 +1332,17 @@ def input_walk_through(
         input_id = source.get("input_id")
         client = source.get("client")
         table_schema_ref = source.get("table_schema_ref")
-        #table_schema = find_schema(table_name, table_schemas)
-        table_schema = find_schema(table_schema_ref, table_schemas) # to support $ as a token of auto increased surfix in inputs, the table name can't be used to find schema, but use table_schema_ref
-        print(f"input_walk_through: table_name = {table_name}, table_schema_ref = {table_schema_ref}, table_schema = {table_schema}")
+        # table_schema = find_schema(table_name, table_schemas)
+        table_schema = find_schema(
+            table_schema_ref, table_schemas
+        )  # to support $ as a token of auto increased surfix in inputs, the table name can't be used to find schema, but use table_schema_ref
+        print(
+            f"input_walk_through: table_name = {table_name}, table_schema_ref = {table_schema_ref}, table_schema = {table_schema}"
+        )
 
         workers = source.get("workers")
+        random_fields = source.get("random_fields")
+        random_ranges = source.get("random_ranges")
         data_source = source.get("data_source")
         data_set_path = source.get("data_set_path")
         input_record_table = source.get("input_record_table")
@@ -1242,15 +1352,11 @@ def input_walk_through(
 
         if data_set_path != None:
             data_set_abspath = (
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                + "/"
-                + "performance/configs/data/data_sets"
-                + "/"
-                + data_set_path
+                test_suite_path + "configs/data/data_sets" + "/" + data_set_path
             )
-
+        logger.debug(f"input_walk_through: data_set_path = {data_set_path}")
         data_set_file = source.get("data_set_file")
-        logger.debug(f"input_walk_through: data_set_file = {data_set_file}")
+        logger.debug(f"input_walk_through: data_set_abspath = {data_set_abspath}")
         if data_set_file != None:
             data_set_file_abspath = data_set_abspath + "/" + data_set_file
 
@@ -1271,8 +1377,6 @@ def input_walk_through(
 
         logger.debug(f"input_id = {input_id}, client = {client}, workers = {workers}")
 
-
-        
         data_sets_for_workers = data_prep_csv_2_list(
             data_set_file_abspath,
             test_id,
@@ -1283,10 +1387,12 @@ def input_walk_through(
             time_incre_interval=ingest_interval,
             batch_size=batch_size,
             data_set_file_format=data_set_file_format,
-            json_column = json_column
+            json_column=json_column,
+            random_fields=random_fields,
+            random_ranges=random_ranges,
         )
 
-        # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")    
+        # logger.debug(f"{sys._getframe().f_code.co_name}: data_sets_for_workers = {data_sets_for_workers}, input_info_data_set = {input_info_data_set}")
         i = 0
         for data_set_dict in data_sets_for_workers:
             input_sub_id = data_set_dict.get("input_sub_id")
@@ -1344,10 +1450,9 @@ def input_walk_through(
     return proc_workers
 
 
-def env_setup(
-    client, rest_setting, test_suite_config, env_compose_file, proton_ci_mode
-):
+def env_setup(client, config, test_suite_config, env_compose_file, proton_ci_mode):
     ci_mode = proton_ci_mode
+    rest_setting = config.get("rest_setting")
     logger.info(f"env_setup: ci_mode = {ci_mode}")
     logger.debug(f"env_setup: rest_setting = {rest_setting}")
     health_url = rest_setting.get("health_check_url")
@@ -1396,12 +1501,13 @@ def env_setup(
     for table_schema in table_schemas:
         table_type = table_schema.get("type")
         table_name = table_schema.get("name")
-        if table_exist(table_ddl_url, table_name):
+        table_info = table_exist(table_ddl_url, table_name)
+        if table_info is not None:
             pass
         else:
             if table_type == "table":
-                create_table_rest(table_ddl_url, table_schema)
-            #elif table_type == "view":
+                create_table_rest(config, table_schema)
+            # elif table_type == "view":
             #    create_table_pyclient(client, table_schema)
 
     setup = test_suite_config.get("setup")
@@ -1410,15 +1516,16 @@ def env_setup(
         setup_inputs = setup.get("inputs")
         if setup_inputs != None:
             setup_input_res = input_walk_through_rest(
-                rest_setting, setup_inputs, table_schemas
+                config, setup_inputs, table_schemas
             )
-        setup_statements = setup.get("statements") #only support table rightnow todo: optimize logic
+        setup_statements = setup.get(
+            "statements"
+        )  # only support table rightnow todo: optimize logic
         if setup_statements != None:
             for statement in setup_statements:
                 query = statement.get("query")
                 if query is not None:
                     client.execute(query)
-
 
     return
 
@@ -1428,7 +1535,9 @@ def test_suite_run(test_context, proc_target_func=query_execute):
     alive = mp.Value("b", False)
     logger.info("rockets_run starts......")
     docker_compose_file = test_context.get("docker_compose_file")
+    test_suite_path = test_context.get("test_suite_path")
     config = test_context.get("config")
+    config["test_suite_path"] = test_suite_path
     rest_setting = config.get("rest_setting")
     proton_server = config.get("proton_server")
     proton_server_native_port = config.get("proton_server_native_port")
@@ -1533,7 +1642,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
     try:
         client = Client(host=proton_server, port=proton_server_native_port)
         env_setup(
-            client, rest_setting, test_suite_config, docker_compose_file, proton_ci_mode
+            client, config, test_suite_config, docker_compose_file, proton_ci_mode
         )
         logger.info("rockets_run env_etup done")
 
@@ -1555,7 +1664,7 @@ def test_suite_run(test_context, proc_target_func=query_execute):
             # scan steps to find out tables used in inputs and truncate all the tables
 
             res_clear_case_env = reset_tables_of_test_inputs(
-                client, table_ddl_url, table_schemas, test
+                client, config, table_schemas, test
             )
 
             for step in steps:
@@ -1677,9 +1786,17 @@ def test_suite_run(test_context, proc_target_func=query_execute):
         return test_sets
 
 
-def test_suite_context(config_file=None, tests_file=None, docker_compose_file=None):
+def test_suite_context(test_suite_path=None):
     # global alive
     # logger.debug(f"test_context: proc_target_func = {proc_target_func}, config_file = {config_file}, tests_file = {tests_file}, docker_compose_file = {docker_compose_file}")
+    if test_suite_path == None:
+        logger.info("No test suite directory specificed by -d, exit.")
+        sys.exit(0)
+    config_file = f"{test_suite_path}/configs/config.json"
+    tests_file = f"{test_suite_path}/tests.json"
+    docker_compose_file = f"{test_suite_path}/configs/docker-compose.yaml"
+    if not os.path.exists(tests_file) or not os.path.exists(config_file):
+        logger.info("tests.json or config.json was not found under test suite folder.")
     config = env_var_get()
     if config == None:
         with open(config_file) as f:
@@ -1696,6 +1813,7 @@ def test_suite_context(config_file=None, tests_file=None, docker_compose_file=No
         test_suite = json.load(f)
 
     rockets_context = {
+        "test_suite_path": test_suite_path,
         "config": config,
         "test_suite": test_suite,
         # "query_exe_client": query_exe_client,
@@ -1721,7 +1839,7 @@ if __name__ == "__main__":
 
     logger.setLevel(logging.INFO)
 
-    logger.info("rockets_main starts......")
+    logger.info("bucks_main starts......")
 
     argv = sys.argv[1:]  # get -d to specify the test_sutie path
     try:
@@ -1736,19 +1854,19 @@ if __name__ == "__main__":
     if test_suite_path == None:
         logger.info("No test suite directory specificed by -d, exit.")
         sys.exit(0)
-    config_file = f"{test_suite_path}/configs/config.json"
-    tests_file = f"{test_suite_path}/tests.json"
-    docker_compose_file = f"{test_suite_path}/configs/docker-compose.yaml"
+    elif not test_suite_path.endswith("/"):
+        test_suite_path += "/"
 
-    if os.path.exists(tests_file):
-        test_context = test_suite_context(
-            config_file, tests_file, docker_compose_file
-        )  # need to have config env vars/config.json and test.json when run rockets.py as a test debug tooling.
-        test_sets = test_suite_run(test_context, query_execute)
-        # output the test_sets one by one
-        logger.info("main: ouput test_sets......")
-        # for test_set in test_sets:
-        #    test_set_json = json.dumps(test_set)
-        #    logger.info(f"main: test_set from rockets_run: {test_set_json} \n\n")
-    else:
-        logger.info("No tests.json exists under test suite folder.")
+    # config_file = f"{test_suite_path}/configs/config.json"
+    # tests_file = f"{test_suite_path}/tests.json"
+    # docker_compose_file = f"{test_suite_path}/configs/docker-compose.yaml"
+
+    test_context = test_suite_context(
+        test_suite_path
+    )  # need to have config env vars/config.json and test.json when run rockets.py as a test debug tooling.
+    test_sets = test_suite_run(test_context, query_execute)
+    # output the test_sets one by one
+    logger.info("main: ouput test_sets......")
+    # for test_set in test_sets:
+    #    test_set_json = json.dumps(test_set)
+    #    logger.info(f"main: test_set from rockets_run: {test_set_json} \n\n")

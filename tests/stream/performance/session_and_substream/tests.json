@@ -141,7 +141,90 @@
                         "type": "string"
                     }
 
-            ]}           
+            ]},
+            {
+                "name": "ttp",
+                "type": "table",
+                "reset": "False",
+                "query_parameters":"logstore_retention_ms=3600000",
+                "config": "setting_1",
+                "columns": [
+                    {
+                        "name": "lpn",
+                        "type": "string"
+                    },
+                    {
+                        "name": "vno",
+                        "type": "string"
+                    },
+                    {
+                        "name": "drc",
+                        "type": "string"
+                    },
+                    {
+                        "name": "drcCode",
+                        "type": "int32"
+                    },
+                    {
+                        "name": "wgs84Lat",
+                        "type": "float32"
+                    },
+                    {
+                        "name": "wgs84Lon",
+                        "type": "float32"
+                    },
+                    {
+                        "name": "gcj02Lat",
+                        "type": "float32"
+                    },
+                    {
+                        "name": "gcj02Lon",
+                        "type": "float32"
+                    },
+                    {
+                        "name": "province",
+                        "type": "nullable(string)"
+                    },
+                    {
+                        "name": "city",
+                        "type": "nullable(string)"
+                    },                    
+                    {
+                        "name": "country",
+                        "type": "nullable(string)"
+                    },
+                    {
+                        "name": "spd",
+                        "type": "float32"
+                    },
+                    {
+                        "name": "mil",
+                        "type": "float32"
+                    },
+                    {
+                        "name": "adr",
+                        "type": "float32"
+                    },                    
+                    {
+                        "name": "time",
+                        "type": "string"
+                    },                                                                                                                                                                                                                                                
+                    {
+                        "name": "perf_event_time",
+                        "type": "datetime64(3, 'Asia/Shanghai')",
+                        "default": "now64(3, 'Asia/Shanghai')"
+                    },                      
+                    {
+                        "name": "_perf_row_id",
+                        "type": "string"
+                    },                  
+                    {
+                        "name": "_perf_ingest_time",
+                        "type": "string"
+                    }
+                ],
+                "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR"
+            }                       
 
 
         ],
@@ -165,209 +248,103 @@
     },
 
     "tests": [
+
         {
             "id": 0,
-            "tags": ["ingest only"],
-            "name": "ingest into one stream iris",
-            "description": "tail query latency w/single source",
-            "db_engine":"proton",
-            "input_info_table": "input_info",
-            "steps":[                    
-
-                {"inputs": [
-                    {"table_name": "iris","input_id": 201,"client":"python", "workers":80, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":100, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "iris","input_id": 202,"client":"rest", "workers":80, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris1.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":100, "loop_times":-1, "result_keep":"False","input_record_table":"input_record1"}                        
-                ]}
-
-            ]               
-        },        
-        {
-            "id": 1,
-            "tags": ["latency"],
-            "name": "tail laterncy - proton",
+            "tags": ["debug"],
+            "name": "longevity - proton, with query time easy json volume, 80 streams",
             "description": "tail query latency w/single source",
             "db_engine":"proton",
             "input_info_table": "input_info",
             "steps":[
                 {"statements": [
-                    {"client":"python","config_set": "setting_1", "query_type": "table", "query":"drop view if exists iris_global_avg_v"},
-                    {"client":"python","config_set": "setting_1", "wait":5, "query_type": "table", "query":"create materialized view iris_global_avg_v as select species, avg(sepal_length) as avg_sepal_length, avg(sepal_width) as avg_sepal_width from iris group by species"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "query_id":"101", "run_mode":"process","workers": 40, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_avg_v", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "workers": 60, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}
-
-
-                ]},
-                    
-
-                {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
-                ]}
-
-            ]               
-        },
-        {
-            "id": 2,
-            "tags": ["latency"],
-            "name": "longevity - proton, with query time easy json volume",
-            "description": "tail query latency w/single source",
-            "db_engine":"proton",
-            "input_info_table": "input_info",
-            "steps":[
-                {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 80, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": 1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists event_s_tumble_count_v$"},                    
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 80, "query_type": "table", "query":"create materialized view event_s_tumble_count_v$ as select window_start as ws, window_end as we, json_string:repo.name as repo_name, count() from tumble(event_s, 5s) group by repo_name, window_start, window_end"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"event_s_tumble_count_v$", "query_id":"102", "run_mode":"process", "loop_times": 1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from event_s_tumble_count_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},                    
-                    {"client":"python", "config_set": "setting_1", "wait": 1, "query_id": 103, "run_mode":"process", "loop_times": 1, "workers": 30, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select a.json_string:id as a_id, to_time(a.json_string:created_at) as a_created_at, a.json_string:payload.pull_request.head.repo.owner.id as a_repo_owner_id, b.json_string:id as b_id, to_time(b.json_string:created_at) as b_created_at, b.json_string:payload.pull_request.head.repo.owner.id as b_repo_owner_id, date_diff('second', a._tp_time, b._tp_time) from event_s as a join event_s1 as b on a_id = b_id and to_int64(a_id) > 0 and date_diff_within(10s, a._tp_time, b._tp_time) ", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 104, "run_mode":"process", "loop_times": 1, "workers": 100, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
-                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},                    
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop stream if exists iris_$"},
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"create stream if not exists iris_$(sepal_length float64, sepal_width float64, petal_length float64, petal_width float64, species string, perf_event_time datetime64(3) default now64(3), _perf_row_id string, _perf_ingest_time string) TTL to_datetime(_tp_time) + INTERVAL 24 HOUR SETTINGS logstore_retention_bytes = '21474836480', logstore_retention_ms = '00000'"},                    
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 2, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris_$ group by species"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_sum_v$", "query_id":"101", "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 105, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 1,"query_id": 106, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"}
 
                 ]},
                     
 
                 {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":120, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                    {"table_name": "iris_$","input_id": 201,"table_schema_ref":"iris", "workers":2, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
                         "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":120, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "event_s","input_id": 203, "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "event_s1","input_id": 204, "workers":1, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "json_string", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                           
+                    {"table_name": "iris_$","input_id": 202,"table_schema_ref":"iris", "client":"rest", "workers":2, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "iris_$","input_id": 203,"table_schema_ref":"iris", "$start_from": 0,"$end_at":1, "client":"rest", "workers":2,"worker_mode":"round_robin", "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
 
-                ]}
-
-            ]               
-        },
-
-        {
-            "id": 3,
-            "tags": ["latency"],
-            "name": "longevity - proton, with query time easy json debug",
-            "description": "tail query latency w/single source",
-            "db_engine":"proton",
-            "input_info_table": "input_info",
-            "steps":[
-                {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 1, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"create stream if not exists iris_$(sepal_length float64, sepal_width float64, petal_length float64, petal_width float64, species string, perf_event_time datetime64(3) default now64(3), _perf_row_id string, _perf_ingest_time string)"},
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 1, "query_type": "table", "query":"create materialized view if not exists iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris_$ group by species"},
-                    {"client":"python","config_set": "setting_1", "wait": 1, "interval":1, "depends_on_stream":"iris_global_sum_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 1, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists event_s_tumble_count_v$"},                    
-                    {"client":"python","config_set": "setting_1", "wait":2, "interval":1, "workers": 2, "query_type": "table", "query":"create materialized view event_s_tumble_count_v$ as select window_start as ws, window_end as we, json_string:repo.name as repo_name, count() from tumble(event_s, 5s) group by repo_name, window_start, window_end"},
-                    {"client":"python","config_set": "setting_1", "wait": 2, "interval":1, "depends_on_stream":"event_s_tumble_count_v$", "query_id":"102", "run_mode":"process", "loop_times": -1, "workers": 2, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from event_s_tumble_count_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},                    
-                    {"client":"python", "config_set": "setting_1", "wait": 1, "query_id": 103, "run_mode":"process", "loop_times": -1, "workers": 2, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select a.json_string:id as a_id, to_time(a.json_string:created_at) as a_created_at, a.json_string:payload.pull_request.head.repo.owner.id as a_repo_owner_id, b.json_string:id as b_id, to_time(b.json_string:created_at) as b_created_at, b.json_string:payload.pull_request.head.repo.owner.id as b_repo_owner_id, date_diff('second', a_created_at, b_created_at) from event_s as a join event_s1 as b on a_id = b_id and to_int64(a_id) > 0 and date_diff_within(10s, a_created_at, b_created_at) ", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python", "config_set": "setting_1", "wait": 1, "query_id": 104, "run_mode":"process", "loop_times": -1, "workers": 2, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 1, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
-                    {"client":"python","config_set": "setting_1","workers": 1, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
-
-                ]},
-                    
-
-                {"inputs": [
-                    {"table_name": "iris_$","input_id": 202,"table_schema_ref":"iris", "client":"rest", "workers":1, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                       
-
-                ]}
-
-            ]               
-        },        
-
-
-        {
-            "id": 4,
-            "tags": ["latency"],
-            "name": "longevity - proton, with easy json obj large volume",
-            "description": "tail query latency w/single source",
-            "db_engine":"proton",
-            "input_info_table": "input_info",
-            "steps":[
-                {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 80, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 80, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 80, "interval":1, "query_type": "table", "query":"drop view if exists event_tumble_count_v$"},                    
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 80, "query_type": "table", "query":"create materialized view event_tumble_count_v$ as select window_start as ws, window_end as we, event.type, count() from tumble(event, 5s) group by event.type, window_start, window_end"},
-                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 50, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
-                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
-
-                ]},
-                    
-
-                {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":110, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "event","input_id": 203, "workers":110, "data_source":"file", "data_set_path":"event", "data_set_file": "event_github.json", "data_set_file_format": "json", "json_column": "event", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
-
-                ]}
-
-            ]               
-        },        
-        {
-            "id": 6,
-            "tags": ["latency"],
-            "name": "longevity - proton, legecy features, no easy json large volume",
-            "description": "tail query latency w/single source",
-            "db_engine":"proton",
-            "input_info_table": "input_info",
-            "steps":[
-                {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 120, "interval":1, "query_type": "table", "query":"drop view if exists iris_global_sum_v$"},
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":5, "workers": 120, "query_type": "table", "query":"create materialized view iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris group by species"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_avg_v$", "query_id":"101", "run_mode":"process", "loop_times": -1, "workers": 120, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 102, "run_mode":"process", "loop_times": -1, "workers": 50, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from iris where sepal_length > 4 and  sepal_length <5", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(iris_global_sum_v$)"},
-                    {"client":"python","config_set": "setting_1","workers": 20, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count(*) from table(iris)"}
-
-                ]},
-                    
-
-                {"inputs": [
-                    {"table_name": "iris","input_id": 201, "workers":100, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "iris","input_id": 202, "client":"rest", "workers":220, "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 1000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                        
                 ]}
 
             ]               
         },
         {
             "id": 7,
-            "tags": ["latency"],
-            "name": "longevity - proton, stream 1000, iris",
+            "tags": ["debug-ingestion only"],
+            "name": "longevity - proton, with query time easy json volume, 80 streams",
             "description": "tail query latency w/single source",
             "db_engine":"proton",
             "input_info_table": "input_info",
             "steps":[
                 {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 1000, "interval":1, "query_type": "table", "query":"create stream if not exists iris_$(sepal_length float64, sepal_width float64, petal_length float64, petal_width float64, species string, perf_event_time datetime64(3) default now64(3), _perf_row_id string, _perf_ingest_time string)"},
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 1000, "query_type": "table", "query":"create materialized view if not exists iris_global_sum_v$ as select species, sum(sepal_length) as sum_sepal_length, sum(sepal_width) as sum_sepal_width from iris_$ group by species"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"iris_global_sum_v$", "query_id":"101", "run_mode":"process", "loop_times": 1, "workers": 1000, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from iris_global_sum_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"}                   
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists ttp_session_substream_v$"},                    
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop stream if exists ttp_$"},
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"CREATE STREAM if not exists ttp_$(`lpn` string, `vno` string, `drc` string, `drcCode` int32, `wgs84Lat` float32, `wgs84Lon` float32, `gcj02Lat` float32, `gcj02Lon` float32, `province` nullable(string), `city` nullable(string), `country` nullable(string), `spd` float32, `mil` float32, `time` string, `adr` string, perf_event_time datetime64(3) default now64(3,'Asia/Shanghai'), _perf_row_id string, _perf_ingest_time string, `_tp_time` datetime64(3, 'Asia/Shanghai') DEFAULT now64(3,'Asia/Shanghai') CODEC(DoubleDelta, LZ4), `_tp_index_time` datetime64(3, 'UTC') CODEC(DoubleDelta, LZ4)) TTL to_datetime(_tp_time) + INTERVAL 24 HOUR SETTINGS logstore_retention_bytes = '21474836480', logstore_retention_ms = '00000'"}
+                ]},
+                    
+
+                {"inputs": [
+                    {"table_name": "ttp_$","input_id": 210,"table_schema_ref":"ttp", "workers":2, "data_source":"file", "data_set_path":"ttp", "data_set_file": "ttp.csv", "random_fields": "lpn", "random_ranges":"2000", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 3000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "ttp_$","input_id": 211,"table_schema_ref":"ttp", "client":"rest", "workers":2, "data_source":"file", "data_set_path":"ttp", "data_set_file": "ttp.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "ttp_$","input_id": 212,"table_schema_ref":"ttp", "$start_from": 0,"$end_at":1, "client":"rest", "workers":2,"worker_mode":"round_robin", "data_source":"file", "data_set_path":"ttp", "data_set_file": "ttp.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
+
+                ]}
+
+            ]               
+        },        
+
+        {
+            "id": 8,
+            "tags": ["debug"],
+            "name": "longevity - proton, with query time easy json volume, 80 streams",
+            "description": "tail query latency w/single source",
+            "db_engine":"proton",
+            "input_info_table": "input_info",
+            "steps":[
+                {"statements": [
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists ttp_session_substream_v$"},                    
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop stream if exists ttp_$"},
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"CREATE STREAM if not exists ttp_$(`lpn` string, `vno` string, `drc` string, `drcCode` int32, `wgs84Lat` float32, `wgs84Lon` float32, `gcj02Lat` float32, `gcj02Lon` float32, `province` nullable(string), `city` nullable(string), `country` nullable(string), `spd` float32, `mil` float32, `time` string, `adr` string, perf_event_time datetime64(3) default now64(3,'Asia/Shanghai'), _perf_row_id string, _perf_ingest_time string, `_tp_time` datetime64(3, 'Asia/Shanghai') DEFAULT now64(3,'Asia/Shanghai') CODEC(DoubleDelta, LZ4), `_tp_index_time` datetime64(3, 'UTC') CODEC(DoubleDelta, LZ4)) TTL to_datetime(_tp_time) + INTERVAL 24 HOUR SETTINGS logstore_retention_bytes = '21474836480', logstore_retention_ms = '00000'"},                    
+                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 2, "query_type": "table", "query":"create view if not exists ttp_session_substream_v$ as (WITH duration AS(SELECT lpn, window_start AS ds, window_end AS de, date_diff('second', ds, de) AS du FROM session(ttp_$, _tp_time, 1s, 40s, spd > 0, spd = 0, lpn) GROUP BY lpn, window_start, window_end  SETTINGS seek_to = 'earliest') SELECT lpn, window_start, window_end, sum(du) FROM hop(duration, de, 10s, 40s) PARTITION BY lpn GROUP BY lpn, window_start, window_end HAVING  sum(du) > 1s)"},
+                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"ttp_session_substream_v$", "query_id":201, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from ttp_session_substream_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 202, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from ttp_$ where spd >0", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 203, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select count_distinct(lpn) FROM (SELECT lpn, max(_tp_time) as lastSeen FROM ttp_$ group by lpn having lastSeen>date_sub(now(),10s) emit periodic 5s settings seek_to='-24h')", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 1,"query_id": 204, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(ttp_$) where spd >0"}
 
                 ]},
                     
 
                 {"inputs": [
-                    {"table_name": "iris_$","input_id": 202,"table_schema_ref":"iris", "$start_from": 0,"$end_at":999, "client":"rest", "workers":200,"worker_mode":"round_robin", "data_source":"file", "data_set_path":"iris", "data_set_file": "iris.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}                       
+                    {"table_name": "ttp_$","input_id": 210,"table_schema_ref":"ttp", "workers":2, "data_source":"file", "data_set_path":"ttp", "data_set_file": "ttp.csv", "random_fields": "lpn", "random_ranges":"2000", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 3000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "ttp_$","input_id": 211,"table_schema_ref":"ttp", "client":"rest", "workers":2, "data_source":"file", "data_set_path":"ttp", "data_set_file": "ttp.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
+                    {"table_name": "ttp_$","input_id": 212,"table_schema_ref":"ttp", "$start_from": 0,"$end_at":1, "client":"rest", "workers":2,"worker_mode":"round_robin", "data_source":"file", "data_set_path":"ttp", "data_set_file": "ttp.csv", "table_schema_file":"table_schema.json -todo", 
+                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
 
                 ]}
 
             ]               
-        },
+        },        
         
         {
-            "id": 8,
+            "id": 1,
             "tags": ["latency"],
             "name": "longevity - proton, with query time easy json volume, 80 streams",
             "description": "tail query latency w/single source",

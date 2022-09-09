@@ -9,6 +9,55 @@ x-logging: &default-logging
     compress: "true"
 
 services:
+
+  neutron:
+    container_name: neutron
+    extra_hosts: 
+        - "kafka:${KAFKA_IP}"    
+    logging: *default-logging
+    image: timeplus/neutron:${NEUTRON_TAG}
+    pull_policy: always
+    command:
+      # Make sure your log file is under /timeplus/logs, otherwise there will be permission issue
+      --config=/timeplus/config/.neutron.yaml --show-api-doc --log-file-path=/timeplus/logs/neutron.log ${NEUTRON_EXTRA_OPTION}
+    environment:
+      - PROTON_ADDR=proton-cluster-node1 
+      - PROTON_KV_ADDR=proton-cluster-node1 
+      - PROTON_STATS_ADDR=proton-cluster-node1 
+      - TLS=false
+    volumes:
+      - ./neutron/certificate:/certificate/
+      - ./neutron/config:/timeplus/config/
+      - ./neutron/logs:/timeplus/logs/
+      # - ./neutron/axion/console:/timeplus/console/          # Un-comment this line to deploy UI separately
+      # - ./neutron/axion/playground:/timeplus/playground/    # Un-comment this line to deploy UI separately
+    ports:
+      - "${NEUTRON_PORT}:8000"
+    depends_on:
+      - proton-cluster-node1 
+  
+  demoapp:
+    container_name: demoapp
+    logging: *default-logging
+    image: timeplus/neutron:${NEUTRON_TAG}
+    pull_policy: always
+    command:
+      demo --config=/timeplus/config/.neutron.yaml --log-file-path=/timeplus/logs/neutron.log
+    environment:
+      - PROTON_ADDR=proton-cluster-node1 
+      - PROTON_KV_ADDR=proton-cluster-node1 
+      - PROTON_STATS_ADDR=proton-cluster-node1 
+      - TLS=false
+      # - DEMO_SHOW_CASE=true
+      - METRICS_STORE_TYPE=none
+      # - RUN_WEB_SERVER=false
+      - METADATA_STORE_TYPE=memory
+    volumes:
+      - ./demoapp/config:/timeplus/config/
+      - ./demoapp/logs:/timeplus/logs/
+    depends_on:
+      - proton-cluster-node1  
+
   proton-cluster-node1:
     image: timeplus/proton:${PROTON_TAG:-prestage}
     logging: *default-logging
@@ -40,11 +89,13 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - STREAM_STORAGE_BROKERS=kafka:29092
-      #- LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_BROKERS=pkc-ld537.ca-central-1.aws.confluent.cloud:9092
       - STREAM_STORAGE_TYPE=kafka
-      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
-
+      - STREAM_STORAGE_SECURITY_PROTOCOL=SASL_SSL
+      - STREAM_STORAGE_USERNAME=FUATNXDP7XKVELBM
+      - STREAM_STORAGE_PASSWORD=MNNRwfuLnV298tMHY++5zrivNdpdiq5xkkyDPEQHmYhJ+3Wf728SappHGK83eiY0
+      - STREAM_STORAGE_CLUSTER_ID=lkc-rr7jjk
+      - LOGSTORE_REPLICATION_FACTOR=3
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
@@ -79,11 +130,13 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - STREAM_STORAGE_BROKERS=kafka:29092
-      #- LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_BROKERS=pkc-ld537.ca-central-1.aws.confluent.cloud:9092
       - STREAM_STORAGE_TYPE=kafka
-      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
-
+      - STREAM_STORAGE_SECURITY_PROTOCOL=SASL_SSL
+      - STREAM_STORAGE_USERNAME=FUATNXDP7XKVELBM
+      - STREAM_STORAGE_PASSWORD=MNNRwfuLnV298tMHY++5zrivNdpdiq5xkkyDPEQHmYhJ+3Wf728SappHGK83eiY0
+      - STREAM_STORAGE_CLUSTER_ID=lkc-rr7jjk
+      - LOGSTORE_REPLICATION_FACTOR=3
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
@@ -119,11 +172,13 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - STREAM_STORAGE_BROKERS=kafka:29092
-      #- LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_BROKERS=pkc-ld537.ca-central-1.aws.confluent.cloud:9092
       - STREAM_STORAGE_TYPE=kafka
-      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
-
+      - STREAM_STORAGE_SECURITY_PROTOCOL=SASL_SSL
+      - STREAM_STORAGE_USERNAME=FUATNXDP7XKVELBM
+      - STREAM_STORAGE_PASSWORD=MNNRwfuLnV298tMHY++5zrivNdpdiq5xkkyDPEQHmYhJ+3Wf728SappHGK83eiY0
+      - STREAM_STORAGE_CLUSTER_ID=lkc-rr7jjk
+      - LOGSTORE_REPLICATION_FACTOR=3
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 

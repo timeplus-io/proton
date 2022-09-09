@@ -9,11 +9,10 @@ x-logging: &default-logging
     compress: "true"
 
 services:
+
   proton-cluster-node1:
     image: timeplus/proton:${PROTON_TAG:-prestage}
     logging: *default-logging
-    extra_hosts: 
-        - "kafka:${KAFKA_IP}"      
     pull_policy: always
     container_name: proton-cluster-node1
     hostname: proton-cluster-node1
@@ -40,19 +39,19 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - STREAM_STORAGE_BROKERS=kafka:29092
-      #- LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_BROKERS=pkc-ld537.ca-central-1.aws.confluent.cloud:9092
       - STREAM_STORAGE_TYPE=kafka
-      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
-
+      - STREAM_STORAGE_SECURITY_PROTOCOL=SASL_SSL
+      - STREAM_STORAGE_USERNAME=FUATNXDP7XKVELBM
+      - STREAM_STORAGE_PASSWORD=MNNRwfuLnV298tMHY++5zrivNdpdiq5xkkyDPEQHmYhJ+3Wf728SappHGK83eiY0
+      - STREAM_STORAGE_CLUSTER_ID=lkc-rr7jjk
+      - LOGSTORE_REPLICATION_FACTOR=3
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-cluster-node2:
     image: timeplus/proton:${PROTON_TAG:-prestage}
     logging: *default-logging
-    extra_hosts: 
-        - "kafka:${KAFKA_IP}"      
     pull_policy: always
     container_name: proton-cluster-node2
     hostname: proton-cluster-node2
@@ -79,11 +78,13 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - STREAM_STORAGE_BROKERS=kafka:29092
-      #- LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_BROKERS=pkc-ld537.ca-central-1.aws.confluent.cloud:9092
       - STREAM_STORAGE_TYPE=kafka
-      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
-
+      - STREAM_STORAGE_SECURITY_PROTOCOL=SASL_SSL
+      - STREAM_STORAGE_USERNAME=FUATNXDP7XKVELBM
+      - STREAM_STORAGE_PASSWORD=MNNRwfuLnV298tMHY++5zrivNdpdiq5xkkyDPEQHmYhJ+3Wf728SappHGK83eiY0
+      - STREAM_STORAGE_CLUSTER_ID=lkc-rr7jjk
+      - LOGSTORE_REPLICATION_FACTOR=3
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
@@ -91,8 +92,6 @@ services:
   proton-cluster-node3:
     image: timeplus/proton:${PROTON_TAG:-prestage}
     logging: *default-logging
-    extra_hosts: 
-        - "kafka:${KAFKA_IP}"      
     pull_policy: always
     container_name: proton-cluster-node3
     hostname: proton-cluster-node3
@@ -119,11 +118,13 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - STREAM_STORAGE_BROKERS=kafka:29092
-      #- LOGSTORE_REPLICATION_FACTOR=3
+      - STREAM_STORAGE_BROKERS=pkc-ld537.ca-central-1.aws.confluent.cloud:9092
       - STREAM_STORAGE_TYPE=kafka
-      - STREAM_STORAGE_CLUSTER_ID=kafkacluster
-
+      - STREAM_STORAGE_SECURITY_PROTOCOL=SASL_SSL
+      - STREAM_STORAGE_USERNAME=FUATNXDP7XKVELBM
+      - STREAM_STORAGE_PASSWORD=MNNRwfuLnV298tMHY++5zrivNdpdiq5xkkyDPEQHmYhJ+3Wf728SappHGK83eiY0
+      - STREAM_STORAGE_CLUSTER_ID=lkc-rr7jjk
+      - LOGSTORE_REPLICATION_FACTOR=3
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 

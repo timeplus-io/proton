@@ -12,6 +12,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:${KAFKA_TAG}
     user: "0:0"
+    hostname: zookeeper
     container_name: zookeeper
     ports:
       - 2181:2181
@@ -25,10 +26,12 @@ services:
   kafka1:
     image: confluentinc/cp-kafka:${KAFKA_TAG}
     user: "0:0"
+    hostname: kafka1
     container_name: kafka1
     ports:
     # To learn about configuring Kafka for access across networks see
     # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "9092:9092"
       - "29092:29092"
     depends_on:
       - zookeeper
@@ -39,10 +42,11 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, CONNECTIONS_FROM_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092, CONNECTIONS_FROM_HOST://kafka:29092
-      #KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
+      KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes: 
       - ./kafka_data:/var/lib/kafka/data
     ulimits:
@@ -53,6 +57,7 @@ services:
   kafka2:
     image: confluentinc/cp-kafka:${KAFKA_TAG}
     user: "0:0"
+    hostname: kafka2
     container_name: kafka2
     ports:
     # To learn about configuring Kafka for access across networks see
@@ -67,10 +72,11 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, CONNECTIONS_FROM_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092, CONNECTIONS_FROM_HOST://kafka:39092
-      #KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
+      KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes: 
       - ./kafka1_data:/var/lib/kafka/data
     ulimits:
@@ -81,6 +87,7 @@ services:
   kafka3:
     image: confluentinc/cp-kafka:${KAFKA_TAG}
     user: "0:0"
+    hostname: kafka3
     container_name: kafka3
     ports:
     # To learn about configuring Kafka for access across networks see
@@ -95,13 +102,22 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, CONNECTIONS_FROM_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9092, CONNECTIONS_FROM_HOST://kafka:49092
-      #KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
+      KFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXTA
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes: 
       - ./kafka2_data:/var/lib/kafka/data
     ulimits:
       nofile:
         soft: 262144
         hard: 262144 
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "192.168.16.0/24"

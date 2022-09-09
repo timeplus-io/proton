@@ -14,7 +14,7 @@ logger:
     # - debug
     # - trace
     # [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
-    level: information
+    level: debug
     log: /var/log/proton-server/proton-server.log
     errorlog: /var/log/proton-server/proton-server.err.log
     # Rotation policy
@@ -940,13 +940,13 @@ cluster_settings:
             enabled: true
             default: true # true means, the streaming storage will be used to provision system internal topics
             cluster_name: default-sys-kafka-cluster-name
-            cluster_id: kafkacluster
-            security_protocol: PLAINTEXT # support PLAINTEXT, SASL_SSL
+            cluster_id: pkc-ld537.ca-central-1.aws.confluent.cloud:9092
+            security_protocol: SASL_SSL # support PLAINTEXT, SASL_SSL
             # if security_protocol is SASL_SSL, username and password should be specified.
-            # username: 
-            # password:
+            username:  
+            password: 
             # Setup the Kafka brokers here
-            brokers: kafka:29092
+            brokers: pkc-ld537.ca-central-1.aws.confluent.cloud:9092
             # Group ID used internally. Once it is setup, can't be changed.
             # Otherwise, there may have data duplication as proton uses it
             # for checkpointing
@@ -1053,12 +1053,15 @@ cluster_settings:
     # shall coexist on the same node
     node_roles:
         role:
+            - placement
             - catalog
+            - ddl
+            - task
 
 # Metastore server config
 metastore_server:
     http_port: 9444
-    server_id: 3
+    server_id: 1
 
     namespace_whitelist:
         namespace:
