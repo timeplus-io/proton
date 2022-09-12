@@ -724,7 +724,7 @@ class IColumn;
     M(UInt64, max_idempotent_ids, 1000, "Maximum idempotent IDs to keep in memory and on disk for idempotent data ingestion", 0) \
     M(Bool, synchronous_ddl, true, "If setting is enabled, the DDL for streaming storage will be executed synchronously otherwise it will be asynchronous. By default is enabled.", 0) \
     M(String, query_mode, "streaming", "Default query mode. table or streaming", 0) \
-    M(String, query_resource_group, "dedicated", "Default resource group. dedicated or shared", 1) \
+    M(String, query_resource_group, "shared", "Default resource group. 'dedicated' or 'shared'", 1) \
     M(UInt64, max_channels_per_resource_group, 20, "Max channels per shared resource group. One streaming query maps to one channel", 1) \
     M(Bool, enable_light_ingest, true, "Light ingest is inserting partial columns of a table", 0) \
     M(Bool, _tp_enable_log_stream_expr, false, "Enable log stream analytic", 0) \

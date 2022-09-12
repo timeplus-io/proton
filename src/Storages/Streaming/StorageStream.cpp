@@ -36,179 +36,179 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int TYPE_MISMATCH;
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int NOT_IMPLEMENTED;
-    extern const int OK;
-    extern const int UNABLE_TO_SKIP_UNUSED_SHARDS;
-    extern const int TOO_MANY_ROWS;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int BAD_ARGUMENTS;
-    extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int INTERNAL_ERROR;
-    extern const int UNSUPPORTED_PARAMETER;
+extern const int TYPE_MISMATCH;
+extern const int INVALID_CONFIG_PARAMETER;
+extern const int NOT_IMPLEMENTED;
+extern const int OK;
+extern const int UNABLE_TO_SKIP_UNUSED_SHARDS;
+extern const int TOO_MANY_ROWS;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int BAD_ARGUMENTS;
+extern const int RECEIVED_ERROR_TOO_MANY_REQUESTS;
+extern const int UNKNOWN_EXCEPTION;
+extern const int INTERNAL_ERROR;
+extern const int UNSUPPORTED_PARAMETER;
 }
 
 namespace
 {
-    const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
-    const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS = 2;
-    const UInt64 DISTRIBUTED_GROUP_BY_NO_MERGE_AFTER_AGGREGATION = 2;
+const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
+const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS = 2;
+const UInt64 DISTRIBUTED_GROUP_BY_NO_MERGE_AFTER_AGGREGATION = 2;
 
-    ExpressionActionsPtr
-    buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns, bool project)
+ExpressionActionsPtr
+buildShardingKeyExpression(const ASTPtr & sharding_key, ContextPtr context, const NamesAndTypesList & columns, bool project)
+{
+    ASTPtr query = sharding_key;
+    auto syntax_result = TreeRewriter(context).analyze(query, columns);
+    return ExpressionAnalyzer(query, syntax_result, context).getActions(project);
+}
+
+bool isExpressionActionsDeterministics(const ExpressionActionsPtr & actions)
+{
+    for (const auto & action : actions->getActions())
     {
-        ASTPtr query = sharding_key;
-        auto syntax_result = TreeRewriter(context).analyze(query, columns);
-        return ExpressionAnalyzer(query, syntax_result, context).getActions(project);
+        if (action.node->type != ActionsDAG::ActionType::FUNCTION)
+            continue;
+
+        if (!action.node->function_base->isDeterministic())
+            return false;
     }
+    return true;
+}
 
-    bool isExpressionActionsDeterministics(const ExpressionActionsPtr & actions)
+class ReplacingConstantExpressionsMatcher
+{
+public:
+    using Data = Block;
+
+    static bool needChildVisit(ASTPtr &, const ASTPtr &) { return true; }
+
+    static void visit(ASTPtr & node, Block & block_with_constants)
     {
-        for (const auto & action : actions->getActions())
-        {
-            if (action.node->type != ActionsDAG::ActionType::FUNCTION)
-                continue;
+        if (!node->as<ASTFunction>())
+            return;
 
-            if (!action.node->function_base->isDeterministic())
+        std::string name = node->getColumnName();
+        if (block_with_constants.has(name))
+        {
+            auto result = block_with_constants.getByName(name);
+            if (!isColumnConst(*result.column))
+                return;
+
+            node = std::make_shared<ASTLiteral>(assert_cast<const ColumnConst &>(*result.column).getField());
+        }
+    }
+};
+
+void replaceConstantExpressions(
+    ASTPtr & node,
+    ContextPtr context,
+    const NamesAndTypesList & columns,
+    ConstStoragePtr storage,
+    const StorageSnapshotPtr & storage_snapshot)
+{
+    auto syntax_result = TreeRewriter(context).analyze(node, columns, storage, storage_snapshot);
+    Block block_with_constants = KeyCondition::getBlockWithConstants(node, syntax_result, context);
+
+    InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(block_with_constants);
+    visitor.visit(node);
+}
+
+/// Returns one of the following:
+/// - QueryProcessingStage::Complete
+/// - QueryProcessingStage::WithMergeableStateAfterAggregation
+/// - none (in this case regular WithMergeableState should be used)
+std::optional<QueryProcessingStage::Enum>
+getOptimizedQueryProcessingStage(const ASTPtr & query_ptr, bool extremes, const Block & sharding_key_block)
+{
+    const auto & select = query_ptr->as<ASTSelectQuery &>();
+
+    auto sharding_block_has = [&](const auto & exprs, size_t limit = SIZE_MAX) -> bool {
+        size_t i = 0;
+        for (auto & expr : exprs)
+        {
+            ++i;
+            if (i > limit)
+                break;
+
+            auto id = expr->template as<ASTIdentifier>();
+            if (!id)
+                return false;
+            /// TODO: if GROUP BY contains multiIf()/if() it should contain only columns from sharding_key
+            if (!sharding_key_block.has(id->name()))
                 return false;
         }
         return true;
-    }
-
-    class ReplacingConstantExpressionsMatcher
-    {
-    public:
-        using Data = Block;
-
-        static bool needChildVisit(ASTPtr &, const ASTPtr &) { return true; }
-
-        static void visit(ASTPtr & node, Block & block_with_constants)
-        {
-            if (!node->as<ASTFunction>())
-                return;
-
-            std::string name = node->getColumnName();
-            if (block_with_constants.has(name))
-            {
-                auto result = block_with_constants.getByName(name);
-                if (!isColumnConst(*result.column))
-                    return;
-
-                node = std::make_shared<ASTLiteral>(assert_cast<const ColumnConst &>(*result.column).getField());
-            }
-        }
     };
 
-    void replaceConstantExpressions(
-        ASTPtr & node,
-        ContextPtr context,
-        const NamesAndTypesList & columns,
-        ConstStoragePtr storage,
-        const StorageSnapshotPtr & storage_snapshot)
+    // GROUP BY qualifiers
+    // - TODO: WITH TOTALS can be implemented
+    // - TODO: WITH ROLLUP can be implemented (I guess)
+    if (select.group_by_with_totals || select.group_by_with_rollup || select.group_by_with_cube)
+        return {};
+
+    // TODO: extremes support can be implemented
+    if (extremes)
+        return {};
+
+    // DISTINCT
+    if (select.distinct)
     {
-        auto syntax_result = TreeRewriter(context).analyze(node, columns, storage, storage_snapshot);
-        Block block_with_constants = KeyCondition::getBlockWithConstants(node, syntax_result, context);
-
-        InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(block_with_constants);
-        visitor.visit(node);
-    }
-
-    /// Returns one of the following:
-    /// - QueryProcessingStage::Complete
-    /// - QueryProcessingStage::WithMergeableStateAfterAggregation
-    /// - none (in this case regular WithMergeableState should be used)
-    std::optional<QueryProcessingStage::Enum>
-    getOptimizedQueryProcessingStage(const ASTPtr & query_ptr, bool extremes, const Block & sharding_key_block)
-    {
-        const auto & select = query_ptr->as<ASTSelectQuery &>();
-
-        auto sharding_block_has = [&](const auto & exprs, size_t limit = SIZE_MAX) -> bool {
-            size_t i = 0;
-            for (auto & expr : exprs)
-            {
-                ++i;
-                if (i > limit)
-                    break;
-
-                auto id = expr->template as<ASTIdentifier>();
-                if (!id)
-                    return false;
-                /// TODO: if GROUP BY contains multiIf()/if() it should contain only columns from sharding_key
-                if (!sharding_key_block.has(id->name()))
-                    return false;
-            }
-            return true;
-        };
-
-        // GROUP BY qualifiers
-        // - TODO: WITH TOTALS can be implemented
-        // - TODO: WITH ROLLUP can be implemented (I guess)
-        if (select.group_by_with_totals || select.group_by_with_rollup || select.group_by_with_cube)
+        if (!sharding_block_has(select.select()->children))
             return {};
+    }
 
-        // TODO: extremes support can be implemented
-        if (extremes)
+    // GROUP BY
+    const ASTPtr group_by = select.groupBy();
+    if (!group_by)
+    {
+        if (!select.distinct)
             return {};
-
-        // DISTINCT
-        if (select.distinct)
-        {
-            if (!sharding_block_has(select.select()->children))
-                return {};
-        }
-
-        // GROUP BY
-        const ASTPtr group_by = select.groupBy();
-        if (!group_by)
-        {
-            if (!select.distinct)
-                return {};
-        }
-        else
-        {
-            if (!sharding_block_has(group_by->children, 1))
-                return {};
-        }
-
-        // ORDER BY
-        const ASTPtr order_by = select.orderBy();
-        if (order_by)
-            return QueryProcessingStage::WithMergeableStateAfterAggregation;
-
-        // LIMIT BY
-        // LIMIT
-        // OFFSET
-        if (select.limitBy() || select.limitLength() || select.limitOffset())
-            return QueryProcessingStage::WithMergeableStateAfterAggregation;
-
-        // Only simple SELECT FROM GROUP BY sharding_key can use Complete state.
-        return QueryProcessingStage::Complete;
     }
-
-    size_t getClusterQueriedNodes(const Settings & settings, const ClusterPtr & cluster)
+    else
     {
-        size_t num_local_shards = cluster->getLocalShardCount();
-        size_t num_remote_shards = cluster->getRemoteShardCount();
-        return (num_remote_shards * settings.max_parallel_replicas) + num_local_shards;
+        if (!sharding_block_has(group_by->children, 1))
+            return {};
     }
 
-    String makeFormattedListOfShards(const ClusterPtr & cluster)
+    // ORDER BY
+    const ASTPtr order_by = select.orderBy();
+    if (order_by)
+        return QueryProcessingStage::WithMergeableStateAfterAggregation;
+
+    // LIMIT BY
+    // LIMIT
+    // OFFSET
+    if (select.limitBy() || select.limitLength() || select.limitOffset())
+        return QueryProcessingStage::WithMergeableStateAfterAggregation;
+
+    // Only simple SELECT FROM GROUP BY sharding_key can use Complete state.
+    return QueryProcessingStage::Complete;
+}
+
+size_t getClusterQueriedNodes(const Settings & settings, const ClusterPtr & cluster)
+{
+    size_t num_local_shards = cluster->getLocalShardCount();
+    size_t num_remote_shards = cluster->getRemoteShardCount();
+    return (num_remote_shards * settings.max_parallel_replicas) + num_local_shards;
+}
+
+String makeFormattedListOfShards(const ClusterPtr & cluster)
+{
+    WriteBufferFromOwnString buf;
+
+    bool head = true;
+    buf << "[";
+    for (const auto & shard_info : cluster->getShardsInfo())
     {
-        WriteBufferFromOwnString buf;
-
-        bool head = true;
-        buf << "[";
-        for (const auto & shard_info : cluster->getShardsInfo())
-        {
-            (head ? buf : buf << ", ") << shard_info.shard_num;
-            head = false;
-        }
-        buf << "]";
-
-        return buf.str();
+        (head ? buf : buf << ", ") << shard_info.shard_num;
+        head = false;
     }
+    buf << "]";
+
+    return buf.str();
+}
 }
 
 StorageStream::StorageStream(
@@ -456,7 +456,8 @@ void StorageStream::readStreaming(
     pipes.reserve(shards);
 
     const auto & settings_ref = context_->getSettingsRef();
-    auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
+    auto share_resource_group = (settings_ref.query_resource_group.value == "shared")
+        && (settings_ref.seek_to.value == "latest" || settings_ref.seek_to.value.empty());
 
     std::vector<std::pair<std::shared_ptr<StreamShard>, Int32>> shard_info;
     if (requireDistributedQuery(context_))
@@ -1249,8 +1250,8 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStageRemote(
 
     /// If there is only one node, the query can be fully processed by the
     /// shard, initiator will work as a proxy only.
-//    if (getClusterQueriedNodes(settings, cluster) == 1)
-//        return QueryProcessingStage::Complete;
+    //    if (getClusterQueriedNodes(settings, cluster) == 1)
+    //        return QueryProcessingStage::Complete;
 
     if (settings.optimize_skip_unused_shards && settings.optimize_distributed_group_by_sharding_key && sharding_key_expr
         && (settings.allow_nondeterministic_optimize_skip_unused_shards || sharding_key_is_deterministic))
