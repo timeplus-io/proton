@@ -40,7 +40,7 @@ public:
 
     String getName() const override
     {
-        return "exponentialMovingAverage";
+        return "exponential_moving_average";
     }
 
     DataTypePtr getReturnType() const override
@@ -83,7 +83,7 @@ public:
 
 void registerAggregateFunctionExponentialMovingAverage(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("exponentialMovingAverage",
+    factory.registerFunction("exponential_moving_average",
         [](const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *) -> AggregateFunctionPtr
         {
             assertBinary(name, argument_types);

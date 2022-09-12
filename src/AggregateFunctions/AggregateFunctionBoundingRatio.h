@@ -108,7 +108,7 @@ private:
 public:
     String getName() const override
     {
-        return "boundingRatio";
+        return "bounding_ratio";
     }
 
     AggregateFunctionBoundingRatio(const DataTypes & arguments)

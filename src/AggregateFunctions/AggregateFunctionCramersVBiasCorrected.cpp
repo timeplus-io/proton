@@ -15,7 +15,7 @@ struct CramersVBiasCorrectedData : CrossTabData
 {
     static const char * getName()
     {
-        return "cramersVBiasCorrected";
+        return "cramers_v_bias_corrected";
     }
 
     Float64 getResult() const

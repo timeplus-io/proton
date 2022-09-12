@@ -91,10 +91,10 @@ namespace
 
 void registerAggregateFunctionsBitmap(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("groupBitmap", createAggregateFunctionBitmap<AggregateFunctionGroupBitmapData>);
-    factory.registerFunction("groupBitmapAnd", createAggregateFunctionBitmapL2<AggregateFunctionBitmapL2And>);
-    factory.registerFunction("groupBitmapOr", createAggregateFunctionBitmapL2<AggregateFunctionBitmapL2Or>);
-    factory.registerFunction("groupBitmapXor", createAggregateFunctionBitmapL2<AggregateFunctionBitmapL2Xor>);
+    factory.registerFunction("group_bitmap", createAggregateFunctionBitmap<AggregateFunctionGroupBitmapData>);
+    factory.registerFunction("group_bitmap_and", createAggregateFunctionBitmapL2<AggregateFunctionBitmapL2And>);
+    factory.registerFunction("group_bitmap_or", createAggregateFunctionBitmapL2<AggregateFunctionBitmapL2Or>);
+    factory.registerFunction("group_bitmap_xor", createAggregateFunctionBitmapL2<AggregateFunctionBitmapL2Xor>);
 }
 
 }

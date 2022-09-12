@@ -62,7 +62,7 @@ createAggregateFunctionWindowFunnel(const std::string & name, const DataTypes & 
 
 void registerAggregateFunctionWindowFunnel(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("windowFunnel", createAggregateFunctionWindowFunnel<AggregateFunctionWindowFunnelData>);
+    factory.registerFunction("window_funnel", createAggregateFunctionWindowFunnel<AggregateFunctionWindowFunnelData>);
 }
 
 }

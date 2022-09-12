@@ -189,7 +189,7 @@ public:
         return sizeof(AggregateFunctionUniqUpToData<T>) + sizeof(T) * threshold;
     }
 
-    String getName() const override { return "uniqUpTo"; }
+    String getName() const override { return "uniq_up_to"; }
 
     DataTypePtr getReturnType() const override
     {
@@ -254,7 +254,7 @@ public:
         return sizeof(AggregateFunctionUniqUpToData<UInt64>) + sizeof(UInt64) * threshold;
     }
 
-    String getName() const override { return "uniqUpTo"; }
+    String getName() const override { return "uniq_up_to"; }
 
     DataTypePtr getReturnType() const override
     {

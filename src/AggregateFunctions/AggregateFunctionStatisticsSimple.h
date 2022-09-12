@@ -93,25 +93,25 @@ public:
     String getName() const override
     {
         if constexpr (StatFunc::kind == StatisticsFunctionKind::varPop)
-            return "varPop";
+            return "var_pop";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::varSamp)
-            return "varSamp";
+            return "var_samp";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::stddevPop)
-            return "stddevPop";
+            return "stddev_pop";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::stddevSamp)
-            return "stddevSamp";
+            return "stddev_samp";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::skewPop)
-            return "skewPop";
+            return "skew_pop";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::skewSamp)
-            return "skewSamp";
+            return "skew_samp";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::kurtPop)
-            return "kurtPop";
+            return "kurt_pop";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::kurtSamp)
-            return "kurtSamp";
+            return "kurt_samp";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::covarPop)
-            return "covarPop";
+            return "covar_pop";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::covarSamp)
-            return "covarSamp";
+            return "covar_samp";
         if constexpr (StatFunc::kind == StatisticsFunctionKind::corr)
             return "corr";
         __builtin_unreachable();

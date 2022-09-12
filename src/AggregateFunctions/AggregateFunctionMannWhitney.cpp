@@ -32,7 +32,7 @@ AggregateFunctionPtr createAggregateFunctionMannWhitneyUTest(
 
 void registerAggregateFunctionMannWhitney(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("mannWhitneyUTest", createAggregateFunctionMannWhitneyUTest);
+    factory.registerFunction("mann_whitney_utest", createAggregateFunctionMannWhitneyUTest);
 }
 
 }

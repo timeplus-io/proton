@@ -79,7 +79,7 @@ AggregateFunctionPtr createAggregateFunctionSimpleLinearRegression(
 
 void registerAggregateFunctionSimpleLinearRegression(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("simpleLinearRegression", createAggregateFunctionSimpleLinearRegression);
+    factory.registerFunction("simple_linear_regression", createAggregateFunctionSimpleLinearRegression);
 }
 
 }

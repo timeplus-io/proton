@@ -24,6 +24,15 @@ static const std::unordered_map<std::string, std::string> streaming_func_map = {
     {"__streaming_neighbor", "neighbor"},
     {"__streaming_now64", "now64"},
     {"__streaming_now", "now"},
+    {"__count_retract", "count"},
+    {"__sum_retract", "sum"},
+    {"__sum_kahan_retract", "sum_kahan"},
+    {"__sum_with_overflow_retract", "sum_with_overflow"},
+    {"__avg_retract", "avg"},
+    {"__max_retract", "max"},
+    {"__min_retract", "min"},
+    {"__arg_min_retract", "arg_min"},
+    {"__arg_max_retract", "arg_max"},
 };
 }
 /// proton: ends

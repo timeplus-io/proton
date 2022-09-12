@@ -50,13 +50,13 @@ AggregateFunctionPtr createAggregateFunctionStatisticsBinary(
 
 void registerAggregateFunctionsStatisticsStable(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("varSampStable", createAggregateFunctionStatisticsUnary<AggregateFunctionVarSampStable>);
-    factory.registerFunction("varPopStable", createAggregateFunctionStatisticsUnary<AggregateFunctionVarPopStable>);
-    factory.registerFunction("stddevSampStable", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevSampStable>);
-    factory.registerFunction("stddevPopStable", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevPopStable>);
-    factory.registerFunction("covarSampStable", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarSampStable>);
-    factory.registerFunction("covarPopStable", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarPopStable>);
-    factory.registerFunction("corrStable", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrStable>);
+    factory.registerFunction("var_samp_stable", createAggregateFunctionStatisticsUnary<AggregateFunctionVarSampStable>);
+    factory.registerFunction("var_pop_stable", createAggregateFunctionStatisticsUnary<AggregateFunctionVarPopStable>);
+    factory.registerFunction("stddev_samp_stable", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevSampStable>);
+    factory.registerFunction("stddev_pop_stable", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevPopStable>);
+    factory.registerFunction("covar_samp_stable", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarSampStable>);
+    factory.registerFunction("covar_pop_stable", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarPopStable>);
+    factory.registerFunction("corr_stable", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrStable>);
 }
 
 }

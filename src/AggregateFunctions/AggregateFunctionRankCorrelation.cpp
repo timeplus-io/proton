@@ -33,7 +33,7 @@ AggregateFunctionPtr createAggregateFunctionRankCorrelation(
 
 void registerAggregateFunctionRankCorrelation(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("rankCorr", createAggregateFunctionRankCorrelation);
+    factory.registerFunction("rank_corr", createAggregateFunctionRankCorrelation);
 }
 
 }

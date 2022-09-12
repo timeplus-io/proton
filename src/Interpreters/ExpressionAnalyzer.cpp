@@ -1624,7 +1624,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
         bool only_types,
         const FilterDAGInfoPtr & filter_info_,
         const Block & source_header,
-        bool emit_version)
+        bool emit_version,
+        bool is_changelog)
     : first_stage(first_stage_)
     , second_stage(second_stage_)
     , need_aggregate(query_analyzer.hasAggregation())
@@ -1736,6 +1737,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             }
             chain.addStep();
 
+            /// proton : starts
             /// We will need propagate session start/end columns to the required output column even though users doesn't explicitly SELECT them
             /// because we will need access them for down stream processing like aggregation
             if (storage)
@@ -1750,6 +1752,14 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                     }
                 }
             }
+
+            /// We will need propagate `_tp_delta` to downstream for changelog query processing
+            if (is_changelog)
+            {
+                auto & step = chain.getLastStep();
+                step.addRequiredOutput(ProtonConsts::RESERVED_DELTA_FLAG);
+            }
+            /// proton : ends
         }
 
         if (need_aggregate)
@@ -1775,6 +1785,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 ExpressionActionsChain::Step & step = chain.lastStep(query_analyzer.aggregated_columns);
                 step.actions()->addColumn({DataTypeFactory::instance().get("int64"), ProtonConsts::RESERVED_EMIT_VERSION});
             }
+
+            /// FIXME, `EMIT CHANGELOG` which requires emitting `_tp_delta`
             /// proton: ends
 
             if (query_analyzer.appendHaving(chain, only_types || !second_stage))

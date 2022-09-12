@@ -20,7 +20,7 @@ AggregateFunctionPtr createAggregateFunctionSingleValueOrNull(const std::string 
 
 void registerAggregateFunctionSingleValueOrNull(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("singleValueOrNull", createAggregateFunctionSingleValueOrNull);
+    factory.registerFunction("single_value_or_null", createAggregateFunctionSingleValueOrNull);
 }
 
 

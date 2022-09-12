@@ -403,11 +403,11 @@ private:
 
 struct NameLinearRegression
 {
-    static constexpr auto name = "stochasticLinearRegression";
+    static constexpr auto name = "stochastic_linear_regression";
 };
 struct NameLogisticRegression
 {
-    static constexpr auto name = "stochasticLogisticRegression";
+    static constexpr auto name = "stochastic_logistic_regression";
 };
 
 }

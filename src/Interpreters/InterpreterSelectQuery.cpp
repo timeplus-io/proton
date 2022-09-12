@@ -134,8 +134,8 @@ namespace
     {
         using TypeToVisit = ASTFunction;
 
-        StreamingFunctionData(bool streaming_)
-            : streaming(streaming_) { }
+        StreamingFunctionData(bool streaming_, bool is_changelog_)
+            : streaming(streaming_), is_changelog(is_changelog_) { }
 
         void visit(ASTFunction & func, ASTPtr)
         {
@@ -149,7 +149,24 @@ namespace
             {
                 auto iter = func_map.find(func.name);
                 if (iter != func_map.end())
+                {
                     func.name = iter->second;
+                    return;
+                }
+
+                if (is_changelog)
+                {
+                    iter = changelog_func_map.find(func.name);
+                    if (iter != changelog_func_map.end())
+                    {
+                        if (!iter->second.empty())
+                            func.name = iter->second;
+                        else
+                            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", func.name);
+
+                        return;
+                    }
+                }
             }
         }
 
@@ -167,16 +184,46 @@ namespace
 
     private:
         bool streaming;
+        bool is_changelog;
 
         static std::unordered_map<String, String> func_map;
+        static std::unordered_map<String, String> changelog_func_map;
     };
-
 
     std::unordered_map<String, String> StreamingFunctionData::func_map =  {
         {"neighbor", "__streaming_neighbor"},
         {"now64", "__streaming_now64"},
         {"now", "__streaming_now"},
     };
+
+    std::unordered_map<String, String> StreamingFunctionData::changelog_func_map =  {
+        {"count", "__count_retract"},
+        {"sum", "__sum_retract"},
+        {"sum_kahan", "__sum_kahan_retract"},
+        {"sum_with_overflow", "__sum_with_overflow_retract"},
+        {"avg", "__avg_retract"},
+        {"max", "__max_retract"},
+        {"min", "__min_retract"},
+        {"arg_min", "__arg_min_retract"},
+        {"arg_max", "__arg_max_retract"},
+        {"latest", ""},
+        {"earliest", ""},
+        {"first_value", ""},
+        {"last_value", ""},
+        {"top_k", ""},
+        {"min_k", ""},
+        {"max_k", ""},
+        {"unique", ""},
+        {"unique_exact", ""},
+        {"unique_exact_if", ""},
+        {"median", ""},
+        {"quantile", ""},
+        {"p90", ""},
+        {"p95", ""},
+        {"p99", ""},
+        {"moving_sum", ""},
+    };
+
     using StreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
 
     /// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
@@ -509,6 +556,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     /// proton: starts.
     analyzeStreamingMode();
+    analyzeChangelogMode();
 
     /// Support snapshot query with seek_to, handling with streaming query before `TreeRewriter::analyzeSelect`
     if (!isStreaming() && storage && supportStreamingQuery(storage))
@@ -674,6 +722,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             if (last_tail && last_interval_bs.num_units > 0 && isStreaming())
                 if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_EVENT_TIME) == required_columns.end())
                     required_columns.push_back(ProtonConsts::RESERVED_EVENT_TIME);
+
+            if (isChangelog())
+            {
+                if (std::find(required_columns.begin(), required_columns.end(), ProtonConsts::RESERVED_DELTA_FLAG) == required_columns.end())
+                    required_columns.push_back(ProtonConsts::RESERVED_DELTA_FLAG);
+            }
             /// proton: ends
 
             /// Fix source_header for filter actions.
@@ -878,7 +932,7 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
         && options.to_stage > QueryProcessingStage::WithMergeableState;
 
     analysis_result = ExpressionAnalysisResult(
-        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version);
+        *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version, isChangelog());
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -2933,11 +2987,12 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     /// If `window_start/end` are in aggregation columns, move them to the beginning
     /// of the aggregation columns for later window extraction
     Streaming::Aggregator::Params::GroupBy streaming_group_by = Streaming::Aggregator::Params::GroupBy::OTHER;
-    size_t time_col_pos = 0;
+    ssize_t time_col_pos = -1;
     String time_col_name;
 
-    size_t session_start_pos = 0;
-    size_t session_end_pos = 0;
+    ssize_t session_start_pos = -1;
+    ssize_t session_end_pos = -1;
+    ssize_t delta_col_pos = isChangelog() ? header_before_aggregation.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG) : -1;
 
     auto window_type = windowType();
     if (window_type == Streaming::WindowType::SESSION)
@@ -3021,6 +3076,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         time_col_pos,
         session_start_pos,
         session_end_pos,
+        delta_col_pos,
         getStreamingFunctionDescription());
 
     auto merge_threads = max_streams;
@@ -3046,6 +3102,12 @@ bool InterpreterSelectQuery::isStreaming() const
 {
     assert(is_streaming.has_value());
     return *is_streaming;
+}
+
+bool InterpreterSelectQuery::isChangelog() const
+{
+    assert(is_changelog.has_value());
+    return *is_changelog;
 }
 
 Streaming::HashSemantic InterpreterSelectQuery::getHashSemantic() const
@@ -3231,7 +3293,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
 void InterpreterSelectQuery::handleEmitVersion()
 {
     bool streaming = isStreaming();
-    StreamingFunctionVisitor::Data func_data(streaming);
+    StreamingFunctionVisitor::Data func_data(streaming, isChangelog());
     StreamingFunctionVisitor(func_data).visit(query_ptr);
 
     if (func_data.emit_version)
@@ -3299,6 +3361,29 @@ void InterpreterSelectQuery::analyzeStreamingMode()
         streaming = interpreter_subquery->isStreaming();
 
     is_streaming = streaming;
+}
+
+void InterpreterSelectQuery::analyzeChangelogMode()
+{
+    if (!isStreaming() || context->getSettingsRef().enforce_append_only.value)
+    {
+        is_changelog = false;
+        return;
+    }
+
+    if (storage)
+    {
+        if (storage->as<StorageView>())
+        {
+            auto select = storage->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+            is_changelog = InterpreterSelectWithUnionQuery(select, context, SelectQueryOptions().analyze()).isChangelog();
+        }
+        else
+            is_changelog = storage->isChangelogKvMode() || storage->isChangelogMode();
+
+    }
+    else if (interpreter_subquery)
+        is_changelog = interpreter_subquery->isChangelog();
 }
 
 ColumnsDescriptionPtr InterpreterSelectQuery::getExtendedObjects() const

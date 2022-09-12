@@ -25,7 +25,7 @@ template <typename T>
 struct AggregateFunctionGroupBitOrData
 {
     T value = 0;
-    static const char * name() { return "groupBitOr"; }
+    static const char * name() { return "group_bit_or"; }
     void update(T x) { value |= x; }
 
 #if USE_EMBEDDED_COMPILER
@@ -48,7 +48,7 @@ template <typename T>
 struct AggregateFunctionGroupBitAndData
 {
     T value = -1; /// Two's complement arithmetic, sign extension.
-    static const char * name() { return "groupBitAnd"; }
+    static const char * name() { return "group_bit_and"; }
     void update(T x) { value &= x; }
 
 #if USE_EMBEDDED_COMPILER
@@ -71,7 +71,7 @@ template <typename T>
 struct AggregateFunctionGroupBitXorData
 {
     T value = 0;
-    static const char * name() { return "groupBitXor"; }
+    static const char * name() { return "group_bit_xor"; }
     void update(T x) { value ^= x; }
 
 #if USE_EMBEDDED_COMPILER

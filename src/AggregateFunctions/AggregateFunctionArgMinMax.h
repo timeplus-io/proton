@@ -59,7 +59,7 @@ public:
 
     String getName() const override
     {
-        return StringRef(Data::ValueData_t::name()) == StringRef("min") ? "argMin" : "argMax";
+        return StringRef(Data::ValueData_t::name()) == StringRef("min") ? "arg_min" : "arg_max";
     }
 
     DataTypePtr getReturnType() const override

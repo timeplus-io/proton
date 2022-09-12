@@ -640,10 +640,11 @@ public:
         GroupBy group_by = GroupBy::OTHER;
 
         /// Params for session window
-        size_t session_id_col_pos = 0;
-        size_t time_col_pos = 0;
-        size_t session_start_pos = 0;
-        size_t session_end_pos = 0;
+        ssize_t session_id_col_pos;
+        ssize_t time_col_pos;
+        ssize_t session_start_pos;
+        ssize_t session_end_pos;
+        ssize_t delta_col_pos;
         size_t time_scale = 0;
         bool time_col_is_datetime64 = false;
         Int64 window_interval = 0;
@@ -670,9 +671,10 @@ public:
             bool keep_state_ = true,
             size_t streaming_window_count_ = 0,
             GroupBy streaming_group_by_ = GroupBy::OTHER,
-            size_t time_col_pos_ = 0,
-            size_t session_start_pos_ = 0,
-            size_t session_end_pos_ = 0,
+            ssize_t time_col_pos_ = -1,
+            ssize_t session_start_pos_ = -1,
+            ssize_t session_end_pos_ = -1,
+            ssize_t delta_col_pos_ = -1,
             FunctionDescriptionPtr window_desc_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
@@ -691,6 +693,7 @@ public:
             time_col_pos(time_col_pos_),
             session_start_pos(session_start_pos_),
             session_end_pos(session_end_pos_),
+            delta_col_pos(delta_col_pos_),
             window_desc(window_desc_)
         {
             if (window_desc)
@@ -853,6 +856,9 @@ private:
         const IColumn ** arguments{};
         const IAggregateFunction * batch_that{};
         const IColumn ** batch_arguments{};
+        /// proton : starts
+        const IColumn * delta_column{};
+        /// proton : ends
         const UInt64 * offsets{};
     };
 
@@ -940,7 +946,8 @@ private:
         size_t row_begin,
         size_t row_end,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena);
+        Arena * arena,
+        const IColumn * delta_col);
 
     template <typename Method>
     void writeToTemporaryFileImpl(

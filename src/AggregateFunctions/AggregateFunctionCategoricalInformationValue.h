@@ -31,7 +31,7 @@ public:
 
     String getName() const override
     {
-        return "categoricalInformationValue";
+        return "categorical_information_value";
     }
 
     bool allocatesMemoryInArena() const override { return false; }

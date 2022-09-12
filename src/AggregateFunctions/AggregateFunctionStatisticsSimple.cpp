@@ -55,26 +55,18 @@ AggregateFunctionPtr createAggregateFunctionStatisticsBinary(
 
 void registerAggregateFunctionsStatisticsSimple(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("varSamp", createAggregateFunctionStatisticsUnary<AggregateFunctionVarSampSimple>);
-    factory.registerFunction("varPop", createAggregateFunctionStatisticsUnary<AggregateFunctionVarPopSimple>);
-    factory.registerFunction("stddevSamp", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevSampSimple>);
-    factory.registerFunction("stddevPop", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevPopSimple>);
-    factory.registerFunction("skewSamp", createAggregateFunctionStatisticsUnary<AggregateFunctionSkewSampSimple>);
-    factory.registerFunction("skewPop", createAggregateFunctionStatisticsUnary<AggregateFunctionSkewPopSimple>);
-    factory.registerFunction("kurtSamp", createAggregateFunctionStatisticsUnary<AggregateFunctionKurtSampSimple>);
-    factory.registerFunction("kurtPop", createAggregateFunctionStatisticsUnary<AggregateFunctionKurtPopSimple>);
+    factory.registerFunction("var_samp", createAggregateFunctionStatisticsUnary<AggregateFunctionVarSampSimple>);
+    factory.registerFunction("var_pop", createAggregateFunctionStatisticsUnary<AggregateFunctionVarPopSimple>);
+    factory.registerFunction("stddev_samp", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevSampSimple>);
+    factory.registerFunction("stddev_pop", createAggregateFunctionStatisticsUnary<AggregateFunctionStddevPopSimple>);
+    factory.registerFunction("skew_samp", createAggregateFunctionStatisticsUnary<AggregateFunctionSkewSampSimple>);
+    factory.registerFunction("skew_pop", createAggregateFunctionStatisticsUnary<AggregateFunctionSkewPopSimple>);
+    factory.registerFunction("kurt_samp", createAggregateFunctionStatisticsUnary<AggregateFunctionKurtSampSimple>);
+    factory.registerFunction("kurt_pop", createAggregateFunctionStatisticsUnary<AggregateFunctionKurtPopSimple>);
 
-    factory.registerFunction("covarSamp", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarSampSimple>);
-    factory.registerFunction("covarPop", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarPopSimple>);
-    factory.registerFunction("corr", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrSimple>, AggregateFunctionFactory::CaseInsensitive);
-
-    /// Synonims for compatibility.
-    factory.registerAlias("VAR_SAMP", "varSamp", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("VAR_POP", "varPop", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("STDDEV_SAMP", "stddevSamp", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("STDDEV_POP", "stddevPop", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("COVAR_SAMP", "covarSamp", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("COVAR_POP", "covarPop", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("covar_samp", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarSampSimple>);
+    factory.registerFunction("covar_pop", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarPopSimple>);
+    factory.registerFunction("corr", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrSimple>, AggregateFunctionFactory::CaseSensitive);
 }
 
 }

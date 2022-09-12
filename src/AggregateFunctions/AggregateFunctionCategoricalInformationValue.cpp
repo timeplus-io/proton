@@ -48,7 +48,7 @@ void registerAggregateFunctionCategoricalIV(
     AggregateFunctionFactory & factory
 )
 {
-    factory.registerFunction("categoricalInformationValue", createAggregateFunctionCategoricalIV);
+    factory.registerFunction("categorical_information_value", createAggregateFunctionCategoricalIV);
 }
 
 }

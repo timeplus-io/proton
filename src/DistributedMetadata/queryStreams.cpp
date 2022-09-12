@@ -16,8 +16,8 @@ void queryStreams(ContextMutablePtr query_context, const std::function<void(Bloc
     String cols = "database, name, engine, uuid, dependencies_table, create_table_query, engine_full, partition_key, sorting_key, "
                   "primary_key, sampling_key, storage_policy";
     String query = fmt::format(
-        "SELECT {} FROM system.tables WHERE NOT is_temporary AND((database != 'system' AND database != 'INFORMATION_SCHEMA' AND database "
-        "!= 'information_schema') OR (database = 'system' AND(name = 'tasks' OR name = 'tables'))) settings "
+        "SELECT {} FROM system.tables WHERE NOT is_temporary AND ((database != 'system' AND database != 'INFORMATION_SCHEMA' AND database "
+        "!= 'information_schema') OR (database = 'system' AND (name = 'tasks' OR name = 'tables'))) settings "
         "show_table_uuid_in_table_create_query_if_not_nil = 1 ",
         cols);
 

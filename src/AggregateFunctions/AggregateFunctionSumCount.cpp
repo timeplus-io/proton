@@ -47,7 +47,7 @@ createAggregateFunctionSumCount(const std::string & name, const DataTypes & argu
 
 void registerAggregateFunctionSumCount(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("sumCount", createAggregateFunctionSumCount);
+    factory.registerFunction("sum_count", createAggregateFunctionSumCount);
 }
 
 }

@@ -190,7 +190,7 @@ public:
     {
     }
 
-    String getName() const override { return "sequenceNextNode"; }
+    String getName() const override { return "sequence_next_node"; }
 
     DataTypePtr getReturnType() const override { return data_type; }
 

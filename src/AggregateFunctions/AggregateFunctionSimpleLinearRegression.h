@@ -106,7 +106,7 @@ public:
 
     String getName() const override
     {
-        return "simpleLinearRegression";
+        return "simple_linear_regression";
     }
 
     void add(

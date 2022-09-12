@@ -20,7 +20,7 @@ namespace
 
 struct MeanZTestData : public ZTestMoments<Float64>
 {
-    static constexpr auto name = "meanZTest";
+    static constexpr auto name = "mean_ztest";
 
     std::pair<Float64, Float64> getResult(Float64 pop_var_x, Float64 pop_var_y) const
     {
@@ -58,7 +58,7 @@ AggregateFunctionPtr createAggregateFunctionMeanZTest(
 
 void registerAggregateFunctionMeanZTest(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("meanZTest", createAggregateFunctionMeanZTest);
+    factory.registerFunction("mean_ztest", createAggregateFunctionMeanZTest);
 }
 
 }

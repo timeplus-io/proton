@@ -1034,7 +1034,7 @@ struct AggregateFunctionSingleValueOrNullData : Data
         }
     }
 
-    static const char * name() { return "singleValueOrNull"; }
+    static const char * name() { return "single_value_or_null"; }
 
 #if USE_EMBEDDED_COMPILER
 

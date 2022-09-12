@@ -151,7 +151,7 @@ template <typename Data>
 class BitmapAndPolicy
 {
 public:
-    static constexpr auto name = "groupBitmapAnd";
+    static constexpr auto name = "group_bitmap_and";
     static void apply(Data & lhs, const Data & rhs) { lhs.rbs.rb_and(rhs.rbs); }
 };
 
@@ -159,7 +159,7 @@ template <typename Data>
 class BitmapOrPolicy
 {
 public:
-    static constexpr auto name = "groupBitmapOr";
+    static constexpr auto name = "group_bitmap_or";
     static void apply(Data & lhs, const Data & rhs) { lhs.rbs.rb_or(rhs.rbs); }
 };
 
@@ -167,7 +167,7 @@ template <typename Data>
 class BitmapXorPolicy
 {
 public:
-    static constexpr auto name = "groupBitmapXor";
+    static constexpr auto name = "group_bitmap_xor";
     static void apply(Data & lhs, const Data & rhs) { lhs.rbs.rb_xor(rhs.rbs); }
 };
 

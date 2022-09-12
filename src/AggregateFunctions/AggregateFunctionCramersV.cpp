@@ -15,7 +15,7 @@ struct CramersVData : CrossTabData
 {
     static const char * getName()
     {
-        return "cramersV";
+        return "cramers_v";
     }
 
     Float64 getResult() const

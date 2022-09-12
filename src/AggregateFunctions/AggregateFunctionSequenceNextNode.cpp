@@ -138,7 +138,7 @@ createAggregateFunctionSequenceNode(const std::string & name, const DataTypes & 
 void registerAggregateFunctionSequenceNextNode(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = { .returns_default_when_only_null = true, .is_order_dependent = false };
-    factory.registerFunction("sequenceNextNode", { createAggregateFunctionSequenceNode, properties });
+    factory.registerFunction("sequence_next_node", { createAggregateFunctionSequenceNode, properties });
 }
 
 }

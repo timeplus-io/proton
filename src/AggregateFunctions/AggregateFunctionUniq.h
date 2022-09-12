@@ -58,7 +58,7 @@ struct AggregateFunctionUniqHLL12Data
     using Set = HyperLogLogWithSmallSetOptimization<T, 16, 12>;
     Set set;
 
-    static String getName() { return "uniq_HLL12"; }
+    static String getName() { return "uniq_hll12"; }
 };
 
 template <>
@@ -67,7 +67,7 @@ struct AggregateFunctionUniqHLL12Data<String>
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
-    static String getName() { return "uniq_HLL12"; }
+    static String getName() { return "uniq_hll12"; }
 };
 
 template <>
@@ -76,7 +76,7 @@ struct AggregateFunctionUniqHLL12Data<UUID>
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12>;
     Set set;
 
-    static String getName() { return "uniq_HLL12"; }
+    static String getName() { return "uniq_hll12"; }
 };
 
 struct AggregateFunctionUniqHLL12DataForVariadic
@@ -84,7 +84,7 @@ struct AggregateFunctionUniqHLL12DataForVariadic
     using Set = HyperLogLogWithSmallSetOptimization<UInt64, 16, 12, TrivialHash>;
     Set set;
 
-    static String getName() { return "uniq_HLL12"; }
+    static String getName() { return "uniq_hll12"; }
 };
 
 

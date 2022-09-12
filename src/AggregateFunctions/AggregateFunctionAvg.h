@@ -225,8 +225,9 @@ public:
     }
 
     void
-    addBatchSinglePlace(size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos) const final
+    addBatchSinglePlace(size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos, const IColumn * delta_col [[maybe_unused]]) const final
     {
+        assert(delta_col == nullptr);
         AggregateFunctionSumData<Numerator> sum_data;
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         if (if_argument_pos >= 0)
@@ -244,9 +245,10 @@ public:
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, const UInt8 * null_map, Arena *, ssize_t if_argument_pos)
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, const UInt8 * null_map, Arena *, ssize_t if_argument_pos, const IColumn * delta_col [[maybe_unused]])
         const final
     {
+        assert(delta_col == nullptr);
         AggregateFunctionSumData<Numerator> sum_data;
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         if (if_argument_pos >= 0)

@@ -33,6 +33,7 @@ public:
     /// proton: starts
     bool hasAggregation() const override;
     bool isStreaming() const override;
+    bool isChangelog() const override;
     bool hasGlobalAggregation() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::HashSemantic getHashSemantic() const override;

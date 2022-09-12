@@ -26,11 +26,11 @@ AggregateFunctionPtr createAggregateFunctionArgMin(
 
 void registerAggregateFunctionsMin(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseSensitive);
 
     /// The functions below depend on the order of data.
     AggregateFunctionProperties properties = { .returns_default_when_only_null = false, .is_order_dependent = true };
-    factory.registerFunction("argMin", { createAggregateFunctionArgMin, properties });
+    factory.registerFunction("arg_min", { createAggregateFunctionArgMin, properties });
 }
 
 }

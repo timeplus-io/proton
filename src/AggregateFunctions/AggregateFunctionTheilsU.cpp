@@ -15,7 +15,7 @@ struct TheilsUData : CrossTabData
 {
     static const char * getName()
     {
-        return "theilsU";
+        return "theils_u";
     }
 
     Float64 getResult() const

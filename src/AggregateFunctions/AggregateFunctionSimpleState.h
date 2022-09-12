@@ -25,7 +25,7 @@ public:
     {
     }
 
-    String getName() const override { return nested_func->getName() + "SimpleState"; }
+    String getName() const override { return nested_func->getName() + "_simple_state"; }
 
     DataTypePtr getReturnType() const override
     {

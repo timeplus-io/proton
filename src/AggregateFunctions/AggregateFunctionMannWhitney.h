@@ -171,7 +171,7 @@ public:
 
     String getName() const override
     {
-        return "mannWhitneyUTest";
+        return "mann_whitney_utest";
     }
 
     bool allocatesMemoryInArena() const override { return true; }

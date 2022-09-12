@@ -43,7 +43,7 @@ public:
         this->data(place).denominator += static_cast<Denominator>(weights.getData()[row_num]);
     }
 
-    String getName() const override { return "avgWeighted"; }
+    String getName() const override { return "avg_weighted"; }
 
 #if USE_EMBEDDED_COMPILER
 

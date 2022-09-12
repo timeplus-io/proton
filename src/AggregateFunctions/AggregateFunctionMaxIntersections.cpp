@@ -33,13 +33,13 @@ namespace
 
 void registerAggregateFunctionsMaxIntersections(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("maxIntersections",
+    factory.registerFunction("max_intersections",
         [](const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return createAggregateFunctionMaxIntersections(AggregateFunctionIntersectionsKind::Count, name, argument_types, parameters);
         });
 
-    factory.registerFunction("maxIntersectionsPosition",
+    factory.registerFunction("max_intersections_position",
         [](const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return createAggregateFunctionMaxIntersections(AggregateFunctionIntersectionsKind::Position, name, argument_types, parameters);

@@ -659,7 +659,7 @@ public:
 
     using AggregateFunctionSequenceBase<T, Data, AggregateFunctionSequenceCount<T, Data>>::AggregateFunctionSequenceBase;
 
-    String getName() const override { return "sequenceCount"; }
+    String getName() const override { return "sequence_count"; }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
 

@@ -80,6 +80,19 @@ void registerAggregateFunctionMinMaxK(AggregateFunctionFactory &);
 void registerAggregateFunctionCombinatorDistinctStreaming(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionsAlias(AggregateFunctionFactory &);
 void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
+
+/// changelog retract aggr
+namespace Streaming
+{
+void registerAggregateFunctionCountRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsMaxRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsMinRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsArgMaxRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsArgMinRetract(AggregateFunctionFactory & factory);
+}
+
 /// proton: ends.
 
 void registerAggregateFunctions()
@@ -144,6 +157,13 @@ void registerAggregateFunctions()
         registerAggregateFunctionMinMaxK(factory);
         registerAggregateFunctionsAlias(factory);
         registerAggregateFunctionXirr(factory);
+        Streaming::registerAggregateFunctionCountRetract(factory);
+        Streaming::registerAggregateFunctionSumRetract(factory);
+        Streaming::registerAggregateFunctionAvgRetract(factory);
+        Streaming::registerAggregateFunctionsMaxRetract(factory);
+        Streaming::registerAggregateFunctionsMinRetract(factory);
+        Streaming::registerAggregateFunctionsArgMaxRetract(factory);
+        Streaming::registerAggregateFunctionsArgMinRetract(factory);
         /// proton: ends.
     }
 

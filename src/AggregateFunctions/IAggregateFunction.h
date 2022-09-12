@@ -123,6 +123,13 @@ public:
      */
     virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const = 0;
 
+    /// proton : starts. for changelog processing, delete existing row from current aggregation result
+    virtual void negate(AggregateDataPtr __restrict /*place*/, const IColumn ** /*columns*/, size_t /*row_num*/, Arena * /*arena*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method negate is not supported for {}", getName());
+    }
+    /// proton : ends
+
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
 
@@ -180,7 +187,8 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const = 0;
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const = 0;
 
     /// The version of "addBatch", that handle sparse columns as arguments.
     virtual void addBatchSparse(
@@ -199,7 +207,7 @@ public:
     /** The same for single place.
       */
     virtual void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const = 0;
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1, const IColumn * delta_col = nullptr) const = 0;
 
     /// The version of "addBatchSinglePlace", that handle sparse columns as arguments.
     virtual void addBatchSparseSinglePlace(
@@ -214,10 +222,11 @@ public:
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const = 0;
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const = 0;
 
     virtual void addBatchSinglePlaceFromInterval(
-        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
+        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1, const IColumn * delta_col = nullptr)
         const = 0;
 
     /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
@@ -354,30 +363,69 @@ public:
 
     AddFunc getAddressOfAddFunction() const override { return &addFree; }
 
+    /// proton : starts
     void addBatch(
         size_t batch_size,
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const override
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const override
     {
-        if (if_argument_pos >= 0)
+        const auto * derived = static_cast<const Derived *>(this);
+
+        //// FIXME, too much branch
+        if (delta_col == nullptr && if_argument_pos < 0)
         {
+            /// Fast path, non-changelog, non combinator-if
+            for (size_t i = 0; i < batch_size; ++i)
+                if (places[i])
+                    derived->add(places[i] + place_offset, columns, i, arena);
+        }
+        else if (delta_col != nullptr && if_argument_pos < 0)
+        {
+            /// changelog
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (places[i])
+                {
+                    if (delta_flags[i] >= 0)
+                        derived->add(places[i] + place_offset, columns, i, arena);
+                    else
+                        derived->negate(places[i] + place_offset, columns, i, arena);
+                }
+            }
+        }
+        else if (delta_col == nullptr && if_argument_pos >= 0)
+        {
+            /// combinator-if
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
             {
                 if (flags[i] && places[i])
-                    static_cast<const Derived *>(this)->add(places[i] + place_offset, columns, i, arena);
+                    derived->add(places[i] + place_offset, columns, i, arena);
             }
         }
         else
         {
+            /// combinator-if + changelog
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
             for (size_t i = 0; i < batch_size; ++i)
-                if (places[i])
-                    static_cast<const Derived *>(this)->add(places[i] + place_offset, columns, i, arena);
+            {
+                if (flags[i] && places[i])
+                {
+                    if (delta_flags[i] >= 0)
+                        derived->add(places[i] + place_offset, columns, i, arena);
+                    else
+                        derived->negate(places[i] + place_offset, columns, i, arena);
+                }
+            }
         }
     }
+    /// proton : ends
 
     void addBatchSparse(
         AggregateDataPtr * places,
@@ -407,24 +455,63 @@ public:
                 static_cast<const Derived *>(this)->merge(places[i] + place_offset, rhs[i], arena);
     }
 
+    /// proton : starts
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1) const override
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const override
     {
-        if (if_argument_pos >= 0)
+        const auto * derived = static_cast<const Derived *>(this);
+        if (delta_col == nullptr && if_argument_pos < 0)
         {
+            /// Fast path. non-changelog, non combinator-if
+            for (size_t i = 0; i < batch_size; ++i)
+                derived->add(place, columns, i, arena);
+        }
+        else if (delta_col != nullptr && if_argument_pos < 0)
+        {
+            /// changelog
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (delta_flags[i] >= 0)
+                    derived->add(place, columns, i, arena);
+                else
+                    derived->negate(place, columns, i, arena);
+            }
+        }
+        else if (delta_col == nullptr && if_argument_pos >= 0)
+        {
+            /// combinator-if
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
             {
                 if (flags[i])
-                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+                    derived->add(place, columns, i, arena);
             }
         }
         else
         {
+            /// changelog + combinator-if
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+
             for (size_t i = 0; i < batch_size; ++i)
-                static_cast<const Derived *>(this)->add(place, columns, i, arena);
+            {
+                if (flags[i])
+                {
+                    if (delta_flags[i] >= 0)
+                        derived->add(place, columns, i, arena);
+                    else
+                        derived->negate(place, columns, i, arena);
+                }
+            }
         }
     }
+    /// proton : ends
 
     void addBatchSparseSinglePlace(
         AggregateDataPtr place, const IColumn ** columns, Arena * arena) const override
@@ -439,48 +526,122 @@ public:
             static_cast<const Derived *>(this)->add(place, &values, offset_it.getValueIndex(), arena);
     }
 
+    /// proton : starts
     void addBatchSinglePlaceNotNull(
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
-        ssize_t if_argument_pos = -1) const override
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const override
     {
-        if (if_argument_pos >= 0)
+        const auto * derived = static_cast<const Derived *>(this);
+        if (delta_col == nullptr && if_argument_pos < 0)
         {
+            /// fast path
+            for (size_t i = 0; i < batch_size; ++i)
+                if (!null_map[i])
+                    derived->add(place, columns, i, arena);
+        }
+        else if (delta_col != nullptr && if_argument_pos < 0)
+        {
+            /// changelog
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                if (!null_map[i])
+                {
+                    if (delta_flags[i] >= 0)
+                        derived->add(place, columns, i, arena);
+                    else
+                        derived->negate(place, columns, i, arena);
+                }
+            }
+        }
+        else if (delta_col == nullptr && if_argument_pos >= 0)
+        {
+            /// combinator-if
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = 0; i < batch_size; ++i)
                 if (!null_map[i] && flags[i])
-                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+                    derived->add(place, columns, i, arena);
         }
         else
         {
+            /// changelog + combinator-if
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+
             for (size_t i = 0; i < batch_size; ++i)
-                if (!null_map[i])
-                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+            {
+                if (!null_map[i] && flags[i])
+                {
+                    if (delta_flags[i] >= 0)
+                        derived->add(place, columns, i, arena);
+                    else
+                        derived->negate(place, columns, i, arena);
+                }
+            }
         }
     }
 
     void addBatchSinglePlaceFromInterval(
-        size_t batch_begin, size_t batch_end, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t if_argument_pos = -1)
-        const override
+        size_t batch_begin,
+        size_t batch_end,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1,
+        const IColumn * delta_col = nullptr) const override
     {
-        if (if_argument_pos >= 0)
+        const auto * derived = static_cast<const Derived *>(this);
+        if (delta_col == nullptr && if_argument_pos < 0)
         {
+            /// fast path
+            for (size_t i = batch_begin; i < batch_end; ++i)
+                derived->add(place, columns, i, arena);
+        }
+        else if (delta_col != nullptr && if_argument_pos < 0)
+        {
+            /// changelog
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+             for (size_t i = batch_begin; i < batch_end; ++i)
+             {
+                 if (delta_flags[i] >= 0)
+                     derived->add(place, columns, i, arena);
+                 else
+                     derived->negate(place, columns, i, arena);
+             }
+        }
+        else if (delta_col == nullptr && if_argument_pos >= 0)
+        {
+            /// combinator-if
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
             for (size_t i = batch_begin; i < batch_end; ++i)
             {
                 if (flags[i])
-                    static_cast<const Derived *>(this)->add(place, columns, i, arena);
+                    derived->add(place, columns, i, arena);
             }
         }
         else
         {
+            /// changelog + combinator-if
+            const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
             for (size_t i = batch_begin; i < batch_end; ++i)
-                static_cast<const Derived *>(this)->add(place, columns, i, arena);
+            {
+                if (flags[i])
+                {
+                    if (delta_flags[i] >= 0)
+                        derived->add(place, columns, i, arena);
+                    else
+                        derived->negate(place, columns, i, arena);
+                }
+            }
         }
     }
+    /// proton : ends
 
     void addBatchArray(
         size_t batch_size, AggregateDataPtr * places, size_t place_offset, const IColumn ** columns, const UInt64 * offsets, Arena * arena)

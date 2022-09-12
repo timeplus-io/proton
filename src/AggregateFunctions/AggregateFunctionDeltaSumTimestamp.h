@@ -50,7 +50,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    String getName() const override { return "deltaSumTimestamp"; }
+    String getName() const override { return "delta_sum_timestamp"; }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeNumber<ValueType>>(); }
 

@@ -102,6 +102,6 @@ createAggregateFunctionAvgWeighted(const std::string & name, const DataTypes & a
 
 void registerAggregateFunctionAvgWeighted(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("avgWeighted", createAggregateFunctionAvgWeighted, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("avg_weighted", createAggregateFunctionAvgWeighted, AggregateFunctionFactory::CaseSensitive);
 }
 }

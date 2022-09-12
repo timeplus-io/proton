@@ -284,6 +284,16 @@ bool InterpreterSelectWithUnionQuery::isStreaming() const
     return false;
 }
 
+bool InterpreterSelectWithUnionQuery::isChangelog() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->isChangelog())
+            return true;
+    }
+    return false;
+}
+
 bool InterpreterSelectWithUnionQuery::hasGlobalAggregation() const
 {
     for (const auto & interpreter : nested_interpreters)

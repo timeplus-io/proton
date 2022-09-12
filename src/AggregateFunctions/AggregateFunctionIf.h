@@ -23,10 +23,10 @@ namespace ErrorCodes
 }
 
 /** Not an aggregate function, but an adapter of aggregate functions,
-  * which any aggregate function `agg(x)` makes an aggregate function of the form `aggIf(x, cond)`.
+  * which any aggregate function `agg(x)` makes an aggregate function of the form `agg_if(x, cond)`.
   * The adapted aggregate function takes two arguments - a value and a condition,
   * and calculates the nested aggregate function for the values when the condition is satisfied.
-  * For example, avgIf(x, cond) calculates the average x if `cond`.
+  * For example, avg_if(x, cond) calculates the average x if `cond`.
   */
 class AggregateFunctionIf final : public IAggregateFunctionHelper<AggregateFunctionIf>
 {
@@ -42,13 +42,13 @@ public:
         if (num_arguments == 0)
             throw Exception("Aggregate function " + getName() + " require at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isUInt8(types.back()))
-            throw Exception("Last argument for aggregate function " + getName() + " must be uint8", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!isBool(types.back()))
+            throw Exception("Last argument for aggregate function " + getName() + " must be bool", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     String getName() const override
     {
-        return nested_func->getName() + "If";
+        return nested_func->getName() + "_if";
     }
 
     DataTypePtr getReturnType() const override
@@ -103,15 +103,16 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         Arena * arena,
-        ssize_t) const override
+        ssize_t,
+        const IColumn * delta_col) const override
     {
-        nested_func->addBatch(batch_size, places, place_offset, columns, arena, num_arguments - 1);
+        nested_func->addBatch(batch_size, places, place_offset, columns, arena, num_arguments - 1, delta_col);
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t) const override
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t, const IColumn * delta_col) const override
     {
-        nested_func->addBatchSinglePlace(batch_size, place, columns, arena, num_arguments - 1);
+        nested_func->addBatchSinglePlace(batch_size, place, columns, arena, num_arguments - 1, delta_col);
     }
 
     void addBatchSinglePlaceNotNull(
@@ -120,9 +121,10 @@ public:
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
-        ssize_t) const override
+        ssize_t,
+        const IColumn * delta_col) const override
     {
-        nested_func->addBatchSinglePlaceNotNull(batch_size, place, columns, null_map, arena, num_arguments - 1);
+        nested_func->addBatchSinglePlaceNotNull(batch_size, place, columns, null_map, arena, num_arguments - 1, delta_col);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override

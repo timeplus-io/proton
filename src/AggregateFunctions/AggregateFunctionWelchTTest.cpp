@@ -68,7 +68,7 @@ AggregateFunctionPtr createAggregateFunctionWelchTTest(
 
 void registerAggregateFunctionWelchTTest(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("welchTTest", createAggregateFunctionWelchTTest);
+    factory.registerFunction("welch_ttest", createAggregateFunctionWelchTTest);
 }
 
 }

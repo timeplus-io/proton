@@ -2,7 +2,9 @@
 
 #Release, RelWithDebInfo, Debug
 build_type="$1"
+sanitizer="$2" # address
 build_type="${build_type:=Release}"
+sanitizer="${sanitizer}"
 
 cmake .. \
     -DCMAKE_BUILD_TYPE=${build_type} \
@@ -20,21 +22,21 @@ cmake .. \
     -DENABLE_NURAFT=ON \
     -DENABLE_RAPIDJSON=ON \
     -DENABLE_YAML_CPP=ON \
-    -DENABLE_NURAFT=ON \
     -DENABLE_SIMDJSON=ON \
     -DENABLE_ROCKSDB=ON \
     -DENABLE_REPLXX=ON \
     -DENABLE_JEMALLOC=OFF \
     -DENABLE_SSL=ON \
-    -DENABLE_BZIP2=OFF \
+    -DENABLE_BZIP2=ON \
     -DENABLE_PROTOBUF=ON \
     -DENABLE_URING=ON \
-    -DENABLE_UTILS=OFF \
+    -DENABLE_UTILS=ON \
     -DENABLE_THINLTO=OFF \
     -DENABLE_CLANG_TIDY=OFF \
     -DENABLE_TESTS=ON \
+    -DENABLE_EXAMPLES=ON \
     -DSTRIP_DEBUG_SYMBOLS_FUNCTIONS=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    -DSANITIZE=address \
-    -DENABLE_CCACHE=ON
+    -DENABLE_CCACHE=ON \
+    -DSANITIZE=${sanitizer}
 

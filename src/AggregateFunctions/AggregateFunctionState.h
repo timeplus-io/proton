@@ -29,7 +29,7 @@ public:
 
     String getName() const override
     {
-        return nested_func->getName() + "State";
+        return nested_func->getName() + "_state";
     }
 
     DataTypePtr getReturnType() const override

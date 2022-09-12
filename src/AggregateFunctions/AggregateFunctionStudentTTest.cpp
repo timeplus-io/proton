@@ -25,7 +25,7 @@ namespace
   */
 struct StudentTTestData : public TTestMoments<Float64>
 {
-    static constexpr auto name = "studentTTest";
+    static constexpr auto name = "student_ttest";
 
     std::pair<Float64, Float64> getResult() const
     {
@@ -71,7 +71,7 @@ AggregateFunctionPtr createAggregateFunctionStudentTTest(
 
 void registerAggregateFunctionStudentTTest(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("studentTTest", createAggregateFunctionStudentTTest);
+    factory.registerFunction("student_ttest", createAggregateFunctionStudentTTest);
 }
 
 }

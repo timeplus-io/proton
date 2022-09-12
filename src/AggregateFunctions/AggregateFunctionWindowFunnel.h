@@ -217,7 +217,7 @@ private:
 public:
     String getName() const override
     {
-        return "windowFunnel";
+        return "window_funnel";
     }
 
     AggregateFunctionWindowFunnel(const DataTypes & arguments, const Array & params)

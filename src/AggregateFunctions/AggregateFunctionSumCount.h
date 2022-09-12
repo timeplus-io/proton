@@ -31,7 +31,7 @@ public:
             this->data(place).denominator);
     }
 
-    String getName() const final { return "sumCount"; }
+    String getName() const final { return "sum_count"; }
 
 #if USE_EMBEDDED_COMPILER
 

@@ -39,14 +39,14 @@ AggregateFunctionPtr createAggregateFunctionBitwise(const std::string & name, co
 
 void registerAggregateFunctionsBitwise(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("groupBitOr", createAggregateFunctionBitwise<AggregateFunctionGroupBitOrData>);
-    factory.registerFunction("groupBitAnd", createAggregateFunctionBitwise<AggregateFunctionGroupBitAndData>);
-    factory.registerFunction("groupBitXor", createAggregateFunctionBitwise<AggregateFunctionGroupBitXorData>);
+    factory.registerFunction("group_bit_or", createAggregateFunctionBitwise<AggregateFunctionGroupBitOrData>);
+    factory.registerFunction("group_bit_and", createAggregateFunctionBitwise<AggregateFunctionGroupBitAndData>);
+    factory.registerFunction("group_bit_xor", createAggregateFunctionBitwise<AggregateFunctionGroupBitXorData>);
 
     /// Aliases for compatibility with MySQL.
-    factory.registerAlias("BIT_OR", "groupBitOr", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("BIT_AND", "groupBitAnd", AggregateFunctionFactory::CaseInsensitive);
-    factory.registerAlias("BIT_XOR", "groupBitXor", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias("bit_or", "group_bit_or", AggregateFunctionFactory::CaseSensitive);
+    factory.registerAlias("bit_and", "group_bit_and", AggregateFunctionFactory::CaseSensitive);
+    factory.registerAlias("bit_xor", "group_bit_xor", AggregateFunctionFactory::CaseSensitive);
 }
 
 }

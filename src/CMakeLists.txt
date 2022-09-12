@@ -234,6 +234,7 @@ add_object_library(clickhouse_processors_transforms_streaming Processors/Transfo
 add_object_library(clickhouse_storages_streaming Storages/Streaming)
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
 add_object_library(clickhouse_functions_streaming Functions/Streaming)
+add_object_library(clickhouse_interpreters_streaming AggregateFunctions/Streaming)
 # proton: ends
 
 add_object_library(clickhouse_processors_sources Processors/Sources)

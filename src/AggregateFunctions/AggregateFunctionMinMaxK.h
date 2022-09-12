@@ -146,14 +146,12 @@ class AggregateFunctionMinMaxK
 protected:
     using State = AggregateFunctionMinMaxKData<T, is_min>;
     UInt64 k;
-    UInt64 reserved;
 
 public:
     AggregateFunctionMinMaxK(UInt64 k_, const DataTypePtr & argument_type_, const Array & params)
         : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKData<T, is_min>, AggregateFunctionMinMaxK<T, is_min>>(
             {argument_type_}, params)
         , k(k_)
-        , reserved(k_ + 1)
     {
     }
 
@@ -166,14 +164,14 @@ public:
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         auto & top_k = this->data(place);
-        top_k.reserve(reserved);
+        top_k.reserve(k + 1);
         top_k.add(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num], k);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         auto & top_k = this->data(place);
-        top_k.reserve(reserved);
+        top_k.reserve(k + 1);
 
         for (const auto & elem : this->data(rhs))
             top_k.add(elem, k);
@@ -187,7 +185,7 @@ public:
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena *) const override
     {
         auto & top_k = this->data(place);
-        top_k.reserve(reserved);
+        top_k.reserve(k + 1);
         top_k.read(buf);
     }
 
@@ -225,7 +223,6 @@ private:
     using State = AggregateFunctionMinMaxKData<StringRef, is_min>;
 
     UInt64 k;
-    UInt64 reserved;
     DataTypePtr & input_data_type;
 
     static void deserializeAndInsert(StringRef str, IColumn & data_to);
@@ -236,7 +233,6 @@ public:
             AggregateFunctionMinMaxKData<StringRef, is_min>,
             AggregateFunctionMinMaxKGeneric<is_plain_column, is_min>>({input_data_type_}, params)
         , k(k_)
-        , reserved(k_ + 1)
         , input_data_type(this->argument_types[0])
     {
     }
@@ -255,7 +251,7 @@ public:
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /*version*/, Arena * arena) const override
     {
         auto & top_k = this->data(place);
-        top_k.reserve(reserved);
+        top_k.reserve(k + 1);
 
         // Specialized here because there's no deserialiser for StringRef
         size_t size = 0;
@@ -273,7 +269,7 @@ public:
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         auto & top_k = this->data(place);
-        top_k.reserve(reserved);
+        top_k.reserve(k + 1);
 
         if constexpr (is_plain_column)
         {
@@ -291,7 +287,7 @@ public:
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         auto & top_k = this->data(place);
-        top_k.reserve(reserved);
+        top_k.reserve(k + 1);
 
         for (const auto & elem : this->data(rhs))
             top_k.add(elem, k);
@@ -472,13 +468,11 @@ class AggregateFunctionMinMaxKTuple
 protected:
     using State = AggregateFunctionMinMaxKTupleData<is_min>;
     UInt64 k;
-    UInt64 reserved;
 
 public:
     AggregateFunctionMinMaxKTuple(UInt64 k_, const DataTypes & arguments, const Array & params)
         : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKTupleData<is_min>, AggregateFunctionMinMaxKTuple<is_min>>(arguments, params)
         , k(k_)
-        , reserved(k_ + 1)
     {
     }
 
@@ -547,7 +541,7 @@ public:
     {
         new (place) State;
         auto & data = this->data(place);
-        data.reserve(reserved);
+        data.reserve(k + 1);
         this->buildTupleValueOperators(data.operators);
     }
 };

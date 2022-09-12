@@ -37,16 +37,16 @@ void registerAggregateFunctionsAny(AggregateFunctionFactory & factory)
     // Synonyms for use as window functions.
     factory.registerFunction("first_value",
         { createAggregateFunctionAny, properties },
-        AggregateFunctionFactory::CaseInsensitive);
+        AggregateFunctionFactory::CaseSensitive);
     factory.registerFunction("last_value",
         { createAggregateFunctionAnyLast, properties },
-        AggregateFunctionFactory::CaseInsensitive);
+        AggregateFunctionFactory::CaseSensitive);
     factory.registerFunction("earliest",
         { createAggregateFunctionAny, properties },
-        AggregateFunctionFactory::CaseInsensitive);
+        AggregateFunctionFactory::CaseSensitive);
     factory.registerFunction("latest",
         { createAggregateFunctionAnyLast, properties },
-        AggregateFunctionFactory::CaseInsensitive);
+        AggregateFunctionFactory::CaseSensitive);
 }
 
 }

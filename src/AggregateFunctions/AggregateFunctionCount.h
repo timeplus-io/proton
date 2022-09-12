@@ -54,8 +54,9 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos) const override
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos, const IColumn * delta_col [[maybe_unused]]) const override
     {
+        assert(delta_col == nullptr);
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
@@ -73,8 +74,10 @@ public:
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena *,
-        ssize_t if_argument_pos) const override
+        ssize_t if_argument_pos,
+        const IColumn * delta_col [[maybe_unused]]) const override
     {
+        assert(delta_col == nullptr);
         if (if_argument_pos >= 0)
         {
             const auto & flags = assert_cast<const ColumnBool &>(*columns[if_argument_pos]).getData();
@@ -204,8 +207,9 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos) const override
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos, const IColumn * delta_col [[maybe_unused]]) const override
     {
+        assert(delta_col == nullptr);
         auto & nc = assert_cast<const ColumnNullable &>(*columns[0]);
         if (if_argument_pos >= 0)
         {

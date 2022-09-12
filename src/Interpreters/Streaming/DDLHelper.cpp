@@ -448,11 +448,8 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
     else
         payload.set("partition_by_granularity", "D");
 
-    if (mode == ProtonConsts::CHANGELOG_KV_MODE || mode == ProtonConsts::VERSIONED_KV_MODE)
-    {
-        assert(create.storage->primary_key);
+    if (mode == ProtonConsts::CHANGELOG_KV_MODE || mode == ProtonConsts::VERSIONED_KV_MODE || mode == ProtonConsts::CHANGELOG_MODE)
         payload.set("mode", mode.get<String>());
-    }
 
     if (create.uuid != UUIDHelpers::Nil)
         payload.set("uuid", toString(create.uuid));

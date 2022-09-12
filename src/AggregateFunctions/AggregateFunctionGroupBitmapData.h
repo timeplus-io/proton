@@ -681,7 +681,7 @@ struct AggregateFunctionGroupBitmapData
     // If false, all bitmap operations will be treated as merge to initialize the state
     bool init = false;
     RoaringBitmapWithSmallSet<T, 32> rbs;
-    static const char * name() { return "groupBitmap"; }
+    static const char * name() { return "group_bitmap"; }
 };
 
 

@@ -345,9 +345,9 @@ public:
         if constexpr (Type == AggregateFunctionTypeSum)
             return "sum";
         else if constexpr (Type == AggregateFunctionTypeSumWithOverflow)
-            return "sumWithOverflow";
+            return "sum_with_overflow";
         else if constexpr (Type == AggregateFunctionTypeSumKahan)
-            return "sumKahan";
+            return "sum_kahan";
         __builtin_unreachable();
     }
 
@@ -384,8 +384,9 @@ public:
     }
 
     void addBatchSinglePlace(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos) const override
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena *, ssize_t if_argument_pos, const IColumn * delta_col [[maybe_unused]]) const override
     {
+        assert(delta_col == nullptr);
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         if (if_argument_pos >= 0)
         {
@@ -399,9 +400,10 @@ public:
     }
 
     void addBatchSinglePlaceNotNull(
-        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, const UInt8 * null_map, Arena *, ssize_t if_argument_pos)
+        size_t batch_size, AggregateDataPtr place, const IColumn ** columns, const UInt8 * null_map, Arena *, ssize_t if_argument_pos, const IColumn * delta_col [[maybe_unused]])
         const override
     {
+        assert(delta_col == nullptr);
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         if (if_argument_pos >= 0)
         {

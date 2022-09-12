@@ -104,6 +104,7 @@ public:
     /// proton: starts
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreaming() const override;
+    bool isChangelog() const override;
     Streaming::HashSemantic getHashSemantic() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
@@ -176,6 +177,7 @@ private:
     void handleEmitVersion();
     void handleSnapshotSeekTo();
     void analyzeStreamingMode(); /// analyze whether it is streaming query
+    void analyzeChangelogMode(); /// analyze whether it is changelog query
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
     /// proton: ends
@@ -220,6 +222,7 @@ private:
     Streaming::BaseScaleInterval last_interval_bs;
     bool emit_version = false;
     std::optional<bool> is_streaming;
+    std::optional<bool> is_changelog;
     /// proton: ends
 
     /// Actions to calculate ALIAS if required.

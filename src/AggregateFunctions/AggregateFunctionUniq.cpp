@@ -133,7 +133,7 @@ void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
         {createAggregateFunctionUniq<AggregateFunctionUniqUniquesHashSetData, AggregateFunctionUniqUniquesHashSetDataForVariadic>, properties});
     /// proton: ends
 
-    factory.registerFunction("uniq_HLL12",
+    factory.registerFunction("uniq_hll12",
         {createAggregateFunctionUniq<false, AggregateFunctionUniqHLL12Data, AggregateFunctionUniqHLL12DataForVariadic>, properties});
 
     /// proton: starts

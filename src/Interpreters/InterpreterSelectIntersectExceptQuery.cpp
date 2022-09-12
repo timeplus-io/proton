@@ -171,6 +171,16 @@ bool InterpreterSelectIntersectExceptQuery::isStreaming() const
     return false;
 }
 
+bool InterpreterSelectIntersectExceptQuery::isChangelog() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (interpreter->isChangelog())
+            return true;
+    }
+    return false;
+}
+
 bool InterpreterSelectIntersectExceptQuery::hasGlobalAggregation() const
 {
     for (const auto & interpreter : nested_interpreters)

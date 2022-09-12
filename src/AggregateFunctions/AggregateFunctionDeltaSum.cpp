@@ -45,7 +45,7 @@ void registerAggregateFunctionDeltaSum(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = { .returns_default_when_only_null = true, .is_order_dependent = true };
 
-    factory.registerFunction("deltaSum", { createAggregateFunctionDeltaSum, properties });
+    factory.registerFunction("delta_sum", { createAggregateFunctionDeltaSum, properties });
 }
 
 }

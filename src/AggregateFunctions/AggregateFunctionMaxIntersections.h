@@ -77,8 +77,8 @@ public:
     String getName() const override
     {
         return kind == AggregateFunctionIntersectionsKind::Count
-            ? "maxIntersections"
-            : "maxIntersectionsPosition";
+            ? "max_intersections"
+            : "max_intersections_position";
     }
 
     DataTypePtr getReturnType() const override

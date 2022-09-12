@@ -38,7 +38,7 @@ public:
         : IAggregateFunctionDataHelper<AggregationFunctionDeltaSumData<T>, AggregationFunctionDeltaSum<T>>{}
     {}
 
-    String getName() const override { return "deltaSum"; }
+    String getName() const override { return "delta_sum"; }
 
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeNumber<T>>(); }
 

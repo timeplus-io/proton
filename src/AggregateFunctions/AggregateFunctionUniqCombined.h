@@ -131,9 +131,9 @@ public:
     String getName() const override
     {
         if constexpr (std::is_same_v<HashValueType, UInt64>)
-            return "uniqCombined64";
+            return "uniq_combined64";
         else
-            return "uniqCombined";
+            return "uniq_combined";
     }
 
     DataTypePtr getReturnType() const override
@@ -203,9 +203,9 @@ public:
     String getName() const override
     {
         if constexpr (std::is_same_v<HashValueType, UInt64>)
-            return "uniqCombined64";
+            return "uniq_combined64";
         else
-            return "uniqCombined";
+            return "uniq_combined";
     }
 
     DataTypePtr getReturnType() const override

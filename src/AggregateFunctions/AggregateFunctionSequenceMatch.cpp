@@ -74,8 +74,8 @@ AggregateFunctionPtr createAggregateFunctionSequenceBase(
 
 void registerAggregateFunctionsSequenceMatch(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("sequenceMatch", createAggregateFunctionSequenceBase<AggregateFunctionSequenceMatch, AggregateFunctionSequenceMatchData>);
-    factory.registerFunction("sequenceCount", createAggregateFunctionSequenceBase<AggregateFunctionSequenceCount, AggregateFunctionSequenceMatchData>);
+    factory.registerFunction("sequence_match", createAggregateFunctionSequenceBase<AggregateFunctionSequenceMatch, AggregateFunctionSequenceMatchData>);
+    factory.registerFunction("sequence_count", createAggregateFunctionSequenceBase<AggregateFunctionSequenceCount, AggregateFunctionSequenceMatchData>);
 }
 
 }

@@ -317,7 +317,6 @@ void Aggregator::compileAggregateFunctionsIfNeeded()
         return;
 
     std::vector<AggregateFunctionWithOffset> functions_to_compile;
-    size_t aggregate_instructions_size = 0;
     String functions_description;
 
     is_aggregate_function_compiled.resize(aggregate_functions.size());
@@ -345,7 +344,6 @@ void Aggregator::compileAggregateFunctionsIfNeeded()
             functions_description += ' ';
         }
 
-        ++aggregate_instructions_size;
         is_aggregate_function_compiled[i] = function->isCompilable();
     }
 
@@ -863,7 +861,7 @@ void NO_INLINE Aggregator::executeImplBatch(
         if (inst->offsets)
             inst->batch_that->addBatchArray(rows, places.get(), inst->state_offset, inst->batch_arguments, inst->offsets, aggregates_pool);
         else
-            inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool);
+            inst->batch_that->addBatch(rows, places.get(), inst->state_offset, inst->batch_arguments, aggregates_pool, -1, inst->delta_column);
     }
 }
 
@@ -926,9 +924,9 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
 
         if (inst->offsets)
             inst->batch_that->addBatchSinglePlace(
-                inst->offsets[static_cast<ssize_t>(rows - 1)], res + inst->state_offset, inst->batch_arguments, arena);
+                inst->offsets[static_cast<ssize_t>(rows - 1)], res + inst->state_offset, inst->batch_arguments, arena, -1, inst->delta_column);
         else
-            inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena);
+            inst->batch_that->addBatchSinglePlace(rows, res + inst->state_offset, inst->batch_arguments, arena, -1, inst->delta_column);
     }
 }
 
@@ -938,15 +936,16 @@ void NO_INLINE Aggregator::executeOnIntervalWithoutKeyImpl(
     size_t row_begin,
     size_t row_end,
     AggregateFunctionInstruction * aggregate_instructions,
-    Arena * arena)
+    Arena * arena,
+    const IColumn * delta_col)
 {
     /// Adding values
     for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
     {
         if (inst->offsets)
-            inst->batch_that->addBatchSinglePlaceFromInterval(inst->offsets[row_begin], inst->offsets[row_end - 1], res + inst->state_offset, inst->batch_arguments, arena);
+            inst->batch_that->addBatchSinglePlaceFromInterval(inst->offsets[row_begin], inst->offsets[row_end - 1], res + inst->state_offset, inst->batch_arguments, arena, -1, delta_col);
         else
-            inst->batch_that->addBatchSinglePlaceFromInterval(row_begin, row_end, res + inst->state_offset, inst->batch_arguments, arena);
+            inst->batch_that->addBatchSinglePlaceFromInterval(row_begin, row_end, res + inst->state_offset, inst->batch_arguments, arena, -1, delta_col);
     }
 }
 
@@ -999,6 +998,11 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
             aggregate_functions_instructions[i].batch_arguments = aggregate_columns[i].data();
 
         aggregate_functions_instructions[i].batch_that = that;
+
+        /// proton : starts
+        if (params.delta_col_pos >= 0)
+            aggregate_functions_instructions[i].delta_column = columns.at(params.delta_col_pos).get(); /// point to the column point is ok
+        /// proton : ends
     }
 }
 
@@ -1133,10 +1137,10 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         // space.
         //
         // But true reservation (IVolume::reserve()) cannot be used here since
-        // current_memory_usage does not takes compression into account and
+        // current_memory_usage does not take compression into account and
         // will reserve way more that actually will be used.
         //
-        // Hence let's do a simple check.
+        // Hence, let's do a simple check.
         if (!enoughSpaceInDirectory(tmp_path, size))
             throw Exception("Not enough space for external aggregation in " + tmp_path, ErrorCodes::NOT_ENOUGH_SPACE);
 

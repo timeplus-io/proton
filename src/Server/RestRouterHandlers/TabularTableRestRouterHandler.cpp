@@ -60,6 +60,9 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         if (table->engine_full.find("subtype = 'rawstore'") != String::npos)
             continue;
 
+        if (table->create_table_query.empty())
+            continue;
+
         const auto & query_ptr = parseQuery(table->create_table_query, query_context);
         const auto & create = query_ptr->as<const ASTCreateQuery &>();
 

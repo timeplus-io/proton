@@ -2,12 +2,10 @@
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 
 #include <DataTypes/DataTypeAggregateFunction.h>
-#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 
-#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
 
 #include <Interpreters/Context.h>

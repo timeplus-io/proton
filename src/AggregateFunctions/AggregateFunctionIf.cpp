@@ -119,7 +119,7 @@ public:
         }
     }
 
-    void addBatchSinglePlace(size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t) const override
+    void addBatchSinglePlace(size_t batch_size, AggregateDataPtr place, const IColumn ** columns, Arena * arena, ssize_t, const IColumn * delta_col) const override
     {
         const ColumnNullable * column = assert_cast<const ColumnNullable *>(columns[0]);
         const UInt8 * null_map = column->getNullMapData().data();
@@ -160,7 +160,7 @@ public:
         }
 
         this->nested_function->addBatchSinglePlaceNotNull(
-            batch_size, this->nestedPlace(place), columns_param, final_nulls.get(), arena, -1);
+            batch_size, this->nestedPlace(place), columns_param, final_nulls.get(), arena, -1, delta_col);
     }
 
 #if USE_EMBEDDED_COMPILER
