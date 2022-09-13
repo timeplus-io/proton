@@ -539,6 +539,12 @@ inline bool isBool(const DataTypePtr & data_type)
     return data_type->getName() == "bool";
 }
 
+template <typename T>
+inline bool isInterval(const T & data_type)
+{
+    return WhichDataType(data_type).isInterval();
+}
+
 template <typename DataType> constexpr bool IsDataTypeDecimal = false;
 template <typename DataType> constexpr bool IsDataTypeNumber = false;
 template <typename DataType> constexpr bool IsDataTypeDateOrDateTime = false;

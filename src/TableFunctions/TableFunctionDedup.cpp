@@ -24,9 +24,9 @@ namespace Streaming
 TableFunctionDedup::TableFunctionDedup(const String & name_) : TableFunctionProxyBase(name_)
 {
     help_message = fmt::format(
-        "Function '{}' requires at least 2 parameters. The deduplication key column parameters shall not be constant. The last optional "
-        "limit parameter shall be integer constant if present. For example, dedup(test, id, 1000). "
-        "dedup(stream, column1[, column2, ..., [limit]])",
+        "Function '{}' requires at least 2 parameters. The deduplication key column parameters shall not be constant. The `timeout` optional "
+        "parameter shall be constant interval seconds like `10s` if present, and the last optional limit parameter shall be integer constant if present. "
+        "For example, dedup(test, id, 1s, 1000). dedup(stream, column1[, column2, ..., [timeout, [limit]]])",
         name);
 }
 
@@ -76,21 +76,52 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
 
 ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
 {
-    /// dedup(table, column1, column2, ..., limit)
+    /// dedup(table, column1, column2, ..., timeout, limit)
     const auto & args = node->arguments->children;
     if (args.size() < 2)
         throw Exception(help_message, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
 
     size_t end_pos = args.size();
-    if (auto * lit = args.back()->as<ASTLiteral>(); lit)
+
+    auto check_timeout = [&](size_t pos) {
+        /// Check if last argument is interval literal
+        if (auto * func = args[pos]->as<ASTFunction>(); func)
+        {
+            /// When last param or second last is interval param, we requires at least 3 params
+            if (args.size() < 3)
+                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+
+            if (func->name != "to_interval_second")
+                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+
+            end_pos -= 1;
+        }
+    };
+
+    auto check_limit = [&](size_t pos) {
+        if (auto * lit = args[pos]->as<ASTLiteral>(); lit)
+        {
+            /// When last param is number limit, we requires at least 4 params
+            if (args.size() < 4)
+                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+
+            if (!isInt64OrUInt64FieldType(lit->value.getType()))
+                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+
+            end_pos -= 1;
+            return true;
+        }
+        return false;
+    };
+
+    if (args.size() > 3)
     {
-        if (args.size() == 2)
-            throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
-
-        if (!isInt64OrUInt64FieldType(lit->value.getType()))
-            throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
-
-        end_pos -= 1;
+        if (check_limit(args.size() - 1))
+            check_timeout(args.size() - 2);
+    }
+    else if (args.size() == 3)
+    {
+        check_timeout(args.size() - 1);
     }
 
     for (size_t i = 1; i < end_pos; ++i)

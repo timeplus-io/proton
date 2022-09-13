@@ -23,7 +23,6 @@
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTWatchQuery.h>
-#include <Parsers/MySQL/ASTCreateQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Parsers/parseQueryPipe.h>
