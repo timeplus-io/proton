@@ -205,6 +205,8 @@ void KafkaWALSimpleConsumer::checkLastError(const KafkaWALContext & ctx) const
                 DB::ErrorCodes::RESOURCE_NOT_FOUND, "Underlying streaming store '{}[{}]' doesn't exist", ctx.topic, ctx.partition);
         case RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN:
             LOG_ERROR(log, "Streaming store are gone");
+            /// Clean the last error, to ensure reconnected connection can still work
+            stats->last_err = 0;
             throw DB::Exception(DB::ErrorCodes::DWAL_FATAL_ERROR, "Underlying streaming store '{}' is gone", ctx.topic);
         case RD_KAFKA_RESP_ERR__FATAL:
             LOG_ERROR(log, "Streaming store has fatal error");
