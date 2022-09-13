@@ -7,12 +7,12 @@
 
 #if USE_NURAFT
 
-#include <Common/ThreadPool.h>
+#include <Coordination/CoordinationSettings.h>
+#include <Coordination/MetaStoreServer.h>
+#include <base/logger_useful.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Exception.h>
-#include <Coordination/MetaStoreServer.h>
-#include <Coordination/CoordinationSettings.h>
-#include <base/logger_useful.h>
+#include <Common/ThreadPool.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 
@@ -20,20 +20,21 @@
 
 namespace DB
 {
-
 class MetaStoreDispatcher
 {
-
 private:
     CoordinationSettingsPtr coordination_settings;
 
     /// Size depends on coordination settings
     MetaSnapshotsQueue snapshots_queue{1};
 
-    std::atomic<bool> shutdown_called{false};
+    std::atomic_flag shutdown_called;
 
     /// RAFT wrapper. Most important class.
-    std::unique_ptr<MetaStoreServer> server;
+    std::unique_ptr<IMetaStoreServer> server;
+
+    /// Whether this node host raft server
+    bool enable_raft = true;
 
     Poco::Logger * log;
 
@@ -50,17 +51,14 @@ public:
 
     ~MetaStoreDispatcher();
 
-    String localGetByKey(const String & key, const String & namespace_) const
-    {
-        return server->localGetByKey(key, namespace_);
-    }
+    String localGetByKey(const String & key, const String & namespace_) const { return server->localGetByKey(key, namespace_); }
 
     std::vector<String> localMultiGetByKeys(const std::vector<String> & keys, const String & namespace_) const
     {
         return server->localMultiGetByKeys(keys, namespace_);
     }
 
-    std::vector<std::pair<String, String> > localRangeGetByNamespace(const String & prefix_, const String & namespace_) const
+    std::vector<std::pair<String, String>> localRangeGetByNamespace(const String & prefix_, const String & namespace_) const
     {
         return server->localRangeGetByNamespace(prefix_, namespace_);
     }
@@ -70,42 +68,27 @@ public:
         return server->putRequest(request, namespace_);
     }
 
-    bool isLeader() const
-    {
-        return server->isLeader();
-    }
+    /// Whether or not this instance has raft server running
+    bool hasServer() const { return enable_raft; }
 
-    bool hasLeader() const
-    {
-        return server->isLeaderAlive();
-    }
+    bool isLeader() const { return enable_raft ? (server->as<MetaStoreServer>())->isLeader() : false; }
+
+    bool hasLeader() const { return enable_raft ? (server->as<MetaStoreServer>())->isLeaderAlive() : false; }
 
     bool isSupportAutoForward() const
     {
-        return server->isAutoForward();
+        return enable_raft ? (server->as<MetaStoreServer>())->isAutoForward() : false;
     }
 
-    int getLeaderID() const
-    {
-        return server->getLeaderID();
-    }
+    int getLeaderID() const { return enable_raft ? (server->as<MetaStoreServer>())->getLeaderID() : -1; }
 
     String getLeaderHostname() const;
 
-    Int64 getTcpPort() const
-    {
-        return tcp_port;
-    }
+    Int64 getTcpPort() const { return tcp_port; }
 
-    Int64 getHttpPort() const
-    {
-        return http_port;
-    }
+    Int64 getHttpPort() const { return http_port; }
 
-    CoordinationSettingsPtr getSettings() const
-    {
-        return coordination_settings;
-    }
+    CoordinationSettingsPtr getSettings() const { return coordination_settings; }
 };
 
 }

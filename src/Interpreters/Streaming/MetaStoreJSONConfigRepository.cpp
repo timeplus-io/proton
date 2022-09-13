@@ -40,7 +40,7 @@ Poco::Timestamp MetaStoreJSONConfigRepository::getUpdateTime(const std::string &
 
 std::set<std::string> MetaStoreJSONConfigRepository::getAllLoadablesDefinitionNames()
 {
-    if (!metastore_dispatcher->hasLeader())
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
         throw Exception(ErrorCodes::NOT_A_LEADER, "Ignoring request, because no alive raft leader exist");
 
     auto kv_pairs = metastore_dispatcher->localRangeGetByNamespace(FUNC_PREFIX, ns);
@@ -53,7 +53,7 @@ std::set<std::string> MetaStoreJSONConfigRepository::getAllLoadablesDefinitionNa
 
 bool MetaStoreJSONConfigRepository::exists(const std::string & definition_entity_name)
 {
-    if (!metastore_dispatcher->hasLeader())
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
         throw Exception(ErrorCodes::NOT_A_LEADER, "No alive raft leader exists");
 
     String json_cfg;
@@ -76,7 +76,7 @@ Poco::AutoPtr<Poco::Util::AbstractConfiguration> MetaStoreJSONConfigRepository::
 
 Poco::JSON::Object::Ptr MetaStoreJSONConfigRepository::get(const std::string & key) const
 {
-    if (!metastore_dispatcher->hasLeader())
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
         throw Exception(ErrorCodes::NOT_A_LEADER, "No alive raft leader exists");
 
     return readConfigKey(fmt::format("{}/{}", FUNC_PREFIX, key));
@@ -129,7 +129,7 @@ void MetaStoreJSONConfigRepository::remove(const std::string & config_file)
 
 Poco::JSON::Array::Ptr MetaStoreJSONConfigRepository::list() const
 {
-    if (!metastore_dispatcher->hasLeader())
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
     {
         LOG_ERROR(&Poco::Logger::get("MetaStoreJSONConfigRepository"), "No alive raft leader");
         throw Exception(ErrorCodes::NOT_A_LEADER, "Fail to list configuration");

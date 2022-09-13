@@ -28,10 +28,12 @@ private:
     std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & payload) const override;
 
     std::pair<String, Int32> doGet(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const Strings & request_keys) const;
-    std::pair<String, Int32> doList(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const String & request_prefix) const;
-
-    std::pair<String, Int32> forwardRequest(const Poco::JSON::Object::Ptr & payload, const String & uri_parameter = {}) const;
-    bool streamingInput() const override { return false; }
+    std::pair<String, Int32>
+    doList(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const String & request_prefix) const;
+    std::pair<String, Int32>
+    doDelete(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const std::vector<String> & keys) const;
+    std::pair<String, Int32> doMultiGet(const Poco::JSON::Object::Ptr & payload, const String & namespace_) const;
+    std::pair<String, Int32> doMultiDelete(const Poco::JSON::Object::Ptr & payload, const String & namespace_) const;
 
 private:
     std::shared_ptr<MetaStoreDispatcher> metastore_dispatcher;

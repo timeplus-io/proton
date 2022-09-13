@@ -666,8 +666,8 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainer snapshot)
             std::unique_lock storage_guard{storage_rwlock};
             if (uuid != UUIDHelpers::Nil)
             {
-                [[maybe_unused]] auto removed = indexed_by_id.erase(uuid);
-                assert(removed == 1);
+                indexed_by_id.erase(uuid);
+                //assert(removed == 1);
             }
             indexed_by_id[p.second->uuid] = p.second;
         }

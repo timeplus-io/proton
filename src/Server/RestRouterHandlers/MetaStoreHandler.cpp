@@ -23,80 +23,78 @@ namespace ErrorCodes
 
 namespace
 {
-    constexpr auto * METASTORE_URL = "http://{}:{}/proton/metastore{}";
+String buildResponse(const String & query_id)
+{
+    Poco::JSON::Object resp;
+    resp.set("request_id", query_id);
 
-    String buildResponse(const String & query_id)
-    {
-        Poco::JSON::Object resp;
-        resp.set("request_id", query_id);
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+String
+buildResponse(const String & namespace_, const std::vector<String> & keys, const std::vector<String> & values, const String & query_id)
+{
+    assert(keys.size() == values.size());
 
-    String
-    buildResponse(const String & namespace_, const std::vector<String> & keys, const std::vector<String> & values, const String & query_id)
-    {
-        assert(keys.size() == values.size());
+    Poco::JSON::Object resp;
+    resp.set("request_id", query_id);
 
-        Poco::JSON::Object resp;
-        resp.set("request_id", query_id);
+    Poco::JSON::Object data;
+    for (size_t i = 0; i < values.size(); ++i)
+        data.set(keys[i], values[i]);
 
-        Poco::JSON::Object data;
-        for (size_t i = 0; i < values.size(); ++i)
-            data.set(keys[i], values[i]);
+    resp.set("data", data);
 
-        resp.set("data", data);
+    if (!namespace_.empty())
+        resp.set("namespace", namespace_);
 
-        if (!namespace_.empty())
-            resp.set("namespace", namespace_);
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+String buildResponse(const String & namespace_, const std::vector<std::pair<String, String>> & kv_pairs, const String & query_id)
+{
+    Poco::JSON::Object resp;
+    resp.set("request_id", query_id);
 
-    String buildResponse(const String & namespace_, const std::vector<std::pair<String, String>> & kv_pairs, const String & query_id)
-    {
-        Poco::JSON::Object resp;
-        resp.set("request_id", query_id);
+    Poco::JSON::Object data;
+    for (const auto & [key, value] : kv_pairs)
+        data.set(key, value);
 
-        Poco::JSON::Object data;
-        for (auto & [key, value] : kv_pairs)
-            data.set(key, value);
+    resp.set("data", data);
 
-        resp.set("data", data);
+    if (!namespace_.empty())
+        resp.set("namespace", namespace_);
 
-        if (!namespace_.empty())
-            resp.set("namespace", namespace_);
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+std::vector<std::pair<String, String>> parseRequestPairsFromJSONObject(const Poco::JSON::Object::Ptr & object)
+{
+    std::vector<std::pair<String, String>> pairs;
+    for (const auto & [key, value] : *object)
+        pairs.emplace_back(key, value.extract<String>());
 
-    std::vector<std::pair<String, String>> parseRequestPairsFromJSONObject(const Poco::JSON::Object::Ptr & object)
-    {
-        std::vector<std::pair<String, String>> pairs;
-        for (const auto & [key, value] : *object)
-            pairs.emplace_back(key, value.extract<String>());
+    return pairs;
+}
 
-        return pairs;
-    }
-
-    std::pair<String, String> parseRequestNamespaceAndKeyFromPath(const String & path)
-    {
-        /// PATH: '/proton/metastore/{namespace}[/{key}] ...'
-        constexpr char prefix[] = "/proton/metastore/";
-        assert(path.starts_with(prefix));
-        size_t root_len = strlen(prefix);
-        auto namespace_end = path.find_first_of('/', root_len);
-        if (namespace_end == std::string::npos)
-            return {path.substr(root_len), ""};
-        else
-            return {String(path, root_len, namespace_end - root_len), path.substr(namespace_end + 1)};
-    }
+std::pair<String, String> parseRequestNamespaceAndKeyFromPath(const String & path)
+{
+    /// PATH: '/proton/metastore/{namespace}[/{key}] ...'
+    constexpr char prefix[] = "/proton/metastore/";
+    assert(path.starts_with(prefix));
+    size_t root_len = strlen(prefix);
+    auto namespace_end = path.find_first_of('/', root_len);
+    if (namespace_end == std::string::npos)
+        return {path.substr(root_len), ""};
+    else
+        return {String(path, root_len, namespace_end - root_len), path.substr(namespace_end + 1)};
+}
 }
 
 std::pair<String, Int32> MetaStoreHandler::executeGet(const Poco::JSON::Object::Ptr & payload) const
@@ -137,78 +135,67 @@ std::pair<String, Int32> MetaStoreHandler::executeGet(const Poco::JSON::Object::
 }
 
 std::pair<String, Int32>
-MetaStoreHandler::doGet(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const Strings & request_keys) const
+MetaStoreHandler::doGet(const Poco::JSON::Object::Ptr & /*payload*/, const String & namespace_, const Strings & request_keys) const
 {
     assert(!request_keys.empty());
 
-    if (!metastore_dispatcher->hasLeader())
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
         return {
             jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
 
-    /// If true, execute read requests as writes through whole RAFT consesus with similar speed
-    bool enable_quorum_reads = getQueryParameterBool("quorum_reads", metastore_dispatcher->getSettings()->quorum_reads);
-
-    if (metastore_dispatcher->isLeader() && !enable_quorum_reads)
-    {
-        std::vector<String> values = metastore_dispatcher->localMultiGetByKeys(request_keys, namespace_);
-        return {buildResponse(namespace_, request_keys, values, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
-    }
-    else if (metastore_dispatcher->isLeader() || (metastore_dispatcher->isSupportAutoForward() && enable_quorum_reads))
-    {
-        auto request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::MULTIGET);
-        request->as<Coordination::KVMultiGetRequest>()->keys = request_keys;
-
-        auto response = metastore_dispatcher->putRequest(request, namespace_);
-        if (response->code != ErrorCodes::OK)
-            return {
-                jsonErrorResponse(fmt::format("Request failed[{}]: {}", response->code, response->msg), ErrorCodes::LOGICAL_ERROR),
-                HTTPResponse::HTTP_BAD_REQUEST};
-
-        auto resp = response->as<const Coordination::KVMultiGetResponse>();
-        return {buildResponse(namespace_, resp->kv_pairs, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
-    }
-    else
-    {
-        /// Forward request to leader node manually
-        return forwardRequest(payload, fmt::format("?quorum_reads={}", enable_quorum_reads));
-    }
+    std::vector<String> values = metastore_dispatcher->localMultiGetByKeys(request_keys, namespace_);
+    return {buildResponse(namespace_, request_keys, values, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
 }
 
-
 std::pair<String, Int32>
-MetaStoreHandler::doList(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const String & request_prefix) const
+MetaStoreHandler::doList(const Poco::JSON::Object::Ptr & /*payload*/, const String & namespace_, const String & request_prefix) const
 {
-    if (!metastore_dispatcher->hasLeader())
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
         return {
             jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
 
-    /// If true, execute read requests as writes through whole RAFT consesus with similar speed
-    bool enable_quorum_reads = getQueryParameterBool("quorum_reads", metastore_dispatcher->getSettings()->quorum_reads);
+    auto kv_pairs = metastore_dispatcher->localRangeGetByNamespace(request_prefix, namespace_);
+    return {buildResponse(namespace_, kv_pairs, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
+}
 
-    if (metastore_dispatcher->isLeader() && !enable_quorum_reads)
-    {
-        auto kv_pairs = metastore_dispatcher->localRangeGetByNamespace(request_prefix, namespace_);
-        return {buildResponse(namespace_, kv_pairs, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
-    }
-    else if (metastore_dispatcher->isLeader() || (metastore_dispatcher->isSupportAutoForward() && enable_quorum_reads))
-    {
-        auto request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::LIST);
-        request->as<Coordination::KVListRequest>()->key_prefix = request_prefix;
+std::pair<String, Int32> MetaStoreHandler::doMultiGet(const Poco::JSON::Object::Ptr & payload, const String & namespace_) const
+{
+    std::vector<String> request_keys;
+    auto json_arguments = payload->getArray("keys");
+    for (size_t i = 0; i < json_arguments->size(); i++)
+        request_keys.emplace_back(json_arguments->get(i).toString());
 
-        auto response = metastore_dispatcher->putRequest(request, namespace_);
-        if (response->code != ErrorCodes::OK)
-            return {
-                jsonErrorResponse(fmt::format("Request failed[{}]: {}", response->code, response->msg), ErrorCodes::LOGICAL_ERROR),
-                HTTPResponse::HTTP_BAD_REQUEST};
+    return doGet(payload, namespace_, request_keys);
+}
 
-        auto resp = response->as<const Coordination::KVListResponse>();
-        return {buildResponse(namespace_, resp->kv_pairs, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
-    }
-    else
-    {
-        /// Forward request to leader node manually
-        return forwardRequest(payload);
-    }
+std::pair<String, Int32>
+MetaStoreHandler::doDelete(const Poco::JSON::Object::Ptr & /*payload*/, const String & namespace_, const std::vector<String> & keys) const
+{
+    if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
+        return {
+            jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER), HTTPResponse::HTTP_BAD_REQUEST};
+
+
+    auto request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::MULTIDELETE);
+    request->as<Coordination::KVMultiDeleteRequest>()->keys = keys;
+
+    auto response = metastore_dispatcher->putRequest(request, namespace_);
+    if (response->code != ErrorCodes::OK)
+        return {
+            jsonErrorResponse(fmt::format("Request failed[{}]: {}", response->code, response->msg), ErrorCodes::LOGICAL_ERROR),
+            HTTPResponse::HTTP_BAD_REQUEST};
+
+    return {buildResponse(query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
+}
+
+std::pair<String, Int32> MetaStoreHandler::doMultiDelete(const Poco::JSON::Object::Ptr & payload, const String & namespace_) const
+{
+    std::vector<String> request_keys;
+    const auto json_arguments = payload->getArray("keys");
+    for (size_t i = 0; i < json_arguments->size(); i++)
+        request_keys.emplace_back(json_arguments->get(i).toString());
+
+    return doDelete(payload, namespace_, request_keys);
 }
 
 std::pair<String, Int32> MetaStoreHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
@@ -216,35 +203,33 @@ std::pair<String, Int32> MetaStoreHandler::executePost(const Poco::JSON::Object:
     try
     {
         auto [namespace_, key] = parseRequestNamespaceAndKeyFromPath(this->query_uri.getPath());
+        const auto action = getQueryParameter("action", "");
+        if (action == "multiget")
+            return doMultiGet(payload, namespace_);
+        else if (action == "multidelete")
+            return doMultiDelete(payload, namespace_);
+
         const auto & request_pairs = parseRequestPairsFromJSONObject(payload);
         if (request_pairs.empty())
             return {
                 jsonErrorResponse("Invalid request data: expected map of key-value(s).", ErrorCodes::BAD_REQUEST_PARAMETER),
                 HTTPResponse::HTTP_BAD_REQUEST};
 
-        if (!metastore_dispatcher->hasLeader())
+        if (metastore_dispatcher->hasServer() && !metastore_dispatcher->hasLeader())
             return {
                 jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER),
                 HTTPResponse::HTTP_BAD_REQUEST};
 
-        if (metastore_dispatcher->isLeader() || metastore_dispatcher->isSupportAutoForward())
-        {
-            auto request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::MULTIPUT);
-            request->as<Coordination::KVMultiPutRequest>()->kv_pairs = request_pairs;
+        auto request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::MULTIPUT);
+        request->as<Coordination::KVMultiPutRequest>()->kv_pairs = request_pairs;
 
-            auto response = metastore_dispatcher->putRequest(request, namespace_);
-            if (response->code != ErrorCodes::OK)
-                return {
-                    jsonErrorResponse(fmt::format("Request failed[{}]: {}", response->code, response->msg), ErrorCodes::LOGICAL_ERROR),
-                    HTTPResponse::HTTP_BAD_REQUEST};
+        auto response = metastore_dispatcher->putRequest(request, namespace_);
+        if (response->code != ErrorCodes::OK)
+            return {
+                jsonErrorResponse(fmt::format("Request failed[{}]: {}", response->code, response->msg), ErrorCodes::LOGICAL_ERROR),
+                HTTPResponse::HTTP_BAD_REQUEST};
 
-            return {buildResponse(query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
-        }
-        else
-        {
-            /// Forward request to leader node manually
-            return forwardRequest(payload);
-        }
+        return {buildResponse(query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
     }
     catch (...)
     {
@@ -269,29 +254,7 @@ std::pair<String, Int32> MetaStoreHandler::executeDelete(const Poco::JSON::Objec
                 jsonErrorResponse("Invalid request data: expected delete-key.", ErrorCodes::BAD_REQUEST_PARAMETER),
                 HTTPResponse::HTTP_BAD_REQUEST};
 
-        if (!metastore_dispatcher->hasLeader())
-            return {
-                jsonErrorResponse("Ignoring request, because no alive leader exist", ErrorCodes::NOT_A_LEADER),
-                HTTPResponse::HTTP_BAD_REQUEST};
-
-        if (metastore_dispatcher->isLeader() || metastore_dispatcher->isSupportAutoForward())
-        {
-            auto request = Coordination::KVRequestFactory::instance().get(Coordination::KVOpNum::MULTIDELETE);
-            request->as<Coordination::KVMultiDeleteRequest>()->keys = {request_key};
-
-            auto response = metastore_dispatcher->putRequest(request, namespace_);
-            if (response->code != ErrorCodes::OK)
-                return {
-                    jsonErrorResponse(fmt::format("Request failed[{}]: {}", response->code, response->msg), ErrorCodes::LOGICAL_ERROR),
-                    HTTPResponse::HTTP_BAD_REQUEST};
-
-            return {buildResponse(query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
-        }
-        else
-        {
-            /// Forward request to leader node manually
-            return forwardRequest(payload);
-        }
+        return doDelete(payload, namespace_, {request_key});
     }
     catch (...)
     {
@@ -301,30 +264,5 @@ std::pair<String, Int32> MetaStoreHandler::executeDelete(const Poco::JSON::Objec
             HTTPResponse::HTTP_BAD_REQUEST};
     }
 }
-
-std::pair<String, Int32> MetaStoreHandler::forwardRequest(const Poco::JSON::Object::Ptr & payload, const String & uri_parameter) const
-{
-    Poco::URI uri{
-        fmt::format(METASTORE_URL, metastore_dispatcher->getLeaderHostname(), metastore_dispatcher->getHttpPort(), uri_parameter)};
-    std::stringstream req_body_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    payload->stringify(req_body_stream, 0);
-    const String & body = req_body_stream.str();
-
-    auto [response, http_status] = sendRequest(
-        uri,
-        HTTPRequest::HTTP_POST,
-        query_context->getCurrentQueryId(),
-        query_context->getUserName(),
-        query_context->getPasswordByUserName(query_context->getUserName()),
-        body,
-        {},
-        log);
-    if (http_status == HTTPResponse::HTTP_OK)
-    {
-        return {response, http_status};
-    }
-    return {jsonErrorResponseFrom(response), http_status};
-}
-
 }
 #endif

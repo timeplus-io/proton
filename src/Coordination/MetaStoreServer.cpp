@@ -8,9 +8,6 @@
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
 #endif
-#include <Common/ZooKeeper/ZooKeeperIO.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 
 #include <Poco/Util/Application.h>
 
@@ -296,7 +293,7 @@ std::vector<std::pair<String, String> > MetaStoreServer::localRangeGetByNamespac
     return resp.kv_pairs;
 }
 
-Coordination::KVResponsePtr MetaStoreServer::putRequest(Coordination::KVRequestPtr request, const String & namespace_)
+Coordination::KVResponsePtr MetaStoreServer::putRequest(const Coordination::KVRequestPtr & request, const String & namespace_)
 {
     Coordination::KVNamespaceAndPrefixHelper helper(checkNamespace(namespace_));
     const auto & entry = getBufferFromKVRequest(helper.handle(request));

@@ -576,7 +576,7 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
             settings.ostr << indent_str << backQuoteIfNeed(getDatabase());
             settings.ostr << ".";
         }
-        settings.ostr << indent_str << backQuoteIfNeed(getTable());
+        settings.ostr << indent_str << backQuoteIfNeed(getTable()) << " ";
     }
     else if (alter_object == AlterObjectType::DATABASE && database)
     {

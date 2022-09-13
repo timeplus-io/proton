@@ -1,9 +1,12 @@
 #include "MetaStoreDispatcher.h"
 
-#include <boost/algorithm/string.hpp>
-#include <Common/Stopwatch.h>
-#include <Common/setThreadName.h>
+#include <Common/ProtonCommon.h>
+#include "MetaStoreConnection.h"
+
 #include <Common/ZooKeeper/KeeperException.h>
+#include <Common/setThreadName.h>
+
+#include <boost/algorithm/string.hpp>
 
 namespace DB
 {
@@ -21,7 +24,7 @@ MetaStoreDispatcher::MetaStoreDispatcher()
 void MetaStoreDispatcher::initialize(const Poco::Util::AbstractConfiguration & config, bool standalone_metastore)
 {
     LOG_DEBUG(log, "Initializing metastore dispatcher");
-    int myid = config.getInt("metastore_server.server_id");
+    int my_id = config.getInt("metastore_server.server_id", -1);
 
     if (config.has("metastore_server.http_port"))
         http_port = config.getInt("metastore_server.http_port");
@@ -30,7 +33,13 @@ void MetaStoreDispatcher::initialize(const Poco::Util::AbstractConfiguration & c
 
     coordination_settings->loadFromConfig("metastore_server.coordination_settings", config);
 
-    server = std::make_unique<MetaStoreServer>(myid, coordination_settings, config, snapshots_queue, standalone_metastore);
+    if (my_id == -1)
+        enable_raft = false;
+
+    if (enable_raft)
+        server = std::make_unique<MetaStoreServer>(my_id, coordination_settings, config, snapshots_queue, standalone_metastore);
+    else
+        server = std::make_unique<MetaStoreConnection>(config);
     try
     {
         LOG_DEBUG(log, "Waiting server to initialize");
@@ -53,11 +62,10 @@ void MetaStoreDispatcher::shutdown()
 {
     try
     {
-        if (shutdown_called)
+        if (shutdown_called.test_and_set())
             return;
 
         LOG_DEBUG(log, "Shutting down storage dispatcher");
-        shutdown_called = true;
 
         if (server)
             server->shutdown();
@@ -77,9 +85,15 @@ MetaStoreDispatcher::~MetaStoreDispatcher()
 
 String MetaStoreDispatcher::getLeaderHostname() const
 {
+    if (!enable_raft)
+        return {};
+
+    const auto metastore_server = server->as<MetaStoreServer>();
+    assert(metastore_server);
+
     /// endpoint is "host:port", parts shall be ["host", "port"]
     std::vector<String> parts;
-    const auto & endpoint = server->getClusterConfig()->get_server(server->getLeaderID())->get_endpoint();
+    const auto & endpoint = metastore_server->getClusterConfig()->get_server(metastore_server->getLeaderID())->get_endpoint();
     boost::split(parts, endpoint, boost::is_any_of(":"));
     if (parts.size() == 2)
         return parts[0];

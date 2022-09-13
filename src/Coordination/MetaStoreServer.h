@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoordinationSettings.h"
+#include "IMetaStoreServer.h"
 #include "InMemoryLogStore.h"
 #include "KVNamespaceAndPrefixHelper.h"
 #include "KVRequest.h"
@@ -18,7 +19,7 @@ namespace DB
 {
 using MetaClusterConfig = nuraft::ptr<nuraft::cluster_config>;
 
-class MetaStoreServer
+class MetaStoreServer : public IMetaStoreServer
 {
 private:
     const int server_id;
@@ -61,15 +62,17 @@ public:
         MetaSnapshotsQueue & snapshots_queue_,
         bool standalone_metastore);
 
-    void startup();
+    ~MetaStoreServer() override = default;
 
-    String localGetByKey(const String & key, const String & namespace_) const;
+    void startup() override;
 
-    std::vector<String> localMultiGetByKeys(const std::vector<String> & keys, const String & namespace_) const;
+    String localGetByKey(const String & key, const String & namespace_) const override;
 
-    std::vector<std::pair<String, String>> localRangeGetByNamespace(const String & prefix_, const String & namespace_) const;
+    std::vector<String> localMultiGetByKeys(const std::vector<String> & keys, const String & namespace_) const override;
 
-    Coordination::KVResponsePtr putRequest(Coordination::KVRequestPtr request, const String & namespace_);
+    std::vector<std::pair<String, String>> localRangeGetByNamespace(const String & prefix_, const String & namespace_) const override;
+
+    Coordination::KVResponsePtr putRequest(const Coordination::KVRequestPtr & request, const String & namespace_) override;
 
     bool isLeader() const;
 
@@ -77,9 +80,9 @@ public:
 
     bool isAutoForward() const;
 
-    void waitInit();
+    void waitInit() override;
 
-    void shutdown();
+    void shutdown() override;
 
     int getServerID() const { return server_id; }
 
