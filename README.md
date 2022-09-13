@@ -35,13 +35,13 @@ After build, you can find the compiled `proton` binaries in `build_docker` direc
 ## Bare Metal Build
 
 ### Build Tools
-- clang-13 and above
+- clang-14 and above
 - cmake
 - ninja
 
 ### MacOS
 We don't support build proton by using Apple Clang. Please use `brew install llvm` to install 
-clang-13 / clang++-13.
+clang-14 / clang++-14.
 
 ### Ad-hoc Build with Default C/C++ Compilers
 
