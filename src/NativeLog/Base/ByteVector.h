@@ -53,6 +53,8 @@ public:
 
     ByteVector(ByteVector && other) noexcept : mem(move(other.mem)), cap(other.cap), siz(other.siz) { }
 
+    ByteVector(): mem(nullptr, std::free), cap(0), siz(0) { }
+
     ~ByteVector() = default;
 
     bool empty() const { return siz == 0; }
@@ -103,6 +105,13 @@ public:
         assert(start_pos < siz && start_pos + length < siz);
 
         return ByteVectorSlice(mem.get() + start_pos, length);
+    }
+
+    void swap(ByteVector & rhs)
+    {
+        mem.swap(rhs.mem);
+        std::swap(cap, rhs.cap);
+        std::swap(siz, rhs.siz);
     }
 
 private:

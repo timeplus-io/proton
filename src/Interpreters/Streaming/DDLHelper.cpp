@@ -83,8 +83,8 @@ void getAndValidateStorageSetting(
         }
         else if (key == "storage_type")
         {
-            if (value != "hybrid" && value != "streaming")
-                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "storage_type only supports 'hybrid' or 'streaming'");
+            if (value != "hybrid" && value != "streaming" && value != "memory")
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "storage_type only supports 'hybrid' or 'streaming' or 'memory'");
         }
 
         handle_setting(key, value);

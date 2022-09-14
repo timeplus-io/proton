@@ -63,6 +63,8 @@ public:
 
     void updateNativeLog();
 
+    bool isInmemory() const;
+
 private:
     void initLog();
     void initKafkaLog();

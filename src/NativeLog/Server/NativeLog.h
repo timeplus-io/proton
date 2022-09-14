@@ -66,6 +66,9 @@ public:
 
     TailCache & getCache() const { return *cache; }
 
+    /// HACK interface
+    void setInmemory(const std::string & ns, const std::string & stream, const StreamID & stream_id, int32_t shards, bool inmemory);
+
     /// nullopt -> Not found
     std::optional<std::pair<uint64_t, std::vector<std::string>>> getLocalStreamInfo(const StreamDescription & desc) const noexcept;
 

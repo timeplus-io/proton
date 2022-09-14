@@ -1343,6 +1343,11 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
                 if (MergeTreeData * table_merge_tree = dynamic_cast<MergeTreeData *>(table.get()))
                 {
+                    /// proton : starts
+                    if (table_merge_tree->isInmemory())
+                        continue;
+                    /// proton : ends
+
                     const auto & settings = getContext()->getSettingsRef();
 
                     calculateMax(max_part_count_for_partition, table_merge_tree->getMaxPartsCountForPartition());

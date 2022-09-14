@@ -267,9 +267,8 @@ CreateStreamResponse NativeLog::createStream(const std::string & ns, const Creat
 
     for (int32_t shard = 0; shard < request.shards; ++shard)
     {
-        auto log = log_manager->getOrCreateLog(ns, StreamShard{request.stream, response.id, shard}, true, false);
+        [[maybe_unused]] auto log = log_manager->getOrCreateLog(ns, StreamShard{request.stream, response.id, shard}, true, false);
         assert(log);
-        (void)log;
     }
     return response;
 }
@@ -395,6 +394,17 @@ TranslateTimestampsResponse NativeLog::translateTimestamps(const std::string & n
     }
 
     return response;
+}
+
+/// HACK interface
+void NativeLog::setInmemory(const std::string & ns, const std::string & stream, const StreamID & stream_id, int32_t shards, bool inmemory)
+{
+    for (int32_t shard = 0; shard < shards; ++shard)
+    {
+        auto log = log_manager->getOrCreateLog(ns, StreamShard{stream, stream_id, shard}, true, false);
+        assert(log);
+        log->setInmemory(inmemory);
+    }
 }
 
 std::optional<std::pair<uint64_t, std::vector<String>>> NativeLog::getLocalStreamInfo(const StreamDescription & desc) const noexcept

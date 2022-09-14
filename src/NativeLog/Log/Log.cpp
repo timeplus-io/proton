@@ -73,9 +73,15 @@ LogAppendDescription Log::append(RecordPtr & record)
 {
     auto append_info = analyzeAndValidateRecord(*record);
 
-    auto byte_vec{record->serialize()};
-    checkSize(byte_vec.size());
-    append_info.valid_bytes = byte_vec.size();
+    ByteVector byte_vec;
+
+    if (!inmemory)
+    {
+        auto serialized_bytes{record->serialize()};
+        checkSize(serialized_bytes.size());
+        append_info.valid_bytes = serialized_bytes.size();
+        byte_vec.swap(serialized_bytes);
+    }
 
     /// Hold the lock and insert them to the log
     {
@@ -87,12 +93,16 @@ LogAppendDescription Log::append(RecordPtr & record)
         LogSequenceMetadata metadata{append_info.seq_metadata.record_sn, segment->baseSequence(), segment->size()};
 
         /// Append the records, and increment the loglet end sn immediately after the append
-        loglet->append(byte_vec, append_info);
+        if (inmemory)
+            /// Update the sequence number manually here
+            loglet->updateLogEndSequence(append_info.seq_metadata.record_sn + 1, 0, 0);
+        else
+            loglet->append(byte_vec, append_info);
 
         /// Update the high watermark in case it has gotten ahead of the log end sn following a truncation
         /// or if a new segment has been rolled and the sn metadata needs to be updated
-//        if (highWatermarkWithoutLock() >= logEndSequence())
-//            updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
+        /// if (highWatermarkWithoutLock() >= logEndSequence())
+        /// updateHighWatermarkMetadataWithoutLock(loglet->logEndSequenceMetadata());
 
         /// maybeIncrementFirstUnstableSequenceWithoutLock();
 
@@ -170,7 +180,8 @@ void Log::assignSequence(RecordPtr & record, ByteVector & byte_vec, LogAppendDes
     append_info.append_timestamp = now;
 
     /// We will need fix the sequence number and append timestamp in the serialization
-    record->deltaSerialize(byte_vec);
+    if (likely(!inmemory))
+        record->deltaSerialize(byte_vec);
 }
 
 void Log::checkSize(int64_t record_size)
@@ -310,6 +321,13 @@ Log::fetch(int64_t sn, uint64_t max_size, int64_t max_wait_ms, std::optional<uin
     assert(max_wait_ms >= 0);
 
     auto max_sn_metadata{waitForMoreDataIfNeeded(sn, max_wait_ms, isolation)};
+
+    if (inmemory)
+    {
+        /// We will need carry back the `sn` to consume
+        max_sn_metadata.record_sn = sn;
+        return {max_sn_metadata, {}};
+    }
 
     /// LOG_INFO(logger, "fetch at sn={} max_sn_meta={}", sn, max_sn_metadata.string());
 

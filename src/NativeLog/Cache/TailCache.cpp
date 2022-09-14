@@ -38,18 +38,18 @@ void TailCache::put(const StreamShard & stream_shard, RecordPtr record)
             size -= entry->shard_records.front()->totalSerializedBytes();
             entries -= 1;
 
-            entry->shard_records.pop_front();
+            entry->shard_records.erase(entry->shard_records.begin());
         }
     }
 
     entry->new_records_cv.notify_all();
 }
 
-std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int64_t wait_ms, int64_t start_sn) const
+std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int64_t wait_ms, int64_t start_sn, bool from_cache_only) const
 {
     assert(wait_ms > 0);
 
-    if (start_sn == EARLIEST_SN)
+    if (start_sn == EARLIEST_SN && !from_cache_only)
         /// We can't serve earliest sn from cache since we don't know the earliest sn in file system
         /// fallback to log
         return {{}, true};
@@ -72,7 +72,7 @@ std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int
         /// We still have a chance when TailCache::put insert a new entry for a stream_shard, but before
         /// inserting the records to the entry, a TailCache::get chimes in
         if (entry->shard_records.empty())
-            /// We like client to spin / retry and the next time, the cache is probably not empty
+            /// We like client to spin / retry since this is a very short spin and the next time, the cache is probably not empty
             return {{}, false};
 
         auto first_sn{entry->shard_records.front()->getSN()};
@@ -87,6 +87,12 @@ std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int
         /// 3. the requested `start_sn == last_sn + 1`, the consumer already catches up the latest records in the cache, we will wait for future records
         /// 4. the requested `start_sn > last_sn + 1`, the consumer request something in the future which shall not happen, we can have 2 different handling
         ///    logic for this request: a. throw an Exception telling consumer the request is out of sequence or b. wait for future sn to be cached. We pick b. here
+        /// 5. the requested `start_sn == EARLIEST_SN && from_cache_only=true`, serve the records in the cache
+
+        /// case 5
+        if (start_sn == EARLIEST_SN)
+            /// service what we have in the cache
+            start_sn = first_sn;
 
         /// case 0
         if (start_sn == LATEST_SN)
@@ -108,8 +114,14 @@ std::pair<RecordPtrs, bool> TailCache::get(const StreamShard & stream_shard, int
 
         /// case 1
         if (start_sn < first_sn)
-            /// Out of sequence for cache, fallback to log
-            return {{}, true};
+        {
+            if (from_cache_only)
+                /// There may be data loss
+                start_sn = first_sn;
+            else
+                /// Out of sequence for cache, fallback to log
+                return {{}, true};
+        }
 
         /// case 2
         if (first_sn <= start_sn && last_sn >= start_sn)

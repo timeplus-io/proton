@@ -6,8 +6,8 @@
 #include <Common/StreamShard.h>
 
 #include <memory>
-#include <unordered_map>
 
+#include <absl/container/flat_hash_map.h>
 #include <boost/noncopyable.hpp>
 
 namespace nlog
@@ -19,7 +19,7 @@ public:
 
     void put(const StreamShard & stream_shard, RecordPtr record);
 
-    std::pair<RecordPtrs, bool> get(const StreamShard & stream_shard, int64_t wait_ms, int64_t start_sn) const;
+    std::pair<RecordPtrs, bool> get(const StreamShard & stream_shard, int64_t wait_ms, int64_t start_sn, bool from_cache_only = false) const;
 
     void remove(const StreamShard & stream_shard);
 
@@ -32,7 +32,7 @@ private:
         std::condition_variable new_records_cv;
 
         uint64_t size = 0;
-        std::deque<RecordPtr> shard_records;
+        std::vector<RecordPtr> shard_records;
     };
 
     using CacheEntryPtr = std::shared_ptr<CacheEntry>;
@@ -42,7 +42,7 @@ private:
     std::atomic_uint_fast64_t entries = 0;
 
     mutable std::mutex mutex;
-    std::unordered_map<StreamShard, CacheEntryPtr> records;
+    absl::flat_hash_map<StreamShard, CacheEntryPtr> records;
 };
 
 using TailCachePtr = std::shared_ptr<TailCache>;

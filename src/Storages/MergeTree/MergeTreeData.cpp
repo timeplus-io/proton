@@ -251,7 +251,9 @@ MergeTreeData::MergeTreeData(
     checkTTLExpressions(metadata_, metadata_);
 
     /// proton: start. If relative_data_path is empty, it is a virtual table
-    if (relative_data_path.empty())
+    /// When it is `memory` storage type, the data never gets persist on disk
+    inmemory = settings->storage_type.value == "memory";
+    if (isVirtual() || isInmemory())
         return;
     /// proton: end.
 

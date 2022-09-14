@@ -26,6 +26,7 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     Poco::Logger * logger_)
     : native_log(nlog::NativeLog::instance(nullptr))
     , tail_cache(native_log.getCache())
+    , inmemory(stream_shard_->isInmemory())
     , stream_shard(std::move(stream_shard_))
     , schema(stream_shard->storageStream()->getInMemoryMetadataPtr()->getSampleBlock())
     , fetch_request({})
@@ -53,7 +54,7 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
     /// Try read from cache
     auto & fetch_desc = fetch_request.fetch_descs[0];
     {
-        auto [records, fallback_to_log] = tail_cache.get(fetch_desc.stream_shard, fetch_desc.max_wait_ms, fetch_desc.sn);
+        auto [records, fallback_to_log] = tail_cache.get(fetch_desc.stream_shard, fetch_desc.max_wait_ms, fetch_desc.sn, inmemory);
         if (!records.empty())
         {
             fetch_desc.sn = records.back()->getSN() + 1;

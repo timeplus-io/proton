@@ -946,6 +946,7 @@ public:
     bool isChangelogMode() const override { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_MODE; }
     bool isChangelogKvMode() const override { return storage_settings.get()->mode.value == ProtonConsts::CHANGELOG_KV_MODE; }
     bool isVersionedKvMode() const override { return storage_settings.get()->mode.value == ProtonConsts::VERSIONED_KV_MODE; }
+    bool isInmemory() const { return inmemory; }
     bool isVirtual() const { return relative_data_path.empty(); }
     Int64 committedSN() const { return committed_sn; }
     void setCommittedSN(Int64 committed_sn_) { committed_sn = committed_sn_; }
@@ -1257,6 +1258,8 @@ private:
     /// proton: starts
     std::atomic<Int64> committed_sn = -1;
     std::atomic<Int64> inmemory_committed_sn = -1;
+
+    bool inmemory = false;
     /// proton: ends
 
     void resetObjectColumnsFromActiveParts(const DataPartsLock & lock);

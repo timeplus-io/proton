@@ -19,50 +19,50 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int OK;
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int UNKNOWN_EXCEPTION;
+extern const int OK;
+extern const int INVALID_CONFIG_PARAMETER;
+extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace
 {
 
-    inline void assignSequenceID(nlog::RecordPtr & record)
+inline void assignSequenceID(nlog::RecordPtr & record)
+{
+    auto * col = record->getBlock().findByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
+    if (!col)
+        return;
+
+    auto * seq_id_col = typeid_cast<ColumnInt64 *>(col->column->assumeMutable().get());
+    if (seq_id_col)
     {
-        auto * col = record->getBlock().findByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
-        if (!col)
-            return;
-
-        auto * seq_id_col = typeid_cast<ColumnInt64 *>(col->column->assumeMutable().get());
-        if (seq_id_col)
-        {
-            auto & data = seq_id_col->getData();
-            for (auto & item : data)
-                item = record->getSN();
-        }
+        auto & data = seq_id_col->getData();
+        for (auto & item : data)
+            item = record->getSN();
     }
+}
 
-    inline void assignIndexTime(ColumnWithTypeAndName * index_time_col)
+inline void assignIndexTime(ColumnWithTypeAndName * index_time_col)
+{
+    if (!index_time_col)
+        return;
+
+    /// index_time_col->column
+    ///    = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
+
+    const auto * type = typeid_cast<const DataTypeDateTime64 *>(index_time_col->type.get());
+    if (type)
     {
-        if (!index_time_col)
-            return;
+        auto scale = type->getScale();
+        auto * col = typeid_cast<ColumnDecimal<DateTime64> *>(index_time_col->column->assumeMutable().get());
+        assert(col);
 
-        /// index_time_col->column
-        ///    = index_time_col->type->createColumnConst(moved_block.rows(), nowSubsecond(3))->convertToFullColumnIfConst();
-
-        const auto * type = typeid_cast<const DataTypeDateTime64 *>(index_time_col->type.get());
-        if (type)
-        {
-            auto scale = type->getScale();
-            auto * col = typeid_cast<ColumnDecimal<DateTime64> *>(index_time_col->column->assumeMutable().get());
-            assert(col);
-
-            auto now = nowSubsecond(scale).get<DateTime64>();
-            auto & data = col->getData();
-            for (auto & item : data)
-                item = now;
-        }
+        auto now = nowSubsecond(scale).get<DateTime64>();
+        auto & data = col->getData();
+        for (auto & item : data)
+            item = now;
     }
+}
 }
 
 StreamShard::StreamShard(
@@ -89,7 +89,7 @@ StreamShard::StreamShard(
 {
     assert(storage_stream);
 
-    if (!relative_data_path_.empty())
+    if (!relative_data_path_.empty() && !isInmemory())
     {
         auto shard_path = fmt::format("{}{}/", relative_data_path_, shard);
         storage = StorageMergeTree::create(
@@ -127,7 +127,7 @@ void StreamShard::startup()
 
     initLog();
 
-    /// for virtual tables, there is no storage object
+    /// for virtual tables or in-memory storage type, there is no storage object
     if (!storage)
         return;
 
@@ -787,7 +787,7 @@ void StreamShard::initLog()
     const auto & logstore = ssettings->logstore.value;
 
     auto context = storage_stream->getContext();
-    if (logstore == ProtonConsts::LOGSTORE_NATIVE_LOG || nlog::NativeLog::instance(context).enabled())
+    if (logstore == ProtonConsts::LOGSTORE_NATIVE_LOG || nlog::NativeLog::instance(context).enabled() || isInmemory())
         initNativeLog();
     else if (logstore == ProtonConsts::LOGSTORE_KAFKA || klog::KafkaWALPool::instance(context).enabled())
         initKafkaLog();
@@ -863,9 +863,17 @@ void StreamShard::initKafkaLog()
 
 void StreamShard::initNativeLog()
 {
+    bool inmemory = isInmemory();
+
     auto & native_log = nlog::NativeLog::instance(storage_stream->getContext());
     if (!native_log.enabled())
+    {
+        if (inmemory)
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER, "Pure in-memory storage type requires nativelog, but nativelog is disabled");
+
         return;
+    }
 
     auto ssettings = storage_stream->getSettings();
     const auto & storage_id = storage_stream->getStorageID();
@@ -884,6 +892,16 @@ void StreamShard::initNativeLog()
             throw DB::Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to create stream, error={}", create_resp.errString());
         else
             LOG_INFO(log, "Log was provisioned successfully");
+
+        native_log.setInmemory(create_resp.ns, create_resp.stream, create_resp.id, create_resp.shards, inmemory);
+    }
+    else
+    {
+        /// Since we don't commit `inmemory` to metastore, we will need explicitly set this flag during bootstrap
+        /// Whey we don't commit `inmemory` flag to metastore ? because this requires a metadata protocol upgrade
+        /// Hack this for now
+        for (const auto & stream_desc : list_resp.streams)
+            native_log.setInmemory(stream_desc.ns, stream_desc.stream, stream_desc.id, stream_desc.shards, inmemory);
     }
 }
 
@@ -1008,5 +1026,10 @@ void StreamShard::updateNativeLog()
         throw DB::Exception(update_resp.error_code, "Failed to update stream, error={}", update_resp.errString());
     else
         LOG_INFO(log, "NativeLog has been updated successfully");
+}
+
+bool StreamShard::isInmemory() const
+{
+    return storage_stream->getSettings()->storage_type.value == "memory";
 }
 }

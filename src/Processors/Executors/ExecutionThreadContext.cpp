@@ -32,7 +32,7 @@ void ExecutionThreadContext::wakeUp()
 
 static void executeJob(IProcessor * processor)
 {
-        processor->work();
+    processor->work();
 }
 
 bool ExecutionThreadContext::executeTask()

@@ -127,6 +127,9 @@ public:
     const fs::path & rootDir() const { return loglet->rootDir(); }
     const fs::path & logDir() const { return loglet->logDir(); }
 
+    void setInmemory(bool inmemory_) { inmemory = inmemory_; }
+    bool isInmemory() const { return inmemory; }
+
 private:
     inline LogAppendDescription analyzeAndValidateRecord(Record & record);
     inline void checkSize(int64_t record_size);
@@ -300,6 +303,8 @@ private:
     TailCachePtr cache;
 
     std::atomic_flag closed;
+
+    bool inmemory = false;
 
     /// The earliest sn which is part of an incomplete transaction. This is used to compute the
     /// last stable sn (LSN) in ReplicaManager

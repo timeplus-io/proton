@@ -19,7 +19,7 @@ target_include_directories(nlog SYSTEM PUBLIC
         # "${proton_SOURCE_DIR}/contrib/flatbuffers/include"
         "${ROCKSDB_INCLUDE_DIR}")
 
-target_link_libraries(nlog PUBLIC clickhouse_common_io ch_contrib::rocksdb)
+target_link_libraries(nlog PUBLIC clickhouse_common_io ch_contrib::rocksdb ch_contrib::abseil_swiss_tables)
 
 if (ENABLE_TESTS)
     add_subdirectory(tests)

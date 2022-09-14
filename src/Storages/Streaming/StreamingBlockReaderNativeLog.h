@@ -44,6 +44,8 @@ private:
     nlog::NativeLog & native_log;
     nlog::TailCache & tail_cache;
 
+    bool inmemory = false;
+
     std::shared_ptr<StreamShard> stream_shard;
     Block schema;
 
