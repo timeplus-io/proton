@@ -522,7 +522,7 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"create stream t_bool(id int, value int, bool_f bool, time datetime64(3))"},
                     {"client":"python", "query_type": "table","depends_on_stream":"t_bool", "wait":2, "query":"insert into t_bool(id, value, bool_f,time)values(1, -1000, true, '2020-01-02 00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05 09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')"},
                     {"client":"python", "query_type": "table","wait":3,"query":" create materialized view if not exists bool_mv as with transformed as (select id, value, bool_f, time from t_bool) select window_start as ws, window_end as we, id, bool_f, count(bool_f) from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings seek_to='earliest'"},
-                    {"client":"python", "query_type": "table","wait":5, "depends_on_stream":"bool_mv","query_id": "801", "query":"select id, bool_f, count() from table(bool_mv) group by id, bool_f"}
+                    {"client":"python", "query_type": "table","wait":10, "depends_on_stream":"bool_mv","query_id": "801", "query":"select id, bool_f, count() from table(bool_mv) group by id, bool_f"}
 
                     ]}
             ],

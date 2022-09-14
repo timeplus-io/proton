@@ -212,7 +212,7 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
 
     ASTPtr table;
     if (table_expression->database_and_table_name)
-        table = std::make_shared<ASTIdentifier>(table_expression->database_and_table_name->as<ASTTableIdentifier &>().name());
+        table = table_expression->database_and_table_name->as<ASTTableIdentifier &>().clone();
     else if (table_expression->table_function)
         table = table_expression->table_function;
     else if (table_expression->subquery)

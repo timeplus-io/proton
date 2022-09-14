@@ -37,8 +37,6 @@ private:
     CountedArgValueMap<ValType, ResType, maximum> values;
 
 public:
-    explicit AggregateFunctionArgMinMaxData(size_t max_size_) : values(max_size_) { }
-
     static bool allocatesMemoryInArena() { return false; }
 
     static const char * name()
