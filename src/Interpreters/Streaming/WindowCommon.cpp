@@ -46,11 +46,15 @@ std::optional<IntervalKind> mapIntervalKind(const String & func_name)
         return {};
 }
 
-ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
-{
-    /// Assume it is a time or time_expr, we will check it later again
-    return (ast->as<ASTIdentifier>() || ast->as<ASTFunction>());
-}
+    ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
+    {
+        /// Assume it is a time or time_expr, we will check it later again
+        if (ast->as<ASTIdentifier>())
+            return true;
+        else if (auto * func = ast->as<ASTFunction>())
+            return !mapIntervalKind(func->name);
+        return false;
+    }
 
 ALWAYS_INLINE bool isIntervalAST(const ASTPtr ast)
 {

@@ -14,7 +14,9 @@
 #   ifdef __clang__
 #       pragma clang diagnostic ignored "-Wreserved-id-macro"
 #   endif
-#   define _XOPEN_SOURCE 700
+#   ifndef _XOPEN_SOURCE 
+#       define _XOPEN_SOURCE 700
+#   endif
 #endif
 #include <ucontext.h>
 

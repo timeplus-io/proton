@@ -1,13 +1,13 @@
 #include <memory>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Parsers/IParserBase.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/ParserSetQuery.h>
+#include <Parsers/IParserBase.h>
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserSelectQuery.h>
+#include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
 /// proton: starts
@@ -29,7 +29,7 @@ namespace ErrorCodes
 }
 
 
-bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     auto select_query = std::make_shared<ASTSelectQuery>();
     node = select_query;
@@ -41,6 +41,10 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     ParserKeyword s_from("FROM");
     ParserKeyword s_prewhere("PREWHERE");
     ParserKeyword s_where("WHERE");
+    /// proton: starts.
+    ParserKeyword keyword_partition_by("PARTITION BY");
+    ParserNotEmptyExpressionList columns_partition_by(false /* we don't allow declaring aliases here*/);
+    /// proton: ends.
     ParserKeyword s_group_by("GROUP BY");
     ParserKeyword s_with("WITH");
     ParserKeyword s_totals("TOTALS");
@@ -67,7 +71,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
 
     ParserNotEmptyExpressionList exp_list(false);
     ParserNotEmptyExpressionList exp_list_for_with_clause(false);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(false);    /// proton: starts don't allows aliases without AS keyword.
+    ParserNotEmptyExpressionList exp_list_for_select_clause(false); /// proton: starts don't allows aliases without AS keyword.
     ParserExpressionWithOptionalAlias exp_elem(false);
     ParserOrderByExpressionList order_list;
 
@@ -79,6 +83,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     ASTPtr tables;
     ASTPtr prewhere_expression;
     ASTPtr where_expression;
+    /// proton: starts.
+    ASTPtr partition_by_expression_list;
+    /// proton: ends.
     ASTPtr group_expression_list;
     ASTPtr having_expression;
     ASTPtr window_list;
@@ -197,6 +204,14 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
         if (!exp_elem.parse(pos, where_expression, expected))
             return false;
     }
+
+    /// proton: starts.
+    if (keyword_partition_by.ignore(pos, expected))
+    {
+        if (!columns_partition_by.parse(pos, partition_by_expression_list, expected))
+            return false;
+    }
+    /// proton: ends.
 
     /// GROUP BY expr list
     if (s_group_by.ignore(pos, expected))
@@ -384,7 +399,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     if (distinct_on_expression_list)
     {
         /// DISTINCT ON and LIMIT BY are mutually exclusive, checked before
-        assert (limit_by_expression_list == nullptr);
+        assert(limit_by_expression_list == nullptr);
 
         /// Transform `DISTINCT ON expr` to `LIMIT 1 BY expr`
         limit_by_expression_list = distinct_on_expression_list;
@@ -450,6 +465,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     select_query->setExpression(ASTSelectQuery::Expression::TABLES, std::move(tables));
     select_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere_expression));
     select_query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_expression));
+    /// proton: starts.
+    select_query->setExpression(ASTSelectQuery::Expression::PARTITION_BY, std::move(partition_by_expression_list));
+    /// proton: ends.
     select_query->setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(group_expression_list));
     select_query->setExpression(ASTSelectQuery::Expression::HAVING, std::move(having_expression));
     select_query->setExpression(ASTSelectQuery::Expression::WINDOW, std::move(window_list));

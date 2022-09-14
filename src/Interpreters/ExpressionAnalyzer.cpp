@@ -60,6 +60,10 @@
 /// proton: starts
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/WindowCommon.h>
+#include <Common/ProtonCommon.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/Streaming/HashJoin.h>
+#include <Interpreters/Streaming/WindowCommon.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
@@ -822,8 +826,11 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
         getRootActionsNoMakeSet(window_function.function_node->clone(),
             true, actions);
 
+        /// proton: starts. support non-aggregate-over function in streaming queries
+        /// For example: select lag(val) over (partition by cid) from stream
         const ASTs & arguments
             = window_function.function_node->arguments->children;
+        window_function.template_arguments.reserve(arguments.size());
         window_function.argument_types.resize(arguments.size());
         window_function.argument_names.resize(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
@@ -840,15 +847,49 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
 
             window_function.argument_types[i] = node->result_type;
             window_function.argument_names[i] = name;
+            window_function.template_arguments.emplace_back(
+                node->column ? node->column : node->result_type->createColumn(), node->result_type, name);
         }
 
         AggregateFunctionProperties properties;
-        window_function.aggregate_function
-            = AggregateFunctionFactory::instance().get(
-                window_function.function_node->name,
-                window_function.argument_types,
-                window_function.function_parameters, properties);
+        if (syntax->streaming)
+        {
+            window_function.aggregate_function
+                = AggregateFunctionFactory::instance().tryGet(
+                    window_function.function_node->name,
+                    window_function.argument_types,
+                    window_function.function_parameters, properties);
 
+            if (!window_function.aggregate_function)
+            {
+                FunctionOverloadResolverPtr func;
+                try 
+                {
+                    func = FunctionFactory::instance().get(window_function.function_node->name, getContext());
+                }
+                catch (Exception & e)
+                {
+                    auto hints = AggregateFunctionFactory::instance().getHints(window_function.function_node->name);
+                    if (!hints.empty())
+                        e.addMessage("Or unknown aggregate function " + window_function.function_node->name + ". Maybe you meant: " + toString(hints));
+                    throw;
+                }
+
+                /// Stateless functions with over clause doesn't make sense, but it's still allowed
+                // if (!func->isStateful())
+                //     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support stateless function '{}' with over clause", func->getName());
+
+                window_function.template_function = func;
+                window_function.function = window_function.template_function->build(window_function.template_arguments);
+            }
+        }
+        else
+            window_function.aggregate_function
+                = AggregateFunctionFactory::instance().get(
+                    window_function.function_node->name,
+                    window_function.argument_types,
+                    window_function.function_parameters, properties);
+        /// proton: ends.
 
         // Find the window corresponding to this function. It may be either
         // referenced by name and previously defined in WINDOW clause, or it
@@ -1771,6 +1812,28 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
 
             query_analyzer.appendGroupBy(chain, only_types || !first_stage, optimize_aggregation_in_order, group_by_elements_actions);
             query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
+
+            /// proton: starts.
+            bool has_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;
+            if (has_streaming_aggr_over)
+            {
+                query_analyzer.makeWindowDescriptions(chain.getLastActions());
+                query_analyzer.appendWindowFunctionsArguments(chain, only_types || !first_stage);
+
+                /// We have to manually add the output of the window function
+                /// to the list of the output columns of the window step, because the
+                /// window functions are not in the ExpressionActions.
+                for (const auto & [_, w] : query_analyzer.window_descriptions)
+                {
+                    for (const auto & f : w.window_functions)
+                    {
+                        assert(f.aggregate_function);
+                        query_analyzer.aggregated_columns.push_back({f.column_name, f.aggregate_function->getReturnType()});
+                    }
+                }
+            }
+            /// proton: ends.
+
             before_aggregation = chain.getLastActions();
 
             finalize_chain(chain);
@@ -1819,7 +1882,11 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
 
         // Window functions are processed in a separate expression chain after
         // the main SELECT, similar to what we do for aggregate functions.
-        if (has_window)
+        /// proton: starts.
+        bool has_streaming_non_aggregate_over = query_analyzer.syntax->streaming && has_window && !need_aggregate;
+        bool has_historical_window = !query_analyzer.syntax->streaming && has_window;
+        if (has_historical_window || has_streaming_non_aggregate_over)
+        /// proton: ends.
         {
             query_analyzer.makeWindowDescriptions(chain.getLastActions());
 
@@ -1838,8 +1905,10 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             {
                 for (const auto & f : w.window_functions)
                 {
+                    /// proton: starts.
                     query_analyzer.columns_after_window.push_back(
-                        {f.column_name, f.aggregate_function->getReturnType()});
+                        {f.column_name, f.aggregate_function ? f.aggregate_function->getReturnType() : f.function->getResultType()});
+                    /// proton: ends.
                 }
             }
 

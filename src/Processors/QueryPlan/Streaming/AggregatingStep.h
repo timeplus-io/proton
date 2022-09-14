@@ -36,6 +36,8 @@ public:
     const Aggregator::Params & getParams() const { return params; }
 
 private:
+    void transformPipelineWithSubstream(AggregatingTransformParamsPtr transform_params, QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &);
+
     Aggregator::Params params;
     bool final;
     size_t merge_threads;

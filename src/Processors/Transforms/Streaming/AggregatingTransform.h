@@ -5,6 +5,7 @@
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Core/Streaming/WatermarkInfo.h>
 
 namespace DB
 {
@@ -41,12 +42,6 @@ struct AggregatingTransformParams
     }
 
     Block getHeader() const { return aggregator.getHeader(final, false, emit_version); }
-};
-
-struct WatermarkBound
-{
-    Int64 watermark = 0;
-    Int64 watermark_lower_bound = 0;
 };
 
 struct ManyAggregatedData

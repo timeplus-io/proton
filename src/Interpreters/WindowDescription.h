@@ -8,6 +8,10 @@
 #include <Core/Names.h>
 #include <Core/Types.h>
 
+/// proton: starts.
+#include <Functions/IFunction.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -18,6 +22,11 @@ struct WindowFunctionDescription
     std::string column_name;
     const ASTFunction * function_node = nullptr;
     AggregateFunctionPtr aggregate_function;
+    /// proton: starts. Support non-aggregate-function
+    FunctionOverloadResolverPtr template_function;  /// FunctionBuilder used to build new function for each substream
+    ColumnsWithTypeAndName template_arguments;      /// needed by FunctionBuilder
+    FunctionBasePtr function;                       /// one built function used for analyze
+    /// proton: ends.
     Array function_parameters;
     DataTypes argument_types;
     Names argument_names;

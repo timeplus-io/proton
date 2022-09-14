@@ -370,6 +370,21 @@ public:
         return dispatch(*this, x, FindCallable{}) != nullptr;
     }
 
+    /// proton: starts.
+    struct HashCallable
+    {
+        // hash() doesn't need any key memory management, so we don't work with
+        // any key holders here, only with normal keys. The key type is still
+        // different for every subtable, this is why it is a template parameter.
+        template <typename Submap, typename SubmapKey>
+        size_t ALWAYS_INLINE operator()(Submap &, const SubmapKey &, size_t hash)
+        {
+            return hash;
+        }
+    };
+    size_t ALWAYS_INLINE hash(const Key & x) const { return dispatch(*this, x, HashCallable{}); }
+    /// proton: ends.
+
     void write(DB::WriteBuffer & wb) const
     {
         m0.write(wb);

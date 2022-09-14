@@ -32,6 +32,11 @@ public:
         std::unordered_set<String> uniq_names {};
         std::vector<const ASTFunction *> aggregates {};
         std::vector<const ASTFunction *> window_functions {};
+
+        /// proton: starts. for streaming query, we refine window_function into aggregate_over and non_aggregate_over
+        std::vector<const ASTFunction *> aggregate_overs {};
+        std::vector<const ASTFunction *> non_aggregate_overs {};
+        /// proton: ends.
     };
 
     static bool needChildVisit(const ASTPtr & node, const ASTPtr & child)
@@ -92,6 +97,13 @@ private:
 
             data.uniq_names.insert(column_name);
             data.window_functions.push_back(&node);
+
+            /// proton: starts.
+            if (AggregateFunctionFactory::instance().isAggregateFunctionName(node.name))
+                data.aggregate_overs.push_back(&node);
+            else
+                data.non_aggregate_overs.push_back(&node);
+            /// proton: ends.
         }
     }
 

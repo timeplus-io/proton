@@ -98,6 +98,7 @@ void registerFunctionIsFinite(FunctionFactory &);
 void registerFunctionIsInfinite(FunctionFactory &);
 void registerFunctionIsNaN(FunctionFactory &);
 void registerFunctionIfNotFinite(FunctionFactory &);
+void registerFunctionRowNumberInAllBlocks(FunctionFactory &);
 /// proton: ends.
 
 #ifdef FUZZING_MODE
@@ -121,7 +122,6 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionBlockSize(factory);
     registerFunctionBlockNumber(factory);
     registerFunctionRowNumberInBlock(factory);
-    registerFunctionRowNumberInAllBlocks(factory);
     registerFunctionIgnore(factory);
     registerFunctionIndexHint(factory);
     registerFunctionIdentity(factory);
@@ -203,6 +203,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionIsInfinite(factory);
     registerFunctionIsNaN(factory);
     registerFunctionIfNotFinite(factory);
+    registerFunctionRowNumberInAllBlocks(factory);
     /// proton: ends.
 }
 

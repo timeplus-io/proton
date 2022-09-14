@@ -65,7 +65,7 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
             if (!fallback_to_log)
                 return {};
 
-            LOG_DEBUG(logger, "Cache miss, fallback to file read, request_sn={}", fetch_desc.sn);
+            LOG_TRACE(logger, "Cache miss, fallback to file read, request_sn={}", fetch_desc.sn);
         }
     }
 

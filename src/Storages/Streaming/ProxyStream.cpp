@@ -23,6 +23,19 @@ namespace DB
 {
 namespace Streaming
 {
+
+namespace
+{
+std::vector<size_t> keyIndecesForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+{
+    std::vector<size_t> substream_key_indices;
+    substream_key_indices.reserve(query_info.substream_keys.size());
+    for (const auto & key : query_info.substream_keys)
+        substream_key_indices.emplace_back(header.getPositionByName(key));
+    return substream_key_indices;
+}
+}
+
 ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
@@ -359,13 +372,15 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
         output_header.insert(2, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
     }
 
-    query_plan.addStep(std::make_unique<WatermarkStep>(
+    std::vector<size_t> substream_key_indices = keyIndecesForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+    query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
         query_plan.getCurrentDataStream(),
         std::move(output_header),
         query_info.query,
         query_info.syntax_analyzer_result,
         streaming_func_desc,
         proc_time,
+        std::move(substream_key_indices),
         log));
 }
 
@@ -376,8 +391,8 @@ void ProxyStream::processWindowAssignmentStep(
     {
         Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
 
-        query_plan.addStep(std::make_unique<WindowAssignmentStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
+        query_plan.addStep(
+            std::make_unique<WindowAssignmentStep>(query_plan.getCurrentDataStream(), std::move(output_header), streaming_func_desc));
     }
 }
 

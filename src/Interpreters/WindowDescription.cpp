@@ -21,7 +21,12 @@ std::string WindowFunctionDescription::dump() const
 
     ss << "window function '" << column_name << "\n";
     ss << "function node " << function_node->dumpTree() << "\n";
-    ss << "aggregate function '" << aggregate_function->getName() << "'\n";
+    /// proton: starts.
+    if (aggregate_function)
+        ss << "aggregate function '" << aggregate_function->getName() << "'\n";
+    else
+        ss << "function '" << function->getName() << "'\n";
+    /// proton: ends.
     if (!function_parameters.empty())
     {
         ss << "parameters " << toString(function_parameters) << "\n";

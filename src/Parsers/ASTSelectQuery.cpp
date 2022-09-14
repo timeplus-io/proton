@@ -42,6 +42,9 @@ ASTPtr ASTSelectQuery::clone() const
     CLONE(Expression::TABLES);
     CLONE(Expression::PREWHERE);
     CLONE(Expression::WHERE);
+    /// proton: starts
+    CLONE(Expression::PARTITION_BY);
+    /// proton: ends.
     CLONE(Expression::GROUP_BY);
     CLONE(Expression::HAVING);
     CLONE(Expression::WINDOW);
@@ -131,6 +134,16 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         /// proton: ends
         where()->formatImpl(s, state, frame);
     }
+
+    /// proton: starts
+    if (partitionBy())
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PARTITION BY\n " + next_indent_str << (s.hilite ? hilite_none : "");
+        s.one_line
+            ? partitionBy()->formatImpl(s, state, frame)
+            : partitionBy()->as<ASTExpressionList &>().formatImplMultiline(s, state, frame);
+    }
+    /// proton: ends
 
     if (groupBy())
     {

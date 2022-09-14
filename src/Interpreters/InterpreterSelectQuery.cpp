@@ -86,14 +86,18 @@
 
 /// proton: starts
 #include <DataTypes/ObjectUtils.h>
+#include <Interpreters/GetAggregatesVisitor.h>
 #include <Interpreters/Streaming/Aggregator.h>
 #include <Interpreters/Streaming/EmitInterpreter.h>
+#include <Interpreters/Streaming/PartitionByVisitor.h>
+#include <Parsers/ASTWindowDefinition.h>
 #include <Processors/QueryPlan/Streaming/AggregatingStep.h>
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
 #include <Processors/QueryPlan/Streaming/ProcessTimeFilterStep.h>
 #include <Processors/QueryPlan/Streaming/SortingStep.h>
 #include <Processors/QueryPlan/Streaming/TimestampTransformStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
+#include <Processors/QueryPlan/Streaming/WindowStep.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageMaterializedView.h>
@@ -175,8 +179,7 @@ namespace
         static bool ignoreSubquery(const ASTPtr & /*node*/, const ASTPtr & child)
         {
             /// Don't go to FROM, JOIN, UNION since they are already handled recursively
-            if (child->as<ASTTableExpression>() ||
-                child->as<ASTSelectQuery>())
+            if (child->as<ASTTableExpression>() || child->as<ASTSelectQuery>())
                 return false;
 
             return true;
@@ -192,6 +195,7 @@ namespace
 
     std::unordered_map<String, String> StreamingFunctionData::func_map =  {
         {"neighbor", "__streaming_neighbor"},
+        {"row_number", "__streaming_row_number"},
         {"now64", "__streaming_now64"},
         {"now", "__streaming_now"},
     };
@@ -242,6 +246,15 @@ namespace
             select.refWhere() = makeASTFunction("and", where_ast, select.where()->clone());
         else
             select.setExpression(ASTSelectQuery::Expression::WHERE, where_ast);
+    }
+
+    std::vector<size_t> keyIndecesForSubstreams(const Block & header, const SelectQueryInfo & query_info)
+    {
+        std::vector<size_t> substream_key_indices;
+        substream_key_indices.reserve(query_info.substream_keys.size());
+        for (const auto & key : query_info.substream_keys)
+            substream_key_indices.emplace_back(header.getPositionByName(key));
+        return substream_key_indices;
     }
 }
 /// proton: ends.
@@ -597,14 +610,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             joined_tables.tablesWithColumns(),
             required_result_column_names,
             table_join);
+
+        checkEmitVersion();
         /// proton: ends
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
         context->setDistributed(syntax_analyzer_result->is_remote_storage);
-
-        /// proton: starts. Use streaming version of the functions
-        handleEmitVersion();
-        /// proton: ends.
 
         if (storage && !query.final() && storage->needRewriteQueryWithFinal(syntax_analyzer_result->requiredSourceColumns()))
             query.setFinal();
@@ -780,6 +791,9 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             group_exprs.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_SESSION_ID));
         }
     }
+
+    /// Try to do some preparation for functions in streaming queries
+    checkAndPrepareStreamingFunctions();
     /// proto: ends
 
     analyze(shouldMoveToPrewhere());
@@ -933,6 +947,10 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
 
     analysis_result = ExpressionAnalysisResult(
         *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header, emit_version, isChangelog());
+
+    /// proton: starts.
+    handleStreamingWindowOverSubstream();
+    /// proton: ends.
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -2579,7 +2597,7 @@ static bool windowDescriptionComparator(const WindowDescription * _left, const W
 }
 
 static bool sortIsPrefix(const WindowDescription & _prefix,
-    const WindowDescription & _full)
+     const WindowDescription & _full)
 {
     const auto & prefix = _prefix.full_sort_description;
     const auto & full = _full.full_sort_description;
@@ -2596,8 +2614,35 @@ static bool sortIsPrefix(const WindowDescription & _prefix,
     return true;
 }
 
+void InterpreterSelectQuery::executeStreamingWindow(QueryPlan & query_plan)
+{
+    assert(isStreaming());
+
+    if (!query_info.has_non_aggregate_over)
+        return;
+
+    assert(query_analyzer->windowDescriptions().size() == 1);
+    for (const auto & [_, window_desc] : query_analyzer->windowDescriptions())
+    {
+        std::vector<WindowFunctionDescription> window_functions;
+        window_functions.reserve(window_desc.window_functions.size());
+        for (const auto & window_func : window_desc.window_functions)
+        {
+            if (window_func.function)
+                window_functions.emplace_back(window_func);
+        }
+
+        auto window_step = std::make_unique<Streaming::WindowStep>(query_plan.getCurrentDataStream(), window_desc, window_functions);
+        window_step->setStepDescription("Streaming window for substream '" + window_desc.window_name + "'");
+        query_plan.addStep(std::move(window_step));
+    }
+}
+
 void InterpreterSelectQuery::executeWindow(QueryPlan & query_plan)
 {
+    if (isStreaming())
+        return executeStreamingWindow(query_plan);
+
     // Try to sort windows in such an order that the window with the longest
     // sort description goes first, and all window that use its prefixes follow.
     std::vector<const WindowDescription *> windows_sorted;
@@ -3044,10 +3089,48 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     }
 
     AggregateDescriptions aggregates = query_analyzer->aggregates();
+    /// Convert window over aggregate descriptions to regular Aggregate descriptions
+    if (query_info.has_aggregate_over)
+    {
+        /// Window over aggregates are not compatible with regular aggregates
+        /// so they can't coexist at the same level in one SQL.
+        assert(aggregates.empty());
+        assert(query_analyzer->windowDescriptions().size() == 1);
+        for (const auto & [_, window_desc] : query_analyzer->windowDescriptions())
+        {
+            for (const auto & window_func : window_desc.window_functions)
+            {
+                if (!window_func.aggregate_function)
+                    continue;
+
+                AggregateDescription aggr_desc;
+                aggr_desc.function = window_func.aggregate_function;
+                aggr_desc.argument_names = window_func.argument_names;
+                aggr_desc.column_name = window_func.column_name;
+                aggregates.emplace_back(std::move(aggr_desc));
+            }
+        }
+    }
+
     for (auto & descr : aggregates)
         if (descr.arguments.empty())
             for (const auto & name : descr.argument_names)
                 descr.arguments.push_back(header_before_aggregation.getPositionByName(name));
+
+    /// Prepare substream key indices for only tumble/hop
+    std::vector<size_t> substream_key_indices;
+    if (query_info.has_aggregate_over)
+    {
+        if (streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_START
+            || streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_END)
+        {
+            substream_key_indices = keyIndecesForSubstreams(header_before_aggregation, query_info);
+        }
+        else if (streaming_group_by == Streaming::Aggregator::Params::GroupBy::SESSION)
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Doesn't support window over with session window");
+        }
+    }
 
     const Settings & settings = context->getSettingsRef();
 
@@ -3077,6 +3160,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         session_start_pos,
         session_end_pos,
         delta_col_pos,
+        std::move(substream_key_indices),
         getStreamingFunctionDescription());
 
     auto merge_threads = max_streams;
@@ -3285,26 +3369,33 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
             output_header.insert(2, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
         }
 
+        /// Prepare substream key indices for only tumble/hop
+        std::vector<size_t> substream_key_indices;
+        if (!hasGlobalAggregation())
+            substream_key_indices = keyIndecesForSubstreams(query_plan.getCurrentDataStream().header, query_info);
+
         query_plan.addStep(std::make_unique<Streaming::WatermarkStep>(
-            query_plan.getCurrentDataStream(), std::move(output_header), query_info.query, query_info.syntax_analyzer_result, getStreamingFunctionDescription(), false, log));
+            query_plan.getCurrentDataStream(),
+            std::move(output_header),
+            query_info.query,
+            query_info.syntax_analyzer_result,
+            getStreamingFunctionDescription(),
+            false,
+            std::move(substream_key_indices),
+            log));
     }
 }
 
-void InterpreterSelectQuery::handleEmitVersion()
+void InterpreterSelectQuery::checkEmitVersion()
 {
-    bool streaming = isStreaming();
-    StreamingFunctionVisitor::Data func_data(streaming, isChangelog());
-    StreamingFunctionVisitor(func_data).visit(query_ptr);
-
-    if (func_data.emit_version)
+    if (emit_version)
     {
+        bool streaming = isStreaming();
         /// emit_version() shall be used along with aggregation only
         if (streaming && syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
             throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used along with streaming aggregations");
         else if (!streaming)
             throw Exception(ErrorCodes::UNSUPPORTED, "emit_version() shall be only used in streaming query");
-
-        emit_version = true;
     }
 }
 
@@ -3394,6 +3485,122 @@ ColumnsDescriptionPtr InterpreterSelectQuery::getExtendedObjects() const
         return storage_snapshot->object_columns.get();
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "not implemented"); /// input_pipe
+}
+
+void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
+{
+    /// Prepare streaming version of the functions
+    bool streaming = isStreaming();
+    StreamingFunctionVisitor::Data func_data(streaming, isChangelog());
+    StreamingFunctionVisitor(func_data).visit(query_ptr);
+    emit_version = func_data.emit_version;
+
+    if (!streaming)
+        return;
+
+    /// Assign partition by for aggregate / statulful functions
+    /// select sum(x), avg(x) from ... partition by id
+    /// e.g. sum(x) -> sum(x) over(paritiotn by id), avg(x) over(partition by id)
+    PartitionByVisitor::Data partition_by_data;
+    PartitionByVisitor(partition_by_data).visit(query_ptr);
+
+    /// Prepare streaming window functions
+    GetAggregatesVisitor::Data data;
+    GetAggregatesVisitor(data).visit(query_ptr);
+
+    if (!data.aggregates.empty() && !data.window_functions.empty())
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED, "Window over aggregation is not compatible with non-window over aggregation in the same query");
+
+    if (!data.aggregate_overs.empty() && !data.non_aggregate_overs.empty())
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED, "Window over aggregation is not compatible with window over non-aggregation in the same query");
+
+    String unique_window_name;
+    for (const auto * function_node : data.window_functions)
+    {
+        assert(function_node->is_window_function);
+        const auto & definition = function_node->window_definition->as<const ASTWindowDefinition &>();
+        /// Not support follows syntax:
+        /// 1) select func(...) OVER window_name from stream WINDOW window_name as (partition by ...)
+        /// 2) select func(...) OVER (window_name) from stream WINDOW window_name as (partition by ...)
+        if (!function_node->window_name.empty() || !definition.parent_window_name.empty())
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "No support that use predefined window '{}' in streaming queries",
+                function_node->window_name.empty() ? definition.parent_window_name : function_node->window_name);
+
+        // Not support frame in Streaming Window
+        if (!definition.frame_is_default)
+            throw Exception(
+                ErrorCodes::UNSUPPORTED, "Window frame is not supported in streaming window over aggregation '{}'", function_node->name);
+
+        if (definition.order_by)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Order by is not support in streaming window over aggregation '{}'", function_node->name);
+
+        if (!definition.partition_by)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "'PARTITION BY' is required but missing in streaming window over aggregation '{}'",
+                function_node->name);
+
+        if (unique_window_name.empty())
+        {
+            unique_window_name = definition.getDefaultWindowName();
+            auto & query = getSelectQuery();
+            if (query.groupBy())
+            {
+                if (!data.non_aggregate_overs.empty())
+                    throw Exception(
+                        ErrorCodes::NOT_IMPLEMENTED, "'GROUP BY' is not compatible with streaming window over non-aggregate function");
+
+                /// Append `PARTITION BY` keys to `GROUP BY` expression
+                auto & group_exprs = query.groupBy()->children;
+                for (const auto & column_ast : definition.partition_by->children)
+                    group_exprs.emplace_back(column_ast->clone());
+            }
+            else if (!data.aggregate_overs.empty())
+            {
+                /// Use PARTITION BY keys as GROUP BY expression
+                query.setExpression(ASTSelectQuery::Expression::GROUP_BY, definition.partition_by->clone());
+            }
+        }
+        else if (definition.getDefaultWindowName() != unique_window_name)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "Streaming window over is required to have identical signature, but '{}' is not the same as '{}'",
+                unique_window_name,
+                definition.getDefaultWindowName());
+    }
+}
+
+void InterpreterSelectQuery::handleStreamingWindowOverSubstream()
+{
+    if (query_info.has_window && isStreaming())
+    {
+        const auto & windows = query_analyzer->windowDescriptions();
+        assert(windows.size() == 1);
+        const auto & window = windows.begin()->second;
+
+        for (const auto & win_desc : window.window_functions)
+        {
+            if (win_desc.aggregate_function)
+                query_info.has_aggregate_over = true;
+            if (win_desc.function)
+                query_info.has_non_aggregate_over = true;
+        }
+        assert(!(query_info.has_aggregate_over && query_info.has_non_aggregate_over));
+
+        /// Cache partition keys if need aggregate, which are used as substream keys in SubstreamWatermark and StreamingAggregator
+        if (query_info.has_aggregate_over)
+        {
+            assert(!window.partition_by.empty());
+            query_info.substream_keys.reserve(window.partition_by.size());
+            for (const auto & column_desc : window.partition_by)
+                query_info.substream_keys.emplace_back(column_desc.column_name);
+        }
+    }
 }
 /// proton: ends
 }

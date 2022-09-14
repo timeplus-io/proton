@@ -10,6 +10,7 @@ class HopTumbleBaseWatermark : public Watermark
 {
 public:
     explicit HopTumbleBaseWatermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_);
+    HopTumbleBaseWatermark(const HopTumbleBaseWatermark &) = default;
     ~HopTumbleBaseWatermark() override = default;
 
 protected:

@@ -3,6 +3,7 @@
 #include <Processors/Transforms/Streaming/GlobalAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
 #include <Processors/Transforms/Streaming/TumbleHopAggregatingTransform.h>
+#include <Processors/Transforms/Streaming/TumbleHopAggregatingTransformWithSubstream.h>
 
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
@@ -38,8 +39,7 @@ AggregatingStep::AggregatingStep(
     bool emit_version_)
     : ITransformingStep(
         input_stream_,
-        params_.getHeader(
-            final_, params_.group_by == Aggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
+        params_.getHeader(final_, params_.group_by == Aggregator::Params::GroupBy::SESSION, params_.time_col_is_datetime64, emit_version_),
         getTraits(),
         false)
     , params(std::move(params_))
@@ -51,7 +51,7 @@ AggregatingStep::AggregatingStep(
 {
 }
 
-void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
+void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings)
 {
     QueryPipelineProcessorsCollector collector(pipeline, this);
 
@@ -70,6 +70,14 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
+
+    /// For substream
+    if (!transform_params->params.substream_key_indices.empty())
+    {
+        transformPipelineWithSubstream(transform_params, pipeline, settings);
+        aggregating = collector.detachProcessors(0);
+        return;
+    }
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
@@ -95,8 +103,6 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
         });
 
         pipeline.resize(1);
-
-        aggregating = collector.detachProcessors(0);
     }
     else
     {
@@ -111,9 +117,9 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
             else
                 return std::make_shared<GlobalAggregatingTransform>(header, transform_params);
         });
-
-        aggregating = collector.detachProcessors(0);
     }
+
+    aggregating = collector.detachProcessors(0);
 }
 
 void AggregatingStep::describeActions(FormatSettings & settings) const
@@ -129,6 +135,40 @@ void AggregatingStep::describeActions(JSONBuilder::JSONMap & map) const
 void AggregatingStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(aggregating, settings);
+}
+
+void AggregatingStep::transformPipelineWithSubstream(
+    AggregatingTransformParamsPtr transform_params, QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
+{
+    assert(
+        transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+        || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+
+    /// If there are several sources, then we perform parallel aggregation
+    if (pipeline.getNumStreams() > 1)
+    {
+        /// Add resize transform to uniformly distribute data between aggregating streams.
+        if (!storage_has_evenly_distributed_read)
+            pipeline.resize(pipeline.getNumStreams(), true, true);
+
+        auto substream_many_data = std::make_shared<SubstreamManyAggregatedData>(pipeline.getNumStreams());
+
+        size_t counter = 0;
+        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
+            return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(
+                header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
+        });
+
+        pipeline.resize(1);
+    }
+    else
+    {
+        pipeline.resize(1);
+
+        pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
+            return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
+        });
+    }
 }
 }
 }

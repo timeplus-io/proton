@@ -78,7 +78,7 @@ if (NOT ENABLE_MISC_FUNCS)
             blockSize.cpp
             blockNumber.cpp
             rowNumberInBlock.cpp
-            rowNumberInAllBlocks.cpp
+            # rowNumberInAllBlocks.cpp
             ignore.cpp
             indexHint.cpp
             identity.cpp

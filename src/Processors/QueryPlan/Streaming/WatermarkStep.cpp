@@ -1,6 +1,7 @@
 #include "WatermarkStep.h"
 
 #include <Processors/Transforms/Streaming/WatermarkTransform.h>
+#include <Processors/Transforms/Streaming/WatermarkTransformWithSubstream.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 namespace DB
@@ -30,21 +31,32 @@ WatermarkStep::WatermarkStep(
     TreeRewriterResultPtr syntax_analyzer_result_,
     FunctionDescriptionPtr desc_,
     bool proc_time_,
+    std::vector<size_t> substream_keys_,
     Poco::Logger * log_)
     : ITransformingStep(input_stream_, std::move(output_header_), getTraits())
     , query(std::move(query_))
     , syntax_analyzer_result(std::move(syntax_analyzer_result_))
     , desc(std::move(desc_))
     , proc_time(proc_time_)
+    , substream_keys(std::move(substream_keys_))
     , log(log_)
 {
 }
 
 void WatermarkStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
-    pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WatermarkTransform>(query, syntax_analyzer_result, desc, proc_time, header, output_stream->header, log);
-    });
+    if (substream_keys.empty())
+    {
+        pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            return std::make_shared<WatermarkTransform>(query, syntax_analyzer_result, desc, proc_time, header, output_stream->header, log);
+        });
+    }
+    else
+    {
+        pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+            return std::make_shared<WatermarkTransformWithSubstream>(query, syntax_analyzer_result, desc, proc_time, substream_keys, header, output_stream->header, log);
+        });
+    }
 }
 }
 }

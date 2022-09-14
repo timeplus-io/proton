@@ -951,7 +951,7 @@ void NO_INLINE Aggregator::executeOnIntervalWithoutKeyImpl(
 
 
 void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns & aggregate_columns, Columns & materialized_columns,
-    AggregateFunctionInstructions & aggregate_functions_instructions, NestedColumnsHolder & nested_columns_holder) const
+     AggregateFunctionInstructions & aggregate_functions_instructions, NestedColumnsHolder & nested_columns_holder) const
 {
     for (size_t i = 0; i < params.aggregates_size; ++i)
         aggregate_columns[i].resize(params.aggregates[i].arguments.size());
@@ -3028,10 +3028,12 @@ void Aggregator::setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawP
             window_lower_bound = window;
     }
     result.aggregates_pool->setCurrentTimestamps(window_lower_bound, window_upper_bound);
+    LOG_DEBUG(log, "Set current pool timestamp watermark={}, window_lower_bound={}", window_upper_bound, window_lower_bound);
 }
 
-void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
+void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const
 {
+    auto watermark = watermark_bound.watermark;
     if (watermark <= 0)
         return;
 
@@ -3046,11 +3048,11 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, Int64 wate
         data = nullptr;
     };
 
-    auto interval = watermark - watermark_lower_bound;
+    auto interval = watermark - watermark_bound.watermark_lower_bound;
     assert(interval > 0);
 
     if (params.group_by == Params::GroupBy::WINDOW_START)
-        watermark = watermark_lower_bound;
+        watermark = watermark_bound.watermark_lower_bound;
 
     size_t removed = 0;
     UInt64 last_removed_watermark = 0;
@@ -3156,8 +3158,9 @@ void Aggregator::clearInfoOfEmitSessions()
     sessions_to_emit.clear();
 }
 
-std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const
+std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const
 {
+    auto watermark = watermark_bound.watermark;
     auto get_defaults = []()
     {
         /// By default, we are using 256 buckets for 2 level hash table
@@ -3173,7 +3176,7 @@ std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, I
         return get_defaults();
 
     if (params.group_by == Params::GroupBy::WINDOW_START)
-        watermark = watermark_lower_bound;
+        watermark = watermark_bound.watermark_lower_bound;
 
     switch (result.type)
     {

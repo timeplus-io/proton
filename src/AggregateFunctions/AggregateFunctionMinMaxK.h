@@ -488,7 +488,7 @@ public:
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(this->argument_types));
     }
 
-    bool allocatesMemoryInArena() const override { return false; }
+    bool allocatesMemoryInArena() const override { return true; }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {

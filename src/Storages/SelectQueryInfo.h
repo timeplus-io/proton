@@ -162,6 +162,12 @@ struct SelectQueryInfo
     /// Cached value of ExpressionAnalysisResult::has_window
     bool has_window = false;
 
+    /// proton: starts.
+    bool has_aggregate_over = false;
+    bool has_non_aggregate_over = false;
+    Names substream_keys;
+    /// proton: ends.
+
     ClusterPtr getCluster() const { return !optimized_cluster ? cluster : optimized_cluster; }
 
     /// If not null, it means we choose a projection to execute current query.

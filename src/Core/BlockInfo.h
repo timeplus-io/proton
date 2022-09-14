@@ -1,6 +1,7 @@
 #pragma once
 
 #include <base/types.h>
+#include <Core/Streaming/WatermarkInfo.h>
 
 #include <unordered_map>
 #include <vector>
@@ -29,33 +30,56 @@ struct BlockInfo
       */
 
 #define APPLY_FOR_BLOCK_INFO_FIELDS(M) \
-    M(bool,     is_overflows,     false,     1) \
-    M(Int32,    bucket_num,     -1,     2)
+    M(bool, is_overflows, false, 1) \
+    M(Int32, bucket_num, -1, 2)
 
-#define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) \
-    TYPE NAME = DEFAULT;
+#define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) TYPE NAME = DEFAULT;
 
     APPLY_FOR_BLOCK_INFO_FIELDS(DECLARE_FIELD)
 
 #undef DECLARE_FIELD
 
     /// proton: starts
+    WatermarkBound watermark_bound;
+
     /// watermark = 0 => no watermark setup
     /// watermark = -1 => force flush
     /// watermark > 0 => timestamp watermark
-    Int64 watermark = 0;
+    Int64 & watermark = watermark_bound.watermark;
 
     /// watermark_start is `watermark - window_size`
-    Int64 watermark_lower_bound = 0;
+    Int64 & watermark_lower_bound = watermark_bound.watermark_lower_bound;
 
     /// Milliseconds since UTC
     Int64 append_time = 0;
 
+    BlockInfo() = default;
+    BlockInfo(const BlockInfo & rhs)
+        : is_overflows(rhs.is_overflows), bucket_num(rhs.bucket_num), watermark_bound(rhs.watermark_bound), append_time(rhs.append_time)
+    {
+    }
+
+    BlockInfo & operator=(const BlockInfo & rhs)
+    {
+        is_overflows = rhs.is_overflows;
+        bucket_num = rhs.bucket_num;
+        watermark_bound = rhs.watermark_bound;
+        append_time = rhs.append_time;
+        return *this;
+    }
+
     /// Here we try to reuse existing data members for different purposes
     /// since they work at different stage, it shall be fine
     /// We shall fix it.
-    void setBlockId(Int64 block_id) { append_time = block_id; }
-    Int64 blockId() const { return append_time; }
+
+    void setBlockId(Int64 block_id)
+    {
+        append_time = block_id;
+    }
+    Int64 blockId() const
+    {
+        return append_time;
+    }
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.

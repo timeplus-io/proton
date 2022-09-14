@@ -258,6 +258,8 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_keys256_two_level, true) \
         M(low_cardinality_key_string_two_level, true) \
         M(low_cardinality_key_fixed_string_two_level, true) \
+        /* proton: starts */ \
+        /* two level */ \
         M(streaming_key16_two_level, true) \
         M(streaming_key32_two_level, true) \
         M(streaming_key64_two_level, true) \
@@ -270,6 +272,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(streaming_low_cardinality_keys128_two_level, true) \
         M(streaming_low_cardinality_keys256_two_level, true) \
         M(streaming_serialized_two_level, true) \
+        /* proton: ends. */
 
     enum class Type
     {
@@ -650,6 +653,10 @@ public:
         Int64 window_interval = 0;
         Int64 max_emit_timeout = 0;
         UInt64 session_size = 0;
+
+        /// Params for substream
+        std::vector<size_t> substream_key_indices;
+
         FunctionDescriptionPtr window_desc;
         IntervalKind::Kind interval_kind = IntervalKind::Second;
         IntervalKind::Kind timeout_kind = IntervalKind::Second;
@@ -675,6 +682,7 @@ public:
             ssize_t session_start_pos_ = -1,
             ssize_t session_end_pos_ = -1,
             ssize_t delta_col_pos_ = -1,
+            std::vector<size_t> substream_key_indices_ = {},
             FunctionDescriptionPtr window_desc_ = nullptr)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
@@ -694,6 +702,7 @@ public:
             session_start_pos(session_start_pos_),
             session_end_pos(session_end_pos_),
             delta_col_pos(delta_col_pos_),
+            substream_key_indices(std::move(substream_key_indices_)),
             window_desc(window_desc_)
         {
             if (window_desc)
@@ -829,6 +838,7 @@ private:
     friend class SessionAggregatingTransform;
     friend class GlobalAggregatingTransform;
     friend class TumbleHopAggregatingTransform;
+    friend class TumbleHopAggregatingTransformWithSubstream;
 
     SessionHashMap session_map;
     std::vector<size_t> sessions_to_emit;
@@ -1126,10 +1136,10 @@ private:
     /// proton: starts
     inline void initStatesWithoutKey(AggregatedDataVariants & data_variants) const;
     void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, AggregatedDataVariants & result) const;
-    void removeBucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    void removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
     void removeBucketsOfSession(AggregatedDataVariants & result, size_t session_id) const;
     void clearInfoOfEmitSessions();
-    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, Int64 watermark_lower_bound, Int64 watermark) const;
+    std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
     static std::vector<size_t> bucketsOfSession(AggregatedDataVariants & result, size_t session_id);
     template <typename TargetColumnType>
     SessionStatus processSessionRow(

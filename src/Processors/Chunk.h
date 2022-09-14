@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Streaming/WatermarkInfo.h>
 #include <Columns/IColumn.h>
 #include <unordered_map>
 
@@ -14,6 +15,7 @@ struct ChunkContext
     static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
 
     /// A pair of Int64, flags represent what they mean
+    SubstreamID id = INVALID_SUBSTREAM_ID;
     Int64 ts_1 = 0;
     Int64 ts_2 = 0;
     UInt64 flags = 0;
@@ -26,22 +28,23 @@ struct ChunkContext
     ALWAYS_INLINE bool hasMark() const { return flags != 0; }
 
     ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
-    ALWAYS_INLINE void setWatermark(Int64 watermark, Int64 watermark_lower_bound)
+    ALWAYS_INLINE void setWatermark(const WatermarkBound & wb)
     {
-        if (watermark != 0)
+        /// Whether there is a watermark or not, we need id to mark which substream the chunk belongs to.
+        id = wb.id;
+        if (wb.watermark != 0)
         {
             flags |= WATERMARK_FLAG;
-            ts_1 = watermark;
-            ts_2 = watermark_lower_bound;
+            ts_1 = wb.watermark;
+            ts_2 = wb.watermark_lower_bound;
         }
     }
 
-    ALWAYS_INLINE void getWatermark(Int64 & watermark, Int64 & watermark_lower_bound) const
+    ALWAYS_INLINE WatermarkBound getWatermark() const
     {
         assert(hasWatermark());
 
-        watermark = ts_1;
-        watermark_lower_bound = ts_2;
+        return WatermarkBound{id, ts_1, ts_2};
     }
 
     ALWAYS_INLINE bool hasAppendTime() const { return flags & APPEND_TIME_FLAG; }

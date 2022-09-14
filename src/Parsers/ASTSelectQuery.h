@@ -23,6 +23,9 @@ public:
         TABLES,
         PREWHERE,
         WHERE,
+        /// proton: starts
+        PARTITION_BY,
+        /// proton: ends
         GROUP_BY,
         HAVING,
         WINDOW,
@@ -52,6 +55,10 @@ public:
                 return "PREWHERE";
             case Expression::WHERE:
                 return "WHERE";
+            /// proton: starts
+            case Expression::PARTITION_BY:
+                return "PARTITION_BY";
+            /// proton: ends
             case Expression::GROUP_BY:
                 return "GROUP BY";
             case Expression::HAVING:
@@ -103,6 +110,9 @@ public:
     const ASTPtr tables()         const { return getExpression(Expression::TABLES); }
     const ASTPtr prewhere()       const { return getExpression(Expression::PREWHERE); }
     const ASTPtr where()          const { return getExpression(Expression::WHERE); }
+    /// proton: starts
+    const ASTPtr partitionBy()    const { return getExpression(Expression::PARTITION_BY); }
+    /// proton: ends
     const ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
     const ASTPtr having()         const { return getExpression(Expression::HAVING); }
     const ASTPtr window() const { return getExpression(Expression::WINDOW); }

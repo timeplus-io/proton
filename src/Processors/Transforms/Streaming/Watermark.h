@@ -61,11 +61,14 @@ private:
 class Watermark
 {
 public:
-    Watermark(WatermarkSettings && watermark_settings_, bool proc_time_, Poco::Logger * log_)
+    Watermark(WatermarkSettings watermark_settings_, bool proc_time_, Poco::Logger * log_)
         : watermark_settings(std::move(watermark_settings_)), proc_time(proc_time_), log(log_)
     {
     }
+    Watermark(const Watermark &) = default;
     virtual ~Watermark() { }
+
+    virtual std::unique_ptr<Watermark> clone() const { return std::make_unique<Watermark>(*this); }
 
     void preProcess();
     void process(Block & block);
@@ -110,6 +113,6 @@ protected:
     Int64 last_logged_late_events_ts = 0;
 };
 
-using WatermarkPtr = std::shared_ptr<Watermark>;
+using WatermarkPtr = std::unique_ptr<Watermark>;
 }
 }

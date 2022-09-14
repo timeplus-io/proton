@@ -29,7 +29,7 @@ public:
 
     ~WatermarkTransform() override = default;
 
-    String getName() const override { return "WatermarkTransform"; }
+    String getName() const override { return watermark_name + "Transform"; }
 
 private:
     void transform(Chunk & chunk) override;
@@ -42,6 +42,7 @@ private:
         bool proc_time,
         Poco::Logger * log);
 
+    String watermark_name;
     WatermarkPtr watermark;
 };
 }

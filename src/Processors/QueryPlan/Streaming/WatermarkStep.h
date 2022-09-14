@@ -19,6 +19,7 @@ public:
         TreeRewriterResultPtr syntax_analyzer_result_,
         FunctionDescriptionPtr desc_,
         bool proc_time,
+        std::vector<size_t> substream_keys,
         Poco::Logger * log);
 
     ~WatermarkStep() override = default;
@@ -31,7 +32,7 @@ private:
     TreeRewriterResultPtr syntax_analyzer_result;
     FunctionDescriptionPtr desc;
     bool proc_time;
-    String partition_key;
+    std::vector<size_t> substream_keys;
     Poco::Logger * log;
 };
 }

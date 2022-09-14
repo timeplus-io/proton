@@ -79,6 +79,9 @@ namespace
     private:
         void calculateMinMax(Block & block) const
         {
+            if (!calc_min_max)
+                return;
+
             const auto & split_col = block.getByPosition(split_column_pos);
             auto col = typeid_cast<IntegralColumnType *>(split_col.column->assumeMutable().get());
 

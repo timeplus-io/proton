@@ -43,12 +43,12 @@ void WatermarkTransform::transform(Chunk & chunk)
             chunk.setChunkInfo(std::make_shared<ChunkInfo>());
             chunk_info = chunk.getChunkInfo();
         }
-        const_cast<ChunkInfo *>(chunk_info.get())->ctx.setWatermark(block.info.watermark, block.info.watermark_lower_bound);
+        const_cast<ChunkInfo *>(chunk_info.get())->ctx.setWatermark(block.info.watermark_bound);
     }
 }
 
 void WatermarkTransform::initWatermark(
-    ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
+     ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time, Poco::Logger * log)
 {
     WatermarkSettings watermark_settings(query, syntax_analyzer_result, desc);
     if (watermark_settings.func_name == ProtonConsts::TUMBLE_FUNC_NAME)
@@ -57,7 +57,8 @@ void WatermarkTransform::initWatermark(
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
-        watermark = std::make_shared<TumbleWatermark>(std::move(watermark_settings), proc_time, log);
+        watermark = std::make_unique<TumbleWatermark>(std::move(watermark_settings), proc_time, log);
+        watermark_name = "TumbleWatermark";
     }
     else if (watermark_settings.func_name == ProtonConsts::HOP_FUNC_NAME)
     {
@@ -65,7 +66,8 @@ void WatermarkTransform::initWatermark(
             && watermark_settings.mode != WatermarkSettings::EmitMode::WATERMARK_WITH_DELAY)
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
-        watermark = std::make_shared<HopWatermark>(std::move(watermark_settings), proc_time, log);
+        watermark = std::make_unique<HopWatermark>(std::move(watermark_settings), proc_time, log);
+        watermark_name = "HopWatermark";
     }
     else if (watermark_settings.func_name == ProtonConsts::SESSION_FUNC_NAME)
     {
@@ -74,11 +76,13 @@ void WatermarkTransform::initWatermark(
             throw Exception("Streaming window functions only support watermark based emit", ErrorCodes::INVALID_EMIT_MODE);
 
         watermark
-            = std::make_shared<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
+            = std::make_unique<SessionWatermark>(std::move(watermark_settings), proc_time, desc->session_start, desc->session_end, log);
+        watermark_name = "SessionWatermark";
     }
     else
     {
-        watermark = std::make_shared<Watermark>(std::move(watermark_settings), proc_time, log);
+        watermark = std::make_unique<Watermark>(std::move(watermark_settings), proc_time, log);
+        watermark_name = "Watermark";
     }
 }
 }

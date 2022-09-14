@@ -103,7 +103,13 @@ private:
 class FunctionToOverloadResolverAdaptor : public IFunctionOverloadResolver
 {
 public:
-    explicit FunctionToOverloadResolverAdaptor(std::shared_ptr<IFunction> function_) : function(std::move(function_)) {}
+    /// proton: starts. For stateful functions, we create new function for each IFunctionOverloadResolver::build(...)
+    using FunctionCreator = std::function<std::shared_ptr<IFunction>()>;
+    explicit FunctionToOverloadResolverAdaptor(std::shared_ptr<IFunction> function_, FunctionCreator && func_creater = {})
+        : function(std::move(function_)), stateful_func_creater(std::move(func_creater))
+    {
+    }
+    /// proton: ends.
 
     bool isDeterministic() const override { return function->isDeterministic(); }
     bool isDeterministicInScopeOfQuery() const override { return function->isDeterministicInScopeOfQuery(); }
@@ -134,6 +140,11 @@ public:
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;
 
+        /// proton: starts.
+        if (stateful_func_creater)
+            return std::make_unique<FunctionToFunctionBaseAdaptor>(stateful_func_creater(), data_types, result_type);
+        /// proton: ends.
+
         return std::make_unique<FunctionToFunctionBaseAdaptor>(function, data_types, result_type);
     }
 
@@ -141,6 +152,7 @@ public:
 
 private:
     std::shared_ptr<IFunction> function;
+    FunctionCreator stateful_func_creater;
 };
 
 

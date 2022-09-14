@@ -239,9 +239,9 @@ public:
             //                /// Pack if possible all the keys along with information about which key values are nulls
             //                /// into a fixed 16- or 32-byte blob.
             //                if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= 16)
-            //                    return StreamingAggregatedDataVariants::Type::nullable_keys128;
+            //                    return AggregatedDataVariants::Type::nullable_keys128;
             //                if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= 32)
-            //                    return StreamingAggregatedDataVariants::Type::nullable_keys256;
+            //                    return AggregatedDataVariants::Type::nullable_keys256;
             //            }
             //
             //            if (has_low_cardinality && params.keys_size == 1)
@@ -251,18 +251,18 @@ public:
             //                    size_t size_of_field = types_removed_nullable[0]->getSizeOfValueInMemory();
             //
             //                    if (size_of_field == 1)
-            //                        return StreamingAggregatedDataVariants::Type::low_cardinality_key8;
+            //                        return AggregatedDataVariants::Type::low_cardinality_key8;
             //                    if (size_of_field == 2)
-            //                        return StreamingAggregatedDataVariants::Type::low_cardinality_key16;
+            //                        return AggregatedDataVariants::Type::low_cardinality_key16;
             //                    if (size_of_field == 4)
-            //                        return StreamingAggregatedDataVariants::Type::low_cardinality_key32;
+            //                        return AggregatedDataVariants::Type::low_cardinality_key32;
             //                    if (size_of_field == 8)
-            //                        return StreamingAggregatedDataVariants::Type::low_cardinality_key64;
+            //                        return AggregatedDataVariants::Type::low_cardinality_key64;
             //                }
             //                else if (isString(types_removed_nullable[0]))
-            //                    return StreamingAggregatedDataVariants::Type::low_cardinality_key_string;
+            //                    return AggregatedDataVariants::Type::low_cardinality_key_string;
             //                else if (isFixedString(types_removed_nullable[0]))
-            //                    return StreamingAggregatedDataVariants::Type::low_cardinality_key_fixed_string;
+            //                    return AggregatedDataVariants::Type::low_cardinality_key_fixed_string;
             //            }
 
             /// Fallback case.
@@ -279,13 +279,13 @@ public:
             //        if (has_low_cardinality)
             //        {
             //            if (size_of_field == 1)
-            //                return StreamingAggregatedDataVariants::Type::low_cardinality_key8;
+            //                return AggregatedDataVariants::Type::low_cardinality_key8;
             //            if (size_of_field == 2)
-            //                return StreamingAggregatedDataVariants::Type::low_cardinality_key16;
+            //                return AggregatedDataVariants::Type::low_cardinality_key16;
             //            if (size_of_field == 4)
-            //                return StreamingAggregatedDataVariants::Type::low_cardinality_key32;
+            //                return AggregatedDataVariants::Type::low_cardinality_key32;
             //            if (size_of_field == 8)
-            //                return StreamingAggregatedDataVariants::Type::low_cardinality_key64;
+            //                return AggregatedDataVariants::Type::low_cardinality_key64;
             //        }
 
             if (size_of_field == 1)
@@ -317,9 +317,9 @@ public:
             //            if (has_low_cardinality)
             //            {
             //                if (keys_bytes <= 16)
-            //                    return StreamingAggregatedDataVariants::Type::low_cardinality_keys128;
+            //                    return AggregatedDataVariants::Type::low_cardinality_keys128;
             //                if (keys_bytes <= 32)
-            //                    return StreamingAggregatedDataVariants::Type::low_cardinality_keys256;
+            //                    return AggregatedDataVariants::Type::low_cardinality_keys256;
             //            }
 
             if (keys_bytes <= 2)
@@ -338,7 +338,7 @@ public:
         if (keys_size == 1 && isString(types_removed_nullable[0]))
         {
             //        if (has_low_cardinality)
-            //            return StreamingAggregatedDataVariants::Type::low_cardinality_key_string;
+            //            return AggregatedDataVariants::Type::low_cardinality_key_string;
             //        else
             return SessionHashMap::Type::serialized;
         }
@@ -383,7 +383,7 @@ public:
         std::vector<SessionBlockQueuePtr> places;
         places.reserve(data.size());
 
-        data.forEachValue([&](const auto & key, auto & mapped)
+        data.forEachValue([&](const auto & key, auto &)
         {
             SessionBlockQueuePtr queue = reinterpret_cast<SessionBlockQueuePtr>(mapped);
             SessionInfo & info = queue->getCurrentSessionInfo();

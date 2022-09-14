@@ -71,7 +71,14 @@ private:
     template <typename Function>
     static FunctionOverloadResolverPtr adaptFunctionToOverloadResolver(ContextPtr context)
     {
-        return std::make_unique<FunctionToOverloadResolverAdaptor>(Function::create(context));
+        /// proton: starts. For stateful functions, when processing several sub-streams,
+        /// we need to create new function for each sub-stream
+        auto function = Function::create(context);
+        bool is_stateful = function->isStateful();
+        return std::make_unique<FunctionToOverloadResolverAdaptor>(
+            std::move(function),
+            is_stateful ? [context]() { return Function::create(context); } : FunctionToOverloadResolverAdaptor::FunctionCreator{});
+        /// proton: ends.
     }
 
     const Functions & getMap() const override { return functions; }

@@ -36,8 +36,8 @@ TumbleHopAggregatingTransform::TumbleHopAggregatingTransform(
 /// and push the block to downstream pipe
 void TumbleHopAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
 {
-    chunk_info->ctx.getWatermark(watermark_bound.watermark, watermark_bound.watermark_lower_bound);
-
+    watermark_bound = chunk_info->ctx.getWatermark();
+    assert(watermark_bound.id == INVALID_SUBSTREAM_ID);
     if (many_data->finalizations.fetch_add(1) + 1 == many_data->variants.size())
     {
         /// The current transform is the last one in this round of
@@ -55,6 +55,7 @@ void TumbleHopAggregatingTransform::finalize(ChunkInfoPtr chunk_info)
                 max_watermark = bound;
 
             /// Reset watermarks
+            assert(bound.id == INVALID_SUBSTREAM_ID);
             bound.watermark = 0;
             bound.watermark_lower_bound = 0;
         }
@@ -143,8 +144,7 @@ void TumbleHopAggregatingTransform::mergeTwoLevel(
 
         /// Figure out which buckets need get merged
         auto & data_variant = data->at(index);
-        std::vector<size_t> buckets
-            = data_variant->aggregator->bucketsBefore(*data_variant, watermark.watermark_lower_bound, watermark.watermark);
+        std::vector<size_t> buckets = data_variant->aggregator->bucketsBefore(*data_variant, watermark);
 
         for (auto bucket : buckets)
         {
@@ -181,8 +181,7 @@ void TumbleHopAggregatingTransform::mergeTwoLevel(
 /// Cleanup memory arena for the projected window buckets
 void TumbleHopAggregatingTransform::removeBuckets()
 {
-    variants.aggregator->removeBucketsBefore(
-        variants, many_data->arena_watermark.watermark_lower_bound, many_data->arena_watermark.watermark);
+    params->aggregator.removeBucketsBefore(variants, many_data->arena_watermark);
 }
 
 }

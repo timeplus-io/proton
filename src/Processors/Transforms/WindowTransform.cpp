@@ -2119,42 +2119,42 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
                 parameters);
         }, properties}, AggregateFunctionFactory::CaseInsensitive);
 
-    factory.registerFunction("lagInFrame", {[](const std::string & name,
+    factory.registerFunction("lag_in_frame", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionLagLeadInFrame<false>>(
                 name, argument_types, parameters);
         }, properties});
 
-    factory.registerFunction("leadInFrame", {[](const std::string & name,
+    factory.registerFunction("lead_in_frame", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionLagLeadInFrame<true>>(
                 name, argument_types, parameters);
         }, properties});
 
-    factory.registerFunction("exponentialTimeDecayedSum", {[](const std::string & name,
+    factory.registerFunction("exponential_time_decayed_sum", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionExponentialTimeDecayedSum>(
                 name, argument_types, parameters);
         }, properties});
 
-    factory.registerFunction("exponentialTimeDecayedMax", {[](const std::string & name,
+    factory.registerFunction("exponential_time_decayed_max", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionExponentialTimeDecayedMax>(
                 name, argument_types, parameters);
         }, properties});
 
-    factory.registerFunction("exponentialTimeDecayedCount", {[](const std::string & name,
+    factory.registerFunction("exponential_time_decayed_count", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionExponentialTimeDecayedCount>(
                 name, argument_types, parameters);
         }, properties});
 
-    factory.registerFunction("exponentialTimeDecayedAvg", {[](const std::string & name,
+    factory.registerFunction("exponential_time_decayed_avg", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionExponentialTimeDecayedAvg>(

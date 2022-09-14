@@ -168,14 +168,17 @@ private:
 
     /// proton: starts
     void executeLastXTail(QueryPlan & query_plan, const Streaming::BaseScaleInterval & last_interval_bs_) const;
+    void executeStreamingWindow(QueryPlan & query_plan);
     void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
     void checkForStreamingQuery() const;
     bool shouldApplyWatermark() const;
     bool shouldKeepState() const;
     void buildStreamingProcessingQueryPlan(QueryPlan & query_plan) const;
-    void handleEmitVersion();
+    void checkEmitVersion();
     void handleSnapshotSeekTo();
+    void handleStreamingWindowOverSubstream();
+    void checkAndPrepareStreamingFunctions();
     void analyzeStreamingMode(); /// analyze whether it is streaming query
     void analyzeChangelogMode(); /// analyze whether it is changelog query
 
