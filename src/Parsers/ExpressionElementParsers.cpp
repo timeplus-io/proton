@@ -1728,6 +1728,9 @@ const char * ParserAlias::restricted_keywords[] =
     "INTERSECT",
     "EXCEPT",
     "EMIT",
+    /// proton: starts.
+    "PARTITION",
+    /// proton: ends.
     nullptr
 };
 

@@ -43,6 +43,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/HashTable/StreamingTwoLevelHashMap.h>
 #include <Common/ProtonCommon.h>
+#include <Core/Streaming/WatermarkInfo.h>
 
 #include <numeric>
 /// proton: ends

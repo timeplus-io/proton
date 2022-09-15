@@ -166,7 +166,7 @@
               (1, 's7', '2022-05-23 15:45:20'),
               (1, 's8', '2022-05-23 15:45:21')"
             },
-            {"client":"python", "wait": 1, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1005'"}             
+            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1005'"}             
           ]
         }
       ],

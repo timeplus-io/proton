@@ -1,7 +1,6 @@
 #pragma once
 
 #include <base/types.h>
-#include <Core/Streaming/WatermarkInfo.h>
 
 #include <unordered_map>
 #include <vector>
@@ -40,33 +39,16 @@ struct BlockInfo
 #undef DECLARE_FIELD
 
     /// proton: starts
-    WatermarkBound watermark_bound;
-
     /// watermark = 0 => no watermark setup
     /// watermark = -1 => force flush
     /// watermark > 0 => timestamp watermark
-    Int64 & watermark = watermark_bound.watermark;
+    Int64 watermark = 0;
 
     /// watermark_start is `watermark - window_size`
-    Int64 & watermark_lower_bound = watermark_bound.watermark_lower_bound;
+    Int64 watermark_lower_bound = 0;
 
     /// Milliseconds since UTC
     Int64 append_time = 0;
-
-    BlockInfo() = default;
-    BlockInfo(const BlockInfo & rhs)
-        : is_overflows(rhs.is_overflows), bucket_num(rhs.bucket_num), watermark_bound(rhs.watermark_bound), append_time(rhs.append_time)
-    {
-    }
-
-    BlockInfo & operator=(const BlockInfo & rhs)
-    {
-        is_overflows = rhs.is_overflows;
-        bucket_num = rhs.bucket_num;
-        watermark_bound = rhs.watermark_bound;
-        append_time = rhs.append_time;
-        return *this;
-    }
 
     /// Here we try to reuse existing data members for different purposes
     /// since they work at different stage, it shall be fine

@@ -102,7 +102,7 @@ std::optional<Chunk> RemoteSource::tryGenerate()
         info->bucket_num = block.info.bucket_num;
         info->is_overflows = block.info.is_overflows;
 
-        info->ctx.setWatermark(block.info.watermark_bound);
+        info->ctx.setWatermark(WatermarkBound{INVALID_SUBSTREAM_ID, block.info.watermark, block.info.watermark_lower_bound});
         chunk.setChunkInfo(std::move(info));
     }
     /// proton: ends
