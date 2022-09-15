@@ -21,7 +21,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # update version
-        # ./release --version patch
+        ./release --version patch
         
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
