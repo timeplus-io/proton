@@ -82,7 +82,7 @@ private:
 
     void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, const WatermarkBound & watermark, ChunkInfoPtr & chunk_info);
 
-    inline void tryRemoveBuckets(SubstreamContextPtr substream_ctx, const WatermarkBound & watermark);
+    inline void removeBuckets(SubstreamContextPtr substream_ctx, const WatermarkBound & watermark);
 
     SubstreamContextPtr getSubstreamContext(const SubstreamID & id);
 

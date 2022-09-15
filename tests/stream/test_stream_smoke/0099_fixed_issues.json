@@ -32,6 +32,33 @@
         {"query_id":"9902", "expected_results":[]},
         {"query_id":"9903", "expected_results":[]}
       ]
+    },
+    {
+      "id": 1,
+      "tags": ["substream"],
+      "name": "#1295",
+      "description": "substream watermark and garbage collection",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query":"drop view if exists test_substream_1"},
+            {"client":"python", "query_type": "table", "wait":2, "query":"create stream test_substream_1(i int, s string)"},
+            {"client":"python", "query_id":"9900", "terminate": "manual", "query_type": "stream", "depends_on_stream":"test_substream_1", "query":"select s, count(*), max(i) from tumble(test_substream_1, 2s) partition by s group by window_start, s"},
+            {"client":"python", "query_type": "table", "depends_on": 9900, "wait":3, "query": "insert into test_substream_1(i, s) values (1, 'a'), (2, 'b')"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_substream_1(i, s) values (1, 'a'), (2, 'b')"},
+            {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_substream_1(i, s) values (1, 'a'), (2, 'b')"},
+            {"client":"python", "wait": 2, "run_mode":"table", "query_type": "table", "query":"kill query where query_id = '9900'"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          ["a", 1, 1],
+          ["b", 1, 2],
+          ["a", 1, 1],
+          ["b", 1, 2]
+        ]}
+      ]
     }
   ]
 }

@@ -79,7 +79,8 @@ void TumbleHopAggregatingTransformWithSubstream::finalize(ChunkInfoPtr chunk_inf
     auto [min_watermark, max_watermark, arena_watermark] = finalizeAndGetWatermarks(substream_ctx, watermark);
 
     /// Do memory arena recycling by last finalized watermark
-    tryRemoveBuckets(substream_ctx, arena_watermark);
+    if (arena_watermark.valid())
+        removeBuckets(substream_ctx, arena_watermark);
 
     /// Finalize current watermark
     if (min_watermark.valid())
@@ -197,13 +198,10 @@ void TumbleHopAggregatingTransformWithSubstream::mergeTwoLevel(
         setCurrentChunk(convertToChunk(merged_block), chunk_info);
 }
 
-void TumbleHopAggregatingTransformWithSubstream::tryRemoveBuckets(SubstreamContextPtr substream_ctx, const WatermarkBound & watermark)
+void TumbleHopAggregatingTransformWithSubstream::removeBuckets(SubstreamContextPtr substream_ctx, const WatermarkBound & watermark)
 {
-    if (watermark.valid())
-    {
-        std::shared_lock lock(substream_ctx->variants_mutex);
-        params->aggregator.removeBucketsBefore(*(substream_ctx->many_variants[current_aggregating_index]), watermark);
-    }
+    std::shared_lock lock(substream_ctx->variants_mutex);
+    params->aggregator.removeBucketsBefore(*(substream_ctx->many_variants[current_aggregating_index]), watermark);
 }
 
 SubstreamContextPtr TumbleHopAggregatingTransformWithSubstream::getSubstreamContext(const SubstreamID & id)
@@ -228,7 +226,8 @@ TumbleHopAggregatingTransformWithSubstream::finalizeAndGetWatermarks(SubstreamCo
     if (wb.watermark > substream_ctx->max_watermark.watermark)
         substream_ctx->max_watermark = wb;
 
-    /// Set finalized status for one part of current substream, and check need finalized
+    /// Set finalized status for one part of current substream,
+    /// and return min/max watermark that requires finalizing
     substream_ctx->finalized.set(current_aggregating_index);
     if (substream_ctx->finalized == all_finalized_mark)
     {
@@ -238,6 +237,8 @@ TumbleHopAggregatingTransformWithSubstream::finalizeAndGetWatermarks(SubstreamCo
         substream_ctx->max_watermark = MIN_WATERMARK;
     }
 
+    /// Return watermark that requires arena recycling
+    /// (ignored the same watermark in same substream)
     if (prev_arena_watermark != substream_ctx->arena_watermark)
     {
         arena_watermark = substream_ctx->arena_watermark;

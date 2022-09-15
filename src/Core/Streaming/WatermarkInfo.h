@@ -22,12 +22,13 @@ struct WatermarkBound
 
     bool valid() const { return watermark != 0; }
     operator bool() const { return valid(); }
+    bool operator==(const WatermarkBound & rhs) const = default;
 };
 }
 
 using SubstreamID = Streaming::Substream::ID;
 using WatermarkBound = Streaming::WatermarkBound;
 using WatermarkBounds = std::vector<WatermarkBound>;
-template<typename T>
+template <typename T>
 using SubstreamHashMap = std::unordered_map<SubstreamID, T>;
 }
