@@ -124,14 +124,20 @@ void ProxyStream::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    /// We drop STREAMING_WINDOW_START/END columns before forwarding the request
+    /// issue-1289
+    /// If current table function is session / tumble / hop,
+    /// we need drop STREAMING_WINDOW_START/END columns before forwarding the request
+    /// since for these table functions, we will add window_start/end automatically
+    /// Event the inner is a table function or stream or view or MV which contains window_start/end,
+    /// we choose the outer table function's window_start/end override the inner ones.
     Names updated_column_names;
     updated_column_names.reserve(column_names.size());
     for (const auto & column_name : column_names)
     {
-        if (column_name == ProtonConsts::STREAMING_WINDOW_START || column_name == ProtonConsts::STREAMING_WINDOW_END
-            || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS || column_name == ProtonConsts::STREAMING_SESSION_ID
-            || column_name == ProtonConsts::STREAMING_SESSION_START || column_name == ProtonConsts::STREAMING_SESSION_END)
+        if (windowType() != WindowType::NONE
+            && (column_name == ProtonConsts::STREAMING_WINDOW_START || column_name == ProtonConsts::STREAMING_WINDOW_END
+                || column_name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS || column_name == ProtonConsts::STREAMING_SESSION_ID
+                || column_name == ProtonConsts::STREAMING_SESSION_START || column_name == ProtonConsts::STREAMING_SESSION_END))
             continue;
 
         updated_column_names.push_back(column_name);
@@ -387,7 +393,8 @@ void ProxyStream::processWatermarkStep(QueryPlan & query_plan, const SelectQuery
 void ProxyStream::processWindowAssignmentStep(
     QueryPlan & query_plan, const Names & required_columns_after_streaming_window, const StorageSnapshotPtr & storage_snapshot) const
 {
-    if (streaming_func_desc->type == WindowType::TUMBLE || streaming_func_desc->type == WindowType::HOP || streaming_func_desc->type == WindowType::SESSION)
+    if (streaming_func_desc->type == WindowType::TUMBLE || streaming_func_desc->type == WindowType::HOP
+        || streaming_func_desc->type == WindowType::SESSION)
     {
         Block output_header = storage_snapshot->getSampleBlockForColumns(required_columns_after_streaming_window);
 

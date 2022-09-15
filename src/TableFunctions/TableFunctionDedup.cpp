@@ -5,7 +5,6 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTSubquery.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
