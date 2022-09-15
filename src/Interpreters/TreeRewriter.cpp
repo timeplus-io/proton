@@ -711,7 +711,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
             /// Try join on constant (cross or empty join) or fail
             if (is_asof || analyzed_join.getAsofInequality() == ASOF::Inequality::RangeBetween) /// proton : starts / ends
                 throw Exception(ErrorCodes::INVALID_JOIN_ON_EXPRESSION,
-                                "Cannot get JOIN keys from JOIN ON section: {}", queryToString(table_join.on_expression));
+                                "ASOF or Range join requires at least one 'equal' join key in JOIN ON section: {}", queryToString(table_join.on_expression));
 
             bool join_on_const_ok = tryJoinOnConst(analyzed_join, table_join.on_expression, context);
             if (!join_on_const_ok)
