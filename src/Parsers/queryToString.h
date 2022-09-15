@@ -4,6 +4,6 @@
 
 namespace DB
 {
-    String queryToString(const ASTPtr & query);
-    String queryToString(const IAST & query);
+    String queryToString(const ASTPtr & query, bool one_line=false);
+    String queryToString(const IAST & query, bool one_line=false);
 }

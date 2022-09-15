@@ -55,7 +55,7 @@ ProcessTimeFilter::ProcessTimeFilter(const String & column_name_, BaseScaleInter
 {
     const auto * column_with_type = header.findByName(column_name);
     if (!column_with_type)
-        throw Exception("Missing target column for process time filtering", ErrorCodes::UNKNOWN_IDENTIFIER);
+        throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "Missing target column '{}' for process time filtering", column_name);
 
     timestamp_col_data_type = column_with_type->type;
     timestamp_col_pos = header.getPositionByName(column_name);

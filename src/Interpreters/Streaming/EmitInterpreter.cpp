@@ -145,7 +145,7 @@ bool EmitInterpreter::LastXRule::handleWindowAggr(ASTSelectQuery & select_query)
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
-        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query));
+        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query, true));
 
     return true;
 }
@@ -258,7 +258,7 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
-        LOG_INFO(log, "(LastXForGlobal) processed query: {}", queryToString(query));
+        LOG_INFO(log, "(LastXForGlobal) processed query: {}", queryToString(query, true));
 
     return true;
 }
@@ -294,7 +294,7 @@ void EmitInterpreter::LastXRule::handleTail(ASTSelectQuery & select_query) const
     select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(new_settings));
 
     if (log)
-        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query));
+        LOG_INFO(log, "(LastXForWindow) processed query: {}", queryToString(query, true));
 }
 
 /// Add `_tp_time >= now64(3, 'UTC') to WHERE clause
