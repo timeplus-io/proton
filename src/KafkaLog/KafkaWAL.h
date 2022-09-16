@@ -93,6 +93,8 @@ public:
 
     int32_t alter(const std::string & name, const std::vector<std::pair<String, String>> & params) const;
 
+    std::map<String, String> get(const std::string & name);
+
     DescribeResult describe(const std::string & name) const;
 
     KafkaWALClusterPtr cluster(const KafkaWALContext & ctx) const;

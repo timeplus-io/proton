@@ -6,9 +6,12 @@
 #include <DistributedMetadata/queryStreams.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
+#include <KafkaLog/KafkaWALPool.h>
+#include <NativeLog/Server/NativeLog.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/Streaming/StorageStream.h>
 #include <Common/ProtonCommon.h>
 
 #include <boost/algorithm/string/join.hpp>
@@ -229,6 +232,38 @@ std::pair<String, Int32> TableRestRouterHandler::executeDelete(const Poco::JSON:
     setupDistributedQueryParameters({});
 
     return {processQuery(query), HTTPResponse::HTTP_OK};
+}
+
+void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_table, const String & db, const String & table) const
+{
+    auto table_id = query_context->resolveStorageID(StorageID(db, table), Context::ResolveOrdinary);
+    if (nlog::NativeLog::instance(query_context).enabled())
+    {
+        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(db, table), query_context);
+        if (storage)
+        {
+            if (auto * stream = storage->as<StorageStream>())
+            {
+                const auto settings = stream->getSettings();
+                resp_table.set("flush_messages", std::to_string(settings->logstore_flush_messages));
+                resp_table.set("flush_ms", std::to_string(settings->logstore_flush_ms));
+                resp_table.set("retention_bytes", std::to_string(settings->logstore_retention_bytes));
+                resp_table.set("retention_ms", std::to_string(settings->logstore_retention_ms));
+            }
+        }
+    }
+    else
+    {
+        /// Kafka log store
+        if (table_id.uuid != UUIDHelpers::Nil)
+        {
+            auto klog = klog::KafkaWALPool::instance(query_context).getMeta();
+            const auto & params = klog->get(toString(table_id.uuid));
+            for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
+                if (params.count(v))
+                    resp_table.set(k, params.at(v));
+        }
+    }
 }
 
 void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const

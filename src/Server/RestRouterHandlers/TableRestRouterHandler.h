@@ -33,6 +33,7 @@ protected:
     std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & payload) const override;
     std::pair<String, Int32> executePatch(const Poco::JSON::Object::Ptr & payload) const override;
 
+    void buildRetentionSettings(Poco::JSON::Object & resp_table, const String & database, const String & table) const;
     virtual void buildTablesJSON(Poco::JSON::Object & resp, const CatalogService::TablePtrs & tables) const = 0;
     virtual void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_ast) const;
     virtual void buildTablePlacements(Poco::JSON::Object & resp_table, const String & table) const;

@@ -671,6 +671,25 @@ int32_t KafkaWAL::alter(const String & name, const std::vector<std::pair<String,
     return doTopic(name, alter_topic, rd_kafka_event_AlterConfigs_result, nullptr, validate, producer_handle.get(), 60000, log, "alter");
 }
 
+std::map<String, String> KafkaWAL::get(const std::string & name)
+{
+    std::map<String, String> params;
+
+    auto config = getTopicConfig(name, producer_handle.get(), log);
+    if (!config)
+        return params;
+
+    size_t cnt = 0;
+    const rd_kafka_ConfigEntry_t ** entries = rd_kafka_ConfigResource_configs(config.get(), &cnt);
+    if (cnt == 0)
+        return params;
+
+    for (size_t i = 0; i < cnt; i++)
+        params.emplace(rd_kafka_ConfigEntry_name(entries[i]), rd_kafka_ConfigEntry_value(entries[i]));
+
+    return params;
+}
+
 int32_t KafkaWAL::remove(const String & name, const KafkaWALContext &) const
 {
     rd_kafka_DeleteTopic_t * topics[1] = {nullptr};
