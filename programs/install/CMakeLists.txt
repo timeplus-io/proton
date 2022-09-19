@@ -9,4 +9,4 @@ set (CLICKHOUSE_INSTALL_LINK
         readpassphrase
 )
 
-clickhouse_program_add_library(install)
+proton_program_add_library(install)

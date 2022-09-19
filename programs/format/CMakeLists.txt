@@ -11,4 +11,4 @@ set (CLICKHOUSE_FORMAT_LINK
         dbms
 )
 
-clickhouse_program_add(format)
+proton_program_add(format)

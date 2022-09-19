@@ -6,4 +6,4 @@ set (CLICKHOUSE_OBFUSCATOR_LINK
         dbms
 )
 
-clickhouse_program_add(obfuscator)
+proton_program_add(obfuscator)

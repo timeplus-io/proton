@@ -8,7 +8,7 @@ set (CLICKHOUSE_BENCHMARK_LINK
         dbms
 )
 
-clickhouse_program_add(benchmark)
+proton_program_add(benchmark)
 
 if(NOT CLICKHOUSE_ONE_SHARED)
     target_link_libraries (clickhouse-benchmark-lib PRIVATE clickhouse-client-lib)

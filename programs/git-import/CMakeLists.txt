@@ -6,5 +6,5 @@ set (CLICKHOUSE_GIT_IMPORT_LINK
         dbms
 )
 
-clickhouse_program_add(git-import)
+proton_program_add(git-import)
 

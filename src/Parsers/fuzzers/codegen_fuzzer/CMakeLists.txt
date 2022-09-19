@@ -36,7 +36,7 @@ set(FUZZER_SRCS codegen_select_fuzzer.cpp "${CURRENT_DIR_IN_BINARY}/out.cpp" ${P
 
 set(CMAKE_INCLUDE_CURRENT_DIR TRUE)
 
-add_executable(codegen_select_fuzzer ${FUZZER_SRCS})
+proton_add_executable(codegen_select_fuzzer ${FUZZER_SRCS})
 
 set_source_files_properties("${PROTO_SRCS}" "out.cpp" PROPERTIES COMPILE_FLAGS "-Wno-reserved-identifier")
 

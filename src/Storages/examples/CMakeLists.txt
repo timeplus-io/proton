@@ -1,16 +1,16 @@
-add_executable (remove_symlink_directory remove_symlink_directory.cpp)
+proton_add_executable (remove_symlink_directory remove_symlink_directory.cpp)
 target_link_libraries (remove_symlink_directory PRIVATE dbms)
 
-add_executable (merge_selector merge_selector.cpp)
+proton_add_executable (merge_selector merge_selector.cpp)
 target_link_libraries (merge_selector PRIVATE dbms)
 
-add_executable (merge_selector2 merge_selector2.cpp)
+proton_add_executable (merge_selector2 merge_selector2.cpp)
 target_link_libraries (merge_selector2 PRIVATE dbms)
 
-add_executable (get_current_inserts_in_replicated get_current_inserts_in_replicated.cpp)
+proton_add_executable (get_current_inserts_in_replicated get_current_inserts_in_replicated.cpp)
 target_link_libraries (get_current_inserts_in_replicated PRIVATE dbms clickhouse_common_config clickhouse_common_zookeeper string_utils)
 
-add_executable (transform_part_zk_nodes transform_part_zk_nodes.cpp)
+proton_add_executable (transform_part_zk_nodes transform_part_zk_nodes.cpp)
 target_link_libraries (transform_part_zk_nodes
     PRIVATE
         boost::program_options

@@ -1,4 +1,4 @@
-add_executable (streaming_records streaming_records_example.cpp record.h memory_records.h record_generated.h)
+proton_add_executable (streaming_records streaming_records_example.cpp record.h memory_records.h record_generated.h)
 target_link_libraries (streaming_records PRIVATE clickhouse_common_io)
 
 # FIXME

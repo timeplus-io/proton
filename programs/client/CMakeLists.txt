@@ -17,6 +17,6 @@ set (CLICKHOUSE_CLIENT_LINK
 # Always use internal readpassphrase
 list(APPEND CLICKHOUSE_CLIENT_LINK PRIVATE readpassphrase)
 
-clickhouse_program_add(client)
+proton_program_add(client)
 
 install (FILES clickhouse-client.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-client" COMPONENT proton-client RENAME config.xml)

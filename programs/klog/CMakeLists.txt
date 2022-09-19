@@ -5,4 +5,4 @@ set (CLICKHOUSE_KLOG_BENCHMARK_LINK
         dbms
 )
 
-clickhouse_program_add(klog-benchmark)
+proton_program_add(klog-benchmark)

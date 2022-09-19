@@ -18,7 +18,7 @@ set (CLICKHOUSE_METASTORE_LINK
     ${LINK_RESOURCE_LIB}
 )
 
-clickhouse_program_add(metastore)
+proton_program_add(metastore)
 
 install (FILES metastore_config.yaml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-metastore" COMPONENT proton-metastore)
 

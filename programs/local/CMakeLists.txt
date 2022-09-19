@@ -15,7 +15,7 @@ set (CLICKHOUSE_LOCAL_LINK
         # proton: ends.
 )
 
-clickhouse_program_add(local)
+proton_program_add(local)
 
 if(NOT CLICKHOUSE_ONE_SHARED)
     target_link_libraries(clickhouse-local-lib PRIVATE clickhouse-server-lib)

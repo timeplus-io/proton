@@ -19,7 +19,7 @@ set (CLICKHOUSE_KEEPER_LINK
     ${LINK_RESOURCE_LIB}
 )
 
-clickhouse_program_add(keeper)
+proton_program_add(keeper)
 
 install (FILES keeper_config.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-keeper" COMPONENT proton-keeper)
 

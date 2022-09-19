@@ -1,6 +1,6 @@
 enable_language(ASM)
 
-add_executable (memcpy-bench
+proton_add_executable (memcpy-bench
     memcpy-bench.cpp
     FastMemcpy.cpp
     FastMemcpy_Avx.cpp
