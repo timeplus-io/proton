@@ -139,7 +139,7 @@ def start_server(requests_amount):
 # Testing area.
 #####################################################################
 
-def test_select(dict_name="", schema="word String, counter UInt32", requests=[], answers=[], test_data=""):
+def test_select(dict_name="", schema="word string, counter uint32", requests=[], answers=[], test_data=""):
     global ADDING_ENDING
     global SEND_ENCODING
     global COMPRESS_METHOD

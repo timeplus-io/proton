@@ -1,8 +1,9 @@
-drop table if exists test_table_url_syntax
+SET query_mode = 'table';
+drop stream if exists test_table_url_syntax
 ;
-create table test_table_url_syntax (id UInt32) ENGINE = URL('')
+create stream test_table_url_syntax (id uint32) ENGINE = URL('')
 ; -- { serverError 36 }
-create table test_table_url_syntax (id UInt32) ENGINE = URL('','','','')
+create stream test_table_url_syntax (id uint32) ENGINE = URL('','','','')
 ; -- { serverError 42 }
-drop table if exists test_table_url_syntax
+drop stream if exists test_table_url_syntax
 ;

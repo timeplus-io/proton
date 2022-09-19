@@ -31,17 +31,17 @@ formats = client.query("SELECT name FROM system.formats WHERE is_input AND is_ou
     AND name NOT IN ('CapnProto', 'RawBLOB', 'Template', 'ProtobufSingle', 'LineAsString', 'Protobuf') ORDER BY name").strip().split('\n')
 
 # Generic formats
-client.query("DROP TABLE IF EXISTS t_async_insert")
-client.query("CREATE TABLE t_async_insert (id UInt64, s String, arr Array(UInt64)) ENGINE = Memory")
-gen_data_query = "SELECT number AS id, toString(number) AS s, range(number) AS arr FROM numbers(10) FORMAT {}"
+client.query("DROP STREAM IF EXISTS t_async_insert")
+client.query("create stream t_async_insert (id uint64, s string, arr array(uint64)) ")
+gen_data_query = "SELECT number AS id, to_string(number) AS s, range(number) AS arr FROM numbers(10) FORMAT {}"
 
 for data_format in formats:
     run_test(data_format, gen_data_query, settings={"async_insert": 1, "wait_for_async_insert": 1})
 
 # LineAsString
-client.query("DROP TABLE IF EXISTS t_async_insert")
-client.query("CREATE TABLE t_async_insert (s String) ENGINE = Memory")
-gen_data_query = "SELECT toString(number) AS s FROM numbers(10) FORMAT {}"
+client.query("DROP STREAM IF EXISTS t_async_insert")
+client.query("create stream t_async_insert (s string) ")
+gen_data_query = "SELECT to_string(number) AS s FROM numbers(10) FORMAT {}"
 
 run_test('LineAsString', gen_data_query, settings={"async_insert": 1, "wait_for_async_insert": 1})
 

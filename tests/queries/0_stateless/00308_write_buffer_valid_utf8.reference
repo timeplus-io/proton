@@ -3,15 +3,15 @@
 	[
 		{
 			"name": "s1",
-			"type": "String"
+			"type": "string"
 		},
 		{
 			"name": "s2",
-			"type": "String"
+			"type": "string"
 		},
 		{
 			"name": "s3",
-			"type": "String"
+			"type": "string"
 		}
 	],
 

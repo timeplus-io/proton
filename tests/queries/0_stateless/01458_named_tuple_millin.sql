@@ -1,17 +1,17 @@
-DROP TABLE IF EXISTS tuple;
+DROP STREAM IF EXISTS tuple;
 
-CREATE TABLE tuple
+create stream tuple
 (
-    `j` Tuple(a Int8, b String)
+    `j` tuple(a int8, b string)
 )
-ENGINE = Memory;
+;
 
-SHOW CREATE TABLE tuple FORMAT TSVRaw;
+SHOW create stream tuple FORMAT TSVRaw;
 DESC tuple;
-DROP TABLE tuple;
+DROP STREAM tuple;
 
-CREATE TABLE tuple ENGINE = Memory AS SELECT CAST((1, 'Test'), 'Tuple(a Int8,  b String)') AS j;
+create stream tuple  AS SELECT CAST((1, 'Test'), 'tuple(a int8,  b string)') AS j;
 
-SHOW CREATE TABLE tuple FORMAT TSVRaw;
+SHOW create stream tuple FORMAT TSVRaw;
 DESC tuple;
-DROP TABLE tuple;
+DROP STREAM tuple;

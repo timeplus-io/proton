@@ -12,9 +12,9 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS enum_mapping_protobuf_00825;
+DROP STREAM IF EXISTS enum_mapping_protobuf_00825;
 
-CREATE TABLE enum_mapping_protobuf_00825
+create stream enum_mapping_protobuf_00825
 (
   x Enum16('First'=-100, 'Second'=0, 'Third'=100)
 ) ENGINE = MergeTree ORDER BY tuple();
@@ -37,4 +37,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO enum_mapping_protobuf_00825 FORMAT Proto
 $CLICKHOUSE_CLIENT --query "SELECT * FROM enum_mapping_protobuf_00825"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE enum_mapping_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM enum_mapping_protobuf_00825"

@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS defaults;
+DROP STREAM IF EXISTS defaults;
 
-CREATE TABLE defaults
+create stream defaults
 (
-	n Int8
-)ENGINE = Memory();
+	n int8
+)();
 
 SELECT sum(n) FROM defaults;
 SELECT sumOrNull(n) FROM defaults;
@@ -33,4 +33,4 @@ SELECT sumOrNull(n) FROM defaults;
 SELECT count(n) FROM defaults;
 SELECT countOrNull(n) FROM defaults;
 
-DROP TABLE defaults;
+DROP STREAM defaults;

@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS table1;
-DROP TABLE IF EXISTS table2;
+DROP STREAM IF EXISTS table1;
+DROP STREAM IF EXISTS table2;
 
-CREATE TABLE table1 (a UInt32, b UInt32) ENGINE = Memory;
-CREATE TABLE table2 (a UInt32, b UInt32) ENGINE = Memory;
+create stream table1 (a uint32, b uint32) ;
+create stream table2 (a uint32, b uint32) ;
 
 INSERT INTO table1 SELECT number, number FROM numbers(10);
 INSERT INTO table2 SELECT number * 2, number * 20 FROM numbers(6);
@@ -37,5 +37,5 @@ from table1 as t1
 join table2 as t2 on t1_a = t2_a
 where (t1.a as t1_a) > 2 and (t2.a as t2_a) > 4;
 
-DROP TABLE table1;
-DROP TABLE table2;
+DROP STREAM table1;
+DROP STREAM table2;

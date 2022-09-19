@@ -1,8 +1,8 @@
 -- Tags: zookeeper, no-replicated-database
 -- Tag no-replicated-database: Old syntax is not allowed
 
-DROP TABLE IF EXISTS deduplication_by_partition;
-CREATE TABLE deduplication_by_partition(d Date, x UInt32) ENGINE =
+DROP STREAM IF EXISTS deduplication_by_partition;
+create stream deduplication_by_partition(d date, x uint32) ENGINE =
     ReplicatedMergeTree('/clickhouse/tables/{database}/test_00516/deduplication_by_partition', 'r1', d, x, 8192);
 
 INSERT INTO deduplication_by_partition VALUES ('2000-01-01', 1);
@@ -16,7 +16,7 @@ SELECT '*** Before DROP PARTITION ***';
 
 SELECT * FROM deduplication_by_partition ORDER BY d, x;
 
-ALTER TABLE deduplication_by_partition DROP PARTITION 200001;
+ALTER STREAM deduplication_by_partition DROP PARTITION 200001;
 
 SELECT '*** After DROP PARTITION ***';
 
@@ -34,4 +34,4 @@ SELECT '*** After INSERT ***';
 
 SELECT * FROM deduplication_by_partition ORDER BY d, x;
 
-DROP TABLE deduplication_by_partition;
+DROP STREAM deduplication_by_partition;

@@ -18,10 +18,10 @@ trap 'rm $tmp_file' EXIT
 #     - ./src/Server/HTTP/HTMLForm.cpp:245: bool DB::HTMLForm::MultipartReadBuffer::skipToNextBoundary(): Assertion `boundary_hit' failed.
 #     - ./src/IO/LimitReadBuffer.cpp:17: virtual bool DB::LimitReadBuffer::nextImpl(): Assertion `position() >= in->position()' failed.
 #
-$CLICKHOUSE_CLIENT -q "SELECT toString(number) FROM numbers(10e6) FORMAT TSV" > "$tmp_file"
+$CLICKHOUSE_CLIENT -q "SELECT to_string(number) FROM numbers(10e6) FORMAT TSV" > "$tmp_file"
 
 # NOTE: Just in case check w/ input_format_parallel_parsing and w/o
-timeout 0.15s ${CLICKHOUSE_CURL} -sS -F "s=@$tmp_file;" "${CLICKHOUSE_URL}&s_structure=key+Int&query=SELECT+dummy+IN+s&input_format_parallel_parsing=true" -o /dev/null
+timeout 0.15s ${CLICKHOUSE_CURL} -sS -F "s=@$tmp_file;" "${CLICKHOUSE_URL}&s_structure=key+int&query=SELECT+dummy+IN+s&input_format_parallel_parsing=true" -o /dev/null
 echo $?
-timeout 0.15s ${CLICKHOUSE_CURL} -sS -F "s=@$tmp_file;" "${CLICKHOUSE_URL}&s_structure=key+Int&query=SELECT+dummy+IN+s&input_format_parallel_parsing=false" -o /dev/null
+timeout 0.15s ${CLICKHOUSE_CURL} -sS -F "s=@$tmp_file;" "${CLICKHOUSE_URL}&s_structure=key+int&query=SELECT+dummy+IN+s&input_format_parallel_parsing=false" -o /dev/null
 echo $?

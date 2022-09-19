@@ -1,12 +1,13 @@
-drop table if exists alter_ttl;
+SET query_mode = 'table';
+drop stream if exists alter_ttl;
 
-create table alter_ttl(i Int) engine = MergeTree order by i ttl toDate('2020-05-05');
-alter table alter_ttl add column s String;
-alter table alter_ttl modify column s String ttl toDate('2020-01-01');
-show create table alter_ttl;
-drop table alter_ttl;
+create stream alter_ttl(i int) engine = MergeTree order by i ttl to_date('2020-05-05');
+alter stream alter_ttl add column s string;
+alter stream alter_ttl modify column s string ttl to_date('2020-01-01');
+show create stream alter_ttl;
+drop stream alter_ttl;
 
-create table alter_ttl(d Date, s String) engine = MergeTree order by d ttl d + interval 1 month;
-alter table alter_ttl modify column s String ttl d + interval 1 day;
-show create table alter_ttl;
-drop table alter_ttl;
+create stream alter_ttl(d date, s string) engine = MergeTree order by d ttl d + interval 1 month;
+alter stream alter_ttl modify column s string ttl d + interval 1 day;
+show create stream alter_ttl;
+drop stream alter_ttl;

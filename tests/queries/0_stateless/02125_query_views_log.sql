@@ -1,10 +1,11 @@
-drop table if exists src;
-drop table if exists dst;
-drop table if exists mv1;
-drop table if exists mv2;
+SET query_mode = 'table';
+drop stream if exists src;
+drop stream if exists dst;
+drop stream if exists mv1;
+drop stream if exists mv2;
 
-create table src (key Int) engine=Null();
-create table dst (key Int) engine=Null();
+create stream src (key int) engine=Null();
+create stream dst (key int) engine=Null();
 create materialized view mv1 to dst as select * from src;
 create materialized view mv2 to dst as select * from src;
 

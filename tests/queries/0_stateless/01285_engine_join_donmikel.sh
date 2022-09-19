@@ -5,43 +5,43 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT --multiquery --query "
-DROP TABLE IF EXISTS NmSubj;
-DROP TABLE IF EXISTS events;
+DROP STREAM IF EXISTS NmSubj;
+DROP STREAM IF EXISTS events;
 
-create table NmSubj
+create stream NmSubj
 (
-    NmId      UInt32,
-    SubjectId UInt32
+    NmId      uint32,
+    SubjectId uint32
 )
     engine = Join(All, inner, NmId);
 
-create table events
+create stream events
 (
-    EventDate       Date,
+    EventDate       date,
     EventDateTime   DateTime,
-    EventId         String,
+    EventId         string,
     SessionId       FixedString(36),
     PageViewId      FixedString(36),
-    UserId          UInt64,
+    UserId          uint64,
     UniqUserId      FixedString(36),
-    UrlReferrer     String,
-    Param1          String,
-    Param2          String,
-    Param3          String,
-    Param4          String,
-    Param5          String,
-    Param6          String,
-    Param7          String,
-    Param8          String,
-    Param9          String,
-    Param10         String,
-    ApplicationType UInt8,
-    Locale          String,
-    Lang            String,
-    Version         String,
-    Path            String,
-    QueryString     String,
-    UserHostAddress UInt32
+    UrlReferrer     string,
+    Param1          string,
+    Param2          string,
+    Param3          string,
+    Param4          string,
+    Param5          string,
+    Param6          string,
+    Param7          string,
+    Param8          string,
+    Param9          string,
+    Param10         string,
+    ApplicationType uint8,
+    Locale          string,
+    Lang            string,
+    Version         string,
+    Path            string,
+    QueryString     string,
+    UserHostAddress uint32
 )
     engine = MergeTree()
         PARTITION BY (toYYYYMM(EventDate), EventId)
@@ -55,12 +55,12 @@ insert into NmSubj values (1, 1), (2, 2), (3, 3);
 $CLICKHOUSE_CLIENT --query "INSERT INTO events FORMAT TSV" < "${CURDIR}"/01285_engine_join_donmikel.tsv
 
 $CLICKHOUSE_CLIENT --query "
-SELECT toInt32(count() / 24) as Count
+SELECT to_int32(count() / 24) as Count
 FROM events as e INNER JOIN NmSubj as ns
-ON ns.NmId = toUInt32(e.Param1)
+ON ns.NmId = to_uint32(e.Param1)
 WHERE e.EventDate = today() - 7 AND e.EventId = 'GCO' AND ns.SubjectId = 2073"
 
 $CLICKHOUSE_CLIENT --multiquery --query "
-DROP TABLE NmSubj;
-DROP TABLE events;
+DROP STREAM NmSubj;
+DROP STREAM events;
 "

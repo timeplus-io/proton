@@ -10,11 +10,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPLICAS=5
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_alter_mt_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_alter_mt_$i"
 done
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "CREATE TABLE concurrent_alter_mt_$i (key UInt64, value1 UInt64, value2 Int32) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_alter_mt', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000"
+    $CLICKHOUSE_CLIENT --query "create stream concurrent_alter_mt_$i (key uint64, value1 uint64, value2 int32) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_alter_mt', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000"
 done
 
 $CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_alter_mt_1 SELECT number, number + 10, number from numbers(10)"
@@ -35,11 +35,11 @@ INITIAL_SUM=$($CLICKHOUSE_CLIENT --query "SELECT SUM(value1) FROM concurrent_alt
 # between each other, so can be executed concurrently.
 function correct_alter_thread()
 {
-    TYPES=(Float64 String UInt8 UInt32)
+    TYPES=(float64 string uint8 uint32)
     while true; do
         REPLICA=$(($RANDOM % 5 + 1))
         TYPE=${TYPES[$RANDOM % ${#TYPES[@]} ]}
-        $CLICKHOUSE_CLIENT --query "ALTER TABLE concurrent_alter_mt_$REPLICA MODIFY COLUMN value1 $TYPE SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
+        $CLICKHOUSE_CLIENT --query "ALTER STREAM concurrent_alter_mt_$REPLICA MODIFY COLUMN value1 $TYPE SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
         sleep 0.$RANDOM
     done
 }
@@ -64,7 +64,7 @@ function select_thread()
 {
     while true; do
         REPLICA=$(($RANDOM % 5 + 1))
-        $CLICKHOUSE_CLIENT --query "SELECT SUM(toUInt64(value1)) FROM concurrent_alter_mt_$REPLICA" 1>/dev/null
+        $CLICKHOUSE_CLIENT --query "SELECT SUM(to_uint64(value1)) FROM concurrent_alter_mt_$REPLICA" 1>/dev/null
         sleep 0.$RANDOM
     done
 }
@@ -111,7 +111,7 @@ echo "Finishing alters"
 #
 # 120 seconds is more than enough, but in rare cases for slow builds (debug,
 # thread) it maybe necessary.
-while [[ $(timeout 120 ${CLICKHOUSE_CLIENT} --query "ALTER TABLE concurrent_alter_mt_1 MODIFY COLUMN value1 String SETTINGS replication_alter_partitions_sync=2" 2>&1) ]]; do
+while [[ $(timeout 120 ${CLICKHOUSE_CLIENT} --query "ALTER STREAM concurrent_alter_mt_1 MODIFY COLUMN value1 string SETTINGS replication_alter_partitions_sync=2" 2>&1) ]]; do
     sleep 1
 done
 
@@ -119,9 +119,9 @@ check_replication_consistency "concurrent_alter_mt_" "count(), sum(key), sum(cit
 
 for i in $(seq $REPLICAS); do
     $CLICKHOUSE_CLIENT --query "SYSTEM SYNC REPLICA concurrent_alter_mt_$i"
-    $CLICKHOUSE_CLIENT --query "SELECT SUM(toUInt64(value1)) > $INITIAL_SUM FROM concurrent_alter_mt_$i"
+    $CLICKHOUSE_CLIENT --query "SELECT SUM(to_uint64(value1)) > $INITIAL_SUM FROM concurrent_alter_mt_$i"
     $CLICKHOUSE_CLIENT --query "SELECT COUNT() FROM system.mutations WHERE database = '$CLICKHOUSE_DATABASE' and is_done=0 and table = 'concurrent_alter_mt_$i'" # all mutations have to be done
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.mutations WHERE database = '$CLICKHOUSE_DATABASE' and is_done=0 and table = 'concurrent_alter_mt_$i'"
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.replication_queue WHERE table = 'concurrent_alter_mt_$i' and (type = 'ALTER_METADATA' or type = 'MUTATE_PART')"
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_alter_mt_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_alter_mt_$i"
 done

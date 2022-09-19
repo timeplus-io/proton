@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS null_as_default";
-$CLICKHOUSE_CLIENT --query="CREATE TABLE null_as_default (i Int8, s String DEFAULT 'Hello', n UInt64 DEFAULT 42, d Date DEFAULT '2019-06-19', a Array(UInt8) DEFAULT [1, 2, 3], t Tuple(String, Float64) DEFAULT ('default', i / 4)) ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS null_as_default";
+$CLICKHOUSE_CLIENT --query="create stream null_as_default (i int8, s string DEFAULT 'Hello', n uint64 DEFAULT 42, d date DEFAULT '2019-06-19', a array(uint8) DEFAULT [1, 2, 3], t tuple(string, float64) DEFAULT ('default', i / 4)) ";
 
 echo 'CSV'
 echo '\N, 1, \N, "2019-07-22", "[10, 20, 30]", \N
@@ -61,4 +61,4 @@ echo '(NULL, '\''1'\'', (null), '\''2019-07-22'\'', ([10, 20, 30]), (NuLl)),
 (2, null, (123), null, ([]), ('\''test'\'', 2.71828)),
 (3, null, (null), null, (null), (null))' | $CLICKHOUSE_CLIENT --input_format_null_as_default=1 --query="INSERT INTO null_as_default VALUES";
 $CLICKHOUSE_CLIENT --query="SELECT * FROM null_as_default ORDER BY i";
-$CLICKHOUSE_CLIENT --query="DROP TABLE null_as_default";
+$CLICKHOUSE_CLIENT --query="DROP STREAM null_as_default";

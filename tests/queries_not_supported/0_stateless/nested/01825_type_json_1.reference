@@ -1,0 +1,27 @@
+1	aa	bb	c	
+2	ee			ff
+3				foo
+all_1_1_0	data	tuple(k1 string, k2 tuple(k3 string, k4 string), k5 string)
+all_2_2_0	data	tuple(k5 string)
+all_1_2_1	data	tuple(k1 string, k2 tuple(k3 string, k4 string), k5 string)
+============
+1	['aaa','ddd']	[['bbb','ccc'],['eee','fff']]
+all_3_3_0	data	tuple(k1 nested(k2 string, k3 nested(k4 string)))
+============
+1	a	42
+2	b	4200
+4242
+all_4_4_0	data	tuple(name string, value Int16)
+1	a	42
+2	b	4200
+3	a	42.123
+all_4_4_0	data	tuple(name string, value Int16)
+all_5_5_0	data	tuple(name string, value float64)
+1	a	42
+2	b	4200
+3	a	42.123
+4	a	some
+all_4_4_0	data	tuple(name string, value Int16)
+all_5_5_0	data	tuple(name string, value float64)
+all_6_6_0	data	tuple(name string, value string)
+all_4_6_1	data	tuple(name string, value string)

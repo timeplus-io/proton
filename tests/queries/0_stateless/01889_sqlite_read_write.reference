@@ -6,13 +6,13 @@ table3
 table4
 table5
 show creare table:
-CREATE TABLE SQLite.table1\n(\n    `col1` Nullable(String),\n    `col2` Nullable(Int16)\n)\nENGINE = SQLite
-CREATE TABLE SQLite.table2\n(\n    `col1` Nullable(Int32),\n    `col2` Nullable(String)\n)\nENGINE = SQLite
+create stream SQLite.table1\n(\n    `col1` Nullable(string),\n    `col2` Nullable(Int16)\n)\nENGINE = SQLite
+create stream SQLite.table2\n(\n    `col1` Nullable(int32),\n    `col2` Nullable(string)\n)\nENGINE = SQLite
 describe table:
-col1	Nullable(String)					
+col1	Nullable(string)					
 col2	Nullable(Int16)					
-col1	Nullable(Int32)					
-col2	Nullable(String)					
+col1	Nullable(int32)					
+col2	Nullable(string)					
 select *:
 line1	1
 line2	2
@@ -21,10 +21,10 @@ line3	3
 2	text2
 3	text3
 test types
-CREATE TABLE SQLite.table4\n(\n    `a` Nullable(Int32),\n    `b` Nullable(Int32),\n    `c` Nullable(Int8),\n    `d` Nullable(Int16),\n    `e` Nullable(Int32),\n    `bigint` Nullable(String),\n    `int2` Nullable(String),\n    `int8` Nullable(String)\n)\nENGINE = SQLite
-CREATE TABLE SQLite.table5\n(\n    `a` Nullable(String),\n    `b` Nullable(String),\n    `c` Nullable(Float64),\n    `d` Nullable(Float64),\n    `e` Nullable(Float64),\n    `f` Nullable(Float32)\n)\nENGINE = SQLite
-create table engine with table3
-CREATE TABLE default.sqlite_table3\n(\n    `col1` String,\n    `col2` Int32\n)\nENGINE = SQLite
+create stream SQLite.table4\n(\n    `a` Nullable(int32),\n    `b` Nullable(int32),\n    `c` Nullable(int8),\n    `d` Nullable(Int16),\n    `e` Nullable(int32),\n    `bigint` Nullable(string),\n    `int2` Nullable(string),\n    `int8` Nullable(string)\n)\nENGINE = SQLite
+create stream SQLite.table5\n(\n    `a` Nullable(string),\n    `b` Nullable(string),\n    `c` Nullable(float64),\n    `d` Nullable(float64),\n    `e` Nullable(float64),\n    `f` Nullable(Float32)\n)\nENGINE = SQLite
+create stream engine with table3
+create stream default.sqlite_table3\n(\n    `col1` string,\n    `col2` int32\n)\nENGINE = SQLite
 	1
 not a null	2
 	3

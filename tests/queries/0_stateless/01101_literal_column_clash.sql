@@ -1,11 +1,11 @@
 -- https://github.com/ClickHouse/ClickHouse/issues/9810
-select cast(1 as String)
+select cast(1 as string)
 from (select 1 as iid) as t1
-join (select '1' as sid) as t2 on t2.sid = cast(t1.iid as String);
+join (select '1' as sid) as t2 on t2.sid = cast(t1.iid as string);
 
 -- even simpler cases
-select cast(7 as String), * from (select 3 "'String'");
-select cast(7 as String), * from (select number "'String'" FROM numbers(2));
+select cast(7 as string), * from (select 3 "'string'");
+select cast(7 as string), * from (select number "'string'" FROM numbers(2));
 SELECT concat('xyz', 'abc'), * FROM (SELECT 2 AS "'xyz'");
 with 3 as "1" select 1, "1"; -- { serverError 352 }
 
@@ -17,9 +17,9 @@ select null, isConstant(null), * from (select 2 x, null) a right join (select 3 
 
 -- other cases with joins and constants
 
-select cast(1, 'UInt8') from (select arrayJoin([1, 2]) as a) t1 left join (select 1 as b) t2 on b = ignore('UInt8'); -- { serverError 403 }
+select cast(1, 'uint8') from (select array_join([1, 2]) as a) t1 left join (select 1 as b) t2 on b = ignore('uint8'); -- { serverError 403 }
 
-select isConstant('UInt8'), toFixedString('hello', toUInt8(substring('UInt8', 5, 1))) from (select arrayJoin([1, 2]) as a) t1 left join (select 1 as b) t2 on b = ignore('UInt8');  -- { serverError 403 }
+select isConstant('uint8'), to_fixed_string('hello', to_uint8(substring('uint8', 5, 1))) from (select array_join([1, 2]) as a) t1 left join (select 1 as b) t2 on b = ignore('uint8');  -- { serverError 403 }
 
 -- https://github.com/ClickHouse/ClickHouse/issues/20624
-select 2 as `toString(x)`, x from (select 1 as x);
+select 2 as `to_string(x)`, x from (select 1 as x);

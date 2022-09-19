@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS empty;
-DROP TABLE IF EXISTS data;
+DROP STREAM IF EXISTS empty;
+DROP STREAM IF EXISTS data;
 
-CREATE TABLE empty (value Int8) ENGINE = TinyLog;
-CREATE TABLE data (value Int8) ENGINE = TinyLog;
+create stream empty (value int8) ;
+create stream data (value int8) ;
 
 INSERT INTO data SELECT * FROM empty;
 SELECT * FROM data;
@@ -10,5 +10,5 @@ SELECT * FROM data;
 INSERT INTO data SELECT 1;
 SELECT * FROM data;
 
-DROP TABLE empty;
-DROP TABLE data;
+DROP STREAM empty;
+DROP STREAM data;

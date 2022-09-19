@@ -1,12 +1,12 @@
-DROP TABLE IF EXISTS test.basic;
-DROP TABLE IF EXISTS test.visits_null;
+DROP STREAM IF EXISTS test.basic;
+DROP STREAM IF EXISTS test.visits_null;
 
 CREATE TABLE test.visits_null
 (
     CounterID UInt32,
-    StartDate Date,
-    Sign Int8,
-    UserID UInt64
+    StartDate date,
+    Sign int8,
+    UserID uint64
 ) ENGINE = Null;
 
 CREATE MATERIALIZED VIEW test.basic
@@ -57,17 +57,17 @@ GROUP BY StartDate
 ORDER BY StartDate;
 
 
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
-OPTIMIZE TABLE test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
+OPTIMIZE STREAM test.basic;
 
 
-DROP TABLE test.visits_null;
-DROP TABLE test.basic;
+DROP STREAM test.visits_null;
+DROP STREAM test.basic;

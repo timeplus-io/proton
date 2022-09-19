@@ -38,7 +38,7 @@ CustomSeparatedWithNamesAndTypes
 <result_before_delimiter>
 <row_before_delimiter>"x"<field_delimiter>"y"<field_delimiter>"s"<row_after_delimieter>
 <row_between_delimiter>
-<row_before_delimiter>"UInt64"<field_delimiter>"UInt64"<field_delimiter>"String"<row_after_delimieter>
+<row_before_delimiter>"uint64"<field_delimiter>"uint64"<field_delimiter>"string"<row_after_delimieter>
 <row_between_delimiter>
 <row_before_delimiter>0<field_delimiter>1<field_delimiter>"hello"<row_after_delimieter>
 <row_between_delimiter>

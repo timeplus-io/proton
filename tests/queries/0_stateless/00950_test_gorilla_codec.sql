@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS codecTest;
+DROP STREAM IF EXISTS codecTest;
 
-CREATE TABLE codecTest (
-    key      UInt64,
-    name     String,
-    ref_valueF64 Float64,
+create stream codecTest (
+    key      uint64,
+    name     string,
+    ref_valueF64 float64,
     ref_valueF32 Float32,
-    valueF64 Float64  CODEC(Gorilla),
+    valueF64 float64  CODEC(Gorilla),
     valueF32 Float32  CODEC(Gorilla)
 ) Engine = MergeTree ORDER BY key;
 
@@ -58,4 +58,4 @@ AND
 	c2.key = c1.key - 1
 LIMIT 10;
 
-DROP TABLE IF EXISTS codecTest;
+DROP STREAM IF EXISTS codecTest;

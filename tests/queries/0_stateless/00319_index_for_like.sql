@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS index_for_like;
-CREATE TABLE index_for_like (s String, d Date DEFAULT today()) ENGINE = MergeTree(d, (s, d), 1);
+DROP STREAM IF EXISTS index_for_like;
+create stream index_for_like (s string, d date DEFAULT today()) ENGINE = MergeTree(d, (s, d), 1);
 
 INSERT INTO index_for_like (s) VALUES ('Hello'), ('Hello, World'), ('Hello, World 1'), ('Hello 1'), ('Goodbye'), ('Goodbye, World'), ('Goodbye 1'), ('Goodbye, World 1'); 
 
@@ -51,4 +51,4 @@ SELECT s FROM index_for_like WHERE s LIKE 'Hello, Worl_%';
 SET max_rows_to_read = 1;
 SELECT s FROM index_for_like WHERE s LIKE 'Hello, Worl\\_%';
 
-DROP TABLE index_for_like;
+DROP STREAM index_for_like;

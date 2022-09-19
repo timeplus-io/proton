@@ -1,7 +1,7 @@
 -- Tags: no-parallel, no-fasttest
 
-DROP TABLE IF EXISTS rollup;
-CREATE TABLE rollup(a String, b Int32, s Int32) ENGINE = Memory;
+DROP STREAM IF EXISTS rollup;
+create stream rollup(a string, b int32, s int32) ;
 
 INSERT INTO rollup VALUES ('a', 1, 10), ('a', 1, 15), ('a', 2, 20);
 INSERT INTO rollup VALUES ('a', 2, 25), ('b', 1, 10), ('b', 1, 5);
@@ -22,4 +22,4 @@ SET group_by_two_level_threshold = 1;
 SELECT a, sum(s), count() from rollup GROUP BY a WITH ROLLUP ORDER BY a;
 SELECT a, b, sum(s), count() from rollup GROUP BY a, b WITH ROLLUP ORDER BY a, b;
 
-DROP TABLE rollup;
+DROP STREAM rollup;

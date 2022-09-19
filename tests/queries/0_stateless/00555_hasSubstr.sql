@@ -11,7 +11,7 @@ select hasSubstr([1, Null], [3, 4, Null]);
 select '-';
 
 
-select hasSubstr([1], emptyArrayUInt8());
+select hasSubstr([1], empty_array_uint8());
 select '-';
 
 select hasSubstr([1, 2, 3, 4], [1, 3]);

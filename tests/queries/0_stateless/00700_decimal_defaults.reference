@@ -1,7 +1,7 @@
 a	Decimal(9, 4)	DEFAULT	0			
 b	Decimal(18, 4)	DEFAULT	a / 2			
 c	Decimal(38, 4)	DEFAULT	b / 3			
-d	Decimal(9, 4)	MATERIALIZED	a + toDecimal32(\'0.2\', 1)			
+d	Decimal(9, 4)	MATERIALIZED	a + to_decimal32(\'0.2\', 1)			
 e	Decimal(18, 4)	ALIAS	b * 2			
 f	Decimal(38, 4)	ALIAS	c * 6			
 0	0	0

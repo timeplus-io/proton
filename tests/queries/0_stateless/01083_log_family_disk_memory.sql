@@ -1,19 +1,6 @@
-DROP TABLE IF EXISTS log;
+DROP STREAM IF EXISTS log;
 
-CREATE TABLE log (x UInt8) ENGINE = StripeLog () SETTINGS disk = 'disk_memory';
-
-SELECT * FROM log ORDER BY x;
-INSERT INTO log VALUES (0);
-SELECT * FROM log ORDER BY x;
-INSERT INTO log VALUES (1);
-SELECT * FROM log ORDER BY x;
-INSERT INTO log VALUES (2);
-SELECT * FROM log ORDER BY x;
-
-TRUNCATE TABLE log;
-DROP TABLE log;
-
-CREATE TABLE log (x UInt8) ENGINE = TinyLog () SETTINGS disk = 'disk_memory';
+create stream log (x uint8) ENGINE = StripeLog () SETTINGS disk = 'disk_memory';
 
 SELECT * FROM log ORDER BY x;
 INSERT INTO log VALUES (0);
@@ -24,9 +11,9 @@ INSERT INTO log VALUES (2);
 SELECT * FROM log ORDER BY x;
 
 TRUNCATE TABLE log;
-DROP TABLE log;
+DROP STREAM log;
 
-CREATE TABLE log (x UInt8) ENGINE = Log () SETTINGS disk = 'disk_memory';
+create stream log (x uint8)  () SETTINGS disk = 'disk_memory';
 
 SELECT * FROM log ORDER BY x;
 INSERT INTO log VALUES (0);
@@ -37,4 +24,17 @@ INSERT INTO log VALUES (2);
 SELECT * FROM log ORDER BY x;
 
 TRUNCATE TABLE log;
-DROP TABLE log;
+DROP STREAM log;
+
+create stream log (x uint8)   () SETTINGS disk = 'disk_memory';
+
+SELECT * FROM log ORDER BY x;
+INSERT INTO log VALUES (0);
+SELECT * FROM log ORDER BY x;
+INSERT INTO log VALUES (1);
+SELECT * FROM log ORDER BY x;
+INSERT INTO log VALUES (2);
+SELECT * FROM log ORDER BY x;
+
+TRUNCATE TABLE log;
+DROP STREAM log;

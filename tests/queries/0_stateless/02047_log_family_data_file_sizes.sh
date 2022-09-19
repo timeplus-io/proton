@@ -9,8 +9,8 @@ for engine in "${engines[@]}"
 do
     echo "$engine:"
 
-    $CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS tbl"
-    $CLICKHOUSE_CLIENT --query="CREATE TABLE tbl(x UInt32, y String) ENGINE=$engine"
+    $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS tbl"
+    $CLICKHOUSE_CLIENT --query="create stream tbl(x uint32, y string) ENGINE=$engine"
     data_dir=$($CLICKHOUSE_CLIENT --query="SELECT data_paths[1] FROM system.tables WHERE name='tbl' AND database=currentDatabase()")
 
     echo "empty:"

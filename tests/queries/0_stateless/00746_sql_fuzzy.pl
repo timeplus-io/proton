@@ -84,8 +84,8 @@ sub file_read ($) {
 }
 
 our ($query, $query_select, $expression_cast, $expression, $type, $type_cast, $functions, $table_functions);
-$type_cast = {map { $_ => $_ } qw(DateTime Date String)};
-$type = {%$type_cast, (map { $_ => $_ } qw(Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64 Float32 Float64))};
+$type_cast = {map { $_ => $_ } qw(DateTime date string)};
+$type = {%$type_cast, (map { $_ => $_ } qw(int8 Int16 int32 int64 uint8 uint16 uint32 uint64 Float32 float64))};
 $type->{"Nullable($_)"} = "Nullable($_)" for values %$type;
 # AS, LIKE, NOT LIKE, IN, NOT IN, GLOBAL IN, GLOBAL NOT IN, BETWEEN, IS, ClosingRoundBracket, Comma, Dot, Arrow, QuestionMark, OR, AND
 

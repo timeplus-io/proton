@@ -22,8 +22,8 @@ mkdir -p ${CLICKHOUSE_USER_FILES_PATH}/dir
 
 
 ### 1st TEST in CLIENT mode.
-${CLICKHOUSE_CLIENT} --query "drop table if exists data;"
-${CLICKHOUSE_CLIENT} --query "create table data (A String, B String) engine=MergeTree() order by A;"
+${CLICKHOUSE_CLIENT} --query "drop stream if exists data;"
+${CLICKHOUSE_CLIENT} --query "create stream data (A string, B string) engine=MergeTree() order by A;"
 
 
 # Valid cases:
@@ -32,10 +32,10 @@ ${CLICKHOUSE_CLIENT} --query "insert into data select file('a.txt'), file('b.txt
 ${CLICKHOUSE_CLIENT} --query "insert into data select file('a.txt'), file('b.txt');";echo ":"$?
 ${CLICKHOUSE_CLIENT} --query "select file('c.txt'), * from data";echo ":"$?
 ${CLICKHOUSE_CLIENT} --multiquery --query "
-    create table filenames(name String) engine=MergeTree() order by tuple();
+    create stream filenames(name string) engine=MergeTree() order by tuple();
     insert into filenames values ('a.txt'), ('b.txt'), ('c.txt');
     select file(name) from filenames format TSV;
-    drop table if exists filenames;
+    drop stream if exists filenames;
 "
 
 # Invalid cases: (Here using sub-shell to catch exception avoiding the test quit)
@@ -64,8 +64,8 @@ echo $c_count
 # Valid cases:
 # The default dir is the CWD path in LOCAL mode
 ${CLICKHOUSE_LOCAL} --query "
-    drop table if exists data;
-    create table data (A String, B String) engine=MergeTree() order by A;
+    drop stream if exists data;
+    create stream data (A string, B string) engine=MergeTree() order by A;
     select file('a.txt'), file('b.txt');
     insert into data select file('a.txt'), file('b.txt');
     insert into data select file('a.txt'), file('b.txt');
@@ -89,8 +89,8 @@ echo -n Hello > ${CLICKHOUSE_USER_FILES_PATH}/a
 echo -n Hello > ${CLICKHOUSE_USER_FILES_PATH}/b
 echo -n World > ${CLICKHOUSE_USER_FILES_PATH}/c
 
-${CLICKHOUSE_CLIENT} --query "SELECT file(arrayJoin(['a', 'b', 'c'])) AS s, count() GROUP BY s ORDER BY s"
-${CLICKHOUSE_CLIENT} --query "SELECT s, count() FROM file('?', TSV, 's String') GROUP BY s ORDER BY s"
+${CLICKHOUSE_CLIENT} --query "SELECT file(array_join(['a', 'b', 'c'])) AS s, count() GROUP BY s ORDER BY s"
+${CLICKHOUSE_CLIENT} --query "SELECT s, count() FROM file('?', TSV, 's string') GROUP BY s ORDER BY s"
 
 # Restore
 rm ${CLICKHOUSE_USER_FILES_PATH}/{a,b,c}.txt

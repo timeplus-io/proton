@@ -8,11 +8,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS local"
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS distributed"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS local"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS distributed"
 
-$CLICKHOUSE_CLIENT --query "CREATE TABLE local (x UInt8) ENGINE = Memory;"
-$CLICKHOUSE_CLIENT --query "CREATE TABLE distributed AS local ENGINE = Distributed(test_cluster_two_shards, currentDatabase(), local, x);"
+$CLICKHOUSE_CLIENT --query "create stream local (x uint8) ;"
+$CLICKHOUSE_CLIENT --query "create stream distributed AS local ENGINE = Distributed(test_cluster_two_shards, currentDatabase(), local, x);"
 
 $CLICKHOUSE_CLIENT --insert_distributed_sync=0 --network_compression_method='zstd' --query "INSERT INTO distributed SELECT number FROM numbers(256);"
 $CLICKHOUSE_CLIENT --insert_distributed_sync=0 --network_compression_method='zstd' --query "SYSTEM FLUSH DISTRIBUTED distributed;"
@@ -44,5 +44,5 @@ wait
 
 $CLICKHOUSE_CLIENT --query "SELECT 1"
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS local"
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS distributed"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS local"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS distributed"

@@ -3,19 +3,19 @@ SELECT
     v
 FROM t_02147
 ORDER BY
-    toStartOfHour(date) ASC,
+    to_start_of_hour(date) ASC,
     v ASC
 SELECT
     date,
     v
 FROM t_02147_dist
 ORDER BY
-    toStartOfHour(date) ASC,
+    to_start_of_hour(date) ASC,
     v ASC
 SELECT
     date,
     v
 FROM t_02147_merge
 ORDER BY
-    toStartOfHour(date) ASC,
+    to_start_of_hour(date) ASC,
     v ASC

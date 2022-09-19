@@ -1,10 +1,11 @@
 SET optimize_on_insert = 0;
 
-DROP TABLE IF EXISTS tags;
+SET query_mode = 'table';
+DROP STREAM IF EXISTS tags;
 
-CREATE TABLE tags (
-    id String,
-    seqs Array(UInt8),
+create stream tags (
+    id string,
+    seqs array(uint8),
     create_time DateTime DEFAULT now()
 ) engine=ReplacingMergeTree()
 ORDER BY (id);
@@ -18,16 +19,16 @@ FROM tags
 WHERE id LIKE 'id%'
 GROUP BY id;
 
-DROP TABLE tags;
+DROP STREAM tags;
 
 
 -- https://github.com/ClickHouse/ClickHouse/issues/15294
 
-drop table if exists TestTable;
+drop stream if exists TestTable;
 
-create table TestTable (column String, start DateTime, end DateTime) engine MergeTree order by start;
+create stream TestTable (column string, start DateTime, end DateTime) engine MergeTree order by start;
 
-insert into TestTable (column, start, end) values('test', toDateTime('2020-07-20 09:00:00'), toDateTime('2020-07-20 20:00:00')),('test1', toDateTime('2020-07-20 09:00:00'), toDateTime('2020-07-20 20:00:00')),('test2', toDateTime('2020-07-20 09:00:00'), toDateTime('2020-07-20 20:00:00'));
+insert into TestTable (column, start, end) values('test', to_datetime('2020-07-20 09:00:00'), to_datetime('2020-07-20 20:00:00')),('test1', to_datetime('2020-07-20 09:00:00'), to_datetime('2020-07-20 20:00:00')),('test2', to_datetime('2020-07-20 09:00:00'), to_datetime('2020-07-20 20:00:00'));
 
 SELECT column,
 (SELECT d from (select [1, 2, 3, 4] as d)) as d
@@ -35,16 +36,16 @@ FROM TestTable
 where column == 'test'
 GROUP BY column;
 
-drop table TestTable;
+drop stream TestTable;
 
 -- https://github.com/ClickHouse/ClickHouse/issues/11407
 
-drop table if exists aaa;
-drop table if exists bbb;
+drop stream if exists aaa;
+drop stream if exists bbb;
 
-CREATE TABLE aaa (
-    id UInt16,
-    data String
+create stream aaa (
+    id uint16,
+    data string
 )
 ENGINE = MergeTree()
 PARTITION BY tuple()
@@ -52,9 +53,9 @@ ORDER BY id;
 
 INSERT INTO aaa VALUES (1, 'sef'),(2, 'fre'),(3, 'jhg');
 
-CREATE TABLE bbb (
-    id UInt16,
-    data String
+create stream bbb (
+    id uint16,
+    data string
 )
 ENGINE = MergeTree()
 PARTITION BY tuple()
@@ -62,12 +63,12 @@ ORDER BY id;
 
 INSERT INTO bbb VALUES (2, 'fre'), (3, 'jhg');
 
-with (select groupArray(id) from bbb) as ids
+with (select group_array(id) from bbb) as ids
 select *
   from aaa
  where has(ids, id)
 order by id;
 
 
-drop table aaa;
-drop table bbb;
+drop stream aaa;
+drop stream bbb;

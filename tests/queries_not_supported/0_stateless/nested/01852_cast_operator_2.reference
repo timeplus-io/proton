@@ -1,0 +1,13 @@
+(0.1,0.2)
+SELECT CAST(\'(0.1, 0.2)\', \'tuple(Decimal(75, 70), Decimal(75, 70))\')
+0.1
+SELECT CAST(\'0.1\', \'Decimal(4, 4)\')
+[1,2,3]
+SELECT CAST(\'[1, 2, 3]\', \'array(int32)\')
+[1,2]
+SELECT CAST([CAST(\'1\', \'uint32\'), CAST(\'2\', \'uint32\')], \'array(uint64)\')
+[[1,2],[3]]
+SELECT CAST([CAST(\'[1, 2]\', \'array(uint32)\'), [3]], \'array(array(uint64))\')
+[[1,2],[3]]
+SELECT CAST([CAST([CAST(\'1\', \'UInt16\'), CAST(\'2\', \'UInt16\')], \'array(uint32)\'), [3]], \'array(array(uint64))\')
+[(1,'a'),(3,'b')]	nested(u uint8, s string)

@@ -26,8 +26,8 @@ def insert_block(table_name, block_granularity_rows, block_rows):
     client.query("INSERT INTO {} VALUES {}".format(table_name, values_row))
 
 try:
-    client.query("DROP TABLE IF EXISTS t")
-    client.query("CREATE TABLE t (v UInt8, data String) ENGINE = MergeTree() ORDER BY tuple() SETTINGS min_bytes_for_wide_part = 0")
+    client.query("DROP STREAM IF EXISTS t")
+    client.query("create stream t (v uint8, data string) ENGINE = MergeTree() ORDER BY tuple() SETTINGS min_bytes_for_wide_part = 0")
 
     client.query("SYSTEM STOP MERGES t")
 
@@ -51,8 +51,8 @@ try:
     insert_block("t", block_granularity_rows=6092, block_rows=6092)
 
     client.query("SYSTEM START MERGES t")
-    client.query("OPTIMIZE TABLE t FINAL")
+    client.query("OPTIMIZE STREAM t FINAL")
 
     print(client.query_return_df("SELECT COUNT() as C FROM t FORMAT TabSeparatedWithNames")['C'][0])
 finally:
-    client.query("DROP TABLE IF EXISTS t")
+    client.query("DROP STREAM IF EXISTS t")

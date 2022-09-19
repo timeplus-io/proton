@@ -1,18 +1,6 @@
-DROP TABLE IF EXISTS log;
+DROP STREAM IF EXISTS log;
 
-CREATE TABLE log (x UInt8) ENGINE = StripeLog;
-
-SELECT * FROM log ORDER BY x;
-INSERT INTO log VALUES (0);
-SELECT * FROM log ORDER BY x;
-INSERT INTO log VALUES (1);
-SELECT * FROM log ORDER BY x;
-INSERT INTO log VALUES (2);
-SELECT * FROM log ORDER BY x;
-
-DROP TABLE log;
-
-CREATE TABLE log (x UInt8) ENGINE = TinyLog;
+create stream log (x uint8) ENGINE = StripeLog;
 
 SELECT * FROM log ORDER BY x;
 INSERT INTO log VALUES (0);
@@ -22,9 +10,9 @@ SELECT * FROM log ORDER BY x;
 INSERT INTO log VALUES (2);
 SELECT * FROM log ORDER BY x;
 
-DROP TABLE log;
+DROP STREAM log;
 
-CREATE TABLE log (x UInt8) ENGINE = Log;
+create stream log (x uint8) ;
 
 SELECT * FROM log ORDER BY x;
 INSERT INTO log VALUES (0);
@@ -34,4 +22,16 @@ SELECT * FROM log ORDER BY x;
 INSERT INTO log VALUES (2);
 SELECT * FROM log ORDER BY x;
 
-DROP TABLE log;
+DROP STREAM log;
+
+create stream log (x uint8)  ;
+
+SELECT * FROM log ORDER BY x;
+INSERT INTO log VALUES (0);
+SELECT * FROM log ORDER BY x;
+INSERT INTO log VALUES (1);
+SELECT * FROM log ORDER BY x;
+INSERT INTO log VALUES (2);
+SELECT * FROM log ORDER BY x;
+
+DROP STREAM log;

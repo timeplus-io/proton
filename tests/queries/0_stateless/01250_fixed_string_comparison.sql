@@ -1,4 +1,4 @@
-WITH 'abb' AS b, 'abc' AS c, 'abd' AS d, toFixedString(b, 5) AS bf, toFixedString(c, 5) AS cf, toFixedString(d, 5) AS df
+WITH 'abb' AS b, 'abc' AS c, 'abd' AS d, to_fixed_string(b, 5) AS bf, to_fixed_string(c, 5) AS cf, to_fixed_string(d, 5) AS df
 SELECT
     b = b, b > b, b < b,
     b = c, b > c, b < c,

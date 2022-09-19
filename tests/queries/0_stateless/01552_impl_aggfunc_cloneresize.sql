@@ -1,17 +1,18 @@
-drop table if EXISTS test_bm;
+SET query_mode = 'table';
+drop stream if EXISTS test_bm;
 
-drop table if EXISTS test_bm_join;
+drop stream if EXISTS test_bm_join;
 
-create table test_bm(
-	dim UInt64,
-	id UInt64 ) 
+create stream test_bm(
+	dim uint64,
+	id uint64 ) 
 ENGINE = MergeTree()
 ORDER BY( dim, id )
 SETTINGS index_granularity = 8192;
 
-create table test_bm_join( 
-  dim UInt64,
-  id UInt64 )
+create stream test_bm_join( 
+  dim uint64,
+  id uint64 )
 ENGINE = MergeTree()
 ORDER BY(dim,id)
 SETTINGS index_granularity = 8192;
@@ -31,7 +32,7 @@ right join(
 		(
 		select
 			dim,
-			groupBitmapState(toUInt64(id)) as ids
+			groupBitmapState(to_uint64(id)) as ids
 		FROM
 			test_bm
 		where
@@ -41,7 +42,7 @@ right join(
 	right join (
 		select
 			dim,
-			groupBitmapState(toUInt64(id)) as ids2
+			groupBitmapState(to_uint64(id)) as ids2
 		FROM
 			test_bm
 		where
@@ -52,6 +53,6 @@ right join(
 using(dim)
 group by dim;
 
-drop table test_bm;
+drop stream test_bm;
 
-drop table test_bm_join;
+drop stream test_bm_join;

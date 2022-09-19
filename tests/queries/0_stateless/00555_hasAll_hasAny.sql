@@ -18,8 +18,8 @@ select hasAny([1], [Null]);
 select hasAny([1, Null], [Null]);
 select '-';
 
-select hasAll([1], emptyArrayUInt8());
-select hasAny([1], emptyArrayUInt8());
+select hasAll([1], empty_array_uint8());
+select hasAny([1], empty_array_uint8());
 select '-';
 
 select hasAny([1, 2, 3, 4], [5, 6]);

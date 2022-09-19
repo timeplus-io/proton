@@ -1,0 +1,10 @@
+	test_01602a	CREATE TEMPORARY STREAM test_01602a (`x` uint32) 	Memory	Memory	1
+	test_01602b	CREATE TEMPORARY STREAM test_01602b (`y` float64, `z` string) 	Memory	Memory	1
+	test_01602a	x	uint32	1			0	0	0		0	0	0	0		\N	32	2	0	\N
+	test_01602b	y	float64	1			0	0	0		0	0	0	0		\N	\N	\N	\N	\N
+	test_01602b	z	string	2			0	0	0		0	0	0	0		\N	\N	\N	\N	\N
+CREATE TEMPORARY STREAM test_01602a\n(\n    `x` uint32\n)\nENGINE = Memory
+CREATE TEMPORARY STREAM test_01602b\n(\n    `y` float64,\n    `z` string\n)\nENGINE = Memory
+0
+0
+0

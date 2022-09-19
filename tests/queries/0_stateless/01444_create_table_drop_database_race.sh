@@ -21,7 +21,7 @@ function thread1()
 function thread2()
 {
     while true; do
-        ${CLICKHOUSE_CLIENT} --query="CREATE TABLE IF NOT EXISTS test_01444.t$RANDOM (x UInt8) ENGINE = MergeTree ORDER BY tuple()" 2>/dev/null
+        ${CLICKHOUSE_CLIENT} --query="create stream IF NOT EXISTS test_01444.t$RANDOM (x uint8) ENGINE = MergeTree ORDER BY tuple()" 2>/dev/null
     done
 }
 

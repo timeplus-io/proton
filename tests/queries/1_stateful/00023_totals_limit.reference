@@ -7,7 +7,7 @@
 		},
 		{
 			"name": "uniqIf(UserID, and(notEquals(UserID, 0), equals(_uniq_Goals, 1)))",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 

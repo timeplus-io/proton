@@ -409,7 +409,7 @@ Code: 33. DB::ParsingEx---tion: Error while reading Parquet data: IOError: Unkno
 1454480831	67	Jonathan	Ellis	jellis1u@g.co	Male	125.115.227.203		China	4/5/1991	268468.96	Staff Scientist	　
 1454460516	68	Rachel	Price	rprice1v@census.gov	Female	89.52.192.105		Indonesia	5/6/1982	234502.16	Payment Adjustment Coordinator	
 1454492257	69	Harold	Olson	holson1w@chronoengine.com	Male	169.173.35.139		China	7/25/1994	146917.43	Occupational Therapist	
-1454524497	70	Pamela	Wagner	pwagner1x@gravatar.com	Female	184.97.191.144	5593584893781844	Italy	5/3/1964	253108.75	Automation Specialist I	1;DROP TABLE users
+1454524497	70	Pamela	Wagner	pwagner1x@gravatar.com	Female	184.97.191.144	5593584893781844	Italy	5/3/1964	253108.75	Automation Specialist I	1;drop stream users
 1454537805	71	Stephanie	Watkins	swatkins1y@rakuten.co.jp		124.183.29.113	30552863095190	Burkina Faso	8/29/1971	\N	Physical Therapy Assistant	
 1454530454	72	John	Ortiz	jortiz1z@mozilla.org	Male	4.70.220.127	5194470971764378	Sweden	2/13/1978	91566.02	Analyst Programmer	
 1454523864	73	Kimberly	Wheeler	kwheeler20@imgur.com	Female	26.46.50.55		China	11/6/1978	31026.94	Junior Executive	

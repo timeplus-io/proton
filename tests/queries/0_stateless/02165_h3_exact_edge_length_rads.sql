@@ -1,8 +1,8 @@
 -- Tags: no-fasttest
 
-DROP TABLE IF EXISTS h3_indexes;
+DROP STREAM IF EXISTS h3_indexes;
 
-CREATE TABLE h3_indexes (h3_index UInt64) ENGINE = Memory;
+create stream h3_indexes (h3_index uint64) ;
 
 -- Test h3 indices selected from original test fixture: https://github.com/uber/h3/blob/master/src/apps/testapps/testH3CellAreaExhaustive.c
 
@@ -25,5 +25,5 @@ INSERT INTO h3_indexes VALUES (1242009915283734527);
 
 SELECT h3ExactEdgeLengthRads(h3_index) FROM h3_indexes ORDER BY h3_index;
 
-DROP TABLE h3_indexes;
+DROP STREAM h3_indexes;
 

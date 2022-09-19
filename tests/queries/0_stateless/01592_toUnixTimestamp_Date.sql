@@ -1,1 +1,1 @@
-select toUnixTimestamp(today()); -- { serverError 44; }
+select to_unix_timestamp(today()); -- { serverError 44; }

@@ -12,7 +12,7 @@ FROM
         runningDifference(cityHash64(t.1)) AS i
     FROM
     (
-        SELECT arrayJoin([(\'a\', 1), (\'a\', 2), (\'a\', 3), (\'b\', 11), (\'b\', 13), (\'b\', 15)]) AS t
+        SELECT array_join([(\'a\', 1), (\'a\', 2), (\'a\', 3), (\'b\', 11), (\'b\', 13), (\'b\', 15)]) AS t
     )
 )
 WHERE i = 0
@@ -98,10 +98,10 @@ FROM
         id,
         id_b
     FROM A
-    WHERE ts <= toDateTime(\'1970-01-01 03:00:00\')
+    WHERE ts <= to_datetime(\'1970-01-01 03:00:00\')
 ) AS a
 ALL LEFT JOIN B AS b ON b.id = id_b
-WHERE ts <= toDateTime(\'1970-01-01 03:00:00\')
+WHERE ts <= to_datetime(\'1970-01-01 03:00:00\')
 SELECT
     ts AS `--a.ts`,
     id AS `--a.id`,
@@ -116,10 +116,10 @@ FROM
         id,
         id_b
     FROM A
-    WHERE ts <= toDateTime(\'1970-01-01 03:00:00\')
+    WHERE ts <= to_datetime(\'1970-01-01 03:00:00\')
 ) AS a
 ALL LEFT JOIN B AS b ON `--b.id` = `--a.id_b`
-WHERE `--a.ts` <= toDateTime(\'1970-01-01 03:00:00\')
+WHERE `--a.ts` <= to_datetime(\'1970-01-01 03:00:00\')
 2	3
 3	4
 4	5
@@ -133,9 +133,9 @@ FROM
 (
     SELECT dummy
     FROM system.one
-    WHERE arrayMap(x -> (x + 1), [dummy]) = [1]
+    WHERE array_map(x -> (x + 1), [dummy]) = [1]
 )
-WHERE arrayMap(x -> (x + 1), [dummy]) = [1]
+WHERE array_map(x -> (x + 1), [dummy]) = [1]
 0
 SELECT
     id,
@@ -153,7 +153,7 @@ ALL INNER JOIN
         1 AS id,
         3 AS value_1
 ) USING (id)
-WHERE arrayMap(x -> ((x + value) + value_1), [1]) = [6]
+WHERE array_map(x -> ((x + value) + value_1), [1]) = [6]
 1	2	3
 SELECT dummy
 FROM system.one

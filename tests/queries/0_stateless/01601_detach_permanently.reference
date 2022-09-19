@@ -1,14 +1,14 @@
 database atomic tests
-can not create table with same name as detached permanently
+can not create stream with same name as detached permanently
 can not detach twice
 can not drop detached
 can not replace with the other table
 can still show the create statement
 Row 1:
 ──────
-statement: CREATE TABLE test1601_detach_permanently_atomic.test_name_reuse
+statement: create stream test1601_detach_permanently_atomic.test_name_reuse
 (
-    `number` UInt64
+    `number` uint64
 )
 ENGINE = MergeTree
 ORDER BY tuple()
@@ -27,16 +27,16 @@ And detach permanently again to check how database drop will behave
 DROP database
 -----------------------
 database ordinary tests
-can not create table with same name as detached permanently
+can not create stream with same name as detached permanently
 can not detach twice
 can not drop detached
 can not replace with the other table
 can still show the create statement
 Row 1:
 ──────
-statement: CREATE TABLE test1601_detach_permanently_ordinary.test_name_reuse
+statement: create stream test1601_detach_permanently_ordinary.test_name_reuse
 (
-    `number` UInt64
+    `number` uint64
 )
 ENGINE = MergeTree
 ORDER BY tuple()
@@ -54,18 +54,18 @@ DROP database - Directory not empty error, but database detached
 DROP database - now success
 -----------------------
 database lazy tests
-can not create table with same name as detached permanently
+can not create stream with same name as detached permanently
 can not detach twice
 can not drop detached
 can not replace with the other table
 can still show the create statement
 Row 1:
 ──────
-statement: CREATE TABLE test1601_detach_permanently_lazy.test_name_reuse
+statement: create stream test1601_detach_permanently_lazy.test_name_reuse
 (
-    `number` UInt64
+    `number` uint64
 )
-ENGINE = Log
+ 
 can attach with full syntax
 can attach with short syntax
 can not detach permanently the table which is already detached (temporary)

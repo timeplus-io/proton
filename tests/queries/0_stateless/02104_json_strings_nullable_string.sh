@@ -9,10 +9,10 @@ USER_FILES_PATH=$(clickhouse-client --query "select _path,_file from file('nonex
 DATA_FILE=$USER_FILES_PATH/test_02104_null.data
 
 echo -e '{"s" : "NULLSome string"}' > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02104_null.data', 'JSONStringsEachRow', 's Nullable(String)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02104_null.data', 'JSONStringsEachRow', 's Nullable(string)')"
 
 echo -e '["NULLSome string"]' > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02104_null.data', 'JSONCompactStringsEachRow', 's Nullable(String)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02104_null.data', 'JSONCompactStringsEachRow', 's Nullable(string)')"
 
 rm $DATA_FILE
 

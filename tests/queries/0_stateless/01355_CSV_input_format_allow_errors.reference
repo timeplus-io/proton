@@ -9,7 +9,7 @@ File generated:
 ******************
 attempt to parse w/o flags
 Return code: 117
-OK: stderr contains a message 'is not like Int64'
+OK: stderr contains a message 'is not like int64'
 ******************
 attempt to parse with input_format_allow_errors_ratio=0.1
 Return code: 117

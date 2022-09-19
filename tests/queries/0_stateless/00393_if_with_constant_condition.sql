@@ -3,7 +3,7 @@ SELECT 0 ? not_existing_column : 1 FROM system.numbers LIMIT 1;
 SELECT 1 ? (0 ? not_existing_column : 2) : 0 FROM system.numbers LIMIT 1;
 
 /* scalar subquery optimization */
-SELECT (SELECT toUInt8(number + 1) FROM system.numbers LIMIT 1) ? 1 : 2 FROM system.numbers LIMIT 1;
+SELECT (SELECT to_uint8(number + 1) FROM system.numbers LIMIT 1) ? 1 : 2 FROM system.numbers LIMIT 1;
 
 /* alias test */
 SELECT (1 as a) ? (2 as b) : (3 as c) as d, a, b, c, d FORMAT TSKV;

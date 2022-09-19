@@ -1,8 +1,8 @@
-SELECT finalizeAggregation(initializeAggregation('uniqExactState', toNullable('foo')));
-SELECT toTypeName(initializeAggregation('uniqExactState', toNullable('foo')));
+SELECT finalize_aggregation(initializeAggregation('uniqExactState', toNullable('foo')));
+SELECT to_type_name(initializeAggregation('uniqExactState', toNullable('foo')));
 
-SELECT finalizeAggregation(initializeAggregation('uniqExactState', toNullable(123)));
-SELECT toTypeName(initializeAggregation('uniqExactState', toNullable(123)));
+SELECT finalize_aggregation(initializeAggregation('uniqExactState', toNullable(123)));
+SELECT to_type_name(initializeAggregation('uniqExactState', toNullable(123)));
 
 SELECT initializeAggregation('uniqExactState', toNullable('foo')) = arrayReduce('uniqExactState', [toNullable('foo')]);
 SELECT initializeAggregation('uniqExactState', toNullable(123)) = arrayReduce('uniqExactState', [toNullable(123)]);

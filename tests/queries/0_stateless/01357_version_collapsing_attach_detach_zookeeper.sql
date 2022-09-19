@@ -1,20 +1,20 @@
 -- Tags: zookeeper, no-parallel
 
-DROP TABLE IF EXISTS versioned_collapsing_table;
+DROP STREAM IF EXISTS versioned_collapsing_table;
 
-CREATE TABLE versioned_collapsing_table(
-  d Date,
-  key1 UInt64,
-  key2 UInt32,
-  value String,
-  sign Int8,
-  version UInt16
+create stream versioned_collapsing_table(
+  d date,
+  key1 uint64,
+  key2 uint32,
+  value string,
+  sign int8,
+  version uint16
 )
 ENGINE = ReplicatedVersionedCollapsingMergeTree('/clickhouse/versioned_collapsing_table/{shard}', '{replica}', sign, version)
 PARTITION BY d
 ORDER BY (key1, key2);
 
-INSERT INTO versioned_collapsing_table VALUES (toDate('2019-10-10'), 1, 1, 'Hello', -1, 1);
+INSERT INTO versioned_collapsing_table VALUES (to_date('2019-10-10'), 1, 1, 'Hello', -1, 1);
 
 SELECT value FROM system.zookeeper WHERE path = '/clickhouse/versioned_collapsing_table/s1' and name = 'metadata';
 
@@ -25,4 +25,4 @@ ATTACH TABLE versioned_collapsing_table;
 
 SELECT COUNT() FROM versioned_collapsing_table;
 
-DROP TABLE IF EXISTS versioned_collapsing_table;
+DROP STREAM IF EXISTS versioned_collapsing_table;

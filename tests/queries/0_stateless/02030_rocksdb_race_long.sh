@@ -11,9 +11,9 @@ set -o errexit
 set -o pipefail
 
 echo "
-	DROP TABLE IF EXISTS rocksdb_race;
-	CREATE TABLE rocksdb_race (key String, value UInt32) Engine=EmbeddedRocksDB PRIMARY KEY(key);
-    INSERT INTO rocksdb_race SELECT '1_' || toString(number), number FROM numbers(100000);
+	DROP STREAM IF EXISTS rocksdb_race;
+	create stream rocksdb_race (key string, value uint32) Engine=EmbeddedRocksDB PRIMARY KEY(key);
+    INSERT INTO rocksdb_race SELECT '1_' || to_string(number), number FROM numbers(100000);
 " | $CLICKHOUSE_CLIENT -n
 
 function read_stat_thread()
@@ -46,4 +46,4 @@ timeout $TIMEOUT bash -c truncate_thread 2> /dev/null &
 
 wait
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE rocksdb_race"
+$CLICKHOUSE_CLIENT -q "DROP STREAM rocksdb_race"

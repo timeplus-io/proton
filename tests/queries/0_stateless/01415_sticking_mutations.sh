@@ -7,22 +7,22 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS sticking_mutations"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS sticking_mutations"
 
 function check_sticky_mutations()
 {
-    $CLICKHOUSE_CLIENT -n --query "CREATE TABLE sticking_mutations (
-      date Date,
-      key UInt64,
-      value1 String,
-      value2 UInt8
+    $CLICKHOUSE_CLIENT -n --query "create stream sticking_mutations (
+      date date,
+      key uint64,
+      value1 string,
+      value2 uint8
     )
     ENGINE = MergeTree()
     ORDER BY key;"
 
-    $CLICKHOUSE_CLIENT --query "INSERT INTO sticking_mutations SELECT toDate('2020-07-10'), number, toString(number), number % 128 FROM numbers(1000)"
+    $CLICKHOUSE_CLIENT --query "INSERT INTO sticking_mutations SELECT to_date('2020-07-10'), number, to_string(number), number % 128 FROM numbers(1000)"
 
-    $CLICKHOUSE_CLIENT --query "INSERT INTO sticking_mutations SELECT toDate('2100-01-10'), number, toString(number), number % 128 FROM numbers(1000)"
+    $CLICKHOUSE_CLIENT --query "INSERT INTO sticking_mutations SELECT to_date('2100-01-10'), number, to_string(number), number % 128 FROM numbers(1000)"
 
     # if merges stopped for normal merge tree mutations will stick
     $CLICKHOUSE_CLIENT --query "SYSTEM STOP MERGES sticking_mutations"
@@ -47,27 +47,27 @@ function check_sticky_mutations()
     $CLICKHOUSE_CLIENT --query "SYSTEM START MERGES sticking_mutations"
 
     # Just to be sure, that previous mutations finished
-    $CLICKHOUSE_CLIENT --query "ALTER TABLE sticking_mutations DELETE WHERE value2 % 31 == 0 SETTINGS mutations_sync = 1"
+    $CLICKHOUSE_CLIENT --query "ALTER STREAM sticking_mutations DELETE WHERE value2 % 31 == 0 SETTINGS mutations_sync = 1"
 
-    $CLICKHOUSE_CLIENT --query "OPTIMIZE TABLE sticking_mutations FINAL"
+    $CLICKHOUSE_CLIENT --query "OPTIMIZE STREAM sticking_mutations FINAL"
 
     $CLICKHOUSE_CLIENT --query "SELECT sum(cityHash64(*)) > 1 FROM sticking_mutations WHERE key > 10"
 
-    $CLICKHOUSE_CLIENT --query "SHOW CREATE TABLE sticking_mutations"
+    $CLICKHOUSE_CLIENT --query "SHOW create stream sticking_mutations"
 
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS sticking_mutations"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS sticking_mutations"
 }
 
-check_sticky_mutations "ALTER TABLE sticking_mutations DELETE WHERE value2 % 32 == 0, MODIFY COLUMN value1 UInt64"
+check_sticky_mutations "ALTER STREAM sticking_mutations DELETE WHERE value2 % 32 == 0, MODIFY COLUMN value1 uint64"
 
-check_sticky_mutations "ALTER TABLE sticking_mutations MODIFY COLUMN value1 UInt64, DELETE WHERE value2 % 32 == 0"
+check_sticky_mutations "ALTER STREAM sticking_mutations MODIFY COLUMN value1 uint64, DELETE WHERE value2 % 32 == 0"
 
-check_sticky_mutations "ALTER TABLE sticking_mutations UPDATE value1 = 15 WHERE key < 2000, DELETE WHERE value2 % 32 == 0"
+check_sticky_mutations "ALTER STREAM sticking_mutations UPDATE value1 = 15 WHERE key < 2000, DELETE WHERE value2 % 32 == 0"
 
-check_sticky_mutations "ALTER TABLE sticking_mutations DELETE WHERE value2 % 32 == 0, UPDATE value1 = 15 WHERE key < 2000"
+check_sticky_mutations "ALTER STREAM sticking_mutations DELETE WHERE value2 % 32 == 0, UPDATE value1 = 15 WHERE key < 2000"
 
-check_sticky_mutations "ALTER TABLE sticking_mutations DELETE WHERE value2 % 32 == 0, DROP COLUMN value1"
+check_sticky_mutations "ALTER STREAM sticking_mutations DELETE WHERE value2 % 32 == 0, DROP COLUMN value1"
 
-check_sticky_mutations "ALTER TABLE sticking_mutations DELETE WHERE value2 % 32 == 0, RENAME COLUMN value1 TO renamed_value1"
+check_sticky_mutations "ALTER STREAM sticking_mutations DELETE WHERE value2 % 32 == 0, RENAME COLUMN value1 TO renamed_value1"
 
-check_sticky_mutations "ALTER TABLE sticking_mutations MODIFY COLUMN value1 UInt64, MODIFY TTL date + INTERVAL 1 DAY"
+check_sticky_mutations "ALTER STREAM sticking_mutations MODIFY COLUMN value1 uint64, MODIFY TTL date + INTERVAL 1 DAY"

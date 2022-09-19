@@ -36,13 +36,13 @@ SELECT arraySort(geohashesInBox(23.11, -82.37, 23.12, -82.36, 6));
 
 SELECT 'small range always produces array of length 1';
 SELECT lon/5 - 180 AS lon1, lat/5 - 90 AS lat1, lon1 AS lon2, lat1 AS lat2, geohashesInBox(lon1, lat1, lon2, lat2, 1)  AS g
-FROM (SELECT arrayJoin(range(360*5)) AS lon,  arrayJoin(range(180*5)) AS lat) WHERE length(g) != 1;
+FROM (SELECT array_join(range(360*5)) AS lon,  array_join(range(180*5)) AS lat) WHERE length(g) != 1;
 
 SELECT lon/5 - 40 AS lon1, lat/5 - 20 AS lat1, lon1 AS lon2, lat1 AS lat2, geohashesInBox(lon1, lat1, lon2, lat2, 12) AS g
-FROM (SELECT arrayJoin(range(80*5)) AS lon,  arrayJoin(range(10*5)) AS lat) WHERE length(g) != 1;
+FROM (SELECT array_join(range(80*5)) AS lon,  array_join(range(10*5)) AS lat) WHERE length(g) != 1;
 
 SELECT lon/5 - 40 AS lon1, lat/5 - 20 AS lat1, lon1 + 0.0000000001 AS lon2, lat1 + 0.0000000001 AS lat2, geohashesInBox(lon1, lat1, lon2, lat2, 1) AS g
-FROM (SELECT arrayJoin(range(80*5)) AS lon,  arrayJoin(range(10*5)) AS lat) WHERE length(g) != 1;
+FROM (SELECT array_join(range(80*5)) AS lon,  array_join(range(10*5)) AS lat) WHERE length(g) != 1;
 
 SELECT 'zooming';
 SELECT arraySort(geohashesInBox(20.0, 20.0, 21.0, 21.0, 2));
@@ -67,6 +67,6 @@ SELECT length(geohashesInBox(-inf, -inf, inf, inf, 3));
 SELECT 'errors';
 SELECT geohashesInBox();  -- { serverError 42 } -- not enough arguments
 SELECT geohashesInBox(1, 2, 3, 4, 5);  -- { serverError 43 }  -- wrong types of arguments
-SELECT geohashesInBox(toFloat32(1.0), 2.0, 3.0, 4.0, 5);  -- { serverError 43 } -- all lats and longs should be of the same type
+SELECT geohashesInBox(to_float32(1.0), 2.0, 3.0, 4.0, 5);  -- { serverError 43 } -- all lats and longs should be of the same type
 SELECT geohashesInBox(24.48, 40.56, 24.785, 40.81, 12); -- { serverError 128 } -- to many elements in array
 

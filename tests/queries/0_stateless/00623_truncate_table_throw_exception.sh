@@ -10,7 +10,7 @@ ${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS test_truncate;"
 ${CLICKHOUSE_CLIENT} --query "CREATE DATABASE test_truncate;"
 
 ${CLICKHOUSE_CLIENT} --query "SELECT '========Before Truncate========';"
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE test_truncate.test_view_depend (s String) ENGINE = Log;"
+${CLICKHOUSE_CLIENT} --query "create stream test_truncate.test_view_depend (s string)  ;"
 ${CLICKHOUSE_CLIENT} --query "CREATE VIEW test_truncate.test_view AS SELECT * FROM test_truncate.test_view_depend;"
 
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test_truncate.test_view_depend VALUES('test_string');"

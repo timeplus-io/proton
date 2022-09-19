@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS t1;
+DROP STREAM IF EXISTS t1;
 
-CREATE TABLE t1 (`a` UInt32, `b` UInt32, `c` UInt32 ) ENGINE = Memory;
+create stream t1 (`a` uint32, `b` uint32, `c` uint32 ) ;
 INSERT INTO t1 VALUES (1, 1, 1), (1, 1, 2), (2, 2, 2), (1, 2, 2);
 
 SELECT DISTINCT ON (a, b) a, b, c FROM t1;
@@ -20,4 +20,4 @@ SELECT DISTINCT ON (a) * FROM t1;
 -- SELECT ALL DISTINCT ON (a, b) a, b FROM t1; -- { clientError 62 }
 -- SELECT DISTINCT ON (a, b) ALL a, b FROM t1; -- { clientError 62 }
 
-DROP TABLE IF EXISTS t1;
+DROP STREAM IF EXISTS t1;

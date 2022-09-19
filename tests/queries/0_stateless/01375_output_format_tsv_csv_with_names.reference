@@ -4,7 +4,7 @@ number
 1
 TSVWithNamesAndTypes
 number
-UInt64
+uint64
 0
 1
 TSVRawWithNames
@@ -13,7 +13,7 @@ number
 1
 TSVRawWithNamesAndTypes
 number
-UInt64
+uint64
 0
 1
 CSVWithNames
@@ -22,6 +22,6 @@ CSVWithNames
 1
 CSVWithNamesAndTypes
 "number"
-"UInt64"
+"uint64"
 0
 1

@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS test;
-CREATE TABLE test (i UInt64) Engine = MergeTree() order by i;
+DROP STREAM IF EXISTS test;
+create stream test (i uint64) Engine = MergeTree() order by i;
 INSERT INTO test SELECT number FROM numbers(100);
 INSERT INTO test SELECT number FROM numbers(10,100);
-OPTIMIZE TABLE test FINAL;
+OPTIMIZE STREAM test FINAL;
 
 -- Only set limit
 SET limit = 5;
@@ -29,4 +29,4 @@ SELECT * FROM test LIMIT 50 OFFSET 190; -- 0 rows
 SELECT * FROM test LIMIT 50 OFFSET 185; -- 5 rows
 SELECT * FROM test LIMIT 18 OFFSET 5; -- 8 rows
 
-DROP TABLE test;
+DROP STREAM test;

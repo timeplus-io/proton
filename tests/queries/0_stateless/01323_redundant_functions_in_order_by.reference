@@ -15,21 +15,21 @@
 1	1
 2	2
 3	3
-SELECT groupArray(x)
+SELECT group_array(x)
 FROM
 (
     SELECT number AS x
     FROM numbers(3)
     ORDER BY x ASC
 )
-SELECT groupArray(x)
+SELECT group_array(x)
 FROM
 (
     SELECT number AS x
     FROM numbers(3)
     ORDER BY x ASC
 )
-SELECT groupArray(x)
+SELECT group_array(x)
 FROM
 (
     SELECT number AS x
@@ -83,7 +83,7 @@ ORDER BY
 1	1
 2	2
 3	3
-SELECT groupArray(x)
+SELECT group_array(x)
 FROM
 (
     SELECT number AS x
@@ -92,7 +92,7 @@ FROM
         x ASC,
         exp(x) ASC
 )
-SELECT groupArray(x)
+SELECT group_array(x)
 FROM
 (
     SELECT number AS x
@@ -101,7 +101,7 @@ FROM
         x ASC,
         exp(exp(x)) ASC
 )
-SELECT groupArray(x)
+SELECT group_array(x)
 FROM
 (
     SELECT number AS x

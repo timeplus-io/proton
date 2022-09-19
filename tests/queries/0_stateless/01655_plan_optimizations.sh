@@ -30,7 +30,7 @@ $CLICKHOUSE_CLIENT -q "
     explain actions = 1 select s, y, y != 0 from (select sum(x) as s, y from (
         select number as x, number + 1 as y from numbers(10)) group by y
     ) where y != 0
-    settings enable_optimize_predicate_expression=0" | grep -o "Aggregating\|Filter\|COLUMN Const(UInt8) -> notEquals(y, 0)"
+    settings enable_optimize_predicate_expression=0" | grep -o "Aggregating\|Filter\|COLUMN Const(uint8) -> notEquals(y, 0)"
 $CLICKHOUSE_CLIENT -q "
     select s, y, y != 0 from (select sum(x) as s, y from (
         select number as x, number + 1 as y from numbers(10)) group by y
@@ -56,7 +56,7 @@ $CLICKHOUSE_CLIENT -q "
         select sum(x) as s, y from (select number as x, number + 1 as y from numbers(10)) group by y
     ) where y != 0 and s - 4
     settings enable_optimize_predicate_expression=0" |
-    grep -o "Aggregating\|Filter column\|Filter column: notEquals(y, 0)\|FUNCTION _CAST(minus(s, 4) :: 1, UInt8 :: 3) -> and(notEquals(y, 0), minus(s, 4))"
+    grep -o "Aggregating\|Filter column\|Filter column: notEquals(y, 0)\|FUNCTION _CAST(minus(s, 4) :: 1, uint8 :: 3) -> and(notEquals(y, 0), minus(s, 4))"
 $CLICKHOUSE_CLIENT -q "
     select s, y from (
         select sum(x) as s, y from (select number as x, number + 1 as y from numbers(10)) group by y

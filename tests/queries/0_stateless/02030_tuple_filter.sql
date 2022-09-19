@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS test_tuple_filter;
+DROP STREAM IF EXISTS test_tuple_filter;
 
-CREATE TABLE test_tuple_filter (id UInt32, value String, log_date Date) Engine=MergeTree() ORDER BY id PARTITION BY log_date SETTINGS index_granularity = 3;
+create stream test_tuple_filter (id uint32, value string, log_date date) Engine=MergeTree() ORDER BY id PARTITION BY log_date SETTINGS index_granularity = 3;
 
 INSERT INTO test_tuple_filter VALUES (1,'A','2021-01-01'),(2,'B','2021-01-01'),(3,'C','2021-01-01'),(4,'D','2021-01-02'),(5,'E','2021-01-02');
 
@@ -38,4 +38,4 @@ SELECT * FROM test_tuple_filter WHERE (id, value) = tuple(1); -- { serverError 4
 SELECT * FROM test_tuple_filter WHERE tuple(id, value) = tuple(value, id); -- { serverError 386 }
 SELECT * FROM test_tuple_filter WHERE equals((id, value)); -- { serverError 42 }
 
-DROP TABLE IF EXISTS test_tuple_filter;
+DROP STREAM IF EXISTS test_tuple_filter;

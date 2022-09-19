@@ -1,14 +1,14 @@
 5000
 900
-String	562
-Array	134
-UInt64	63
-Tuple	52
-Int32	47
-Int8	17
+string	562
+array	134
+uint64	63
+tuple	52
+int32	47
+int8	17
 Int16	15
-Nested	9
-Int64	1
+nested	9
+int64	1
 leonardomso/33-js-concepts	3
 ytdl-org/youtube-dl	3
 Bogdanp/neko	2

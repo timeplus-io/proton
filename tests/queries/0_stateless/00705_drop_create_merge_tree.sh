@@ -16,8 +16,8 @@ function stress()
     trap handle_interruption INT
 
     while $CONTINUE; do
-        ${CLICKHOUSE_CLIENT} --query "CREATE TABLE IF NOT EXISTS table (x UInt8) ENGINE = MergeTree ORDER BY tuple()" 2>/dev/null
-        ${CLICKHOUSE_CLIENT} --query "DROP TABLE table" 2>/dev/null
+        ${CLICKHOUSE_CLIENT} --query "create stream IF NOT EXISTS table (x uint8) ENGINE = MergeTree ORDER BY tuple()" 2>/dev/null
+        ${CLICKHOUSE_CLIENT} --query "DROP STREAM table" 2>/dev/null
     done
 
     trap - INT
@@ -34,4 +34,4 @@ done
 wait
 echo
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS table";
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS table";

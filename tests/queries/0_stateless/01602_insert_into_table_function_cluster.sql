@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS x;
-DROP TABLE IF EXISTS y;
+DROP STREAM IF EXISTS x;
+DROP STREAM IF EXISTS y;
 
-CREATE TABLE x AS system.numbers ENGINE = MergeTree ORDER BY number;
-CREATE TABLE y AS system.numbers ENGINE = MergeTree ORDER BY number;
+create stream x AS system.numbers ENGINE = MergeTree ORDER BY number;
+create stream y AS system.numbers ENGINE = MergeTree ORDER BY number;
 
 -- Just one shard, sharding key isn't necessary
 INSERT INTO FUNCTION cluster('test_shard_localhost', currentDatabase(), x) SELECT * FROM numbers(10);
@@ -19,5 +19,5 @@ SELECT * FROM x ORDER BY number;
 
 SELECT * FROM remote('127.0.0.{1,2}', currentDatabase(), y) ORDER BY number;
 
-DROP TABLE x;
-DROP TABLE y;
+DROP STREAM x;
+DROP STREAM y;

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS data (sketch Array(Int8)) ENGINE=Memory;
+create stream IF NOT EXISTS data (sketch array(int8)) ENGINE=Memory;
 
 INSERT INTO data VALUES ([-1,-1,-1]), ([4,-1,2]), ([0,25,-1]), ([-1,-1,7]), ([-1,-1,-1]);
 
@@ -8,18 +8,18 @@ SELECT maxArray(sketch) FROM data;
 
 SELECT maxForEach(sketch) FROM data;
 
-DROP TABLE data;
+DROP STREAM data;
 
 
 SELECT k, sumForEach(arr) FROM (SELECT number % 3 AS k, range(number) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
-SELECT k, sumForEach(arr) FROM (SELECT intDiv(number, 3) AS k, range(number) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
+SELECT k, sumForEach(arr) FROM (SELECT int_div(number, 3) AS k, range(number) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
 
 SELECT k, groupArrayForEach(arr) FROM (SELECT number % 3 AS k, range(number) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
-SELECT k, groupArrayForEach(arr) FROM (SELECT intDiv(number, 3) AS k, range(number) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
+SELECT k, groupArrayForEach(arr) FROM (SELECT int_div(number, 3) AS k, range(number) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
 
-SELECT k, groupArrayForEach(arr) FROM (SELECT number % 3 AS k, arrayMap(x -> toString(x), range(number)) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
-SELECT k, groupArrayForEach(arr) FROM (SELECT intDiv(number, 3) AS k, arrayMap(x -> toString(x), range(number)) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
+SELECT k, groupArrayForEach(arr) FROM (SELECT number % 3 AS k, array_map(x -> to_string(x), range(number)) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
+SELECT k, groupArrayForEach(arr) FROM (SELECT int_div(number, 3) AS k, array_map(x -> to_string(x), range(number)) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
 
-SELECT k, groupArrayForEach(arr), quantilesExactForEach(0.5, 0.9)(arr) FROM (SELECT intDiv(number, 3) AS k, arrayMap(x -> number + x, range(number)) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
+SELECT k, groupArrayForEach(arr), quantilesExactForEach(0.5, 0.9)(arr) FROM (SELECT int_div(number, 3) AS k, array_map(x -> number + x, range(number)) AS arr FROM system.numbers LIMIT 10) GROUP BY k ORDER BY k;
 
-SELECT uniqForEach(x) FROM (SELECT emptyArrayUInt8() AS x UNION ALL SELECT [1, 2, 3] UNION ALL SELECT emptyArrayUInt8() UNION ALL SELECT [2, 2]);
+SELECT uniqForEach(x) FROM (SELECT empty_array_uint8() AS x UNION ALL SELECT [1, 2, 3] UNION ALL SELECT empty_array_uint8() UNION ALL SELECT [2, 2]);

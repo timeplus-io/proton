@@ -1,0 +1,9 @@
+A
+B
+numbers
+one
+A	1	TinyLog	create stream test_show_tables.A (`A` uint8) 
+B	1	TinyLog	create stream test_show_tables.B (`A` uint8) 
+test_temporary_table
+['test_show_tables']	['test_materialized']
+0

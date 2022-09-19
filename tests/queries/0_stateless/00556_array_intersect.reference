@@ -11,4 +11,4 @@
 [[1,1]]
 [[1,1]]
 [(1,['a','b'])]
-Array(Tuple(UInt8, Array(String)))
+array(tuple(uint8, array(string)))

@@ -1,9 +1,9 @@
 -- Tags: zookeeper
 
-DROP TABLE IF EXISTS sample_table;
+DROP STREAM IF EXISTS sample_table;
 
-CREATE TABLE sample_table (
-    key UInt64
+create stream sample_table (
+    key uint64
 )
 ENGINE ReplicatedMergeTree('/clickhouse/{database}/01700_system_zookeeper_path_in/{shard}', '{replica}')
 ORDER BY tuple();
@@ -21,4 +21,4 @@ SELECT '========';
 SELECT name FROM system.zookeeper WHERE path IN (SELECT concat('/clickhouse/' || currentDatabase() || '/01700_system_zookeeper_path_in/s1/', name)
     FROM system.zookeeper WHERE (name != 'replicas' AND name NOT LIKE 'leader_election%' AND path = '/clickhouse/' || currentDatabase() || '/01700_system_zookeeper_path_in/s1')) ORDER BY name;
 
-DROP TABLE IF EXISTS sample_table;
+DROP STREAM IF EXISTS sample_table;

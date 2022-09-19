@@ -5,4 +5,4 @@ SELECT arrayCompact([1, 1, NULL, NULL, 2, 2, 2]);
 SELECT arrayCompact([1, 1, NULL, NULL, nan, nan, 2, 2, 2]);
 SELECT arrayCompact(['hello', '', '', '', 'world', 'world']);
 SELECT arrayCompact([[[]], [[], []], [[], []], [[]]]);
-SELECT arrayCompact(x -> toString(intDiv(x, 3)), range(number)) FROM numbers(10);
+SELECT arrayCompact(x -> to_string(int_div(x, 3)), range(number)) FROM numbers(10);

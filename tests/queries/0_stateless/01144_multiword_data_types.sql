@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS multiword_types;
-DROP TABLE IF EXISTS unsigned_types;
+DROP STREAM IF EXISTS multiword_types;
+DROP STREAM IF EXISTS unsigned_types;
 
-CREATE TABLE multiword_types (
+create stream multiword_types (
     a DOUBLE,
     b DOUBLE PRECISION,
     c CHAR DEFAULT 'str',
@@ -9,7 +9,7 @@ CREATE TABLE multiword_types (
     e CHAR LARGE OBJECT COMMENT 'comment',
     f CHARACTER VARYING(123),
     g ChArAcTeR   large    OBJECT,
-    h nchar varying (456) default toString(a) comment 'comment',
+    h nchar varying (456) default to_string(a) comment 'comment',
     i NCHAR LARGE OBJECT,
     j BINARY LARGE OBJECT,
     k BINARY VARYING,
@@ -20,12 +20,12 @@ CREATE TABLE multiword_types (
     p NATIONAL CHAR VARYING
 ) ENGINE=Memory;
 
-SHOW CREATE TABLE multiword_types;
+SHOW create stream multiword_types;
 
 INSERT INTO multiword_types(a) VALUES (1);
-SELECT toTypeName((*,)) FROM multiword_types;
+SELECT to_type_name((*,)) FROM multiword_types;
 
-CREATE TABLE unsigned_types (
+create stream unsigned_types (
     a TINYINT  SIGNED,
     b INT1     SIGNED,
     c SMALLINT SIGNED,
@@ -40,12 +40,12 @@ CREATE TABLE unsigned_types (
     l BIGINT   UNSIGNED
 ) ENGINE=Memory;
 
-SHOW CREATE TABLE unsigned_types;
+SHOW create stream unsigned_types;
 
 INSERT INTO unsigned_types(a) VALUES (1);
-SELECT toTypeName((*,)) FROM unsigned_types;
+SELECT to_type_name((*,)) FROM unsigned_types;
 
 SELECT CAST('42' AS DOUBLE PRECISION), CAST(42, 'NATIONAL CHARACTER VARYING'), CAST(-1 AS tinyint  UnSiGnEd), CAST(65535, ' sMaLlInT  signed ');
 
-DROP TABLE multiword_types;
-DROP TABLE unsigned_types;
+DROP STREAM multiword_types;
+DROP STREAM unsigned_types;

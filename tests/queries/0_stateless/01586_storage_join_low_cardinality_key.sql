@@ -1,6 +1,6 @@
-CREATE TABLE low_card
+create stream low_card
 (
-    `lc` LowCardinality(String)
+    `lc` LowCardinality(string)
 )
 ENGINE = Join(ANY, LEFT, lc);
 
@@ -8,6 +8,6 @@ INSERT INTO low_card VALUES ( '1' );
 
 SELECT * FROM low_card;
 SELECT * FROM low_card WHERE lc = '1';
-SELECT CAST(lc AS String) FROM low_card;
+SELECT CAST(lc AS string) FROM low_card;
 
-DROP TABLE low_card;
+DROP STREAM low_card;

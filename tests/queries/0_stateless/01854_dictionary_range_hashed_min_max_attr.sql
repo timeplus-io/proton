@@ -3,8 +3,8 @@
 DROP DICTIONARY IF EXISTS dict_01864;
 CREATE DICTIONARY dict_01864
 (
-    `id` UInt64,
-    `value` String
+    `id` uint64,
+    `value` string
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'does_not_exists'))

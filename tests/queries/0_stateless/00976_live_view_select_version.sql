@@ -2,15 +2,15 @@
 
 SET allow_experimental_live_view = 1;
 
-DROP TABLE IF EXISTS lv;
-DROP TABLE IF EXISTS mt;
+DROP STREAM IF EXISTS lv;
+DROP STREAM IF EXISTS mt;
 
-CREATE TABLE mt (a Int32) Engine=MergeTree order by tuple();
+create stream mt (a int32) Engine=MergeTree order by tuple();
 CREATE LIVE VIEW lv AS SELECT * FROM mt;
 
 INSERT INTO mt VALUES (1),(2),(3);
 
 SELECT *,_version FROM lv;
 
-DROP TABLE lv;
-DROP TABLE mt;
+DROP STREAM lv;
+DROP STREAM mt;

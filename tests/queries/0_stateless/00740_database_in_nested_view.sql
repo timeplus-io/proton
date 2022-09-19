@@ -1,12 +1,12 @@
 -- Tags: no-parallel
-
+SET query_mode = 'table';
 CREATE DATABASE test_00740;
 USE test_00740;
 
-DROP TABLE IF EXISTS test_00740;
-DROP TABLE IF EXISTS test_view_00740;
-DROP TABLE IF EXISTS test_nested_view_00740;
-DROP TABLE IF EXISTS test_joined_view_00740;
+drop stream IF EXISTS test_00740;
+drop stream IF EXISTS test_view_00740;
+drop stream IF EXISTS test_nested_view_00740;
+drop stream IF EXISTS test_joined_view_00740;
 
 CREATE VIEW test_00740 AS SELECT 1 AS N;
 CREATE VIEW test_view_00740 AS SELECT * FROM test_00740;
@@ -22,8 +22,8 @@ SELECT * FROM test_00740.test_view_00740;
 SELECT * FROM test_00740.test_nested_view_00740;
 SELECT * FROM test_00740.test_joined_view_00740;
 
-DROP TABLE IF EXISTS test_00740.test_00740;
-DROP TABLE IF EXISTS test_00740.test_view_00740;
-DROP TABLE IF EXISTS test_00740.test_nested_view_00740;
+drop stream IF EXISTS test_00740.test_00740;
+drop stream IF EXISTS test_00740.test_view_00740;
+drop stream IF EXISTS test_00740.test_nested_view_00740;
 
 DROP DATABASE test_00740;

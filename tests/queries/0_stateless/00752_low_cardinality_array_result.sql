@@ -1,2 +1,2 @@
-SELECT arrayJoin(splitByChar(',', toLowCardinality('a,b,c')));
+SELECT array_join(splitByChar(',', toLowCardinality('a,b,c')));
 

@@ -1,1 +1,1 @@
-create table x( id UInt64, t  AggregateFunction(argMax, Enum8('<Empty>' = -1, 'Male' = 1, 'Female' = 2), UInt64) DEFAULT arrayReduce('argMaxState', ['cast(-1, \'Enum8(\'<Empty>\' = -1, \'Male\' = 1, \'Female\' = 2)'], [toUInt64(0)]) ) Engine=MergeTree ORDER BY id; -- { serverError 70 }
+create stream x( id uint64, t  aggregate_function(argMax, Enum8('<Empty>' = -1, 'Male' = 1, 'Female' = 2), uint64) DEFAULT arrayReduce('argMaxState', ['cast(-1, \'Enum8(\'<Empty>\' = -1, \'Male\' = 1, \'Female\' = 2)'], [to_uint64(0)]) ) Engine=MergeTree ORDER BY id; -- { serverError 70 }

@@ -55,15 +55,15 @@ for NAME in $(find "$DATA_DIR"/*.parquet -print0 | xargs -0 -n 1 basename | LC_A
     # COLUMNS=`$CUR_DIR/00900_parquet_create_table_columns.py $JSON` 2>&1 || continue
     COLUMNS=$(cat "$COLUMNS_FILE") || continue
 
-    ${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS parquet_load"
+    ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_load"
     $CLICKHOUSE_CLIENT --multiquery <<EOF
 SET allow_experimental_map_type = 1;
-CREATE TABLE parquet_load ($COLUMNS) ENGINE = Memory;
+create stream parquet_load ($COLUMNS) ;
 EOF
 
     # Some files contain unsupported data structures, exception is ok.
     cat "$DATA_DIR"/"$NAME" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_load FORMAT Parquet" 2>&1 | sed 's/Exception/Ex---tion/'
 
     ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_load LIMIT 100"
-    ${CLICKHOUSE_CLIENT} --query="DROP TABLE parquet_load"
+    ${CLICKHOUSE_CLIENT} --query="DROP STREAM parquet_load"
 done

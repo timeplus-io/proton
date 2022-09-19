@@ -1,10 +1,10 @@
 -- insert data duplicates by providing deduplication token on insert
 
-DROP TABLE IF EXISTS insert_dedup_token SYNC;
+DROP STREAM IF EXISTS insert_dedup_token SYNC;
 
 select 'create and check deduplication';
-CREATE TABLE insert_dedup_token (
-    id Int32, val UInt32
+create stream insert_dedup_token (
+    id int32, val uint32
 ) ENGINE=MergeTree() ORDER BY id
 SETTINGS non_replicated_deduplication_window=0xFFFFFFFF;
 
@@ -30,4 +30,4 @@ set insert_deduplication_token = '';
 INSERT INTO insert_dedup_token VALUES(2, 1002);
 SELECT * FROM insert_dedup_token ORDER BY id;
 
-DROP TABLE insert_dedup_token SYNC;
+DROP STREAM insert_dedup_token SYNC;

@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t_buffer_map"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE t_buffer_map(m1 Map(String, UInt64), m2 Map(String, String)) ENGINE = Buffer('', '', 1, 1, 1, 1000000000000, 1000000000000, 1000000000000, 1000000000000)"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS t_buffer_map"
+$CLICKHOUSE_CLIENT -q "create stream t_buffer_map(m1 Map(string, uint64), m2 Map(string, string)) ENGINE = Buffer('', '', 1, 1, 1, 1000000000000, 1000000000000, 1000000000000, 1000000000000)"
 
 function insert1
 {
@@ -32,4 +32,4 @@ timeout $TIMEOUT bash -c select1 &
 wait
 
 echo "OK"
-$CLICKHOUSE_CLIENT -q "DROP TABLE t_buffer_map"
+$CLICKHOUSE_CLIENT -q "DROP STREAM t_buffer_map"

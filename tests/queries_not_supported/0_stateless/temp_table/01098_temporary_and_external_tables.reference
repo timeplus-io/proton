@@ -1,0 +1,9 @@
+CREATE TEMPORARY STREAM tmp_table\n(\n    `n` uint64\n)\nENGINE = Memory AS\nSELECT number AS n\nFROM numbers(42)
+CREATE TEMPORARY STREAM tmp_table\n(\n    `n` uint64\n)\nENGINE = Memory AS\nSELECT number AS n\nFROM numbers(42)
+CREATE TEMPORARY STREAM tmp_table\n(\n    `n` uint64\n)\nENGINE = Memory AS\nSELECT number AS n\nFROM numbers(42)
+42
+OK
+OK
+3	9
+0
+1

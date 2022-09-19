@@ -6,14 +6,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 $CLICKHOUSE_CLIENT --multiquery <<EOF
 SET allow_experimental_window_view = 1;
-DROP TABLE IF EXISTS mt;
-DROP TABLE IF EXISTS info;
-DROP TABLE IF EXISTS dst;
-DROP TABLE IF EXISTS wv;
+DROP STREAM IF EXISTS mt;
+DROP STREAM IF EXISTS info;
+DROP STREAM IF EXISTS dst;
+DROP STREAM IF EXISTS wv;
 
-CREATE TABLE dst(count UInt64, sum UInt64, w_end DateTime) Engine=MergeTree ORDER BY tuple();
-CREATE TABLE mt(a Int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple();
-CREATE TABLE info(key Int32, value Int32) ENGINE=MergeTree ORDER BY tuple();
+create stream dst(count uint64, sum uint64, w_end DateTime) Engine=MergeTree ORDER BY tuple();
+create stream mt(a int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple();
+create stream info(key int32, value int32) ENGINE=MergeTree ORDER BY tuple();
 CREATE WINDOW VIEW wv TO dst WATERMARK=ASCENDING AS SELECT count(a) AS count, sum(info.value) as sum, tumbleEnd(wid) AS w_end FROM mt JOIN info ON mt.a = info.key GROUP BY tumble(timestamp, INTERVAL '5' SECOND, 'US/Samoa') AS wid;
 
 INSERT INTO info VALUES (1, 2);
@@ -33,7 +33,7 @@ while true; do
 done
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM dst ORDER BY w_end;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE wv"
-$CLICKHOUSE_CLIENT --query="DROP TABLE mt"
-$CLICKHOUSE_CLIENT --query="DROP TABLE info"
-$CLICKHOUSE_CLIENT --query="DROP TABLE dst"
+$CLICKHOUSE_CLIENT --query="DROP STREAM wv"
+$CLICKHOUSE_CLIENT --query="DROP STREAM mt"
+$CLICKHOUSE_CLIENT --query="DROP STREAM info"
+$CLICKHOUSE_CLIENT --query="DROP STREAM dst"

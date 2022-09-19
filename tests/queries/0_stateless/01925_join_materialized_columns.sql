@@ -1,22 +1,22 @@
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;
 
-CREATE TABLE t1 (
+create stream t1 (
     time DateTime,
-    foo String,
-    dimension_1 String,
-    dt Date MATERIALIZED toDate(time),
-    dt1 Date MATERIALIZED toDayOfYear(time),
+    foo string,
+    dimension_1 string,
+    dt date MATERIALIZED to_date(time),
+    dt1 date MATERIALIZED toDayOfYear(time),
     aliascol1 ALIAS foo || dimension_1,
     time_alias DateTime ALIAS time
 ) ENGINE = MergeTree() PARTITION BY toYYYYMM(dt) ORDER BY (dt, foo);
 
-CREATE TABLE t2 (
+create stream t2 (
     time DateTime,
-    bar String,
-    dimension_2 String,
-    dt Date MATERIALIZED toDate(time),
-    dt2 Date MATERIALIZED toDayOfYear(time),
+    bar string,
+    dimension_2 string,
+    dt date MATERIALIZED to_date(time),
+    dt2 date MATERIALIZED toDayOfYear(time),
     aliascol2 ALIAS bar || dimension_2,
     time_alias DateTime ALIAS time
 ) ENGINE = MergeTree() PARTITION BY toYYYYMM(dt) ORDER BY (dt, bar);

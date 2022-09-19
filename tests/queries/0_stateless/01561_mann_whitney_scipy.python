@@ -13,8 +13,8 @@ from pure_http_client import ClickHouseClient
 
 def test_and_check(name, a, b, t_stat, p_value):
     client = ClickHouseClient()
-    client.query("DROP TABLE IF EXISTS mann_whitney;")
-    client.query("CREATE TABLE mann_whitney (left Float64, right UInt8) ENGINE = Memory;");
+    client.query("DROP STREAM IF EXISTS mann_whitney;")
+    client.query("create stream mann_whitney (left float64, right uint8) ;");
     client.query("INSERT INTO mann_whitney VALUES {};".format(", ".join(['({},{}), ({},{})'.format(i, 0, j, 1) for i,j in zip(a, b)])))
 
     real = client.query_return_df(
@@ -25,7 +25,7 @@ def test_and_check(name, a, b, t_stat, p_value):
     real_p_value = real['p_value'][0]
     assert(abs(real_t_stat - np.float64(t_stat) < 1e-2)), "clickhouse_t_stat {}, scipy_t_stat {}".format(real_t_stat, t_stat)
     assert(abs(real_p_value - np.float64(p_value)) < 1e-2), "clickhouse_p_value {}, scipy_p_value {}".format(real_p_value, p_value)
-    client.query("DROP TABLE IF EXISTS mann_whitney;")
+    client.query("DROP STREAM IF EXISTS mann_whitney;")
 
 
 def test_mann_whitney():

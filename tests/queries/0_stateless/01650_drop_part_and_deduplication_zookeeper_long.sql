@@ -1,12 +1,12 @@
 -- Tags: long, zookeeper, no-replicated-database
 -- Tag no-replicated-database: Fails due to additional replicas or shards
 
-DROP TABLE IF EXISTS partitioned_table;
+DROP STREAM IF EXISTS partitioned_table;
 
-CREATE TABLE partitioned_table (
-    key UInt64,
-    partitioner UInt8,
-    value String
+create stream partitioned_table (
+    key uint64,
+    partitioner uint8,
+    value string
 )
 ENGINE ReplicatedMergeTree('/clickhouse/{database}/01650_drop_part_and_deduplication_partitioned_table', '1')
 ORDER BY key
@@ -31,7 +31,7 @@ SELECT partition_id, name FROM system.parts WHERE table = 'partitioned_table' AN
 
 SELECT substring(name, 1, 2), value FROM system.zookeeper WHERE path='/clickhouse/' || currentDatabase() || '/01650_drop_part_and_deduplication_partitioned_table/blocks/' ORDER BY value;
 
-ALTER TABLE partitioned_table DROP PART '3_1_1_0';
+ALTER STREAM partitioned_table DROP PART '3_1_1_0';
 
 SELECT '~~~~parts after drop 3_1_1_0~~~~~';
 
@@ -47,4 +47,4 @@ SELECT partition_id, name FROM system.parts WHERE table = 'partitioned_table' AN
 
 SELECT substring(name, 1, 2), value FROM system.zookeeper WHERE path='/clickhouse/' || currentDatabase() || '/01650_drop_part_and_deduplication_partitioned_table/blocks/' ORDER BY value;
 
-DROP TABLE IF EXISTS partitioned_table;
+DROP STREAM IF EXISTS partitioned_table;

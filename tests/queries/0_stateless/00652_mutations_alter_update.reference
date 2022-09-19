@@ -2,7 +2,7 @@
 Updating partition key should fail
 Updating primary key should fail
 Updating MATERIALIZED column should fail
-Updating with non-UInt8 predicate should fail
+Updating with non-uint8 predicate should fail
 *** Test updating according to a predicate ***
 2000-01-01	123	aaa	101
 2000-01-01	234	cde	2

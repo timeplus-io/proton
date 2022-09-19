@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS ints;
-DROP TABLE IF EXISTS floats;
-DROP TABLE IF EXISTS strings;
+DROP STREAM IF EXISTS ints;
+DROP STREAM IF EXISTS floats;
+DROP STREAM IF EXISTS strings;
 
-CREATE TABLE ints (
+create stream ints (
     a TINYINT,
     b TINYINT(8),
     c SMALLINT,
@@ -15,9 +15,9 @@ CREATE TABLE ints (
 
 INSERT INTO ints VALUES (1, 8, 11, 16, 21, 32, 41, 64);
 
-SELECT  toTypeName(a), toTypeName(b), toTypeName(c), toTypeName(d), toTypeName(e), toTypeName(f), toTypeName(g), toTypeName(h) FROM ints;
+SELECT  to_type_name(a), to_type_name(b), to_type_name(c), to_type_name(d), to_type_name(e), to_type_name(f), to_type_name(g), to_type_name(h) FROM ints;
 
-CREATE TABLE floats (
+create stream floats (
     a FLOAT,
     b FLOAT(12),
     c FLOAT(15, 22),
@@ -29,18 +29,18 @@ CREATE TABLE floats (
 
 INSERT INTO floats VALUES (1.1, 1.2, 1.3, 41.1, 41.1, 42.1);
 
-SELECT  toTypeName(a), toTypeName(b), toTypeName(c), toTypeName(d), toTypeName(e), toTypeName(f) FROM floats;
+SELECT  to_type_name(a), to_type_name(b), to_type_name(c), to_type_name(d), to_type_name(e), to_type_name(f) FROM floats;
 
 
-CREATE TABLE strings (
+create stream strings (
     a VARCHAR,
     b VARCHAR(11)
 ) engine=Memory;
 
 INSERT INTO strings VALUES ('test', 'string');
 
-SELECT  toTypeName(a), toTypeName(b)  FROM strings;
+SELECT  to_type_name(a), to_type_name(b)  FROM strings;
 
-DROP TABLE floats;
-DROP TABLE ints;
-DROP TABLE strings;
+DROP STREAM floats;
+DROP STREAM ints;
+DROP STREAM strings;

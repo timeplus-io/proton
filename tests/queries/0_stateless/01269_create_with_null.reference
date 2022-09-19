@@ -1,7 +1,7 @@
-Nullable(Int32)	Int32	Nullable(Int32)	Int32
-CREATE TABLE default.data_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Int32\n)\nENGINE = Memory
-Nullable(Int32)	Int32	Nullable(Int32)	Nullable(Int32)
-CREATE TABLE default.set_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Nullable(Int32)\n)\nENGINE = Memory
-CREATE TABLE default.set_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Nullable(Int32)\n)\nENGINE = Memory
-CREATE TABLE default.cannot_be_nullable\n(\n    `n` Nullable(Int8),\n    `a` Array(UInt8)\n)\nENGINE = Memory
-CREATE TABLE default.cannot_be_nullable\n(\n    `n` Nullable(Int8),\n    `a` Array(UInt8)\n)\nENGINE = Memory
+Nullable(int32)	int32	Nullable(int32)	int32
+create stream default.data_null\n(\n    `a` Nullable(int32),\n    `b` int32,\n    `c` Nullable(int32),\n    `d` int32\n)\nENGINE = Memory
+Nullable(int32)	int32	Nullable(int32)	Nullable(int32)
+create stream default.set_null\n(\n    `a` Nullable(int32),\n    `b` int32,\n    `c` Nullable(int32),\n    `d` Nullable(int32)\n)\nENGINE = Memory
+create stream default.set_null\n(\n    `a` Nullable(int32),\n    `b` int32,\n    `c` Nullable(int32),\n    `d` Nullable(int32)\n)\nENGINE = Memory
+create stream default.cannot_be_nullable\n(\n    `n` Nullable(int8),\n    `a` array(uint8)\n)\nENGINE = Memory
+create stream default.cannot_be_nullable\n(\n    `n` Nullable(int8),\n    `a` array(uint8)\n)\nENGINE = Memory

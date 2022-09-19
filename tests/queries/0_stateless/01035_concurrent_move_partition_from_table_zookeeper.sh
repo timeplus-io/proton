@@ -7,17 +7,17 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS src;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS dst;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS src;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS dst;"
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE src (p UInt64, k String) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src', '1') PARTITION BY p ORDER BY k;"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE dst (p UInt64, k String) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst', '1') PARTITION BY p ORDER BY k SETTINGS old_parts_lifetime=1, cleanup_delay_period=1, cleanup_delay_period_random_add=0;"
+$CLICKHOUSE_CLIENT --query="create stream src (p uint64, k string) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src', '1') PARTITION BY p ORDER BY k;"
+$CLICKHOUSE_CLIENT --query="create stream dst (p uint64, k string) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst', '1') PARTITION BY p ORDER BY k SETTINGS old_parts_lifetime=1, cleanup_delay_period=1, cleanup_delay_period_random_add=0;"
 
 function thread1()
 {
     while true;
     do
-        $CLICKHOUSE_CLIENT --query="ALTER TABLE src MOVE PARTITION 1 TO TABLE dst;" --query_id=query1
+        $CLICKHOUSE_CLIENT --query="ALTER STREAM src MOVE PARTITION 1 TO TABLE dst;" --query_id=query1
     done
 }
 
@@ -25,7 +25,7 @@ function thread2()
 {
     while true;
     do
-        $CLICKHOUSE_CLIENT --query="INSERT INTO src SELECT number % 2, toString(number) FROM system.numbers LIMIT 100000" --query_id=query2
+        $CLICKHOUSE_CLIENT --query="INSERT INTO src SELECT number % 2, to_string(number) FROM system.numbers LIMIT 100000" --query_id=query2
     done
 }
 
@@ -49,7 +49,7 @@ function thread5()
 {
     while true;
     do
-        $CLICKHOUSE_CLIENT --query="ALTER TABLE src MOVE PARTITION 1 TO TABLE dst;" --query_id=query5
+        $CLICKHOUSE_CLIENT --query="ALTER STREAM src MOVE PARTITION 1 TO TABLE dst;" --query_id=query5
     done
 }
 
@@ -70,8 +70,8 @@ timeout $TIMEOUT bash -c thread5 2> /dev/null &
 
 wait
 
-echo "DROP TABLE src NO DELAY" | ${CLICKHOUSE_CLIENT}
-echo "DROP TABLE dst NO DELAY" | ${CLICKHOUSE_CLIENT}
+echo "DROP STREAM src NO DELAY" | ${CLICKHOUSE_CLIENT}
+echo "DROP STREAM dst NO DELAY" | ${CLICKHOUSE_CLIENT}
 sleep 5
 
 # Check for deadlocks

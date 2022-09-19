@@ -8,11 +8,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=./mergetree_mutations.lib
 . "$CURDIR"/mergetree_mutations.lib
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS kill_mutation_r1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS kill_mutation_r2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS kill_mutation_r1"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS kill_mutation_r2"
 
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE kill_mutation_r1(d Date, x UInt32, s String) ENGINE ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/kill_mutation', '1') ORDER BY x PARTITION BY d"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE kill_mutation_r2(d Date, x UInt32, s String) ENGINE ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/kill_mutation', '2') ORDER BY x PARTITION BY d"
+${CLICKHOUSE_CLIENT} --query="create stream kill_mutation_r1(d date, x uint32, s string) ENGINE ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/kill_mutation', '1') ORDER BY x PARTITION BY d"
+${CLICKHOUSE_CLIENT} --query="create stream kill_mutation_r2(d date, x uint32, s string) ENGINE ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/kill_mutation', '2') ORDER BY x PARTITION BY d"
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO kill_mutation_r1 VALUES ('2000-01-01', 1, 'a')"
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO kill_mutation_r1 VALUES ('2001-01-01', 2, 'b')"
@@ -21,7 +21,7 @@ ${CLICKHOUSE_CLIENT} --query="INSERT INTO kill_mutation_r1 VALUES ('2001-01-01',
 ${CLICKHOUSE_CLIENT} --query="SELECT '*** Create and kill a single invalid mutation ***'"
 
 # wrong mutation
-${CLICKHOUSE_CLIENT} --query="ALTER TABLE kill_mutation_r1 DELETE WHERE toUInt32(s) = 1 SETTINGS mutations_sync=2" 2>&1 | grep -o "happened during execution of mutation '0000000000'" | head -n 1
+${CLICKHOUSE_CLIENT} --query="ALTER STREAM kill_mutation_r1 DELETE WHERE to_uint32(s) = 1 SETTINGS mutations_sync=2" 2>&1 | grep -o "happened during execution of mutation '0000000000'" | head -n 1
 
 ${CLICKHOUSE_CLIENT} --query="SELECT count() FROM system.mutations WHERE database = '$CLICKHOUSE_DATABASE' AND table = 'kill_mutation_r1' AND is_done = 0"
 
@@ -38,10 +38,10 @@ ${CLICKHOUSE_CLIENT} --query="SYSTEM SYNC REPLICA kill_mutation_r2"
 # Should be empty, but in case of problems we will see some diagnostics
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM system.replication_queue WHERE table like 'kill_mutation_r%'"
 
-${CLICKHOUSE_CLIENT} --query="ALTER TABLE kill_mutation_r1 DELETE WHERE toUInt32(s) = 1"
+${CLICKHOUSE_CLIENT} --query="ALTER STREAM kill_mutation_r1 DELETE WHERE to_uint32(s) = 1"
 
 # good mutation, but blocked with wrong mutation
-${CLICKHOUSE_CLIENT} --query="ALTER TABLE kill_mutation_r1 DELETE WHERE x = 1"
+${CLICKHOUSE_CLIENT} --query="ALTER STREAM kill_mutation_r1 DELETE WHERE x = 1"
 
 check_query1="SELECT count() FROM system.mutations WHERE database = '$CLICKHOUSE_DATABASE' AND table = 'kill_mutation_r1' AND is_done = 0"
 
@@ -65,5 +65,5 @@ ${CLICKHOUSE_CLIENT} --query="SELECT * FROM kill_mutation_r2"
 # must be empty
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM system.mutations WHERE table = 'kill_mutation' AND database = '$CLICKHOUSE_DATABASE' AND is_done = 0"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE kill_mutation_r1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE kill_mutation_r2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM kill_mutation_r1"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM kill_mutation_r2"

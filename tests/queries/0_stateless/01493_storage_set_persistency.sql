@@ -1,35 +1,35 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS set;
-DROP TABLE IF EXISTS number;
+DROP STREAM IF EXISTS set;
+DROP STREAM IF EXISTS number;
 
-CREATE TABLE number (number UInt64) ENGINE = Memory();
+create stream number (number uint64) ();
 INSERT INTO number values (1);
 
 SELECT '----- Default Settings -----';
-CREATE TABLE set (val UInt64) ENGINE = Set();
+create stream set (val uint64) ENGINE = Set();
 INSERT INTO set VALUES (1);
 DETACH TABLE set;
 ATTACH TABLE set;
 SELECT number FROM number WHERE number IN set LIMIT 1;
 
-DROP TABLE set;
+DROP STREAM set;
 
 SELECT '----- Settings persistent=1 -----';
-CREATE TABLE set (val UInt64) ENGINE = Set() SETTINGS persistent=1;
+create stream set (val uint64) ENGINE = Set() SETTINGS persistent=1;
 INSERT INTO set VALUES (1);
 DETACH TABLE set;
 ATTACH TABLE set;
 SELECT number FROM number WHERE number IN set LIMIT 1;
 
-DROP TABLE set;
+DROP STREAM set;
 
 SELECT '----- Settings persistent=0 -----';
-CREATE TABLE set (val UInt64) ENGINE = Set() SETTINGS persistent=0;
+create stream set (val uint64) ENGINE = Set() SETTINGS persistent=0;
 INSERT INTO set VALUES (1);
 DETACH TABLE set;
 ATTACH TABLE set;
 SELECT number FROM number WHERE number IN set LIMIT 1;
 
-DROP TABLE set;
-DROP TABLE number;
+DROP STREAM set;
+DROP STREAM number;

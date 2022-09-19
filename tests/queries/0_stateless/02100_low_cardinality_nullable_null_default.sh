@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS test_02100"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE test_02100 (x LowCardinality(Nullable(String)) DEFAULT 'default') ENGINE=Memory()"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS test_02100"
+$CLICKHOUSE_CLIENT -q "create stream test_02100 (x LowCardinality(Nullable(string)) DEFAULT 'default') ENGINE=Memory()"
 
 FORMATS=('CSV' 'TSV' 'TSVRaw' 'TSKV' 'JSONCompactEachRow' 'JSONEachRow' 'Values')
 
@@ -19,5 +19,5 @@ do
     $CLICKHOUSE_CLIENT -q "TRUNCATE TABLE test_02100"
 done
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE test_02100"
+$CLICKHOUSE_CLIENT -q "DROP STREAM test_02100"
 

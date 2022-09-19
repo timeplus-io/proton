@@ -7,7 +7,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 $CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS test_01107"
 $CLICKHOUSE_CLIENT -q "CREATE DATABASE test_01107 ENGINE=Atomic"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE test_01107.mt (n UInt64) ENGINE=MergeTree() ORDER BY tuple()"
+$CLICKHOUSE_CLIENT -q "create stream test_01107.mt (n uint64) ENGINE=MergeTree() ORDER BY tuple()"
 
 $CLICKHOUSE_CLIENT -q "INSERT INTO test_01107.mt SELECT number + sleepEachRow(3) FROM numbers(5)" &
 sleep 1

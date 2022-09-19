@@ -10,12 +10,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPLICAS=3
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_alter_add_drop_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_alter_add_drop_$i"
 done
 
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "CREATE TABLE concurrent_alter_add_drop_$i (key UInt64, value0 UInt8) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_alter_add_drop_column', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000"
+    $CLICKHOUSE_CLIENT --query "create stream concurrent_alter_add_drop_$i (key uint64, value0 uint8) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_alter_add_drop_column', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000"
 done
 
 $CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_alter_add_drop_1 SELECT number, number + 10 from numbers(100000)"
@@ -30,9 +30,9 @@ function alter_thread()
     while true; do
         REPLICA=$(($RANDOM % 3 + 1))
         ADD=$(($RANDOM % 5 + 1))
-        $CLICKHOUSE_CLIENT --query "ALTER TABLE concurrent_alter_add_drop_$REPLICA ADD COLUMN value$ADD UInt32 DEFAULT 42 SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
+        $CLICKHOUSE_CLIENT --query "ALTER STREAM concurrent_alter_add_drop_$REPLICA ADD COLUMN value$ADD uint32 DEFAULT 42 SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
         DROP=$(($RANDOM % 5 + 1))
-        $CLICKHOUSE_CLIENT --query "ALTER TABLE concurrent_alter_add_drop_$REPLICA DROP COLUMN value$DROP SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
+        $CLICKHOUSE_CLIENT --query "ALTER STREAM concurrent_alter_add_drop_$REPLICA DROP COLUMN value$DROP SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
         sleep 0.$RANDOM
     done
 }
@@ -42,7 +42,7 @@ function optimize_thread()
 {
     while true; do
         REPLICA=$(($RANDOM % 3 + 1))
-        $CLICKHOUSE_CLIENT --query "OPTIMIZE TABLE concurrent_alter_add_drop_$REPLICA FINAL SETTINGS replication_alter_partitions_sync=0";
+        $CLICKHOUSE_CLIENT --query "OPTIMIZE STREAM concurrent_alter_add_drop_$REPLICA FINAL SETTINGS replication_alter_partitions_sync=0";
         sleep 0.$RANDOM
     done
 }
@@ -100,7 +100,7 @@ done
 echo "Equal number of columns"
 
 # This alter will finish all previous, but replica 1 maybe still not up-to-date
-while [[ $(timeout 120 ${CLICKHOUSE_CLIENT} --query "ALTER TABLE concurrent_alter_add_drop_1 MODIFY COLUMN value0 String SETTINGS replication_alter_partitions_sync=2" 2>&1) ]]; do
+while [[ $(timeout 120 ${CLICKHOUSE_CLIENT} --query "ALTER STREAM concurrent_alter_add_drop_1 MODIFY COLUMN value0 string SETTINGS replication_alter_partitions_sync=2" 2>&1) ]]; do
     sleep 1
 done
 
@@ -112,5 +112,5 @@ for i in $(seq $REPLICAS); do
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.mutations WHERE is_done = 0 and table = 'concurrent_alter_add_drop_$i'"
     $CLICKHOUSE_CLIENT --query "SELECT COUNT() FROM system.replication_queue WHERE table = 'concurrent_alter_add_drop_$i'"
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.replication_queue WHERE table = 'concurrent_alter_add_drop_$i' and (type = 'ALTER_METADATA' or type = 'MUTATE_PART')"
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_alter_add_drop_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_alter_add_drop_$i"
 done

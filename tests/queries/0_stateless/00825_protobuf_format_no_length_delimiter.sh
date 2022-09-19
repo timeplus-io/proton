@@ -10,13 +10,13 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS no_length_delimiter_protobuf_00825;
-DROP TABLE IF EXISTS roundtrip_no_length_delimiter_protobuf_00825;
+DROP STREAM IF EXISTS no_length_delimiter_protobuf_00825;
+DROP STREAM IF EXISTS roundtrip_no_length_delimiter_protobuf_00825;
 
-CREATE TABLE no_length_delimiter_protobuf_00825
+create stream no_length_delimiter_protobuf_00825
 (
-  x Int32,
-  str String
+  x int32,
+  str string
 ) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO no_length_delimiter_protobuf_00825 VALUES (1000, '1K'), (2000, '2K'), (3000, '3K');
@@ -37,7 +37,7 @@ echo
 # Check the input in the ProtobufSingle format.
 echo
 echo "Roundtrip:"
-$CLICKHOUSE_CLIENT --query "CREATE TABLE roundtrip_no_length_delimiter_protobuf_00825 AS no_length_delimiter_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "create stream roundtrip_no_length_delimiter_protobuf_00825 AS no_length_delimiter_protobuf_00825"
 $CLICKHOUSE_CLIENT --query "INSERT INTO roundtrip_no_length_delimiter_protobuf_00825 FORMAT ProtobufSingle SETTINGS format_schema='$SCHEMADIR/00825_protobuf_format_no_length_delimiter:Message'" < "$BINARY_FILE_PATH"
 $CLICKHOUSE_CLIENT --query "SELECT * FROM roundtrip_no_length_delimiter_protobuf_00825"
 rm "$BINARY_FILE_PATH"
@@ -48,6 +48,6 @@ SELECT * FROM no_length_delimiter_protobuf_00825 FORMAT ProtobufSingle SETTINGS 
 EOF
 
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE no_length_delimiter_protobuf_00825;
-DROP TABLE roundtrip_no_length_delimiter_protobuf_00825;
+DROP STREAM no_length_delimiter_protobuf_00825;
+DROP STREAM roundtrip_no_length_delimiter_protobuf_00825;
 EOF

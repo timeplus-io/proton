@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS test;
-CREATE TABLE test(date Date, keys Array(Nullable(UInt8))) ENGINE = MergeTree(date, date, 1);
+DROP STREAM IF EXISTS test;
+create stream test(date date, keys array(Nullable(uint8))) ENGINE = MergeTree(date, date, 1);
 INSERT INTO test VALUES ('2017-09-10', [1, 2, 3, 4, 5, 6, 7, NULL]);
 SELECT * FROM test LIMIT 1;
 SELECT avgArray(keys) FROM test;
-DROP TABLE test;
+DROP STREAM test;

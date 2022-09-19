@@ -7,8 +7,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS cannot_kill_query"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE cannot_kill_query (x UInt64) ENGINE = MergeTree ORDER BY x" &> /dev/null
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS cannot_kill_query"
+$CLICKHOUSE_CLIENT -q "create stream cannot_kill_query (x uint64) ENGINE = MergeTree ORDER BY x" &> /dev/null
 $CLICKHOUSE_CLIENT -q "INSERT INTO cannot_kill_query SELECT * FROM numbers(10000000)" &> /dev/null
 
 # This SELECT query will run for a long time. It's used as bloker for ALTER query. It will be killed with SYNC kill.
@@ -18,7 +18,7 @@ $CLICKHOUSE_CLIENT -q "$query_for_pending" &>/dev/null &
 sleep 1 # queries should be in strict order
 
 # This ALTER query will wait until $query_for_pending finished. Also it will block $query_to_kill.
-$CLICKHOUSE_CLIENT -q "ALTER TABLE cannot_kill_query MODIFY COLUMN x UInt64" &>/dev/null &
+$CLICKHOUSE_CLIENT -q "ALTER STREAM cannot_kill_query MODIFY COLUMN x uint64" &>/dev/null &
 
 sleep 1
 
@@ -49,4 +49,4 @@ do
     fi
 done
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS cannot_kill_query" &>/dev/null
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS cannot_kill_query" &>/dev/null

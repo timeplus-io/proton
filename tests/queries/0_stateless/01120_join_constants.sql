@@ -6,13 +6,13 @@ SELECT
 FROM
 (
     SELECT
-        arrayJoin([1, 2]) AS k,
+        array_join([1, 2]) AS k,
         'hello'
 ) AS t1
 LEFT JOIN
 (
     SELECT
-        arrayJoin([1, 3]) AS k,
+        array_join([1, 3]) AS k,
         'world'
 ) AS t2 ON t1.k = t2.k;
 
@@ -24,12 +24,12 @@ SELECT
 FROM
 (
     SELECT
-        arrayJoin([1, 2]) AS k,
+        array_join([1, 2]) AS k,
         321
 ) AS t1
 LEFT JOIN
 (
     SELECT
-        arrayJoin([1, 3]) AS k,
+        array_join([1, 3]) AS k,
         123
 ) AS t2 ON t1.k = t2.k;

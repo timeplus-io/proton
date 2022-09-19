@@ -1,6 +1,6 @@
-SELECT CAST(1 AS UInt8);
-SELECT CAST([] AS Array(UInt8));
-SELECT CAST(1, 'UInt8');
+SELECT CAST(1 AS uint8);
+SELECT CAST([] AS array(uint8));
+SELECT CAST(1, 'uint8');
 
 SELECT SUBSTRING('Hello, world' FROM 8);
 SELECT SUBSTRING('Hello, world' FROM 8 FOR 5);

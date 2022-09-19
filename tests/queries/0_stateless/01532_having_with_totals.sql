@@ -1,5 +1,6 @@
-drop table if exists local_t;
-create table local_t engine Log as select 1 a;
+SET query_mode = 'table';
+drop stream if exists local_t;
+create stream local_t engine Log as select 1 a;
 
 SELECT '127.0.0.{1,2}';
 SELECT *
@@ -42,4 +43,4 @@ HAVING a IN
 );
 
 
-drop table if exists local_t;
+drop stream if exists local_t;

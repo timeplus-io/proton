@@ -7,27 +7,27 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=./mergetree_mutations.lib
 . "$CURDIR"/mergetree_mutations.lib
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS indices_mutaions1;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS indices_mutaions2;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS indices_mutaions1;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS indices_mutaions2;"
 
 
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE indices_mutaions1
+create stream indices_mutaions1
 (
-    u64 UInt64,
-    i64 Int64,
-    i32 Int32,
+    u64 uint64,
+    i64 int64,
+    i32 int32,
     INDEX idx (i64, u64 * i64) TYPE minmax GRANULARITY 1
 ) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/indices_mutaions', 'r1')
 PARTITION BY i32
 ORDER BY u64
 SETTINGS index_granularity = 2;
 
-CREATE TABLE indices_mutaions2
+create stream indices_mutaions2
 (
-    u64 UInt64,
-    i64 Int64,
-    i32 Int32,
+    u64 uint64,
+    i64 int64,
+    i32 int32,
     INDEX idx (i64, u64 * i64) TYPE minmax GRANULARITY 1
 ) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/indices_mutaions', 'r2')
 PARTITION BY i32
@@ -52,15 +52,15 @@ $CLICKHOUSE_CLIENT --query="SYSTEM SYNC REPLICA indices_mutaions2"
 $CLICKHOUSE_CLIENT --query="SELECT count() FROM indices_mutaions2 WHERE i64 = 2;"
 $CLICKHOUSE_CLIENT --query="SELECT count() FROM indices_mutaions2 WHERE i64 = 2 FORMAT JSON;" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="ALTER TABLE indices_mutaions1 CLEAR INDEX idx IN PARTITION 1;" --replication_alter_partitions_sync=2 --mutations_sync=2
+$CLICKHOUSE_CLIENT --query="ALTER STREAM indices_mutaions1 CLEAR INDEX idx IN PARTITION 1;" --replication_alter_partitions_sync=2 --mutations_sync=2
 
 $CLICKHOUSE_CLIENT --query="SELECT count() FROM indices_mutaions2 WHERE i64 = 2;"
 $CLICKHOUSE_CLIENT --query="SELECT count() FROM indices_mutaions2 WHERE i64 = 2 FORMAT JSON;" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="ALTER TABLE indices_mutaions1 MATERIALIZE INDEX idx IN PARTITION 1;" --replication_alter_partitions_sync=2 --mutations_sync=2
+$CLICKHOUSE_CLIENT --query="ALTER STREAM indices_mutaions1 MATERIALIZE INDEX idx IN PARTITION 1;" --replication_alter_partitions_sync=2 --mutations_sync=2
 
 $CLICKHOUSE_CLIENT --query="SELECT count() FROM indices_mutaions2 WHERE i64 = 2;"
 $CLICKHOUSE_CLIENT --query="SELECT count() FROM indices_mutaions2 WHERE i64 = 2 FORMAT JSON;" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE indices_mutaions1"
-$CLICKHOUSE_CLIENT --query="DROP TABLE indices_mutaions2"
+$CLICKHOUSE_CLIENT --query="DROP STREAM indices_mutaions1"
+$CLICKHOUSE_CLIENT --query="DROP STREAM indices_mutaions2"

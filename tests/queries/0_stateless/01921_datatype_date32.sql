@@ -1,31 +1,32 @@
-drop table if exists t1;
-create table t1(x1 Date32) engine Memory;
+SET query_mode = 'table';
+drop stream if exists t1;
+create stream t1(x1 date32) engine Memory;
 
 insert into t1 values ('1925-01-01'),('1924-01-01'),('2282-12-31'),('2283-12-31'),('2021-06-22');
 
 select x1 from t1;
-select '-------toYear---------';
-select toYear(x1) from t1;
-select '-------toMonth---------';
-select toMonth(x1) from t1;
+select '-------to_year---------';
+select to_year(x1) from t1;
+select '-------to_month---------';
+select to_month(x1) from t1;
 select '-------toQuarter---------';
 select toQuarter(x1) from t1;
-select '-------toDayOfMonth---------';
-select toDayOfMonth(x1) from t1;
-select '-------toDayOfWeek---------';
-select toDayOfWeek(x1) from t1;
+select '-------to_day_of_month---------';
+select to_day_of_month(x1) from t1;
+select '-------to_day_of_week---------';
+select to_day_of_week(x1) from t1;
 select '-------toDayOfYear---------';
 select toDayOfYear(x1) from t1;
-select '-------toHour---------';
-select toHour(x1) from t1; -- { serverError 43 }
-select '-------toMinute---------';
-select toMinute(x1) from t1; -- { serverError 43 }
-select '-------toSecond---------';
-select toSecond(x1) from t1; -- { serverError 43 }
-select '-------toStartOfDay---------';
-select toStartOfDay(x1, 'Europe/Moscow') from t1;
-select '-------toMonday---------';
-select toMonday(x1) from t1;
+select '-------to_hour---------';
+select to_hour(x1) from t1; -- { serverError 43 }
+select '-------to_minute---------';
+select to_minute(x1) from t1; -- { serverError 43 }
+select '-------to_second---------';
+select to_second(x1) from t1; -- { serverError 43 }
+select '-------to_start_of_day---------';
+select to_start_of_day(x1, 'Europe/Moscow') from t1;
+select '-------to_monday---------';
+select to_monday(x1) from t1;
 select '-------toISOWeek---------';
 select toISOWeek(x1) from t1;
 select '-------toISOYear---------';
@@ -37,43 +38,43 @@ select toYearWeek(x1) from t1;
 select '-------toStartOfWeek---------';
 select toStartOfWeek(x1) from t1;
 select '-------toStartOfMonth---------';
-select toStartOfMonth(x1) from t1;
-select '-------toStartOfQuarter---------';
-select toStartOfQuarter(x1) from t1;
-select '-------toStartOfYear---------';
-select toStartOfYear(x1) from t1;
+select to_start_of_month(x1) from t1;
+select '-------to_start_of_quarter---------';
+select to_start_of_quarter(x1) from t1;
+select '-------to_start_of_year---------';
+select to_start_of_year(x1) from t1;
 select '-------toStartOfSecond---------';
 select toStartOfSecond(x1) from t1; -- { serverError 43 }
-select '-------toStartOfMinute---------';
-select toStartOfMinute(x1) from t1; -- { serverError 43 }
-select '-------toStartOfFiveMinute---------';
-select toStartOfFiveMinute(x1) from t1; -- { serverError 43 }
-select '-------toStartOfTenMinutes---------';
-select toStartOfTenMinutes(x1) from t1; -- { serverError 43 }
-select '-------toStartOfFifteenMinutes---------';
-select toStartOfFifteenMinutes(x1) from t1; -- { serverError 43 }
-select '-------toStartOfHour---------';
-select toStartOfHour(x1) from t1; -- { serverError 43 }
+select '-------to_start_of_minute---------';
+select to_start_of_minute(x1) from t1; -- { serverError 43 }
+select '-------to_start_of_five_minute---------';
+select to_start_of_five_minute(x1) from t1; -- { serverError 43 }
+select '-------to_start_of_ten_minute---------';
+select to_start_of_ten_minute(x1) from t1; -- { serverError 43 }
+select '-------to_start_of_fifteen_minute---------';
+select to_start_of_fifteen_minute(x1) from t1; -- { serverError 43 }
+select '-------to_start_of_hour---------';
+select to_start_of_hour(x1) from t1; -- { serverError 43 }
 select '-------toStartOfISOYear---------';
 select toStartOfISOYear(x1) from t1;
-select '-------toRelativeYearNum---------';
-select toRelativeYearNum(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_year_num---------';
+select to_relative_year_num(x1, 'Europe/Moscow') from t1;
 select '-------toRelativeQuarterNum---------';
 select toRelativeQuarterNum(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeMonthNum---------';
-select toRelativeMonthNum(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeWeekNum---------';
-select toRelativeWeekNum(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeDayNum---------';
-select toRelativeDayNum(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeHourNum---------';
-select toRelativeHourNum(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeMinuteNum---------';
-select toRelativeMinuteNum(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeSecondNum---------';
-select toRelativeSecondNum(x1, 'Europe/Moscow') from t1;
-select '-------toTime---------';
-select toTime(x1) from t1; -- { serverError 43 }
+select '-------to_relative_month_num---------';
+select to_relative_month_num(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_week_num---------';
+select to_relative_week_num(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_day_num---------';
+select to_relative_day_num(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_hour_num---------';
+select to_relative_hour_num(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_minute_num---------';
+select to_relative_minute_num(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_second_num---------';
+select to_relative_second_num(x1, 'Europe/Moscow') from t1;
+select '-------to_time---------';
+select to_time(x1) from t1; -- { serverError 43 }
 select '-------toYYYYMM---------';
 select toYYYYMM(x1) from t1;
 select '-------toYYYYMMDD---------';
@@ -113,7 +114,7 @@ select subtractQuarters(x1, 1) from t1;
 select '-------subtractYears---------';
 select subtractYears(x1, 1) from t1;
 select '-------toDate32---------';
-select toDate32('1925-01-01'), toDate32(toDate('2000-01-01'));
+select toDate32('1925-01-01'), toDate32(to_date('2000-01-01'));
 select toDate32OrZero('1924-01-01'), toDate32OrNull('1924-01-01');
 select toDate32OrZero(''), toDate32OrNull('');
 select (select toDate32OrZero(''));

@@ -1,9 +1,9 @@
-Array product with constant column
-720	Float64
-24	Float64
-3.5	Float64
-6	Float64
-Array product with non constant column
+array product with constant column
+720	float64
+24	float64
+3.5	float64
+6	float64
+array product with non constant column
 24
 0
 6
@@ -11,8 +11,8 @@ Array product with non constant column
 0
 6
 Types of aggregation result array product
-Float64	Float64	Float64	Float64
-Float64	Float64	Float64	Float64
-Float64	Float64	Float64
-Float64	Float64
-Float64	Float64	Float64
+float64	float64	float64	float64
+float64	float64	float64	float64
+float64	float64	float64
+float64	float64
+float64	float64	float64

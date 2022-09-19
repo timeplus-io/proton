@@ -28,9 +28,9 @@ cp ${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz ${CLICKHOUSE_TMP}
 gunzip ${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz_to_decomp.gz
 cat ${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz_to_decomp
 
-# create table to check inserts
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS test_compression_keyword;"
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE test_compression_keyword (text String) Engine=Memory;"
+# create stream to check inserts
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS test_compression_keyword;"
+${CLICKHOUSE_CLIENT} --query "create stream test_compression_keyword (text string) Engine=Memory;"
 
 # insert them
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO TABLE test_compression_keyword FROM INFILE '${CLICKHOUSE_TMP}/test_comp_for_input_and_output.gz' FORMAT TabSeparated;"
@@ -45,7 +45,7 @@ rm -f "${CLICKHOUSE_TMP}/test_comp_for_input_and_output_to_decomp"
 rm -f "${CLICKHOUSE_TMP}/test_comp_for_input_and_output.gz"
 rm -f "${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz_to_decomp"
 rm -f "${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz"
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS test_compression_keyword;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS test_compression_keyword;"
 
 #____________________LOCAL__________________
 # clear files from previous tests.
@@ -67,10 +67,10 @@ cp ${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz ${CLICKHOUSE_TMP}
 gunzip ${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz_to_decomp.gz
 cat ${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz_to_decomp
 
-# create table to check inserts
+# create stream to check inserts
 ${CLICKHOUSE_LOCAL} --query "
-DROP TABLE IF EXISTS test_compression_keyword;
-CREATE TABLE test_compression_keyword (text String) Engine=Memory;
+DROP STREAM IF EXISTS test_compression_keyword;
+create stream test_compression_keyword (text string) Engine=Memory;
 INSERT INTO TABLE test_compression_keyword FROM INFILE '${CLICKHOUSE_TMP}/test_comp_for_input_and_output.gz' FORMAT TabSeparated;
 INSERT INTO TABLE test_compression_keyword FROM INFILE '${CLICKHOUSE_TMP}/test_comp_for_input_and_output.gz' COMPRESSION 'gz' FORMAT TabSeparated;
 INSERT INTO TABLE test_compression_keyword FROM INFILE '${CLICKHOUSE_TMP}/test_comp_for_input_and_output_without_gz' COMPRESSION 'gz' FORMAT TabSeparated;

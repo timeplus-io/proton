@@ -2,11 +2,11 @@ SET enable_optimize_predicate_expression = 0;
 
 select * from system.one l cross join system.one r;
 
-DROP TABLE IF EXISTS t1_00826;
-DROP TABLE IF EXISTS t2_00826;
+DROP STREAM IF EXISTS t1_00826;
+DROP STREAM IF EXISTS t2_00826;
 
-CREATE TABLE t1_00826 (a Int8, b Nullable(Int8)) ENGINE = Memory;
-CREATE TABLE t2_00826 (a Int8, b Nullable(Int8)) ENGINE = Memory;
+create stream t1_00826 (a int8, b Nullable(int8)) ;
+create stream t2_00826 (a int8, b Nullable(int8)) ;
 
 INSERT INTO t1_00826 values (1,1), (2,2);
 INSERT INTO t2_00826 values (1,1), (1,2);
@@ -86,5 +86,5 @@ EXPLAIN SYNTAX SELECT * FROM t1_00826, t2_00826 where t1_00826.b = t2_00826.b;
 SELECT '--- comma and or ---';
 EXPLAIN SYNTAX SELECT * FROM t1_00826, t2_00826 where t1_00826.a = t2_00826.a AND (t2_00826.b IS NULL OR t2_00826.b < 2);
 
-DROP TABLE t1_00826;
-DROP TABLE t2_00826;
+DROP STREAM t1_00826;
+DROP STREAM t2_00826;

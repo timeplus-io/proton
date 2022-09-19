@@ -1,16 +1,16 @@
-DROP TABLE IF EXISTS test_move_partition_src;
-DROP TABLE IF EXISTS test_move_partition_dest;
+DROP STREAM IF EXISTS test_move_partition_src;
+DROP STREAM IF EXISTS test_move_partition_dest;
 
-CREATE TABLE IF NOT EXISTS test_move_partition_src (
-    pk UInt8,
-    val UInt32
+create stream IF NOT EXISTS test_move_partition_src (
+    pk uint8,
+    val uint32
 ) Engine = MergeTree()
   PARTITION BY pk
   ORDER BY (pk, val);
 
-CREATE TABLE IF NOT EXISTS test_move_partition_dest (
-    pk UInt8,
-    val UInt32
+create stream IF NOT EXISTS test_move_partition_dest (
+    pk uint8,
+    val uint32
 ) Engine = MergeTree()
   PARTITION BY pk
   ORDER BY (pk, val);
@@ -20,10 +20,10 @@ INSERT INTO test_move_partition_src SELECT number % 2, number FROM system.number
 SELECT count() FROM test_move_partition_src;
 SELECT count() FROM test_move_partition_dest;
 
-ALTER TABLE test_move_partition_src MOVE PARTITION 1 TO TABLE test_move_partition_dest;
+ALTER STREAM test_move_partition_src MOVE PARTITION 1 TO TABLE test_move_partition_dest;
 
 SELECT count() FROM test_move_partition_src;
 SELECT count() FROM test_move_partition_dest;
 
-DROP TABLE test_move_partition_src;
-DROP TABLE test_move_partition_dest;
+DROP STREAM test_move_partition_src;
+DROP STREAM test_move_partition_dest;

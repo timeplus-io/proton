@@ -1,17 +1,18 @@
-drop table if exists product_groups;
-drop table if exists products;
+SET query_mode = 'table';
+drop stream if exists product_groups;
+drop stream if exists products;
 
-CREATE TABLE product_groups (
-	group_id Int64,
-	group_name String
+create stream product_groups (
+	group_id int64,
+	group_name string
 ) Engine = Memory;
 
 
-CREATE TABLE products (
-	product_id Int64,
-	product_name String,
+create stream products (
+	product_id int64,
+	product_name string,
 	price DECIMAL(11, 2),
-	group_id Int64
+	group_id int64
 ) Engine = Memory;
 
 INSERT INTO product_groups  VALUES	(1, 'Smartphone'),(2, 'Laptop'),(3, 'Tablet');
@@ -101,5 +102,5 @@ SELECT
 FROM products INNER JOIN  product_groups USING (group_id)) t
 order by group_name, product_name, price;
 
-drop table product_groups;
-drop table products;
+drop stream product_groups;
+drop stream products;

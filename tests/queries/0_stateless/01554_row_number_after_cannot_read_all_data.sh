@@ -4,4 +4,4 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-echo -n -e '\x01\x00\x00\x00\x05Hello\x80' | ${CLICKHOUSE_LOCAL} --structure 'x UInt32, s String' --query "SELECT * FROM table" --input-format RowBinary 2>&1 | grep -oF '(at row 2)'
+echo -n -e '\x01\x00\x00\x00\x05Hello\x80' | ${CLICKHOUSE_LOCAL} --structure 'x uint32, s string' --query "SELECT * FROM table" --input-format RowBinary 2>&1 | grep -oF '(at row 2)'

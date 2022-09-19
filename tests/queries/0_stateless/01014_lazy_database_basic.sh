@@ -9,9 +9,9 @@ ${CLICKHOUSE_CLIENT} -n -q "DROP DATABASE IF EXISTS testlazy"
 
 ${CLICKHOUSE_CLIENT} -n -q "
     CREATE DATABASE testlazy ENGINE = Lazy(1);
-    CREATE TABLE testlazy.log (a UInt64, b UInt64) ENGINE = Log;
-    CREATE TABLE testlazy.slog (a UInt64, b UInt64) ENGINE = StripeLog;
-    CREATE TABLE testlazy.tlog (a UInt64, b UInt64) ENGINE = TinyLog;
+    create stream testlazy.log (a uint64, b uint64)  ;
+    create stream testlazy.slog (a uint64, b uint64) ENGINE = StripeLog;
+    create stream testlazy.tlog (a uint64, b uint64) ;
 "
 
 ${CLICKHOUSE_CLIENT} -q "SELECT * FROM system.parts WHERE database = 'testlazy'";
@@ -57,7 +57,7 @@ sleep 1.5
 
 ${CLICKHOUSE_CLIENT} -n -q "
     SELECT * FROM testlazy.log2 LIMIT 0; -- drop testlazy.log2 from cache
-    DROP TABLE testlazy.log2;
+    DROP STREAM testlazy.log2;
 "
 
 sleep 1.5

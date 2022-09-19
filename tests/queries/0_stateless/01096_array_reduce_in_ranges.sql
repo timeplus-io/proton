@@ -18,7 +18,7 @@ SELECT
     );
 
 WITH
-    arrayMap(x -> x + 1, range(50)) as data
+    array_map(x -> x + 1, range(50)) as data
 SELECT
     arrayReduceInRanges('groupArray', [(a, c), (b, d)], data) =
         [arraySlice(data, a, c), arraySlice(data, b, d)]

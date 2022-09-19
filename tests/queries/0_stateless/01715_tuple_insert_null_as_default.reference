@@ -1,15 +1,15 @@
-Tuple
+tuple
 (0,1)
 (0,1)
-Tuple nested in Array
+tuple nested in array
 [(0,2),(3,0),(0,4)]
 [(0,2),(3,0),(0,4)]
-Tuple nested in Array nested in Tuple
+tuple nested in array nested in tuple
 (0,[(0,2),(3,0),(0,4)])
 (0,[(0,2),(3,0),(0,4)])
-Tuple nested in Map
+tuple nested in Map
 {'test':(0,1)}
 {'test':(0,1)}
-Tuple nested in Map nested in Tuple
+tuple nested in Map nested in tuple
 (0,{'test':(0,1)})
 (0,{'test':(0,1)})

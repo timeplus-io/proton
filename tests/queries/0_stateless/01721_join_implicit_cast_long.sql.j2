@@ -1,10 +1,10 @@
 -- Tags: long
 
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;
 
-CREATE TABLE t1 (a UInt16, b UInt16) ENGINE = TinyLog;
-CREATE TABLE t2 (a Int16, b Nullable(Int64)) ENGINE = TinyLog;
+create stream t1 (a uint16, b uint16) ;
+create stream t2 (a Int16, b Nullable(int64)) ;
 
 INSERT INTO t1 SELECT number as a, 100 + number as b FROM system.numbers LIMIT 1, 10;
 INSERT INTO t2 SELECT number - 5 as a, 200 + number - 5 as b FROM system.numbers LIMIT 1, 10;
@@ -55,7 +55,7 @@ SELECT * FROM t1 RIGHT JOIN t2 ON (t1.a + t1.b = t2.a + t2.b - 100) ORDER BY (t1
 SELECT '= inner =';
 SELECT * FROM t1 INNER JOIN t2 ON (t1.a + t1.b = t2.a + t2.b - 100) ORDER BY (t1.a, t2.a);
 
--- Int64 and UInt64 has no supertype
+-- int64 and uint64 has no supertype
 SELECT * FROM t1 FULL JOIN t2 ON (t1.a + t1.b + 100 = t2.a + t2.b) ORDER BY (t1.a, t2.a); -- { serverError 53 }
 SELECT * FROM t1 LEFT JOIN t2 ON (t1.a + t1.b + 100 = t2.a + t2.b) ORDER BY (t1.a, t2.a); -- { serverError 53 }
 SELECT * FROM t1 RIGHT JOIN t2 ON (t1.a + t1.b + 100 = t2.a + t2.b) ORDER BY (t1.a, t2.a); -- { serverError 53 }
@@ -75,19 +75,19 @@ SELECT a > 0, sum(a), sum(b) FROM t1 FULL JOIN t2 USING (a) GROUP BY (a > 0) ORD
 SELECT a > 0, sum(a), sum(t2.a), sum(b), sum(t2.b) FROM t1 FULL JOIN t2 ON (t1.a == t2.a) GROUP BY (a > 0) ORDER BY a > 0;
 
 SELECT '= types =';
-SELECT any(toTypeName(a)) == 'Int32' AND any(toTypeName(t2.a)) == 'Int32' FROM t1 FULL JOIN t2 USING (a);
-SELECT any(toTypeName(a)) == 'Int32' AND any(toTypeName(t2.a)) == 'Int32' FROM t1 LEFT JOIN t2 USING (a);
-SELECT any(toTypeName(a)) == 'Int32' AND any(toTypeName(t2.a)) == 'Int32' FROM t1 RIGHT JOIN t2 USING (a);
-SELECT any(toTypeName(a)) == 'Int32' AND any(toTypeName(t2.a)) == 'Int32' FROM t1 INNER JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'int32' AND any(to_type_name(t2.a)) == 'int32' FROM t1 FULL JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'int32' AND any(to_type_name(t2.a)) == 'int32' FROM t1 LEFT JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'int32' AND any(to_type_name(t2.a)) == 'int32' FROM t1 RIGHT JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'int32' AND any(to_type_name(t2.a)) == 'int32' FROM t1 INNER JOIN t2 USING (a);
 
-SELECT toTypeName(any(a)) == 'Int32' AND toTypeName(any(t2.a)) == 'Int32' FROM t1 FULL JOIN t2 USING (a);
-SELECT min(toTypeName(a) == 'Int32' AND toTypeName(t2.a) == 'Int32') FROM t1 FULL JOIN t2 USING (a);
+SELECT to_type_name(any(a)) == 'int32' AND to_type_name(any(t2.a)) == 'int32' FROM t1 FULL JOIN t2 USING (a);
+SELECT min(to_type_name(a) == 'int32' AND to_type_name(t2.a) == 'int32') FROM t1 FULL JOIN t2 USING (a);
 
-SELECT any(toTypeName(a)) == 'UInt16' AND any(toTypeName(t2.a)) == 'Int16' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
-SELECT any(toTypeName(a)) == 'UInt16' AND any(toTypeName(t2.a)) == 'Int16' FROM t1 LEFT JOIN t2 ON (t1.a == t2.a);
-SELECT any(toTypeName(a)) == 'UInt16' AND any(toTypeName(t2.a)) == 'Int16' FROM t1 RIGHT JOIN t2 ON (t1.a == t2.a);
-SELECT any(toTypeName(a)) == 'UInt16' AND any(toTypeName(t2.a)) == 'Int16' FROM t1 INNER JOIN t2 ON (t1.a == t2.a);
-SELECT toTypeName(any(a)) == 'UInt16' AND toTypeName(any(t2.a)) == 'Int16' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'uint16' AND any(to_type_name(t2.a)) == 'Int16' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'uint16' AND any(to_type_name(t2.a)) == 'Int16' FROM t1 LEFT JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'uint16' AND any(to_type_name(t2.a)) == 'Int16' FROM t1 RIGHT JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'uint16' AND any(to_type_name(t2.a)) == 'Int16' FROM t1 INNER JOIN t2 ON (t1.a == t2.a);
+SELECT to_type_name(any(a)) == 'uint16' AND to_type_name(any(t2.a)) == 'Int16' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
 
 {% if join_type == 'auto' -%}
 SET max_bytes_in_join = 0;
@@ -137,7 +137,7 @@ SELECT * FROM t1 RIGHT JOIN t2 ON (t1.a + t1.b = t2.a + t2.b - 100) ORDER BY (t1
 SELECT '= inner =';
 SELECT * FROM t1 INNER JOIN t2 ON (t1.a + t1.b = t2.a + t2.b - 100) ORDER BY (t1.a, t2.a);
 
--- Int64 and UInt64 has no supertype
+-- int64 and uint64 has no supertype
 SELECT * FROM t1 FULL JOIN t2 ON (t1.a + t1.b + 100 = t2.a + t2.b) ORDER BY (t1.a, t2.a); -- { serverError 53 }
 SELECT * FROM t1 LEFT JOIN t2 ON (t1.a + t1.b + 100 = t2.a + t2.b) ORDER BY (t1.a, t2.a); -- { serverError 53 }
 SELECT * FROM t1 RIGHT JOIN t2 ON (t1.a + t1.b + 100 = t2.a + t2.b) ORDER BY (t1.a, t2.a); -- { serverError 53 }
@@ -157,21 +157,21 @@ SELECT a > 0, sum(a), sum(b) FROM t1 FULL JOIN t2 USING (a) GROUP BY (a > 0) ORD
 SELECT a > 0, sum(a), sum(t2.a), sum(b), sum(t2.b) FROM t1 FULL JOIN t2 ON (t1.a == t2.a) GROUP BY (a > 0) ORDER BY a > 0;
 
 SELECT '= types =';
-SELECT any(toTypeName(a)) == 'Nullable(Int32)' AND any(toTypeName(t2.a)) == 'Nullable(Int32)' FROM t1 FULL JOIN t2 USING (a);
-SELECT any(toTypeName(a)) == 'Int32' AND any(toTypeName(t2.a)) == 'Nullable(Int32)' FROM t1 LEFT JOIN t2 USING (a);
-SELECT any(toTypeName(a)) == 'Nullable(Int32)' AND any(toTypeName(t2.a)) == 'Int32' FROM t1 RIGHT JOIN t2 USING (a);
-SELECT any(toTypeName(a)) == 'Int32' AND any(toTypeName(t2.a)) == 'Int32' FROM t1 INNER JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'Nullable(int32)' AND any(to_type_name(t2.a)) == 'Nullable(int32)' FROM t1 FULL JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'int32' AND any(to_type_name(t2.a)) == 'Nullable(int32)' FROM t1 LEFT JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'Nullable(int32)' AND any(to_type_name(t2.a)) == 'int32' FROM t1 RIGHT JOIN t2 USING (a);
+SELECT any(to_type_name(a)) == 'int32' AND any(to_type_name(t2.a)) == 'int32' FROM t1 INNER JOIN t2 USING (a);
 
-SELECT toTypeName(any(a)) == 'Nullable(Int32)' AND toTypeName(any(t2.a)) == 'Nullable(Int32)' FROM t1 FULL JOIN t2 USING (a);
-SELECT min(toTypeName(a) == 'Nullable(Int32)' AND toTypeName(t2.a) == 'Nullable(Int32)') FROM t1 FULL JOIN t2 USING (a);
+SELECT to_type_name(any(a)) == 'Nullable(int32)' AND to_type_name(any(t2.a)) == 'Nullable(int32)' FROM t1 FULL JOIN t2 USING (a);
+SELECT min(to_type_name(a) == 'Nullable(int32)' AND to_type_name(t2.a) == 'Nullable(int32)') FROM t1 FULL JOIN t2 USING (a);
 
-SELECT any(toTypeName(a)) == 'Nullable(UInt16)' AND any(toTypeName(t2.a)) == 'Nullable(Int16)' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
-SELECT any(toTypeName(a)) == 'UInt16' AND any(toTypeName(t2.a)) == 'Nullable(Int16)' FROM t1 LEFT JOIN t2 ON (t1.a == t2.a);
-SELECT any(toTypeName(a)) == 'Nullable(UInt16)' AND any(toTypeName(t2.a)) == 'Int16' FROM t1 RIGHT JOIN t2 ON (t1.a == t2.a);
-SELECT any(toTypeName(a)) == 'UInt16' AND any(toTypeName(t2.a)) == 'Int16' FROM t1 INNER JOIN t2 ON (t1.a == t2.a);
-SELECT toTypeName(any(a)) == 'Nullable(UInt16)' AND toTypeName(any(t2.a)) == 'Nullable(Int16)' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'Nullable(uint16)' AND any(to_type_name(t2.a)) == 'Nullable(Int16)' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'uint16' AND any(to_type_name(t2.a)) == 'Nullable(Int16)' FROM t1 LEFT JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'Nullable(uint16)' AND any(to_type_name(t2.a)) == 'Int16' FROM t1 RIGHT JOIN t2 ON (t1.a == t2.a);
+SELECT any(to_type_name(a)) == 'uint16' AND any(to_type_name(t2.a)) == 'Int16' FROM t1 INNER JOIN t2 ON (t1.a == t2.a);
+SELECT to_type_name(any(a)) == 'Nullable(uint16)' AND to_type_name(any(t2.a)) == 'Nullable(Int16)' FROM t1 FULL JOIN t2 ON (t1.a == t2.a);
 
 SET join_use_nulls = 0;
 
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;

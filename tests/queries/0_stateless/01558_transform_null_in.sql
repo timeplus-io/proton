@@ -1,7 +1,7 @@
 SET transform_null_in = 1;
 
-DROP TABLE IF EXISTS null_in_1;
-CREATE TABLE null_in_1 (u UInt32, n Nullable(UInt32)) ENGINE = Memory;
+DROP STREAM IF EXISTS null_in_1;
+create stream null_in_1 (u uint32, n Nullable(uint32)) ;
 INSERT INTO null_in_1 VALUES (1, NULL), (2, 2), (3, NULL), (4, 4), (5, NULL);
 
 SELECT count() FROM null_in_1 WHERE n IN (1, 2, NULL);
@@ -12,9 +12,9 @@ SELECT count() FROM null_in_1 WHERE (u, n) IN (42, NULL);
 SELECT count() FROM null_in_1 WHERE (u, n) NOT IN ((3, NULL), (5, NULL));
 
 SELECT '==============';
-DROP TABLE IF EXISTS null_in_1;
+DROP STREAM IF EXISTS null_in_1;
 
-CREATE TABLE null_in_1 (a Nullable(UInt32), b Nullable(UInt32)) ENGINE = Memory;
+create stream null_in_1 (a Nullable(uint32), b Nullable(uint32)) ;
 INSERT INTO null_in_1 VALUES (1, NULL) (0, NULL) (NULL, NULL) (NULL, 1) (NULL, 0) (0, 0) (1, 1);
 
 SELECT count() FROM null_in_1 WHERE (a, b) IN (1, NULL);
@@ -28,4 +28,4 @@ SELECT count() FROM null_in_1 WHERE (a, b) IN (0, 0);
 SELECT count() FROM null_in_1 WHERE (a, b) IN (1, 1);
 SELECT count() FROM null_in_1 WHERE (a, b) IN (1, 42);
 
-DROP TABLE IF EXISTS null_in_1;
+DROP STREAM IF EXISTS null_in_1;

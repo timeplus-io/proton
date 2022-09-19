@@ -1,0 +1,2 @@
+DROP TEMPORARY STREAM IF EXISTS t_00477;
+CREATE TEMPORARY STREAM t_00477 (x array( /* Hello */ uint32 /* World */ )) ;

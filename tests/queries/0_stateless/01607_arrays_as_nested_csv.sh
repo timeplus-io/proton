@@ -5,8 +5,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 ${CLICKHOUSE_CLIENT} --multiquery --query "
-DROP TABLE IF EXISTS test;
-CREATE TABLE test (a Array(String)) ENGINE = Memory;
+DROP STREAM IF EXISTS test;
+create stream test (a array(string)) ;
 "
 
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test FORMAT CSV" <<END
@@ -24,5 +24,5 @@ END
 
 ${CLICKHOUSE_CLIENT} --multiquery --query "
 SELECT * FROM test;
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 "

@@ -5,9 +5,9 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} -q "DROP TABLE IF EXISTS ghdata"
+${CLICKHOUSE_CLIENT} -q "DROP STREAM IF EXISTS ghdata"
 
-${CLICKHOUSE_CLIENT} -q "CREATE TABLE ghdata (data JSON) ENGINE = MergeTree ORDER BY tuple()" --allow_experimental_object_type 1
+${CLICKHOUSE_CLIENT} -q "create stream ghdata (data JSON) ENGINE = MergeTree ORDER BY tuple()" --allow_experimental_object_type 1
 
 cat $CUR_DIR/data_json/ghdata_sample.json | ${CLICKHOUSE_CLIENT} -q "INSERT INTO ghdata FORMAT JSONAsObject"
 
@@ -35,4 +35,4 @@ ${CLICKHOUSE_CLIENT} -q \
 
 ${CLICKHOUSE_CLIENT} -q "SELECT max(data.payload.pull_request.assignees.size0) FROM ghdata"
 
-${CLICKHOUSE_CLIENT} -q "DROP TABLE IF EXISTS ghdata"
+${CLICKHOUSE_CLIENT} -q "DROP STREAM IF EXISTS ghdata"

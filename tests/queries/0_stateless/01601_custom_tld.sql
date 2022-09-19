@@ -35,8 +35,8 @@ select cutToFirstSignificantSubdomainCustomWithWWW('http://www.foo', 'public_suf
 select cutToFirstSignificantSubdomainCustom('http://www.foo', 'public_suffix_list');
 
 select '-- vector';
-select cutToFirstSignificantSubdomainCustom('http://xx.blogspot.co.at/' || toString(number), 'public_suffix_list') from numbers(1);
-select cutToFirstSignificantSubdomainCustom('there-is-no-such-domain' || toString(number), 'public_suffix_list') from numbers(1);
+select cutToFirstSignificantSubdomainCustom('http://xx.blogspot.co.at/' || to_string(number), 'public_suffix_list') from numbers(1);
+select cutToFirstSignificantSubdomainCustom('there-is-no-such-domain' || to_string(number), 'public_suffix_list') from numbers(1);
 
 select '-- no new line';
 select cutToFirstSignificantSubdomainCustom('foo.bar', 'no_new_line_list');

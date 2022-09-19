@@ -6,14 +6,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 $CLICKHOUSE_CLIENT -n --query "
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 
-CREATE TABLE test
+create stream test
 (
   id UUID,
   date_time DateTime,
-  x UInt32,
-  y UInt32
+  x uint32,
+  y uint32
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMMDD(date_time)
 ORDER BY (date_time);
@@ -24,10 +24,10 @@ INSERT INTO test (x, y) VALUES (2, 1);
 $CLICKHOUSE_CLIENT --query "SELECT x, y FROM test"
 
 $CLICKHOUSE_CLIENT --mutations_sync 1 --param_x 1 --param_y 1 --query "
-ALTER TABLE test
-UPDATE x = {x:UInt32}
-WHERE y = {y:UInt32};
+ALTER STREAM test
+UPDATE x = {x:uint32}
+WHERE y = {y:uint32};
 "
 
 $CLICKHOUSE_CLIENT --query "SELECT x, y FROM test"
-$CLICKHOUSE_CLIENT --query "DROP TABLE test"
+$CLICKHOUSE_CLIENT --query "DROP STREAM test"

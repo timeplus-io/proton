@@ -219,13 +219,13 @@ def insertValidLowCardinalityRow():
         writeVarUInt(1, ba) # rows
         writeVarUInt(1, ba) # columns
         writeStringBinary('x', ba)
-        writeStringBinary('LowCardinality(String)', ba)
+        writeStringBinary('LowCardinality(string)', ba)
         ba.extend([1] + [0] * 7) # SharedDictionariesWithAdditionalKeys
-        ba.extend([3, 2] + [0] * 6) # indexes type: UInt64 [3], with additional keys [2]
+        ba.extend([3, 2] + [0] * 6) # indexes type: uint64 [3], with additional keys [2]
         ba.extend([1] + [0] * 7) # num_keys in dict
         writeStringBinary('hello', ba) # key
         ba.extend([1] + [0] * 7) # num_indexes
-        ba.extend([0] * 8) # UInt64 index (0 for 'hello')
+        ba.extend([0] * 8) # uint64 index (0 for 'hello')
         s.sendall(ba)
 
         # Fin block
@@ -255,13 +255,13 @@ def insertLowCardinalityRowWithIndexOverflow():
         writeVarUInt(1, ba) # rows
         writeVarUInt(1, ba) # columns
         writeStringBinary('x', ba)
-        writeStringBinary('LowCardinality(String)', ba)
+        writeStringBinary('LowCardinality(string)', ba)
         ba.extend([1] + [0] * 7) # SharedDictionariesWithAdditionalKeys
-        ba.extend([3, 2] + [0] * 6) # indexes type: UInt64 [3], with additional keys [2]
+        ba.extend([3, 2] + [0] * 6) # indexes type: uint64 [3], with additional keys [2]
         ba.extend([1] + [0] * 7) # num_keys in dict
         writeStringBinary('hello', ba) # key
         ba.extend([1] + [0] * 7) # num_indexes
-        ba.extend([0] * 7 + [1]) # UInt64 index (overflow)
+        ba.extend([0] * 7 + [1]) # uint64 index (overflow)
         s.sendall(ba)
 
         assertPacket(readVarUInt(s), 2)
@@ -289,13 +289,13 @@ def insertLowCardinalityRowWithIncorrectDictType():
         writeVarUInt(1, ba) # rows
         writeVarUInt(1, ba) # columns
         writeStringBinary('x', ba)
-        writeStringBinary('LowCardinality(String)', ba)
+        writeStringBinary('LowCardinality(string)', ba)
         ba.extend([1] + [0] * 7) # SharedDictionariesWithAdditionalKeys
-        ba.extend([3, 3] + [0] * 6) # indexes type: UInt64 [3], with global dict and add keys [1 + 2]
+        ba.extend([3, 3] + [0] * 6) # indexes type: uint64 [3], with global dict and add keys [1 + 2]
         ba.extend([1] + [0] * 7) # num_keys in dict
         writeStringBinary('hello', ba) # key
         ba.extend([1] + [0] * 7) # num_indexes
-        ba.extend([0] * 8) # UInt64 index (overflow)
+        ba.extend([0] * 8) # uint64 index (overflow)
         s.sendall(ba)
 
         assertPacket(readVarUInt(s), 2)
@@ -322,13 +322,13 @@ def insertLowCardinalityRowWithIncorrectAdditionalKeys():
         writeVarUInt(1, ba) # rows
         writeVarUInt(1, ba) # columns
         writeStringBinary('x', ba)
-        writeStringBinary('LowCardinality(String)', ba)
+        writeStringBinary('LowCardinality(string)', ba)
         ba.extend([1] + [0] * 7) # SharedDictionariesWithAdditionalKeys
-        ba.extend([3, 0] + [0] * 6) # indexes type: UInt64 [3], with  NO additional keys [0]
+        ba.extend([3, 0] + [0] * 6) # indexes type: uint64 [3], with  NO additional keys [0]
         ba.extend([1] + [0] * 7) # num_keys in dict
         writeStringBinary('hello', ba) # key
         ba.extend([1] + [0] * 7) # num_indexes
-        ba.extend([0] * 8) # UInt64 index (0 for 'hello')
+        ba.extend([0] * 8) # uint64 index (0 for 'hello')
         s.sendall(ba)
 
         assertPacket(readVarUInt(s), 2)

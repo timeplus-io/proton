@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS sparse_tuple;
+DROP STREAM IF EXISTS sparse_tuple;
 
-CREATE TABLE sparse_tuple (id UInt64, t Tuple(a UInt64, s String))
+create stream sparse_tuple (id uint64, t tuple(a uint64, s string))
 ENGINE = MergeTree ORDER BY tuple()
 SETTINGS ratio_of_defaults_for_sparse_serialization = 0.5;
 
@@ -22,9 +22,9 @@ SELECT t.a FROM sparse_tuple WHERE t.a != 0 ORDER BY t.a LIMIT 5;
 SELECT t.s FROM sparse_tuple ORDER BY id LIMIT 5;
 SELECT t.s FROM sparse_tuple WHERE t.a != 0 ORDER BY id LIMIT 5;
 
-DROP TABLE IF EXISTS sparse_tuple;
+DROP STREAM IF EXISTS sparse_tuple;
 
-CREATE TABLE sparse_tuple (id UInt64, t Tuple(a UInt64, b Tuple(u UInt32, s String)))
+create stream sparse_tuple (id uint64, t tuple(a uint64, b tuple(u uint32, s string)))
 ENGINE = MergeTree ORDER BY tuple()
 SETTINGS ratio_of_defaults_for_sparse_serialization = 0.5;
 
@@ -50,4 +50,4 @@ ORDER BY column;
 
 SELECT t.b.s FROM sparse_tuple WHERE t.b.u != 0 ORDER BY id LIMIT 5;
 
-DROP TABLE IF EXISTS sparse_tuple;
+DROP STREAM IF EXISTS sparse_tuple;

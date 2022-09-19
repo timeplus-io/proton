@@ -1,0 +1,9 @@
+EventDate	date					
+UTCEventTime	DateTime					
+MoscowEventDate	date	DEFAULT	to_date(UTCEventTime)			
+EventDate	date					
+UTCEventTime	DateTime					
+MoscowEventDate	date	DEFAULT	to_date(UTCEventTime)			
+2015-06-09	2015-06-09 01:02:03	2015-06-09
+2015-06-09	2015-06-09 01:02:03	2015-06-09
+2015-06-09	2015-06-09 01:02:03	2015-06-09

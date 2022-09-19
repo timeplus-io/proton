@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS prewhere;
+DROP STREAM IF EXISTS prewhere;
 
-CREATE TABLE prewhere (d Date, a String, b String) ENGINE = MergeTree(d, d, 8192);
+create stream prewhere (d date, a string, b string) ENGINE = MergeTree(d, d, 8192);
 INSERT INTO prewhere VALUES ('2015-01-01', 'hello', 'world');
 
-ALTER TABLE prewhere ADD COLUMN a1 String AFTER a;
+ALTER STREAM prewhere ADD COLUMN a1 string AFTER a;
 INSERT INTO prewhere VALUES ('2015-01-01', 'hello1', 'xxx', 'world1');
 
 SELECT d, a, a1, b FROM prewhere PREWHERE a LIKE 'hello%' ORDER BY a1;
 
-DROP TABLE prewhere;
+DROP STREAM prewhere;

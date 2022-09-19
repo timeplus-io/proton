@@ -5,12 +5,12 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS x, t.2 AS weight FROM (SELECT arrayJoin([(1, 5), (2, 4), (3, 3), (4, 2), (5, 1)]) AS t));"
-${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS x, t.2 AS weight FROM (SELECT arrayJoin([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]) AS t));"
+${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS x, t.2 AS weight FROM (SELECT array_join([(1, 5), (2, 4), (3, 3), (4, 2), (5, 1)]) AS t));"
+${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS x, t.2 AS weight FROM (SELECT array_join([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)]) AS t));"
 ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select toDecimal256(1, 0) x, toDecimal256(1, 1) y);"
-${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select toDecimal32(1, 0) x, toDecimal256(1, 1) y);"
+${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select to_decimal32(1, 0) x, toDecimal256(1, 1) y);"
 
-types=("Int8" "Int16" "Int32" "Int64" "UInt8" "UInt16" "UInt32" "UInt64" "Float32" "Float64")
+types=("int8" "Int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64" "Float32" "float64")
 
 for left in "${types[@]}"
 do

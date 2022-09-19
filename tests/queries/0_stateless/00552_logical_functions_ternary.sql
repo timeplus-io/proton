@@ -12,10 +12,10 @@ SELECT
     and(x1 and x2, x3 and x4) AS and2
 FROM (
     SELECT
-        nullIf(toUInt8(number % 3), 2) AS x1,
-        nullIf(toUInt8(number / 3 % 3), 2) AS x2,
-        nullIf(toUInt8(number / 9 % 3), 2) AS x3,
-        nullIf(toUInt8(number / 27 % 3), 2) AS x4
+        nullIf(to_uint8(number % 3), 2) AS x1,
+        nullIf(to_uint8(number / 3 % 3), 2) AS x2,
+        nullIf(to_uint8(number / 9 % 3), 2) AS x3,
+        nullIf(to_uint8(number / 27 % 3), 2) AS x4
     FROM numbers(81)
 )
 WHERE
@@ -37,17 +37,17 @@ SELECT
     and(x1, and((x2 and x3) and (x4 and x5), (x6 and x7) and (x8 and (x9 and (x10 and x11))))) AS and2
 FROM (
     SELECT
-        nullIf(toUInt8(number % 3), 2) AS x1,
-        nullIf(toUInt8(number / 3 % 3), 2) AS x2,
-        nullIf(toUInt8(number / 9 % 3), 2) AS x3,
-        nullIf(toUInt8(number / 27 % 3), 2) AS x4,
-        nullIf(toUInt8(number / 81 % 3), 2) AS x5,
-        nullIf(toUInt8(number / 243 % 3), 2) AS x6,
-        nullIf(toUInt8(number / 729 % 3), 2) AS x7,
-        nullIf(toUInt8(number / 2187 % 3), 2) AS x8,
-        nullIf(toUInt8(number / 6561 % 3), 2) AS x9,
-        nullIf(toUInt8(number / 19683 % 3), 2) AS x10,
-        nullIf(toUInt8(number / 59049 % 3), 2) AS x11
+        nullIf(to_uint8(number % 3), 2) AS x1,
+        nullIf(to_uint8(number / 3 % 3), 2) AS x2,
+        nullIf(to_uint8(number / 9 % 3), 2) AS x3,
+        nullIf(to_uint8(number / 27 % 3), 2) AS x4,
+        nullIf(to_uint8(number / 81 % 3), 2) AS x5,
+        nullIf(to_uint8(number / 243 % 3), 2) AS x6,
+        nullIf(to_uint8(number / 729 % 3), 2) AS x7,
+        nullIf(to_uint8(number / 2187 % 3), 2) AS x8,
+        nullIf(to_uint8(number / 6561 % 3), 2) AS x9,
+        nullIf(to_uint8(number / 19683 % 3), 2) AS x10,
+        nullIf(to_uint8(number / 59049 % 3), 2) AS x11
     FROM numbers(177147)
 )
 WHERE

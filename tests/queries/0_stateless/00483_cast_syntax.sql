@@ -1,2 +1,2 @@
-SELECT CAST(1 AS Int8);
-SELECT CAST(1, 'Int8');
+SELECT CAST(1 AS int8);
+SELECT CAST(1, 'int8');

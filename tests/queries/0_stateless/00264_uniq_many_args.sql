@@ -9,8 +9,8 @@ FROM
 (
     SELECT
         number % 10 AS x,
-        intDiv(number, 10) % 10 AS y,
-        toString(intDiv(number, 100) % 10) AS z
+        int_div(number, 10) % 10 AS y,
+        to_string(int_div(number, 100) % 10) AS z
     FROM system.numbers LIMIT 1000
 );
 
@@ -28,8 +28,8 @@ FROM
     SELECT
         (number + 0x8ffcbd8257219a26) * 0x66bb3430c06d2353 % 131 AS k,
         number % 10 AS x,
-        intDiv(number, 10) % 10 AS y,
-        toString(intDiv(number, 100) % 10) AS z
+        int_div(number, 10) % 10 AS y,
+        to_string(int_div(number, 100) % 10) AS z
     FROM system.numbers LIMIT 100000
 )
 GROUP BY k

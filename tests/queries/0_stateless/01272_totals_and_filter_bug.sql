@@ -2,8 +2,8 @@ select * from (select number, count() from numbers(2) group by number with total
 
 select '-';
 
-CREATE TABLE foo (server_date Date, dimension_1 String, metric_1 UInt32) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
-CREATE TABLE bar (server_date Date, dimension_1 String, metric_2 UInt32) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
+create stream foo (server_date date, dimension_1 string, metric_1 uint32) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
+create stream bar (server_date date, dimension_1 string, metric_2 uint32) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
 
 INSERT INTO foo VALUES ('2020-01-01', 'test1', 10), ('2020-01-01', 'test2', 20);
 INSERT INTO bar VALUES ('2020-01-01', 'test2', 30), ('2020-01-01', 'test3', 40);
@@ -33,5 +33,5 @@ ALL FULL OUTER JOIN
 WHERE sum_metric_2 < 20
 ORDER BY dimension_1 ASC;
 
-DROP TABLE foo;
-DROP TABLE bar;
+DROP STREAM foo;
+DROP STREAM bar;

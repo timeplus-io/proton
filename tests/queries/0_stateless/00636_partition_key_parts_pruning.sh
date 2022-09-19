@@ -6,8 +6,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ${CLICKHOUSE_CLIENT} --query="SELECT '*** Single column partition key ***'"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS single_col_partition_key"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE single_col_partition_key(x UInt32) ENGINE MergeTree ORDER BY x PARTITION BY intDiv(x, 10)"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS single_col_partition_key"
+${CLICKHOUSE_CLIENT} --query="create stream single_col_partition_key(x uint32) ENGINE MergeTree ORDER BY x PARTITION BY int_div(x, 10)"
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO single_col_partition_key VALUES (1), (2), (3), (4), (11), (12), (20)"
 
@@ -15,12 +15,12 @@ ${CLICKHOUSE_CLIENT} --query="SELECT count() FROM single_col_partition_key WHERE
 ${CLICKHOUSE_CLIENT} --query="SELECT count() FROM single_col_partition_key WHERE x >= 11 FORMAT XML" | grep -F rows_read | sed 's/^[ \t]*//g'
 ${CLICKHOUSE_CLIENT} --query="SELECT count() FROM single_col_partition_key WHERE x = 20 FORMAT XML" | grep -F rows_read | sed 's/^[ \t]*//g'
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE single_col_partition_key"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM single_col_partition_key"
 
 ${CLICKHOUSE_CLIENT} --query="SELECT '*** Composite partition key ***'"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS composite_partition_key"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE composite_partition_key(a UInt32, b UInt32, c UInt32) ENGINE MergeTree ORDER BY c PARTITION BY (intDiv(a, 100), intDiv(b, 10), c)"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS composite_partition_key"
+${CLICKHOUSE_CLIENT} --query="create stream composite_partition_key(a uint32, b uint32, c uint32) ENGINE MergeTree ORDER BY c PARTITION BY (int_div(a, 100), int_div(b, 10), c)"
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO composite_partition_key VALUES \
     (1, 1, 1), (2, 2, 1), (3, 3, 1)"
@@ -41,4 +41,4 @@ ${CLICKHOUSE_CLIENT} --query="SELECT count() FROM composite_partition_key WHERE 
 
 ${CLICKHOUSE_CLIENT} --query="SELECT count() FROM composite_partition_key WHERE a = 301 AND b = 21 AND c = 3 FORMAT XML SETTINGS optimize_trivial_count_query = 0" | grep -F rows_read | sed 's/^[ \t]*//g'
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE composite_partition_key"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM composite_partition_key"

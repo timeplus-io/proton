@@ -29,9 +29,9 @@ $CLICKHOUSE_CLIENT -q "SELECT name,
                               FROM system.databases WHERE name LIKE 'test_01114_%'" | sed "s/$uuid_db_1/00001114-1000-4000-8000-000000000001/g" | sed "s/$uuid_db_2/00001114-1000-4000-8000-000000000002/g"
 
 $CLICKHOUSE_CLIENT -nm -q "
-CREATE TABLE test_01114_1.mt_tmp (n UInt64) ENGINE=MergeTree() ORDER BY tuple();
+create stream test_01114_1.mt_tmp (n uint64) ENGINE=MergeTree() ORDER BY tuple();
 INSERT INTO test_01114_1.mt_tmp SELECT * FROM numbers(100);
-CREATE TABLE test_01114_3.mt (n UInt64) ENGINE=MergeTree() ORDER BY tuple() PARTITION BY (n % 5);
+create stream test_01114_3.mt (n uint64) ENGINE=MergeTree() ORDER BY tuple() PARTITION BY (n % 5);
 INSERT INTO test_01114_3.mt SELECT * FROM numbers(20);
 
 RENAME TABLE test_01114_1.mt_tmp TO test_01114_3.mt_tmp; /* move from Atomic to Ordinary */
@@ -43,8 +43,8 @@ DROP DATABASE test_01114_3;
 "
 
 explicit_uuid=$($CLICKHOUSE_CLIENT -q "SELECT generateUUIDv4()")
-$CLICKHOUSE_CLIENT -q "CREATE TABLE test_01114_2.mt UUID '$explicit_uuid' (n UInt64) ENGINE=MergeTree() ORDER BY tuple() PARTITION BY (n % 5)"
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE TABLE test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
+$CLICKHOUSE_CLIENT -q "create stream test_01114_2.mt UUID '$explicit_uuid' (n uint64) ENGINE=MergeTree() ORDER BY tuple() PARTITION BY (n % 5)"
+$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW create stream test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
 $CLICKHOUSE_CLIENT -q "SELECT name, uuid, create_table_query FROM system.tables WHERE database='test_01114_2'" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
 
 
@@ -63,13 +63,13 @@ EXCHANGE TABLES test_01114_1.mt AND test_01114_2.mt;
 # Check that nothing changed
 $CLICKHOUSE_CLIENT -q "SELECT count() FROM test_01114_1.mt"
 uuid_mt1=$($CLICKHOUSE_CLIENT -q "SELECT uuid FROM system.tables WHERE database='test_01114_1' AND name='mt'")
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE TABLE test_01114_1.mt" | sed "s/$uuid_mt1/00001114-0000-4000-8000-000000000001/g"
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE TABLE test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
+$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW create stream test_01114_1.mt" | sed "s/$uuid_mt1/00001114-0000-4000-8000-000000000001/g"
+$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW create stream test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
 
 $CLICKHOUSE_CLIENT -nm -q "
-DROP TABLE test_01114_1.mt SETTINGS database_atomic_wait_for_drop_and_detach_synchronously=0;
-CREATE TABLE test_01114_1.mt (s String) ENGINE=Log();
-INSERT INTO test_01114_1.mt SELECT 's' || toString(number) FROM numbers(5);
+DROP STREAM test_01114_1.mt SETTINGS database_atomic_wait_for_drop_and_detach_synchronously=0;
+create stream test_01114_1.mt (s string) ENGINE=Log();
+INSERT INTO test_01114_1.mt SELECT 's' || to_string(number) FROM numbers(5);
 SELECT count() FROM test_01114_1.mt
 " # result: 5
 

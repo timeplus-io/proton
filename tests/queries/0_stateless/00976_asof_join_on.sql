@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS A;
-DROP TABLE IF EXISTS B;
+DROP STREAM IF EXISTS A;
+DROP STREAM IF EXISTS B;
 
-CREATE TABLE A(a UInt32, t UInt32) ENGINE = Memory;
-CREATE TABLE B(b UInt32, t UInt32) ENGINE = Memory;
+create stream A(a uint32, t uint32) ;
+create stream B(b uint32, t uint32) ;
 
 INSERT INTO A (a,t) VALUES (1,1),(1,2),(1,3), (2,1),(2,2),(2,3), (3,1),(3,2),(3,3);
 INSERT INTO B (b,t) VALUES (1,2),(1,4),(2,3);
@@ -23,5 +23,5 @@ SELECT count() FROM A ASOF JOIN B ON A.a == B.b AND A.t != B.t; -- { serverError
 
 SELECT A.a, A.t, B.b, B.t FROM A ASOF JOIN B ON A.a == B.b AND A.t < B.t OR A.a == B.b + 1 ORDER BY (A.a, A.t); -- { serverError 48 }
 
-DROP TABLE A;
-DROP TABLE B;
+DROP STREAM A;
+DROP STREAM B;

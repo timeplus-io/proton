@@ -1,0 +1,1 @@
+SELECT uniqExact(x), length(groupUniqArray(x)), arrayUniq(group_array(x)), uniqExact(y), arrayUniq(group_array(y)), uniqExact(concat(to_string(x), '_', y)), arrayUniq(group_array(x), group_array(y)) FROM (SELECT round(log(intHash32(number))) AS x, to_string(round(cbrt(intHash32(number)))) AS y FROM system.numbers LIMIT 10000);

@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS clicks;
-DROP TABLE IF EXISTS transactions;
+DROP STREAM IF EXISTS clicks;
+DROP STREAM IF EXISTS transactions;
 
-CREATE TABLE clicks (domain String) ENGINE = Memory;
-CREATE TABLE transactions (domain String) ENGINE = Memory;
+create stream clicks (domain string) ;
+create stream transactions (domain string) ;
 
 INSERT INTO clicks VALUES ('facebook.com'), ('yandex.ru'), ('google.com');
 INSERT INTO transactions VALUES ('facebook.com'), ('yandex.ru'), ('baidu.com');
@@ -15,7 +15,7 @@ FROM
 (
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -47,7 +47,7 @@ FROM
 UNION ALL 
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -67,7 +67,7 @@ FROM
 (
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -99,7 +99,7 @@ FROM
 UNION ALL 
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -120,7 +120,7 @@ FROM
 (
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -153,7 +153,7 @@ FROM
 UNION ALL 
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -174,7 +174,7 @@ FROM
 (
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -206,7 +206,7 @@ FROM
 UNION ALL 
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -228,7 +228,7 @@ FROM
 (
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -260,7 +260,7 @@ FROM
 UNION ALL 
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -282,7 +282,7 @@ FROM
 (
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -314,7 +314,7 @@ FROM
 UNION ALL 
     SELECT
         COUNT(*) AS total_count, 
-        toUInt64(0) AS facebookHits, 
+        to_uint64(0) AS facebookHits, 
         domain
     FROM transactions 
     GROUP BY domain
@@ -327,5 +327,5 @@ USING (total, domain)
 ORDER BY total, domain;
 
 
-DROP TABLE clicks;
-DROP TABLE transactions;
+DROP STREAM clicks;
+DROP STREAM transactions;

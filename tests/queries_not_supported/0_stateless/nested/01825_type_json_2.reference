@@ -1,0 +1,24 @@
+1	(1,2,0)	tuple(k1 int8, k2 int8, k3 int8)
+2	(0,3,4)	tuple(k1 int8, k2 int8, k3 int8)
+1	1	2	0
+2	0	3	4
+1	(1,2,'0')	tuple(k1 int8, k2 int8, k3 string)
+2	(0,3,'4')	tuple(k1 int8, k2 int8, k3 string)
+3	(0,0,'10')	tuple(k1 int8, k2 int8, k3 string)
+4	(0,5,'str')	tuple(k1 int8, k2 int8, k3 string)
+1	1	2	0
+2	0	3	4
+3	0	0	10
+4	0	5	str
+============
+1	([1,2,3.3])	tuple(k1 array(float64))
+1	[1,2,3.3]
+1	(['1','2','3.3'])	tuple(k1 array(string))
+2	(['a','4','b'])	tuple(k1 array(string))
+1	['1','2','3.3']
+2	['a','4','b']
+============
+1	([(11,0,0),(0,22,0)])	tuple(k1 nested(k2 int8, k3 int8, k4 int8))
+2	([(0,33,0),(0,0,44),(0,55,66)])	tuple(k1 nested(k2 int8, k3 int8, k4 int8))
+1	[11,0]	[0,22]	[0,0]
+2	[0,0,0]	[33,0,55]	[0,44,66]

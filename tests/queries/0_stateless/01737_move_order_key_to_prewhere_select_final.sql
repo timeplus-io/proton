@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS prewhere_move_select_final;
+DROP STREAM IF EXISTS prewhere_move_select_final;
 
-CREATE TABLE prewhere_move_select_final (x Int, y Int, z Int) ENGINE = ReplacingMergeTree() ORDER BY (x, y);
+create stream prewhere_move_select_final (x int, y int, z int) ENGINE = ReplacingMergeTree() ORDER BY (x, y);
 INSERT INTO prewhere_move_select_final SELECT number, number * 2, number * 3 FROM numbers(1000);
 
 select 'optimize_move_to_prewhere_if_final = 1';
@@ -33,4 +33,4 @@ EXPLAIN SYNTAX SELECT * FROM prewhere_move_select_final FINAL WHERE z > 400;
 select '';
 EXPLAIN SYNTAX SELECT * FROM prewhere_move_select_final FINAL WHERE y > 100 and z > 400;
 
-DROP TABLE prewhere_move_select_final;
+DROP STREAM prewhere_move_select_final;

@@ -3,11 +3,11 @@
 	[
 		{
 			"name": "count()",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "n",
-			"type": "UInt8"
+			"type": "uint8"
 		}
 	],
 

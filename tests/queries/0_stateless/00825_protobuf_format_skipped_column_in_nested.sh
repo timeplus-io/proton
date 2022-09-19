@@ -12,24 +12,24 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS table_skipped_column_in_nested_00825;
+DROP STREAM IF EXISTS table_skipped_column_in_nested_00825;
 
-CREATE TABLE table_skipped_column_in_nested_00825 (
+create stream table_skipped_column_in_nested_00825 (
     identifier UUID,
-    unused1 String,
-    modules Nested (
-        module_id UInt32,
-        supply UInt32,
-        temp UInt32
+    unused1 string,
+    modules nested (
+        module_id uint32,
+        supply uint32,
+        temp uint32
     ),
-    modules_nodes Nested (
-        opening_time Array(UInt32),
-        node_id Array(UInt32),
-        closing_time_time Array(UInt32),
-        current Array(UInt32),
-        coords Nested (
+    modules_nodes nested (
+        opening_time array(uint32),
+        node_id array(uint32),
+        closing_time_time array(uint32),
+        current array(uint32),
+        coords nested (
             x Float32,
-            y Float64
+            y float64
         )
     )
 ) ENGINE = MergeTree ORDER BY tuple();
@@ -52,4 +52,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO table_skipped_column_in_nested_00825 FOR
 $CLICKHOUSE_CLIENT --query "SELECT * FROM table_skipped_column_in_nested_00825 ORDER BY unused1"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE table_skipped_column_in_nested_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM table_skipped_column_in_nested_00825"

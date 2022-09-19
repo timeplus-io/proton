@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS join_test;
+DROP STREAM IF EXISTS join_test;
 
-CREATE TABLE join_test (id UInt16, num UInt16) engine = Join(ANY, LEFT, id) settings join_any_take_last_row = 1;
+create stream join_test (id uint16, num uint16) engine = Join(ANY, LEFT, id) settings join_any_take_last_row = 1;
 
 INSERT INTO join_test (id, num) SELECT number, number FROM system.numbers LIMIT 1000;
 
@@ -24,4 +24,4 @@ INSERT INTO join_test (id, num) SELECT number, number * 2 FROM system.numbers LI
 SELECT joinGet('join_test', 'num', 500);
 
 -- joinGet('join_test', 'num', 500) will be 1000 and it is not fine
-DROP TABLE join_test;
+DROP STREAM join_test;

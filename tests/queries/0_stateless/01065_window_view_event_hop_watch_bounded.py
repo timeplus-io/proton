@@ -23,14 +23,14 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     client2.send('SET allow_experimental_window_view = 1')
     client2.expect(prompt)
 
-    client1.send('DROP TABLE IF EXISTS test.mt')
+    client1.send('DROP STREAM IF EXISTS test.mt')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS test.wv')
+    client1.send('DROP STREAM IF EXISTS test.wv')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS `.inner.wv`')
+    client1.send('DROP STREAM IF EXISTS `.inner.wv`')
     client1.expect(prompt)
 
-    client1.send('CREATE TABLE test.mt(a Int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple()')
+    client1.send('create stream test.mt(a int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple()')
     client1.expect(prompt)
     client1.send("CREATE WINDOW VIEW test.wv WATERMARK=INTERVAL '2' SECOND AS SELECT count(a) AS count, hopEnd(wid) AS w_end FROM test.mt GROUP BY hop(timestamp, INTERVAL '2' SECOND, INTERVAL '3' SECOND, 'US/Samoa') AS wid")
     client1.expect(prompt)
@@ -53,7 +53,7 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     if match.groups()[1]:
         client1.send(client1.command)
         client1.expect(prompt)
-    client1.send('DROP TABLE test.wv')
+    client1.send('DROP STREAM test.wv')
     client1.expect(prompt)
-    client1.send('DROP TABLE test.mt')
+    client1.send('DROP STREAM test.mt')
     client1.expect(prompt)

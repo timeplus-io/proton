@@ -7,22 +7,22 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-$CLICKHOUSE_CLIENT --query "drop table if exists test_table"
-$CLICKHOUSE_CLIENT --query "CREATE TABLE test_table
+$CLICKHOUSE_CLIENT --query "drop stream if exists test_table"
+$CLICKHOUSE_CLIENT --query "create stream test_table
 (
-    a      UInt16 DEFAULT 0,
-    c      LowCardinality(String) DEFAULT '',
-    t_date LowCardinality(String) DEFAULT '',
-    ex     LowCardinality(String) DEFAULT '',
-    team   LowCardinality(String) DEFAULT '',
-    g      LowCardinality(String) DEFAULT '',
+    a      uint16 DEFAULT 0,
+    c      LowCardinality(string) DEFAULT '',
+    t_date LowCardinality(string) DEFAULT '',
+    ex     LowCardinality(string) DEFAULT '',
+    team   LowCardinality(string) DEFAULT '',
+    g      LowCardinality(string) DEFAULT '',
     mt     FixedString(1) DEFAULT ' ',
-    rw_ts  Int64 DEFAULT 0,
-    exr_t  Int64 DEFAULT 0,
-    en     UInt16 DEFAULT 0,
-    f_t    Int64 DEFAULT 0,
-    j      UInt64 DEFAULT 0,
-    oj     UInt64 DEFAULT 0
+    rw_ts  int64 DEFAULT 0,
+    exr_t  int64 DEFAULT 0,
+    en     uint16 DEFAULT 0,
+    f_t    int64 DEFAULT 0,
+    j      uint64 DEFAULT 0,
+    oj     uint64 DEFAULT 0
 )
 ENGINE = MergeTree
 PARTITION BY (c, t_date)
@@ -31,10 +31,10 @@ SETTINGS index_granularity = 8192"
 
 $CLICKHOUSE_CLIENT --query "
 INSERT INTO test_table(t_date, c,team, a) SELECT
-arrayJoin([toDate('2021-07-15'),toDate('2021-07-16')]) as t_date,
-arrayJoin(['aur','rua']) as c,
-arrayJoin(['AWD','ZZZ']) as team,
-arrayJoin([3183,3106,0,3130,3108,3126,3109,3107,3182,3180,3129,3128,3125,3266]) as a
+array_join([to_date('2021-07-15'),to_date('2021-07-16')]) as t_date,
+array_join(['aur','rua']) as c,
+array_join(['AWD','ZZZ']) as team,
+array_join([3183,3106,0,3130,3108,3126,3109,3107,3182,3180,3129,3128,3125,3266]) as a
 FROM numbers(600);"
 
 $CLICKHOUSE_CLIENT --query "DROP ROLE IF exists AWD;"

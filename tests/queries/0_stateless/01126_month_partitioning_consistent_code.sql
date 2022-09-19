@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS mt;
-CREATE TABLE mt (d Date, x UInt8) ENGINE = MergeTree(d, x, 8192);
+DROP STREAM IF EXISTS mt;
+create stream mt (d date, x uint8) ENGINE = MergeTree(d, x, 8192);
 INSERT INTO mt VALUES (52392, 1), (62677, 2);
-DROP TABLE mt;
+DROP STREAM mt;

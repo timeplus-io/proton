@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 
-CREATE TABLE test (timestamp DateTime('UTC'), i UInt8) Engine=MergeTree() PARTITION BY toYYYYMM(timestamp) ORDER BY (i);
+create stream test (timestamp datetime('UTC'), i uint8) Engine=MergeTree() PARTITION BY toYYYYMM(timestamp) ORDER BY (i);
 INSERT INTO test values ('2020-05-13 16:38:45', 1);
 
 SELECT
@@ -8,7 +8,7 @@ SELECT
     timestamp AS original
 FROM test
 LEFT JOIN (SELECT 2 AS x) AS anything ON x = i
-WHERE timestamp >= toDateTime('2020-05-13T00:00:00', 'America/Sao_Paulo');
+WHERE timestamp >= to_datetime('2020-05-13T00:00:00', 'America/Sao_Paulo');
 
 /* This was incorrect result in previous ClickHouse versions:
 ┌─converted───────────┬─original────────────┐
@@ -21,7 +21,7 @@ SELECT
     timestamp AS original
 FROM test
 -- LEFT JOIN (SELECT 2 AS x) AS anything ON x = i -- Removing the join fixes the issue.
-WHERE timestamp >= toDateTime('2020-05-13T00:00:00', 'America/Sao_Paulo');
+WHERE timestamp >= to_datetime('2020-05-13T00:00:00', 'America/Sao_Paulo');
 
 /*
 ┌─converted───────────┬─original────────────┐
@@ -42,4 +42,4 @@ WHERE timestamp >= '2020-05-13T00:00:00'; -- Not using toDateTime in the WHERE a
 └─────────────────────┴─────────────────────┘
 */
 
-DROP TABLE test;
+DROP STREAM test;

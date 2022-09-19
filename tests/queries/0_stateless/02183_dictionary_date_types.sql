@@ -1,12 +1,12 @@
-DROP TABLE IF EXISTS 02183_dictionary_source_table;
-CREATE TABLE 02183_dictionary_source_table
+DROP STREAM IF EXISTS 02183_dictionary_source_table;
+create stream 02183_dictionary_source_table
 (
-    id UInt64,
-    value_date Date,
+    id uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
-) ENGINE=TinyLog;
+) ;
 
 INSERT INTO 02183_dictionary_source_table VALUES (0, '2019-05-05', '2019-05-05', '2019-05-05', '2019-05-05');
 
@@ -15,8 +15,8 @@ SELECT * FROM 02183_dictionary_source_table;
 DROP DICTIONARY IF EXISTS 02183_flat_dictionary;
 CREATE DICTIONARY 02183_flat_dictionary
 (
-    id UInt64,
-    value_date Date,
+    id uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -34,8 +34,8 @@ DROP DICTIONARY 02183_flat_dictionary;
 DROP DICTIONARY IF EXISTS 02183_hashed_dictionary;
 CREATE DICTIONARY 02183_hashed_dictionary
 (
-    id UInt64,
-    value_date Date,
+    id uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -53,8 +53,8 @@ DROP DICTIONARY 02183_hashed_dictionary;
 DROP DICTIONARY IF EXISTS 02183_hashed_array_dictionary;
 CREATE DICTIONARY 02183_hashed_array_dictionary
 (
-    id UInt64,
-    value_date Date,
+    id uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -72,8 +72,8 @@ DROP DICTIONARY 02183_hashed_array_dictionary;
 DROP DICTIONARY IF EXISTS 02183_cache_dictionary;
 CREATE DICTIONARY 02183_cache_dictionary
 (
-    id UInt64,
-    value_date Date,
+    id uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -92,8 +92,8 @@ DROP DICTIONARY 02183_cache_dictionary;
 DROP DICTIONARY IF EXISTS 02183_direct_dictionary;
 CREATE DICTIONARY 02183_direct_dictionary
 (
-    id UInt64,
-    value_date Date,
+    id uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -106,17 +106,17 @@ SELECT 'Direct dictionary';
 SELECT * FROM 02183_direct_dictionary;
 
 DROP DICTIONARY 02183_direct_dictionary;
-DROP TABLE 02183_dictionary_source_table;
+DROP STREAM 02183_dictionary_source_table;
 
-DROP TABLE IF EXISTS 02183_ip_trie_dictionary_source_table;
-CREATE TABLE 02183_ip_trie_dictionary_source_table
+DROP STREAM IF EXISTS 02183_ip_trie_dictionary_source_table;
+create stream 02183_ip_trie_dictionary_source_table
 (
-    prefix String,
-    value_date Date,
+    prefix string,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
-) ENGINE=TinyLog;
+) ;
 
 INSERT INTO 02183_ip_trie_dictionary_source_table VALUES ('127.0.0.1', '2019-05-05', '2019-05-05', '2019-05-05', '2019-05-05');
 SELECT * FROM 02183_ip_trie_dictionary_source_table;
@@ -124,8 +124,8 @@ SELECT * FROM 02183_ip_trie_dictionary_source_table;
 DROP DICTIONARY IF EXISTS 02183_ip_trie_dictionary;
 CREATE DICTIONARY 02183_ip_trie_dictionary
 (
-    prefix String,
-    value_date Date,
+    prefix string,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -139,25 +139,25 @@ SELECT 'IPTrie dictionary';
 SELECT * FROM 02183_ip_trie_dictionary;
 
 DROP DICTIONARY 02183_ip_trie_dictionary;
-DROP TABLE 02183_ip_trie_dictionary_source_table;
+DROP STREAM 02183_ip_trie_dictionary_source_table;
 
-DROP TABLE IF EXISTS 02183_polygon_dictionary_source_table;
-CREATE TABLE 02183_polygon_dictionary_source_table
+DROP STREAM IF EXISTS 02183_polygon_dictionary_source_table;
+create stream 02183_polygon_dictionary_source_table
 (
-    key Array(Array(Array(Tuple(Float64, Float64)))),
-    value_date Date,
+    key array(array(array(tuple(float64, float64)))),
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
-) ENGINE = TinyLog;
+) ;
 
 INSERT INTO 02183_polygon_dictionary_source_table VALUES ([[[(0, 0), (0, 1), (1, 1), (1, 0)]]], '2019-05-05', '2019-05-05', '2019-05-05', '2019-05-05');
 
 DROP DICTIONARY IF EXISTS 02183_polygon_dictionary;
 CREATE DICTIONARY 02183_polygon_dictionary
 (
-    key Array(Array(Array(Tuple(Float64, Float64)))),
-    value_date Date,
+    key array(array(array(tuple(float64, float64)))),
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -170,30 +170,30 @@ LIFETIME(0);
 SELECT 'Polygon dictionary';
 SELECT * FROM 02183_polygon_dictionary;
 
-DROP TABLE 02183_polygon_dictionary_source_table;
+DROP STREAM 02183_polygon_dictionary_source_table;
 DROP DICTIONARY 02183_polygon_dictionary;
 
-DROP TABLE IF EXISTS 02183_range_dictionary_source_table;
-CREATE TABLE 02183_range_dictionary_source_table
+DROP STREAM IF EXISTS 02183_range_dictionary_source_table;
+create stream 02183_range_dictionary_source_table
 (
-    key UInt64,
-    start UInt64,
-    end UInt64,
-    value_date Date,
+    key uint64,
+    start uint64,
+    end uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
-) ENGINE = TinyLog;
+) ;
 
 INSERT INTO 02183_range_dictionary_source_table VALUES(0, 0, 1, '2019-05-05', '2019-05-05', '2019-05-05', '2019-05-05');
 SELECT * FROM 02183_range_dictionary_source_table;
 
 CREATE DICTIONARY 02183_range_dictionary
 (
-    key UInt64,
-    start UInt64,
-    end UInt64,
-    value_date Date,
+    key uint64,
+    start uint64,
+    end uint64,
+    value_date date,
     value_date_32 Date32,
     value_date_time DateTime,
     value_date_time_64 DateTime64
@@ -208,4 +208,4 @@ SELECT 'Range dictionary';
 SELECT * FROM 02183_range_dictionary;
 
 DROP DICTIONARY 02183_range_dictionary;
-DROP TABLE 02183_range_dictionary_source_table;
+DROP STREAM 02183_range_dictionary_source_table;

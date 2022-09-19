@@ -2,7 +2,7 @@
 # Tags: long
 
 # NOTE: this done as not .sql since we need to Ordinary database
-# (to account threads in query_log for DROP TABLE query)
+# (to account threads in query_log for DROP STREAM query)
 # and we can do it compatible with parallel run only in .sh
 # (via $CLICKHOUSE_DATABASE)
 
@@ -15,16 +15,16 @@ $CLICKHOUSE_CLIENT -nm -q "create database ordinary_$CLICKHOUSE_DATABASE engine=
 # MergeTree
 $CLICKHOUSE_CLIENT -nm -q """
     use ordinary_$CLICKHOUSE_DATABASE;
-    drop table if exists data_01810;
+    drop stream if exists data_01810;
 
-    create table data_01810 (key Int)
+    create stream data_01810 (key int)
     Engine=MergeTree()
     order by key
     partition by key%100
     settings max_part_removal_threads=10, concurrent_part_removal_threshold=99, min_bytes_for_wide_part=0;
 
     insert into data_01810 select * from numbers(100);
-    drop table data_01810 settings log_queries=1;
+    drop stream data_01810 settings log_queries=1;
     system flush logs;
 
     -- sometimes the same thread can be used to remove part, due to ThreadPool,
@@ -34,7 +34,7 @@ $CLICKHOUSE_CLIENT -nm -q """
     where
         event_date >= yesterday() and
         current_database = currentDatabase() and
-        query = 'drop table data_01810 settings log_queries=1;' and
+        query = 'drop stream data_01810 settings log_queries=1;' and
         type = 'QueryFinish'
     format Null;
 """
@@ -42,16 +42,16 @@ $CLICKHOUSE_CLIENT -nm -q """
 # ReplicatedMergeTree
 $CLICKHOUSE_CLIENT -nm -q """
     use ordinary_$CLICKHOUSE_DATABASE;
-    drop table if exists rep_data_01810;
+    drop stream if exists rep_data_01810;
 
-    create table rep_data_01810 (key Int)
+    create stream rep_data_01810 (key int)
     Engine=ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/rep_data_01810', '1')
     order by key
     partition by key%100
     settings max_part_removal_threads=10, concurrent_part_removal_threshold=99, min_bytes_for_wide_part=0;
 
     insert into rep_data_01810 select * from numbers(100);
-    drop table rep_data_01810 settings log_queries=1;
+    drop stream rep_data_01810 settings log_queries=1;
     system flush logs;
 
     -- sometimes the same thread can be used to remove part, due to ThreadPool,
@@ -61,7 +61,7 @@ $CLICKHOUSE_CLIENT -nm -q """
     where
         event_date >= yesterday() and
         current_database = currentDatabase() and
-        query = 'drop table rep_data_01810 settings log_queries=1;' and
+        query = 'drop stream rep_data_01810 settings log_queries=1;' and
         type = 'QueryFinish'
     format Null;
 """

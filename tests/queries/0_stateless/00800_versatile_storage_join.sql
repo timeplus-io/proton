@@ -4,17 +4,17 @@ CREATE DATABASE IF NOT EXISTS test_00800;
 
 USE test_00800;
 
-DROP TABLE IF EXISTS join_any_inner;
-DROP TABLE IF EXISTS join_any_left;
-DROP TABLE IF EXISTS join_any_left_null;
-DROP TABLE IF EXISTS join_all_inner;
-DROP TABLE IF EXISTS join_all_left;
-DROP TABLE IF EXISTS join_string_key;
+DROP STREAM IF EXISTS join_any_inner;
+DROP STREAM IF EXISTS join_any_left;
+DROP STREAM IF EXISTS join_any_left_null;
+DROP STREAM IF EXISTS join_all_inner;
+DROP STREAM IF EXISTS join_all_left;
+DROP STREAM IF EXISTS join_string_key;
 
-CREATE TABLE join_any_inner (s String, x Array(UInt8), k UInt64) ENGINE = Join(ANY, INNER, k);
-CREATE TABLE join_any_left (s String, x Array(UInt8), k UInt64) ENGINE = Join(ANY, LEFT, k);
-CREATE TABLE join_all_inner (s String, x Array(UInt8), k UInt64) ENGINE = Join(ALL, INNER, k);
-CREATE TABLE join_all_left (s String, x Array(UInt8), k UInt64) ENGINE = Join(ALL, LEFT, k);
+create stream join_any_inner (s string, x array(uint8), k uint64) ENGINE = Join(ANY, INNER, k);
+create stream join_any_left (s string, x array(uint8), k uint64) ENGINE = Join(ANY, LEFT, k);
+create stream join_all_inner (s string, x array(uint8), k uint64) ENGINE = Join(ALL, INNER, k);
+create stream join_all_left (s string, x array(uint8), k uint64) ENGINE = Join(ALL, LEFT, k);
 
 INSERT INTO join_any_inner VALUES ('abc', [0], 1), ('def', [1, 2], 2);
 INSERT INTO join_any_left VALUES ('abc', [0], 1), ('def', [1, 2], 2);
@@ -31,7 +31,7 @@ SELECT * from join_all_left ORDER BY k;
 
 -- create StorageJoin tables with customized settings
 
-CREATE TABLE join_any_left_null (s String, k UInt64) ENGINE = Join(ANY, LEFT, k) SETTINGS join_use_nulls = 1;
+create stream join_any_left_null (s string, k uint64) ENGINE = Join(ANY, LEFT, k) SETTINGS join_use_nulls = 1;
 INSERT INTO join_any_left_null VALUES ('abc', 1), ('def', 2);
 
 -- joinGet
@@ -48,22 +48,22 @@ SELECT '';
 SELECT joinGet(join_any_left_null, 's', number) FROM numbers(3);
 SELECT '';
 
-CREATE TABLE join_string_key (s String, x Array(UInt8), k UInt64) ENGINE = Join(ANY, LEFT, s);
+create stream join_string_key (s string, x array(uint8), k uint64) ENGINE = Join(ANY, LEFT, s);
 INSERT INTO join_string_key VALUES ('abc', [0], 1), ('def', [1, 2], 2);
 SELECT joinGet('join_string_key', 'x', 'abc'), joinGet('join_string_key', 'k', 'abc');
 
 USE default;
 
-DROP TABLE test_00800.join_any_inner;
-DROP TABLE test_00800.join_any_left;
-DROP TABLE test_00800.join_any_left_null;
-DROP TABLE test_00800.join_all_inner;
-DROP TABLE test_00800.join_all_left;
-DROP TABLE test_00800.join_string_key;
+DROP STREAM test_00800.join_any_inner;
+DROP STREAM test_00800.join_any_left;
+DROP STREAM test_00800.join_any_left_null;
+DROP STREAM test_00800.join_all_inner;
+DROP STREAM test_00800.join_all_left;
+DROP STREAM test_00800.join_string_key;
 
 -- test provided by Alexander Zaitsev
-DROP TABLE IF EXISTS test_00800.join_test;
-CREATE TABLE test_00800.join_test (a UInt8, b UInt8) Engine = Join(ANY, LEFT, a);
+DROP STREAM IF EXISTS test_00800.join_test;
+create stream test_00800.join_test (a uint8, b uint8) Engine = Join(ANY, LEFT, a);
 
 USE test_00800;
 select joinGet('join_test', 'b', 1);
@@ -72,6 +72,6 @@ USE system;
 SELECT joinGet('test_00800.join_test', 'b', 1);
 
 USE default;
-DROP TABLE test_00800.join_test;
+DROP STREAM test_00800.join_test;
 
 DROP DATABASE test_00800;

@@ -1,22 +1,22 @@
-DROP TABLE IF EXISTS t_nested_tuple;
+DROP STREAM IF EXISTS t_nested_tuple;
 
-CREATE TABLE t_nested_tuple
+create stream t_nested_tuple
 (
-    endUserIDs Tuple(
-      _experience Tuple(
-          aaid Tuple(
-              id Nullable(String),
-              namespace Tuple(
-                  code LowCardinality(Nullable(String))
+    endUserIDs tuple(
+      _experience tuple(
+          aaid tuple(
+              id Nullable(string),
+              namespace tuple(
+                  code LowCardinality(Nullable(string))
               ),
-              primary LowCardinality(Nullable(UInt8))
+              primary LowCardinality(Nullable(uint8))
           ),
-          mcid Tuple(
-              id Nullable(String),
-              namespace Tuple(
-                  code LowCardinality(Nullable(String))
+          mcid tuple(
+              id Nullable(string),
+              namespace tuple(
+                  code LowCardinality(Nullable(string))
               ),
-              primary LowCardinality(Nullable(UInt8))
+              primary LowCardinality(Nullable(uint8))
           )
       )
   )
@@ -35,4 +35,4 @@ SELECT endUserIDs._experience.aaid.namespace FROM t_nested_tuple FORMAT JSONEach
 SELECT endUserIDs._experience.aaid.namespace.code FROM t_nested_tuple FORMAT JSONEachRow;
 SELECT endUserIDs._experience.aaid.primary FROM t_nested_tuple FORMAT JSONEachRow;
 
-DROP TABLE t_nested_tuple;
+DROP STREAM t_nested_tuple;

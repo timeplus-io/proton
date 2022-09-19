@@ -5,25 +5,25 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS mutation_table"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS mutation_table"
 
 $CLICKHOUSE_CLIENT --query "
-    CREATE TABLE mutation_table(
-        key UInt64,
-        value String
+    create stream mutation_table(
+        key uint64,
+        value string
     )
     ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/mutation_table', '1')
     ORDER BY key
     PARTITION BY key % 10
 "
 
-$CLICKHOUSE_CLIENT --query "INSERT INTO mutation_table select number, toString(number) from numbers(100000) where number % 10 != 0"
+$CLICKHOUSE_CLIENT --query "INSERT INTO mutation_table select number, to_string(number) from numbers(100000) where number % 10 != 0"
 
 $CLICKHOUSE_CLIENT --query "INSERT INTO mutation_table VALUES(0, 'hello')"
 
 $CLICKHOUSE_CLIENT --query "SELECT COUNT() FROM mutation_table"
 
-$CLICKHOUSE_CLIENT --query "ALTER TABLE mutation_table MODIFY COLUMN value UInt64 SETTINGS replication_alter_partitions_sync=0"
+$CLICKHOUSE_CLIENT --query "ALTER STREAM mutation_table MODIFY COLUMN value uint64 SETTINGS replication_alter_partitions_sync=0"
 
 first_mutation_id=$($CLICKHOUSE_CLIENT --query "SELECT mutation_id FROM system.mutations where table='mutation_table' and database='$CLICKHOUSE_DATABASE'")
 
@@ -32,7 +32,7 @@ first_mutation_id=$($CLICKHOUSE_CLIENT --query "SELECT mutation_id FROM system.m
 # rare cases this test doesn't check anything, but will report OK.
 sleep 7
 
-$CLICKHOUSE_CLIENT --query "ALTER TABLE mutation_table MODIFY COLUMN value UInt32 SETTINGS replication_alter_partitions_sync=0"
+$CLICKHOUSE_CLIENT --query "ALTER STREAM mutation_table MODIFY COLUMN value uint32 SETTINGS replication_alter_partitions_sync=0"
 
 
 #### just check that both mutations started
@@ -71,4 +71,4 @@ $CLICKHOUSE_CLIENT --query "SELECT is_done, parts_to_do FROM system.mutations wh
 
 $CLICKHOUSE_CLIENT --query "SELECT type, new_part_name FROM system.replication_queue WHERE table='mutation_table' and database='$CLICKHOUSE_DATABASE'"
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS mutation_table"
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS mutation_table"

@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS constraint_test_assumption;
-DROP TABLE IF EXISTS constraint_test_transitivity;
-DROP TABLE IF EXISTS constraint_test_transitivity2;
+DROP STREAM IF EXISTS constraint_test_assumption;
+DROP STREAM IF EXISTS constraint_test_transitivity;
+DROP STREAM IF EXISTS constraint_test_transitivity2;
 
 SET convert_query_to_cnf = 1;
 SET optimize_using_constraints = 1;
@@ -8,7 +8,7 @@ SET optimize_move_to_prewhere = 1;
 SET optimize_substitute_columns = 1;
 SET optimize_append_index = 1;
 
-CREATE TABLE constraint_test_assumption (URL String, a Int32, CONSTRAINT c1 ASSUME domainWithoutWWW(URL) = 'yandex.ru', CONSTRAINT c2 ASSUME URL > 'zzz' AND startsWith(URL, 'test') = True) ENGINE = TinyLog;
+create stream constraint_test_assumption (URL string, a int32, CONSTRAINT c1 ASSUME domainWithoutWWW(URL) = 'yandex.ru', CONSTRAINT c2 ASSUME URL > 'zzz' AND startsWith(URL, 'test') = True) ;
 
 --- Add wrong rows in order to check optimization
 INSERT INTO constraint_test_assumption (URL, a) VALUES ('1', 1);
@@ -27,18 +27,18 @@ SELECT count() FROM constraint_test_assumption WHERE (domainWithoutWWW(URL) = 'y
 SELECT count() FROM constraint_test_assumption WHERE (domainWithoutWWW(URL) = 'yandex.ru' AND URL = '111'); ---> assumption & no assumption -> 0
 SELECT count() FROM constraint_test_assumption WHERE (startsWith(URL, 'test') = True); ---> assumption -> 4
 
-DROP TABLE constraint_test_assumption;
+DROP STREAM constraint_test_assumption;
 
-CREATE TABLE constraint_test_transitivity (a Int64, b Int64, c Int64, d Int32, CONSTRAINT c1 ASSUME a = b AND c = d, CONSTRAINT c2 ASSUME b = c) ENGINE = TinyLog;
+create stream constraint_test_transitivity (a int64, b int64, c int64, d int32, CONSTRAINT c1 ASSUME a = b AND c = d, CONSTRAINT c2 ASSUME b = c) ;
 
 INSERT INTO constraint_test_transitivity (a, b, c, d) VALUES (1, 2, 3, 4);
 
 SELECT count() FROM constraint_test_transitivity WHERE a = d; ---> assumption -> 1
 
-DROP TABLE constraint_test_transitivity;
+DROP STREAM constraint_test_transitivity;
 
 
-CREATE TABLE constraint_test_strong_connectivity (a String, b String, c String, d String, CONSTRAINT c1 ASSUME a <= b AND b <= c AND c <= d AND d <= a) ENGINE = TinyLog;
+create stream constraint_test_strong_connectivity (a string, b string, c string, d string, CONSTRAINT c1 ASSUME a <= b AND b <= c AND c <= d AND d <= a) ;
 
 INSERT INTO constraint_test_strong_connectivity (a, b, c, d) VALUES ('1', '2', '3', '4');
 
@@ -47,9 +47,9 @@ SELECT count() FROM constraint_test_strong_connectivity WHERE a = c AND b = d; -
 SELECT count() FROM constraint_test_strong_connectivity WHERE a < c OR b < d; ---> assumption -> 0
 SELECT count() FROM constraint_test_strong_connectivity WHERE a <= c OR b <= d; ---> assumption -> 1
 
-DROP TABLE constraint_test_strong_connectivity;
+DROP STREAM constraint_test_strong_connectivity;
 
-CREATE TABLE constraint_test_transitivity2 (a String, b String, c String, d String, CONSTRAINT c1 ASSUME a > b AND b >= c AND c > d AND a >= d) ENGINE = TinyLog;
+create stream constraint_test_transitivity2 (a string, b string, c string, d string, CONSTRAINT c1 ASSUME a > b AND b >= c AND c > d AND a >= d) ;
 
 INSERT INTO constraint_test_transitivity2 (a, b, c, d) VALUES ('1', '2', '3', '4');
 
@@ -60,19 +60,19 @@ SELECT count() FROM constraint_test_transitivity2 WHERE a < d; ---> assumption -
 SELECT count() FROM constraint_test_transitivity2 WHERE a = d; ---> assumption -> 0
 SELECT count() FROM constraint_test_transitivity2 WHERE a != d; ---> assumption -> 1
 
-DROP TABLE constraint_test_transitivity2;
+DROP STREAM constraint_test_transitivity2;
 
-CREATE TABLE constraint_test_transitivity3 (a Int64, b Int64, c Int64, CONSTRAINT c1 ASSUME b > 10 AND 1 > a) ENGINE = TinyLog;
+create stream constraint_test_transitivity3 (a int64, b int64, c int64, CONSTRAINT c1 ASSUME b > 10 AND 1 > a) ;
 
 INSERT INTO constraint_test_transitivity3 (a, b, c) VALUES (4, 0, 2);
 
 SELECT count() FROM constraint_test_transitivity3 WHERE a < b; ---> assumption -> 1
 SELECT count() FROM constraint_test_transitivity3 WHERE b >= a; ---> assumption -> 1
 
-DROP TABLE constraint_test_transitivity3;
+DROP STREAM constraint_test_transitivity3;
 
 
-CREATE TABLE constraint_test_constants_repl (a Int64, b Int64, c Int64, d Int64, CONSTRAINT c1 ASSUME a - b = 10 AND c + d = 20) ENGINE = TinyLog;
+create stream constraint_test_constants_repl (a int64, b int64, c int64, d int64, CONSTRAINT c1 ASSUME a - b = 10 AND c + d = 20) ;
 
 INSERT INTO constraint_test_constants_repl (a, b, c, d) VALUES (1, 2, 3, 4);
 
@@ -81,9 +81,9 @@ SELECT count() FROM constraint_test_constants_repl WHERE a - b < 0; ---> assumpt
 SELECT count() FROM constraint_test_constants_repl WHERE a - b = c + d; ---> assumption -> 0
 SELECT count() FROM constraint_test_constants_repl WHERE (a - b) * 2 = c + d; ---> assumption -> 1
 
-DROP TABLE constraint_test_constants_repl;
+DROP STREAM constraint_test_constants_repl;
 
-CREATE TABLE constraint_test_constants (a Int64, b Int64, c Int64, CONSTRAINT c1 ASSUME b > 10 AND a >= 10) ENGINE = TinyLog;
+create stream constraint_test_constants (a int64, b int64, c int64, CONSTRAINT c1 ASSUME b > 10 AND a >= 10) ;
 
 INSERT INTO constraint_test_constants (a, b, c) VALUES (0, 0, 0);
 
@@ -102,4 +102,4 @@ EXPLAIN SYNTAX SELECT count() FROM constraint_test_constants WHERE (a > 100 OR b
 EXPLAIN SYNTAX SELECT count() FROM constraint_test_constants WHERE (a > 100 OR b > 100 OR c > 100) AND (a <= 100 OR b > 100 OR c > 100) AND (NOT b > 100 OR c > 100) AND (c > 100);
 EXPLAIN SYNTAX SELECT count() FROM constraint_test_constants WHERE (a > 100 OR b > 100 OR c > 100) AND (a <= 100 OR b > 100 OR c > 100) AND (NOT b > 100 OR c > 100) AND (c <= 100);
 
-DROP TABLE constraint_test_constants;
+DROP STREAM constraint_test_constants;

@@ -1,0 +1,32 @@
+DROP STREAM IF EXISTS dst_00753;
+DROP STREAM IF EXISTS buffer_00753;
+SET send_logs_level = 'error';
+
+create stream dst_00753 (x uint64, y uint64) ENGINE = MergeTree ORDER BY tuple();
+create stream buffer_00753 (x uint64, y uint64) ENGINE = Buffer(currentDatabase(), dst_00753, 1, 99999, 99999, 1, 1, 99999, 99999);
+
+INSERT INTO buffer_00753 VALUES (1, 100);
+INSERT INTO buffer_00753 VALUES (2, 200);
+INSERT INTO buffer_00753 VALUES (3, 300);
+SELECT 'init';
+SELECT * FROM dst_00753 ORDER BY x;
+SELECT '-';
+SELECT * FROM buffer_00753 ORDER BY x;
+
+ALTER STREAM dst_00753 DROP COLUMN x, MODIFY COLUMN y string, ADD COLUMN z string DEFAULT 'DEFZ';
+
+INSERT INTO buffer_00753 VALUES (4, 400);
+SELECT 'alt';
+SELECT * FROM dst_00753 ORDER BY y;
+SELECT '-';
+SELECT * FROM buffer_00753 ORDER BY y;
+
+OPTIMIZE STREAM buffer_00753;
+SELECT 'opt';
+SELECT * FROM dst_00753 ORDER BY y;
+SELECT '-';
+SELECT * FROM buffer_00753 ORDER BY y;
+
+SET send_logs_level = 'warning';
+DROP STREAM IF EXISTS dst_00753;
+DROP STREAM IF EXISTS buffer_00753;

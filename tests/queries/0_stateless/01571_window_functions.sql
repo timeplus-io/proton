@@ -4,12 +4,13 @@
 -- some craziness with a mix of materialized and unmaterialized const columns
 -- after merging sorted transform, that used to break the peer group detection in
 -- the window transform.
-CREATE TABLE order_by_const
+SET query_mode = 'table';
+create stream order_by_const
 (
-    `a` UInt64,
-    `b` UInt64,
-    `c` UInt64,
-    `d` UInt64
+    `a` uint64,
+    `b` uint64,
+    `c` uint64,
+    `d` uint64
 )
 ENGINE = MergeTree
 ORDER BY (a, b)
@@ -22,7 +23,7 @@ INSERT INTO order_by_const(a, b, c, d) VALUES (1, 5, 104, 1), (1, 6, 105, 1), (2
 INSERT INTO order_by_const(a, b, c, d) VALUES (2, 2, 107, 2), (2, 3, 108, 2), (2, 4, 109, 2);
 SELECT row_number() OVER (order by 1, a) FROM order_by_const;
 
-drop table order_by_const;
+drop stream order_by_const;
 
 -- expressions in window frame
 select count() over (rows between 1 + 1 preceding and 1 + 1 following) from numbers(10);

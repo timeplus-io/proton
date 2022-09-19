@@ -1,5 +1,6 @@
-drop table if exists t0;
-CREATE TABLE t0 (c0 String) ENGINE = Log();
+SET query_mode = 'table';
+drop stream if exists t0;
+create stream t0 (c0 string)  ();
 
 SELECT isNull(t0.c0) OR COUNT('\n?pVa')
 FROM t0
@@ -17,4 +18,4 @@ GROUP BY t0.c0
 HAVING isNull(isNull(t0.c0))
 SETTINGS aggregate_functions_null_for_empty = 1, enable_optimize_predicate_expression = 0;
 
-drop table if exists t0;
+drop stream if exists t0;

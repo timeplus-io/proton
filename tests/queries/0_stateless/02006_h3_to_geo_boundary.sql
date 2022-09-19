@@ -1,8 +1,8 @@
 -- Tags: no-fasttest
 
-DROP TABLE IF EXISTS h3_indexes;
+DROP STREAM IF EXISTS h3_indexes;
 
-CREATE TABLE h3_indexes (h3_index UInt64) ENGINE = Memory;
+create stream h3_indexes (h3_index uint64) ;
 
 -- Coordinates from h3ToGeo test.
 
@@ -25,4 +25,4 @@ INSERT INTO h3_indexes VALUES (644178757620501158);
 
 SELECT h3ToGeoBoundary(h3_index) FROM h3_indexes ORDER BY h3_index;
 
-DROP TABLE h3_indexes;
+DROP STREAM h3_indexes;

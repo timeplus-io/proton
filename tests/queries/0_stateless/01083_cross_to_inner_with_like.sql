@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS n;
-DROP TABLE IF EXISTS r;
+DROP STREAM IF EXISTS n;
+DROP STREAM IF EXISTS r;
 
-CREATE TABLE n (k UInt32) ENGINE = Memory;
-CREATE TABLE r (k UInt32, name String) ENGINE = Memory;
+create stream n (k uint32) ;
+create stream r (k uint32, name string) ;
 
 SET enable_optimize_predicate_expression = 0;
 
@@ -10,5 +10,5 @@ EXPLAIN SYNTAX SELECT * FROM n, r WHERE n.k = r.k AND r.name = 'A';
 EXPLAIN SYNTAX SELECT * FROM n, r WHERE n.k = r.k AND r.name LIKE 'A%';
 EXPLAIN SYNTAX SELECT * FROM n, r WHERE n.k = r.k AND r.name NOT LIKE 'A%';
 
-DROP TABLE n;
-DROP TABLE r;
+DROP STREAM n;
+DROP STREAM r;

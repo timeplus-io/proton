@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS t;
-CREATE TABLE t (d Date, z UInt32) ENGINE = MergeTree(d, (z), 1);
+DROP STREAM IF EXISTS t;
+create stream t (d date, z uint32) ENGINE = MergeTree(d, (z), 1);
 
 INSERT INTO t VALUES ('2017-01-01', 1);
 
@@ -8,4 +8,4 @@ SELECT 1
 FROM t
 WHERE x;
 
-DROP TABLE t;
+DROP STREAM t;

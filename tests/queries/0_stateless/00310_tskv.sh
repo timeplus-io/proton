@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS tskv";
-$CLICKHOUSE_CLIENT --query="CREATE TABLE tskv (tskv_format String, timestamp DateTime('UTC'), timezone String, text String, binary_data String) ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS tskv";
+$CLICKHOUSE_CLIENT --query="create stream tskv (tskv_format string, timestamp datetime('UTC'), timezone string, text string, binary_data string) ";
 
 # shellcheck disable=SC2028
 echo -n 'tskv	tskv_format=custom-service-log	timestamp=2013-01-01 00:00:00	timezone=+0400	text=multiline\ntext	binary_data=can contain \0 symbol
@@ -16,4 +16,4 @@ tskv
 ' | $CLICKHOUSE_CLIENT --query="INSERT INTO tskv FORMAT TSKV";
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM tskv ORDER BY binary_data";
-$CLICKHOUSE_CLIENT --query="DROP TABLE tskv";
+$CLICKHOUSE_CLIENT --query="DROP STREAM tskv";

@@ -1,5 +1,5 @@
-CREATE TABLE tmp ENGINE = TinyLog AS SELECT queryID();
-CREATE TABLE tmp ENGINE = TinyLog AS SELECT initialQueryID();
+create stream tmp  AS SELECT queryID();
+create stream tmp  AS SELECT initialQueryID();
 3
 3
 1

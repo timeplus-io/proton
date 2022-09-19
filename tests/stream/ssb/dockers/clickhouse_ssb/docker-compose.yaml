@@ -7,9 +7,9 @@ services:
      - ../clickhouse-server/datas:/var/lib/clickhouse
      - ../clickhouse-server/log:/var/log/clickhouse-server
     ports:
-      - "8123:8123" #  HTTP
-      - "9000:9000" # TCP
-      - "9009:9009" # Postgres
+      - "18123:8123" #  HTTP
+      - "19000:9000" # TCP
+      - "19009:9009" # Postgres
     deploy:
       replicas: 1
       #restart_policy:
@@ -18,3 +18,11 @@ services:
     # to discover stream store
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "192.168.12.0/24"

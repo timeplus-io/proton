@@ -8,13 +8,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS test_db";
 
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "CREATE DATABASE {db:Identifier}";
-${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "CREATE TABLE {db:Identifier}.{tbl:Identifier} (id UInt64, col1 UInt64) ENGINE = MergeTree() ORDER BY id";
+${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "create stream {db:Identifier}.{tbl:Identifier} (id uint64, col1 uint64) ENGINE = MergeTree() ORDER BY id";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "INSERT INTO {db:Identifier}.{tbl:Identifier} VALUES (1,2)";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "SELECT * FROM {db:Identifier}.{tbl:Identifier}";
-${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "OPTIMIZE TABLE {db:Identifier}.{tbl:Identifier}";
-${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "ALTER TABLE {db:Identifier}.{tbl:Identifier} RENAME COLUMN col1 to col2";
+${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "OPTIMIZE STREAM {db:Identifier}.{tbl:Identifier}";
+${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "ALTER STREAM {db:Identifier}.{tbl:Identifier} RENAME COLUMN col1 to col2";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "EXISTS TABLE {db:Identifier}.{tbl:Identifier}";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "INSERT INTO {db:Identifier}.{tbl:Identifier} VALUES (3,4)";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "SELECT col2 FROM {db:Identifier}.{tbl:Identifier} ORDER BY col2 DESC";
-${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "DROP TABLE {db:Identifier}.{tbl:Identifier}";
+${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "DROP STREAM {db:Identifier}.{tbl:Identifier}";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "DROP DATABASE {db:Identifier}";

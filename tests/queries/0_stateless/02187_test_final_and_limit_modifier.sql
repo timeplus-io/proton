@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS test_02187;
-CREATE TABLE test_02187 (
-    info String,
-    id Int32
+DROP STREAM IF EXISTS test_02187;
+create stream test_02187 (
+    info string,
+    id int32
 )
 ENGINE = ReplacingMergeTree(id)
 ORDER BY id;

@@ -1,1 +1,1 @@
-CREATE TABLE system.rocksdb\n(\n    `database` String,\n    `table` String,\n    `name` String,\n    `value` UInt64\n)\nENGINE = SystemRocksDB()\nCOMMENT \'SYSTEM TABLE is built on the fly.\'
+create stream system.rocksdb\n(\n    `database` string,\n    `table` string,\n    `name` string,\n    `value` uint64\n)\nENGINE = SystemRocksDB()\nCOMMENT \'SYSTEM TABLE is built on the fly.\'

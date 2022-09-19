@@ -11,9 +11,9 @@ from pure_http_client import ClickHouseClient
 client = ClickHouseClient()
 
 N = 10
-create_query = "CREATE TABLE t_cnf_fuzz(" + ", ".join([f"c{i} UInt8" for i in range(N)]) + ") ENGINE = Memory"
+create_query = "create stream t_cnf_fuzz(" + ", ".join([f"c{i} uint8" for i in range(N)]) + ") "
 
-client.query("DROP TABLE IF EXISTS t_cnf_fuzz")
+client.query("DROP STREAM IF EXISTS t_cnf_fuzz")
 client.query(create_query)
 
 # Insert all possible combinations of bool columns.
@@ -69,5 +69,5 @@ for _ in range(T):
         print(fail_report.format(query_cnf, res, res_cnf))
         exit(1)
 
-client.query("DROP TABLE t_cnf_fuzz")
+client.query("DROP STREAM t_cnf_fuzz")
 print("OK")

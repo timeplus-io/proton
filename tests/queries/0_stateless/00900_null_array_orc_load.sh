@@ -7,12 +7,12 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 DATA_FILE=$CUR_DIR/data_orc/test_null_array.orc
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS test_null_array_orc"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE test_null_array_orc(col0 Array(Nullable(Int64)),col1 Array(Nullable(String))) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS test_null_array_orc"
+${CLICKHOUSE_CLIENT} --query="create stream test_null_array_orc(col0 array(Nullable(int64)),col1 array(Nullable(string))) "
 cat "$DATA_FILE"  | ${CLICKHOUSE_CLIENT} -q "insert into test_null_array_orc format ORC"
 ${CLICKHOUSE_CLIENT} --query="select * from test_null_array_orc"
 
-${CLICKHOUSE_CLIENT} --query="drop table test_null_array_orc"
+${CLICKHOUSE_CLIENT} --query="drop stream test_null_array_orc"
 
 #
 #  test_null_array.orc is impossible to create using CH because it stores NULL instead of empty array

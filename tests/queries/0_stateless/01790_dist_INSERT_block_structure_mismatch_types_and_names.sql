@@ -1,10 +1,10 @@
-DROP TABLE IF EXISTS tmp_01781;
-DROP TABLE IF EXISTS dist_01781;
+DROP STREAM IF EXISTS tmp_01781;
+DROP STREAM IF EXISTS dist_01781;
 
 SET prefer_localhost_replica=0;
 
-CREATE TABLE tmp_01781 (n LowCardinality(String)) ENGINE=Memory;
-CREATE TABLE dist_01781 (n LowCardinality(String)) Engine=Distributed(test_cluster_two_shards, currentDatabase(), tmp_01781, cityHash64(n));
+create stream tmp_01781 (n LowCardinality(string)) ENGINE=Memory;
+create stream dist_01781 (n LowCardinality(string)) Engine=Distributed(test_cluster_two_shards, currentDatabase(), tmp_01781, cityHash64(n));
 
 SET insert_distributed_sync=1;
 INSERT INTO dist_01781 VALUES ('1'),('2');
@@ -18,5 +18,5 @@ INSERT INTO dist_01781 VALUES ('1'),('2');
 INSERT INTO dist_01781 SELECT * FROM numbers(1000);
 SYSTEM FLUSH DISTRIBUTED dist_01781;
 
-DROP TABLE tmp_01781;
-DROP TABLE dist_01781;
+DROP STREAM tmp_01781;
+DROP STREAM dist_01781;

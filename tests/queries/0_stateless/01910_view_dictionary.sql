@@ -1,23 +1,23 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS dictionary_source_en;
-DROP TABLE IF EXISTS dictionary_source_ru;
-DROP TABLE IF EXISTS dictionary_source_view;
+DROP STREAM IF EXISTS dictionary_source_en;
+DROP STREAM IF EXISTS dictionary_source_ru;
+DROP STREAM IF EXISTS dictionary_source_view;
 DROP DICTIONARY IF EXISTS flat_dictionary;
 
-CREATE TABLE dictionary_source_en
+create stream dictionary_source_en
 (
-    id UInt64,
-    value String
-) ENGINE = TinyLog;
+    id uint64,
+    value string
+) ;
 
 INSERT INTO dictionary_source_en VALUES (1, 'One'), (2,'Two'), (3, 'Three');
 
-CREATE TABLE dictionary_source_ru
+create stream dictionary_source_ru
 (
-    id UInt64,
-    value String
-) ENGINE = TinyLog;
+    id uint64,
+    value string
+) ;
 
 INSERT INTO dictionary_source_ru VALUES (1, 'Один'), (2,'Два'), (3, 'Три');
 
@@ -27,9 +27,9 @@ select * from dictionary_source_view;
 
 CREATE DICTIONARY flat_dictionary
 (
-    id UInt64,
-    value_en String,
-    value_ru String
+    id uint64,
+    value_en string,
+    value_ru string
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT 9000 USER 'default' PASSWORD '' TABLE 'dictionary_source_view'))
@@ -41,7 +41,7 @@ SELECT
     dictGet(concat(currentDatabase(), '.flat_dictionary'), 'value_ru', number + 1)
 FROM numbers(3);
 
-DROP TABLE dictionary_source_en;
-DROP TABLE dictionary_source_ru;
-DROP TABLE dictionary_source_view;
+DROP STREAM dictionary_source_en;
+DROP STREAM dictionary_source_ru;
+DROP STREAM dictionary_source_view;
 DROP DICTIONARY flat_dictionary;

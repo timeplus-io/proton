@@ -1,4 +1,4 @@
-WITH arrayJoin(['a', 'b']) AS z
+WITH array_join(['a', 'b']) AS z
 SELECT
     z,
     sumMergeForEach(x) AS x

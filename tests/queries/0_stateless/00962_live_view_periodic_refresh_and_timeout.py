@@ -24,7 +24,7 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     client2.send('SET allow_experimental_live_view = 1')
     client2.expect(prompt)
 
-    client1.send('DROP TABLE IF EXISTS test.lv')
+    client1.send('drop stream IF EXISTS test.lv')
     client1.expect(prompt)
     client1.send("CREATE LIVE VIEW test.lv WITH TIMEOUT 60 AND REFRESH 1"
                  " AS SELECT value FROM system.events WHERE event = 'OSCPUVirtualTimeMicroseconds'")
@@ -49,6 +49,6 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
         if time.time() - start_time > 90:
             break
     # check table is dropped
-    client1.send('DROP TABLE test.lv')
+    client1.send('drop stream test.lv')
     client1.expect('Table test.lv doesn\'t exist')
     client1.expect(prompt)

@@ -1,5 +1,6 @@
-drop table if exists badFixedStringSort;
-CREATE TABLE IF NOT EXISTS badFixedStringSort (uuid5_old FixedString(16), subitem String) engine=MergeTree order by  tuple();
+SET query_mode = 'table';
+drop stream if exists badFixedStringSort;
+create stream IF NOT EXISTS badFixedStringSort (uuid5_old FixedString(16), subitem string) engine=MergeTree order by  tuple();
 
 INSERT INTO badFixedStringSort values (UUIDStringToNum('999e1140-66ef-5610-9c3a-b3fb33e0fda9'), '1');
 INSERT INTO badFixedStringSort values (UUIDStringToNum('999e1140-66ef-5610-9c3a-b3fb33e0fda9'), '2');
@@ -19,4 +20,4 @@ INSERT INTO badFixedStringSort values (UUIDStringToNum('999e1140-66ef-5610-9c3a-
 optimize table badFixedStringSort final;
 select hex(uuid5_old), subitem from badFixedStringSort ORDER BY  uuid5_old, subitem;
 
-drop table if exists badFixedStringSort;
+drop stream if exists badFixedStringSort;

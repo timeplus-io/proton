@@ -10,19 +10,19 @@ USER_FILES_PATH=$(clickhouse-client --query "select _path,_file from file('nonex
 $CLICKHOUSE_CLIENT -n --query="
     SET allow_experimental_bigint_types = 1;
 
-    DROP TABLE IF EXISTS dictionary_decimal_source_table;
-    CREATE TABLE dictionary_decimal_source_table
+    DROP STREAM IF EXISTS dictionary_decimal_source_table;
+    create stream dictionary_decimal_source_table
     (
-        id UInt64,
+        id uint64,
         decimal_value Decimal256(5)
-    ) ENGINE = TinyLog;
+    ) ;
 
     INSERT INTO dictionary_decimal_source_table VALUES (1, 5.0);
 
     DROP DICTIONARY IF EXISTS ssd_cache_dictionary;
     CREATE DICTIONARY ssd_cache_dictionary
     (
-        id UInt64,
+        id uint64,
         decimal_value Decimal256(5)
     )
     PRIMARY KEY id
@@ -31,6 +31,6 @@ $CLICKHOUSE_CLIENT -n --query="
     LAYOUT(SSD_CACHE(BLOCK_SIZE 4096 FILE_SIZE 8192 PATH '$USER_FILES_PATH/0d'));
 
     SELECT 'SSDCache dictionary';
-    SELECT dictGet('ssd_cache_dictionary', 'decimal_value', toUInt64(1));
+    SELECT dictGet('ssd_cache_dictionary', 'decimal_value', to_uint64(1));
 
     DROP DICTIONARY ssd_cache_dictionary;"

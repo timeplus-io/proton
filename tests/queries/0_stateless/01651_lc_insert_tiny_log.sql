@@ -1,47 +1,48 @@
-drop table if exists perf_lc_num;
+SET query_mode = 'table';
+drop stream if exists perf_lc_num;
 
-CREATE TABLE perf_lc_num(　        num UInt8,　        arr Array(LowCardinality(Int64)) default [num]　        ) ENGINE = TinyLog;
+create stream perf_lc_num(　        num uint8,　        arr array(LowCardinality(int64)) default [num]　        ) ;
 
-INSERT INTO perf_lc_num (num) SELECT toUInt8(number) FROM numbers(10000000);
-
-select sum(length(arr)) from perf_lc_num;
-select sum(length(arr)), sum(num) from perf_lc_num;
-
-INSERT INTO perf_lc_num (num) SELECT toUInt8(number) FROM numbers(10000000);
+INSERT INTO perf_lc_num (num) SELECT to_uint8(number) FROM numbers(10000000);
 
 select sum(length(arr)) from perf_lc_num;
 select sum(length(arr)), sum(num) from perf_lc_num;
 
-drop table if exists perf_lc_num;
-
-
-CREATE TABLE perf_lc_num(　        num UInt8,　        arr Array(LowCardinality(Int64)) default [num]　        ) ENGINE = Log;
-
-INSERT INTO perf_lc_num (num) SELECT toUInt8(number) FROM numbers(10000000);
+INSERT INTO perf_lc_num (num) SELECT to_uint8(number) FROM numbers(10000000);
 
 select sum(length(arr)) from perf_lc_num;
 select sum(length(arr)), sum(num) from perf_lc_num;
 
-INSERT INTO perf_lc_num (num) SELECT toUInt8(number) FROM numbers(10000000);
+drop stream if exists perf_lc_num;
+
+
+create stream perf_lc_num(　        num uint8,　        arr array(LowCardinality(int64)) default [num]　        )  ;
+
+INSERT INTO perf_lc_num (num) SELECT to_uint8(number) FROM numbers(10000000);
 
 select sum(length(arr)) from perf_lc_num;
 select sum(length(arr)), sum(num) from perf_lc_num;
 
-drop table if exists perf_lc_num;
-
-
-CREATE TABLE perf_lc_num(　        num UInt8,　        arr Array(LowCardinality(Int64)) default [num]　        ) ENGINE = StripeLog;
-
-INSERT INTO perf_lc_num (num) SELECT toUInt8(number) FROM numbers(10000000);
+INSERT INTO perf_lc_num (num) SELECT to_uint8(number) FROM numbers(10000000);
 
 select sum(length(arr)) from perf_lc_num;
 select sum(length(arr)), sum(num) from perf_lc_num;
 
-INSERT INTO perf_lc_num (num) SELECT toUInt8(number) FROM numbers(10000000);
+drop stream if exists perf_lc_num;
+
+
+create stream perf_lc_num(　        num uint8,　        arr array(LowCardinality(int64)) default [num]　        ) ENGINE = StripeLog;
+
+INSERT INTO perf_lc_num (num) SELECT to_uint8(number) FROM numbers(10000000);
 
 select sum(length(arr)) from perf_lc_num;
 select sum(length(arr)), sum(num) from perf_lc_num;
 
-drop table if exists perf_lc_num;
+INSERT INTO perf_lc_num (num) SELECT to_uint8(number) FROM numbers(10000000);
+
+select sum(length(arr)) from perf_lc_num;
+select sum(length(arr)), sum(num) from perf_lc_num;
+
+drop stream if exists perf_lc_num;
 
 

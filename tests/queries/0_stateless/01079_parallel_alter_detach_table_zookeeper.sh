@@ -8,11 +8,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPLICAS=3
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_alter_detach_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_alter_detach_$i"
 done
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "CREATE TABLE concurrent_alter_detach_$i (key UInt64, value1 UInt8, value2 UInt8) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_alter_detach', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000,temporary_directories_lifetime=10,cleanup_delay_period=3,cleanup_delay_period_random_add=0"
+    $CLICKHOUSE_CLIENT --query "create stream concurrent_alter_detach_$i (key uint64, value1 uint8, value2 uint8) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_alter_detach', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000,temporary_directories_lifetime=10,cleanup_delay_period=3,cleanup_delay_period_random_add=0"
 done
 
 $CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_alter_detach_1 SELECT number, number + 10, number from numbers(10)"
@@ -30,11 +30,11 @@ INITIAL_SUM=$($CLICKHOUSE_CLIENT --query "SELECT SUM(value1) FROM concurrent_alt
 # between each other, so can be executed concurrently.
 function correct_alter_thread()
 {
-    TYPES=(Float64 String UInt8 UInt32)
+    TYPES=(float64 string uint8 uint32)
     while true; do
         REPLICA=$(($RANDOM % 3 + 1))
         TYPE=${TYPES[$RANDOM % ${#TYPES[@]} ]}
-        $CLICKHOUSE_CLIENT --query "ALTER TABLE concurrent_alter_detach_$REPLICA MODIFY COLUMN value1 $TYPE SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
+        $CLICKHOUSE_CLIENT --query "ALTER STREAM concurrent_alter_detach_$REPLICA MODIFY COLUMN value1 $TYPE SETTINGS replication_alter_partitions_sync=0"; # additionaly we don't wait anything for more heavy concurrency
         sleep 0.$RANDOM
     done
 }
@@ -93,7 +93,7 @@ for i in $(seq $REPLICAS); do
 done
 
 # This alter will finish all previous, but replica 1 maybe still not up-to-date
-while [[ $(timeout 120 ${CLICKHOUSE_CLIENT} --query "ALTER TABLE concurrent_alter_detach_1 MODIFY COLUMN value1 String SETTINGS replication_alter_partitions_sync=2" 2>&1) ]]; do
+while [[ $(timeout 120 ${CLICKHOUSE_CLIENT} --query "ALTER STREAM concurrent_alter_detach_1 MODIFY COLUMN value1 string SETTINGS replication_alter_partitions_sync=2" 2>&1) ]]; do
     sleep 1
     # just try to attach table if it failed for some reason in the code above
     for i in $(seq $REPLICAS); do
@@ -103,9 +103,9 @@ done
 
 for i in $(seq $REPLICAS); do
     $CLICKHOUSE_CLIENT --query "SYSTEM SYNC REPLICA concurrent_alter_detach_$i"
-    $CLICKHOUSE_CLIENT --query "SELECT SUM(toUInt64(value1)) > $INITIAL_SUM FROM concurrent_alter_detach_$i"
+    $CLICKHOUSE_CLIENT --query "SELECT SUM(to_uint64(value1)) > $INITIAL_SUM FROM concurrent_alter_detach_$i"
     $CLICKHOUSE_CLIENT --query "SELECT COUNT() FROM system.mutations WHERE database = '$CLICKHOUSE_DATABASE' and is_done=0 and table = 'concurrent_alter_detach_$i'" # all mutations have to be done
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.mutations WHERE database = '$CLICKHOUSE_DATABASE' and is_done=0 and table = 'concurrent_alter_detach_$i'" # all mutations have to be done
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.replication_queue WHERE table = 'concurrent_alter_detach_$i' and (type = 'ALTER_METADATA' or type = 'MUTATE_PART')" # all mutations and alters have to be done
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_alter_detach_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_alter_detach_$i"
 done

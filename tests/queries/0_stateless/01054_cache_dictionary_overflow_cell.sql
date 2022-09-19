@@ -1,9 +1,9 @@
 -- Tags: no-parallel
-
+SET query_mode = 'table';
 create database if not exists test_01054_overflow;
-drop table if exists test_01054_overflow.ints;
+drop stream if exists test_01054_overflow.ints;
 
-create table test_01054_overflow.ints (key UInt64, i8 Int8, i16 Int16, i32 Int32, i64 Int64, u8 UInt8, u16 UInt16, u32 UInt32, u64 UInt64) Engine = Memory;
+create stream test_01054_overflow.ints (key uint64, i8 int8, i16 Int16, i32 int32, i64 int64, u8 uint8, u16 uint16, u32 uint32, u64 uint64) Engine = Memory;
 
 insert into test_01054_overflow.ints values (1, 1, 1, 1, 1, 1, 1, 1, 1);
 insert into test_01054_overflow.ints values (2, 2, 2, 2, 2, 2, 2, 2, 2);
@@ -27,32 +27,32 @@ insert into test_01054_overflow.ints values (19, 19, 19, 19, 19, 19, 19, 19, 19)
 insert into test_01054_overflow.ints values (20, 20, 20, 20, 20, 20, 20, 20, 20);
 
 select 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(1)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(2)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(3)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(4)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(5)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(6)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(7)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(8)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(9)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(10)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(11)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(12)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(13)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(14)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(15)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(16)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(17)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(18)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(19)), 
-dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(20));
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(1)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(2)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(3)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(4)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(5)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(6)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(7)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(8)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(9)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(10)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(11)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(12)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(13)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(14)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(15)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(16)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(17)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(18)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(19)), 
+dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(20));
 
-SELECT arrayMap(x -> dictGet('one_cell_cache_ints_overflow', 'i8', toUInt64(x)), array)
+SELECT array_map(x -> dictGet('one_cell_cache_ints_overflow', 'i8', to_uint64(x)), array)
 FROM
 (
     SELECT [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] AS array
 );
 
-DROP TABLE if exists test_01054.ints;
+DROP STREAM if exists test_01054.ints;
 DROP DATABASE test_01054_overflow;

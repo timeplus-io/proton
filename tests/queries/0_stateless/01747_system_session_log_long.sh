@@ -358,7 +358,7 @@ SELECT
     replaceAll(user, '${BASE_USERNAME}', '\${BASE_USERNAME}') as user_name,
     interface,
     type,
-    if(count(*) > 1, 'many', toString(count(*))) -- do not rely on count value since MySQL does arbitrary number of retries
+    if(count(*) > 1, 'many', to_string(count(*))) -- do not rely on count value since MySQL does arbitrary number of retries
 FROM
     system.session_log
 WHERE

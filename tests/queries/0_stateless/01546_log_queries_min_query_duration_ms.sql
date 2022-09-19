@@ -38,7 +38,7 @@ where
     and event_date >= yesterday();
 -- There at least two threads involved in a simple query
 -- (one thread just waits another, sigh)
-select if(count() == 2, 'OK', 'Fail: ' || toString(count()))
+select if(count() == 2, 'OK', 'Fail: ' || to_string(count()))
 from system.query_thread_log
 where
     query like 'select \'01546_log_queries_min_query_duration_ms-slow%'

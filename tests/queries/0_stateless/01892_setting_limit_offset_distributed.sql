@@ -8,7 +8,7 @@ SELECT
     count(),
     number
 FROM remote('127.{1,2}', view(
-    SELECT intDiv(number, 2) AS number
+    SELECT int_div(number, 2) AS number
     FROM numbers(10)
 ))
 GROUP BY number
@@ -22,7 +22,7 @@ SELECT
     count(),
     number
 FROM remote('127.{1,2}', view(
-    SELECT intDiv(number, 2) AS number
+    SELECT int_div(number, 2) AS number
     FROM numbers(10)
 ))
 GROUP BY number

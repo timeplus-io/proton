@@ -5,7 +5,7 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE ${CLICKHOUSE_DATABASE}.remote_table (a Int64) ENGINE=TinyLog AS SELECT * FROM system.numbers limit 10;"
+${CLICKHOUSE_CLIENT} --query "create stream ${CLICKHOUSE_DATABASE}.remote_table (a int64)  AS SELECT * FROM system.numbers limit 10;"
 
 if [ "$CLICKHOUSE_HOST" == "localhost" ]; then
     # Connecting to 127.0.0.1 will connect to clickhouse-local itself, where the table doesn't exist
@@ -33,4 +33,4 @@ else
 fi
 
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE ${CLICKHOUSE_DATABASE}.remote_table;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM ${CLICKHOUSE_DATABASE}.remote_table;"

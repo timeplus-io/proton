@@ -6,8 +6,8 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS tuples";
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE tuples (t1 Tuple(UInt32, UInt32), t2 Tuple(String, String), t3 Tuple(Tuple(UInt32, String), UInt32), t4 Tuple(Tuple(UInt32, UInt32), Tuple(String, String)), t5 Tuple(Array(UInt32), UInt32), t6 Tuple(Tuple(Array(UInt32), Array(UInt32)), Tuple(Array(Array(UInt32)), UInt32)), t7 Array(Tuple(Array(Array(UInt32)), Tuple(Array(Tuple(UInt32, UInt32)), UInt32)))) ENGINE=Memory()"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS tuples";
+${CLICKHOUSE_CLIENT} --query="create stream tuples (t1 tuple(uint32, uint32), t2 tuple(string, string), t3 tuple(tuple(uint32, string), uint32), t4 tuple(tuple(uint32, uint32), tuple(string, string)), t5 tuple(array(uint32), uint32), t6 tuple(tuple(array(uint32), array(uint32)), tuple(array(array(uint32)), uint32)), t7 array(tuple(array(array(uint32)), tuple(array(tuple(uint32, uint32)), uint32)))) ENGINE=Memory()"
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO tuples VALUES ((1, 2), ('1', '2'), ((1, '1'), 1), ((1, 2), ('1', '2')), ([1,2,3], 1), (([1,2,3], [1,2,3]), ([[1,2,3], [1,2,3]], 1)), [([[1,2,3], [1,2,3]], ([(1, 2), (1, 2)], 1))])"
 
@@ -22,4 +22,4 @@ for format in ${formats}; do
     ${CLICKHOUSE_CLIENT} --query="SELECT * FROM tuples"
 done
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE tuples"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM tuples"

@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS t0;
+DROP STREAM IF EXISTS t0;
 
-CREATE TABLE t0
+create stream t0
 (
-    `c0` Int32,
-    `c1` Int32 CODEC(NONE)
+    `c0` int32,
+    `c1` int32 CODEC(NONE)
 )
 ENGINE = MergeTree()
 ORDER BY tuple()
@@ -16,4 +16,4 @@ SELECT t0.c1 FROM t0 WHERE NOT (t0.c1 OR (t0.c0 AND -1.0)); -- { serverError 70 
 SELECT t0.c1 FROM t0 WHERE NOT (t0.c1 OR (t0.c0 AND inf));
 SELECT t0.c1 FROM t0 WHERE NOT (t0.c1 OR (t0.c0 AND nan));
 
-DROP TABLE t0;
+DROP STREAM t0;

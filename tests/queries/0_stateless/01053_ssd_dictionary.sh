@@ -13,14 +13,14 @@ $CLICKHOUSE_CLIENT -n --query="
 
   CREATE DATABASE 01053_db Engine = Ordinary;
 
-  DROP TABLE IF EXISTS 01053_db.table_for_dict;
+  DROP STREAM IF EXISTS 01053_db.table_for_dict;
 
-  CREATE TABLE 01053_db.table_for_dict
+  create stream 01053_db.table_for_dict
   (
-    id UInt64,
-    a UInt64,
-    b Int32,
-    c String
+    id uint64,
+    a uint64,
+    b int32,
+    c string
   )
   ENGINE = MergeTree()
   ORDER BY id;
@@ -35,10 +35,10 @@ $CLICKHOUSE_CLIENT -n --query="
   -- Probably we need rewrite it to integration test
   CREATE DICTIONARY 01053_db.ssd_dict
   (
-      id UInt64,
-      a UInt64 DEFAULT 0,
-      b Int32 DEFAULT -1,
-      c String DEFAULT 'none'
+      id uint64,
+      a uint64 DEFAULT 0,
+      b int32 DEFAULT -1,
+      c string DEFAULT 'none'
   )
   PRIMARY KEY id
   SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB '01053_db'))
@@ -46,21 +46,21 @@ $CLICKHOUSE_CLIENT -n --query="
   LAYOUT(SSD_CACHE(FILE_SIZE 8192 PATH '$USER_FILES_PATH/0d'));
 
   SELECT 'TEST_SMALL';
-  SELECT dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(1));
-  SELECT dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(4));
-  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(5));
-  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(6));
-  SELECT dictGetString('01053_db.ssd_dict', 'c', toUInt64(2));
-  SELECT dictGetString('01053_db.ssd_dict', 'c', toUInt64(3));
+  SELECT dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(1));
+  SELECT dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(4));
+  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(5));
+  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(6));
+  SELECT dictGetString('01053_db.ssd_dict', 'c', to_uint64(2));
+  SELECT dictGetString('01053_db.ssd_dict', 'c', to_uint64(3));
 
   SELECT * FROM 01053_db.ssd_dict ORDER BY id;
   DROP DICTIONARY 01053_db.ssd_dict;
 
-  DROP TABLE IF EXISTS 01053_db.keys_table;
+  DROP STREAM IF EXISTS 01053_db.keys_table;
 
-  CREATE TABLE 01053_db.keys_table
+  create stream 01053_db.keys_table
   (
-    id UInt64
+    id uint64
   )
   ENGINE = StripeLog();
 
@@ -76,10 +76,10 @@ $CLICKHOUSE_CLIENT -n --query="
 
   CREATE DICTIONARY 01053_db.ssd_dict
   (
-      id UInt64,
-      a UInt64 DEFAULT 0,
-      b Int32 DEFAULT -1,
-      c String DEFAULT 'none'
+      id uint64,
+      a uint64 DEFAULT 0,
+      b int32 DEFAULT -1,
+      c string DEFAULT 'none'
   )
   PRIMARY KEY id
   SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB '01053_db'))
@@ -87,38 +87,38 @@ $CLICKHOUSE_CLIENT -n --query="
   LAYOUT(SSD_CACHE(FILE_SIZE 8192 PATH '$USER_FILES_PATH/1d' BLOCK_SIZE 512 WRITE_BUFFER_SIZE 4096));
 
   SELECT 'UPDATE DICTIONARY';
-  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(id))) FROM 01053_db.keys_table;
+  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(id))) FROM 01053_db.keys_table;
 
   SELECT 'VALUE FROM DISK';
-  SELECT dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(1));
+  SELECT dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(1));
 
-  SELECT dictGetString('01053_db.ssd_dict', 'c', toUInt64(1));
+  SELECT dictGetString('01053_db.ssd_dict', 'c', to_uint64(1));
 
   SELECT 'VALUE FROM RAM BUFFER';
-  SELECT dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(10));
-  SELECT dictGetString('01053_db.ssd_dict', 'c', toUInt64(10));
+  SELECT dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(10));
+  SELECT dictGetString('01053_db.ssd_dict', 'c', to_uint64(10));
 
   SELECT 'VALUES FROM DISK AND RAM BUFFER';
-  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(id))) FROM 01053_db.keys_table;
+  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(id))) FROM 01053_db.keys_table;
 
   SELECT 'HAS';
-  SELECT count() FROM 01053_db.keys_table WHERE dictHas('01053_db.ssd_dict', toUInt64(id));
+  SELECT count() FROM 01053_db.keys_table WHERE dictHas('01053_db.ssd_dict', to_uint64(id));
 
   SELECT 'VALUES NOT FROM TABLE';
 
-  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(1000000)), dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(1000000)), dictGetString('01053_db.ssd_dict', 'c', toUInt64(1000000));
-  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(1000000)), dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(1000000)), dictGetString('01053_db.ssd_dict', 'c', toUInt64(1000000));
+  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(1000000)), dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(1000000)), dictGetString('01053_db.ssd_dict', 'c', to_uint64(1000000));
+  SELECT dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(1000000)), dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(1000000)), dictGetString('01053_db.ssd_dict', 'c', to_uint64(1000000));
 
   SELECT 'DUPLICATE KEYS';
-  SELECT arrayJoin([1, 2, 3, 3, 2, 1]) AS id, dictGetInt32('01053_db.ssd_dict', 'b', toUInt64(id));
+  SELECT array_join([1, 2, 3, 3, 2, 1]) AS id, dictGetInt32('01053_db.ssd_dict', 'b', to_uint64(id));
   --SELECT
   DROP DICTIONARY IF EXISTS 01053_db.ssd_dict;
 
-  DROP TABLE IF EXISTS 01053_db.keys_table;
+  DROP STREAM IF EXISTS 01053_db.keys_table;
 
-  CREATE TABLE 01053_db.keys_table
+  create stream 01053_db.keys_table
   (
-    id UInt64
+    id uint64
   )
   ENGINE = MergeTree()
   ORDER BY id;
@@ -131,13 +131,13 @@ $CLICKHOUSE_CLIENT -n --query="
   INSERT INTO 01053_db.keys_table SELECT intHash64(number) FROM system.numbers LIMIT 700, 370;
   INSERT INTO 01053_db.keys_table VALUES (10);
 
-  OPTIMIZE TABLE 01053_db.keys_table;
+  OPTIMIZE STREAM 01053_db.keys_table;
 
   CREATE DICTIONARY 01053_db.ssd_dict
   (
-      id UInt64,
-      a UInt64 DEFAULT 0,
-      b Int32 DEFAULT -1
+      id uint64,
+      a uint64 DEFAULT 0,
+      b int32 DEFAULT -1
   )
   PRIMARY KEY id
   SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB '01053_db'))
@@ -145,13 +145,13 @@ $CLICKHOUSE_CLIENT -n --query="
   LAYOUT(SSD_CACHE(FILE_SIZE 8192 PATH '$USER_FILES_PATH/2d' BLOCK_SIZE 512 WRITE_BUFFER_SIZE 1024));
 
   SELECT 'UPDATE DICTIONARY (MT)';
-  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(id))) FROM 01053_db.keys_table;
+  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(id))) FROM 01053_db.keys_table;
 
   SELECT 'VALUES FROM DISK AND RAM BUFFER (MT)';
-  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', toUInt64(id))) FROM 01053_db.keys_table;
+  SELECT sum(dictGetUInt64('01053_db.ssd_dict', 'a', to_uint64(id))) FROM 01053_db.keys_table;
 
   DROP DICTIONARY IF EXISTS 01053_db.ssd_dict;
 
-  DROP TABLE IF EXISTS 01053_db.table_for_dict;
+  DROP STREAM IF EXISTS 01053_db.table_for_dict;
 
   DROP DATABASE IF EXISTS 01053_db;"

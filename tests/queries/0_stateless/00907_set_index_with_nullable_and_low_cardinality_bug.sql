@@ -1,10 +1,10 @@
+SET query_mode = 'table';
+drop stream if exists null_lc_set_index;
 
-drop table if exists null_lc_set_index;
-
-CREATE TABLE null_lc_set_index (
+create stream null_lc_set_index (
   timestamp         DateTime,
-  action            LowCardinality(Nullable(String)),
-  user              LowCardinality(Nullable(String)),
+  action            LowCardinality(Nullable(string)),
+  user              LowCardinality(Nullable(string)),
   INDEX test_user_idx (user) TYPE set(0) GRANULARITY 8192
 ) ENGINE=MergeTree
   PARTITION BY toYYYYMMDD(timestamp)
@@ -14,5 +14,5 @@ INSERT INTO null_lc_set_index VALUES (1550883020, 'follow', 'bob');
 
 SELECT action, user FROM null_lc_set_index WHERE user = 'alice';
 
-drop table if exists null_lc_set_index;
+drop stream if exists null_lc_set_index;
 

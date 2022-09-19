@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS memory;
-CREATE TABLE memory (x UInt8) ENGINE = Memory;
+DROP STREAM IF EXISTS memory;
+create stream memory (x uint8) ;
 
 INSERT INTO memory VALUES (1);
 INSERT INTO memory (x) VALUES (2);
@@ -10,4 +10,4 @@ INSERT INTO memory(x)VALUES(6);
 
 SELECT * FROM memory ORDER BY x;
 
-DROP TABLE memory;
+DROP STREAM memory;

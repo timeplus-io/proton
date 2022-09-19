@@ -12,7 +12,7 @@ expect_after {
 }
 
 set basedir [file dirname $argv0]
-spawn bash -c "source $basedir/../shell_config.sh ; \$CLICKHOUSE_LOCAL --disable_suggestion --interactive --query 'create table t(i Int32) engine=Memory; insert into t select 1'"
+spawn bash -c "source $basedir/../shell_config.sh ; \$CLICKHOUSE_LOCAL --disable_suggestion --interactive --query 'create stream t(i int32) engine=Memory; insert into t select 1'"
 expect ":) "
 
 send -- "select * from t format TSV\r"

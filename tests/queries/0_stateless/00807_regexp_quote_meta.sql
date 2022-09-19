@@ -9,4 +9,4 @@ SELECT regexpQuoteMeta('(Hello');
 SELECT regexpQuoteMeta('(((((((((');
 SELECT regexpQuoteMeta('\\');
 SELECT regexpQuoteMeta('\0\\|()^$.[?*+{');
-SELECT DISTINCT regexpQuoteMeta(toString(number)) = toString(number) FROM numbers(100000);
+SELECT DISTINCT regexpQuoteMeta(to_string(number)) = to_string(number) FROM numbers(100000);

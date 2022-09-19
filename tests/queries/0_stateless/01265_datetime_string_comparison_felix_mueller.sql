@@ -1,17 +1,17 @@
-DROP TABLE IF EXISTS tztest;
+DROP STREAM IF EXISTS tztest;
 
-CREATE TABLE tztest
+create stream tztest
 (
-    timeBerlin DateTime('Europe/Berlin'), 
-    timeLA DateTime('America/Los_Angeles')
+    timeBerlin datetime('Europe/Berlin'), 
+    timeLA datetime('America/Los_Angeles')
 )
-ENGINE = Memory;
+;
 
 INSERT INTO tztest (timeBerlin, timeLA) VALUES ('2019-05-06 12:00:00', '2019-05-06 12:00:00');
 
 SELECT
-    toUnixTimestamp(timeBerlin),
-    toUnixTimestamp(timeLA)
+    to_unix_timestamp(timeBerlin),
+    to_unix_timestamp(timeLA)
 FROM tztest;
 
 SELECT 1
@@ -26,4 +26,4 @@ SELECT 1
 FROM tztest
 WHERE '2019-05-06 12:00:00' = timeBerlin;
 
-DROP TABLE tztest;
+DROP STREAM tztest;

@@ -19,9 +19,9 @@ function create_drop_thread()
 {
     while true; do
         num=$(($RANDOM % 10 + 1))
-        $CLICKHOUSE_CLIENT --query "CREATE TABLE test_table$num (key UInt64, value1 UInt8, value2 UInt8) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/test_table$num', '0') ORDER BY key"
+        $CLICKHOUSE_CLIENT --query "create stream test_table$num (key uint64, value1 uint8, value2 uint8) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/test_table$num', '0') ORDER BY key"
         sleep 0.$RANDOM
-        $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test_table$num"
+        $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test_table$num"
     done
 }
 
@@ -44,9 +44,9 @@ timeout $TIMEOUT bash -c create_drop_thread 2> /dev/null &
 wait
 
 for num in $(seq 1 10); do
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test_table$num" 2>/dev/null
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test_table$num" 2>/dev/null
     while  [ $? -ne 0 ]; do
-        $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test_table$num" 2>/dev/null
+        $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test_table$num" 2>/dev/null
     done
 done
 

@@ -12,14 +12,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 function thread_create {
     while true; do
-        $CLICKHOUSE_CLIENT --query "CREATE TABLE IF NOT EXISTS $1 (x UInt64, s Array(Nullable(String))) ENGINE = $2"
+        $CLICKHOUSE_CLIENT --query "create stream IF NOT EXISTS $1 (x uint64, s array(Nullable(string))) ENGINE = $2"
         sleep 0.0$RANDOM
     done
 }
 
 function thread_drop {
     while true; do
-        $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS $1"
+        $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS $1"
         sleep 0.0$RANDOM
     done
 }
@@ -40,7 +40,7 @@ function thread_select {
 
 function thread_insert {
     while true; do
-        $CLICKHOUSE_CLIENT --query "INSERT INTO $1 SELECT rand64(1), [toString(rand64(2))] FROM numbers($2)" 2>&1 | grep -v -e 'Received exception from server' -e '^(query: '| grep -v -P 'Code: (60|218)'
+        $CLICKHOUSE_CLIENT --query "INSERT INTO $1 SELECT rand64(1), [to_string(rand64(2))] FROM numbers($2)" 2>&1 | grep -v -e 'Received exception from server' -e '^(query: '| grep -v -P 'Code: (60|218)'
         sleep 0.0$RANDOM
     done
 }
@@ -87,5 +87,5 @@ function test_with_engine {
 #test_with_engine Log
 test_with_engine Memory
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t1"
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t2"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS t1"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS t2"

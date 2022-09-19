@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS data_01515;
-CREATE TABLE data_01515
+DROP STREAM IF EXISTS data_01515;
+create stream data_01515
 (
-    key Int,
-    d1 Int,
-    d1_null Nullable(Int),
+    key int,
+    d1 int,
+    d1_null Nullable(int),
     INDEX d1_idx d1 TYPE minmax GRANULARITY 1,
     INDEX d1_null_idx assumeNotNull(d1_null) TYPE minmax GRANULARITY 1
 )
@@ -32,4 +32,4 @@ SELECT * FROM data_01515 WHERE d1 = 0 SETTINGS force_data_skipping_indices='  d1
 SELECT * FROM data_01515 WHERE d1_null = 0 SETTINGS force_data_skipping_indices='d1_null_idx'; -- { serverError 277 }
 SELECT * FROM data_01515 WHERE assumeNotNull(d1_null) = 0 SETTINGS force_data_skipping_indices='d1_null_idx';
 
-DROP TABLE data_01515;
+DROP STREAM data_01515;

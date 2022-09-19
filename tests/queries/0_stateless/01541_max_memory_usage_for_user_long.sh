@@ -15,7 +15,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ${CLICKHOUSE_CLIENT} -n --allow_introspection_functions 1 --query "DROP USER IF EXISTS test_01541; CREATE USER test_01541; GRANT ALL ON *.* TO test_01541;";
 
 
-query="SELECT groupArray(repeat('a', 1000)) FROM numbers(10000) GROUP BY number % 10 FORMAT JSON"
+query="SELECT group_array(repeat('a', 1000)) FROM numbers(10000) GROUP BY number % 10 FORMAT JSON"
 
 function execute_http()
 {

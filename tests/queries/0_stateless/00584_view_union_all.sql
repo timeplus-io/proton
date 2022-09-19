@@ -1,10 +1,11 @@
-DROP TABLE IF EXISTS Test_00584;
+SET query_mode = 'table';
+drop stream IF EXISTS Test_00584;
 
-CREATE TABLE Test_00584 (
-    createdDate Date,
-    str String,
+create stream Test_00584 (
+    createdDate date,
+    str string,
     key Enum8('A' = 0, 'B' = 1, 'ALL' = 2),
-    a Int64
+    a int64
 )
 ENGINE = MergeTree(createdDate, str, 8192);
 
@@ -25,5 +26,5 @@ CREATE VIEW TestView AS
 
 SELECT * FROM TestView ORDER BY key;
 
-DROP TABLE TestView;
-DROP TABLE Test_00584;
+drop stream TestView;
+drop stream Test_00584;

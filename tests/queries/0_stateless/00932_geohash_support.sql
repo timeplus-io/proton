@@ -1,9 +1,10 @@
-drop table if exists geohash_test_data;
+SET query_mode = 'table';
+drop stream if exists geohash_test_data;
 
-create table geohash_test_data (
-	latitude  Float64,
-	longitude Float64,
-	encoded   String
+create stream geohash_test_data (
+	latitude  float64,
+	longitude float64,
+	encoded   string
 ) engine = MergeTree order by (latitude, longitude, encoded);
 
 -- data obtained from geohash.com
@@ -64,4 +65,4 @@ where
 	or
 	abs(lon_error) > longitude_max_error;
 
-drop table if exists geohash_test_data;
+drop stream if exists geohash_test_data;

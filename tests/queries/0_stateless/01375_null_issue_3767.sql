@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS null_issue_3767;
+DROP STREAM IF EXISTS null_issue_3767;
 
-CREATE TABLE null_issue_3767 (value Nullable(String)) ENGINE=Memory;
+create stream null_issue_3767 (value Nullable(string)) ENGINE=Memory;
 
-INSERT INTO null_issue_3767 (value) VALUES ('A String'), (NULL);
+INSERT INTO null_issue_3767 (value) VALUES ('A string'), (NULL);
 
-SELECT value FROM null_issue_3767 WHERE value NOT IN ('A String');
+SELECT value FROM null_issue_3767 WHERE value NOT IN ('A string');
 
-DROP TABLE null_issue_3767;
+DROP STREAM null_issue_3767;

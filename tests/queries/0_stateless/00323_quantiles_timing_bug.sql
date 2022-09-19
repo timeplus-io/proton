@@ -1,1 +1,1 @@
-SELECT quantilesTiming(0.99)(arrayJoin(range(100000)));
+SELECT quantiles_timing(0.99)(array_join(range(100000)));

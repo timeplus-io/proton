@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS t_sparse_distinct;
+DROP STREAM IF EXISTS t_sparse_distinct;
 
-CREATE TABLE t_sparse_distinct (id UInt32, v UInt64)
+create stream t_sparse_distinct (id uint32, v uint64)
 ENGINE = MergeTree
 ORDER BY id
 SETTINGS ratio_of_defaults_for_sparse_serialization = 0.9;
@@ -17,4 +17,4 @@ ORDER BY name;
 
 SELECT DISTINCT v FROM t_sparse_distinct ORDER BY v;
 
-DROP TABLE t_sparse_distinct;
+DROP STREAM t_sparse_distinct;

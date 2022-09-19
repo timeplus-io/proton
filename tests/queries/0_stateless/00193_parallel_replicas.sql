@@ -1,9 +1,9 @@
 -- Tags: replica
 
-DROP TABLE IF EXISTS parallel_replicas;
-DROP TABLE IF EXISTS parallel_replicas_backup;
+DROP STREAM IF EXISTS parallel_replicas;
+DROP STREAM IF EXISTS parallel_replicas_backup;
 
-CREATE TABLE parallel_replicas (d Date DEFAULT today(), x UInt32, u UInt64, s String) ENGINE = MergeTree(d, cityHash64(u, s), (x, d, cityHash64(u, s)), 8192);
+create stream parallel_replicas (d date DEFAULT today(), x uint32, u uint64, s string) ENGINE = MergeTree(d, cityHash64(u, s), (x, d, cityHash64(u, s)), 8192);
 INSERT INTO parallel_replicas (x, u, s) VALUES (1, 2, 'A'),(3, 4, 'B'),(5, 6, 'C'),(7, 8, 'D'),(9,10,'E');
 INSERT INTO parallel_replicas (x, u, s) VALUES (11, 12, 'F'),(13, 14, 'G'),(15, 16, 'H'),(17, 18, 'I'),(19,20,'J');
 INSERT INTO parallel_replicas (x, u, s) VALUES (21, 22, 'K'),(23, 24, 'L'),(25, 26, 'M'),(27, 28, 'N'),(29,30,'O');
@@ -19,7 +19,7 @@ INSERT INTO parallel_replicas (x, u, s) VALUES (51, 52, 'Z');
 
 /* Две реплики */
 
-CREATE TABLE parallel_replicas_backup(d Date DEFAULT today(), x UInt32, u UInt64, s String) ENGINE = Memory;
+create stream parallel_replicas_backup(d date DEFAULT today(), x uint32, u uint64, s string) ;
 
 SET parallel_replicas_count = 2;
 
@@ -34,8 +34,8 @@ SELECT count() > 0 FROM parallel_replicas;
 SET parallel_replicas_count = 0;
 SELECT x, u, s FROM parallel_replicas_backup ORDER BY x, u, s ASC;
 
-DROP TABLE parallel_replicas_backup;
-CREATE TABLE parallel_replicas_backup(d Date DEFAULT today(), x UInt32, u UInt64, s String) ENGINE = Memory;
+DROP STREAM parallel_replicas_backup;
+create stream parallel_replicas_backup(d date DEFAULT today(), x uint32, u uint64, s string) ;
 
 /* Три реплики */
 
@@ -56,5 +56,5 @@ SELECT count() > 0 FROM parallel_replicas;
 SET parallel_replicas_count = 0;
 SELECT x, u, s FROM parallel_replicas_backup ORDER BY x, u, s ASC;
 
-DROP TABLE parallel_replicas;
-DROP TABLE parallel_replicas_backup;
+DROP STREAM parallel_replicas;
+DROP STREAM parallel_replicas_backup;

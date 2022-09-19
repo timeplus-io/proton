@@ -17,15 +17,15 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPLICAS=5
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_mutate_mt_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_mutate_mt_$i"
 done
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "CREATE TABLE concurrent_mutate_mt_$i (key UInt64, value1 UInt64, value2 String) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_mutate_mt', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000,temporary_directories_lifetime=10,cleanup_delay_period=3,cleanup_delay_period_random_add=0"
+    $CLICKHOUSE_CLIENT --query "create stream concurrent_mutate_mt_$i (key uint64, value1 uint64, value2 string) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/concurrent_mutate_mt', '$i') ORDER BY key SETTINGS max_replicated_mutations_in_queue=1000, number_of_free_entries_in_pool_to_execute_mutation=0,max_replicated_merges_in_queue=1000,temporary_directories_lifetime=10,cleanup_delay_period=3,cleanup_delay_period_random_add=0"
 done
 
-$CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_mutate_mt_1 SELECT number, number + 10, toString(number) from numbers(10)"
-$CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_mutate_mt_1 SELECT number, number + 10, toString(number) from numbers(10, 40)"
+$CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_mutate_mt_1 SELECT number, number + 10, to_string(number) from numbers(10)"
+$CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_mutate_mt_1 SELECT number, number + 10, to_string(number) from numbers(10, 40)"
 
 for i in $(seq $REPLICAS); do
     $CLICKHOUSE_CLIENT --query "SYSTEM SYNC REPLICA concurrent_mutate_mt_$i"
@@ -42,7 +42,7 @@ function correct_alter_thread()
 {
     while true; do
         REPLICA=$(($RANDOM % 5 + 1))
-        $CLICKHOUSE_CLIENT --query "ALTER TABLE concurrent_mutate_mt_$REPLICA UPDATE value1 = value1 + 1 WHERE 1";
+        $CLICKHOUSE_CLIENT --query "ALTER STREAM concurrent_mutate_mt_$REPLICA UPDATE value1 = value1 + 1 WHERE 1";
         sleep 1
     done
 }
@@ -55,7 +55,7 @@ function insert_thread()
     while true; do
         REPLICA=$(($RANDOM % 5 + 1))
         VALUE=${VALUES[$RANDOM % ${#VALUES[@]} ]}
-        $CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_mutate_mt_$REPLICA VALUES($RANDOM, $VALUE, toString($VALUE))"
+        $CLICKHOUSE_CLIENT --query "INSERT INTO concurrent_mutate_mt_$REPLICA VALUES($RANDOM, $VALUE, to_string($VALUE))"
         sleep 0.$RANDOM
     done
 }
@@ -127,8 +127,8 @@ while true ; do
 done
 
 for i in $(seq $REPLICAS); do
-    $CLICKHOUSE_CLIENT --query "SELECT SUM(toUInt64(value1)) > $INITIAL_SUM FROM concurrent_mutate_mt_$i"
+    $CLICKHOUSE_CLIENT --query "SELECT SUM(to_uint64(value1)) > $INITIAL_SUM FROM concurrent_mutate_mt_$i"
     $CLICKHOUSE_CLIENT --query "SELECT COUNT() FROM system.mutations WHERE table='concurrent_mutate_mt_$i' and is_done=0" # all mutations have to be done
     $CLICKHOUSE_CLIENT --query "SELECT * FROM system.mutations WHERE table='concurrent_mutate_mt_$i' and is_done=0" # for verbose output
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS concurrent_mutate_mt_$i"
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS concurrent_mutate_mt_$i"
 done

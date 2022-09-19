@@ -1,6 +1,7 @@
-DROP TABLE IF EXISTS test;
+SET query_mode = 'table';
+drop stream IF EXISTS test;
 
-CREATE TABLE test(timestamp DateTime) ENGINE = MergeTree ORDER BY timestamp;
+create stream test(timestamp DateTime) ENGINE = MergeTree ORDER BY timestamp;
 
 INSERT INTO test VALUES ('2020-10-15 00:00:00');
 INSERT INTO test VALUES ('2020-10-15 12:00:00');
@@ -33,8 +34,8 @@ SELECT '';
 SELECT * FROM test WHERE '2020-10-16' >= timestamp ORDER BY timestamp;
 SELECT '';
 
-DROP TABLE test;
-CREATE TABLE test(timestamp DateTime64) ENGINE = MergeTree ORDER BY timestamp;
+drop stream test;
+create stream test(timestamp DateTime64) ENGINE = MergeTree ORDER BY timestamp;
 
 INSERT INTO test VALUES ('2020-10-15 00:00:00');
 INSERT INTO test VALUES ('2020-10-15 12:00:00');
@@ -67,4 +68,4 @@ SELECT '';
 SELECT * FROM test WHERE '2020-10-16' >= timestamp ORDER BY timestamp;
 SELECT '';
 
-DROP TABLE test;
+drop stream test;

@@ -27,12 +27,12 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
 
     client1.send('CREATE DATABASE 01069_window_view_proc_tumble_watch')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS 01069_window_view_proc_tumble_watch.mt')
+    client1.send('DROP STREAM IF EXISTS 01069_window_view_proc_tumble_watch.mt')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS 01069_window_view_proc_tumble_watch.wv NO DELAY')
+    client1.send('DROP STREAM IF EXISTS 01069_window_view_proc_tumble_watch.wv NO DELAY')
     client1.expect(prompt)
 
-    client1.send('CREATE TABLE 01069_window_view_proc_tumble_watch.mt(a Int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple()')
+    client1.send('create stream 01069_window_view_proc_tumble_watch.mt(a int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple()')
     client1.expect(prompt)
     client1.send("CREATE WINDOW VIEW 01069_window_view_proc_tumble_watch.wv AS SELECT count(a) AS count FROM 01069_window_view_proc_tumble_watch.mt GROUP BY tumble(timestamp, INTERVAL '1' SECOND, 'US/Samoa') AS wid;")
     client1.expect(prompt)
@@ -54,9 +54,9 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     if match.groups()[1]:
         client1.send(client1.command)
         client1.expect(prompt)
-    client1.send('DROP TABLE 01069_window_view_proc_tumble_watch.wv NO DELAY')
+    client1.send('DROP STREAM 01069_window_view_proc_tumble_watch.wv NO DELAY')
     client1.expect(prompt)
-    client1.send('DROP TABLE 01069_window_view_proc_tumble_watch.mt')
+    client1.send('DROP STREAM 01069_window_view_proc_tumble_watch.mt')
     client1.expect(prompt)
     client1.send('DROP DATABASE IF EXISTS 01069_window_view_proc_tumble_watch')
     client1.expect(prompt)

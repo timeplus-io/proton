@@ -21,7 +21,7 @@ $CLICKHOUSE_CLIENT -q "EXPLAIN json = 1, actions = 1, description = 0
 
 echo "--------"
 $CLICKHOUSE_CLIENT -q "EXPLAIN json = 1, actions = 1, description = 0
-                       SELECT distinct intDiv(number, 2), intDiv(number, 3) from numbers(10) FORMAT TSVRaw
+                       SELECT distinct int_div(number, 2), int_div(number, 3) from numbers(10) FORMAT TSVRaw
                       " | grep Distinct -A 1
 
 echo "--------"

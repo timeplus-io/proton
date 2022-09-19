@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 
-CREATE TABLE test
+create stream test
 (
-  `id` Nullable(String),
+  `id` Nullable(string),
   `status` Nullable(Enum8('NEW' = 0, 'CANCEL' = 1)),
-  `nested.nestedType` Array(Nullable(String)),
-  `partition` Date
+  `nested.nestedType` array(Nullable(string)),
+  `partition` date
 ) ENGINE = MergeTree() PARTITION BY partition
 ORDER BY
   partition SETTINGS index_granularity = 8192;
@@ -25,4 +25,4 @@ WHERE (status IN (
 GROUP BY CUBE(status)
 LIMIT 100;
 
-DROP TABLE test;
+DROP STREAM test;

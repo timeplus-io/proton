@@ -10,9 +10,9 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS squares_protobuf_00825;
+DROP STREAM IF EXISTS squares_protobuf_00825;
 
-CREATE TABLE squares_protobuf_00825 (number UInt32, square UInt64) ENGINE = MergeTree ORDER BY tuple();
+create stream squares_protobuf_00825 (number uint32, square uint64) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO squares_protobuf_00825 VALUES (2, 4), (0, 0), (3, 9);
 
@@ -32,4 +32,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO squares_protobuf_00825 FORMAT Protobuf S
 $CLICKHOUSE_CLIENT --query "SELECT * FROM squares_protobuf_00825"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE squares_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM squares_protobuf_00825"

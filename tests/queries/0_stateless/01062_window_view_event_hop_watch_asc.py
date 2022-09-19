@@ -25,12 +25,12 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
 
     client1.send('CREATE DATABASE 01062_window_view_event_hop_watch_asc')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS 01062_window_view_event_hop_watch_asc.mt')
+    client1.send('DROP STREAM IF EXISTS 01062_window_view_event_hop_watch_asc.mt')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS 01062_window_view_event_hop_watch_asc.wv NO DELAY')
+    client1.send('DROP STREAM IF EXISTS 01062_window_view_event_hop_watch_asc.wv NO DELAY')
     client1.expect(prompt)
 
-    client1.send('CREATE TABLE 01062_window_view_event_hop_watch_asc.mt(a Int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple()')
+    client1.send('create stream 01062_window_view_event_hop_watch_asc.mt(a int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple()')
     client1.expect(prompt)
     client1.send("CREATE WINDOW VIEW 01062_window_view_event_hop_watch_asc.wv WATERMARK=ASCENDING AS SELECT count(a) AS count, hopEnd(wid) AS w_end FROM 01062_window_view_event_hop_watch_asc.mt GROUP BY hop(timestamp, INTERVAL '2' SECOND, INTERVAL '3' SECOND, 'US/Samoa') AS wid")
     client1.expect(prompt)
@@ -56,9 +56,9 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     if match.groups()[1]:
         client1.send(client1.command)
         client1.expect(prompt)
-    client1.send('DROP TABLE 01062_window_view_event_hop_watch_asc.wv NO DELAY')
+    client1.send('DROP STREAM 01062_window_view_event_hop_watch_asc.wv NO DELAY')
     client1.expect(prompt)
-    client1.send('DROP TABLE 01062_window_view_event_hop_watch_asc.mt')
+    client1.send('DROP STREAM 01062_window_view_event_hop_watch_asc.mt')
     client1.expect(prompt)
     client1.send('DROP DATABASE IF EXISTS 01062_window_view_event_hop_watch_asc')
     client1.expect(prompt)

@@ -1,12 +1,12 @@
-DROP TABLE IF EXISTS t_01411;
+DROP STREAM IF EXISTS t_01411;
 
-CREATE TABLE t_01411(
-    str LowCardinality(String),
-    arr Array(LowCardinality(String)) default [str]
+create stream t_01411(
+    str LowCardinality(string),
+    arr array(LowCardinality(string)) default [str]
 ) ENGINE = MergeTree()
 ORDER BY tuple();
 
-INSERT INTO t_01411 (str) SELECT concat('asdf', toString(number % 10000)) FROM numbers(1000000);
+INSERT INTO t_01411 (str) SELECT concat('asdf', to_string(number % 10000)) FROM numbers(1000000);
 
 SELECT count() FROM t_01411 WHERE str = 'asdf337';
 SELECT count() FROM t_01411 WHERE arr[1] = 'asdf337';
@@ -17,12 +17,12 @@ SELECT count() FROM t_01411 WHERE arr[1] = str;
 SELECT count() FROM t_01411 WHERE has(arr, str);
 SELECT count() FROM t_01411 WHERE indexOf(arr, str) > 0;
 
-DROP TABLE IF EXISTS t_01411;
-DROP TABLE IF EXISTS t_01411_num;
+DROP STREAM IF EXISTS t_01411;
+DROP STREAM IF EXISTS t_01411_num;
 
-CREATE TABLE t_01411_num(
-    num UInt8,
-    arr Array(LowCardinality(Int64)) default [num]
+create stream t_01411_num(
+    num uint8,
+    arr array(LowCardinality(int64)) default [num]
 ) ENGINE = MergeTree()
 ORDER BY tuple();
 
@@ -38,10 +38,10 @@ SELECT count() FROM t_01411_num WHERE has(arr, num);
 SELECT count() FROM t_01411_num WHERE indexOf(arr, num) > 0;
 SELECT count() FROM t_01411_num WHERE indexOf(arr, num % 337) > 0;
 
--- Checking Arr(String) and LC(String)
+-- Checking Arr(string) and LC(string)
 SELECT indexOf(['a', 'b', 'c'], toLowCardinality('a'));
 
--- Checking Arr(Nullable(String)) and LC(String)
+-- Checking Arr(Nullable(string)) and LC(string)
 SELECT indexOf(['a', 'b', NULL], toLowCardinality('a'));
 
-DROP TABLE IF EXISTS t_01411_num;
+DROP STREAM IF EXISTS t_01411_num;

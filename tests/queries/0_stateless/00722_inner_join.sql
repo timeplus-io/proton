@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS one;
-CREATE TABLE one(dummy UInt8) ENGINE = Memory;
+DROP STREAM IF EXISTS one;
+create stream one(dummy uint8) ;
 
 SELECT database, t.name
     FROM system.tables AS t
@@ -90,4 +90,4 @@ SELECT count()
     JOIN system.databases AS db ON db.name = t.database
     WHERE t.name = 'one';
 
-DROP TABLE one;
+DROP STREAM one;

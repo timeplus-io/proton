@@ -1,0 +1,20 @@
+aggregate_function(topKArray(10), array(string))
+aggregate_function(topKDistinct(10), string)
+aggregate_function(topKForEach(10), array(string))
+aggregate_function(topKIf(10), string, uint8)
+aggregate_function(topK(10), string)
+aggregate_function(topKOrNull(10), string)
+aggregate_function(topKOrDefault(10), string)
+aggregate_function(topKResample(10, 1, 2, 42), string, uint64)
+aggregate_function(topK(10), string)
+aggregate_function(topKArrayResampleOrDefaultIf(10, 1, 2, 42), array(string), uint64, uint8)
+10
+10
+[10]
+11
+10
+10
+10
+[1]
+10
+[1]

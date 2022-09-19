@@ -1,0 +1,216 @@
+d	date					
+k	uint64					
+i32	int32					
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	10	42
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\')\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\')\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	9	41	1992-01-01 08:00:00
+2015-01-01	10	42	1970-01-01 00:00:00
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	8	40	2012-12-12 12:12:12	[1,2,3]	['12','13','14']
+2015-01-01	9	41	1992-01-01 08:00:00	[]	[]
+2015-01-01	10	42	1970-01-01 00:00:00	[]	[]
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+n.d	array(date)					
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `n.d` array(date)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+n.d	array(date)					
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `n.d` array(date)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	7	39	2014-07-14 13:26:50	[10,20,30]	['120','130','140']	['2000-01-01','2000-01-01','2000-01-03']
+2015-01-01	8	40	2012-12-12 12:12:12	[1,2,3]	['12','13','14']	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	9	41	1992-01-01 08:00:00	[]	[]	[]
+2015-01-01	10	42	1970-01-01 00:00:00	[]	[]	[]
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+n.d	array(date)					
+s	string	DEFAULT	\'0\'			
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `n.d` array(date),\n    `s` string DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+n.d	array(date)					
+s	string	DEFAULT	\'0\'			
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `n.d` array(date),\n    `s` string DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	[10,20,30]	['asd','qwe','qwe']	['2000-01-01','2000-01-01','2000-01-03']	100500
+2015-01-01	7	39	2014-07-14 13:26:50	[10,20,30]	['120','130','140']	['2000-01-01','2000-01-01','2000-01-03']	0
+2015-01-01	8	40	2012-12-12 12:12:12	[1,2,3]	['12','13','14']	['1970-01-01','1970-01-01','1970-01-01']	0
+2015-01-01	9	41	1992-01-01 08:00:00	[]	[]	[]	0
+2015-01-01	10	42	1970-01-01 00:00:00	[]	[]	[]	0
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+s	Int64	DEFAULT	\'0\'			
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `s` Int64 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+s	Int64	DEFAULT	\'0\'			
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `s` Int64 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	[10,20,30]	['asd','qwe','qwe']	100500
+2015-01-01	7	39	2014-07-14 13:26:50	[10,20,30]	['120','130','140']	0
+2015-01-01	8	40	2012-12-12 12:12:12	[1,2,3]	['12','13','14']	0
+2015-01-01	9	41	1992-01-01 08:00:00	[]	[]	0
+2015-01-01	10	42	1970-01-01 00:00:00	[]	[]	0
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+s	uint32	DEFAULT	\'0\'			
+n.d	array(date)					
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `s` uint32 DEFAULT \'0\',\n    `n.d` array(date)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.ui8	array(uint8)					
+n.s	array(string)					
+s	uint32	DEFAULT	\'0\'			
+n.d	array(date)					
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `s` uint32 DEFAULT \'0\',\n    `n.d` array(date)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	[10,20,30]	['asd','qwe','qwe']	100500	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	7	39	2014-07-14 13:26:50	[10,20,30]	['120','130','140']	0	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	8	40	2012-12-12 12:12:12	[1,2,3]	['12','13','14']	0	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	9	41	1992-01-01 08:00:00	[]	[]	0	[]
+2015-01-01	10	42	1970-01-01 00:00:00	[]	[]	0	[]
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.s	array(string)					
+s	uint32	DEFAULT	\'0\'			
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.s` array(string),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+n.s	array(string)					
+s	uint32	DEFAULT	\'0\'			
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `n.s` array(string),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	['asd','qwe','qwe']	100500
+2015-01-01	7	39	2014-07-14 13:26:50	['120','130','140']	0
+2015-01-01	8	40	2012-12-12 12:12:12	['12','13','14']	0
+2015-01-01	9	41	1992-01-01 08:00:00	[]	0
+2015-01-01	10	42	1970-01-01 00:00:00	[]	0
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+s	uint32	DEFAULT	\'0\'			
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+s	uint32	DEFAULT	\'0\'			
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	100500
+2015-01-01	7	39	2014-07-14 13:26:50	0
+2015-01-01	8	40	2012-12-12 12:12:12	0
+2015-01-01	9	41	1992-01-01 08:00:00	0
+2015-01-01	10	42	1970-01-01 00:00:00	0
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+s	uint32	DEFAULT	\'0\'			
+n.s	array(string)					
+n.d	array(date)					
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `s` uint32 DEFAULT \'0\',\n    `n.s` array(string),\n    `n.d` array(date)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+s	uint32	DEFAULT	\'0\'			
+n.s	array(string)					
+n.d	array(date)					
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `s` uint32 DEFAULT \'0\',\n    `n.s` array(string),\n    `n.d` array(date)\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	100500	[]	[]
+2015-01-01	7	39	2014-07-14 13:26:50	0	[]	[]
+2015-01-01	8	40	2012-12-12 12:12:12	0	[]	[]
+2015-01-01	9	41	1992-01-01 08:00:00	0	[]	[]
+2015-01-01	10	42	1970-01-01 00:00:00	0	[]	[]
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+s	uint32	DEFAULT	\'0\'			
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	DateTime(\'UTC\')					
+s	uint32	DEFAULT	\'0\'			
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` DateTime(\'UTC\'),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15 13:26:50	100500
+2015-01-01	7	39	2014-07-14 13:26:50	0
+2015-01-01	8	40	2012-12-12 12:12:12	0
+2015-01-01	9	41	1992-01-01 08:00:00	0
+2015-01-01	10	42	1970-01-01 00:00:00	0
+d	date					
+k	uint64					
+i32	int32					
+dt	date					
+s	DateTime(\'UTC\')	DEFAULT	\'1970-01-01 00:00:00\'			
+create stream default.replicated_alter1\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` date,\n    `s` DateTime(\'UTC\') DEFAULT \'1970-01-01 00:00:00\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r1\', d, k, 8192)
+d	date					
+k	uint64					
+i32	int32					
+dt	date					
+s	DateTime(\'UTC\')	DEFAULT	\'1970-01-01 00:00:00\'			
+create stream default.replicated_alter2\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `dt` date,\n    `s` DateTime(\'UTC\') DEFAULT \'1970-01-01 00:00:00\'\n)\nENGINE = ReplicatedMergeTree(\'/clickhouse/tables/default/test_00062/alter\', \'r2\', d, k, 8192)
+2015-01-01	6	38	2014-07-15	1970-01-02 03:55:00
+2015-01-01	7	39	2014-07-14	1970-01-01 00:00:00
+2015-01-01	8	40	2012-12-12	1970-01-01 00:00:00
+2015-01-01	9	41	1992-01-01	1970-01-01 00:00:00
+2015-01-01	10	42	1970-01-01	1970-01-01 00:00:00

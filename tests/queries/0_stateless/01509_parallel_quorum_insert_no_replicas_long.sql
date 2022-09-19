@@ -1,17 +1,17 @@
 -- Tags: long, replica, no-replicated-database
 -- Tag no-replicated-database: Fails due to additional replicas or shards
 
-DROP TABLE IF EXISTS r1 SYNC;
-DROP TABLE IF EXISTS r2 SYNC;
+DROP STREAM IF EXISTS r1 SYNC;
+DROP STREAM IF EXISTS r2 SYNC;
 
-CREATE TABLE r1 (
-    key UInt64, value String
+create stream r1 (
+    key uint64, value string
 )
 ENGINE = ReplicatedMergeTree('/clickhouse/{database}/01509_parallel_quorum_insert_no_replicas', '1')
 ORDER BY tuple();
 
-CREATE TABLE r2 (
-    key UInt64, value String
+create stream r2 (
+    key uint64, value string
 )
 ENGINE = ReplicatedMergeTree('/clickhouse/{database}/01509_parallel_quorum_insert_no_replicas', '2')
 ORDER BY tuple();
@@ -99,5 +99,5 @@ SELECT 'insert happened';
 SELECT COUNT() FROM r1;
 SELECT COUNT() FROM r2;
 
-DROP TABLE IF EXISTS r1;
-DROP TABLE IF EXISTS r2;
+DROP STREAM IF EXISTS r1;
+DROP STREAM IF EXISTS r2;

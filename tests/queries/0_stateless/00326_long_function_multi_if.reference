@@ -13529,7 +13529,7 @@ Numeric array branches
 [3,3]
 [1,2]
 [2,3]
-String branches
+string branches
 ABC
 B
 CD
@@ -16090,7 +16090,7 @@ foo
 foo
 foo
 foo
-String array branches
+string array branches
 ['ABCDE','ABCDEF']
 ['B','BC']
 ['CDE','CDEF']

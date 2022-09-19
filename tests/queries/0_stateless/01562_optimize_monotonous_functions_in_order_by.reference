@@ -14,7 +14,7 @@ SELECT
     timestamp,
     key
 FROM test_order_by
-ORDER BY toDate(timestamp) ASC
+ORDER BY to_date(timestamp) ASC
 LIMIT 10
 Expression (Projection)
   Limit (preliminary LIMIT (without OFFSET))
@@ -27,7 +27,7 @@ SELECT
     key
 FROM test_order_by
 ORDER BY
-    toDate(timestamp) ASC,
+    to_date(timestamp) ASC,
     timestamp ASC
 LIMIT 10
 Expression (Projection)

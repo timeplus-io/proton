@@ -1,15 +1,15 @@
 -- Tags: zookeeper, no-parallel
 
-DROP TABLE IF EXISTS empty1;
-DROP TABLE IF EXISTS empty2;
+DROP STREAM IF EXISTS empty1;
+DROP STREAM IF EXISTS empty2;
 
 SELECT 'Check creating empty parts';
 
-CREATE TABLE empty1 (key UInt32, val UInt32, date Datetime)
+create stream empty1 (key uint32, val uint32, date Datetime)
 ENGINE=ReplicatedSummingMergeTree('/clickhouse/01560_optimize_on_insert', '1', val)
 PARTITION BY date ORDER BY key;
 
-CREATE TABLE empty2 (key UInt32, val UInt32, date Datetime)
+create stream empty2 (key uint32, val uint32, date Datetime)
 ENGINE=ReplicatedSummingMergeTree('/clickhouse/01560_optimize_on_insert', '2', val)
 PARTITION BY date ORDER BY key;
 
@@ -34,5 +34,5 @@ SELECT * FROM empty2 ORDER BY key;
 SELECT table, partition, active FROM system.parts where table = 'empty1' and database=currentDatabase() and active = 1;
 SELECT table, partition, active FROM system.parts where table = 'empty2' and database=currentDatabase() and active = 1;
 
-DROP TABLE IF EXISTS empty1;
-DROP TABLE IF EXISTS empty2;
+DROP STREAM IF EXISTS empty1;
+DROP STREAM IF EXISTS empty2;

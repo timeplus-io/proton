@@ -7,10 +7,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS template1";
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS template2";
-$CLICKHOUSE_CLIENT --query="CREATE TABLE template1 (s1 String, s2 String, s3 String, s4 String, n UInt64, d Date) ENGINE = Memory";
-$CLICKHOUSE_CLIENT --query="CREATE TABLE template2 (s1 String, s2 String, s3 String, s4 String, n UInt64, d Date) ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS template1";
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS template2";
+$CLICKHOUSE_CLIENT --query="create stream template1 (s1 string, s2 string, s3 string, s4 string, n uint64, d date) ";
+$CLICKHOUSE_CLIENT --query="create stream template2 (s1 string, s2 string, s3 string, s4 string, n uint64, d date) ";
 
 echo "==== check escaping ===="
 echo -ne '{prefix} \n${data}\n $$ suffix $$\n' > "$CURDIR"/00938_template_input_format_resultset.tmp
@@ -30,7 +30,7 @@ format_template_rows_between_delimiter = ';\n'";
 $CLICKHOUSE_CLIENT --query="SELECT * FROM template1 ORDER BY n FORMAT CSV";
 
 echo "==== parse json (sophisticated template) ===="
-echo -ne '{${:}"meta"${:}:${:}[${:}{${:}"name"${:}:${:}"s1"${:},${:}"type"${:}:${:}"String"${:}}${:},${:}{${:}"name"${:}:${:}"s2"${:},${:}"type"${:}:${:}"String"${:}}${:},${:}{${:}"name"${:}:${:}"s3"${:},${:}"type"${:}:${:}"String"${:}}${:},${:}{${:}"name"${:}:${:}"s4"${:},${:}"type"${:}:${:}"String"${:}}${:},${:}{${:}"name"${:}:${:}"n"${:},${:}"type"${:}:${:}"UInt64"${:}}${:},${:}{${:}"name"${:}:${:}"d"${:},${:}"type"${:}:${:}"Date"${:}}${:}]${:},${:}"data"${:}:${:}[${data}]${:},${:}"rows"${:}:${:}${:CSV}${:},${:}"statistics"${:}:${:}{${:}"elapsed"${:}:${:}${:CSV}${:},${:}"rows_read"${:}:${:}${:CSV}${:},${:}"bytes_read"${:}:${:}${:CSV}${:}}${:}}' > "$CURDIR"/00938_template_input_format_resultset.tmp
+echo -ne '{${:}"meta"${:}:${:}[${:}{${:}"name"${:}:${:}"s1"${:},${:}"type"${:}:${:}"string"${:}}${:},${:}{${:}"name"${:}:${:}"s2"${:},${:}"type"${:}:${:}"string"${:}}${:},${:}{${:}"name"${:}:${:}"s3"${:},${:}"type"${:}:${:}"string"${:}}${:},${:}{${:}"name"${:}:${:}"s4"${:},${:}"type"${:}:${:}"string"${:}}${:},${:}{${:}"name"${:}:${:}"n"${:},${:}"type"${:}:${:}"uint64"${:}}${:},${:}{${:}"name"${:}:${:}"d"${:},${:}"type"${:}:${:}"date"${:}}${:}]${:},${:}"data"${:}:${:}[${data}]${:},${:}"rows"${:}:${:}${:CSV}${:},${:}"statistics"${:}:${:}{${:}"elapsed"${:}:${:}${:CSV}${:},${:}"rows_read"${:}:${:}${:CSV}${:},${:}"bytes_read"${:}:${:}${:CSV}${:}}${:}}' > "$CURDIR"/00938_template_input_format_resultset.tmp
 echo -ne '{${:}"s1"${:}:${:}${s1:JSON}${:},${:}"s2"${:}:${:}${s2:JSON}${:},${:}"s3"${:}:${:}${s3:JSON}${:},${:}"s4"${:}:${:}${s4:JSON}${:},${:}"n"${:}:${:}${n:JSON}${:},${:}"d"${:}:${:}${d:JSON}${:}${:}}' > "$CURDIR"/00938_template_input_format_row.tmp
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM template1 ORDER BY n FORMAT JSON" | $CLICKHOUSE_CLIENT --query="INSERT INTO template2 FORMAT TemplateIgnoreSpaces SETTINGS \
@@ -75,7 +75,7 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM template1 ORDER BY n FORMAT CSV";
 
 
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE template1";
-$CLICKHOUSE_CLIENT --query="DROP TABLE template2";
+$CLICKHOUSE_CLIENT --query="DROP STREAM template1";
+$CLICKHOUSE_CLIENT --query="DROP STREAM template2";
 rm "$CURDIR"/00938_template_input_format_resultset.tmp "$CURDIR"/00938_template_input_format_row.tmp
 

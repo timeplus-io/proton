@@ -7,8 +7,8 @@ SELECT countMerge(x) AS y FROM ( SELECT 2 * countState() AS x FROM ( SELECT 1 ))
 SELECT countMerge(x) AS y FROM ( SELECT 0 * countState() AS x FROM ( SELECT 1 UNION ALL SELECT 2));
 SELECT sumMerge(y) AS z FROM ( SELECT 3 * sumState(x) * 2 AS y FROM ( SELECT 1 AS x UNION ALL SELECT 2 AS x));
 
-DROP TABLE IF EXISTS mult_aggregation;
-CREATE TABLE mult_aggregation(a UInt32, b UInt32) ENGINE = Memory;
+DROP STREAM IF EXISTS mult_aggregation;
+create stream mult_aggregation(a uint32, b uint32) ;
 INSERT INTO mult_aggregation VALUES(1, 1);
 INSERT INTO mult_aggregation VALUES(1, 3);
 
@@ -23,4 +23,4 @@ SELECT groupUniqArrayMerge(y * 5) FROM (SELECT groupUniqArrayState(x) AS y FROM 
 
 SELECT sumMerge(y * a) FROM (SELECT a, sumState(b) AS y FROM mult_aggregation GROUP BY a); -- { serverError 44}
 
-DROP TABLE IF EXISTS mult_aggregation;
+DROP STREAM IF EXISTS mult_aggregation;

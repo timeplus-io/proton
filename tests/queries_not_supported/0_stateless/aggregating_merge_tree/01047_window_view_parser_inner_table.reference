@@ -1,0 +1,32 @@
+---TUMBLE---
+||---WINDOW COLUMN NAME---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'))`\nSETTINGS index_granularity = 8192
+||---WINDOW COLUMN ALIAS---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'))`\nSETTINGS index_granularity = 8192
+||---DATA COLUMN ALIAS---
+create stream test_01047.`.inner.wv`\n(\n    `b` int32,\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY b\nSETTINGS index_granularity = 8192
+||---IDENTIFIER---
+create stream test_01047.`.inner.wv`\n(\n    `b` int32,\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nPRIMARY KEY `windowID(timestamp, toIntervalSecond(\'1\'))`\nORDER BY (`windowID(timestamp, toIntervalSecond(\'1\'))`, b)\nSETTINGS index_granularity = 8192
+||---FUNCTION---
+create stream test_01047.`.inner.wv`\n(\n    `plus(a, b)` int64,\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nPRIMARY KEY `windowID(timestamp, toIntervalSecond(\'1\'))`\nORDER BY (`windowID(timestamp, toIntervalSecond(\'1\'))`, `plus(a, b)`)\nSETTINGS index_granularity = 8192
+||---PARTITION---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(____timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nPARTITION BY `windowID(____timestamp, toIntervalSecond(\'1\'))`\nORDER BY `windowID(____timestamp, toIntervalSecond(\'1\'))`\nSETTINGS index_granularity = 8192
+||---JOIN---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32),\n    `count(mt_2.b)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'))`\nSETTINGS index_granularity = 8192
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'))` uint32,\n    `count(a)` aggregate_function(count, int32),\n    `count(mt_2.b)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'))`\nSETTINGS index_granularity = 8192
+---HOP---
+||---WINDOW COLUMN NAME---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nSETTINGS index_granularity = 8192
+||---WINDOW COLUMN ALIAS---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nSETTINGS index_granularity = 8192
+||---DATA COLUMN ALIAS---
+create stream test_01047.`.inner.wv`\n(\n    `b` int32,\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY b\nSETTINGS index_granularity = 8192
+||---IDENTIFIER---
+create stream test_01047.`.inner.wv`\n(\n    `b` int32,\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nPRIMARY KEY `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nORDER BY (`windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`, b)\nSETTINGS index_granularity = 8192
+||---FUNCTION---
+create stream test_01047.`.inner.wv`\n(\n    `plus(a, b)` int64,\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nPRIMARY KEY `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nORDER BY (`windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`, `plus(a, b)`)\nSETTINGS index_granularity = 8192
+||---PARTITION---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(____timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nPARTITION BY `windowID(____timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nORDER BY `windowID(____timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nSETTINGS index_granularity = 8192
+||---JOIN---
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32),\n    `count(mt_2.b)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nSETTINGS index_granularity = 8192
+create stream test_01047.`.inner.wv`\n(\n    `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))` uint32,\n    `count(a)` aggregate_function(count, int32),\n    `count(mt_2.b)` aggregate_function(count, int32)\n)\nENGINE = AggregatingMergeTree\nORDER BY `windowID(timestamp, toIntervalSecond(\'1\'), toIntervalSecond(\'3\'))`\nSETTINGS index_granularity = 8192

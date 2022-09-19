@@ -3,11 +3,11 @@
 	[
 		{
 			"name": "ignore(x)",
-			"type": "UInt8"
+			"type": "uint8"
 		},
 		{
 			"name": "count()",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 
@@ -36,11 +36,11 @@
 	[
 		{
 			"name": "ignore(x)",
-			"type": "UInt8"
+			"type": "uint8"
 		},
 		{
 			"name": "count()",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 

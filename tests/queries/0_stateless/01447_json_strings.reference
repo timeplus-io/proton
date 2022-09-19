@@ -3,19 +3,19 @@
 	[
 		{
 			"name": "1",
-			"type": "UInt8"
+			"type": "uint8"
 		},
 		{
 			"name": "'a'",
-			"type": "String"
+			"type": "string"
 		},
 		{
 			"name": "[1, 2, 3]",
-			"type": "Array(UInt8)"
+			"type": "array(uint8)"
 		},
 		{
 			"name": "(1, 'a')",
-			"type": "Tuple(UInt8, String)"
+			"type": "tuple(uint8, string)"
 		},
 		{
 			"name": "NULL",
@@ -23,7 +23,7 @@
 		},
 		{
 			"name": "nan",
-			"type": "Float64"
+			"type": "float64"
 		}
 	],
 

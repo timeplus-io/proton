@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS test.basic_00040;
+DROP STREAM IF EXISTS test.basic_00040;
 
 CREATE MATERIALIZED VIEW test.basic_00040
 ENGINE = AggregatingMergeTree(StartDate, (CounterID, StartDate), 8192)
@@ -41,4 +41,4 @@ GROUP BY StartDate
 ORDER BY StartDate;
 
 
-DROP TABLE test.basic_00040;
+DROP STREAM test.basic_00040;

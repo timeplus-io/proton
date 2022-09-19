@@ -1,0 +1,1 @@
+create stream default.test_table\n(\n    `col1` DateTime,\n    `col2` int64,\n    `col3` aggregate_function(1, sumMap, tuple(array(uint8), array(uint8)))\n)\nENGINE = AggregatingMergeTree\nORDER BY (col1, col2)\nSETTINGS index_granularity = 8192

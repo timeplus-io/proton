@@ -5,36 +5,36 @@ CREATE DATABASE 02097_db;
 
 USE 02097_db;
 
-CREATE TABLE test_table
+create stream test_table
 (
-    key_column UInt64,
-    data_column_1 UInt64,
-    data_column_2 UInt8
+    key_column uint64,
+    data_column_1 uint64,
+    data_column_2 uint8
 )
 ENGINE = MergeTree
 ORDER BY key_column;
 
 CREATE DICTIONARY test_dictionary
 (
-    key_column UInt64 DEFAULT 0,
-    data_column_1 UInt64 DEFAULT 1,
-    data_column_2 UInt8 DEFAULT 1
+    key_column uint64 DEFAULT 0,
+    data_column_1 uint64 DEFAULT 1,
+    data_column_2 uint8 DEFAULT 1
 )
 PRIMARY KEY key_column
 LAYOUT(DIRECT())
 SOURCE(CLICKHOUSE(TABLE 'test_table'));
 
-CREATE TABLE test_table_default
+create stream test_table_default
 (
-    data_1 DEFAULT dictGetUInt64('test_dictionary', 'data_column_1', toUInt64(0)),
-    data_2 DEFAULT dictGet(test_dictionary, 'data_column_2', toUInt64(0))
+    data_1 DEFAULT dictGetUInt64('test_dictionary', 'data_column_1', to_uint64(0)),
+    data_2 DEFAULT dictGet(test_dictionary, 'data_column_2', to_uint64(0))
 )
-ENGINE=TinyLog;
+;
 
 SELECT create_table_query FROM system.tables WHERE name = 'test_table_default' AND database = '02097_db';
 
-DROP TABLE test_table_default;
+DROP STREAM test_table_default;
 DROP DICTIONARY test_dictionary;
-DROP TABLE test_table;
+DROP STREAM test_table;
 
 DROP DATABASE IF EXISTS 02097_db;

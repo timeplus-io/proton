@@ -1,9 +1,9 @@
 SET mutations_sync=2;
 
-DROP TABLE IF EXISTS rep_data;
-CREATE TABLE rep_data
+DROP STREAM IF EXISTS rep_data;
+create stream rep_data
 (
-    p Int,
+    p int,
     t DateTime,
     INDEX idx t TYPE minmax GRANULARITY 1
 )
@@ -12,14 +12,14 @@ PARTITION BY p
 ORDER BY t
 SETTINGS number_of_free_entries_in_pool_to_execute_mutation=0;
 INSERT INTO rep_data VALUES (1, now());
-ALTER TABLE rep_data MATERIALIZE INDEX idx IN PARTITION ID 'NO_SUCH_PART'; -- { serverError 248 }
-ALTER TABLE rep_data MATERIALIZE INDEX idx IN PARTITION ID '1';
-ALTER TABLE rep_data MATERIALIZE INDEX idx IN PARTITION ID '2';
+ALTER STREAM rep_data MATERIALIZE INDEX idx IN PARTITION ID 'NO_SUCH_PART'; -- { serverError 248 }
+ALTER STREAM rep_data MATERIALIZE INDEX idx IN PARTITION ID '1';
+ALTER STREAM rep_data MATERIALIZE INDEX idx IN PARTITION ID '2';
 
-DROP TABLE IF EXISTS data;
-CREATE TABLE data
+DROP STREAM IF EXISTS data;
+create stream data
 (
-    p Int,
+    p int,
     t DateTime,
     INDEX idx t TYPE minmax GRANULARITY 1
 )
@@ -28,6 +28,6 @@ PARTITION BY p
 ORDER BY t
 SETTINGS number_of_free_entries_in_pool_to_execute_mutation=0;
 INSERT INTO data VALUES (1, now());
-ALTER TABLE data MATERIALIZE INDEX idx IN PARTITION ID 'NO_SUCH_PART'; -- { serverError 248 }
-ALTER TABLE data MATERIALIZE INDEX idx IN PARTITION ID '1';
-ALTER TABLE data MATERIALIZE INDEX idx IN PARTITION ID '2';
+ALTER STREAM data MATERIALIZE INDEX idx IN PARTITION ID 'NO_SUCH_PART'; -- { serverError 248 }
+ALTER STREAM data MATERIALIZE INDEX idx IN PARTITION ID '1';
+ALTER STREAM data MATERIALIZE INDEX idx IN PARTITION ID '2';

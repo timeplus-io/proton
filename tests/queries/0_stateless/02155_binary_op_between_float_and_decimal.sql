@@ -13,8 +13,8 @@ SELECT 1.0::Decimal32(5) / 0.0;
 SELECT least(1.5, 1.0::Decimal32(5));
 SELECT greatest(1.5, 1.0::Decimal32(5));
 
-DROP TABLE IF EXISTS t;
-CREATE TABLE t(d1 Decimal32(5), d2 Decimal64(10), d3 Decimal128(20), d4 Decimal256(40), f1 Float32, f2 Float64) ENGINE=Memory; 
+DROP STREAM IF EXISTS t;
+create stream t(d1 Decimal32(5), d2 Decimal64(10), d3 Decimal128(20), d4 Decimal256(40), f1 Float32, f2 float64) ENGINE=Memory; 
 
 INSERT INTO t values (-4.5, 4.5, -45.5, 45.5, 2.5, -3.5);
 INSERT INTO t values (4.5, -4.5, 45.5, -45.5, -3.5, 2.5);
@@ -93,4 +93,4 @@ SELECT d2, f2, greatest(d2, f2) FROM t ORDER BY f2;
 SELECT d3, f2, greatest(d3, f2) FROM t ORDER BY f2;
 SELECT d4, f2, greatest(d4, f2) FROM t ORDER BY f2;
 
-DROP TABLE t;
+DROP STREAM t;

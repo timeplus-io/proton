@@ -1,0 +1,30 @@
+date	date					
+val	uint64					
+val2	uint8	DEFAULT	42			
+val3	uint8	DEFAULT	val2 + 1			
+val4	uint64	ALIAS	val			
+-
+date	date					
+val	uint64					
+val2	uint8	DEFAULT	42			
+val3	uint8	DEFAULT	val2 + 1			
+val4	uint64	ALIAS	val			
+-
+date	date					
+val	uint64					
+val2	uint8	DEFAULT	42			
+val3	uint8	DEFAULT	val2 + 1			
+val4	uint64	ALIAS	val			
+-
+date	date					
+val	uint64					
+val2	uint8	DEFAULT	42			
+val3	uint8	DEFAULT	val2 + 1			
+val4	uint64	ALIAS	val			
+-
+1	uint8					
+-
+1	uint8					
+-
+number	uint64					
+-

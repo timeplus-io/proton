@@ -8,6 +8,6 @@ SELECT count() FROM (SELECT sum(x) AS a, avg(x) AS b FROM (SELECT number AS x FR
 SELECT count() FROM (SELECT sum(x), avg(x) FROM (SELECT number AS x FROM numbers(10)));
 SELECT count() FROM (SELECT sum(x), avg(x) FROM (SELECT number % 3 AS x FROM numbers(10) GROUP BY x));
 SELECT 1 FROM (SELECT DISTINCT sum(x), avg(x) FROM (SELECT number AS x FROM numbers(10)));
-SELECT count() FROM (SELECT sum(x), arrayJoin([min(x), max(x)]) FROM (SELECT number AS x FROM numbers(10)));
-SELECT count() FROM (SELECT arrayJoin([sum(x), medianExact(x)]), arrayJoin([min(x), max(x)]) FROM (SELECT number AS x FROM numbers(10)));
-SELECT 1 FROM (SELECT arrayJoin([sum(x), medianExact(x)]), arrayJoin([min(x), max(x)]) FROM (SELECT number AS x FROM numbers(10)));
+SELECT count() FROM (SELECT sum(x), array_join([min(x), max(x)]) FROM (SELECT number AS x FROM numbers(10)));
+SELECT count() FROM (SELECT array_join([sum(x), medianExact(x)]), array_join([min(x), max(x)]) FROM (SELECT number AS x FROM numbers(10)));
+SELECT 1 FROM (SELECT array_join([sum(x), medianExact(x)]), array_join([min(x), max(x)]) FROM (SELECT number AS x FROM numbers(10)));

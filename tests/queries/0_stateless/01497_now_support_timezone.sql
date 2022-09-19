@@ -1,1 +1,1 @@
-SELECT (toHour(now('Asia/Shanghai')) - toHour(now('UTC'))) IN (8, -16);
+SELECT (to_hour(now('Asia/Shanghai')) - to_hour(now('UTC'))) IN (8, -16);

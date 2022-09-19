@@ -12,8 +12,8 @@ from pure_http_client import ClickHouseClient
 
 def test_and_check(name, a, b, t_stat, p_value, precision=1e-2):
     client = ClickHouseClient()
-    client.query("DROP TABLE IF EXISTS ttest;")
-    client.query("CREATE TABLE ttest (left Float64, right UInt8) ENGINE = Memory;");
+    client.query("DROP STREAM IF EXISTS ttest;")
+    client.query("create stream ttest (left float64, right uint8) ;");
     client.query("INSERT INTO ttest VALUES {};".format(", ".join(['({},{})'.format(i, 0) for i in a])))
     client.query("INSERT INTO ttest VALUES {};".format(", ".join(['({},{})'.format(j, 1) for j in b])))
     real = client.query_return_df(
@@ -24,7 +24,7 @@ def test_and_check(name, a, b, t_stat, p_value, precision=1e-2):
     real_p_value = real['p_value'][0]
     assert(abs(real_t_stat - np.float64(t_stat)) < precision), "clickhouse_t_stat {}, scipy_t_stat {}".format(real_t_stat, t_stat)
     assert(abs(real_p_value - np.float64(p_value)) < precision), "clickhouse_p_value {}, scipy_p_value {}".format(real_p_value, p_value)
-    client.query("DROP TABLE IF EXISTS ttest;")
+    client.query("DROP STREAM IF EXISTS ttest;")
 
 
 def test_student():

@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS t_move_to_prewhere;
+DROP STREAM IF EXISTS t_move_to_prewhere;
 
-CREATE TABLE t_move_to_prewhere (id UInt32, a UInt8, b UInt8, c UInt8, fat_string String)
+create stream t_move_to_prewhere (id uint32, a uint8, b uint8, c uint8, fat_string string)
 ENGINE = MergeTree ORDER BY id PARTITION BY id
 SETTINGS min_rows_for_wide_part = 100, min_bytes_for_wide_part = 0;
 
@@ -14,13 +14,13 @@ ORDER BY partition;
 SELECT count() FROM t_move_to_prewhere WHERE a AND b AND c AND NOT ignore(fat_string);
 EXPLAIN SYNTAX SELECT count() FROM t_move_to_prewhere WHERE a AND b AND c AND NOT ignore(fat_string);
 
-DROP TABLE IF EXISTS t_move_to_prewhere;
+DROP STREAM IF EXISTS t_move_to_prewhere;
 
 -- With only compact parts, we cannot move 3 conditions to PREWHERE,
 -- because we don't know sizes and we can use only number of columns in conditions.
 -- Sometimes moving a lot of columns to prewhere may be harmful.
 
-CREATE TABLE t_move_to_prewhere (id UInt32, a UInt8, b UInt8, c UInt8, fat_string String)
+create stream t_move_to_prewhere (id uint32, a uint8, b uint8, c uint8, fat_string string)
 ENGINE = MergeTree ORDER BY id PARTITION BY id
 SETTINGS min_rows_for_wide_part = 10000, min_bytes_for_wide_part = 100000000;
 
@@ -34,4 +34,4 @@ ORDER BY partition;
 SELECT count() FROM t_move_to_prewhere WHERE a AND b AND c AND NOT ignore(fat_string);
 EXPLAIN SYNTAX SELECT count() FROM t_move_to_prewhere WHERE a AND b AND c AND NOT ignore(fat_string);
 
-DROP TABLE IF EXISTS t_move_to_prewhere;
+DROP STREAM IF EXISTS t_move_to_prewhere;

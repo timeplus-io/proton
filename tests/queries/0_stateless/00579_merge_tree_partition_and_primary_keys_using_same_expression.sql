@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS partition_and_primary_keys_using_same_expression;
+DROP STREAM IF EXISTS partition_and_primary_keys_using_same_expression;
 
-CREATE TABLE partition_and_primary_keys_using_same_expression(dt DateTime)
-    ENGINE MergeTree PARTITION BY toDate(dt) ORDER BY toDayOfWeek(toDate(dt));
+create stream partition_and_primary_keys_using_same_expression(dt DateTime)
+    ENGINE MergeTree PARTITION BY to_date(dt) ORDER BY to_day_of_week(to_date(dt));
 
 INSERT INTO partition_and_primary_keys_using_same_expression
     VALUES ('2018-02-19 12:00:00');
@@ -12,7 +12,7 @@ SELECT * FROM partition_and_primary_keys_using_same_expression ORDER BY dt;
 
 SELECT '---';
 
-ALTER TABLE partition_and_primary_keys_using_same_expression DROP PARTITION '2018-02-20';
+ALTER STREAM partition_and_primary_keys_using_same_expression DROP PARTITION '2018-02-20';
 SELECT * FROM partition_and_primary_keys_using_same_expression ORDER BY dt;
 
-DROP TABLE partition_and_primary_keys_using_same_expression;
+DROP STREAM partition_and_primary_keys_using_same_expression;

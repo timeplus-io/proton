@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 FORMATS=('TSVWithNamesAndTypes' 'CSVWithNamesAndTypes' 'JSONStringsEachRow' 'JSONCompactEachRowWithNamesAndTypes' 'JSONCompactStringsEachRowWithNamesAndTypes')
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parsing_with_names"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS parsing_with_names"
 
 for format in "${FORMATS[@]}"
 do
@@ -18,7 +18,7 @@ do
     $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 --input_format_parallel_parsing=false -q "INSERT INTO parsing_with_names FORMAT $format SETTINGS input_format_null_as_default=0"
 
     $CLICKHOUSE_CLIENT -q "SELECT * FROM parsing_with_names;" | md5sum
-    $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parsing_with_names"
+    $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS parsing_with_names"
 
 
     $CLICKHOUSE_CLIENT -q "CREATE TABLE parsing_with_names(c FixedString(16), a DateTime('Europe/Moscow'),  b String) ENGINE=Memory()"
@@ -28,5 +28,5 @@ do
     $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 --input_format_parallel_parsing=true -q "INSERT INTO parsing_with_names FORMAT $format SETTINGS input_format_null_as_default=0"
 
     $CLICKHOUSE_CLIENT -q "SELECT * FROM parsing_with_names;" | md5sum
-    $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parsing_with_names"
+    $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS parsing_with_names"
 done

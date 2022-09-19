@@ -6,12 +6,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 EXCEPTION_TEXT="Code: 457."
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS ps";
-$CLICKHOUSE_CLIENT -q "CREATE TABLE ps (
-    a Array(UInt32), da Array(Array(UInt8)),
-    t Tuple(Int16, String), dt Tuple(UInt8, Tuple(String, UInt8)),
-    n Nullable(Date)
-    ) ENGINE = Memory";
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS ps";
+$CLICKHOUSE_CLIENT -q "create stream ps (
+    a array(uint32), da array(array(uint8)),
+    t tuple(Int16, string), dt tuple(uint8, tuple(string, uint8)),
+    n Nullable(date)
+    ) ";
 
 $CLICKHOUSE_CLIENT -q "INSERT INTO ps VALUES (
     [1, 2], [[1, 1], [2, 2]],
@@ -23,19 +23,19 @@ $CLICKHOUSE_CLIENT -q "INSERT INTO ps VALUES (
     '2015-02-15')";
 
 $CLICKHOUSE_CLIENT --max_threads=1 --param_aui="[1, 2]" \
-    -q "SELECT t FROM ps WHERE a = {aui:Array(UInt16)}";
+    -q "SELECT t FROM ps WHERE a = {aui:array(uint16)}";
 $CLICKHOUSE_CLIENT --max_threads=1 --param_d_a="[[1, 1], [2, 2]]" \
-    -q "SELECT dt FROM ps WHERE da = {d_a:Array(Array(UInt8))}";
+    -q "SELECT dt FROM ps WHERE da = {d_a:array(array(uint8))}";
 $CLICKHOUSE_CLIENT --max_threads=1 --param_tisd="(10, 'Test')" \
-    -q "SELECT a FROM ps WHERE t = {tisd:Tuple(Int16, String)}";
+    -q "SELECT a FROM ps WHERE t = {tisd:tuple(Int16, string)}";
 $CLICKHOUSE_CLIENT --max_threads=1 --param_d_t="(10, ('dt', 10))" \
-    -q "SELECT da FROM ps WHERE dt = {d_t:Tuple(UInt8, Tuple(String, UInt8))}";
+    -q "SELECT da FROM ps WHERE dt = {d_t:tuple(uint8, tuple(string, uint8))}";
 $CLICKHOUSE_CLIENT --max_threads=1 --param_nd="2015-02-15" \
-    -q "SELECT * FROM ps WHERE n = {nd:Nullable(Date)}";
+    -q "SELECT * FROM ps WHERE n = {nd:Nullable(date)}";
 
 # Must throw an exception to avoid SQL injection
 $CLICKHOUSE_CLIENT --max_threads=1 --param_injection="[1] OR 1" \
-    -q "SELECT * FROM ps WHERE a = {injection:Array(UInt32)}" 2>&1 \
+    -q "SELECT * FROM ps WHERE a = {injection:array(uint32)}" 2>&1 \
     | grep -o "$EXCEPTION_TEXT"
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE ps";
+$CLICKHOUSE_CLIENT -q "DROP STREAM ps";

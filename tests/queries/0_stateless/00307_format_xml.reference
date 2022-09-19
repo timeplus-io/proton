@@ -4,11 +4,11 @@
 		<columns>
 			<column>
 				<name>s</name>
-				<type>String</type>
+				<type>string</type>
 			</column>
 			<column>
 				<name>'Hello\n&lt;World>'</name>
-				<type>String</type>
+				<type>string</type>
 			</column>
 			<column>
 				<name>time</name>
@@ -16,11 +16,11 @@
 			</column>
 			<column>
 				<name>arr</name>
-				<type>Array(String)</type>
+				<type>array(string)</type>
 			</column>
 			<column>
 				<name>tpl</name>
-				<type>Tuple(String, DateTime)</type>
+				<type>tuple(string, DateTime)</type>
 			</column>
 		</columns>
 	</meta>

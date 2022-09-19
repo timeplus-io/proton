@@ -1,15 +1,15 @@
-DROP TABLE IF EXISTS t64;
+DROP STREAM IF EXISTS t64;
 
-CREATE TABLE t64
+create stream t64
 (
-    u8 UInt8,
-    t_u8 UInt8 Codec(T64('bit'), LZ4),
-    u16 UInt16,
-    t_u16 UInt16 Codec(T64('bit'), LZ4),
-    u32 UInt32,
-    t_u32 UInt32 Codec(T64('bit'), LZ4),
-    u64 UInt64,
-    t_u64 UInt64 Codec(T64('bit'), LZ4)
+    u8 uint8,
+    t_u8 uint8 Codec(T64('bit'), LZ4),
+    u16 uint16,
+    t_u16 uint16 Codec(T64('bit'), LZ4),
+    u32 uint32,
+    t_u32 uint32 Codec(T64('bit'), LZ4),
+    u64 uint64,
+    t_u64 uint64 Codec(T64('bit'), LZ4)
 ) ENGINE MergeTree() ORDER BY tuple();
 
 INSERT INTO t64 SELECT number AS x, x, x, x, x, x, x, x FROM numbers(1);
@@ -91,11 +91,11 @@ SELECT * FROM t64 WHERE u16 != t_u16;
 SELECT * FROM t64 WHERE u32 != t_u32;
 SELECT * FROM t64 WHERE u64 != t_u64;
 
-OPTIMIZE TABLE t64 FINAL;
+OPTIMIZE STREAM t64 FINAL;
 
 SELECT * FROM t64 WHERE u8 != t_u8;
 SELECT * FROM t64 WHERE u16 != t_u16;
 SELECT * FROM t64 WHERE u32 != t_u32;
 SELECT * FROM t64 WHERE u64 != t_u64;
 
-DROP TABLE t64;
+DROP STREAM t64;

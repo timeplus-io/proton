@@ -3,7 +3,7 @@
 	[
 		{
 			"name": "length('�')",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 

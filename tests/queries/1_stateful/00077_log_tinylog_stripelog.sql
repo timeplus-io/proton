@@ -1,12 +1,12 @@
 SET check_query_single_value_result = 1;
 
-DROP TABLE IF EXISTS test.hits_log;
-DROP TABLE IF EXISTS test.hits_tinylog;
-DROP TABLE IF EXISTS test.hits_stripelog;
+DROP STREAM IF EXISTS test.hits_log;
+DROP STREAM IF EXISTS test.hits_tinylog;
+DROP STREAM IF EXISTS test.hits_stripelog;
 
-CREATE TABLE test.hits_log (CounterID UInt32, AdvEngineID UInt8, RegionID UInt32, SearchPhrase String, UserID UInt64) ENGINE = Log;
-CREATE TABLE test.hits_tinylog (CounterID UInt32, AdvEngineID UInt8, RegionID UInt32, SearchPhrase String, UserID UInt64) ENGINE = TinyLog;
-CREATE TABLE test.hits_stripelog (CounterID UInt32, AdvEngineID UInt8, RegionID UInt32, SearchPhrase String, UserID UInt64) ENGINE = StripeLog;
+CREATE TABLE test.hits_log (CounterID UInt32, AdvEngineID UInt8, RegionID UInt32, SearchPhrase String, UserID uint64)  ;
+CREATE TABLE test.hits_tinylog (CounterID UInt32, AdvEngineID UInt8, RegionID UInt32, SearchPhrase String, UserID uint64) ;
+CREATE TABLE test.hits_stripelog (CounterID UInt32, AdvEngineID UInt8, RegionID UInt32, SearchPhrase String, UserID uint64) ENGINE = StripeLog;
 
 CHECK TABLE test.hits_log;
 CHECK TABLE test.hits_tinylog;
@@ -25,6 +25,6 @@ CHECK TABLE test.hits_log;
 CHECK TABLE test.hits_tinylog;
 CHECK TABLE test.hits_stripelog;
 
-DROP TABLE test.hits_log;
-DROP TABLE test.hits_tinylog;
-DROP TABLE test.hits_stripelog;
+DROP STREAM test.hits_log;
+DROP STREAM test.hits_tinylog;
+DROP STREAM test.hits_stripelog;

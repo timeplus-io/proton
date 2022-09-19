@@ -1,7 +1,7 @@
 -- Tags: disabled
 
-DROP TABLE IF EXISTS replacing;
-CREATE TABLE replacing (d Date, k UInt64, s String, v UInt16) ENGINE = ReplacingMergeTree(d, k, 8192, v);
+DROP STREAM IF EXISTS replacing;
+create stream replacing (d date, k uint64, s string, v uint16) ENGINE = ReplacingMergeTree(d, k, 8192, v);
 
 INSERT INTO replacing VALUES ('2000-01-01', 1, 'Hello', 0);
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
@@ -11,7 +11,7 @@ INSERT INTO replacing VALUES ('2000-01-01', 1, 'World', 0);
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, v, _part_index;
 
-OPTIMIZE TABLE replacing;
+OPTIMIZE STREAM replacing;
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, v, _part_index;
 
@@ -25,17 +25,17 @@ INSERT INTO replacing VALUES ('2000-01-01', 2, 'def', 1);
 INSERT INTO replacing VALUES ('2000-01-01', 2, 'ghi', 0);
 SELECT * FROM replacing FINAL ORDER BY k, v, _part_index;
 
-OPTIMIZE TABLE replacing;
-OPTIMIZE TABLE replacing;
-OPTIMIZE TABLE replacing;
+OPTIMIZE STREAM replacing;
+OPTIMIZE STREAM replacing;
+OPTIMIZE STREAM replacing;
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, v, _part_index;
 
-DROP TABLE replacing;
+DROP STREAM replacing;
 
 
-DROP TABLE IF EXISTS replacing;
-CREATE TABLE replacing (d Date, k UInt64, s String, v UInt16) ENGINE = ReplacingMergeTree(d, k, 1, v);
+DROP STREAM IF EXISTS replacing;
+create stream replacing (d date, k uint64, s string, v uint16) ENGINE = ReplacingMergeTree(d, k, 1, v);
 
 INSERT INTO replacing VALUES ('2000-01-01', 1, 'Hello', 0);
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
@@ -45,7 +45,7 @@ INSERT INTO replacing VALUES ('2000-01-01', 1, 'World', 0);
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, v, _part_index;
 
-OPTIMIZE TABLE replacing;
+OPTIMIZE STREAM replacing;
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, v, _part_index;
 
@@ -59,15 +59,15 @@ INSERT INTO replacing VALUES ('2000-01-01', 2, 'def', 1);
 INSERT INTO replacing VALUES ('2000-01-01', 2, 'ghi', 0);
 SELECT * FROM replacing FINAL ORDER BY k, v, _part_index;
 
-OPTIMIZE TABLE replacing PARTITION 200001 FINAL;
+OPTIMIZE STREAM replacing PARTITION 200001 FINAL;
 SELECT _part_index, * FROM replacing ORDER BY k, v, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, v, _part_index;
 
-DROP TABLE replacing;
+DROP STREAM replacing;
 
 
-DROP TABLE IF EXISTS replacing;
-CREATE TABLE replacing (d Date, k UInt64, s String) ENGINE = ReplacingMergeTree(d, k, 2);
+DROP STREAM IF EXISTS replacing;
+create stream replacing (d date, k uint64, s string) ENGINE = ReplacingMergeTree(d, k, 2);
 
 INSERT INTO replacing VALUES ('2000-01-01', 1, 'Hello');
 SELECT _part_index, * FROM replacing ORDER BY k, _part_index;
@@ -77,7 +77,7 @@ INSERT INTO replacing VALUES ('2000-01-01', 1, 'World');
 SELECT _part_index, * FROM replacing ORDER BY k, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, _part_index;
 
-OPTIMIZE TABLE replacing;
+OPTIMIZE STREAM replacing;
 SELECT _part_index, * FROM replacing ORDER BY k, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, _part_index;
 
@@ -91,8 +91,8 @@ INSERT INTO replacing VALUES ('2000-01-01', 2, 'def');
 INSERT INTO replacing VALUES ('2000-01-01', 2, 'ghi');
 SELECT * FROM replacing FINAL ORDER BY k, _part_index;
 
-OPTIMIZE TABLE replacing PARTITION 200001 FINAL;
+OPTIMIZE STREAM replacing PARTITION 200001 FINAL;
 SELECT _part_index, * FROM replacing ORDER BY k, _part_index;
 SELECT _part_index, * FROM replacing FINAL ORDER BY k, _part_index;
 
-DROP TABLE replacing;
+DROP STREAM replacing;

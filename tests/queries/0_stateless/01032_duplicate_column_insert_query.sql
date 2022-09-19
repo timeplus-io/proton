@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS sometable;
+DROP STREAM IF EXISTS sometable;
 
-CREATE TABLE sometable (
-    date Date,
-    time Int64,
-    value UInt64
+create stream sometable (
+    date date,
+    time int64,
+    value uint64
 ) ENGINE=MergeTree()
 ORDER BY time;
 
@@ -14,4 +14,4 @@ SELECT COUNT() from sometable;
 
 INSERT INTO sometable (date, time, value, time) VALUES ('2019-11-08', 1573185600, 100, 1573185600); -- {serverError 15}
 
-DROP TABLE IF EXISTS sometable;
+DROP STREAM IF EXISTS sometable;

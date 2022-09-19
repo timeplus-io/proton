@@ -1,0 +1,17 @@
+CounterID	uint32					
+dummy	string					
+StartDate	date					
+Sign	int8					
+VisitID	uint64					
+UserID	uint64					
+StartTime	DateTime					
+ClickLogID	uint64					
+create stream default.merge\n(\n    `CounterID` uint32,\n    `dummy` string,\n    `StartDate` date,\n    `Sign` int8,\n    `VisitID` uint64,\n    `UserID` uint64,\n    `StartTime` DateTime,\n    `ClickLogID` uint64\n)\nENGINE = Merge(\'default\', \'merge\\\\[0-9\\\\]\')
+CounterID	uint32					
+StartDate	date					
+Sign	int8					
+VisitID	uint64					
+UserID	uint64					
+StartTime	DateTime					
+ClickLogID	uint64					
+create stream default.merge\n(\n    `CounterID` uint32,\n    `StartDate` date,\n    `Sign` int8,\n    `VisitID` uint64,\n    `UserID` uint64,\n    `StartTime` DateTime,\n    `ClickLogID` uint64\n)\nENGINE = Merge(\'default\', \'merge\\\\[0-9\\\\]\')

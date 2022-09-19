@@ -8,11 +8,11 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT --prefer_localhost_replica=0 -nm -q "
-    DROP TABLE IF EXISTS tmp_01683;
-    DROP TABLE IF EXISTS dist_01683;
+    DROP STREAM IF EXISTS tmp_01683;
+    DROP STREAM IF EXISTS dist_01683;
 
-    CREATE TABLE tmp_01683 (n Int8) ENGINE=Memory;
-    CREATE TABLE dist_01683 (n UInt64) Engine=Distributed(test_cluster_two_shards, currentDatabase(), tmp_01683, n);
+    create stream tmp_01683 (n int8) ENGINE=Memory;
+    create stream dist_01683 (n uint64) Engine=Distributed(test_cluster_two_shards, currentDatabase(), tmp_01683, n);
 
     SET insert_distributed_sync=1;
     INSERT INTO dist_01683 VALUES (1),(2);
@@ -27,6 +27,6 @@ $CLICKHOUSE_CLIENT --prefer_localhost_replica=0 -nm -q "
 
     SELECT * FROM tmp_01683 ORDER BY n;
 
-    DROP TABLE tmp_01683;
-    DROP TABLE dist_01683;
+    DROP STREAM tmp_01683;
+    DROP STREAM dist_01683;
 " |& sed 's/^.*</</g'

@@ -14,8 +14,8 @@
 -- SELECT count() FROM system.numbers WHERE NOT (number <= number);
 -- SELECT count() FROM system.numbers WHERE NOT (number >= number);
 
--- SELECT count() FROM system.numbers WHERE SHA256(toString(number)) != SHA256(toString(number));
--- SELECT count() FROM system.numbers WHERE SHA256(toString(number)) != SHA256(toString(number)) AND rand() > 10;
+-- SELECT count() FROM system.numbers WHERE SHA256(to_string(number)) != SHA256(to_string(number));
+-- SELECT count() FROM system.numbers WHERE SHA256(to_string(number)) != SHA256(to_string(number)) AND rand() > 10;
 
 -- column_column_comparison.xml
 -- <test>
@@ -33,15 +33,15 @@
 --     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE SearchPhrase < SearchPhrase SETTINGS max_threads = 2]]></query>
 --     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE SearchPhrase < URL]]></query>
 --     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE SearchPhrase < PageCharset SETTINGS max_threads = 2]]></query>
---     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE notEmpty(SearchPhrase) AND SearchPhrase < SearchPhrase SETTINGS max_threads = 2]]></query>
---     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE notEmpty(SearchPhrase) AND SearchPhrase < URL]]></query>
---     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE notEmpty(SearchPhrase) AND SearchPhrase < PageCharset SETTINGS max_threads = 2]]></query>
+--     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE not_empty(SearchPhrase) AND SearchPhrase < SearchPhrase SETTINGS max_threads = 2]]></query>
+--     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE not_empty(SearchPhrase) AND SearchPhrase < URL]]></query>
+--     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE not_empty(SearchPhrase) AND SearchPhrase < PageCharset SETTINGS max_threads = 2]]></query>
 --     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE MobilePhoneModel < MobilePhoneModel SETTINGS max_threads = 1]]></query>
 --     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE MobilePhoneModel < URL]]></query>
 --     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE MobilePhoneModel < PageCharset SETTINGS max_threads = 2]]></query>
---     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE notEmpty(MobilePhoneModel) AND MobilePhoneModel < MobilePhoneModel SETTINGS max_threads = 1]]></query>
---     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE notEmpty(MobilePhoneModel) AND MobilePhoneModel < URL]]></query>
---     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE notEmpty(MobilePhoneModel) AND MobilePhoneModel < PageCharset SETTINGS max_threads = 2]]></query>
+--     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE not_empty(MobilePhoneModel) AND MobilePhoneModel < MobilePhoneModel SETTINGS max_threads = 1]]></query>
+--     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE not_empty(MobilePhoneModel) AND MobilePhoneModel < URL]]></query>
+--     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE not_empty(MobilePhoneModel) AND MobilePhoneModel < PageCharset SETTINGS max_threads = 2]]></query>
 --     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE PageCharset < PageCharset SETTINGS max_threads = 2]]></query>
 --     <query><![CDATA[SELECT count() FROM hits_100m_single WHERE PageCharset < URL]]></query>
 --     <query short="1"><![CDATA[SELECT count() FROM hits_100m_single WHERE Title < Title]]></query>

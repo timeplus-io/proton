@@ -6,5 +6,5 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT --param_foo |& grep -q -x 'Code: 36. DB::Exception: Parameter requires value'
-$CLICKHOUSE_CLIENT --param_foo foo -q 'select {foo:String}'
-$CLICKHOUSE_CLIENT -q 'select {foo:String}' --param_foo foo
+$CLICKHOUSE_CLIENT --param_foo foo -q 'select {foo:string}'
+$CLICKHOUSE_CLIENT -q 'select {foo:string}' --param_foo foo

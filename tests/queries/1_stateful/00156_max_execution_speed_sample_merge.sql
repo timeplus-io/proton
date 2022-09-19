@@ -1,6 +1,6 @@
 SET max_execution_speed = 4000000, timeout_before_checking_execution_speed = 0.001;
 
-CREATE TEMPORARY TABLE times (t DateTime);
+CREATE TEMPORARY STREAM times (t DateTime);
 
 INSERT INTO times SELECT now();
 SELECT count() FROM test.hits SAMPLE 1 / 2;

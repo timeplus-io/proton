@@ -30,5 +30,5 @@ SELECT anyLast(number * 3) AS x, x FROM numbers(1, 2);
 
 SELECT any(anyLast(number)) FROM numbers(1); -- { serverError 184 }
 
-SELECT 'arrayJoin';
-SELECT *, any(arrayJoin([[], []])) FROM numbers(1) GROUP BY number;
+SELECT 'array_join';
+SELECT *, any(array_join([[], []])) FROM numbers(1) GROUP BY number;

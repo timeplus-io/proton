@@ -1,0 +1,1 @@
+SELECT k, finalize_aggregation(sum_state), runningAccumulate(sum_state) FROM (SELECT int_div(number, 50000) AS k, sumState(number) AS sum_state FROM (SELECT number FROM system.numbers LIMIT 1000000) GROUP BY k ORDER BY k);

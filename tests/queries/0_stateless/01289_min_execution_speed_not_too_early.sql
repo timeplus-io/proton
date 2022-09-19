@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS ES;
+DROP STREAM IF EXISTS ES;
 
-create table ES(A String) Engine=MergeTree order by tuple();
-insert into ES select toString(number) from numbers(10000000);
+create stream ES(A string) Engine=MergeTree order by tuple();
+insert into ES select to_string(number) from numbers(10000000);
 
 SET max_execution_time = 100,
     timeout_before_checking_execution_speed = 100,
@@ -18,4 +18,4 @@ SELECT * FROM ES LIMIT 10000 format Null;
 SELECT * FROM ES LIMIT 100000 format Null;
 SELECT * FROM ES LIMIT 1000000 format Null;
 
-DROP TABLE ES;
+DROP STREAM ES;

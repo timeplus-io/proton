@@ -1,19 +1,19 @@
 -- Tags: distributed
 
-DROP TABLE IF EXISTS tt6;
+DROP STREAM IF EXISTS tt6;
 
-CREATE TABLE tt6
+create stream tt6
 (
-	`id` UInt32,
-	`first_column` UInt32,
-	`second_column` UInt32,
-	`third_column` UInt32,
-	`status` String
+	`id` uint32,
+	`first_column` uint32,
+	`second_column` uint32,
+	`third_column` uint32,
+	`status` string
 
 )
 ENGINE = Distributed('test_shard_localhost', '', 'tt7', rand());
 
-CREATE TABLE tt7 as tt6 ENGINE = Distributed('test_shard_localhost', '', 'tt6', rand());
+create stream tt7 as tt6 ENGINE = Distributed('test_shard_localhost', '', 'tt6', rand());
 
 INSERT INTO tt6 VALUES (1, 1, 1, 1, 'ok'); -- { serverError 581 }
 
@@ -27,4 +27,4 @@ INSERT INTO tt6 VALUES (1, 1, 1, 1, 'ok'); -- { serverError 306}
 -- stack overflow
 SELECT * FROM tt6; -- { serverError 306 }
 
-DROP TABLE tt6;
+DROP STREAM tt6;

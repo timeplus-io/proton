@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 
 SELECT arrayCumSumNonNegative([1, 2, 3, 4]);
 
@@ -8,7 +8,7 @@ SELECT arrayDifference([1, 2, 3, 4]);
 
 SELECT arrayDifference([1, 7, 100, 5]);
 
-CREATE TABLE test(a Array(Int64), b Array(Float64), c Array(UInt64)) ENGINE=Memory;
+create stream test(a array(int64), b array(float64), c array(uint64)) ENGINE=Memory;
 
 INSERT INTO test VALUES ([1, -3, 0, 1], [1.0, 0.4, -0.1], [1, 3, 1]);
 
@@ -24,5 +24,5 @@ SELECT arrayDifference(b) FROM test;
 
 SELECT arrayDifference(c) FROM test;
 
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 

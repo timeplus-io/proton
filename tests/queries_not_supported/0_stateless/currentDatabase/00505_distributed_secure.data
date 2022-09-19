@@ -1,0 +1,23 @@
+DROP STREAM IF EXISTS secure1;
+DROP STREAM IF EXISTS secure2;
+DROP STREAM IF EXISTS secure3;
+
+create stream secure1 ( date date, a int32, b int32, c int32, d int32) ENGINE = MergeTree(date, (a, date), 8192);
+create stream secure2 ( date date, a int32, b int32, c int32, d int32) ENGINE = Distributed(test_shard_localhost_secure, currentDatabase(), 'secure1');
+create stream secure3 ( date date, a int32, b int32, c int32, d int32) ENGINE = Distributed(test_shard_localhost_secure, currentDatabase(), 'secure2');
+
+INSERT INTO secure1 VALUES (1,  2, 3, 4, 5);
+INSERT INTO secure1 VALUES (11,12,13,14,15);
+INSERT INTO secure2 VALUES (21,22,23,24,25);
+INSERT INTO secure3 VALUES (31,32,33,34,35);
+
+SYSTEM FLUSH DISTRIBUTED secure2;
+SYSTEM FLUSH DISTRIBUTED secure3;
+
+SELECT * FROM secure1 ORDER BY a;
+SELECT * FROM secure2 ORDER BY a;
+SELECT * FROM secure3 ORDER BY a;
+
+DROP STREAM secure1;
+DROP STREAM secure2;
+DROP STREAM secure3;

@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS insert_select_dst;
-DROP TABLE IF EXISTS insert_select_src;
+DROP STREAM IF EXISTS insert_select_dst;
+DROP STREAM IF EXISTS insert_select_src;
 
-CREATE TABLE insert_select_dst (i int, middle_a int, middle_b int, j int) ENGINE = Log;
+create stream insert_select_dst (i int, middle_a int, middle_b int, j int)  ;
 
-CREATE TABLE insert_select_src (i int, j int) ENGINE = Log;
+create stream insert_select_src (i int, j int)  ;
 
 INSERT INTO insert_select_src VALUES (1, 2), (3, 4);
 
@@ -14,5 +14,5 @@ INSERT INTO insert_select_dst(insert_select_src.* EXCEPT (middle_a, middle_b)) S
 
 SELECT * FROM insert_select_dst;
 
-DROP TABLE IF EXISTS insert_select_dst;
-DROP TABLE IF EXISTS insert_select_src;
+DROP STREAM IF EXISTS insert_select_dst;
+DROP STREAM IF EXISTS insert_select_src;

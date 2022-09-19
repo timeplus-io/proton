@@ -7,9 +7,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 set -e
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test1";
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test2";
-$CLICKHOUSE_CLIENT --query "CREATE TABLE test1 (x UInt64) ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test1";
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test2";
+$CLICKHOUSE_CLIENT --query "create stream test1 (x uint64) ";
 
 
 function thread1()
@@ -37,5 +37,5 @@ timeout $TIMEOUT bash -c thread2 2> /dev/null &
 
 wait
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test1";
-$CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS test2";
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test1";
+$CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test2";

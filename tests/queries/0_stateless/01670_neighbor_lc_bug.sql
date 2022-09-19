@@ -6,24 +6,25 @@ FROM
 (
     SELECT
         number % 5 AS n,
-        toString(n) AS s,
-        CAST(s, 'LowCardinality(String)') AS lcs
+        to_string(n) AS s,
+        CAST(s, 'LowCardinality(string)') AS lcs
     FROM numbers(10)
 );
 
-drop table if exists neighbor_test;
+SET query_mode = 'table';
+drop stream if exists neighbor_test;
 
-CREATE TABLE neighbor_test
+create stream neighbor_test
 (
-    `rowNr` UInt8,
-    `val_string` String,
-    `val_low` LowCardinality(String)
+    `rowNr` uint8,
+    `val_string` string,
+    `val_low` LowCardinality(string)
 )
 ENGINE = MergeTree
 PARTITION BY tuple()
 ORDER BY rowNr;
 
-INSERT INTO neighbor_test VALUES (1, 'String 1', 'String 1'), (2, 'String 1', 'String 1'), (3, 'String 2', 'String 2');
+INSERT INTO neighbor_test VALUES (1, 'string 1', 'string 1'), (2, 'string 1', 'string 1'), (3, 'string 2', 'string 2');
 
 SELECT
     rowNr,
@@ -40,4 +41,4 @@ FROM
     ORDER BY val_string ASC
 ) format PrettyCompact;
 
-drop table if exists neighbor_test;
+drop stream if exists neighbor_test;

@@ -1,9 +1,10 @@
 set enable_positional_arguments = 1;
 
-drop table if exists test;
-drop table if exists test2;
+SET query_mode = 'table';
+drop stream if exists test;
+drop stream if exists test2;
 
-create table test(x1 Int, x2 Int, x3 Int) engine=Memory();
+create stream test(x1 int, x2 int, x3 int) engine=Memory();
 insert into test values (1, 10, 100), (10, 1, 10), (100, 100, 1);
 
 -- { echo }
@@ -34,7 +35,7 @@ select 1 + max(x1), x2 from test group by 1, 2; -- { serverError 43 }
 
 explain syntax select x1 + x3, x3 from test group by 1, 2;
 
-create table test2(x1 Int, x2 Int, x3 Int) engine=Memory;
+create stream test2(x1 int, x2 int, x3 int) engine=Memory;
 insert into test2 values (1, 10, 100), (10, 1, 10), (100, 100, 1);
 select x1, x1 * 2, max(x2), max(x3) from test2 group by 2, 1, x1 order by 1, 2, 4 desc, 3 asc;
 

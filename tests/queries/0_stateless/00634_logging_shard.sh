@@ -33,8 +33,8 @@ lines_two_servers=$(cat "$server_logs_file" | wc -l)
 (( $lines_two_servers >= 2 * $lines_one_server )) || echo "Fail: $lines_two_servers $lines_one_server"
 
 # INSERT
-$CLICKHOUSE_CLIENT $settings -q "DROP TABLE IF EXISTS null_00634_1"
-$CLICKHOUSE_CLIENT $settings -q "CREATE TABLE null_00634_1 (i Int8) ENGINE = Null"
+$CLICKHOUSE_CLIENT $settings -q "DROP STREAM IF EXISTS null_00634_1"
+$CLICKHOUSE_CLIENT $settings -q "create stream null_00634_1 (i int8) ENGINE = Null"
 
 true > "$server_logs_file"
 $CLICKHOUSE_CLIENT $settings -q "INSERT INTO null_00634_1 VALUES (0)"
@@ -44,7 +44,7 @@ true > "$server_logs_file"
 $CLICKHOUSE_CLIENT $settings -q "INSERT INTO TABLE FUNCTION remote('127.0.0.2', '${CLICKHOUSE_DATABASE}', 'null_00634_1') VALUES (0)"
 lines_two_servers=$(cat "$server_logs_file" | wc -l)
 
-$CLICKHOUSE_CLIENT $settings -q "DROP TABLE IF EXISTS null_00634_1"
+$CLICKHOUSE_CLIENT $settings -q "DROP STREAM IF EXISTS null_00634_1"
 (( $lines_two_servers > $lines_one_server )) || echo "Fail: $lines_two_servers $lines_one_server"
 
 

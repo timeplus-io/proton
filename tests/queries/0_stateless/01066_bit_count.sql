@@ -5,9 +5,9 @@ SELECT bitCount(0);
 SELECT bitCount(1);
 SELECT bitCount(-1);
 
-SELECT bitCount(toInt64(-1));
-SELECT bitCount(toInt32(-1));
-SELECT bitCount(toInt16(-1));
-SELECT bitCount(toInt8(-1));
+SELECT bitCount(to_int64(-1));
+SELECT bitCount(to_int32(-1));
+SELECT bitCount(to_int16(-1));
+SELECT bitCount(to_int8(-1));
 
-SELECT x, bitCount(x), hex(reinterpretAsString(x)) FROM VALUES ('x Float64', (1), (-1), (inf));
+SELECT x, bitCount(x), hex(reinterpret_as_string(x)) FROM VALUES ('x float64', (1), (-1), (inf));

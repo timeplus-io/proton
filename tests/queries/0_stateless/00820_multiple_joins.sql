@@ -1,13 +1,13 @@
-DROP TABLE IF EXISTS table1;
-DROP TABLE IF EXISTS table2;
-DROP TABLE IF EXISTS table3;
-DROP TABLE IF EXISTS table5;
-DROP TABLE IF EXISTS table_set;
+DROP STREAM IF EXISTS table1;
+DROP STREAM IF EXISTS table2;
+DROP STREAM IF EXISTS table3;
+DROP STREAM IF EXISTS table5;
+DROP STREAM IF EXISTS table_set;
 
-CREATE TABLE table1 (a UInt32) ENGINE = Memory;
-CREATE TABLE table2 (a UInt32, b UInt32) ENGINE = Memory;
-CREATE TABLE table3 (b UInt32, c UInt32) ENGINE = Memory;
-CREATE TABLE table5 (a UInt32, b UInt32, c UInt32) ENGINE = Memory;
+create stream table1 (a uint32) ;
+create stream table2 (a uint32, b uint32) ;
+create stream table3 (b uint32, c uint32) ;
+create stream table5 (a uint32, b uint32, c uint32) ;
 
 INSERT INTO table1 SELECT number FROM numbers(21);
 INSERT INTO table2 SELECT number * 2, number * 20 FROM numbers(11);
@@ -78,7 +78,7 @@ join table3 as t3 on t2_b = t3_b;
 --join table3 as t3 on t1_t3_x = t2_t3_x;
 
 
-CREATE TABLE table_set ( x UInt32 ) ENGINE = Set;
+create stream table_set ( x uint32 ) ENGINE = Set;
 INSERT INTO table_set VALUES (0), (1), (2);
 
 select count()
@@ -88,8 +88,8 @@ join table3 as t3 on t2.b = t3.b
 join table5 as t5 on t3.c = t5.c
 WHERE t1.a in table_set;
 
-DROP TABLE table_set;
-DROP TABLE table1;
-DROP TABLE table2;
-DROP TABLE table3;
-DROP TABLE table5;
+DROP STREAM table_set;
+DROP STREAM table1;
+DROP STREAM table2;
+DROP STREAM table3;
+DROP STREAM table5;

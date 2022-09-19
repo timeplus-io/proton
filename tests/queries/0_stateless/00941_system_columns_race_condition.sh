@@ -9,8 +9,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 set -e
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS alter_table"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE alter_table (a UInt8, b Int16, c Float32, d String, e Array(UInt8), f Nullable(UUID), g Tuple(UInt8, UInt16)) ENGINE = MergeTree ORDER BY a"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS alter_table"
+$CLICKHOUSE_CLIENT -q "create stream alter_table (a uint8, b Int16, c Float32, d string, e array(uint8), f Nullable(UUID), g tuple(uint8, uint16)) ENGINE = MergeTree ORDER BY a"
 
 function thread1()
 {
@@ -20,7 +20,7 @@ function thread1()
 
 function thread2()
 {
-    while true; do $CLICKHOUSE_CLIENT -n --query "ALTER TABLE alter_table ADD COLUMN h String; ALTER TABLE alter_table MODIFY COLUMN h UInt64; ALTER TABLE alter_table DROP COLUMN h;"; done
+    while true; do $CLICKHOUSE_CLIENT -n --query "ALTER STREAM alter_table ADD COLUMN h string; ALTER STREAM alter_table MODIFY COLUMN h uint64; ALTER STREAM alter_table DROP COLUMN h;"; done
 }
 
 # https://stackoverflow.com/questions/9954794/execute-a-shell-function-with-timeout
@@ -46,4 +46,4 @@ timeout 15 bash -c thread2 2> /dev/null &
 
 wait
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE alter_table"
+$CLICKHOUSE_CLIENT -q "DROP STREAM alter_table"

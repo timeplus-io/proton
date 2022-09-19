@@ -1,6 +1,6 @@
-testlazy	log	CREATE TABLE testlazy.log (`a` UInt64, `b` UInt64) ENGINE = Log
-testlazy	slog	CREATE TABLE testlazy.slog (`a` UInt64, `b` UInt64) ENGINE = StripeLog
-testlazy	tlog	CREATE TABLE testlazy.tlog (`a` UInt64, `b` UInt64) ENGINE = TinyLog
+testlazy	log	create stream testlazy.log (`a` uint64, `b` uint64)  
+testlazy	slog	create stream testlazy.slog (`a` uint64, `b` uint64) ENGINE = StripeLog
+testlazy	tlog	create stream testlazy.tlog (`a` uint64, `b` uint64) 
 testlazy	log
 testlazy	slog
 testlazy	tlog

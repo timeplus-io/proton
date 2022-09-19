@@ -4,13 +4,13 @@ select * from system.merge_tree_settings order by length(description) limit 1;
 with [
     'Seconds',
     'Bool',
-    'Int64',
-    'String',
+    'int64',
+    'string',
     'Char',
     'LogsLevel',
     'URI',
     'Float',
-    'UInt64',
+    'uint64',
     'MaxThreads',
     'Milliseconds',
     'JoinStrictness',
@@ -21,14 +21,14 @@ with [
     'OverflowModeGroupBy',
     'DateTimeInputFormat',
     'DistributedProductMode'
-] as types select hasAll(arrayDistinct(groupArray(type)), types) from system.settings;
+] as types select hasAll( array_distinct(group_array(type)), types) from system.settings;
 
 with [
     'Seconds',
     'Bool',
-    'Int64',
-    'String',
+    'int64',
+    'string',
     'Float',
-    'UInt64',
+    'uint64',
     'MaxThreads'
-] as types select hasAll(arrayDistinct(groupArray(type)), types) from system.merge_tree_settings;
+] as types select hasAll( array_distinct(group_array(type)), types) from system.merge_tree_settings;

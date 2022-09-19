@@ -1,0 +1,101 @@
+d	date					
+k	uint64					
+i32	int32					
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	10	42
+d	date					
+k	uint64					
+i32	int32					
+n.ui8	array(uint8)					
+n.s	array(string)					
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `n.ui8` array(uint8),\n    `n.s` array(string)\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	8	40	[1,2,3]	['12','13','14']
+2015-01-01	10	42	[]	[]
+d	date					
+k	uint64					
+i32	int32					
+n.ui8	array(uint8)					
+n.s	array(string)					
+n.d	array(date)					
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `n.d` array(date)\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	7	39	[10,20,30]	['120','130','140']	['2000-01-01','2000-01-01','2000-01-03']
+2015-01-01	8	40	[1,2,3]	['12','13','14']	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	10	42	[]	[]	[]
+d	date					
+k	uint64					
+i32	int32					
+n.ui8	array(uint8)					
+n.s	array(string)					
+n.d	array(date)					
+s	string	DEFAULT	\'0\'			
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `n.d` array(date),\n    `s` string DEFAULT \'0\'\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	[10,20,30]	['asd','qwe','qwe']	['2000-01-01','2000-01-01','2000-01-03']	100500
+2015-01-01	7	39	[10,20,30]	['120','130','140']	['2000-01-01','2000-01-01','2000-01-03']	0
+2015-01-01	8	40	[1,2,3]	['12','13','14']	['1970-01-01','1970-01-01','1970-01-01']	0
+2015-01-01	10	42	[]	[]	[]	0
+d	date					
+k	uint64					
+i32	int32					
+n.ui8	array(uint8)					
+n.s	array(string)					
+s	Int64	DEFAULT	\'0\'			
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `s` Int64 DEFAULT \'0\'\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	[10,20,30]	['asd','qwe','qwe']	100500
+2015-01-01	7	39	[10,20,30]	['120','130','140']	0
+2015-01-01	8	40	[1,2,3]	['12','13','14']	0
+2015-01-01	10	42	[]	[]	0
+d	date					
+k	uint64					
+i32	int32					
+n.ui8	array(uint8)					
+n.s	array(string)					
+s	uint32	DEFAULT	\'0\'			
+n.d	array(date)					
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `n.ui8` array(uint8),\n    `n.s` array(string),\n    `s` uint32 DEFAULT \'0\',\n    `n.d` array(date)\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	[10,20,30]	['asd','qwe','qwe']	100500	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	7	39	[10,20,30]	['120','130','140']	0	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	8	40	[1,2,3]	['12','13','14']	0	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	10	42	[]	[]	0	[]
+2015-01-01	6	38	[10,20,30]	['asd','qwe','qwe']	100500	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	7	39	[10,20,30]	['120','130','140']	0	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	8	40	[1,2,3]	['12','13','14']	0	['1970-01-01','1970-01-01','1970-01-01']
+2015-01-01	10	42	[]	[]	0	[]
+d	date					
+k	uint64					
+i32	int32					
+n.s	array(string)					
+s	uint32	DEFAULT	\'0\'			
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `n.s` array(string),\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	['asd','qwe','qwe']	100500
+2015-01-01	7	39	['120','130','140']	0
+2015-01-01	8	40	['12','13','14']	0
+2015-01-01	10	42	[]	0
+d	date					
+k	uint64					
+i32	int32					
+s	uint32	DEFAULT	\'0\'			
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	100500
+2015-01-01	7	39	0
+2015-01-01	8	40	0
+2015-01-01	10	42	0
+d	date					
+k	uint64					
+i32	int32					
+s	uint32	DEFAULT	\'0\'			
+n.s	array(string)					
+n.d	array(date)					
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `s` uint32 DEFAULT \'0\',\n    `n.s` array(string),\n    `n.d` array(date)\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	100500	[]	[]
+2015-01-01	7	39	0	[]	[]
+2015-01-01	8	40	0	[]	[]
+2015-01-01	10	42	0	[]	[]
+d	date					
+k	uint64					
+i32	int32					
+s	uint32	DEFAULT	\'0\'			
+create stream default.alter_00061\n(\n    `d` date,\n    `k` uint64,\n    `i32` int32,\n    `s` uint32 DEFAULT \'0\'\n)\nENGINE = MergeTree(d, k, 8192)
+2015-01-01	6	38	100500
+2015-01-01	7	39	0
+2015-01-01	8	40	0
+2015-01-01	10	42	0

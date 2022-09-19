@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS t_tuple_element;
+DROP STREAM IF EXISTS t_tuple_element;
 
-CREATE TABLE t_tuple_element(t1 Tuple(a UInt32, s String), t2 Tuple(UInt32, String)) ENGINE = Memory;
+create stream t_tuple_element(t1 tuple(a uint32, s string), t2 tuple(uint32, string)) ;
 INSERT INTO t_tuple_element VALUES ((1, 'a'), (2, 'b'));
 
 SET optimize_functions_to_subcolumns = 1;
@@ -33,10 +33,10 @@ SELECT tupleElement(t2, 0) FROM t_tuple_element; -- { serverError 127 }
 SELECT tupleElement(t2, 3) FROM t_tuple_element; -- { serverError 127 }
 SELECT tupleElement(t2, materialize(1)) FROM t_tuple_element; -- { serverError 43 }
 
-DROP TABLE t_tuple_element;
+DROP STREAM t_tuple_element;
 
 WITH (1, 2) AS t SELECT t.1, t.2;
 EXPLAIN SYNTAX WITH (1, 2) AS t SELECT t.1, t.2;
 
-WITH (1, 2)::Tuple(a UInt32, b UInt32) AS t SELECT t.1, tupleElement(t, 'b');
-EXPLAIN SYNTAX WITH (1, 2)::Tuple(a UInt32, b UInt32) AS t SELECT t.1, tupleElement(t, 'b');
+WITH (1, 2)::tuple(a uint32, b uint32) AS t SELECT t.1, tupleElement(t, 'b');
+EXPLAIN SYNTAX WITH (1, 2)::tuple(a uint32, b uint32) AS t SELECT t.1, tupleElement(t, 'b');

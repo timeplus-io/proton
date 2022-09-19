@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "create table many_mutations (x UInt32, y UInt32) engine = MergeTree order by x"
+$CLICKHOUSE_CLIENT -q "create stream many_mutations (x uint32, y uint32) engine = MergeTree order by x"
 $CLICKHOUSE_CLIENT -q "insert into many_mutations values (0, 0), (1, 1)"
 $CLICKHOUSE_CLIENT -q "system stop merges many_mutations"
 
@@ -15,7 +15,7 @@ job()
 {
    for _ in {1..1000}
    do
-      $CLICKHOUSE_CLIENT -q "alter table many_mutations update y = y + 1 where 1"
+      $CLICKHOUSE_CLIENT -q "alter stream many_mutations update y = y + 1 where 1"
    done
 }
 

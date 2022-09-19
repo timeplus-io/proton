@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS too_many_parts;
-CREATE TABLE too_many_parts (x UInt64) ENGINE = MergeTree ORDER BY tuple() SETTINGS parts_to_delay_insert = 5, parts_to_throw_insert = 5;
+DROP STREAM IF EXISTS too_many_parts;
+create stream too_many_parts (x uint64) ENGINE = MergeTree ORDER BY tuple() SETTINGS parts_to_delay_insert = 5, parts_to_throw_insert = 5;
 
 SYSTEM STOP MERGES too_many_parts;
 SET max_block_size = 1, min_insert_block_size_rows = 0, min_insert_block_size_bytes = 0;
@@ -11,4 +11,4 @@ SELECT count() FROM too_many_parts;
 -- exception is thrown if threshold is exceeded on new INSERT.
 INSERT INTO too_many_parts SELECT * FROM numbers(10); -- { serverError 252 }
 
-DROP TABLE too_many_parts;
+DROP STREAM too_many_parts;

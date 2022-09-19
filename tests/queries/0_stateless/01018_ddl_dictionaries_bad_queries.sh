@@ -13,9 +13,9 @@ $CLICKHOUSE_CLIENT -q "DROP DICTIONARY IF  EXISTS dict1"
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY key1, key2
     LAYOUT(HASHED())
@@ -28,9 +28,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY non_existing_column
     LAYOUT(HASHED())
@@ -42,9 +42,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY non_existing_column, key1
     LAYOUT(COMPLEX_KEY_HASHED())
@@ -56,9 +56,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY key2, key1
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict1' DB '$CLICKHOUSE_DATABASE'))
@@ -69,9 +69,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     LAYOUT(COMPLEX_KEY_HASHED())
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict1' DB '$CLICKHOUSE_DATABASE'))
@@ -82,9 +82,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY key2, key1
     LAYOUT(COMPLEX_KEY_HASHED())
@@ -95,9 +95,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY non_existing_column, key1
     LAYOUT(COMPLEX_KEY_HASHED())
@@ -109,9 +109,9 @@ $CLICKHOUSE_CLIENT -q "
 $CLICKHOUSE_CLIENT -q "
     CREATE DICTIONARY dict1
     (
-        key1 UInt64,
-        key2 UInt64,
-        value String
+        key1 uint64,
+        key2 uint64,
+        value string
     )
     PRIMARY KEY key1
     LAYOUT(COMPLEX_KEY_HASHED())

@@ -4,4 +4,4 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE t (c CODEC(NONE)) ENGINE = Memory" 2>&1 | grep -oF 'Unknown data type family: CODEC' | uniq
+${CLICKHOUSE_CLIENT} --query "create stream t (c CODEC(NONE)) " 2>&1 | grep -oF 'Unknown data type family: CODEC' | uniq

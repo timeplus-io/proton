@@ -1,18 +1,19 @@
-drop table if exists rate_test;
+SET query_mode = 'table';
+drop stream if exists rate_test;
 
-create table rate_test (timestamp UInt32, event UInt32) engine=Memory;
+create stream rate_test (timestamp uint32, event uint32) engine=Memory;
 insert into rate_test values (0,1000),(1,1001),(2,1002),(3,1003),(4,1004),(5,1005),(6,1006),(7,1007),(8,1008);
 
 select 1.0 = boundingRatio(timestamp, event) from rate_test;
 
-drop table if exists rate_test2;
-create table rate_test2 (uid UInt32 default 1,timestamp DateTime, event UInt32) engine=Memory;
+drop stream if exists rate_test2;
+create stream rate_test2 (uid uint32 default 1,timestamp DateTime, event uint32) engine=Memory;
 insert into rate_test2(timestamp, event) values ('2018-01-01 01:01:01',1001),('2018-01-01 01:01:02',1002),('2018-01-01 01:01:03',1003),('2018-01-01 01:01:04',1004),('2018-01-01 01:01:05',1005),('2018-01-01 01:01:06',1006),('2018-01-01 01:01:07',1007),('2018-01-01 01:01:08',1008);
 
 select 1.0 = boundingRatio(timestamp, event) from rate_test2;
 
-drop table rate_test;
-drop table rate_test2;
+drop stream rate_test;
+drop stream rate_test2;
 
 
 SELECT boundingRatio(number, number * 1.5) FROM numbers(10);

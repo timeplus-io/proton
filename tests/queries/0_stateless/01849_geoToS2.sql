@@ -1,9 +1,9 @@
 -- Tags: no-fasttest
 -- Tag no-fasttest: needs s2
 
-DROP TABLE IF EXISTS s2_indexes;
+DROP STREAM IF EXISTS s2_indexes;
 
-CREATE TABLE s2_indexes (s2_index UInt64, longitude Float64, latitude Float64) ENGINE = Memory;
+create stream s2_indexes (s2_index uint64, longitude float64, latitude float64) ;
 
 -- Random geo coordinates were generated using S2Testing::RandomPoint() method from s2 API.
 
@@ -42,12 +42,12 @@ SELECT first, second, result FROM (
     ORDER BY s2_index
  );
 
-SELECT s2ToGeo(toUInt64(-1)); -- { serverError 36 }
+SELECT s2ToGeo(to_uint64(-1)); -- { serverError 36 }
 SELECT s2ToGeo(nan); -- { serverError 43 }
-SELECT geoToS2(toFloat64(toUInt64(-1)), toFloat64(toUInt64(-1)));
+SELECT geoToS2(toFloat64(to_uint64(-1)), toFloat64(to_uint64(-1)));
 SELECT geoToS2(nan, nan); -- { serverError 43 }
 SELECT geoToS2(-inf, 1.1754943508222875e-38); -- { serverError 43 }
 
 
 
-DROP TABLE IF EXISTS s2_indexes;
+DROP STREAM IF EXISTS s2_indexes;

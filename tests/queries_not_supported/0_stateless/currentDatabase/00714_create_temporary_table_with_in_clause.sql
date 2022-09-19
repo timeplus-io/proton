@@ -1,0 +1,10 @@
+DROP TEMPORARY STREAM IF EXISTS temporary_table;
+DROP STREAM IF EXISTS test_merge_1;
+DROP STREAM IF EXISTS test_merge_2;
+create stream test_merge_1(id uint64)  ;
+create stream test_merge_2(id uint64)  ;
+CREATE TEMPORARY TABLE temporary_table AS SELECT * FROM numbers(1) WHERE number NOT IN (SELECT id FROM merge(currentDatabase(), 'test_merge_1|test_merge_2'));
+SELECT * FROM temporary_table;
+DROP TEMPORARY STREAM IF EXISTS temporary_table;
+DROP STREAM IF EXISTS test_merge_1;
+DROP STREAM IF EXISTS test_merge_2;

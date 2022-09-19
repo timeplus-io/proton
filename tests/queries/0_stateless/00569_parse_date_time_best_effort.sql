@@ -4,7 +4,7 @@ SELECT
     parseDateTimeBestEffortOrZero(s, 'UTC') AS b
 FROM
 (
-    SELECT arrayJoin([
+    SELECT array_join([
 '0',
 '0000',
 '00:00:00',

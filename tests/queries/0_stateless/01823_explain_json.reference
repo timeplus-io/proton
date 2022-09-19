@@ -37,30 +37,30 @@
       "Header": [
         {
           "Name": "1",
-          "Type": "UInt8"
+          "Type": "uint8"
         },
         {
           "Name": "plus(2, dummy)",
-          "Type": "UInt16"
+          "Type": "uint16"
         }
 --------
           "Node Type": "Aggregating",
           "Header": [
             {
               "Name": "number",
-              "Type": "UInt64"
+              "Type": "uint64"
             },
             {
               "Name": "plus(number, 1)",
-              "Type": "UInt64"
+              "Type": "uint64"
             },
             {
               "Name": "quantile(0.2)(number)",
-              "Type": "Float64"
+              "Type": "float64"
             },
             {
               "Name": "sumIf(number, greater(number, 0))",
-              "Type": "UInt64"
+              "Type": "uint64"
             }
           ],
           "Keys": ["number", "plus(number, 1)"],
@@ -70,8 +70,8 @@
               "Function": {
                 "Name": "quantile",
                 "Parameters": ["0.2"],
-                "Argument Types": ["UInt64"],
-                "Result Type": "Float64"
+                "Argument Types": ["uint64"],
+                "Result Type": "float64"
               },
               "Arguments": ["number"],
               "Argument Positions": [0]
@@ -80,8 +80,8 @@
               "Name": "sumIf(number, greater(number, 0))",
               "Function": {
                 "Name": "sumIf",
-                "Argument Types": ["UInt64", "UInt8"],
-                "Result Type": "UInt64"
+                "Argument Types": ["uint64", "uint8"],
+                "Result Type": "uint64"
               },
               "Arguments": ["number", "greater(number, 0)"],
               "Argument Positions": [0, 2]
@@ -93,10 +93,10 @@
           "Columns": ["x", "y"],
 --------
           "Node Type": "Distinct",
-          "Columns": ["intDiv(number, 3)", "intDiv(number, 2)"],
+          "Columns": ["int_div(number, 3)", "int_div(number, 2)"],
 --
               "Node Type": "Distinct",
-              "Columns": ["intDiv(number, 3)", "intDiv(number, 2)"],
+              "Columns": ["int_div(number, 3)", "int_div(number, 2)"],
 --------
               "Sort Description": [
                 {

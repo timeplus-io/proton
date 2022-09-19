@@ -1,29 +1,29 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
-DROP TABLE IF EXISTS t3;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;
+DROP STREAM IF EXISTS t3;
 
-CREATE TABLE t1
+create stream t1
 (
-    `n` Int8
+    `n` int8
 )
-ENGINE = Memory
+
 COMMENT 'this is a temtorary table';
 
-CREATE TABLE t2
+create stream t2
 (
-    `n` Int8
+    `n` int8
 )
 ENGINE = MergeTree
 ORDER BY n
 COMMENT 'this is a MergeTree table';
 
-CREATE TABLE t3
+create stream t3
 (
-    `n` Int8
+    `n` int8
 )
-ENGINE = Log
+ 
 COMMENT 'this is a Log table';
 
 SELECT
@@ -32,8 +32,8 @@ SELECT
 FROM system.tables
 WHERE name IN ('t1', 't2', 't3') AND database = currentDatabase() order by name;
 
-SHOW CREATE TABLE t1;
+SHOW create stream t1;
 
-DROP TABLE t1;
-DROP TABLE t2;
-DROP TABLE t3;
+DROP STREAM t1;
+DROP STREAM t2;
+DROP STREAM t3;

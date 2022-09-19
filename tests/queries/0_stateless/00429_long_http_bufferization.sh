@@ -9,7 +9,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 function query {
     # bash isn't able to store \0 bytes, so use [1; 255] random range
-    echo "SELECT greatest(toUInt8(1), toUInt8(intHash64(number))) FROM system.numbers LIMIT $1 FORMAT RowBinary"
+    echo "SELECT greatest(to_uint8(1), to_uint8(intHash64(number))) FROM system.numbers LIMIT $1 FORMAT RowBinary"
 }
 
 function ch_url() {

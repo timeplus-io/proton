@@ -9,16 +9,16 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS mt_00763_1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS buffer_00763_1"
+${CLICKHOUSE_CLIENT} --query="drop stream IF EXISTS mt_00763_1"
+${CLICKHOUSE_CLIENT} --query="drop stream IF EXISTS buffer_00763_1"
 
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE buffer_00763_1 (s String) ENGINE = Buffer($CLICKHOUSE_DATABASE, mt_00763_1, 1, 1, 1, 1, 1, 1, 1)"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE mt_00763_1 (x UInt32, s String) ENGINE = MergeTree ORDER BY x"
+${CLICKHOUSE_CLIENT} --query="create stream buffer_00763_1 (s string) ENGINE = Buffer($CLICKHOUSE_DATABASE, mt_00763_1, 1, 1, 1, 1, 1, 1, 1)"
+${CLICKHOUSE_CLIENT} --query="create stream mt_00763_1 (x uint32, s string) ENGINE = MergeTree ORDER BY x"
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO mt_00763_1 VALUES (1, '1'), (2, '2'), (3, '3')"
 
 function thread1()
 {
-    seq 1 300 | sed -r -e 's/.+/ALTER TABLE mt_00763_1 MODIFY column s UInt32; ALTER TABLE mt_00763_1 MODIFY column s String;/' | ${CLICKHOUSE_CLIENT} --multiquery --ignore-error ||:
+    seq 1 300 | sed -r -e 's/.+/ALTER STREAM mt_00763_1 MODIFY column s uint32; ALTER STREAM mt_00763_1 MODIFY column s string;/' | ${CLICKHOUSE_CLIENT} --multiquery --ignore-error ||:
 }
 
 function thread2()
@@ -31,5 +31,5 @@ thread2 &
 
 wait
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE mt_00763_1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE buffer_00763_1"
+${CLICKHOUSE_CLIENT} --query="drop stream mt_00763_1"
+${CLICKHOUSE_CLIENT} --query="drop stream buffer_00763_1"

@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS db;
+DROP STREAM IF EXISTS db;
 
-CREATE TABLE tb
+create stream tb
 (
-    date Date,
-    `index` Int32,
-    value Int32,
-    idx Int32 ALIAS `index`
+    date date,
+    `index` int32,
+    value int32,
+    idx int32 ALIAS `index`
 )
 ENGINE = MergeTree
 PARTITION BY date
@@ -18,4 +18,4 @@ SET force_primary_key = 1;
 select * from tb where `index` >= 0 AND `index` <= 2;
 select * from tb where idx >= 0 AND idx <= 2;
 
-DROP TABLE tb;
+DROP STREAM tb;

@@ -4,22 +4,22 @@ DROP DICTIONARY IF EXISTS dict_flat;
 DROP DICTIONARY IF EXISTS dict_hashed;
 DROP DICTIONARY IF EXISTS dict_complex_cache;
 
-CREATE TABLE t1 (key UInt64, a UInt8, b String, c Float64) ENGINE = MergeTree() ORDER BY key;
-INSERT INTO t1 SELECT number, number, toString(number), number from numbers(4);
+create stream t1 (key uint64, a uint8, b string, c float64) ENGINE = MergeTree() ORDER BY key;
+INSERT INTO t1 SELECT number, number, to_string(number), number from numbers(4);
 
-CREATE DICTIONARY dict_flat (key UInt64 DEFAULT 0, a UInt8 DEFAULT 42, b String DEFAULT 'x', c Float64 DEFAULT 42.0)
+CREATE DICTIONARY dict_flat (key uint64 DEFAULT 0, a uint8 DEFAULT 42, b string DEFAULT 'x', c float64 DEFAULT 42.0)
 PRIMARY KEY key
 SOURCE(CLICKHOUSE(TABLE 't1'))
 LIFETIME(MIN 1 MAX 10)
 LAYOUT(FLAT());
 
-CREATE DICTIONARY dict_hashed (key UInt64 DEFAULT 0, a UInt8 DEFAULT 42, b String DEFAULT 'x', c Float64 DEFAULT 42.0)
+CREATE DICTIONARY dict_hashed (key uint64 DEFAULT 0, a uint8 DEFAULT 42, b string DEFAULT 'x', c float64 DEFAULT 42.0)
 PRIMARY KEY key
 SOURCE(CLICKHOUSE(TABLE 't1'))
 LIFETIME(MIN 1 MAX 10)
 LAYOUT(HASHED());
 
-CREATE DICTIONARY dict_complex_cache (key UInt64 DEFAULT 0, a UInt8 DEFAULT 42, b String DEFAULT 'x', c Float64 DEFAULT 42.0)
+CREATE DICTIONARY dict_complex_cache (key uint64 DEFAULT 0, a uint8 DEFAULT 42, b string DEFAULT 'x', c float64 DEFAULT 42.0)
 PRIMARY KEY key, b
 SOURCE(CLICKHOUSE(TABLE 't1'))
 LIFETIME(MIN 1 MAX 10)
@@ -105,4 +105,4 @@ DROP DICTIONARY dict_flat;
 DROP DICTIONARY dict_hashed;
 DROP DICTIONARY dict_complex_cache;
 
-DROP TABLE t1;
+DROP STREAM t1;

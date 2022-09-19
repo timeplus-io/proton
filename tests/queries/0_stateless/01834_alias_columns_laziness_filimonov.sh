@@ -5,8 +5,8 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 ${CLICKHOUSE_CLIENT} --multiquery --query "
-drop table if exists aliases_lazyness;
-create table aliases_lazyness (x UInt32, y ALIAS sleepEachRow(0.1)) Engine=MergeTree ORDER BY x;
+drop stream if exists aliases_lazyness;
+create stream aliases_lazyness (x uint32, y ALIAS sleepEachRow(0.1)) Engine=MergeTree ORDER BY x;
 insert into aliases_lazyness(x) select * from numbers(40);
 "
 
@@ -23,6 +23,6 @@ while [[ $i -lt $retries ]]; do
 done
 
 ${CLICKHOUSE_CLIENT} --multiquery --query "
-drop table aliases_lazyness;
+drop stream aliases_lazyness;
 SELECT 'Ok';
 "

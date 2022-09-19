@@ -1,4 +1,4 @@
 SELECT
     materialize(toLowCardinality('')) AS lc,
-    toTypeName(lc)
+    to_type_name(lc)
 WHERE lc = defaultValueOfArgumentType(lc)

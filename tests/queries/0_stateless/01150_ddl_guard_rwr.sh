@@ -10,8 +10,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 $CLICKHOUSE_CLIENT --query "DROP DATABASE IF EXISTS test_01150"
 $CLICKHOUSE_CLIENT --query "CREATE DATABASE test_01150"
 
-$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t1 (x UInt64, s Array(Nullable(String))) ENGINE = Memory"
-$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t2 (x UInt64, s Array(Nullable(String))) ENGINE = Memory"
+$CLICKHOUSE_CLIENT --query "create stream test_01150.t1 (x uint64, s array(Nullable(string))) "
+$CLICKHOUSE_CLIENT --query "create stream test_01150.t2 (x uint64, s array(Nullable(string))) "
 
 function thread_detach_attach {
     while true; do

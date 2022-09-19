@@ -9,10 +9,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} -q "drop table if exists m"
-${CLICKHOUSE_CLIENT} -q "create table m (dummy UInt8) ENGINE = Distributed('test_cluster_two_shards', 'system', 'one')"
+${CLICKHOUSE_CLIENT} -q "drop stream if exists m"
+${CLICKHOUSE_CLIENT} -q "create stream m (dummy uint8) ENGINE = Distributed('test_cluster_two_shards', 'system', 'one')"
 
-query_id=$(${CLICKHOUSE_CLIENT} -q "select lower(hex(reverse(reinterpretAsString(generateUUIDv4()))))")
+query_id=$(${CLICKHOUSE_CLIENT} -q "select lower(hex(reverse(reinterpret_as_string(generateUUIDv4()))))")
 ${CLICKHOUSE_CLIENT} -q "select * from m format Null" "--query_id=$query_id"
 
 ${CLICKHOUSE_CLIENT} -n -q "
@@ -24,4 +24,4 @@ from system.query_log
 where initial_query_id = '$query_id' and type = 'QueryFinish';
 "
 
-${CLICKHOUSE_CLIENT} -q "drop table m"
+${CLICKHOUSE_CLIENT} -q "drop stream m"

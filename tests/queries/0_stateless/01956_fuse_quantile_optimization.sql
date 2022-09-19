@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS datetime;
-CREATE TABLE datetime (d DateTime('UTC')) ENGINE = Memory;
-INSERT INTO datetime(d) VALUES(toDateTime('2016-06-15 23:00:00', 'UTC'))
+DROP STREAM IF EXISTS datetime;
+create stream datetime (d datetime('UTC')) ;
+INSERT INTO datetime(d) VALUES(to_datetime('2016-06-15 23:00:00', 'UTC'))
 
 SET optimize_syntax_fuse_functions = true;
 
@@ -70,7 +70,7 @@ SELECT quantile(quantileDeterministic('', '2.47')('0.02', '0.2', NULL), 0.9)(d),
 SELECT quantileTimingWeighted([[[[['-214748364.8'], NULL]], [[[quantileTimingWeighted([[[[['-214748364.8'], NULL], '-922337203.6854775808'], [[['-214748364.7']]], NULL]])([NULL], NULL), '-214748364.7']]], NULL]])([NULL], NULL); -- { serverError ILLEGAL_AGGREGATION }
 SELECT quantileTimingWeighted([quantileTimingWeighted(0.5)(1, 1)])(1, 1); -- { serverError ILLEGAL_AGGREGATION }
 
-DROP TABLE datetime;
+DROP STREAM datetime;
 
 SET optimize_syntax_fuse_functions = 1;
 SELECT quantile(1 AS a), quantile(a AS b), quantile(b AS c);

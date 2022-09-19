@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS bug_14144;
+DROP STREAM IF EXISTS bug_14144;
 
-CREATE TABLE bug_14144
+create stream bug_14144
 ( meta_source_req_uuid Nullable(UUID),
-  a Int64,
-  meta_source_type String
+  a int64,
+  meta_source_type string
 )
 ENGINE = MergeTree
 ORDER BY a;
@@ -31,7 +31,7 @@ SELECT COUNT() FROM (
    LIMIT 100000
 );
 
-DROP TABLE bug_14144;
+DROP STREAM bug_14144;
 
 
 

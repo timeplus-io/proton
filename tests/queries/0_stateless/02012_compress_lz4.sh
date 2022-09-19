@@ -10,7 +10,7 @@ WORKING_FOLDER_02012="${USER_FILES_PATH}/${CLICKHOUSE_DATABASE}"
 rm -rf "${WORKING_FOLDER_02012}"
 mkdir "${WORKING_FOLDER_02012}"
 
-${CLICKHOUSE_CLIENT} --query "SELECT * FROM (SELECT 'Hello, World!' as String) INTO OUTFILE '${WORKING_FOLDER_02012}/lz4_compression.lz4'"
-${CLICKHOUSE_CLIENT} --query "SELECT * FROM file('${WORKING_FOLDER_02012}/lz4_compression.lz4', 'TabSeparated', 'col String')"
+${CLICKHOUSE_CLIENT} --query "SELECT * FROM (SELECT 'Hello, World!' as string) INTO OUTFILE '${WORKING_FOLDER_02012}/lz4_compression.lz4'"
+${CLICKHOUSE_CLIENT} --query "SELECT * FROM file('${WORKING_FOLDER_02012}/lz4_compression.lz4', 'TabSeparated', 'col string')"
 
 rm -rf "${WORKING_FOLDER_02012}"

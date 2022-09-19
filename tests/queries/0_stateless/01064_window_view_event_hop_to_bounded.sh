@@ -6,12 +6,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 $CLICKHOUSE_CLIENT --multiquery <<EOF
 SET allow_experimental_window_view = 1;
-DROP TABLE IF EXISTS mt;
-DROP TABLE IF EXISTS dst;
-DROP TABLE IF EXISTS wv;
+DROP STREAM IF EXISTS mt;
+DROP STREAM IF EXISTS dst;
+DROP STREAM IF EXISTS wv;
 
-CREATE TABLE dst(count UInt64, w_end DateTime) Engine=MergeTree ORDER BY tuple();
-CREATE TABLE mt(a Int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple();
+create stream dst(count uint64, w_end DateTime) Engine=MergeTree ORDER BY tuple();
+create stream mt(a int32, timestamp DateTime) ENGINE=MergeTree ORDER BY tuple();
 CREATE WINDOW VIEW wv TO dst WATERMARK=INTERVAL '2' SECOND AS SELECT count(a) AS count, hopEnd(wid) AS w_end FROM mt GROUP BY hop(timestamp, INTERVAL '2' SECOND, INTERVAL '3' SECOND, 'US/Samoa') AS wid;
 
 INSERT INTO mt VALUES (1, '1990/01/01 12:00:00');
@@ -29,6 +29,6 @@ while true; do
 done
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM dst ORDER BY w_end;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE wv"
-$CLICKHOUSE_CLIENT --query="DROP TABLE mt"
-$CLICKHOUSE_CLIENT --query="DROP TABLE dst"
+$CLICKHOUSE_CLIENT --query="DROP STREAM wv"
+$CLICKHOUSE_CLIENT --query="DROP STREAM mt"
+$CLICKHOUSE_CLIENT --query="DROP STREAM dst"

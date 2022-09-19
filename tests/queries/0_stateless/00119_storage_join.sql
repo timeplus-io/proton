@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS t2;
+DROP STREAM IF EXISTS t2;
 
-CREATE TABLE t2 (s String, x Array(UInt8), k UInt64) ENGINE = Join(ANY, LEFT, k);
+create stream t2 (s string, x array(uint8), k uint64) ENGINE = Join(ANY, LEFT, k);
 
 INSERT INTO t2 VALUES ('abc', [0], 1), ('def', [1, 2], 2);
 INSERT INTO t2 (k, s) VALUES (3, 'ghi');
@@ -15,4 +15,4 @@ SELECT t1.k, t1.s, t2.x
 FROM ( SELECT number AS k, 'a' AS s FROM numbers(2) GROUP BY number WITH TOTALS ) AS t1
 ANY LEFT JOIN t2 AS t2 USING(k);
 
-DROP TABLE t2;
+DROP STREAM t2;

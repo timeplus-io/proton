@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 
-CREATE TABLE IF NOT EXISTS test( id UInt32, track UInt8, codec String, content String, rdate Date DEFAULT '2018-02-03', track_id String DEFAULT concat(concat(concat(toString(track), '-'), codec), content) ) ENGINE=MergeTree(rdate, (id, track_id), 8192);
+create stream IF NOT EXISTS test( id uint32, track uint8, codec string, content string, rdate date DEFAULT '2018-02-03', track_id string DEFAULT concat(concat(concat(to_string(track), '-'), codec), content) ) ENGINE=MergeTree(rdate, (id, track_id), 8192);
 
 INSERT INTO test(id, track, codec) VALUES(1, 0, 'h264');
 
@@ -10,4 +10,4 @@ INSERT INTO test(id, track, codec, content) VALUES(2, 0, 'h264', 'CONTENT');
 
 SELECT * FROM test ORDER BY id;
 
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;

@@ -1,14 +1,14 @@
-CREATE TABLE a
+create stream a
 (
-    `number` UInt64,
+    `number` uint64,
     `x` MATERIALIZED x
 )
 ENGINE = MergeTree
 ORDER BY number; --{ serverError 174}
 
-CREATE TABLE foo
+create stream foo
 (
-    i Int32,
+    i int32,
     j ALIAS j + 1
 )
 ENGINE = MergeTree() ORDER BY i; --{ serverError 174}

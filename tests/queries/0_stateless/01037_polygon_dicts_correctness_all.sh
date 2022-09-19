@@ -14,8 +14,8 @@ tar -xf "${CURDIR}"/01037_test_data_search.tar.gz -C "${CURDIR}"
 $CLICKHOUSE_CLIENT -n --query="
 DROP DATABASE IF EXISTS test_01037;
 CREATE DATABASE test_01037;
-DROP TABLE IF EXISTS test_01037.points;
-CREATE TABLE test_01037.points (x Float64, y Float64) ENGINE = Memory;
+DROP STREAM IF EXISTS test_01037.points;
+create stream test_01037.points (x float64, y float64) ;
 "
 
 $CLICKHOUSE_CLIENT --query="INSERT INTO test_01037.points FORMAT TSV" --max_insert_block_size=100000 < "${CURDIR}/01037_point_data"
@@ -23,15 +23,15 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO test_01037.points FORMAT TSV" --max_inse
 rm "${CURDIR}"/01037_point_data
 
 $CLICKHOUSE_CLIENT -n --query="
-DROP TABLE IF EXISTS test_01037.polygons_array;
+DROP STREAM IF EXISTS test_01037.polygons_array;
 
-CREATE TABLE test_01037.polygons_array
+create stream test_01037.polygons_array
 (
-   key Array(Array(Array(Array(Float64)))),
-   name String,
-   value UInt64
+   key array(array(array(array(float64)))),
+   name string,
+   value uint64
 )
-ENGINE = Memory;
+;
 "
 
 $CLICKHOUSE_CLIENT --query="INSERT INTO test_01037.polygons_array FORMAT JSONEachRow" --max_insert_block_size=100000 < "${CURDIR}/01037_polygon_data"
@@ -47,9 +47,9 @@ do
 
    CREATE DICTIONARY test_01037.dict_array
    (
-   key Array(Array(Array(Array(Float64)))),
-   name String DEFAULT 'qqq',
-   value UInt64 DEFAULT 101
+   key array(array(array(array(float64)))),
+   name string DEFAULT 'qqq',
+   value uint64 DEFAULT 101
    )
    PRIMARY KEY key
    SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'polygons_array' PASSWORD '' DB 'test_01037'))
@@ -64,6 +64,6 @@ do
 done
 
 $CLICKHOUSE_CLIENT -n --query="
-DROP TABLE test_01037.points;
+DROP STREAM test_01037.points;
 DROP DATABASE test_01037;
 "

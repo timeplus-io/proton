@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS join_tbl;
+DROP STREAM IF EXISTS join_tbl;
 
-CREATE TABLE join_tbl (`id` String, `name` String, lcname LowCardinality(String)) ENGINE = Join(any, left, id);
+create stream join_tbl (`id` string, `name` string, lcname LowCardinality(string)) ENGINE = Join(any, left, id);
 
 INSERT INTO join_tbl VALUES ('xxx', 'yyy', 'yyy');
 
@@ -11,4 +11,4 @@ SELECT joinGet('join_tbl', 'lcname', 'xxx') == 'yyy';
 SELECT joinGet('join_tbl', 'lcname', toLowCardinality('xxx')) == 'yyy';
 SELECT joinGet('join_tbl', 'lcname', toLowCardinality(materialize('xxx'))) == 'yyy';
 
-DROP TABLE IF EXISTS join_tbl;
+DROP STREAM IF EXISTS join_tbl;

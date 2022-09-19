@@ -1,14 +1,14 @@
 -- Tags: no-ordinary-database
-
-drop table if exists t;
-drop table if exists dist;
-drop table if exists buf;
-drop table if exists join;
+SET query_mode = 'table';
+drop stream if exists t;
+drop stream if exists dist;
+drop stream if exists buf;
+drop stream if exists join;
 
 select 'test flush on replace';
-create table t (n UInt64, s String default 's' || toString(n)) engine=Memory;
-create table dist (n int) engine=Distributed(test_shard_localhost, currentDatabase(), t);
-create table buf (n int) engine=Buffer(currentDatabase(), dist, 1, 10, 100, 10, 100, 1000, 1000);
+create stream t (n uint64, s string default 's' || to_string(n)) engine=Memory;
+create stream dist (n int) engine=Distributed(test_shard_localhost, currentDatabase(), t);
+create stream buf (n int) engine=Buffer(currentDatabase(), dist, 1, 10, 100, 10, 100, 1000, 1000);
 
 system stop distributed sends dist;
 insert into buf values (1);
@@ -47,7 +47,7 @@ select * from numbers(10) as t any join join on t.number=join.n order by n;
 
 select name from system.tables where database=currentDatabase() order by name;
 
-drop table t;
-drop table dist;
-drop table buf;
-drop table join;
+drop stream t;
+drop stream dist;
+drop stream buf;
+drop stream join;

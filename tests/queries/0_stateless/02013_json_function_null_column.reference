@@ -1,7 +1,7 @@
-\N	Nullable(String)
-	String
-\N	Nullable(String)
-	Nullable(String)
+\N	Nullable(string)
+	string
+\N	Nullable(string)
+	Nullable(string)
 \N	Nullable(Nothing)
 \N	Nullable(Nothing)
 b

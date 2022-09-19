@@ -1,0 +1,27 @@
+CounterID	uint32					
+StartDate	date					
+UserID	uint32					
+VisitID	uint32					
+NestedColumn.A	array(uint8)					
+NestedColumn.S	array(string)					
+ToDrop	uint32					
+Added0	uint32					
+Added1	uint32					
+Added2	uint32					
+AddedNested1.A	array(uint32)					
+AddedNested1.B	array(uint64)					
+AddedNested1.C	array(string)					
+AddedNested2.A	array(uint32)					
+AddedNested2.B	array(uint64)					
+CounterID	uint32					
+StartDate	date					
+UserID	uint32					
+VisitID	uint32					
+Added0	string					
+Added1	uint32					
+Added2	uint32					
+AddedNested1.A	array(uint32)					
+AddedNested1.C	array(string)					
+AddedNested2.A	array(uint32)					
+AddedNested2.B	array(uint64)					
+1	2014-01-01	2	3		0	0	[]	[]	[]	[]

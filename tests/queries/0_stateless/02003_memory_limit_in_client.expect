@@ -23,7 +23,7 @@ set basedir [file dirname $argv0]
 spawn bash -c "source $basedir/../shell_config.sh ; \$CLICKHOUSE_CLIENT_BINARY \$CLICKHOUSE_CLIENT_OPT --disable_suggestion --max_memory_usage_in_client=1"
 expect ":) "
 
-send  -- "SELECT arrayMap(x -> range(x), range(number)) FROM numbers(1000)\r"
+send  -- "SELECT array_map(x -> range(x), range(number)) FROM numbers(1000)\r"
 expect "Code: 241"
 
 expect ":) "
@@ -38,7 +38,7 @@ expect eof
 spawn bash -c "source $basedir/../shell_config.sh ; \$CLICKHOUSE_CLIENT_BINARY \$CLICKHOUSE_CLIENT_OPT --disable_suggestion --max_memory_usage_in_client=1"
 expect ":) "
 
-send  -- "SELECT arrayMap(x -> range(x), range(number)) FROM numbers(1000)\r"
+send  -- "SELECT array_map(x -> range(x), range(number)) FROM numbers(1000)\r"
 expect "Code: 241"
 
 expect ":) "

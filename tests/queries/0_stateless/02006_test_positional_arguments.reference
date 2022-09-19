@@ -102,7 +102,7 @@ FROM test
 GROUP BY
     x1 + x3,
     x3
-create table test2(x1 Int, x2 Int, x3 Int) engine=Memory;
+create stream test2(x1 int, x2 int, x3 int) engine=Memory;
 insert into test2 values (1, 10, 100), (10, 1, 10), (100, 100, 1);
 select x1, x1 * 2, max(x2), max(x3) from test2 group by 2, 1, x1 order by 1, 2, 4 desc, 3 asc;
 1	2	10	100

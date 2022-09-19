@@ -1,6 +1,7 @@
-drop table if exists test;
+SET query_mode = 'table';
+drop stream if exists test;
 
-create table test (project LowCardinality(String)) engine=MergeTree() order by project;
+create stream test (project LowCardinality(string)) engine=MergeTree() order by project;
 insert into test values ('val1'), ('val2'), ('val3');
 
 select sum(project in ('val1', 'val2')) from test;
@@ -9,4 +10,4 @@ select sum(project in ('val1', 'val2')) from test where project in ('val1', 'val
 select count() from test where project in ('val1', 'val2');
 select project in ('val1', 'val2') from test where project in ('val1', 'val2');
 
-drop table test;
+drop stream test;

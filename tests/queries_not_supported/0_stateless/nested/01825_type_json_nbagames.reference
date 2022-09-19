@@ -1,0 +1,12 @@
+1000
+data	tuple(_id tuple(`$oid` string), date tuple(`$date` string), teams nested(abbreviation string, city string, home uint64, name string, players nested(ast int8, blk int8, drb int8, fg int8, fg3 int8, fg3_pct string, fg3a int8, fg_pct string, fga int8, ft int8, ft_pct string, fta int8, mp string, orb int8, pf int8, player string, pts int8, stl int8, tov int8, trb int8), results tuple(ast int8, blk int8, drb int8, fg int8, fg3 int8, fg3_pct string, fg3a int8, fg_pct string, fga int8, ft int8, ft_pct string, fta int8, mp Int16, orb int8, pf int8, pts Int16, stl int8, tov int8, trb int8), score Int16, won int8))					
+Boston Celtics	70
+Los Angeles Lakers	64
+Milwaukee Bucks	61
+Philadelphia 76ers	57
+Atlanta Hawks	55
+Larry Bird	10
+Clyde Drexler	4
+Alvin Robertson	3
+Magic Johnson	3
+Charles Barkley	2

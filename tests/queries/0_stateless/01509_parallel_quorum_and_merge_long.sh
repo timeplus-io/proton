@@ -8,13 +8,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parallel_q1"
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parallel_q2"
+$CLICKHOUSE_CLIENT -q "drop stream IF EXISTS parallel_q1"
+$CLICKHOUSE_CLIENT -q "drop stream IF EXISTS parallel_q2"
 
 
-$CLICKHOUSE_CLIENT -q "CREATE TABLE parallel_q1 (x UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/parallel_q', 'r1') ORDER BY tuple() SETTINGS old_parts_lifetime = 1, cleanup_delay_period = 0, cleanup_delay_period_random_add = 0"
+$CLICKHOUSE_CLIENT -q "create stream parallel_q1 (x uint64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/parallel_q', 'r1') ORDER BY tuple() SETTINGS old_parts_lifetime = 1, cleanup_delay_period = 0, cleanup_delay_period_random_add = 0"
 
-$CLICKHOUSE_CLIENT -q "CREATE TABLE parallel_q2 (x UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/parallel_q', 'r2') ORDER BY tuple() SETTINGS always_fetch_merged_part = 1"
+$CLICKHOUSE_CLIENT -q "create stream parallel_q2 (x uint64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/parallel_q', 'r2') ORDER BY tuple() SETTINGS always_fetch_merged_part = 1"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM STOP REPLICATION QUEUES parallel_q2"
 
@@ -31,7 +31,7 @@ do
     part_count=$($CLICKHOUSE_CLIENT --query="SELECT COUNT() FROM system.parts WHERE table='parallel_q1' and database='${CLICKHOUSE_DATABASE}'")
 done
 
-$CLICKHOUSE_CLIENT --replication_alter_partitions_sync 0 -q "OPTIMIZE TABLE parallel_q1 FINAL"
+$CLICKHOUSE_CLIENT --replication_alter_partitions_sync 0 -q "OPTIMIZE STREAM parallel_q1 FINAL"
 
 # check part merged locally
 has_part=$($CLICKHOUSE_CLIENT --query="SELECT COUNT() FROM system.parts WHERE table='parallel_q1' and database='${CLICKHOUSE_DATABASE}' and name='all_0_1_1'")
@@ -65,5 +65,5 @@ $CLICKHOUSE_CLIENT --query="SELECT event_type FROM system.part_log WHERE table='
 $CLICKHOUSE_CLIENT --query="SELECT COUNT() FROM parallel_q2"
 $CLICKHOUSE_CLIENT --query="SELECT COUNT() FROM parallel_q1"
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parallel_q1"
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS parallel_q2"
+$CLICKHOUSE_CLIENT -q "drop stream IF EXISTS parallel_q1"
+$CLICKHOUSE_CLIENT -q "drop stream IF EXISTS parallel_q2"

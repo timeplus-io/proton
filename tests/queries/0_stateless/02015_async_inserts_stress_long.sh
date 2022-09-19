@@ -46,8 +46,8 @@ function truncate1()
     done
 }
 
-${CLICKHOUSE_CLIENT} -q "DROP TABLE IF EXISTS async_inserts"
-${CLICKHOUSE_CLIENT} -q "CREATE TABLE async_inserts (id UInt32, s String) ENGINE = MergeTree ORDER BY id"
+${CLICKHOUSE_CLIENT} -q "DROP STREAM IF EXISTS async_inserts"
+${CLICKHOUSE_CLIENT} -q "create stream async_inserts (id uint32, s string) ENGINE = MergeTree ORDER BY id"
 
 TIMEOUT=10
 
@@ -69,4 +69,4 @@ timeout $TIMEOUT bash -c truncate1 &
 wait
 echo "OK"
 
-${CLICKHOUSE_CLIENT} -q "DROP TABLE IF EXISTS async_inserts";
+${CLICKHOUSE_CLIENT} -q "DROP STREAM IF EXISTS async_inserts";

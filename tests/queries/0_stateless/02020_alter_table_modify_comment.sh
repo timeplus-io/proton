@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 function get_table_comment_info()
 {
-    $CLICKHOUSE_CLIENT --query="SHOW CREATE TABLE comment_test_table;"
+    $CLICKHOUSE_CLIENT --query="SHOW create stream comment_test_table;"
     $CLICKHOUSE_CLIENT --query="SELECT 'comment=', comment FROM system.tables WHERE database=currentDatabase() and name='comment_test_table'"
     echo # just a newline
 }
@@ -17,12 +17,12 @@ function test_table_comments()
     echo "engine : ${ENGINE_NAME}"
 
     $CLICKHOUSE_CLIENT -nm <<EOF
-    DROP TABLE IF EXISTS comment_test_table;
+    DROP STREAM IF EXISTS comment_test_table;
 
-    CREATE TABLE comment_test_table
+    create stream comment_test_table
     (
-        k UInt64,
-        s String
+        k uint64,
+        s string
     ) ENGINE = ${ENGINE_NAME}
     COMMENT 'Test table with comment';
 EOF
@@ -31,15 +31,15 @@ EOF
     get_table_comment_info
 
     echo change a comment
-    $CLICKHOUSE_CLIENT --query="ALTER TABLE comment_test_table MODIFY COMMENT 'new comment on a table';"
+    $CLICKHOUSE_CLIENT --query="ALTER STREAM comment_test_table MODIFY COMMENT 'new comment on a table';"
     get_table_comment_info
 
     echo remove a comment
-    $CLICKHOUSE_CLIENT --query="ALTER TABLE comment_test_table MODIFY COMMENT '';"
+    $CLICKHOUSE_CLIENT --query="ALTER STREAM comment_test_table MODIFY COMMENT '';"
     get_table_comment_info
 
     echo add a comment back
-    $CLICKHOUSE_CLIENT --query="ALTER TABLE comment_test_table MODIFY COMMENT 'another comment on a table';"
+    $CLICKHOUSE_CLIENT --query="ALTER STREAM comment_test_table MODIFY COMMENT 'another comment on a table';"
     get_table_comment_info
 
     echo detach table

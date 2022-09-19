@@ -30,24 +30,24 @@ select countSubstrings('aaaa', 'aa');
 
 select '';
 select 'CountSubstringsImpl::vectorVector';
-select countSubstrings(toString(number), toString(number)) from numbers(1);
-select countSubstrings(concat(toString(number), '000111'), toString(number)) from numbers(1);
-select countSubstrings(concat(toString(number), '000111001'), toString(number)) from numbers(1);
-select 'intersect', countSubstrings(concat(toString(number), '0000000'), '00') from numbers(1) format CSV;
+select countSubstrings(to_string(number), to_string(number)) from numbers(1);
+select countSubstrings(concat(to_string(number), '000111'), to_string(number)) from numbers(1);
+select countSubstrings(concat(to_string(number), '000111001'), to_string(number)) from numbers(1);
+select 'intersect', countSubstrings(concat(to_string(number), '0000000'), '00') from numbers(1) format CSV;
 
 select '';
 select 'CountSubstringsImpl::constantVector';
-select countSubstrings('100', toString(number)) from numbers(3);
-select countSubstrings('0100', toString(number)) from numbers(1);
-select countSubstrings('010000', toString(number)) from numbers(1);
-select 'intersect', countSubstrings('00000000', repeat(toString(number), 2)) from numbers(1) format CSV;
+select countSubstrings('100', to_string(number)) from numbers(3);
+select countSubstrings('0100', to_string(number)) from numbers(1);
+select countSubstrings('010000', to_string(number)) from numbers(1);
+select 'intersect', countSubstrings('00000000', repeat(to_string(number), 2)) from numbers(1) format CSV;
 
 select '';
 select 'CountSubstringsImpl::vectorConstant';
-select countSubstrings(toString(number), '1') from system.numbers limit 3 offset 9;
-select countSubstrings(concat(toString(number), '000111'), '1') from numbers(1);
-select countSubstrings(concat(toString(number), '000111001'), '1') from numbers(1);
-select 'intersect', countSubstrings(repeat(toString(number), 8), '00') from numbers(1) format CSV;
+select countSubstrings(to_string(number), '1') from system.numbers limit 3 offset 9;
+select countSubstrings(concat(to_string(number), '000111'), '1') from numbers(1);
+select countSubstrings(concat(to_string(number), '000111001'), '1') from numbers(1);
+select 'intersect', countSubstrings(repeat(to_string(number), 8), '00') from numbers(1) format CSV;
 
 --
 -- countSubstringsCaseInsensitive
@@ -77,8 +77,8 @@ select countSubstringsCaseInsensitive('aaaa', 'AA');
 select '';
 select 'CountSubstringsImpl::vectorVector';
 select countSubstringsCaseInsensitive(upper(char(number)), lower(char(number))) from numbers(100) where number = 0x41; -- A
-select countSubstringsCaseInsensitive(concat(toString(number), 'aaa111'), char(number)) from numbers(100) where number = 0x41;
-select countSubstringsCaseInsensitive(concat(toString(number), 'aaa111aa1'), char(number)) from numbers(100) where number = 0x41;
+select countSubstringsCaseInsensitive(concat(to_string(number), 'aaa111'), char(number)) from numbers(100) where number = 0x41;
+select countSubstringsCaseInsensitive(concat(to_string(number), 'aaa111aa1'), char(number)) from numbers(100) where number = 0x41;
 
 select '';
 select 'CountSubstringsImpl::constantVector';
@@ -119,10 +119,10 @@ select '';
 select 'CountSubstringsImpl::vectorVector';
 -- can't use any char, since this will not make valid UTF8
 -- for the haystack we use number as-is, for needle we just add dependency from number to go to vectorVector code
-select countSubstringsCaseInsensitiveUTF8(upperUTF8(concat(char(number), 'я')), lowerUTF8(concat(substringUTF8(char(number), 2), 'Я'))) from numbers(100) where number = 0x41; -- A
-select countSubstringsCaseInsensitiveUTF8(concat(toString(number), 'ЯЯЯ111'), concat(substringUTF8(char(number), 2), 'я')) from numbers(100) where number = 0x41; -- A
-select countSubstringsCaseInsensitiveUTF8(concat(toString(number), 'яяя111яя1'), concat(substringUTF8(char(number), 2), 'Я')) from numbers(100) where number = 0x41; -- A
-select 'intersect', countSubstringsCaseInsensitiveUTF8(concat(toString(number), 'яяяяяяяя'), concat(substringUTF8(char(number), 2), 'Яя')) from numbers(100) where number = 0x41 format CSV; -- A
+select countSubstringsCaseInsensitiveUTF8(upperUTF8(concat(char(number), 'я')), lower_utf8(concat(substringUTF8(char(number), 2), 'Я'))) from numbers(100) where number = 0x41; -- A
+select countSubstringsCaseInsensitiveUTF8(concat(to_string(number), 'ЯЯЯ111'), concat(substringUTF8(char(number), 2), 'я')) from numbers(100) where number = 0x41; -- A
+select countSubstringsCaseInsensitiveUTF8(concat(to_string(number), 'яяя111яя1'), concat(substringUTF8(char(number), 2), 'Я')) from numbers(100) where number = 0x41; -- A
+select 'intersect', countSubstringsCaseInsensitiveUTF8(concat(to_string(number), 'яяяяяяяя'), concat(substringUTF8(char(number), 2), 'Яя')) from numbers(100) where number = 0x41 format CSV; -- A
 
 select '';
 select 'CountSubstringsImpl::constantVector';

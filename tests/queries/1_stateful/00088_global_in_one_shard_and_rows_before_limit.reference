@@ -3,11 +3,11 @@
 	[
 		{
 			"name": "EventDate",
-			"type": "Date"
+			"type": "date"
 		},
 		{
 			"name": "count()",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 

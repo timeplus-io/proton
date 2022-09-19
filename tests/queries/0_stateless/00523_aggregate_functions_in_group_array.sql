@@ -3,7 +3,7 @@ FROM
 (
     SELECT
         key1 % 3 AS key2,
-        groupArray(state) AS arr
+        group_array(state) AS arr
     FROM
     (
         SELECT

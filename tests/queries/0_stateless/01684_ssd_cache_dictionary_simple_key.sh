@@ -11,13 +11,13 @@ $CLICKHOUSE_CLIENT -n --query="
     DROP DATABASE IF EXISTS 01684_database_for_cache_dictionary;
     CREATE DATABASE 01684_database_for_cache_dictionary;
 
-    CREATE TABLE 01684_database_for_cache_dictionary.simple_key_simple_attributes_source_table
+    create stream 01684_database_for_cache_dictionary.simple_key_simple_attributes_source_table
     (
-    id UInt64,
-    value_first String,
-    value_second String
+    id uint64,
+    value_first string,
+    value_second string
     )
-    ENGINE = TinyLog;
+    ;
 
     INSERT INTO 01684_database_for_cache_dictionary.simple_key_simple_attributes_source_table VALUES(0, 'value_0', 'value_second_0');
     INSERT INTO 01684_database_for_cache_dictionary.simple_key_simple_attributes_source_table VALUES(1, 'value_1', 'value_second_1');
@@ -25,9 +25,9 @@ $CLICKHOUSE_CLIENT -n --query="
 
     CREATE DICTIONARY 01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes
     (
-    id UInt64,
-    value_first String DEFAULT 'value_first_default',
-    value_second String DEFAULT 'value_second_default'
+    id uint64,
+    value_first string DEFAULT 'value_first_default',
+    value_second string DEFAULT 'value_second_default'
     )
     PRIMARY KEY id
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_simple_attributes_source_table'))
@@ -42,26 +42,26 @@ $CLICKHOUSE_CLIENT -n --query="
     SELECT dictGet('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_first', number) as value_first,
         dictGet('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_second', number) as value_second FROM system.numbers LIMIT 4;
     SELECT 'dictGetOrDefault existing value';
-    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_first', number, toString('default')) as value_first,
-        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_second', number, toString('default')) as value_second FROM system.numbers LIMIT 3;
+    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_first', number, to_string('default')) as value_first,
+        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_second', number, to_string('default')) as value_second FROM system.numbers LIMIT 3;
     SELECT 'dictGetOrDefault non existing value';
-    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_first', number, toString('default')) as value_first,
-        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_second', number, toString('default')) as value_second FROM system.numbers LIMIT 4;
+    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_first', number, to_string('default')) as value_first,
+        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', 'value_second', number, to_string('default')) as value_second FROM system.numbers LIMIT 4;
     SELECT 'dictHas';
     SELECT dictHas('01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes', number) FROM system.numbers LIMIT 4;
     SELECT 'select all values as input stream';
     SELECT * FROM 01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes ORDER BY id;
 
     DROP DICTIONARY 01684_database_for_cache_dictionary.cache_dictionary_simple_key_simple_attributes;
-    DROP TABLE 01684_database_for_cache_dictionary.simple_key_simple_attributes_source_table;
+    DROP STREAM 01684_database_for_cache_dictionary.simple_key_simple_attributes_source_table;
 
-    CREATE TABLE 01684_database_for_cache_dictionary.simple_key_complex_attributes_source_table
+    create stream 01684_database_for_cache_dictionary.simple_key_complex_attributes_source_table
     (
-    id UInt64,
-    value_first String,
-    value_second Nullable(String)
+    id uint64,
+    value_first string,
+    value_second Nullable(string)
     )
-    ENGINE = TinyLog;
+    ;
 
     INSERT INTO 01684_database_for_cache_dictionary.simple_key_complex_attributes_source_table VALUES(0, 'value_0', 'value_second_0');
     INSERT INTO 01684_database_for_cache_dictionary.simple_key_complex_attributes_source_table VALUES(1, 'value_1', NULL);
@@ -69,9 +69,9 @@ $CLICKHOUSE_CLIENT -n --query="
 
     CREATE DICTIONARY 01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes
     (
-    id UInt64,
-    value_first String DEFAULT 'value_first_default',
-    value_second Nullable(String) DEFAULT 'value_second_default'
+    id uint64,
+    value_first string DEFAULT 'value_first_default',
+    value_second Nullable(string) DEFAULT 'value_second_default'
     )
     PRIMARY KEY id
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_complex_attributes_source_table'))
@@ -86,24 +86,24 @@ $CLICKHOUSE_CLIENT -n --query="
     SELECT dictGet('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_first', number) as value_first,
         dictGet('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_second', number) as value_second FROM system.numbers LIMIT 4;
     SELECT 'dictGetOrDefault existing value';
-    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_first', number, toString('default')) as value_first,
-        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_second', number, toString('default')) as value_second FROM system.numbers LIMIT 3;
+    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_first', number, to_string('default')) as value_first,
+        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_second', number, to_string('default')) as value_second FROM system.numbers LIMIT 3;
     SELECT 'dictGetOrDefault non existing value';
-    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_first', number, toString('default')) as value_first,
-        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_second', number, toString('default')) as value_second FROM system.numbers LIMIT 4;
+    SELECT dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_first', number, to_string('default')) as value_first,
+        dictGetOrDefault('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', 'value_second', number, to_string('default')) as value_second FROM system.numbers LIMIT 4;
     SELECT 'dictHas';
     SELECT dictHas('01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes', number) FROM system.numbers LIMIT 4;
     SELECT 'select all values as input stream';
     SELECT * FROM 01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes ORDER BY id;
 
     DROP DICTIONARY 01684_database_for_cache_dictionary.cache_dictionary_simple_key_complex_attributes;
-    DROP TABLE 01684_database_for_cache_dictionary.simple_key_complex_attributes_source_table;
+    DROP STREAM 01684_database_for_cache_dictionary.simple_key_complex_attributes_source_table;
 
-    CREATE TABLE 01684_database_for_cache_dictionary.simple_key_hierarchy_table
+    create stream 01684_database_for_cache_dictionary.simple_key_hierarchy_table
     (
-        id UInt64,
-        parent_id UInt64
-    ) ENGINE = TinyLog();
+        id uint64,
+        parent_id uint64
+    ) ();
 
     INSERT INTO 01684_database_for_cache_dictionary.simple_key_hierarchy_table VALUES (1, 0);
     INSERT INTO 01684_database_for_cache_dictionary.simple_key_hierarchy_table VALUES (2, 1);
@@ -112,8 +112,8 @@ $CLICKHOUSE_CLIENT -n --query="
 
     CREATE DICTIONARY 01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy
     (
-    id UInt64,
-    parent_id UInt64 HIERARCHICAL
+    id uint64,
+    parent_id uint64 HIERARCHICAL
     )
     PRIMARY KEY id
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_hierarchy_table'))
@@ -124,10 +124,10 @@ $CLICKHOUSE_CLIENT -n --query="
     SELECT 'dictGet';
     SELECT dictGet('01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy', 'parent_id', number) FROM system.numbers LIMIT 5;
     SELECT 'dictGetHierarchy';
-    SELECT dictGetHierarchy('01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy', toUInt64(1));
-    SELECT dictGetHierarchy('01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy', toUInt64(4));
+    SELECT dictGetHierarchy('01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy', to_uint64(1));
+    SELECT dictGetHierarchy('01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy', to_uint64(4));
 
     DROP DICTIONARY 01684_database_for_cache_dictionary.cache_dictionary_simple_key_hierarchy;
-    DROP TABLE 01684_database_for_cache_dictionary.simple_key_hierarchy_table;
+    DROP STREAM 01684_database_for_cache_dictionary.simple_key_hierarchy_table;
 
     DROP DATABASE 01684_database_for_cache_dictionary;"

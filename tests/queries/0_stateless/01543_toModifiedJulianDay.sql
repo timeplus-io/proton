@@ -16,23 +16,23 @@ SELECT toModifiedJulianDayOrNull('1999-02-29');
 SELECT toModifiedJulianDayOrNull('1999-13-32');
 
 --
-SELECT 'Invocation with String column';
+SELECT 'Invocation with string column';
 
-DROP TABLE IF EXISTS toModifiedJulianDay_test;
-CREATE TABLE toModifiedJulianDay_test (d String) ENGINE = Memory;
+DROP STREAM IF EXISTS toModifiedJulianDay_test;
+create stream toModifiedJulianDay_test (d string) ;
 
 INSERT INTO toModifiedJulianDay_test VALUES ('1858-11-16'), ('1858-11-17'), ('2020-11-01');
 SELECT toModifiedJulianDay(d) FROM toModifiedJulianDay_test;
 
-DROP TABLE toModifiedJulianDay_test;
+DROP STREAM toModifiedJulianDay_test;
 
 --
 SELECT 'Invocation with FixedString column';
 
-DROP TABLE IF EXISTS toModifiedJulianDay_test;
-CREATE TABLE toModifiedJulianDay_test (d FixedString(10)) ENGINE = Memory;
+DROP STREAM IF EXISTS toModifiedJulianDay_test;
+create stream toModifiedJulianDay_test (d FixedString(10)) ;
 
 INSERT INTO toModifiedJulianDay_test VALUES ('1858-11-16'), ('1858-11-17'), ('2020-11-01');
 SELECT toModifiedJulianDay(d) FROM toModifiedJulianDay_test;
 
-DROP TABLE toModifiedJulianDay_test;
+DROP STREAM toModifiedJulianDay_test;

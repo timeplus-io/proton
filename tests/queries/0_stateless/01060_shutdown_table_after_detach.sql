@@ -1,19 +1,19 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS test;
-CREATE TABLE test Engine = MergeTree ORDER BY number AS SELECT number, toString(rand()) x from numbers(10000000);
+DROP STREAM IF EXISTS test;
+create stream test Engine = MergeTree ORDER BY number AS SELECT number, to_string(rand()) x from numbers(10000000);
 
 SELECT count() FROM test;
 
-ALTER TABLE test DETACH PARTITION tuple();
+ALTER STREAM test DETACH PARTITION tuple();
 
 SELECT count() FROM test;
 
 DETACH TABLE test;
 ATTACH TABLE test;
 
-ALTER TABLE test ATTACH PARTITION tuple();
+ALTER STREAM test ATTACH PARTITION tuple();
 
 SELECT count() FROM test;
 
-DROP TABLE test;
+DROP STREAM test;

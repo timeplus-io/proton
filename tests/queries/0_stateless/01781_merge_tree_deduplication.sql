@@ -1,13 +1,13 @@
 -- Tags: no-replicated-database
 -- Tag no-replicated-database: Unsupported type of ALTER query
 
-DROP TABLE IF EXISTS merge_tree_deduplication;
+DROP STREAM IF EXISTS merge_tree_deduplication;
 
-CREATE TABLE merge_tree_deduplication
+create stream merge_tree_deduplication
 (
-    key UInt64,
-    value String,
-    part UInt8 DEFAULT 77
+    key uint64,
+    value string,
+    part uint8 DEFAULT 77
 )
 ENGINE=MergeTree()
 ORDER BY key
@@ -68,13 +68,13 @@ SELECT key, value FROM merge_tree_deduplication ORDER BY key;
 
 SELECT '===============';
 
-ALTER TABLE merge_tree_deduplication DROP PART '77_9_9_0'; -- some old part
+ALTER STREAM merge_tree_deduplication DROP PART '77_9_9_0'; -- some old part
 
 INSERT INTO merge_tree_deduplication (key, value) VALUES (10, '10');
 
 SELECT key, value FROM merge_tree_deduplication WHERE key = 10;
 
-ALTER TABLE merge_tree_deduplication DROP PART '77_13_13_0'; -- fresh part
+ALTER STREAM merge_tree_deduplication DROP PART '77_13_13_0'; -- fresh part
 
 INSERT INTO merge_tree_deduplication (key, value) VALUES (12, '12');
 
@@ -83,7 +83,7 @@ SELECT key, value FROM merge_tree_deduplication WHERE key = 12;
 DETACH TABLE merge_tree_deduplication;
 ATTACH TABLE merge_tree_deduplication;
 
-OPTIMIZE TABLE  merge_tree_deduplication FINAL;
+OPTIMIZE STREAM  merge_tree_deduplication FINAL;
 
 INSERT INTO merge_tree_deduplication (key, value) VALUES (11, '11'); -- deduplicated
 INSERT INTO merge_tree_deduplication (key, value) VALUES (12, '12'); -- deduplicated
@@ -96,7 +96,7 @@ SELECT '===============';
 
 INSERT INTO merge_tree_deduplication (key, value, part) VALUES (11, '11', 88);
 
-ALTER TABLE merge_tree_deduplication DROP PARTITION 77;
+ALTER STREAM merge_tree_deduplication DROP PARTITION 77;
 
 INSERT INTO merge_tree_deduplication (key, value, part) VALUES (11, '11', 88); --deduplicated
 
@@ -107,7 +107,7 @@ SELECT part, key, value FROM merge_tree_deduplication ORDER BY key;
 
 -- Alters....
 
-ALTER TABLE merge_tree_deduplication MODIFY SETTING non_replicated_deduplication_window = 2;
+ALTER STREAM merge_tree_deduplication MODIFY SETTING non_replicated_deduplication_window = 2;
 
 SELECT '===============';
 
@@ -120,7 +120,7 @@ SELECT * FROM merge_tree_deduplication WHERE part = 33 ORDER BY key;
 
 SELECT '===============';
 
-ALTER TABLE merge_tree_deduplication MODIFY SETTING non_replicated_deduplication_window = 0;
+ALTER STREAM merge_tree_deduplication MODIFY SETTING non_replicated_deduplication_window = 0;
 
 INSERT INTO merge_tree_deduplication (key, value, part) VALUES (1, '1', 33);
 INSERT INTO merge_tree_deduplication (key, value, part) VALUES (1, '1', 33);
@@ -132,7 +132,7 @@ SELECT * FROM merge_tree_deduplication WHERE part = 33 ORDER BY key;
 
 SELECT '===============';
 
-ALTER TABLE merge_tree_deduplication MODIFY SETTING non_replicated_deduplication_window = 3;
+ALTER STREAM merge_tree_deduplication MODIFY SETTING non_replicated_deduplication_window = 3;
 
 INSERT INTO merge_tree_deduplication (key, value, part) VALUES (1, '1', 33);
 
@@ -152,16 +152,16 @@ ATTACH TABLE merge_tree_deduplication;
 
 SELECT * FROM merge_tree_deduplication WHERE part = 44 ORDER BY key;
 
-DROP TABLE IF EXISTS merge_tree_deduplication;
+DROP STREAM IF EXISTS merge_tree_deduplication;
 
 SELECT '===============';
 
-DROP TABLE IF EXISTS merge_tree_no_deduplication;
+DROP STREAM IF EXISTS merge_tree_no_deduplication;
 
-CREATE TABLE merge_tree_no_deduplication
+create stream merge_tree_no_deduplication
 (
-    key UInt64,
-    value String
+    key uint64,
+    value string
 )
 ENGINE=MergeTree()
 ORDER BY key;
@@ -173,7 +173,7 @@ SELECT * FROM merge_tree_no_deduplication ORDER BY key;
 
 SELECT '===============';
 
-ALTER TABLE merge_tree_no_deduplication MODIFY SETTING non_replicated_deduplication_window = 3;
+ALTER STREAM merge_tree_no_deduplication MODIFY SETTING non_replicated_deduplication_window = 3;
 
 INSERT INTO merge_tree_no_deduplication (key, value) VALUES (1, '1');
 INSERT INTO merge_tree_no_deduplication (key, value) VALUES (2, '2');
@@ -187,4 +187,4 @@ INSERT INTO merge_tree_no_deduplication (key, value) VALUES (4, '4');
 
 SELECT * FROM merge_tree_no_deduplication ORDER BY key;
 
-DROP TABLE IF EXISTS merge_tree_no_deduplication;
+DROP STREAM IF EXISTS merge_tree_no_deduplication;

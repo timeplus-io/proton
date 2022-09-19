@@ -1,10 +1,10 @@
-DROP TABLE IF EXISTS a;
-DROP TABLE IF EXISTS b;
-DROP TABLE IF EXISTS m;
+DROP STREAM IF EXISTS a;
+DROP STREAM IF EXISTS b;
+DROP STREAM IF EXISTS m;
 
-CREATE TABLE a (key UInt32) ENGINE = MergeTree ORDER BY key;
-CREATE TABLE b (key UInt32, ID UInt32) ENGINE = MergeTree ORDER BY key;
-CREATE TABLE m (key UInt32) ENGINE = Merge(currentDatabase(), 'a');
+create stream a (key uint32) ENGINE = MergeTree ORDER BY key;
+create stream b (key uint32, ID uint32) ENGINE = MergeTree ORDER BY key;
+create stream m (key uint32) ENGINE = Merge(currentDatabase(), 'a');
 
 INSERT INTO a VALUES (0);
 INSERT INTO b VALUES (0, 1);
@@ -20,6 +20,6 @@ SELECT * FROM m INNER JOIN b USING(key) WHERE ID = 1 GROUP BY ID, key HAVING ID 
 SELECT sum(b.ID), sum(m.key) FROM m FULL JOIN b ON (m.key == b.key) GROUP BY key;
 SELECT sum(b.ID + m.key) FROM m FULL JOIN b ON (m.key == b.key) GROUP BY key;
 
-DROP TABLE IF EXISTS a;
-DROP TABLE IF EXISTS b;
-DROP TABLE IF EXISTS m;
+DROP STREAM IF EXISTS a;
+DROP STREAM IF EXISTS b;
+DROP STREAM IF EXISTS m;

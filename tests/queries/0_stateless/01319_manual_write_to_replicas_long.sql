@@ -1,10 +1,10 @@
 -- Tags: long, replica
 
-DROP TABLE IF EXISTS r1;
-DROP TABLE IF EXISTS r2;
+DROP STREAM IF EXISTS r1;
+DROP STREAM IF EXISTS r2;
 
-CREATE TABLE r1 (x String) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{database}/r', 'r1') ORDER BY x;
-CREATE TABLE r2 (x String) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{database}/r', 'r2') ORDER BY x;
+create stream r1 (x string) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{database}/r', 'r1') ORDER BY x;
+create stream r2 (x string) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{database}/r', 'r2') ORDER BY x;
 
 SYSTEM STOP REPLICATED SENDS r1;
 SYSTEM STOP REPLICATED SENDS r2;
@@ -25,5 +25,5 @@ SYSTEM SYNC REPLICA r2;
 SELECT * FROM r1;
 SELECT * FROM r2;
 
-DROP TABLE r1;
-DROP TABLE r2;
+DROP STREAM r1;
+DROP STREAM r2;

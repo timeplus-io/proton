@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS perf;
-CREATE TABLE perf (site String, user_id UInt64, z Float64) ENGINE = Log;
+DROP STREAM IF EXISTS perf;
+create stream perf (site string, user_id uint64, z float64)  ;
 
 SELECT * FROM (SELECT perf_1.z AS z_1 FROM perf AS perf_1);
 
@@ -32,4 +32,4 @@ FROM (
             WHERE user_id = 999
 ) js2 USING site);
 
-DROP TABLE perf;
+DROP STREAM perf;

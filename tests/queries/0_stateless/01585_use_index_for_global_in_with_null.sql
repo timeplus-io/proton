@@ -1,10 +1,11 @@
 -- Tags: global
 
-drop table if exists xp;
-drop table if exists xp_d;
+SET query_mode = 'table';
+drop stream if exists xp;
+drop stream if exists xp_d;
 
-create table xp(i Nullable(UInt64), j UInt64) engine MergeTree order by i settings index_granularity = 1, allow_nullable_key = 1;
-create table xp_d as xp engine Distributed(test_shard_localhost, currentDatabase(), xp);
+create stream xp(i Nullable(uint64), j uint64) engine MergeTree order by i settings index_granularity = 1, allow_nullable_key = 1;
+create stream xp_d as xp engine Distributed(test_shard_localhost, currentDatabase(), xp);
 
 insert into xp select number, number + 2 from numbers(10);
 insert into xp select null, 100;
@@ -40,5 +41,5 @@ select * from xp where i global in (null);
 select * from xp_d where i in (null);
 select * from xp_d where i global in (null);
 
-drop table if exists xp;
-drop table if exists xp_d;
+drop stream if exists xp;
+drop stream if exists xp_d;

@@ -1,0 +1,38 @@
+all
+1	[1]
+2	[2]
+key, array_join(arr) in (1, 1)
+1	1
+key, array_join(arr) in ((1, 1), (2, 2))
+1	1
+2	2
+(key, left array join arr) in (1, 1)
+1
+(key, left array join arr) in ((1, 1), (2, 2))
+1
+2
+all
+1	[1]
+2	[2]
+key, array_join(n.x) in (1, 1)
+1	1
+key, array_join(n.x) in ((1, 1), (2, 2))
+1	1
+2	2
+(key, left array join n.x) in (1, 1)
+1
+(key, left array join n.x) in ((1, 1), (2, 2))
+1
+2
+max(key) from tab_00612 where (key, left array join n.x) in (1, 1)
+1
+1
+max(key) from tab_00612 where (key, left array join n.x) in ((1, 1), (2, 2))
+2
+2
+max(key) from tab_00612 any left join (select key, array_join(n.x) as val from tab_00612) using key where (key, val) in (1, 1)
+1
+max(key) from tab_00612 any left join (select key, array_join(n.x) as val from tab_00612) using key where (key, val) in ((1, 1), (2, 2))
+2
+1
+1

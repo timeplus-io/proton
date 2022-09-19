@@ -21,7 +21,7 @@ WITH (
           ORDER BY query_start_time DESC
           LIMIT 1
       ) AS t)
-SELECT if(dateDiff('second', toDateTime(time_with_microseconds), toDateTime(t)) = 0, 'ok', 'fail'); --
+SELECT if(dateDiff('second', to_datetime(time_with_microseconds), to_datetime(t)) = 0, 'ok', 'fail'); --
 
 SELECT '01461_query_thread_log_query_start_time_milliseconds_test';
 SYSTEM FLUSH LOGS;
@@ -45,4 +45,4 @@ WITH (
           ORDER BY query_start_time DESC
           LIMIT 1
       ) AS t)
-SELECT if(dateDiff('second', toDateTime(time_with_microseconds), toDateTime(t)) = 0, 'ok', 'fail'); --
+SELECT if(dateDiff('second', to_datetime(time_with_microseconds), to_datetime(t)) = 0, 'ok', 'fail'); --

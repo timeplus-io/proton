@@ -1,1 +1,1 @@
-`a` Nullable(Int64), `b` Nullable(Float64), `c` Nullable(DateTime('Europe/Moscow')), `index` Nullable(String), `__index_level_1__` Nullable(DateTime('Europe/Moscow'))
+`a` Nullable(int64), `b` Nullable(float64), `c` Nullable(datetime('Europe/Moscow')), `index` Nullable(string), `__index_level_1__` Nullable(datetime('Europe/Moscow'))

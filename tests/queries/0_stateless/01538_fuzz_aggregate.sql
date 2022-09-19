@@ -3,7 +3,7 @@ SELECT
     sum(ns)
 FROM
 (
-    SELECT intDiv(number, NULL) AS k
+    SELECT int_div(number, NULL) AS k
     FROM system.numbers_mt
     GROUP BY k
 )

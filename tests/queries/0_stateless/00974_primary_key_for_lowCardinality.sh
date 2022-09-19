@@ -4,36 +4,36 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS lowString;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS string;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS lowString;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS string;"
 
 $CLICKHOUSE_CLIENT -n --query="
-create table lowString
+create stream lowString
 (
-a LowCardinality(String),
-b Date
+a LowCardinality(string),
+b date
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(b)
 ORDER BY (a)"
 
 $CLICKHOUSE_CLIENT -n --query="
-create table string
+create stream string
 (
-a String,
-b Date
+a string,
+b date
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(b)
 ORDER BY (a)"
 
-$CLICKHOUSE_CLIENT --query="insert into lowString (a, b) select top 100000 toString(number), today() from system.numbers"
+$CLICKHOUSE_CLIENT --query="insert into lowString (a, b) select top 100000 to_string(number), today() from system.numbers"
 
-$CLICKHOUSE_CLIENT --query="insert into string (a, b) select top 100000 toString(number), today() from system.numbers"
+$CLICKHOUSE_CLIENT --query="insert into string (a, b) select top 100000 to_string(number), today() from system.numbers"
 
 $CLICKHOUSE_CLIENT --query="select count() from lowString where a in ('1', '2') FORMAT JSON" | grep "rows_read"
 
 $CLICKHOUSE_CLIENT --query="select count() from string where a in ('1', '2') FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE lowString;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE string;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM lowString;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM string;"

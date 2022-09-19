@@ -1,10 +1,10 @@
-DROP TABLE IF EXISTS test_nested_default;
+DROP STREAM IF EXISTS test_nested_default;
 
-CREATE TABLE test_nested_default
+create stream test_nested_default
 (
-    `id` String,
-    `with_dot.str` String,
-    `with_dot.array` Array(String)
+    `id` string,
+    `with_dot.str` string,
+    `with_dot.array` array(string)
 )
 ENGINE = MergeTree()
 ORDER BY id;
@@ -12,4 +12,4 @@ ORDER BY id;
 INSERT INTO test_nested_default(`id`, `with_dot.array`) VALUES('id', ['str1', 'str2']);
 SELECT * FROM test_nested_default;
 
-DROP TABLE test_nested_default;
+DROP STREAM test_nested_default;

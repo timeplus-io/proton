@@ -2,7 +2,7 @@
 select length(hex(generateUUIDv4()));
 
 with generateUUIDv4() as uuid,
-    replace(toString(uuid), '-', '') as str1,
+    replace(to_string(uuid), '-', '') as str1,
     lower(hex(uuid)) as str2
 select str1 = str2;
 

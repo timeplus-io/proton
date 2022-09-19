@@ -1,10 +1,10 @@
 -- Tags: long, zookeeper, no-replicated-database, no-polymorphic-parts
 -- Tag no-replicated-database: Fails due to additional replicas or shards
-
-drop table if exists rmt;
+SET query_mode = 'table';
+drop stream if exists rmt;
 -- cleanup code will perform extra Exists
 -- (so the .reference will not match)
-create table rmt (n int) engine=ReplicatedMergeTree('/test/01158/{database}/rmt', '1') order by n settings cleanup_delay_period=86400, replicated_can_become_leader=0;
+create stream rmt (n int) engine=ReplicatedMergeTree('/test/01158/{database}/rmt', '1') order by n settings cleanup_delay_period=86400, replicated_can_become_leader=0;
 system sync replica rmt;
 insert into rmt values (1);
 insert into rmt values (1);
@@ -30,4 +30,4 @@ from system.zookeeper_log
 where (session_id, xid) in (select session_id, xid from system.zookeeper_log where path like '/test/01158/' || currentDatabase() || '/rmt/blocks%' and op_num not in (1, 12))
 order by xid, type, request_idx;
 
-drop table rmt;
+drop stream rmt;

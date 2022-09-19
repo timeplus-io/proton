@@ -3,18 +3,18 @@ select interval 1 day, interval 1 week, interval 1 month;
 select interval 1 quarter, interval 1 year;
 
 select date '2001-09-29';
-select (date '2001-09-29' + interval 7 day) x, toTypeName(x);
-select (date '2001-10-01' - interval 7 day) x, toTypeName(x);
-select (date '2001-09-29' + 7) x, toTypeName(x);
-select (date '2001-10-01' - 7) x, toTypeName(x);
-select (date '2001-09-29' + interval 1 hour) x, toTypeName(x);
-select (date '2001-09-29' - interval 1 hour) x, toTypeName(x);
-select (date '2001-10-01' - date '2001-09-28') x, toTypeName(x);
+select (date '2001-09-29' + interval 7 day) x, to_type_name(x);
+select (date '2001-10-01' - interval 7 day) x, to_type_name(x);
+select (date '2001-09-29' + 7) x, to_type_name(x);
+select (date '2001-10-01' - 7) x, to_type_name(x);
+select (date '2001-09-29' + interval 1 hour) x, to_type_name(x);
+select (date '2001-09-29' - interval 1 hour) x, to_type_name(x);
+select (date '2001-10-01' - date '2001-09-28') x, to_type_name(x);
 select timestamp '2001-09-28 01:00:00' + interval 23 hour;
 select timestamp '2001-09-28 23:00:00' - interval 23 hour;
 
 -- TODO: return interval
-select (timestamp '2001-12-29 03:00:00' - timestamp '2001-12-27 12:00:00') x, toTypeName(x); -- interval '1 day 15:00:00'
+select (timestamp '2001-12-29 03:00:00' - timestamp '2001-12-27 12:00:00') x, to_type_name(x); -- interval '1 day 15:00:00'
 
 -- select -interval 23 hour; -- interval '-23:00:00'
 -- select interval 1 day + interval 1 hour; -- interval '1 day 01:00:00'
@@ -26,6 +26,6 @@ select (timestamp '2001-12-29 03:00:00' - timestamp '2001-12-27 12:00:00') x, to
 -- select time '05:00' - interval '2 hours'; -- time '03:00:00'
 
 -- select 900 * interval '1 second'; -- interval '00:15:00'
--- select (21 * interval '1 day') x, toTypeName(x); -- interval '21 days'
--- select (double precision '3.5' * interval '1 hour') x, toTypeName(x); -- interval '03:30:00'
--- select (interval '1 hour' / double precision '1.5') x, toTypeName(x); -- interval '00:40:00'
+-- select (21 * interval '1 day') x, to_type_name(x); -- interval '21 days'
+-- select (double precision '3.5' * interval '1 hour') x, to_type_name(x); -- interval '03:30:00'
+-- select (interval '1 hour' / double precision '1.5') x, to_type_name(x); -- interval '00:40:00'

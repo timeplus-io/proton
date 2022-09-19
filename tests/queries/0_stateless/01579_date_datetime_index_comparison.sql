@@ -1,16 +1,17 @@
-drop table if exists test_index;
+SET query_mode = 'table';
+drop stream if exists test_index;
 
-create table test_index(date Date) engine MergeTree partition by toYYYYMM(date) order by date;
+create stream test_index(date date) engine MergeTree partition by toYYYYMM(date) order by date;
 
 insert into test_index values('2020-10-30');
 
-select 1 from test_index where date < toDateTime('2020-10-30 06:00:00');
+select 1 from test_index where date < to_datetime('2020-10-30 06:00:00');
 
-drop table if exists test_index;
+drop stream if exists test_index;
 
-select toTypeName([-1, toUInt32(1)]);
+select to_type_name([-1, to_uint32(1)]);
 -- We don't promote to wide integers
-select toTypeName([-1, toUInt64(1)]); -- { serverError 386 }
-select toTypeName([-1, toInt128(1)]);
-select toTypeName([toInt64(-1), toInt128(1)]);
-select toTypeName([toUInt64(1), toUInt256(1)]);
+select to_type_name([-1, to_uint64(1)]); -- { serverError 386 }
+select to_type_name([-1, to_int128(1)]);
+select to_type_name([to_int64(-1), to_int128(1)]);
+select to_type_name([to_uint64(1), toUInt256(1)]);

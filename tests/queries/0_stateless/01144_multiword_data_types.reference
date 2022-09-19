@@ -1,5 +1,5 @@
-CREATE TABLE default.multiword_types\n(\n    `a` Float64,\n    `b` Float64,\n    `c` String DEFAULT \'str\',\n    `d` String,\n    `e` String COMMENT \'comment\',\n    `f` String,\n    `g` String,\n    `h` String DEFAULT toString(a) COMMENT \'comment\',\n    `i` String,\n    `j` String,\n    `k` String,\n    `l` String,\n    `m` String,\n    `n` String,\n    `o` String,\n    `p` String\n)\nENGINE = Memory
-Tuple(Float64, Float64, String, String, String, String, String, String, String, String, String, String, String, String, String, String)
-CREATE TABLE default.unsigned_types\n(\n    `a` Int8,\n    `b` Int8,\n    `c` Int16,\n    `d` Int32,\n    `e` Int32,\n    `f` Int64,\n    `g` UInt8,\n    `h` UInt8,\n    `i` UInt16,\n    `j` UInt32,\n    `k` UInt32,\n    `l` UInt64\n)\nENGINE = Memory
-Tuple(Int8, Int8, Int16, Int32, Int32, Int64, UInt8, UInt8, UInt16, UInt32, UInt32, UInt64)
+create stream default.multiword_types\n(\n    `a` float64,\n    `b` float64,\n    `c` string DEFAULT \'str\',\n    `d` string,\n    `e` string COMMENT \'comment\',\n    `f` string,\n    `g` string,\n    `h` string DEFAULT to_string(a) COMMENT \'comment\',\n    `i` string,\n    `j` string,\n    `k` string,\n    `l` string,\n    `m` string,\n    `n` string,\n    `o` string,\n    `p` string\n)\nENGINE = Memory
+tuple(float64, float64, string, string, string, string, string, string, string, string, string, string, string, string, string, string)
+create stream default.unsigned_types\n(\n    `a` int8,\n    `b` int8,\n    `c` Int16,\n    `d` int32,\n    `e` int32,\n    `f` int64,\n    `g` uint8,\n    `h` uint8,\n    `i` uint16,\n    `j` uint32,\n    `k` uint32,\n    `l` uint64\n)\nENGINE = Memory
+tuple(int8, int8, Int16, int32, int32, int64, uint8, uint8, uint16, uint32, uint32, uint64)
 42	42	255	-1

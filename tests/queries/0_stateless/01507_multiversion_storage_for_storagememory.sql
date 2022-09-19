@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS defaults;
-CREATE TABLE defaults
+DROP STREAM IF EXISTS defaults;
+create stream defaults
 (
-	n Int32
-)ENGINE = Memory();
+	n int32
+)();
 
 INSERT INTO defaults SELECT * FROM numbers(10);
 
@@ -12,4 +12,4 @@ TRUNCATE defaults;
 
 SELECT * FROM defaults;
 
-DROP TABLE defaults;
+DROP STREAM defaults;

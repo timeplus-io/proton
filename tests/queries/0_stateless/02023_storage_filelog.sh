@@ -20,8 +20,8 @@ do
 	echo $i, $i >> ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/a.txt
 done
 
-${CLICKHOUSE_CLIENT} --query "drop table if exists file_log;"
-${CLICKHOUSE_CLIENT} --query "create table file_log(k UInt8, v UInt8) engine=FileLog('${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/', 'CSV');"
+${CLICKHOUSE_CLIENT} --query "drop stream if exists file_log;"
+${CLICKHOUSE_CLIENT} --query "create stream file_log(k uint8, v uint8) engine=FileLog('${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/', 'CSV');"
 
 ${CLICKHOUSE_CLIENT} --query "select * from file_log order by k;"
 
@@ -73,6 +73,6 @@ truncate ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}/a.txt --size 0
 # exception happend
 ${CLICKHOUSE_CLIENT} --query "select * from file_log order by k;" 2>&1 | grep -q "Code: 33" && echo 'OK' || echo 'FAIL'
 
-${CLICKHOUSE_CLIENT} --query "drop table file_log;"
+${CLICKHOUSE_CLIENT} --query "drop stream file_log;"
 
 rm -rf ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME:?}

@@ -19,11 +19,11 @@ set basedir [file dirname $argv0]
 spawn bash -c "source $basedir/../shell_config.sh ; \$CLICKHOUSE_CLIENT_BINARY \$CLICKHOUSE_CLIENT_OPT --disable_suggestion -mn"
 expect "\n:) "
 
-send -- "DROP TABLE IF EXISTS t01565;\n"
+send -- "DROP STREAM IF EXISTS t01565;\n"
 expect "\nOk."
 expect "\n:)"
 
-send -- "CREATE TABLE t01565 (c0 String, c1 Int32) ENGINE = Memory() ;\n"
+send -- "create stream t01565 (c0 string, c1 int32) () ;\n"
 expect "\nOk."
 expect "\n:) "
 

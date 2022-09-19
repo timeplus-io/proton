@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS decimal;
+DROP STREAM IF EXISTS decimal;
 
-CREATE TABLE IF NOT EXISTS decimal
+create stream IF NOT EXISTS decimal
 (
     a DEC(9, 3),
     b DEC(18, 9),
     c DEC(38, 18)
-) ENGINE = Memory;
+) ;
 
 INSERT INTO decimal (a, b, c) VALUES (42.0, -42.0, 42) (0.42, -0.42, .42) (42.42, -42.42, 42.42);
 INSERT INTO decimal (a, b, c) FORMAT JSONEachRow {"a":1.1, "b":-1.1, "c":1.1} {"a":1.0, "b":-1.0, "c":1} {"a":0.1, "b":-0.1, "c":.1};
@@ -30,4 +30,4 @@ SELECT * FROM decimal ORDER BY a FORMAT JSONEachRow;
 SELECT * FROM decimal ORDER BY b DESC FORMAT CSV;
 SELECT * FROM decimal ORDER BY c FORMAT TabSeparated;
 
-DROP TABLE IF EXISTS decimal;
+DROP STREAM IF EXISTS decimal;

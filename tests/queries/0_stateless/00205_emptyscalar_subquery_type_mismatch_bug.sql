@@ -7,8 +7,9 @@ cross join a
 where a.b = 0;
 
 -- Reported query
-drop table if exists t_q1ht4gq_5;
-create table t_q1ht4gq_5 (c_zeij INTEGER NOT NULL, c_fehk75l TEXT, c_jz TEXT, c_wynzuek TEXT, c_nkt INTEGER NOT NULL, c_g TEXT, c_mc2 TEXT, primary key(c_nkt)) engine = MergeTree();
+SET query_mode = 'table';
+drop stream if exists t_q1ht4gq_5;
+create stream t_q1ht4gq_5 (c_zeij INTEGER NOT NULL, c_fehk75l TEXT, c_jz TEXT, c_wynzuek TEXT, c_nkt INTEGER NOT NULL, c_g TEXT, c_mc2 TEXT, primary key(c_nkt)) engine = MergeTree();
 WITH
 cte_0 AS (select
     subq_0.c6 as c2,
@@ -35,4 +36,4 @@ select
                 cross join cte_0 as ref_15
             where ref_15.c4 > ref_15.c2));
 
-drop table if exists t_q1ht4gq_5;
+drop stream if exists t_q1ht4gq_5;

@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS decimal;
+DROP STREAM IF EXISTS decimal;
 
-CREATE TABLE decimal
+create stream decimal
 (
     a Decimal(6, 4),
     b Decimal(16, 7),
     c Decimal(20, 8)
-) ENGINE = Memory;
+) ;
 
 SELECT count(a), count(b), count(c) FROM decimal;
 SELECT [min(a), max(a)], [min(b), max(b)], [min(c), max(c)] FROM decimal;
@@ -31,8 +31,8 @@ SELECT argMin(a, b), argMin(a, c), argMin(b, a), argMin(b, c), argMin(c, a), arg
 SELECT argMax(a, b), argMax(a, c), argMax(b, a), argMax(b, c), argMax(c, a), argMax(c, b) FROM decimal;
 SELECT argMax(a, b), argMax(a, c), argMax(b, a), argMax(b, c), argMax(c, a), argMax(c, b) FROM decimal WHERE a < 0;
 
-SELECT median(a) as ma, median(b) as mb, median(c) as mc, toTypeName(ma),toTypeName(mb),toTypeName(mc) FROM decimal;
-SELECT quantile(a) as qa, quantile(b) as qb, quantile(c) as qc, toTypeName(qa),toTypeName(qb),toTypeName(qc) FROM decimal WHERE a < 0;
+SELECT median(a) as ma, median(b) as mb, median(c) as mc, to_type_name(ma),to_type_name(mb),to_type_name(mc) FROM decimal;
+SELECT quantile(a) as qa, quantile(b) as qb, quantile(c) as qc, to_type_name(qa),to_type_name(qb),to_type_name(qc) FROM decimal WHERE a < 0;
 SELECT quantile(0.0)(a), quantile(0.0)(b), quantile(0.0)(c) FROM decimal WHERE a >= 0;
 SELECT quantile(0.2)(a), quantile(0.2)(b), quantile(0.2)(c) FROM decimal WHERE a >= 0;
 SELECT quantile(0.4)(a), quantile(0.4)(b), quantile(0.4)(c) FROM decimal WHERE a >= 0;
@@ -43,8 +43,8 @@ SELECT quantiles(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(a) FROM 
 SELECT quantiles(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(b) FROM decimal;
 SELECT quantiles(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(c) FROM decimal;
 
-SELECT medianExact(a), medianExact(b), medianExact(c) as x, toTypeName(x) FROM decimal;
-SELECT quantileExact(a), quantileExact(b), quantileExact(c) as x, toTypeName(x) FROM decimal WHERE a < 0;
+SELECT medianExact(a), medianExact(b), medianExact(c) as x, to_type_name(x) FROM decimal;
+SELECT quantileExact(a), quantileExact(b), quantileExact(c) as x, to_type_name(x) FROM decimal WHERE a < 0;
 SELECT quantileExact(0.0)(a), quantileExact(0.0)(b), quantileExact(0.0)(c) FROM decimal WHERE a >= 0;
 SELECT quantileExact(0.2)(a), quantileExact(0.2)(b), quantileExact(0.2)(c) FROM decimal WHERE a >= 0;
 SELECT quantileExact(0.4)(a), quantileExact(0.4)(b), quantileExact(0.4)(c) FROM decimal WHERE a >= 0;
@@ -55,8 +55,8 @@ SELECT quantilesExact(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(a) 
 SELECT quantilesExact(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(b) FROM decimal;
 SELECT quantilesExact(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(c) FROM decimal;
 
-SELECT medianExactWeighted(a, 1), medianExactWeighted(b, 2), medianExactWeighted(c, 3) as x, toTypeName(x) FROM decimal;
-SELECT quantileExactWeighted(a, 1), quantileExactWeighted(b, 2), quantileExactWeighted(c, 3) as x, toTypeName(x) FROM decimal WHERE a < 0;
+SELECT medianExactWeighted(a, 1), medianExactWeighted(b, 2), medianExactWeighted(c, 3) as x, to_type_name(x) FROM decimal;
+SELECT quantileExactWeighted(a, 1), quantileExactWeighted(b, 2), quantileExactWeighted(c, 3) as x, to_type_name(x) FROM decimal WHERE a < 0;
 SELECT quantileExactWeighted(0.0)(a, 1), quantileExactWeighted(0.0)(b, 2), quantileExactWeighted(0.0)(c, 3) FROM decimal WHERE a >= 0;
 SELECT quantileExactWeighted(0.2)(a, 1), quantileExactWeighted(0.2)(b, 2), quantileExactWeighted(0.2)(c, 3) FROM decimal WHERE a >= 0;
 SELECT quantileExactWeighted(0.4)(a, 1), quantileExactWeighted(0.4)(b, 2), quantileExactWeighted(0.4)(c, 3) FROM decimal WHERE a >= 0;
@@ -67,14 +67,14 @@ SELECT quantilesExactWeighted(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 
 SELECT quantilesExactWeighted(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(b, 2) FROM decimal;
 SELECT quantilesExactWeighted(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)(c, 3) FROM decimal;
 
-SELECT varPop(a) AS va, varPop(b) AS vb, varPop(c) AS vc, toTypeName(va), toTypeName(vb), toTypeName(vc) FROM decimal;
+SELECT varPop(a) AS va, varPop(b) AS vb, varPop(c) AS vc, to_type_name(va), to_type_name(vb), to_type_name(vc) FROM decimal;
 SELECT varPop(toFloat64(a)), varPop(toFloat64(b)), varPop(toFloat64(c)) FROM decimal;
-SELECT varSamp(a) AS va, varSamp(b) AS vb, varSamp(c) AS vc, toTypeName(va), toTypeName(vb), toTypeName(vc) FROM decimal;
+SELECT varSamp(a) AS va, varSamp(b) AS vb, varSamp(c) AS vc, to_type_name(va), to_type_name(vb), to_type_name(vc) FROM decimal;
 SELECT varSamp(toFloat64(a)), varSamp(toFloat64(b)), varSamp(toFloat64(c)) FROM decimal;
 
-SELECT stddevPop(a) AS da, stddevPop(b) AS db, stddevPop(c) AS dc, toTypeName(da), toTypeName(db), toTypeName(dc) FROM decimal;
+SELECT stddevPop(a) AS da, stddevPop(b) AS db, stddevPop(c) AS dc, to_type_name(da), to_type_name(db), to_type_name(dc) FROM decimal;
 SELECT stddevPop(toFloat64(a)), stddevPop(toFloat64(b)), stddevPop(toFloat64(c)) FROM decimal;
-SELECT stddevSamp(a) AS da, stddevSamp(b) AS db, stddevSamp(c) AS dc, toTypeName(da), toTypeName(db), toTypeName(dc) FROM decimal;
+SELECT stddevSamp(a) AS da, stddevSamp(b) AS db, stddevSamp(c) AS dc, to_type_name(da), to_type_name(db), to_type_name(dc) FROM decimal;
 SELECT stddevSamp(toFloat64(a)), stddevSamp(toFloat64(b)), stddevSamp(toFloat64(c)) FROM decimal;
 
 SELECT covarPop(a, a), covarPop(b, b), covarPop(c, c) FROM decimal; -- { serverError 43 }
@@ -82,5 +82,5 @@ SELECT covarSamp(a, a), covarSamp(b, b), covarSamp(c, c) FROM decimal; -- { serv
 SELECT corr(a, a), corr(b, b), corr(c, c) FROM decimal; -- { serverError 43 }
 SELECT 1 LIMIT 0;
 
-DROP TABLE decimal;
+DROP STREAM decimal;
 

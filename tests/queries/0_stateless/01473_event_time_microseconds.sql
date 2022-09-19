@@ -20,7 +20,7 @@ WITH (
         ORDER BY event_time DESC
         LIMIT 1
     ) AS time
-SELECT if(dateDiff('second', toDateTime(time.1), toDateTime(time.2)) = 0, 'ok', toString(time));
+SELECT if(dateDiff('second', to_datetime(time.1), to_datetime(time.2)) = 0, 'ok', to_string(time));
 
 SELECT '01473_trace_log_table_event_start_time_microseconds_test';
 WITH (
@@ -29,7 +29,7 @@ WITH (
           ORDER BY event_time DESC
           LIMIT 1
       ) AS time
-SELECT if(dateDiff('second', toDateTime(time.1), toDateTime(time.2)) = 0, 'ok', toString(time));
+SELECT if(dateDiff('second', to_datetime(time.1), to_datetime(time.2)) = 0, 'ok', to_string(time));
 
 SELECT '01473_query_log_table_event_start_time_microseconds_test';
 WITH (
@@ -39,7 +39,7 @@ WITH (
         ORDER BY event_time DESC
         LIMIT 1
     ) AS time
-SELECT if(dateDiff('second', toDateTime(time.1), toDateTime(time.2)) = 0, 'ok', toString(time));
+SELECT if(dateDiff('second', to_datetime(time.1), to_datetime(time.2)) = 0, 'ok', to_string(time));
 
 SELECT '01473_query_thread_log_table_event_start_time_microseconds_test';
 WITH (
@@ -49,7 +49,7 @@ WITH (
         ORDER BY event_time DESC
         LIMIT 1
     ) AS time
-SELECT if(dateDiff('second', toDateTime(time.1), toDateTime(time.2)) = 0, 'ok', toString(time));
+SELECT if(dateDiff('second', to_datetime(time.1), to_datetime(time.2)) = 0, 'ok', to_string(time));
 
 SELECT '01473_text_log_table_event_start_time_microseconds_test';
 WITH (
@@ -59,4 +59,4 @@ WITH (
           ORDER BY event_time DESC
           LIMIT 1
       ) AS time
-SELECT if(dateDiff('second', toDateTime(time.1), toDateTime(time.2)) = 0, 'ok', toString(time));
+SELECT if(dateDiff('second', to_datetime(time.1), to_datetime(time.2)) = 0, 'ok', to_string(time));

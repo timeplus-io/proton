@@ -8,14 +8,14 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT -nm -q "
-    drop table if exists test_distributed;
-    drop table if exists test_source;
-    drop table if exists test_shard;
-    drop table if exists test_local;
+    drop stream if exists test_distributed;
+    drop stream if exists test_source;
+    drop stream if exists test_shard;
+    drop stream if exists test_local;
 
-    create table test_shard  (k UInt64, v UInt64) ENGINE Memory();
-    create table test_local  (k UInt64, v UInt64) ENGINE Memory();
-    create table test_source (k UInt64, v UInt64) ENGINE Memory();
+    create stream test_shard  (k uint64, v uint64) ENGINE Memory();
+    create stream test_local  (k uint64, v uint64) ENGINE Memory();
+    create stream test_source (k uint64, v uint64) ENGINE Memory();
 
     insert into test_shard  values (1, 1);
     insert into test_local  values (1, 2);
@@ -28,8 +28,8 @@ $CLICKHOUSE_CLIENT -nm -q "
     select sum(td.v) from test_distributed td asof join $CLICKHOUSE_DATABASE.test_local tl on td.k = tl.k and td.v < tl.v group by tl.k;
     select sum(tl.v) from test_distributed td asof join $CLICKHOUSE_DATABASE.test_local tl on td.k = tl.k and td.v < tl.v group by td.k;
 
-    drop table test_distributed;
-    drop table test_source;
-    drop table test_shard;
-    drop table test_local;
+    drop stream test_distributed;
+    drop stream test_source;
+    drop stream test_shard;
+    drop stream test_local;
 "

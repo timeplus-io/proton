@@ -11,22 +11,22 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CLICKHOUSE_TEST_ZOOKEEPER_PREFIX="${CLICKHOUSE_TEST_ZOOKEEPER_PREFIX}/${CLICKHOUSE_DATABASE}"
 
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS elog;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS elog;"
 
 $CLICKHOUSE_CLIENT --query="
-CREATE TABLE elog (
-    date Date,
-    engine_id UInt32,
-    referrer String
+create stream elog (
+    date date,
+    engine_id uint32,
+    referrer string
 )
 ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/elog/{shard}', '{replica}')
 PARTITION BY date
 ORDER BY (engine_id)
 SETTINGS replicated_deduplication_window = 2, cleanup_delay_period=4, cleanup_delay_period_random_add=0;"
 
-$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (toDate('2018-10-01'), 1, 'hello')"
-$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (toDate('2018-10-01'), 2, 'hello')"
-$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (toDate('2018-10-01'), 3, 'hello')"
+$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (to_date('2018-10-01'), 1, 'hello')"
+$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (to_date('2018-10-01'), 2, 'hello')"
+$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (to_date('2018-10-01'), 3, 'hello')"
 
 $CLICKHOUSE_CLIENT --query="SELECT count(*) from elog" # 3 rows
 
@@ -37,7 +37,7 @@ do
     count=$($CLICKHOUSE_CLIENT --query="SELECT COUNT(*) FROM system.zookeeper where path = '/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/elog/s1/blocks'")
 done
 
-$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (toDate('2018-10-01'), 1, 'hello')"
+$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (to_date('2018-10-01'), 1, 'hello')"
 
 $CLICKHOUSE_CLIENT --query="SELECT count(*) from elog" # 4 rows
 
@@ -48,7 +48,7 @@ do
     count=$($CLICKHOUSE_CLIENT --query="SELECT COUNT(*) FROM system.zookeeper where path = '/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/elog/s1/blocks'")
 done
 
-$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (toDate('2018-10-01'), 2, 'hello')"
+$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (to_date('2018-10-01'), 2, 'hello')"
 
 $CLICKHOUSE_CLIENT --query="SELECT count(*) from elog" # 5 rows
 
@@ -59,8 +59,8 @@ do
     count=$($CLICKHOUSE_CLIENT --query="SELECT COUNT(*) FROM system.zookeeper where path = '/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/elog/s1/blocks'")
 done
 
-$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (toDate('2018-10-01'), 2, 'hello')"
+$CLICKHOUSE_CLIENT --query="INSERT INTO elog VALUES (to_date('2018-10-01'), 2, 'hello')"
 
 $CLICKHOUSE_CLIENT --query="SELECT count(*) from elog" # still 5 rows
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE elog"
+$CLICKHOUSE_CLIENT -q "DROP STREAM elog"

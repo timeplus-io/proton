@@ -2,15 +2,15 @@
 
 create temporary table t engine Memory as select * from generateRandom(
 $$
-    a Array(Int8),
-    b UInt32,
-    c Nullable(String),
+    a array(int8),
+    b uint32,
+    c Nullable(string),
     d Decimal32(4),
     e Nullable(Enum16('h' = 1, 'w' = 5 , 'o' = -200)),
-    f Float64,
-    g Tuple(Date, DateTime('Europe/Moscow'), DateTime64(3, 'Europe/Moscow'), UUID),
+    f float64,
+    g tuple(date, datetime('Europe/Moscow'), DateTime64(3, 'Europe/Moscow'), UUID),
     h FixedString(2),
-    i Array(Nullable(UUID))
+    i array(Nullable(UUID))
 $$, 10, 5, 3) limit 2;
 
 select * apply toJSONString from t;

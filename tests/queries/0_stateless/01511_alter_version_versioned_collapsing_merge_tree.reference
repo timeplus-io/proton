@@ -1,9 +1,9 @@
 1	1	1	-1
 2	2	2	-1
-CREATE TABLE default.table_with_version\n(\n    `key` UInt64,\n    `value` String,\n    `version` UInt8,\n    `sign` Int8\n)\nENGINE = VersionedCollapsingMergeTree(sign, version)\nORDER BY key\nSETTINGS index_granularity = 8192
+create stream default.table_with_version\n(\n    `key` uint64,\n    `value` string,\n    `version` uint8,\n    `sign` int8\n)\nENGINE = VersionedCollapsingMergeTree(sign, version)\nORDER BY key\nSETTINGS index_granularity = 8192
 1	1	1	-1
 2	2	2	-1
-CREATE TABLE default.table_with_version\n(\n    `key` UInt64,\n    `value` String,\n    `version` UInt32,\n    `sign` Int8\n)\nENGINE = VersionedCollapsingMergeTree(sign, version)\nORDER BY key\nSETTINGS index_granularity = 8192
+create stream default.table_with_version\n(\n    `key` uint64,\n    `value` string,\n    `version` uint32,\n    `sign` int8\n)\nENGINE = VersionedCollapsingMergeTree(sign, version)\nORDER BY key\nSETTINGS index_granularity = 8192
 1	1	2	1
 2	2	2	-1
 1	1	2	1

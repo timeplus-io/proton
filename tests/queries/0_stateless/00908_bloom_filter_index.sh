@@ -6,26 +6,26 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS bloom_filter_idx;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS bloom_filter_idx2;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS bloom_filter_idx2;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS bloom_filter_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS bloom_filter_idx2;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS bloom_filter_idx2;"
 
 
 # NGRAM BF
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE bloom_filter_idx
+create stream bloom_filter_idx
 (
-    k UInt64,
-    s String,
+    k uint64,
+    s string,
     INDEX bf (s, lower(s)) TYPE ngrambf_v1(3, 512, 2, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY k
 SETTINGS index_granularity = 2;"
 
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE bloom_filter_idx2
+create stream bloom_filter_idx2
 (
-    k UInt64,
+    k uint64,
     s FixedString(15),
     INDEX bf (s, lower(s)) TYPE ngrambf_v1(3, 512, 2, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
@@ -106,10 +106,10 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE (s, lower(s)) I
 
 # TOKEN BF
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE bloom_filter_idx3
+create stream bloom_filter_idx3
 (
-    k UInt64,
-    s String,
+    k uint64,
+    s string,
     INDEX bf (s, lower(s)) TYPE tokenbf_v1(512, 3, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY k
@@ -138,15 +138,15 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx3 WHERE s LIKE 'column
 $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx3 WHERE s IN ('some string', 'abc') ORDER BY k"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx3 WHERE s IN ('some string', 'abc') ORDER BY k FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE bloom_filter_idx"
-$CLICKHOUSE_CLIENT --query="DROP TABLE bloom_filter_idx2"
-$CLICKHOUSE_CLIENT --query="DROP TABLE bloom_filter_idx3"
+$CLICKHOUSE_CLIENT --query="DROP STREAM bloom_filter_idx"
+$CLICKHOUSE_CLIENT --query="DROP STREAM bloom_filter_idx2"
+$CLICKHOUSE_CLIENT --query="DROP STREAM bloom_filter_idx3"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS bloom_filter_idx_na;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS bloom_filter_idx_na;"
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE bloom_filter_idx_na
+create stream bloom_filter_idx_na
 (
-    na Array(Array(String)),
+    na array(array(string)),
     INDEX bf na TYPE bloom_filter(0.1) GRANULARITY 1
 ) ENGINE = MergeTree()
-ORDER BY na" 2>&1 | grep -c 'DB::Exception: Unexpected type Array(Array(String)) of bloom filter index'
+ORDER BY na" 2>&1 | grep -c 'DB::Exception: Unexpected type array(array(string)) of bloom filter index'

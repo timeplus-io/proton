@@ -6,22 +6,22 @@ CREATE DATABASE database_for_dict;
 
 use database_for_dict;
 
-CREATE TABLE date_table
+create stream date_table
 (
-  id UInt32,
-  val String,
-  start Date,
-  end Date
+  id uint32,
+  val string,
+  start date,
+  end date
 ) Engine = Memory();
 
-INSERT INTO date_table VALUES(1, '1', toDate('2019-01-05'), toDate('2020-01-10'));
+INSERT INTO date_table VALUES(1, '1', to_date('2019-01-05'), to_date('2020-01-10'));
 
 CREATE DICTIONARY somedict
 (
-  id UInt32,
-  val String,
-  start Date,
-  end Date
+  id uint32,
+  val string,
+  start date,
+  end date
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'date_table' DB 'database_for_dict'))

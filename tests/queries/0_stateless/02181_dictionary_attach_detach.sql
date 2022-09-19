@@ -1,18 +1,18 @@
-DROP TABLE IF EXISTS 02181_test_table;
-CREATE TABLE 02181_test_table
+DROP STREAM IF EXISTS 02181_test_table;
+create stream 02181_test_table
 (
-    id UInt64,
-    value String
+    id uint64,
+    value string
 )
-ENGINE = TinyLog;
+;
 
 INSERT INTO 02181_test_table VALUES (0, 'Value');
 
 DROP DICTIONARY IF EXISTS 02181_test_dictionary;
 CREATE DICTIONARY 02181_test_dictionary
 (
-    id UInt64,
-    value String
+    id uint64,
+    value string
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(TABLE '02181_test_table'))
@@ -36,4 +36,4 @@ DETACH DICTIONARY 02181_test_dictionary;
 ATTACH DICTIONARY 02181_test_dictionary;
 
 DROP DICTIONARY 02181_test_dictionary;
-DROP TABLE 02181_test_table;
+DROP STREAM 02181_test_table;

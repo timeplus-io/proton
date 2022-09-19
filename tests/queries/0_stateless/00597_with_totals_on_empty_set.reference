@@ -19,20 +19,20 @@ number:  0
 count(): 0
 Row 1:
 ──────
-groupArray(number): []
+group_array(number): []
 
 
 Totals:
 ───────
-groupArray(number): []
+group_array(number): []
 
 
 Totals:
 ───────
-groupArray(number): []
+group_array(number): []
 
 
 Totals:
 ───────
 number:             0
-groupArray(number): []
+group_array(number): []

@@ -19,7 +19,7 @@
 	[
 		{
 			"name": "number",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 

@@ -3,31 +3,31 @@
 	[
 		{
 			"name": "i0",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "u0",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "ip",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "in",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "up",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "arr",
-			"type": "Array(Int64)"
+			"type": "array(int64)"
 		},
 		{
 			"name": "tuple",
-			"type": "Tuple(UInt64, UInt64)"
+			"type": "tuple(uint64, uint64)"
 		}
 	],
 
@@ -86,31 +86,31 @@
 	[
 		{
 			"name": "i0",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "u0",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "ip",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "in",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "up",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "arr",
-			"type": "Array(Int64)"
+			"type": "array(int64)"
 		},
 		{
 			"name": "tuple",
-			"type": "Tuple(UInt64, UInt64)"
+			"type": "tuple(uint64, uint64)"
 		}
 	],
 
@@ -135,31 +135,31 @@
 	[
 		{
 			"name": "i0",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "u0",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "ip",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "in",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "up",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "arr",
-			"type": "Array(Int64)"
+			"type": "array(int64)"
 		},
 		{
 			"name": "tuple",
-			"type": "Tuple(UInt64, UInt64)"
+			"type": "tuple(uint64, uint64)"
 		}
 	],
 
@@ -218,31 +218,31 @@
 	[
 		{
 			"name": "i0",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "u0",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "ip",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "in",
-			"type": "Int64"
+			"type": "int64"
 		},
 		{
 			"name": "up",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "arr",
-			"type": "Array(Int64)"
+			"type": "array(int64)"
 		},
 		{
 			"name": "tuple",
-			"type": "Tuple(UInt64, UInt64)"
+			"type": "tuple(uint64, uint64)"
 		}
 	],
 

@@ -1,5 +1,6 @@
-drop table if exists prewhere_alias;
-CREATE TABLE prewhere_alias (a UInt8,  b Int32,  c UInt8 ALIAS a,  d Int64 ALIAS b + 1, e Int32 alias a + b) ENGINE = MergeTree ORDER BY tuple();
+SET query_mode = 'table';
+drop stream if exists prewhere_alias;
+create stream prewhere_alias (a uint8,  b int32,  c uint8 ALIAS a,  d int64 ALIAS b + 1, e int32 alias a + b) ENGINE = MergeTree ORDER BY tuple();
 insert into prewhere_alias values (1, 1);
 select '-';
 select a from prewhere_alias prewhere a = 1;
@@ -31,5 +32,5 @@ select a from prewhere_alias prewhere c;
 select b from prewhere_alias prewhere c;
 select c from prewhere_alias prewhere c;
 select d from prewhere_alias prewhere c;
-drop table if exists prewhere_alias;
+drop stream if exists prewhere_alias;
 

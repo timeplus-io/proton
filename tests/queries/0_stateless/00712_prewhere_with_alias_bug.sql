@@ -1,5 +1,6 @@
-drop table if exists prewhere_alias;
-create table prewhere_alias (a Int32, b Int32, c alias a + b) engine = MergeTree order by b;
+SET query_mode = 'table';
+drop stream if exists prewhere_alias;
+create stream prewhere_alias (a int32, b int32, c alias a + b) engine = MergeTree order by b;
 insert into prewhere_alias values(1, 1);
-select a, c + toInt32(1), (c + toInt32(1)) * 2 from prewhere_alias prewhere (c + toInt32(1)) * 2 = 6;
-drop table prewhere_alias;
+select a, c + to_int32(1), (c + to_int32(1)) * 2 from prewhere_alias prewhere (c + to_int32(1)) * 2 = 6;
+drop stream prewhere_alias;

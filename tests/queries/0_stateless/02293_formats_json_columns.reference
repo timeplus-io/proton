@@ -1,42 +1,42 @@
 JSONColumns
 {
 	"a": [0, 1, 2, 3, 4],
-	"b": ["String", "String", "String", "String", "String"],
-	"c": [[[[],"String"],[[],"gnirtS"]], [[[0],"String"],[[0],"gnirtS"]], [[[0,1],"String"],[[0,1],"gnirtS"]], [[[],"String"],[[0,1,2],"gnirtS"]], [[[0],"String"],[[],"gnirtS"]]]
+	"b": ["string", "string", "string", "string", "string"],
+	"c": [[[[],"string"],[[],"gnirtS"]], [[[0],"string"],[[0],"gnirtS"]], [[[0,1],"string"],[[0,1],"gnirtS"]], [[[],"string"],[[0,1,2],"gnirtS"]], [[[0],"string"],[[],"gnirtS"]]]
 }
-a	Nullable(Float64)					
-b	Nullable(String)					
-c	Array(Tuple(Array(Nullable(Float64)), Nullable(String)))					
-0	String	[([],'String'),([],'gnirtS')]
-1	String	[([0],'String'),([0],'gnirtS')]
-2	String	[([0,1],'String'),([0,1],'gnirtS')]
-3	String	[([],'String'),([0,1,2],'gnirtS')]
-4	String	[([0],'String'),([],'gnirtS')]
+a	Nullable(float64)					
+b	Nullable(string)					
+c	array(tuple(array(Nullable(float64)), Nullable(string)))					
+0	string	[([],'string'),([],'gnirtS')]
+1	string	[([0],'string'),([0],'gnirtS')]
+2	string	[([0,1],'string'),([0,1],'gnirtS')]
+3	string	[([],'string'),([0,1,2],'gnirtS')]
+4	string	[([0],'string'),([],'gnirtS')]
 JSONCompactColumns
 [
 	[0, 1, 2, 3, 4],
-	["String", "String", "String", "String", "String"],
-	[[[[],"String"],[[],"gnirtS"]], [[[0],"String"],[[0],"gnirtS"]], [[[0,1],"String"],[[0,1],"gnirtS"]], [[[],"String"],[[0,1,2],"gnirtS"]], [[[0],"String"],[[],"gnirtS"]]]
+	["string", "string", "string", "string", "string"],
+	[[[[],"string"],[[],"gnirtS"]], [[[0],"string"],[[0],"gnirtS"]], [[[0,1],"string"],[[0,1],"gnirtS"]], [[[],"string"],[[0,1,2],"gnirtS"]], [[[0],"string"],[[],"gnirtS"]]]
 ]
-c1	Nullable(Float64)					
-c2	Nullable(String)					
-c3	Array(Tuple(Array(Nullable(Float64)), Nullable(String)))					
-0	String	[([],'String'),([],'gnirtS')]
-1	String	[([0],'String'),([0],'gnirtS')]
-2	String	[([0,1],'String'),([0,1],'gnirtS')]
-3	String	[([],'String'),([0,1,2],'gnirtS')]
-4	String	[([0],'String'),([],'gnirtS')]
+c1	Nullable(float64)					
+c2	Nullable(string)					
+c3	array(tuple(array(Nullable(float64)), Nullable(string)))					
+0	string	[([],'string'),([],'gnirtS')]
+1	string	[([0],'string'),([0],'gnirtS')]
+2	string	[([0,1],'string'),([0,1],'gnirtS')]
+3	string	[([],'string'),([0,1,2],'gnirtS')]
+4	string	[([0],'string'),([],'gnirtS')]
 JSONColumnsWithMetadata
 {
 	"meta":
 	[
 		{
 			"name": "sum",
-			"type": "UInt64"
+			"type": "uint64"
 		},
 		{
 			"name": "avg",
-			"type": "Float64"
+			"type": "float64"
 		}
 	],
 
@@ -74,30 +74,30 @@ JSONColumnsWithMetadata
 		"bytes_read": 20
 	}
 }
-b	Nullable(Float64)					
-a	Nullable(Float64)					
-c	Nullable(Float64)					
-d	Nullable(String)					
+b	Nullable(float64)					
+a	Nullable(float64)					
+c	Nullable(float64)					
+d	Nullable(string)					
 1	3	\N	\N
 2	2	\N	\N
 3	1	\N	\N
 \N	\N	1	\N
 \N	\N	2	\N
 \N	\N	3	\N
-\N	\N	\N	String
+\N	\N	\N	string
 OK
 3	
 2	
 1	
-c1	Nullable(Float64)					
-c2	Nullable(Float64)					
-c3	Nullable(String)					
+c1	Nullable(float64)					
+c2	Nullable(float64)					
+c3	Nullable(string)					
 1	1	\N
 2	2	\N
 3	3	\N
 1	\N	\N
 2	\N	\N
 3	\N	\N
-1	2	String
+1	2	string
 OK
 OK

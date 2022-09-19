@@ -3,15 +3,15 @@
 	[
 		{
 			"name": "total",
-			"type": "Nullable(UInt8)"
+			"type": "Nullable(uint8)"
 		},
 		{
 			"name": "arrayElement(k, 1)",
-			"type": "Nullable(UInt16)"
+			"type": "Nullable(uint16)"
 		},
 		{
 			"name": "arrayElement(k, 2)",
-			"type": "Nullable(UInt16)"
+			"type": "Nullable(uint16)"
 		}
 	],
 

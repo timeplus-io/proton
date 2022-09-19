@@ -11,18 +11,18 @@ cat "$SAMPLE_FILE"
 
 echo '******************'
 echo 'Read twice from a regular file'
-${CLICKHOUSE_LOCAL} --structure 'x UInt64, s String' -q 'select * from table; select * from table;' --file "$SAMPLE_FILE"
+${CLICKHOUSE_LOCAL} --structure 'x uint64, s string' -q 'select * from table; select * from table;' --file "$SAMPLE_FILE"
 echo '---'
-${CLICKHOUSE_LOCAL} --structure 'x UInt64, s String' -q 'select * from table WHERE x IN (select x from table);' --file "$SAMPLE_FILE"
+${CLICKHOUSE_LOCAL} --structure 'x uint64, s string' -q 'select * from table WHERE x IN (select x from table);' --file "$SAMPLE_FILE"
 echo '---'
-${CLICKHOUSE_LOCAL} --structure 'x UInt64, s String' -q 'select * from table UNION ALL select * from table;' --file "$SAMPLE_FILE"
+${CLICKHOUSE_LOCAL} --structure 'x uint64, s string' -q 'select * from table UNION ALL select * from table;' --file "$SAMPLE_FILE"
 
 echo '******************'
 echo 'Read twice from file descriptor that corresponds to a regular file'
-${CLICKHOUSE_LOCAL} --structure 'x UInt64, s String' -q 'select * from table; select * from table;' < "$SAMPLE_FILE"
+${CLICKHOUSE_LOCAL} --structure 'x uint64, s string' -q 'select * from table; select * from table;' < "$SAMPLE_FILE"
 echo '---'
-${CLICKHOUSE_LOCAL} --structure 'x UInt64, s String' -q 'select * from table WHERE x IN (select x from table);' < "$SAMPLE_FILE"
+${CLICKHOUSE_LOCAL} --structure 'x uint64, s string' -q 'select * from table WHERE x IN (select x from table);' < "$SAMPLE_FILE"
 echo '---'
-${CLICKHOUSE_LOCAL} --structure 'x UInt64, s String' -q 'select * from table UNION ALL select * from table;' < "$SAMPLE_FILE"
+${CLICKHOUSE_LOCAL} --structure 'x uint64, s string' -q 'select * from table UNION ALL select * from table;' < "$SAMPLE_FILE"
 
 rm "$SAMPLE_FILE"

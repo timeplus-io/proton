@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS cube;
-CREATE TABLE cube(a String, b Int32, s Int32) ENGINE = Memory;
+DROP STREAM IF EXISTS cube;
+create stream cube(a string, b int32, s int32) ;
 
 INSERT INTO cube VALUES ('a', 1, 10), ('a', 1, 15), ('a', 2, 20);
 INSERT INTO cube VALUES ('a', 2, 25), ('b', 1, 10), ('b', 1, 5);
@@ -16,4 +16,4 @@ SELECT a, b, sum(s), count() from cube GROUP BY a, b WITH CUBE WITH TOTALS ORDER
 SET group_by_two_level_threshold = 1;
 SELECT a, b, sum(s), count() from cube GROUP BY a, b WITH CUBE ORDER BY a, b;
 
-DROP TABLE cube;
+DROP STREAM cube;

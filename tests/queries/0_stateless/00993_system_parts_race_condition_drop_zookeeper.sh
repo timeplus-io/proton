@@ -21,7 +21,7 @@ function thread2()
 {
     while true; do
         REPLICA=$(($RANDOM % 10))
-        $CLICKHOUSE_CLIENT -n --query "ALTER TABLE alter_table_$REPLICA ADD COLUMN h String '0'; ALTER TABLE alter_table_$REPLICA MODIFY COLUMN h UInt64; ALTER TABLE alter_table_$REPLICA DROP COLUMN h;"; 
+        $CLICKHOUSE_CLIENT -n --query "ALTER STREAM alter_table_$REPLICA ADD COLUMN h string '0'; ALTER STREAM alter_table_$REPLICA MODIFY COLUMN h uint64; ALTER STREAM alter_table_$REPLICA DROP COLUMN h;"; 
     done
 }
 
@@ -29,7 +29,7 @@ function thread3()
 {
     while true; do
         REPLICA=$(($RANDOM % 10))
-        $CLICKHOUSE_CLIENT -q "INSERT INTO alter_table_$REPLICA SELECT rand(1), rand(2), 1 / rand(3), toString(rand(4)), [rand(5), rand(6)], rand(7) % 2 ? NULL : generateUUIDv4(), (rand(8), rand(9)) FROM numbers(100000)"; 
+        $CLICKHOUSE_CLIENT -q "INSERT INTO alter_table_$REPLICA SELECT rand(1), rand(2), 1 / rand(3), to_string(rand(4)), [rand(5), rand(6)], rand(7) % 2 ? NULL : generateUUIDv4(), (rand(8), rand(9)) FROM numbers(100000)"; 
     done
 }
 
@@ -37,7 +37,7 @@ function thread4()
 {
     while true; do
         REPLICA=$(($RANDOM % 10))
-        $CLICKHOUSE_CLIENT -q "OPTIMIZE TABLE alter_table_$REPLICA FINAL"; 
+        $CLICKHOUSE_CLIENT -q "OPTIMIZE STREAM alter_table_$REPLICA FINAL"; 
         sleep 0.$RANDOM;
     done
 }
@@ -46,7 +46,7 @@ function thread5()
 {
     while true; do
         REPLICA=$(($RANDOM % 10))
-        $CLICKHOUSE_CLIENT -q "ALTER TABLE alter_table_$REPLICA DELETE WHERE cityHash64(a,b,c,d,e,g) % 1048576 < 524288";
+        $CLICKHOUSE_CLIENT -q "ALTER STREAM alter_table_$REPLICA DELETE WHERE cityHash64(a,b,c,d,e,g) % 1048576 < 524288";
         sleep 0.$RANDOM;
     done
 }
@@ -55,8 +55,8 @@ function thread6()
 {
     while true; do
         REPLICA=$(($RANDOM % 10))
-        $CLICKHOUSE_CLIENT -n -q "DROP TABLE IF EXISTS alter_table_$REPLICA;
-            CREATE TABLE alter_table_$REPLICA (a UInt8, b Int16, c Float32, d String, e Array(UInt8), f Nullable(UUID), g Tuple(UInt8, UInt16)) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/alter_table', 'r_$REPLICA') ORDER BY a PARTITION BY b % 10 SETTINGS old_parts_lifetime = 1, cleanup_delay_period = 0, cleanup_delay_period_random_add = 0;";
+        $CLICKHOUSE_CLIENT -n -q "DROP STREAM IF EXISTS alter_table_$REPLICA;
+            create stream alter_table_$REPLICA (a uint8, b Int16, c Float32, d string, e array(uint8), f Nullable(UUID), g tuple(uint8, uint16)) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/alter_table', 'r_$REPLICA') ORDER BY a PARTITION BY b % 10 SETTINGS old_parts_lifetime = 1, cleanup_delay_period = 0, cleanup_delay_period_random_add = 0;";
         sleep 0.$RANDOM;
         done
 }
@@ -105,6 +105,6 @@ wait
 check_replication_consistency "alter_table_" "count(), sum(a), sum(b), round(sum(c))"
 
 for i in {0..9}; do
-    $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS alter_table_$i" 2>&1 | grep "was not completely removed from ZooKeeper" &
+    $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS alter_table_$i" 2>&1 | grep "was not completely removed from ZooKeeper" &
 done
 wait

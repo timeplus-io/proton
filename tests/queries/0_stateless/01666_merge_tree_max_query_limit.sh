@@ -9,9 +9,9 @@ function wait_for_query_to_start() {
 }
 
 ${CLICKHOUSE_CLIENT} --multiline --multiquery --query "
-drop table if exists simple;
+drop stream if exists simple;
 
-create table simple (i int, j int) engine = MergeTree order by i
+create stream simple (i int, j int) engine = MergeTree order by i
 settings index_granularity = 1, max_concurrent_queries = 1, min_marks_to_honor_max_concurrent_queries = 2;
 
 insert into simple select number, number + 100 from numbers(5000);
@@ -36,7 +36,7 @@ ${CLICKHOUSE_CLIENT} --query "select * from simple where i = 0"
 
 # We can modify the settings to take effect for future queries
 echo "Modify min_marks_to_honor_max_concurrent_queries to 1"
-${CLICKHOUSE_CLIENT} --query "alter table simple modify setting min_marks_to_honor_max_concurrent_queries = 1"
+${CLICKHOUSE_CLIENT} --query "alter stream simple modify setting min_marks_to_honor_max_concurrent_queries = 1"
 
 # Now smaller queries are also throttled
 echo "Check if another query with less marks to read is throttled"
@@ -46,14 +46,14 @@ CODE=$?
 echo "yes"
 
 echo "Modify max_concurrent_queries to 2"
-${CLICKHOUSE_CLIENT} --query "alter table simple modify setting max_concurrent_queries = 2"
+${CLICKHOUSE_CLIENT} --query "alter stream simple modify setting max_concurrent_queries = 2"
 
 # Now more queries are accepted
 echo "Check if another query is passed"
 ${CLICKHOUSE_CLIENT} --query "select * from simple where i = 0"
 
 echo "Modify max_concurrent_queries back to 1"
-${CLICKHOUSE_CLIENT} --query "alter table simple modify setting max_concurrent_queries = 1"
+${CLICKHOUSE_CLIENT} --query "alter stream simple modify setting max_concurrent_queries = 1"
 
 # Now queries are throttled again
 echo "Check if another query with less marks to read is throttled"
@@ -74,4 +74,4 @@ ${CLICKHOUSE_CLIENT} --query_id "$query_id" --query "select i from simple where 
 ${CLICKHOUSE_CLIENT} --query "system flush logs"
 if [[ $(${CLICKHOUSE_CLIENT} --query "select count() > 0 from system.text_log where query_id = '$query_id' and level = 'Warning' and message like '%We have query_id removed but it\'s not recorded. This is a bug%' format TSVRaw") == 1 ]]; then echo "We have query_id removed but it's not recorded. This is a bug." >&2; exit 1; fi
 
-${CLICKHOUSE_CLIENT} --query "drop table simple"
+${CLICKHOUSE_CLIENT} --query "drop stream simple"

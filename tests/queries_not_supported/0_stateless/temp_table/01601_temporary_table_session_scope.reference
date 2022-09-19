@@ -1,0 +1,5 @@
+CREATE TEMPORARY STREAM tmptable (`x` uint32) 
+CREATE TEMPORARY STREAM tmptable (`y` float64, `z` string) 
+x	uint32	1
+y	float64	1
+z	string	2

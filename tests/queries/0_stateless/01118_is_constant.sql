@@ -1,6 +1,6 @@
 select isConstant(1);
 select isConstant([1]);
-select isConstant(arrayJoin([1]));
+select isConstant(array_join([1]));
 SELECT isConstant((SELECT 1));
 SELECT isConstant(x) FROM (SELECT 1 x);
 SELECT '---';

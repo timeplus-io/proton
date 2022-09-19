@@ -1,8 +1,8 @@
 -- Tags: no-fasttest
 
-DROP TABLE IF EXISTS table1;
+DROP STREAM IF EXISTS table1;
 
-CREATE TABLE table1 (lat Float64, lon Float64, resolution UInt8) ENGINE = Memory;
+create stream table1 (lat float64, lon float64, resolution uint8) ;
 
 INSERT INTO table1 VALUES(55.77922738, 37.63098076, 15);
 INSERT INTO table1 VALUES(55.76324100, 37.66018300, 15);
@@ -16,4 +16,4 @@ select geoToH3(lon, lat, 15) AS k from table1 order by lat, lon, k;
 select lat, lon, geoToH3(lon, lat, 15) AS k from table1 order by lat, lon, k;
 select geoToH3(lon, lat, resolution) AS k, count(*) from table1 group by k order by k;
 
-DROP TABLE table1
+DROP STREAM table1

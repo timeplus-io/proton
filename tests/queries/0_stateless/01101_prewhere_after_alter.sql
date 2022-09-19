@@ -1,18 +1,18 @@
-DROP TABLE IF EXISTS test_a;
-DROP TABLE IF EXISTS test_b;
+DROP STREAM IF EXISTS test_a;
+DROP STREAM IF EXISTS test_b;
 
-CREATE TABLE test_a
+create stream test_a
 (
-    OldColumn String DEFAULT '',
-    EventDate Date DEFAULT toDate(EventTime),
+    OldColumn string DEFAULT '',
+    EventDate date DEFAULT to_date(EventTime),
     EventTime DateTime
 ) ENGINE = MergeTree(EventDate, EventTime, 8192);
 
-CREATE TABLE test_b
+create stream test_b
 (
-    OldColumn String DEFAULT '',
-    NewColumn String DEFAULT '',
-    EventDate Date DEFAULT toDate(EventTime),
+    OldColumn string DEFAULT '',
+    NewColumn string DEFAULT '',
+    EventDate date DEFAULT to_date(EventTime),
     EventTime DateTime
 ) ENGINE = MergeTree(EventDate, EventTime, 8192);
 
@@ -21,7 +21,7 @@ INSERT INTO test_a (OldColumn, EventTime) VALUES('1', now());
 INSERT INTO test_b (OldColumn, NewColumn, EventTime) VALUES('1', '1a', now());
 INSERT INTO test_b (OldColumn, NewColumn, EventTime) VALUES('2', '2a', now());
 
-ALTER TABLE test_a ADD COLUMN NewColumn String DEFAULT '' AFTER OldColumn;
+ALTER STREAM test_a ADD COLUMN NewColumn string DEFAULT '' AFTER OldColumn;
 
 INSERT INTO test_a (OldColumn, NewColumn, EventTime) VALUES('2', '2a', now());
 
@@ -32,5 +32,5 @@ INNER JOIN
 Using OldColumn
 PREWHERE NewColumn != '';
 
-DROP TABLE test_a;
-DROP TABLE test_b;
+DROP STREAM test_a;
+DROP STREAM test_b;

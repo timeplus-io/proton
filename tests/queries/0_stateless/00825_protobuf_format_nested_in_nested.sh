@@ -12,9 +12,9 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS nested_in_nested_protobuf_00825;
+DROP STREAM IF EXISTS nested_in_nested_protobuf_00825;
 
-CREATE TABLE nested_in_nested_protobuf_00825 (x Nested (y Nested (z Int64))) ENGINE = MergeTree ORDER BY tuple();
+create stream nested_in_nested_protobuf_00825 (x nested (y nested (z int64))) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO nested_in_nested_protobuf_00825 VALUES ([[(1),(2)],[(3),(4),(5)]]), ([[(6)]]), ([[]]), ([]);
 
@@ -34,4 +34,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO nested_in_nested_protobuf_00825 FORMAT P
 $CLICKHOUSE_CLIENT --query "SELECT * FROM nested_in_nested_protobuf_00825"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE nested_in_nested_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM nested_in_nested_protobuf_00825"

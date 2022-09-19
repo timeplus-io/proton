@@ -1,0 +1,18 @@
+DROP STREAM IF EXISTS src;
+DROP STREAM IF EXISTS dst1;
+DROP STREAM IF EXISTS src_to_dst1;
+DROP STREAM IF EXISTS dst2;
+
+create stream src (x uint8) ENGINE Memory;
+create stream dst1 (x uint8) ENGINE Memory;
+CREATE MATERIALIZED VIEW src_to_dst1 TO dst1 AS SELECT x + 1 as x FROM src;
+CREATE MATERIALIZED VIEW dst2 ENGINE Memory AS SELECT x + 1 as x FROM dst1;
+
+INSERT INTO src VALUES (1), (2);
+SELECT * FROM dst1 ORDER BY x;
+SELECT * FROM dst2 ORDER BY x;
+
+DROP STREAM src;
+DROP STREAM src_to_dst1;
+DROP STREAM dst1;
+DROP STREAM dst2;

@@ -1,8 +1,8 @@
 SET joined_subquery_requires_alias = 0;
 
-DROP TABLE IF EXISTS ANIMAL;
+DROP STREAM IF EXISTS ANIMAL;
 
-CREATE TABLE ANIMAL ( ANIMAL Nullable(String) ) engine = TinyLog;
+create stream ANIMAL ( ANIMAL Nullable(string) ) engine = TinyLog;
 INSERT INTO ANIMAL (ANIMAL) VALUES ('CAT'), ('FISH'), ('DOG'), ('HORSE'), ('BIRD');
 
 select * from (
@@ -19,4 +19,4 @@ group by x.b
 having ANIMAL >= 0) ANIMAL
 where ANIMAL.ANIMAL >= 0;
 
-DROP TABLE ANIMAL;
+DROP STREAM ANIMAL;

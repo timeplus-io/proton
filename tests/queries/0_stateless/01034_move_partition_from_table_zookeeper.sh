@@ -24,11 +24,11 @@ function query_with_retry
     echo "Query '$1' failed with '$result'"
 }
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS src;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS dst;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS src;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS dst;"
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE src (p UInt64, k String, d UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src1', '1') PARTITION BY p ORDER BY k;"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE dst (p UInt64, k String, d UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst1', '1') PARTITION BY p ORDER BY k SETTINGS old_parts_lifetime=1, cleanup_delay_period=1, cleanup_delay_period_random_add=0;"
+$CLICKHOUSE_CLIENT --query="create stream src (p uint64, k string, d uint64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src1', '1') PARTITION BY p ORDER BY k;"
+$CLICKHOUSE_CLIENT --query="create stream dst (p uint64, k string, d uint64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst1', '1') PARTITION BY p ORDER BY k SETTINGS old_parts_lifetime=1, cleanup_delay_period=1, cleanup_delay_period_random_add=0;"
 
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (0, '0', 1);"
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (1, '0', 1);"
@@ -46,38 +46,38 @@ $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM dst;"
 
 
 $CLICKHOUSE_CLIENT --query="SELECT 'MOVE simple';"
-query_with_retry "ALTER TABLE src MOVE PARTITION 1 TO TABLE dst;"
+query_with_retry "ALTER STREAM src MOVE PARTITION 1 TO TABLE dst;"
 
 $CLICKHOUSE_CLIENT --query="SYSTEM SYNC REPLICA dst;"
 $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM src;"
 $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM dst;"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE src;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE dst;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM src;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM dst;"
 
 $CLICKHOUSE_CLIENT --query="SELECT 'MOVE incompatible schema missing column';"
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE src (p UInt64, k String, d UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src2', '1') PARTITION BY p ORDER BY (d, p);"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE dst (p UInt64, d UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst2', '1') PARTITION BY p ORDER BY (d, p) SETTINGS old_parts_lifetime=1, cleanup_delay_period=1, cleanup_delay_period_random_add=0;"
+$CLICKHOUSE_CLIENT --query="create stream src (p uint64, k string, d uint64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src2', '1') PARTITION BY p ORDER BY (d, p);"
+$CLICKHOUSE_CLIENT --query="create stream dst (p uint64, d uint64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst2', '1') PARTITION BY p ORDER BY (d, p) SETTINGS old_parts_lifetime=1, cleanup_delay_period=1, cleanup_delay_period_random_add=0;"
 
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (0, '0', 1);"
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (1, '0', 1);"
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (1, '1', 1);"
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (2, '0', 1);"
 
-query_with_retry "ALTER TABLE src MOVE PARTITION 1 TO TABLE dst;" &>-
+query_with_retry "ALTER STREAM src MOVE PARTITION 1 TO TABLE dst;" &>-
 $CLICKHOUSE_CLIENT --query="SYSTEM SYNC REPLICA dst;"
 
 $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM src;"
 $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM dst;"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE src;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE dst;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM src;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM dst;"
 
 $CLICKHOUSE_CLIENT --query="SELECT 'MOVE incompatible schema different order by';"
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE src (p UInt64, k String, d UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src3', '1') PARTITION BY p ORDER BY (p, k, d);"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE dst (p UInt64, k String, d UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst3', '1') PARTITION BY p ORDER BY (d, k, p);"
+$CLICKHOUSE_CLIENT --query="create stream src (p uint64, k string, d uint64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/src3', '1') PARTITION BY p ORDER BY (p, k, d);"
+$CLICKHOUSE_CLIENT --query="create stream dst (p uint64, k string, d uint64) ENGINE = ReplicatedMergeTree('/clickhouse/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/dst3', '1') PARTITION BY p ORDER BY (d, k, p);"
 
 
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (0, '0', 1);"
@@ -85,12 +85,12 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (1, '0', 1);"
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (1, '1', 1);"
 $CLICKHOUSE_CLIENT --query="INSERT INTO src VALUES (2, '0', 1);"
 
-query_with_retry "ALTER TABLE src MOVE PARTITION 1 TO TABLE dst;" &>-
+query_with_retry "ALTER STREAM src MOVE PARTITION 1 TO TABLE dst;" &>-
 $CLICKHOUSE_CLIENT --query="SYSTEM SYNC REPLICA dst;"
 
 $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM src;"
 $CLICKHOUSE_CLIENT --query="SELECT count(), sum(d) FROM dst;"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE src;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE dst;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM src;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM dst;"
 

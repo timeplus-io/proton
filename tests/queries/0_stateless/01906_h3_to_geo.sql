@@ -1,8 +1,8 @@
 -- Tags: no-fasttest
 
-DROP TABLE IF EXISTS h3_indexes;
+DROP STREAM IF EXISTS h3_indexes;
 
-CREATE TABLE h3_indexes (h3_index UInt64) ENGINE = Memory;
+create stream h3_indexes (h3_index uint64) ;
 
 -- Random geo coordinates were generated using the H3 tool: https://github.com/ClickHouse-Extras/h3/blob/master/src/apps/testapps/mkRandGeo.c at various resolutions from 0 to 15.
 -- Corresponding H3 index values were in turn generated with those geo coordinates using `geoToH3(lon, lat, res)` ClickHouse function for the following test.
@@ -27,13 +27,13 @@ INSERT INTO h3_indexes VALUES (644178757620501158);
 
 SELECT h3ToGeo(h3_index) FROM h3_indexes ORDER BY h3_index;
 
-DROP TABLE h3_indexes;
+DROP STREAM h3_indexes;
 
-DROP TABLE IF EXISTS h3_geo;
+DROP STREAM IF EXISTS h3_geo;
 
 -- compare if the results of h3ToGeo and geoToH3 are the same
 
-CREATE TABLE h3_geo(lat Float64, lon Float64, res UInt8) ENGINE = Memory;
+create stream h3_geo(lat float64, lon float64, res uint8) ;
 
 INSERT INTO h3_geo VALUES (-173.6412167681162, -14.130272474941535, 0);
 INSERT INTO h3_geo VALUES (59.48137613600854, 58.020407687755686, 1);
@@ -60,4 +60,4 @@ SELECT result FROM (
     FROM h3_geo
 );
 
-DROP TABLE h3_geo;
+DROP STREAM h3_geo;

@@ -1,12 +1,12 @@
 -- Tags: no-fasttest
 
-DROP TABLE IF EXISTS collate_test1;
-DROP TABLE IF EXISTS collate_test2;
-DROP TABLE IF EXISTS collate_test3;
+DROP STREAM IF EXISTS collate_test1;
+DROP STREAM IF EXISTS collate_test2;
+DROP STREAM IF EXISTS collate_test3;
 
-CREATE TABLE collate_test1 (x UInt32, s Array(String)) ENGINE=Memory();
-CREATE TABLE collate_test2 (x UInt32, s Array(LowCardinality(Nullable(String)))) ENGINE=Memory();
-CREATE TABLE collate_test3 (x UInt32, s Array(Array(String))) ENGINE=Memory();
+create stream collate_test1 (x uint32, s array(string)) ENGINE=Memory();
+create stream collate_test2 (x uint32, s array(LowCardinality(Nullable(string)))) ENGINE=Memory();
+create stream collate_test3 (x uint32, s array(array(string))) ENGINE=Memory();
 
 INSERT INTO collate_test1 VALUES (1, ['Ё']), (1, ['ё']), (1, ['а']), (2, ['А']), (2, ['я', 'а']), (2, ['Я']), (1, ['ё','а']), (1, ['ё', 'я']), (2, ['ё', 'а', 'а']);
 INSERT INTO collate_test2 VALUES (1, ['Ё']), (1, ['ё']), (1, ['а']), (2, ['А']), (2, ['я']), (2, [null, 'Я']), (1, ['ё','а']), (1, ['ё', null, 'я']), (2, ['ё', 'а', 'а', null]);
@@ -30,7 +30,7 @@ SELECT '';
 SELECT * FROM collate_test3 ORDER BY x, s COLLATE 'ru';
 SELECT '';
 
-DROP TABLE collate_test1;
-DROP TABLE collate_test2;
-DROP TABLE collate_test3;
+DROP STREAM collate_test1;
+DROP STREAM collate_test2;
+DROP STREAM collate_test3;
 

@@ -1,3 +1,4 @@
+SET query_mode = 'table';
 SET log_queries=1;
 SET log_profile_events=true;
 
@@ -62,4 +63,4 @@ WHERE query like '%SELECT ''SLEEP #6 TEST''%'
   AND event_date >= yesterday()
     FORMAT JSONEachRow;
 
-DROP TABLE sleep_view;
+drop stream sleep_view;

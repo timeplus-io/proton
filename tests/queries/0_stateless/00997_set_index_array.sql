@@ -1,16 +1,17 @@
-DROP TABLE IF EXISTS set_array;
+SET query_mode = 'table';
+drop stream IF EXISTS set_array;
 
-CREATE TABLE set_array
+create stream set_array
 (
-    primary_key String,
-    index_array Array(UInt64),
+    primary_key string,
+    index_array array(uint64),
     INDEX additional_index_array (index_array) TYPE set(10000) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY (primary_key);
 
 INSERT INTO set_array
 select
-  toString(intDiv(number, 1000000)) as primary_key,
+  to_string(int_div(number, 1000000)) as primary_key,
   array(number) as index_array
 from system.numbers
 limit 10000000;
@@ -19,4 +20,4 @@ SET max_rows_to_read = 8192;
 
 select count() from set_array where has(index_array, 333);
 
-DROP TABLE set_array;
+drop stream set_array;

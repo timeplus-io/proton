@@ -1,1 +1,1 @@
-SELECT CAST([(1, 'Hello'), (2, 'World')] AS Array(Tuple(a UInt64, b String)));
+SELECT CAST([(1, 'Hello'), (2, 'World')] AS array(tuple(a uint64, b string)));

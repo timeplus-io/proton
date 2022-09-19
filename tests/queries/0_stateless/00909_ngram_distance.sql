@@ -29,9 +29,9 @@ select round(1000 * ngramDistanceUTF8('абвгдеёжз', 'абвгдеёжз'
 select round(1000 * ngramDistanceUTF8('абвгдеёжз', 'абвгдеёж'));
 select round(1000 * ngramDistanceUTF8('абвгдеёжз', 'гдеёзд'));
 select round(1000 * ngramDistanceUTF8('абвгдеёжз', 'ёёёёёёёё'));
-
-drop table if exists test_distance;
-create table test_distance (Title String) engine = Memory;
+SET query_mode = 'table';
+drop stream if exists test_distance;
+create stream test_distance (Title string) engine = Memory;
 insert into test_distance values ('привет как дела?... Херсон'), ('привет как дела клип - Яндекс.Видео'), ('привет'), ('пап привет как дела - Яндекс.Видео'), ('привет братан как дела - Яндекс.Видео'), ('http://metric.ru/'), ('http://autometric.ru/'), ('http://metrica.yandex.com/'), ('http://metris.ru/'), ('http://metrika.ru/'), ('');
 
 SELECT Title, round(1000 * distance) FROM test_distance ORDER BY ngramDistanceUTF8(Title, Title) as distance;
@@ -177,4 +177,4 @@ SELECT Title, round(1000 * distance) FROM test_distance ORDER BY ngramDistanceCa
 SELECT Title, round(1000 * distance) FROM test_distance ORDER BY ngramDistanceCaseInsensitive(Title, 'metrics') as distance;
 SELECT Title, round(1000 * distance) FROM test_distance ORDER BY ngramDistanceCaseInsensitive(Title, 'YanDEX') as distance;
 
-drop table if exists test_distance;
+drop stream if exists test_distance;

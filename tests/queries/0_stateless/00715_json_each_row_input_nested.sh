@@ -7,8 +7,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS json_each_row_nested"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE json_each_row_nested (d1 UInt8, d2 String, n Nested (s String, i Int32) ) ENGINE = Memory"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS json_each_row_nested"
+$CLICKHOUSE_CLIENT -q "create stream json_each_row_nested (d1 uint8, d2 string, n nested (s string, i int32) ) "
 
 echo '{"d1" : 1, "d2" : "ok", "n.s" : ["abc", "def"], "n.i" : [1, 23]}
 { }
@@ -21,9 +21,9 @@ $CLICKHOUSE_CLIENT --max_threads=1 -q "SELECT * FROM json_each_row_nested"
 
 test_nested_json()
 {
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS json_each_row_nested"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS json_each_row_nested"
 
-$CLICKHOUSE_CLIENT -q "CREATE TABLE json_each_row_nested (d1 UInt8, d2 String, n Nested (s String, i Int32) ) ENGINE = Memory"
+$CLICKHOUSE_CLIENT -q "create stream json_each_row_nested (d1 uint8, d2 string, n nested (s string, i int32) ) "
 
 echo '{"d1" : 1, "d2" : "ok", "n" : { "s" : ["abc", "def"], "i" : [1, 23]} }
 { }
@@ -33,7 +33,7 @@ echo '{"d1" : 1, "d2" : "ok", "n" : { "s" : ["abc", "def"], "i" : [1, 23]} }
 | $CLICKHOUSE_CLIENT "$@" --input_format_skip_unknown_fields=1 -q "INSERT INTO json_each_row_nested FORMAT JSONEachRow"
 
 $CLICKHOUSE_CLIENT --max_threads=1 -q "SELECT * FROM json_each_row_nested"
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS json_each_row_nested"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS json_each_row_nested"
 }
 
 test_nested_json

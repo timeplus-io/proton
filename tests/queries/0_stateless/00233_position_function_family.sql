@@ -13,15 +13,15 @@ select 1 = position('a', '', 1);
 select 2 = position('a', '', 2);
 select 0 = position('a', '', 3);
 
-select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = groupArray(position('aaaa', '', number)) from numbers(10);
-select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = groupArray(position(materialize('aaaa'), '', number)) from numbers(10);
-select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = groupArray(position('aaaa', materialize(''), number)) from numbers(10);
-select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = groupArray(position(materialize('aaaa'), materialize(''), number)) from numbers(10);
+select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = group_array(position('aaaa', '', number)) from numbers(10);
+select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = group_array(position(materialize('aaaa'), '', number)) from numbers(10);
+select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = group_array(position('aaaa', materialize(''), number)) from numbers(10);
+select [1, 1, 2, 3, 4, 5, 0, 0, 0, 0] = group_array(position(materialize('aaaa'), materialize(''), number)) from numbers(10);
 
-select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = groupArray(position('aaaa', 'a', number)) from numbers(10);
-select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = groupArray(position(materialize('aaaa'), 'a', number)) from numbers(10);
-select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = groupArray(position('aaaa', materialize('a'), number)) from numbers(10);
-select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = groupArray(position(materialize('aaaa'), materialize('a'), number)) from numbers(10);
+select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = group_array(position('aaaa', 'a', number)) from numbers(10);
+select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = group_array(position(materialize('aaaa'), 'a', number)) from numbers(10);
+select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = group_array(position('aaaa', materialize('a'), number)) from numbers(10);
+select [1, 1, 2, 3, 4, 0, 0, 0, 0, 0] = group_array(position(materialize('aaaa'), materialize('a'), number)) from numbers(10);
 
 select 1 = position(materialize(''), '');
 select 1 = position(materialize('abc'), '');
@@ -137,10 +137,10 @@ select 0 = positionUTF8(materialize('абвабв'), materialize('б'), 6) from 
 select 2 = positionUTF8(materialize('абвабв'), materialize('бва'), 0) from system.numbers limit 10;
 select 0 = positionUTF8(materialize('абвабв'), materialize('бва'), 3) from system.numbers limit 10;
 
-select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = groupArray(positionUTF8(materialize('абвабв'), materialize('б'), number)) from numbers(10);
-select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = groupArray(positionUTF8('абвабв', materialize('б'), number)) from numbers(10);
-select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = groupArray(positionUTF8('абвабв', 'б', number)) from numbers(10);
-select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = groupArray(positionUTF8(materialize('абвабв'), 'б', number)) from numbers(10);
+select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = group_array(positionUTF8(materialize('абвабв'), materialize('б'), number)) from numbers(10);
+select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = group_array(positionUTF8('абвабв', materialize('б'), number)) from numbers(10);
+select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = group_array(positionUTF8('абвабв', 'б', number)) from numbers(10);
+select [2, 2, 2, 5, 5, 5, 0, 0, 0, 0] = group_array(positionUTF8(materialize('абвабв'), 'б', number)) from numbers(10);
 
 select 1 = positionCaseInsensitive('', '');
 select 1 = positionCaseInsensitive('abc', '');
@@ -262,26 +262,26 @@ select position(materialize('абв') as h, lower('аБв' as n)) = positionCase
 select position(materialize('абв') as h, lower('Бв' as n)) = positionCaseInsensitive(h, n) from system.numbers limit 10;
 select position(materialize('абв') as h, lower('В' as n)) = positionCaseInsensitive(h, n) from system.numbers limit 10;
 
-select positionUTF8('' as h, lowerUTF8('' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8('абв' as h, lowerUTF8('' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8('' as h, lowerUTF8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8('абв' as h, lowerUTF8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8('абв' as h, lowerUTF8('Бв' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8('абв' as h, lowerUTF8('в' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8('' as h, lower_utf8('' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8('абв' as h, lower_utf8('' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8('' as h, lower_utf8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8('абв' as h, lower_utf8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8('абв' as h, lower_utf8('Бв' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8('абв' as h, lower_utf8('в' as n)) = positionCaseInsensitiveUTF8(h, n);
 
-select positionUTF8(materialize('') as h, lowerUTF8('' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8(materialize('абв') as h, lowerUTF8('' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8(materialize('') as h, lowerUTF8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8(materialize('абв') as h, lowerUTF8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8(materialize('абв') as h, lowerUTF8('Бв' as n)) = positionCaseInsensitiveUTF8(h, n);
-select positionUTF8(materialize('абв') as h, lowerUTF8('В' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8(materialize('') as h, lower_utf8('' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8(materialize('абв') as h, lower_utf8('' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8(materialize('') as h, lower_utf8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8(materialize('абв') as h, lower_utf8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8(materialize('абв') as h, lower_utf8('Бв' as n)) = positionCaseInsensitiveUTF8(h, n);
+select positionUTF8(materialize('абв') as h, lower_utf8('В' as n)) = positionCaseInsensitiveUTF8(h, n);
 
-select positionUTF8(materialize('') as h, lowerUTF8('' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
-select positionUTF8(materialize('абв') as h, lowerUTF8('' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
-select positionUTF8(materialize('') as h, lowerUTF8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
-select positionUTF8(materialize('абв') as h, lowerUTF8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
-select positionUTF8(materialize('абв') as h, lowerUTF8('Бв' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
-select positionUTF8(materialize('абв') as h, lowerUTF8('В' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
+select positionUTF8(materialize('') as h, lower_utf8('' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
+select positionUTF8(materialize('абв') as h, lower_utf8('' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
+select positionUTF8(materialize('') as h, lower_utf8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
+select positionUTF8(materialize('абв') as h, lower_utf8('аБв' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
+select positionUTF8(materialize('абв') as h, lower_utf8('Бв' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
+select positionUTF8(materialize('абв') as h, lower_utf8('В' as n)) = positionCaseInsensitiveUTF8(h, n) from system.numbers limit 10;
 
 
 select 2 = position('abcdefgh', materialize('b'));
@@ -483,22 +483,22 @@ select 1 = position('abab', materialize('ab'));
 select 1 = position('abababababababababababab', materialize('abab'));
 select 1 = position('abababababababababababab', materialize('abababababababababa'));
 
-select 0 = multiSearchAny('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchAnyCaseInsensitive('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchAnyCaseInsensitiveUTF8('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchAnyUTF8('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstIndex('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstIndexCaseInsensitive('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstIndexCaseInsensitiveUTF8('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstIndexUTF8('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstPosition('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstPositionCaseInsensitive('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstPositionCaseInsensitiveUTF8('\0', CAST([], 'Array(String)'));
-select 0 = multiSearchFirstPositionUTF8('\0', CAST([], 'Array(String)'));
-select [] = multiSearchAllPositions('\0', CAST([], 'Array(String)'));
-select [] = multiSearchAllPositionsCaseInsensitive('\0', CAST([], 'Array(String)'));
-select [] = multiSearchAllPositionsCaseInsensitiveUTF8('\0', CAST([], 'Array(String)'));
-select [] = multiSearchAllPositionsUTF8('\0', CAST([], 'Array(String)'));
+select 0 = multiSearchAny('\0', CAST([], 'array(string)'));
+select 0 = multiSearchAnyCaseInsensitive('\0', CAST([], 'array(string)'));
+select 0 = multiSearchAnyCaseInsensitiveUTF8('\0', CAST([], 'array(string)'));
+select 0 = multiSearchAnyUTF8('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstIndex('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstIndexCaseInsensitive('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstIndexCaseInsensitiveUTF8('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstIndexUTF8('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstPosition('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstPositionCaseInsensitive('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstPositionCaseInsensitiveUTF8('\0', CAST([], 'array(string)'));
+select 0 = multiSearchFirstPositionUTF8('\0', CAST([], 'array(string)'));
+select [] = multiSearchAllPositions('\0', CAST([], 'array(string)'));
+select [] = multiSearchAllPositionsCaseInsensitive('\0', CAST([], 'array(string)'));
+select [] = multiSearchAllPositionsCaseInsensitiveUTF8('\0', CAST([], 'array(string)'));
+select [] = multiSearchAllPositionsUTF8('\0', CAST([], 'array(string)'));
 
 select [2] = multiSearchAllPositions(materialize('abcdefgh'), ['b']);
 select [2] = multiSearchAllPositions(materialize('abcdefgh'), ['bc']);

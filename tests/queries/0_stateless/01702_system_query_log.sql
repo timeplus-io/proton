@@ -15,14 +15,14 @@ DROP SETTINGS PROFILE IF EXISTS sqllt_settings_profile;
 SELECT 'CREATE queries';
 CREATE DATABASE sqllt;
 
-CREATE TABLE sqllt.table
+create stream sqllt.table
 (
-    i UInt8, s String
+    i uint8, s string
 )
 ENGINE = MergeTree PARTITION BY tuple() ORDER BY tuple();
 
 CREATE VIEW sqllt.view AS SELECT i, s FROM sqllt.table;
-CREATE DICTIONARY sqllt.dictionary (key UInt64, value UInt64) PRIMARY KEY key SOURCE(CLICKHOUSE(DB 'sqllt' TABLE 'table' HOST 'localhost' PORT 9001)) LIFETIME(0) LAYOUT(FLAT());
+CREATE DICTIONARY sqllt.dictionary (key uint64, value uint64) PRIMARY KEY key SOURCE(CLICKHOUSE(DB 'sqllt' TABLE 'table' HOST 'localhost' PORT 9001)) LIFETIME(0) LAYOUT(FLAT());
 
 CREATE USER sqllt_user IDENTIFIED WITH PLAINTEXT_PASSWORD BY 'password';
 CREATE ROLE sqllt_role;
@@ -41,16 +41,16 @@ SET log_profile_events=false;
 SET DEFAULT ROLE sqllt_role TO sqllt_user;
 -- SET ROLE sqllt_role; -- tests are executed by user `default` which is defined in XML and is impossible to update.
 
-SELECT 'ALTER TABLE queries';
-ALTER TABLE sqllt.table ADD COLUMN new_col UInt32 DEFAULT 123456789;
-ALTER TABLE sqllt.table COMMENT COLUMN new_col 'dummy column with a comment';
-ALTER TABLE sqllt.table CLEAR COLUMN new_col;
-ALTER TABLE sqllt.table MODIFY COLUMN new_col DateTime DEFAULT '2015-05-18 07:40:13';
-ALTER TABLE sqllt.table MODIFY COLUMN new_col REMOVE COMMENT;
-ALTER TABLE sqllt.table RENAME COLUMN new_col TO the_new_col;
-ALTER TABLE sqllt.table DROP COLUMN the_new_col;
-ALTER TABLE sqllt.table UPDATE i = i + 1 WHERE 1;
-ALTER TABLE sqllt.table DELETE WHERE i > 65535;
+SELECT 'ALTER STREAM queries';
+ALTER STREAM sqllt.table ADD COLUMN new_col uint32 DEFAULT 123456789;
+ALTER STREAM sqllt.table COMMENT COLUMN new_col 'dummy column with a comment';
+ALTER STREAM sqllt.table CLEAR COLUMN new_col;
+ALTER STREAM sqllt.table MODIFY COLUMN new_col DateTime DEFAULT '2015-05-18 07:40:13';
+ALTER STREAM sqllt.table MODIFY COLUMN new_col REMOVE COMMENT;
+ALTER STREAM sqllt.table RENAME COLUMN new_col TO the_new_col;
+ALTER STREAM sqllt.table DROP COLUMN the_new_col;
+ALTER STREAM sqllt.table UPDATE i = i + 1 WHERE 1;
+ALTER STREAM sqllt.table DELETE WHERE i > 65535;
 
 -- not done, seems to hard, so I've skipped queries of ALTER-X, where X is:
 -- PARTITION
@@ -87,7 +87,7 @@ SYSTEM START REPLICATED SENDS sqllt.table;
 -- Since we don't really care about the actual output, suppress it with `FORMAT Null`.
 SELECT 'SHOW queries';
 
-SHOW CREATE TABLE sqllt.table FORMAT Null;
+SHOW create stream sqllt.table FORMAT Null;
 SHOW CREATE DICTIONARY sqllt.dictionary FORMAT Null;
 SHOW DATABASES LIKE 'sqllt' FORMAT Null;
 SHOW TABLES FROM sqllt FORMAT Null;
@@ -119,7 +119,7 @@ ATTACH TABLE sqllt.table;
 RENAME TABLE sqllt.table TO sqllt.table_new;
 RENAME TABLE sqllt.table_new TO sqllt.table;
 TRUNCATE TABLE sqllt.table;
-DROP TABLE sqllt.table SYNC;
+DROP STREAM sqllt.table SYNC;
 
 SET log_comment='';
 ---------------------------------------------------------------------------------------------------

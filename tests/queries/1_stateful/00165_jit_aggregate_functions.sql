@@ -46,7 +46,7 @@ SELECT
     sumIf(WatchID, predicate),
     avgIf(WatchID, predicate),
     avgWeightedIf(WatchID, CounterID, predicate),
-    countIf(WatchID, predicate),
+    count_if(WatchID, predicate),
     groupBitOrIf(WatchID, predicate),
     groupBitAndIf(WatchID, predicate),
     groupBitXorIf(WatchID, predicate)
@@ -93,7 +93,7 @@ SELECT
     sumIf(WatchID, predicate),
     avgIf(WatchID, predicate),
     avgWeightedIf(WatchID, CounterID, predicate),
-    countIf(WatchID, predicate),
+    count_if(WatchID, predicate),
     groupBitOrIf(WatchID, predicate),
     groupBitAndIf(WatchID, predicate),
     groupBitXorIf(WatchID, predicate)
@@ -147,7 +147,7 @@ SELECT
     sumIf(WatchID, predicate),
     avgIf(WatchID, predicate),
     avgWeightedIf(WatchID, CounterID, predicate),
-    countIf(WatchID, predicate),
+    count_if(WatchID, predicate),
     groupBitOrIf(WatchID, predicate),
     groupBitAndIf(WatchID, predicate),
     groupBitXorIf(WatchID, predicate)
@@ -194,7 +194,7 @@ SELECT
     sumIf(WatchID, predicate),
     avgIf(WatchID, predicate),
     avgWeightedIf(WatchID, CounterID, predicate),
-    countIf(WatchID, predicate),
+    count_if(WatchID, predicate),
     groupBitOrIf(WatchID, predicate),
     groupBitAndIf(WatchID, predicate),
     groupBitXorIf(WatchID, predicate)

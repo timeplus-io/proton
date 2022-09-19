@@ -1,8 +1,8 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS mt;
+DROP STREAM IF EXISTS mt;
 
-CREATE TABLE mt (x UInt64) ENGINE = MergeTree ORDER BY x SETTINGS max_part_loading_threads = 16, parts_to_delay_insert = 100000, parts_to_throw_insert = 100000;
+create stream mt (x uint64) ENGINE = MergeTree ORDER BY x SETTINGS max_part_loading_threads = 16, parts_to_delay_insert = 100000, parts_to_throw_insert = 100000;
 
 SYSTEM STOP MERGES mt;
 
@@ -18,4 +18,4 @@ ATTACH TABLE mt;
 SELECT count(), sum(x) FROM mt;
 
 SYSTEM START MERGES mt;
-DROP TABLE mt;
+DROP STREAM mt;

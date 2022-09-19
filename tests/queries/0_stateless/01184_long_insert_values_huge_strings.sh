@@ -5,8 +5,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "drop table if exists huge_strings"
-$CLICKHOUSE_CLIENT -q "create table huge_strings (n UInt64, l UInt64, s String, h UInt64) engine=MergeTree order by n"
+$CLICKHOUSE_CLIENT -q "drop stream if exists huge_strings"
+$CLICKHOUSE_CLIENT -q "create stream huge_strings (n uint64, l uint64, s string, h uint64) engine=MergeTree order by n"
 
 # Timeouts are increased, because test can be slow with sanitizers and parallel runs.
 
@@ -20,4 +20,4 @@ $CLICKHOUSE_CLIENT -q "select count() from huge_strings"
 $CLICKHOUSE_CLIENT -q "select sum(l = length(s)) from huge_strings"
 $CLICKHOUSE_CLIENT -q "select sum(h = cityHash64(s)) from huge_strings"
 
-$CLICKHOUSE_CLIENT -q "drop table huge_strings"
+$CLICKHOUSE_CLIENT -q "drop stream huge_strings"

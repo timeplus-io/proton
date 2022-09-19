@@ -1,16 +1,16 @@
 -- Tags: no-fasttest
 
-SELECT arraySort(h3kRing(581276613233082367, toUInt16(1)));
-SELECT h3kRing(581276613233082367, toUInt16(0));
+SELECT arraySort(h3kRing(581276613233082367, to_uint16(1)));
+SELECT h3kRing(581276613233082367, to_uint16(0));
 SELECT h3kRing(581276613233082367, -1); -- { serverError 43 }
-SELECT h3kRing(581276613233082367, toUInt16(-1)); -- { serverError 12 }
+SELECT h3kRing(581276613233082367, to_uint16(-1)); -- { serverError 12 }
 
 
-DROP TABLE IF EXISTS h3_indexes;
+DROP STREAM IF EXISTS h3_indexes;
 
 -- Test h3 indices and k selected from original test fixture: https://github.com/uber/h3/blob/master/src/apps/testapps
 
-CREATE TABLE h3_indexes (h3_index UInt64, k UInt16) ENGINE = Memory;
+create stream h3_indexes (h3_index uint64, k uint16) ;
 
 
 INSERT INTO h3_indexes VALUES (579205133326352383,1);
@@ -33,4 +33,4 @@ INSERT INTO h3_indexes VALUES (644178757620501158,16);
 
 SELECT arraySort(h3kRing(h3_index, k)) FROM h3_indexes ORDER BY h3_index;
 
-DROP TABLE h3_indexes;
+DROP STREAM h3_indexes;

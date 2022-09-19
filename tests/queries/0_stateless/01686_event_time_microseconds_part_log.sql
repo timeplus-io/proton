@@ -1,14 +1,14 @@
-DROP TABLE IF EXISTS table_with_single_pk;
+DROP STREAM IF EXISTS table_with_single_pk;
 
-CREATE TABLE table_with_single_pk
+create stream table_with_single_pk
 (
-  key UInt8,
-  value String
+  key uint8,
+  value string
 )
 ENGINE = MergeTree
 ORDER BY key;
 
-INSERT INTO table_with_single_pk SELECT number, toString(number % 10) FROM numbers(1000000);
+INSERT INTO table_with_single_pk SELECT number, to_string(number % 10) FROM numbers(1000000);
 
 -- Check NewPart
 SYSTEM FLUSH LOGS;
@@ -19,7 +19,7 @@ WITH (
          ORDER BY event_time DESC
          LIMIT 1
     ) AS time
-SELECT if(dateDiff('second', toDateTime(time.2), toDateTime(time.1)) = 0, 'ok', 'fail');
+SELECT if(dateDiff('second', to_datetime(time.2), to_datetime(time.1)) = 0, 'ok', 'fail');
 
 -- Now let's check RemovePart
 TRUNCATE TABLE table_with_single_pk;
@@ -31,6 +31,6 @@ WITH (
          ORDER BY event_time DESC
          LIMIT 1
     ) AS time
-SELECT if(dateDiff('second', toDateTime(time.2), toDateTime(time.1)) = 0, 'ok', 'fail');
+SELECT if(dateDiff('second', to_datetime(time.2), to_datetime(time.1)) = 0, 'ok', 'fail');
 
-DROP TABLE table_with_single_pk;
+DROP STREAM table_with_single_pk;

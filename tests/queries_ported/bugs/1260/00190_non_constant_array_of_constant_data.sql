@@ -1,0 +1,11 @@
+SELECT array_filter(x -> not_empty(concat(x, 'hello')), ['']) FROM system.one ARRAY JOIN [0] AS elem, array_map(x -> concat(x, 'hello'), ['']) AS unused WHERE NOT ignore(elem);
+SELECT '---';
+SELECT array_filter(x -> x = 'hello', ['']) FROM system.one ARRAY JOIN [0] AS elem WHERE NOT ignore(elem) AND array_exists(x -> x = 'hello', ['']);
+SELECT '---';
+SELECT array_join([0]), replicate('hello', [1]) WHERE NOT ignore(replicate('hello', [1]));
+SELECT '---';
+SELECT array_join([0]), replicate('hello', empty_array_string()) FROM system.one ARRAY JOIN empty_array_string() AS unused WHERE NOT ignore(replicate('hello', empty_array_string()));
+SELECT '---';
+SELECT array_join([0]), replicate('hello', empty_array_string()) WHERE NOT ignore(replicate('hello', empty_array_string()));
+SELECT '---';
+SELECT replicate('hello', empty_array_string()) FROM system.one ARRAY JOIN empty_array_string() AS unused WHERE NOT ignore(replicate('hello', empty_array_string()));

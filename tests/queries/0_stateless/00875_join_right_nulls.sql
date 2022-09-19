@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS t;
-DROP TABLE IF EXISTS nt;
+DROP STREAM IF EXISTS t;
+DROP STREAM IF EXISTS nt;
 
-CREATE TABLE t (x String) ENGINE = Log();
-CREATE TABLE nt (x Nullable(String)) ENGINE = Log();
+create stream t (x string)  ();
+create stream nt (x Nullable(string))  ();
 
 INSERT INTO t (x) VALUES ('id'), ('1');
 INSERT INTO nt (x) VALUES ('id'), (NULL), ('1');
@@ -45,5 +45,5 @@ SELECT sum(isNull(t1.x)), count(t1.x) FROM nt AS t1 LEFT JOIN nt AS t2 USING(x);
 SELECT sum(isNull(t1.x)), count(t1.x) FROM nt AS t1 RIGHT JOIN nt AS t2 USING(x);
 SELECT sum(isNull(t1.x)), count(t1.x) FROM nt AS t1 FULL JOIN nt AS t2 USING(x);
 
-DROP TABLE t;
-DROP TABLE nt;
+DROP STREAM t;
+DROP STREAM nt;

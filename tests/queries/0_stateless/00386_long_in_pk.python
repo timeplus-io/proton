@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 def gen_queries():
-    create_template = 'create table tab_00386 (a Int8, b String, c Tuple(Int8), d Tuple(Tuple(Int8)), e Tuple(Int8, String), f Tuple(Tuple(Int8, String))) engine = MergeTree order by ({}) partition by {}'
-    drop_query = 'drop table if exists tab_00386'
+    create_template = 'create stream tab_00386 (a int8, b string, c tuple(int8), d tuple(tuple(int8)), e tuple(int8, string), f tuple(tuple(int8, string))) engine = MergeTree order by ({}) partition by {}'
+    drop_query = 'drop stream if exists tab_00386'
     values = ('1', "'a'", 'tuple(1)', 'tuple(tuple(1))', "(1, 'a')", "tuple((1, 'a'))")
     insert_query = "insert into tab_00386 values (1, 'a', tuple(1), tuple(tuple(1)), (1, 'a'), tuple((1, 'a')))"
     columns = tuple('a b c d'.split())
@@ -50,7 +50,7 @@ def main():
             print(resp.text)
             break
 
-    requests.post(url, data='drop table tab_00386')
+    requests.post(url, data='drop stream tab_00386')
 
 if __name__ == "__main__":
     main()

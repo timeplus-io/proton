@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS rollup_having;
-CREATE TABLE rollup_having (
-  a Nullable(String),
-  b Nullable(String)
-) ENGINE = Memory;
+DROP STREAM IF EXISTS rollup_having;
+create stream rollup_having (
+  a Nullable(string),
+  b Nullable(string)
+) ;
 
 INSERT INTO rollup_having VALUES (NULL, NULL);
 INSERT INTO rollup_having VALUES ('a', NULL);
@@ -11,4 +11,4 @@ INSERT INTO rollup_having VALUES ('a', 'b');
 SELECT a, b, count(*) FROM rollup_having GROUP BY a, b WITH ROLLUP HAVING a IS NOT NULL ORDER BY a, b;
 SELECT a, b, count(*) FROM rollup_having GROUP BY a, b WITH ROLLUP HAVING a IS NOT NULL and b IS NOT NULL ORDER BY a, b;
 
-DROP TABLE rollup_having;
+DROP STREAM rollup_having;

@@ -1,11 +1,12 @@
 set allow_experimental_projection_optimization = 1;
+SET query_mode = 'table';
 
-drop table if exists x;
+drop stream if exists x;
 
-create table x (pk int, arr Array(int), projection p (select arr order by pk)) engine MergeTree order by tuple();
+create stream x (pk int, arr array(int), projection p (select arr order by pk)) engine MergeTree order by tuple();
 
 insert into x values (1, [2]);
 
 select a from x array join arr as a;
 
-drop table x;
+drop stream x;

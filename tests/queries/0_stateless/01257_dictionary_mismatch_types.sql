@@ -5,28 +5,28 @@ CREATE DATABASE test_dict_db;
 
 set check_table_dependencies=0;
 
-CREATE TABLE test_dict_db.table1
+create stream test_dict_db.table1
 (
-    `col1` String,
+    `col1` string,
     `col2` Int16,
-    `col3` String,
-    `col4` Int32,
-    `col5` String,
-    `col6` Nullable(Float64),
-    `col7` Nullable(Float64),
-    `col8` Nullable(DateTime('UTC')),
-    `col9` Nullable(String),
-    `col10` Nullable(String),
-    `col11` Nullable(String),
-    `col12` Nullable(String),
-    `col13` Nullable(Int32),
-    `col14` Nullable(DateTime('UTC')),
-    `col15` Nullable(DateTime('UTC')),
-    `col16` Nullable(DateTime('UTC')),
-    `col17` Nullable(DateTime('UTC')),
-    `col18` Nullable(DateTime('UTC')),
-    `col19` Nullable(DateTime('UTC')),
-    `col20` Nullable(String)
+    `col3` string,
+    `col4` int32,
+    `col5` string,
+    `col6` Nullable(float64),
+    `col7` Nullable(float64),
+    `col8` Nullable(datetime('UTC')),
+    `col9` Nullable(string),
+    `col10` Nullable(string),
+    `col11` Nullable(string),
+    `col12` Nullable(string),
+    `col13` Nullable(int32),
+    `col14` Nullable(datetime('UTC')),
+    `col15` Nullable(datetime('UTC')),
+    `col16` Nullable(datetime('UTC')),
+    `col17` Nullable(datetime('UTC')),
+    `col18` Nullable(datetime('UTC')),
+    `col19` Nullable(datetime('UTC')),
+    `col20` Nullable(string)
 )
 ENGINE = MergeTree
 ORDER BY (col1, col2, col3, col4, col5);
@@ -35,26 +35,26 @@ INSERT INTO test_dict_db.table1 VALUES ('id1',1,'20200127-1',701,'20200127-1-01'
 
 CREATE DICTIONARY test_dict_db.table1_dict
 (
- col1 String,
+ col1 string,
  col2 Int16,
- col3 String,
- col4 Int32,
- col5 String,
- col6 Float64,
- col7 Float64,
- col8 DateTime('UTC'),
- col9 String,
- col10 String,
- col11 String,
- col12 String,
- col13 Int32,
- col14 DateTime('UTC'),
- col15 DateTime('UTC'),
- col16 DateTime('UTC'),
- col17 DateTime('UTC'),
- col18 DateTime('UTC'),
- col19 DateTime('UTC'),
- col20 String
+ col3 string,
+ col4 int32,
+ col5 string,
+ col6 float64,
+ col7 float64,
+ col8 datetime('UTC'),
+ col9 string,
+ col10 string,
+ col11 string,
+ col12 string,
+ col13 int32,
+ col14 datetime('UTC'),
+ col15 datetime('UTC'),
+ col16 datetime('UTC'),
+ col17 datetime('UTC'),
+ col18 datetime('UTC'),
+ col19 datetime('UTC'),
+ col20 string
 )
 PRIMARY KEY col1,col2,col3,col4,col5
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() DB test_dict_db TABLE table1 USER 'default'))
@@ -68,29 +68,29 @@ SELECT
 FROM test_dict_db.table1
 WHERE dictHas('test_dict_db.table1_dict', (col1, col2, col3, col4, col5)); -- { serverError 349 }
 
-DROP TABLE test_dict_db.table1;
-CREATE TABLE test_dict_db.table1
+DROP STREAM test_dict_db.table1;
+create stream test_dict_db.table1
 (
-    `col1` String,
+    `col1` string,
     `col2` Int16,
-    `col3` String,
-    `col4` Int32,
-    `col5` String,
-    `col6` Float64,
-    `col7` Float64,
-    `col8` DateTime('UTC'),
-    `col9` String,
-    `col10` String,
-    `col11` String,
-    `col12` String,
-    `col13` Int32,
-    `col14` DateTime('UTC'),
-    `col15` DateTime('UTC'),
-    `col16` DateTime('UTC'),
-    `col17` DateTime('UTC'),
-    `col18` DateTime('UTC'),
-    `col19` DateTime('UTC'),
-    `col20` String
+    `col3` string,
+    `col4` int32,
+    `col5` string,
+    `col6` float64,
+    `col7` float64,
+    `col8` datetime('UTC'),
+    `col9` string,
+    `col10` string,
+    `col11` string,
+    `col12` string,
+    `col13` int32,
+    `col14` datetime('UTC'),
+    `col15` datetime('UTC'),
+    `col16` datetime('UTC'),
+    `col17` datetime('UTC'),
+    `col18` datetime('UTC'),
+    `col19` datetime('UTC'),
+    `col20` string
 )
 ENGINE = MergeTree
 ORDER BY (col1, col2, col3, col4, col5);

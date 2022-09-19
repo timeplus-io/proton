@@ -5,9 +5,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS test_00687;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS test_00687;"
 
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE test_00687(val Int64) engine = Memory;"
+${CLICKHOUSE_CLIENT} --query "create stream test_00687(val int64) engine = Memory;"
 
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test_00687 VALUES (1);"
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test_00687 VALUES (2);"
@@ -26,4 +26,4 @@ ${CLICKHOUSE_CLIENT} --query "SELECT * FROM test_00687 ORDER BY val LIMIT 2 OFFS
 echo "$(${CLICKHOUSE_CLIENT} --query "SELECT TOP 2 * FROM test_00687 ORDER BY val LIMIT 2;" 2>&1 | grep -c "Code: 406")"
 echo "$(${CLICKHOUSE_CLIENT} --query "SELECT * FROM test_00687 ORDER BY val LIMIT 2,3 OFFSET 2;" 2>&1 | grep -c "Code: 62")"
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE test_00687;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM test_00687;"

@@ -1,5 +1,5 @@
-SELECT toDecimal32('e', 1); -- { serverError 72 }
-SELECT toDecimal64('e', 2); -- { serverError 72 }
+SELECT to_decimal32('e', 1); -- { serverError 72 }
+SELECT to_decimal64('e', 2); -- { serverError 72 }
 SELECT toDecimal128('e', 3); -- { serverError 72 }
 
 SELECT toDecimal32OrNull('e', 1) x, isNull(x);

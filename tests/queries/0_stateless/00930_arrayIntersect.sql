@@ -1,6 +1,7 @@
-drop table if exists array_intersect;
+SET query_mode = 'table';
+drop stream if exists array_intersect;
 
-create table array_intersect (date Date, arr Array(UInt8)) engine=MergeTree partition by date order by date;
+create stream array_intersect (date date, arr array(uint8)) engine=MergeTree partition by date order by date;
 
 insert into array_intersect values ('2019-01-01', [1,2,3]);
 insert into array_intersect values ('2019-01-01', [1,2]);
@@ -23,7 +24,7 @@ select arraySort(arrayIntersect([1,2], arr)) from array_intersect order by arr;
 select arraySort(arrayIntersect([1,2], [1,2,3,4])) from array_intersect order by arr;
 select arraySort(arrayIntersect([], [])) from array_intersect order by arr;
 
-drop table if exists array_intersect;
+drop stream if exists array_intersect;
 
 select '-';
 select arraySort(arrayIntersect([-100], [156]));

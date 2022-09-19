@@ -10,20 +10,20 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/mergetree_mutations.lib
 
 ${CLICKHOUSE_CLIENT} --allow_nondeterministic_mutations=1 --multiquery << EOF
-DROP TABLE IF EXISTS mutations_r1;
-DROP TABLE IF EXISTS for_subquery;
+DROP STREAM IF EXISTS mutations_r1;
+DROP STREAM IF EXISTS for_subquery;
 
-CREATE TABLE mutations_r1(x UInt32, y UInt32) ENGINE ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/mutations', 'r1') ORDER BY x;
+create stream mutations_r1(x uint32, y uint32) ENGINE ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/mutations', 'r1') ORDER BY x;
 INSERT INTO mutations_r1 VALUES (123, 1), (234, 2), (345, 3);
 
-CREATE TABLE for_subquery(x UInt32) ENGINE TinyLog;
+create stream for_subquery(x uint32) ENGINE TinyLog;
 INSERT INTO for_subquery VALUES (234), (345);
 
-ALTER TABLE mutations_r1 UPDATE y = y + 1 WHERE x IN for_subquery SETTINGS mutations_sync = 2;
-ALTER TABLE mutations_r1 UPDATE y = y + 1 WHERE x IN (SELECT x FROM for_subquery) SETTINGS mutations_sync = 2;
+ALTER STREAM mutations_r1 UPDATE y = y + 1 WHERE x IN for_subquery SETTINGS mutations_sync = 2;
+ALTER STREAM mutations_r1 UPDATE y = y + 1 WHERE x IN (SELECT x FROM for_subquery) SETTINGS mutations_sync = 2;
 EOF
 
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM mutations_r1"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE mutations_r1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE for_subquery"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM mutations_r1"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM for_subquery"

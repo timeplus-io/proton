@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS test_00681;
+DROP STREAM IF EXISTS test_00681;
 
-CREATE TABLE test_00681(x Int32) ENGINE = Log;
+create stream test_00681(x int32)  ;
 INSERT INTO test_00681 VALUES (123);
 
 SELECT a1 
@@ -11,4 +11,4 @@ FROM
     SELECT x, x FROM test_00681
 );
 
-DROP TABLE test_00681;
+DROP STREAM test_00681;

@@ -1,6 +1,7 @@
-drop table if exists order_by_another;
+SET query_mode = 'table';
+drop stream if exists order_by_another;
 
-create table order_by_another (a Nullable(UInt64), b UInt64) Engine = MergeTree order by tuple();
+create stream order_by_another (a Nullable(uint64), b uint64) Engine = MergeTree order by tuple();
 insert into order_by_another values (1, 8), (1, 7), (1, 6), (1, 5), (1, 4), (1, 3), (1, 2), (1, 1);
 
 select 'asc nulls last, asc';
@@ -27,4 +28,4 @@ select a, b from order_by_another order by a desc nulls last, b desc limit 4;
 select 'desc nulls first, desc';
 select a, b from order_by_another order by a desc nulls first, b desc limit 4;
 
-drop table if exists order_by_another;
+drop stream if exists order_by_another;

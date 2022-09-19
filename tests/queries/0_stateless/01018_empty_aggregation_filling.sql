@@ -1,4 +1,4 @@
-SELECT '--- Int Empty ---';
+SELECT '--- int Empty ---';
 
 SELECT arrayReduce('avgOrDefault', arrayPopBack([1]));
 SELECT arrayReduce('avgOrNull', arrayPopBack([1]));
@@ -21,7 +21,7 @@ SELECT stddevSampOrNullIfMerge(state) FROM (SELECT stddevSampOrNullIfState(x, x 
 SELECT maxOrDefaultIfMerge(state) FROM (SELECT maxOrDefaultIfState(x, x > 1) AS state FROM (SELECT 1 AS x));
 SELECT maxOrNullIfMerge(state) FROM (SELECT maxOrNullIfState(x, x > 1) AS state FROM (SELECT 1 AS x));
 
-SELECT '--- Int Non-empty ---';
+SELECT '--- int Non-empty ---';
 
 SELECT arrayReduce('avgOrDefault', [1]);
 SELECT arrayReduce('avgOrNull', [1]);
@@ -49,8 +49,8 @@ SELECT '--- Other Types Empty ---';
 SELECT arrayReduce('maxOrDefault', arrayPopBack(['hello']));
 SELECT arrayReduce('maxOrNull', arrayPopBack(['hello']));
 
-SELECT arrayReduce('maxOrDefault', arrayPopBack(arrayPopBack([toDateTime('2011-04-05 14:19:19'), null])));
-SELECT arrayReduce('maxOrNull', arrayPopBack(arrayPopBack([toDateTime('2011-04-05 14:19:19'), null])));
+SELECT arrayReduce('maxOrDefault', arrayPopBack(arrayPopBack([to_datetime('2011-04-05 14:19:19'), null])));
+SELECT arrayReduce('maxOrNull', arrayPopBack(arrayPopBack([to_datetime('2011-04-05 14:19:19'), null])));
 
 SELECT arrayReduce('avgOrDefault', arrayPopBack([toDecimal128(-123.45, 2)]));
 SELECT arrayReduce('avgOrNull', arrayPopBack([toDecimal128(-123.45, 2)]));
@@ -64,8 +64,8 @@ SELECT '--- Other Types Non-empty ---';
 SELECT arrayReduce('maxOrDefault', ['hello']);
 SELECT arrayReduce('maxOrNull', ['hello']);
 
-SELECT arrayReduce('maxOrDefault', [toDateTime('2011-04-05 14:19:19'), null]);
-SELECT arrayReduce('maxOrNull', [toDateTime('2011-04-05 14:19:19'), null]);
+SELECT arrayReduce('maxOrDefault', [to_datetime('2011-04-05 14:19:19'), null]);
+SELECT arrayReduce('maxOrNull', [to_datetime('2011-04-05 14:19:19'), null]);
 
 SELECT arrayReduce('avgOrDefault', [toDecimal128(-123.45, 2)]);
 SELECT arrayReduce('avgOrNull', [toDecimal128(-123.45, 2)]);

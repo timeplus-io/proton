@@ -4,7 +4,7 @@
 	[
 		{
 			"name": "count()",
-			"type": "UInt64"
+			"type": "uint64"
 		}
 	],
 
@@ -30,7 +30,7 @@
 	"meta":
 	[
 		{
-			"type": "Tuple(UInt64, UInt64)"
+			"type": "tuple(uint64, uint64)"
 		}
 	],
 

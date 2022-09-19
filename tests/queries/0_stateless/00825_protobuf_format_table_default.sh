@@ -10,13 +10,13 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS table_default_protobuf_00825;
+DROP STREAM IF EXISTS table_default_protobuf_00825;
 
-CREATE TABLE table_default_protobuf_00825
+create stream table_default_protobuf_00825
 (
-  x Int64,
-  y Int64 DEFAULT x * x,
-  z Int64 DEFAULT x * x * x
+  x int64,
+  y int64 DEFAULT x * x,
+  z int64 DEFAULT x * x * x
 ) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO table_default_protobuf_00825 (x) VALUES (0), (2), (3), (5);
@@ -38,4 +38,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO table_default_protobuf_00825 FORMAT Prot
 $CLICKHOUSE_CLIENT --query "SELECT * FROM table_default_protobuf_00825 ORDER BY x,y,z"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE table_default_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM table_default_protobuf_00825"

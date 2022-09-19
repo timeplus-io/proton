@@ -13,12 +13,12 @@ arr	s1	s2
 2	hello	world
 3	hello	world
 arr	s1	s2
-UInt8	String	String
+uint8	string	string
 1	hello	world
 2	hello	world
 3	hello	world
 arr	s1	s2
-UInt8	String	String
+uint8	string	string
 1	hello	world
 2	hello	world
 3	hello	world

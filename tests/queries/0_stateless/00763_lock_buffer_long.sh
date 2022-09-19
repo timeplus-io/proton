@@ -7,15 +7,15 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS mt_00763_2"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS buffer_00763_2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS mt_00763_2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS buffer_00763_2"
 
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE buffer_00763_2 (s String) ENGINE = Buffer('$CLICKHOUSE_DATABASE', mt_00763_2, 1, 1, 1, 1, 1, 1, 1)"
+${CLICKHOUSE_CLIENT} --query="create stream buffer_00763_2 (s string) ENGINE = Buffer('$CLICKHOUSE_DATABASE', mt_00763_2, 1, 1, 1, 1, 1, 1, 1)"
 
 
 function thread1()
 {
-    seq 1 500 | sed -r -e 's/.+/DROP TABLE IF EXISTS mt_00763_2; CREATE TABLE mt_00763_2 (s String) ENGINE = MergeTree ORDER BY s; INSERT INTO mt_00763_2 SELECT toString(number) FROM numbers(10);/' | ${CLICKHOUSE_CLIENT} --multiquery --ignore-error ||:
+    seq 1 500 | sed -r -e 's/.+/DROP STREAM IF EXISTS mt_00763_2; create stream mt_00763_2 (s string) ENGINE = MergeTree ORDER BY s; INSERT INTO mt_00763_2 SELECT to_string(number) FROM numbers(10);/' | ${CLICKHOUSE_CLIENT} --multiquery --ignore-error ||:
 }
 
 function thread2()
@@ -28,5 +28,5 @@ thread2 &
 
 wait
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE mt_00763_2"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE buffer_00763_2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM mt_00763_2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM buffer_00763_2"

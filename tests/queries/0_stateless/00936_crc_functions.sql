@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS table1;
+DROP STREAM IF EXISTS table1;
 
-CREATE TABLE table1 (str1 String, str2 String) ENGINE = Memory;
+create stream table1 (str1 string, str2 string) ;
 
 INSERT INTO table1 VALUES('qwerty', 'string');
 INSERT INTO table1 VALUES('qqq', 'aaa');
@@ -15,7 +15,7 @@ select CRC32(str2) from table1 order by CRC32(str2);
 select CRC32(str1), CRC32(str2) from table1 order by CRC32(str1), CRC32(str2);
 select str1, str2, CRC32(str1), CRC32(str2) from table1 order by CRC32(str1), CRC32(str2);
 
-DROP TABLE table1;
+DROP STREAM table1;
 
 SELECT 'CRC32IEEE()';
 SELECT hex(CRC32IEEE('foo'));

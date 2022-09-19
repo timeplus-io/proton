@@ -1,0 +1,6 @@
+[8,9,10]
+['a','b','c']
+create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.x` array(uint32),\n    `n.y` array(string),\n    `value1` string\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.renamed_x` array(uint32),\n    `n.renamed_y` array(string),\n    `value1` string\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+7	[8,9,10]
+7	['a','b','c']

@@ -1,14 +1,14 @@
 SET joined_subquery_requires_alias = 0;
 SET any_join_distinct_right_table_keys = 0;
 
+SET query_mode = 'table';
+drop stream if exists tab1;
+drop stream if exists tab2;
+drop stream if exists tab3;
 
-drop table if exists tab1;
-drop table if exists tab2;
-drop table if exists tab3;
-
-create table tab1 (a1 Int32, b1 Int32) engine = MergeTree order by a1;
-create table tab2 (a2 Int32, b2 Int32) engine = MergeTree order by a2;
-create table tab3 (a3 Int32, b3 Int32) engine = MergeTree order by a3;
+create stream tab1 (a1 int32, b1 int32) engine = MergeTree order by a1;
+create stream tab2 (a2 int32, b2 int32) engine = MergeTree order by a2;
+create stream tab3 (a3 int32, b3 int32) engine = MergeTree order by a3;
 
 insert into tab1 values (1, 2);
 
@@ -57,6 +57,6 @@ select '==';
 select a3, b3 from tab2 any right join tab3 on a2 = a3 or b2 = b3 ORDER BY a3, b3;
 
 
-drop table tab1;
-drop table tab2;
-drop table tab3;
+drop stream tab1;
+drop stream tab2;
+drop stream tab3;

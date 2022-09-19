@@ -9,10 +9,10 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "
 CREATE DATABASE IF NOT EXISTS db01802;
-DROP TABLE IF EXISTS db01802.postgresql;
+DROP STREAM IF EXISTS db01802.postgresql;
 DROP ROW POLICY IF EXISTS test_policy ON db01802.postgresql;
 
-CREATE TABLE db01802.postgresql (val UInt32) ENGINE=MergeTree ORDER BY val;
+create stream db01802.postgresql (val uint32) ENGINE=MergeTree ORDER BY val;
 INSERT INTO db01802.postgresql SELECT number FROM numbers(10);
 
 SELECT 'before row policy';
@@ -44,5 +44,5 @@ SELECT 'after row policy with plaintext_password';
 
 psql "postgresql://postgresql_user:qwerty@localhost:${CLICKHOUSE_PORT_POSTGRESQL}/db01802" -c "SELECT * FROM postgresql;"
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE db01802.postgresql"
+$CLICKHOUSE_CLIENT -q "DROP STREAM db01802.postgresql"
 $CLICKHOUSE_CLIENT -q "DROP DATABASE db01802"

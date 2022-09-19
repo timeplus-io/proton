@@ -29,8 +29,8 @@ def twosample_mean_ztest(rvs1, rvs2, alpha=0.05):
 
 def test_and_check(name, a, b, t_stat, p_value, ci_low, ci_high, precision=1e-2):
     client = ClickHouseClient()
-    client.query("DROP TABLE IF EXISTS ztest;")
-    client.query("CREATE TABLE ztest (left Float64, right UInt8) ENGINE = Memory;");
+    client.query("DROP STREAM IF EXISTS ztest;")
+    client.query("create stream ztest (left float64, right uint8) ;");
     client.query("INSERT INTO ztest VALUES {};".format(", ".join(['({},{})'.format(i, 0) for i in a])))
     client.query("INSERT INTO ztest VALUES {};".format(", ".join(['({},{})'.format(j, 1) for j in b])))
     real = client.query_return_df(
@@ -47,7 +47,7 @@ def test_and_check(name, a, b, t_stat, p_value, ci_low, ci_high, precision=1e-2)
     assert(abs(real_p_value - np.float64(p_value)) < precision), "clickhouse_p_value {}, py_p_value {}".format(real_p_value, p_value)
     assert(abs(real_ci_low - np.float64(ci_low)) < precision), "clickhouse_ci_low {}, py_ci_low {}".format(real_ci_low, ci_low)
     assert(abs(real_ci_high - np.float64(ci_high)) < precision), "clickhouse_ci_high {}, py_ci_high {}".format(real_ci_high, ci_high)
-    client.query("DROP TABLE IF EXISTS ztest;")
+    client.query("DROP STREAM IF EXISTS ztest;")
 
 
 def test_mean_ztest():

@@ -1,7 +1,7 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS array_pk;
-CREATE TABLE array_pk (key Array(UInt8), s String, n UInt64, d Date MATERIALIZED '2000-01-01') ENGINE = MergeTree(d, (key, s, n), 1);
+DROP STREAM IF EXISTS array_pk;
+create stream array_pk (key array(uint8), s string, n uint64, d date MATERIALIZED '2000-01-01') ENGINE = MergeTree(d, (key, s, n), 1);
 
 INSERT INTO array_pk VALUES ([1, 2, 3], 'Hello, world!', 1);
 INSERT INTO array_pk VALUES ([1, 2], 'Hello', 2);
@@ -17,4 +17,4 @@ ATTACH TABLE array_pk;
 
 SELECT * FROM array_pk ORDER BY n;
 
-DROP TABLE array_pk;
+DROP STREAM array_pk;

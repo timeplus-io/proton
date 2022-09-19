@@ -4,13 +4,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS set_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS set_idx;"
 
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE set_idx
+create stream set_idx
 (
-    u64 UInt64,
-    i32 Int32,
+    u64 uint64,
+    i32 int32,
     INDEX idx (i32) TYPE set(2) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY u64
@@ -24,4 +24,4 @@ SELECT number, number FROM system.numbers LIMIT 100"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE i32 > 0 FORMAT JSON" | grep "rows_read"
 
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE set_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM set_idx;"

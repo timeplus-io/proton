@@ -1,0 +1,2 @@
+Example:
+python3 create_mv_from_search.py ./{2_3}.search {2_3}.sh -f '/Users/,.sql,.sh' -s '/Users/,.sql,.sh' -r 'mv /Users/,.* /Users/jameshao/projects/proton/tests/queries_not_supported/0_stateless/{2_3}/,.* /Users/jameshao/projects/proton/tests/queries_not_supported/0_stateless/{2_3}/'

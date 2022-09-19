@@ -8,15 +8,15 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS contributors"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE contributors (name String) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS contributors"
+${CLICKHOUSE_CLIENT} --query="create stream contributors (name string) "
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM system.contributors ORDER BY name DESC FORMAT ArrowStream" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO contributors FORMAT ArrowStream"
 # random results
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM contributors LIMIT 10" > /dev/null
-${CLICKHOUSE_CLIENT} --query="DROP TABLE contributors"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM contributors"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_numbers"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_numbers (number UInt64) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_numbers"
+${CLICKHOUSE_CLIENT} --query="create stream arrow_numbers (number uint64) "
 # less than default block size (65k)
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM system.numbers LIMIT 10000 FORMAT ArrowStream" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_numbers FORMAT ArrowStream"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_numbers ORDER BY number DESC LIMIT 10"
@@ -34,18 +34,18 @@ ${CLICKHOUSE_CLIENT} --query="TRUNCATE TABLE arrow_numbers"
 ${CLICKHOUSE_CLIENT} --max_block_size=1 --query="SELECT * FROM system.numbers LIMIT 1000 FORMAT ArrowStream" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_numbers FORMAT ArrowStream"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_numbers ORDER BY number DESC LIMIT 10"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_numbers"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_numbers"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_types1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_types2"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_types3"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_types4"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_types1       (int8 Int8, uint8 UInt8, int16 Int16, uint16 UInt16, int32 Int32, uint32 UInt32, int64 Int64, uint64 UInt64, float32 Float32, float64 Float64, string String, fixedstring FixedString(15), date Date, datetime DateTime) ENGINE = Memory"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_types2       (int8 Int8, uint8 UInt8, int16 Int16, uint16 UInt16, int32 Int32, uint32 UInt32, int64 Int64, uint64 UInt64, float32 Float32, float64 Float64, string String, fixedstring FixedString(15), date Date, datetime DateTime) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_types1"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_types2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_types3"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_types4"
+${CLICKHOUSE_CLIENT} --query="create stream arrow_types1       (int8 int8, uint8 uint8, int16 Int16, uint16 uint16, int32 int32, uint32 uint32, int64 int64, uint64 uint64, float32 Float32, float64 float64, string string, fixedstring FixedString(15), date date, datetime DateTime) "
+${CLICKHOUSE_CLIENT} --query="create stream arrow_types2       (int8 int8, uint8 uint8, int16 Int16, uint16 uint16, int32 int32, uint32 uint32, int64 int64, uint64 uint64, float32 Float32, float64 float64, string string, fixedstring FixedString(15), date date, datetime DateTime) "
 # convert min type
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_types3       (int8 Int8,  uint8 Int8,  int16 Int8,   uint16 Int8,  int32 Int8,   uint32 Int8,  int64 Int8,   uint64 Int8,    float32 Int8,    float64 Int8, string FixedString(15), fixedstring FixedString(15), date Date,    datetime Date) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="create stream arrow_types3       (int8 int8,  uint8 int8,  int16 int8,   uint16 int8,  int32 int8,   uint32 int8,  int64 int8,   uint64 int8,    float32 int8,    float64 int8, string FixedString(15), fixedstring FixedString(15), date date,    datetime date) "
 # convert max type
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_types4       (int8 Int64, uint8 Int64, int16 Int64, uint16 Int64, int32 Int64,  uint32 Int64, int64 Int64,  uint64 Int64,   float32 Int64,   float64 Int64, string String,          fixedstring String, date DateTime, datetime DateTime) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="create stream arrow_types4       (int8 int64, uint8 int64, int16 int64, uint16 int64, int32 int64,  uint32 int64, int64 int64,  uint64 int64,   float32 int64,   float64 int64, string string,          fixedstring string, date DateTime, datetime DateTime) "
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_types1 values (     -108,         108,       -1016,          1116,       -1032,          1132,       -1064,          1164,          -1.032,          -1.064,    'string-0',               'fixedstring', '2001-02-03', '2002-02-03 04:05:06')"
 
@@ -83,11 +83,11 @@ echo max:
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_types4 ORDER BY int8"
 
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_types5"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS arrow_types6"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_types5"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS arrow_types6"
 ${CLICKHOUSE_CLIENT} --query="TRUNCATE TABLE arrow_types2"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_types5       (int8 Nullable(Int8), uint8 Nullable(UInt8), int16 Nullable(Int16), uint16 Nullable(UInt16), int32 Nullable(Int32), uint32 Nullable(UInt32), int64 Nullable(Int64), uint64 Nullable(UInt64), float32 Nullable(Float32), float64 Nullable(Float64), string Nullable(String), fixedstring Nullable(FixedString(15)), date Nullable(Date), datetime Nullable(DateTime)) ENGINE = Memory"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE arrow_types6       (int8 Nullable(Int8), uint8 Nullable(UInt8), int16 Nullable(Int16), uint16 Nullable(UInt16), int32 Nullable(Int32), uint32 Nullable(UInt32), int64 Nullable(Int64), uint64 Nullable(UInt64), float32 Nullable(Float32), float64 Nullable(Float64), string Nullable(String), fixedstring Nullable(FixedString(15)), date Nullable(Date), datetime Nullable(DateTime)) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="create stream arrow_types5       (int8 Nullable(int8), uint8 Nullable(uint8), int16 Nullable(Int16), uint16 Nullable(uint16), int32 Nullable(int32), uint32 Nullable(uint32), int64 Nullable(int64), uint64 Nullable(uint64), float32 Nullable(Float32), float64 Nullable(float64), string Nullable(string), fixedstring Nullable(FixedString(15)), date Nullable(date), datetime Nullable(DateTime)) "
+${CLICKHOUSE_CLIENT} --query="create stream arrow_types6       (int8 Nullable(int8), uint8 Nullable(uint8), int16 Nullable(Int16), uint16 Nullable(uint16), int32 Nullable(int32), uint32 Nullable(uint32), int64 Nullable(int64), uint64 Nullable(uint64), float32 Nullable(Float32), float64 Nullable(float64), string Nullable(string), fixedstring Nullable(FixedString(15)), date Nullable(date), datetime Nullable(DateTime)) "
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_types5 values (               NULL,                  NULL,                  NULL,                    NULL,                  NULL,                    NULL,                  NULL,                    NULL,                      NULL,                      NULL,                    NULL,                                  NULL,                NULL,                        NULL)"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_types5 ORDER BY int8 FORMAT ArrowStream" > "${CLICKHOUSE_TMP}"/arrow_all_types_5.arrow
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_types5 ORDER BY int8 FORMAT ArrowStream" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_types6 FORMAT ArrowStream"
@@ -95,12 +95,12 @@ ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_types1 ORDER BY int8 FORMAT Ar
 echo dest from null:
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_types6 ORDER BY int8"
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_types5"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_types6"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_types5"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_types6"
 
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_types1"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_types2"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_types3"
-${CLICKHOUSE_CLIENT} --query="DROP TABLE arrow_types4"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_types1"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_types2"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_types3"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_types4"
 

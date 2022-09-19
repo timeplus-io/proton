@@ -1,5 +1,5 @@
 id	[]	[]	[]
-t	['a','s']	['UInt64','String']	['Sparse','Default']
+t	['a','s']	['uint64','string']	['Sparse','Default']
 (0,'a')
 (0,'aa')
 (0,'aaa')
@@ -41,7 +41,7 @@ a
 a
 a
 id	[]	[]	[]
-t	['a','b','b.u','b.s']	['UInt64','Tuple(u UInt32, s String)','UInt32','String']	['Sparse','Default','Sparse','Default']
+t	['a','b','b.u','b.s']	['uint64','tuple(u uint32, s string)','uint32','string']	['Sparse','Default','Sparse','Default']
 0
 0
 0
@@ -58,7 +58,7 @@ aaaaaa
 a
 aaaaaa
 id	[]	[]	[]
-t	['a','b','b.u','b.s']	['UInt64','Tuple(u UInt32, s String)','UInt32','String']	['Sparse','Default','Sparse','Default']
+t	['a','b','b.u','b.s']	['uint64','tuple(u uint32, s string)','uint32','string']	['Sparse','Default','Sparse','Default']
 aaaaaa
 a
 aaaaaa

@@ -1,4 +1,4 @@
---- notEmpty
+--- not_empty
 	['a']	2
 	['a','b','c']	3
 	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4
@@ -23,7 +23,7 @@
 --- <= []
 	[]	1
 ---
---- notEmpty
+--- not_empty
 	['a']	2
 	['a','b','c']	3
 	['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']	4

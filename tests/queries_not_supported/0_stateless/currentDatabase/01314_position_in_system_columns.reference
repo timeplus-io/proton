@@ -1,0 +1,6 @@
+x	uint8	1
+y	string	2
+z	array(string)	3
+x	uint8	1
+y	string	2
+z	array(string)	3

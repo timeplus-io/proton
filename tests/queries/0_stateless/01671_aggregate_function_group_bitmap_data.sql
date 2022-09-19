@@ -1,10 +1,10 @@
-CREATE TABLE group_bitmap_data_test
+create stream group_bitmap_data_test
 (
-    `pickup_date` Date,
-    `city_id` UInt32,
-    `uid` UInt32
+    `pickup_date` date,
+    `city_id` uint32,
+    `uid` uint32
 )
-ENGINE = Memory;
+;
 
 INSERT INTO group_bitmap_data_test SELECT
     '2019-01-01',
@@ -52,4 +52,4 @@ ALL LEFT JOIN
     GROUP BY city_id
 ) AS js2 USING (city_id);
 
-DROP TABLE IF EXISTS group_bitmap_data_test;
+DROP STREAM IF EXISTS group_bitmap_data_test;

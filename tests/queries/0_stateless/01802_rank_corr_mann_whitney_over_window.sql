@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS 01802_empsalary;
+DROP STREAM IF EXISTS 01802_empsalary;
 
-CREATE TABLE 01802_empsalary
+create stream 01802_empsalary
 (
-    `depname` LowCardinality(String),
-    `empno` UInt64,
-    `salary` Int32,
-    `enroll_date` Date
+    `depname` LowCardinality(string),
+    `empno` uint64,
+    `salary` int32,
+    `enroll_date` date
 )
 ENGINE = MergeTree
 ORDER BY enroll_date
@@ -17,4 +17,4 @@ SELECT mannWhitneyUTest(salary, salary) OVER (ORDER BY salary ROWS BETWEEN CURRE
 
 SELECT rankCorr(salary, 0.5) OVER (ORDER BY salary ASC ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) AS func FROM 01802_empsalary; -- {serverError 36}
 
-DROP TABLE IF EXISTS 01802_empsalary;
+DROP STREAM IF EXISTS 01802_empsalary;

@@ -2,12 +2,12 @@
 
 SET allow_experimental_live_view = 1;
 
-DROP TABLE IF EXISTS lv;
-DROP TABLE IF EXISTS A;
-DROP TABLE IF EXISTS B;
+DROP STREAM IF EXISTS lv;
+DROP STREAM IF EXISTS A;
+DROP STREAM IF EXISTS B;
 
-CREATE TABLE A (id Int32) Engine=Memory;
-CREATE TABLE B (id Int32, name String) Engine=Memory;
+create stream A (id int32) Engine=Memory;
+create stream B (id int32, name string) Engine=Memory;
 
 CREATE LIVE VIEW lv AS SELECT id, name FROM ( SELECT A.id, B.name FROM A, B WHERE A.id = B.id);
 
@@ -25,6 +25,6 @@ INSERT INTO B VALUES (2, 'hello')
 SELECT *,_version FROM lv ORDER BY id;
 SELECT *,_version FROM lv ORDER BY id;
 
-DROP TABLE lv;
-DROP TABLE A;
-DROP TABLE B;
+DROP STREAM lv;
+DROP STREAM A;
+DROP STREAM B;

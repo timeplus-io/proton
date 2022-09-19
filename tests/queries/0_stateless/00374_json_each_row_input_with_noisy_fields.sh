@@ -7,8 +7,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS json_noisy"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE json_noisy (d1 UInt8, d2 String) ENGINE = Memory"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS json_noisy"
+$CLICKHOUSE_CLIENT -q "create stream json_noisy (d1 uint8, d2 string) "
 
 echo '{"d1" : 1, "d2" : "ok"}
 { }
@@ -20,17 +20,17 @@ echo '{"d1" : 1, "d2" : "ok"}
 | $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 -q "INSERT INTO json_noisy FORMAT JSONEachRow"
 
 $CLICKHOUSE_CLIENT --max_threads=1 -q "SELECT * FROM json_noisy"
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS json_noisy"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS json_noisy"
 
 # Regular test for DateTime
 
 echo
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS json_each_row"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE json_each_row (d DateTime('Europe/Moscow')) ENGINE = Memory"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS json_each_row"
+$CLICKHOUSE_CLIENT -q "create stream json_each_row (d datetime('Europe/Moscow')) "
 echo '{"d" : "2017-08-31 18:36:48", "t" : ""}
 {"d" : "1504193808", "t" : -1}
 {"d" : 1504193808, "t" : []}
 {"d" : 01504193808, "t" : []}' \
 | $CLICKHOUSE_CLIENT --input_format_skip_unknown_fields=1 -q "INSERT INTO json_each_row FORMAT JSONEachRow"
 $CLICKHOUSE_CLIENT -q "SELECT DISTINCT * FROM json_each_row"
-$CLICKHOUSE_CLIENT -q "DROP TABLE json_each_row"
+$CLICKHOUSE_CLIENT -q "DROP STREAM json_each_row"

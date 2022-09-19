@@ -1,13 +1,14 @@
-DROP TABLE IF EXISTS columns_transformers;
+SET query_mode = 'table';
+drop stream IF EXISTS columns_transformers;
 
-CREATE TABLE columns_transformers (i Int64, j Int16, k Int64) Engine=TinyLog;
+create stream columns_transformers (i int64, j Int16, k int64) Engine=TinyLog;
 INSERT INTO columns_transformers VALUES (100, 10, 324), (120, 8, 23);
 
 SELECT * APPLY(sum) from columns_transformers;
 SELECT * APPLY sum from columns_transformers;
 SELECT columns_transformers.* APPLY(avg) from columns_transformers;
 SELECT a.* APPLY(toDate) APPLY(any) from columns_transformers a;
-SELECT COLUMNS('[jk]') APPLY(toString) APPLY(length) from columns_transformers;
+SELECT COLUMNS('[jk]') APPLY(to_string) APPLY(length) from columns_transformers;
 
 SELECT * EXCEPT(i) APPLY(sum) from columns_transformers;
 SELECT columns_transformers.* EXCEPT(j) APPLY(avg) from columns_transformers;
@@ -30,7 +31,7 @@ SELECT a.* APPLY(toDate) REPLACE STRICT(i + 1 AS i) APPLY(any) from columns_tran
 EXPLAIN SYNTAX SELECT * APPLY(sum) from columns_transformers;
 EXPLAIN SYNTAX SELECT columns_transformers.* APPLY(avg) from columns_transformers;
 EXPLAIN SYNTAX SELECT a.* APPLY(toDate) APPLY(any) from columns_transformers a;
-EXPLAIN SYNTAX SELECT COLUMNS('[jk]') APPLY(toString) APPLY(length) from columns_transformers;
+EXPLAIN SYNTAX SELECT COLUMNS('[jk]') APPLY(to_string) APPLY(length) from columns_transformers;
 EXPLAIN SYNTAX SELECT * EXCEPT(i) APPLY(sum) from columns_transformers;
 EXPLAIN SYNTAX SELECT columns_transformers.* EXCEPT(j) APPLY(avg) from columns_transformers;
 EXPLAIN SYNTAX SELECT a.* APPLY(toDate) EXCEPT(i, j) APPLY(any) from columns_transformers a;
@@ -53,4 +54,4 @@ EXPLAIN SYNTAX SELECT i, j, COLUMNS(i, j, k) APPLY(toFloat64), COLUMNS(i, j) EXC
 SELECT COLUMNS(i, j, k) APPLY(quantiles(0.5)) from columns_transformers;
 EXPLAIN SYNTAX SELECT COLUMNS(i, j, k) APPLY(quantiles(0.5)) from columns_transformers;
 
-DROP TABLE columns_transformers;
+drop stream columns_transformers;

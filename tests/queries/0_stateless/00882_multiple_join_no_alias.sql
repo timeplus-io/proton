@@ -1,10 +1,11 @@
-drop table if exists t;
-drop table if exists s;
-drop table if exists y;
+SET query_mode = 'table';
+drop stream if exists t;
+drop stream if exists s;
+drop stream if exists y;
 
-create table t(a Int64, b Int64) engine = Memory;
-create table s(a Int64, b Int64) engine = Memory;
-create table y(a Int64, b Int64) engine = Memory;
+create stream t(a int64, b int64) engine = Memory;
+create stream s(a int64, b int64) engine = Memory;
+create stream y(a int64, b int64) engine = Memory;
 
 insert into t values (1,1), (2,2);
 insert into s values (1,1);
@@ -30,6 +31,6 @@ left join s on t.a = s.a
 left join y on y.b = s.b
 group by t.a order by t.a;
 
-drop table t;
-drop table s;
-drop table y;
+drop stream t;
+drop stream s;
+drop stream y;

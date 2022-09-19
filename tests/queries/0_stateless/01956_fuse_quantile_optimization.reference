@@ -35,15 +35,15 @@ FROM datetime
 2016-06-15 23:00:00	2016-06-15 23:00:00	2016-06-15 23:00:00
 quantileTiming:
 SELECT
-    quantilesTiming(0.2, 0.3)(d)[1],
-    quantilesTiming(0.2, 0.3)(d)[2],
+    quantiles_timing(0.2, 0.3)(d)[1],
+    quantiles_timing(0.2, 0.3)(d)[2],
     quantileTiming(0.2)(d + 1)
 FROM datetime
 30000	30000	30000
 quantileTimingWeighted:
 SELECT
-    quantilesTimingWeighted(0.2, 0.3)(d, 1)[1],
-    quantilesTimingWeighted(0.2, 0.3)(d, 1)[2],
+    quantiles_timing_weighted(0.2, 0.3)(d, 1)[1],
+    quantiles_timing_weighted(0.2, 0.3)(d, 1)[2],
     quantileTimingWeighted(0.2)(d, 2)
 FROM datetime
 30000	30000	30000

@@ -12,13 +12,13 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS array_of_arrays_protobuf_00825;
+DROP STREAM IF EXISTS array_of_arrays_protobuf_00825;
 
-CREATE TABLE array_of_arrays_protobuf_00825
+create stream array_of_arrays_protobuf_00825
 (
-    a String,
-    b Nested (
-        c Array(Float64)
+    a string,
+    b nested (
+        c array(float64)
     )
 ) ENGINE = MergeTree ORDER BY tuple();
 
@@ -40,4 +40,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO array_of_arrays_protobuf_00825 FORMAT Pr
 $CLICKHOUSE_CLIENT --query "SELECT * FROM array_of_arrays_protobuf_00825"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE array_of_arrays_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM array_of_arrays_protobuf_00825"

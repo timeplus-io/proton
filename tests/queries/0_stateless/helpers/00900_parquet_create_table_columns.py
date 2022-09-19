@@ -4,19 +4,19 @@ import json
 import sys
 
 TYPE_PARQUET_CONVERTED_TO_CLICKHOUSE = {
-    "TIMESTAMP_MICROS": "DateTime('Europe/Moscow')",
-    "TIMESTAMP_MILLIS": "DateTime('Europe/Moscow')",
-    "UTF8": "String",
+    "TIMESTAMP_MICROS": "datetime('Europe/Moscow')",
+    "TIMESTAMP_MILLIS": "datetime('Europe/Moscow')",
+    "UTF8": "string",
 }
 
 TYPE_PARQUET_PHYSICAL_TO_CLICKHOUSE = {
-    "BOOLEAN": "UInt8",
-    "INT32": "Int32",
-    "INT64": "Int64",
+    "BOOLEAN": "uint8",
+    "INT32": "int32",
+    "INT64": "int64",
     "FLOAT": "Float32",
-    "DOUBLE": "Float64",
-    "BYTE_ARRAY": "String",
-    "INT96": "Int64", # TODO!
+    "DOUBLE": "float64",
+    "BYTE_ARRAY": "string",
+    "INT96": "int64", # TODO!
 }
 
 def read_file(filename):
@@ -76,7 +76,7 @@ def dump_columns(obj):
         if len(types) == 1:
             return types[0]
         else:
-            return "Tuple({})".format(", ".join(types))
+            return "tuple({})".format(", ".join(types))
 
     print(", ".join(map(lambda descr: "`{}` {}".format(descr["name"], _format_type(descr["types"])), columns_descr)))
 

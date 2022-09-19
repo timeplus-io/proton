@@ -13,7 +13,7 @@ SELECT
     covarPop(1, 1),
     covarSamp(1, 1),
     DATABASE(),
-    dateDiff('DAY', toDate('2020-10-24'), toDate('2019-10-24')),
+    dateDiff('DAY', to_date('2020-10-24'), to_date('2019-10-24')),
     exp(1),
     arrayFlatten([[1]]),
     floor(1),
@@ -62,5 +62,5 @@ SELECT
     currentUser(),
     varPop(1),
     varSamp(1),
-    toWeek(toDate('2020-10-24')),
-    toYearWeek(toDate('2020-10-24'))
+    toWeek(to_date('2020-10-24')),
+    toYearWeek(to_date('2020-10-24'))

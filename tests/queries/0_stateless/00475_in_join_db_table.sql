@@ -1,23 +1,24 @@
-DROP TABLE IF EXISTS set;
-CREATE TABLE set (x String) ENGINE = Memory;
+SET query_mode = 'table';
+drop stream IF EXISTS set;
+create stream set (x string) ;
 INSERT INTO set VALUES ('hello');
-SELECT (arrayJoin(['hello', 'world']) AS s) IN set, s;
+SELECT (array_join(['hello', 'world']) AS s) IN set, s;
 
-DROP TABLE set;
-CREATE TABLE set (x String) ENGINE = Set;
+drop stream set;
+create stream set (x string) ENGINE = Set;
 INSERT INTO set VALUES ('hello');
-SELECT (arrayJoin(['hello', 'world']) AS s) IN set, s;
+SELECT (array_join(['hello', 'world']) AS s) IN set, s;
 
-DROP TABLE set;
+drop stream set;
 
-DROP TABLE IF EXISTS join;
-CREATE TABLE join (k UInt8, x String) ENGINE = Memory;
+drop stream IF EXISTS join;
+create stream join (k uint8, x string) ;
 INSERT INTO join VALUES (1, 'hello');
-SELECT k, x FROM (SELECT arrayJoin([1, 2]) AS k) js1 ANY LEFT JOIN join USING k;
+SELECT k, x FROM (SELECT array_join([1, 2]) AS k) js1 ANY LEFT JOIN join USING k;
 
-DROP TABLE join;
-CREATE TABLE join (k UInt8, x String) ENGINE = Join(ANY, LEFT, k);
+drop stream join;
+create stream join (k uint8, x string) ENGINE = Join(ANY, LEFT, k);
 INSERT INTO join VALUES (1, 'hello');
-SELECT k, x FROM (SELECT arrayJoin([1, 2]) AS k) js1 ANY LEFT JOIN join USING k;
+SELECT k, x FROM (SELECT array_join([1, 2]) AS k) js1 ANY LEFT JOIN join USING k;
 
-DROP TABLE join;
+drop stream join;

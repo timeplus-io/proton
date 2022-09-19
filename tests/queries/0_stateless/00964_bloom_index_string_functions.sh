@@ -4,14 +4,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS bloom_filter_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS bloom_filter_idx;"
 
 # NGRAM BF
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE bloom_filter_idx
+create stream bloom_filter_idx
 (
-    k UInt64,
-    s String,
+    k uint64,
+    s string,
     INDEX bf (s, lower(s)) TYPE ngrambf_v1(3, 512, 2, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY k
@@ -83,4 +83,4 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(
 $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['adab', 'cad', 'aba']) AND (startsWith(s, 'c') OR startsWith(s, 'C'))"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM bloom_filter_idx WHERE multiSearchAny(s, ['adab', 'cad', 'aba']) AND (startsWith(s, 'c') OR startsWith(s, 'C')) FORMAT JSON" | grep "rows_read"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE bloom_filter_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM bloom_filter_idx;"

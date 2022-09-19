@@ -1,0 +1,4 @@
+1
+CREATE TEMPORARY STREAM temp_tab\n(\n    `number` uint64\n)\nENGINE = Memory
+temp_tab
+0

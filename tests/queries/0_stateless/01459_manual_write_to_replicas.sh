@@ -11,8 +11,8 @@ NUM_REPLICAS=10
 
 for i in $(seq 1 $NUM_REPLICAS); do
     $CLICKHOUSE_CLIENT -n -q "
-        DROP TABLE IF EXISTS r$i;
-        CREATE TABLE r$i (x UInt64) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/r', 'r$i') ORDER BY x;
+        DROP STREAM IF EXISTS r$i;
+        create stream r$i (x uint64) ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/r', 'r$i') ORDER BY x;
     "
 done
 
@@ -37,5 +37,5 @@ for i in $(seq 1 $NUM_REPLICAS); do
 done
 
 for i in $(seq 1 $NUM_REPLICAS); do
-    $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS r$i;"
+    $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS r$i;"
 done

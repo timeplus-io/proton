@@ -10,11 +10,11 @@ select bin(512);
 select bin('0');
 select bin('10');
 select bin('测试');
-select bin(toFixedString('测试', 10));
-select bin(toFloat32(1.2));
+select bin(to_fixed_string('测试', 10));
+select bin(to_float32(1.2));
 select bin(toFloat64(1.2));
-select bin(toDecimal32(1.2, 8));
-select bin(toDecimal64(1.2, 17));
+select bin(to_decimal32(1.2, 8));
+select bin(to_decimal64(1.2, 17));
 select bin('12332424');
 select bin(materialize('12332424'));
 select bin(toNullable(materialize('12332424')));
@@ -38,8 +38,8 @@ select hex('') == bin('');
 select unhex('') == unbin('');
 select unhex('0') == unbin('0');
 
--- hex and bin support AggregateFunction
-select hex(sumState(number)) == hex(toString(sumState(number))) from numbers(10);
-select hex(avgState(number)) == hex(toString(avgState(number))) from numbers(99);
+-- hex and bin support aggregate_function
+select hex(sumState(number)) == hex(to_string(sumState(number))) from numbers(10);
+select hex(avgState(number)) == hex(to_string(avgState(number))) from numbers(99);
 select hex(avgState(number)) from numbers(10);
 select bin(avgState(number)) from numbers(10);

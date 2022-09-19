@@ -11,10 +11,10 @@ $CLICKHOUSE_CLIENT --query="DROP DATABASE IF EXISTS dictdb_01076;"
 $CLICKHOUSE_CLIENT --query="CREATE DATABASE dictdb_01076;"
 
 $CLICKHOUSE_CLIENT --query="
-CREATE TABLE dictdb_01076.table_datarace
+create stream dictdb_01076.table_datarace
 (
   key_column UUID,
-  value Float64
+  value float64
 )
 ENGINE = MergeTree()
 ORDER BY key_column;
@@ -27,8 +27,8 @@ INSERT INTO dictdb_01076.table_datarace VALUES ('cd5db34f-0c25-4375-b10e-bfb3708
 $CLICKHOUSE_CLIENT --query="
 CREATE DICTIONARY IF NOT EXISTS dictdb_01076.dict_datarace
 (
-  key_column UInt64,
-  value Float64 DEFAULT 77.77
+  key_column uint64,
+  value float64 DEFAULT 77.77
 )
 PRIMARY KEY key_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_datarace' DB 'dictdb_01076'))
@@ -41,7 +41,7 @@ function thread1()
     for _ in {1..50}
     do
         # This query will be ended with exception, because source dictionary has UUID as a key type.
-        $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat64('dictdb_01076.dict_datarace', 'value', toUInt64(1));"
+        $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat64('dictdb_01076.dict_datarace', 'value', to_uint64(1));"
     done
 }
 
@@ -51,7 +51,7 @@ function thread2()
     for _ in {1..50}
     do
         # This query will be ended with exception, because source dictionary has UUID as a key type.
-        $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat64('dictdb_01076.dict_datarace', 'value', toUInt64(2));"
+        $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat64('dictdb_01076.dict_datarace', 'value', to_uint64(2));"
     done
 }
 
@@ -68,5 +68,5 @@ wait
 echo OK
 
 $CLICKHOUSE_CLIENT --query="DROP DICTIONARY dictdb_01076.dict_datarace;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE dictdb_01076.table_datarace;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM dictdb_01076.table_datarace;"
 $CLICKHOUSE_CLIENT --query="DROP DATABASE dictdb_01076;"

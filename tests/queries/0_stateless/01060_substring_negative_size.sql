@@ -11,9 +11,9 @@ select substring(cast('abcdefgh' as FixedString(8)), 2, materialize(-2));
 select substring(cast('abcdefgh' as FixedString(8)), materialize(2), materialize(-2));
 
 select '-';
-
-drop table if exists t;
-create table t (s String, l Int8, r Int8) engine = Memory;
+SET query_mode = 'table';
+drop stream if exists t;
+create stream t (s string, l int8, r int8) engine = Memory;
 insert into t values ('abcdefgh', 2, -2), ('12345678', 3, -3);
 
 select substring(s, 2, -2) from t;
@@ -23,8 +23,8 @@ select substring(s, l, r) from t;
 
 select '-';
 
-drop table if exists t;
-create table t (s FixedString(8), l Int8, r Int8) engine = Memory;
+drop stream if exists t;
+create stream t (s FixedString(8), l int8, r int8) engine = Memory;
 insert into t values ('abcdefgh', 2, -2), ('12345678', 3, -3);
 
 select substring(s, 2, -2) from t;
@@ -32,5 +32,5 @@ select substring(s, l, -2) from t;
 select substring(s, 2, r) from t;
 select substring(s, l, r) from t;
 
-drop table if exists t;
+drop stream if exists t;
 

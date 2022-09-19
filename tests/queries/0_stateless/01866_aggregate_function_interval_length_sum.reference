@@ -1,6 +1,6 @@
-a	5	UInt64
-b	8	UInt64
-c	3	UInt64
-a	1	Float64
-a	7201	UInt64
-a	7	UInt64
+a	5	uint64
+b	8	uint64
+c	3	uint64
+a	1	float64
+a	7201	uint64
+a	7	uint64

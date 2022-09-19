@@ -12,11 +12,11 @@ set -eo pipefail
 $CLICKHOUSE_CLIENT --multiquery <<EOF
 SET allow_experimental_map_type = 1;
 
-DROP TABLE IF EXISTS map_protobuf_00825;
+DROP STREAM IF EXISTS map_protobuf_00825;
 
-CREATE TABLE map_protobuf_00825
+create stream map_protobuf_00825
 (
-  a Map(String, UInt32)
+  a Map(string, uint32)
 ) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO map_protobuf_00825 VALUES ({'x':5, 'y':7}), ({'z':11}), ({'temp':0}), ({'':0});
@@ -38,4 +38,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO map_protobuf_00825 FORMAT Protobuf SETTI
 $CLICKHOUSE_CLIENT --query "SELECT * FROM map_protobuf_00825"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE map_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM map_protobuf_00825"

@@ -16,8 +16,8 @@ do
 	echo $i, $i >> ${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}.txt
 done
 
-${CLICKHOUSE_CLIENT} --query "drop table if exists file_log;"
-${CLICKHOUSE_CLIENT} --query "create table file_log(k UInt8, v UInt8) engine=FileLog('${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}.txt', 'CSV');"
+${CLICKHOUSE_CLIENT} --query "drop stream if exists file_log;"
+${CLICKHOUSE_CLIENT} --query "create stream file_log(k uint8, v uint8) engine=FileLog('${user_files_path}/${CLICKHOUSE_TEST_UNIQUE_NAME}.txt', 'CSV');"
 
 ${CLICKHOUSE_CLIENT} --query "select * from file_log order by k;"
 

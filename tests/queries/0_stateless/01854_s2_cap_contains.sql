@@ -10,5 +10,5 @@ select s2CapContains(1157339245694594829, nan, 1157339245694594829); -- { server
 select s2CapContains(1157339245694594829, 3.14, nan); -- { serverError 43 }
 
 
-select s2CapContains(toUInt64(-1), -1.0, toUInt64(-1)); -- { serverError 36 }
-select s2CapContains(toUInt64(-1), 9999.9999, toUInt64(-1)); -- { serverError 36 }
+select s2CapContains(to_uint64(-1), -1.0, to_uint64(-1)); -- { serverError 36 }
+select s2CapContains(to_uint64(-1), 9999.9999, to_uint64(-1)); -- { serverError 36 }

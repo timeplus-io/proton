@@ -2,4 +2,4 @@
 {"s":{"a.b":1,"a.c":2}}
 1		[22,33]
 2	qqq	[44]
-Tuple(k1 Int8, k2 Tuple(k3 String, k4 Array(Int8)))
+tuple(k1 int8, k2 tuple(k3 string, k4 array(int8)))

@@ -14,9 +14,9 @@ $CLICKHOUSE_CLIENT -n -q "
 
 CREATE DICTIONARY ordinary_db.dict1
 (
-  key_column UInt64 DEFAULT 0,
-  second_column UInt8 DEFAULT 1,
-  third_column String DEFAULT 'qqq'
+  key_column uint64 DEFAULT 0,
+  second_column uint8 DEFAULT 1,
+  third_column string DEFAULT 'qqq'
 )
 PRIMARY KEY key_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'view_for_dict' PASSWORD '' DB 'ordinary_db'))
@@ -27,7 +27,7 @@ LAYOUT(CACHE(SIZE_IN_CELLS 3));
 function dict_get_thread()
 {
     while true; do
-        $CLICKHOUSE_CLIENT --query "SELECT dictGetString('ordinary_db.dict1', 'third_column', toUInt64(rand() % 1000)) from numbers(2)" &>/dev/null
+        $CLICKHOUSE_CLIENT --query "SELECT dictGetString('ordinary_db.dict1', 'third_column', to_uint64(rand() % 1000)) from numbers(2)" &>/dev/null
     done
 }
 
@@ -35,18 +35,18 @@ function dict_get_thread()
 function drop_create_table_thread()
 {
     while true; do
-        $CLICKHOUSE_CLIENT -n --query "CREATE TABLE ordinary_db.table_for_dict_real (
-            key_column UInt64,
-            second_column UInt8,
-            third_column String
+        $CLICKHOUSE_CLIENT -n --query "create stream ordinary_db.table_for_dict_real (
+            key_column uint64,
+            second_column uint8,
+            third_column string
         )
         ENGINE MergeTree() ORDER BY tuple();
-        INSERT INTO ordinary_db.table_for_dict_real SELECT number, number, toString(number) from numbers(2);
+        INSERT INTO ordinary_db.table_for_dict_real SELECT number, number, to_string(number) from numbers(2);
         CREATE VIEW ordinary_db.view_for_dict AS SELECT key_column, second_column, third_column from ordinary_db.table_for_dict_real WHERE sleepEachRow(1) == 0;
 "
         sleep 10
 
-        $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS ordinary_db.table_for_dict_real"
+        $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS ordinary_db.table_for_dict_real"
         sleep 10
     done
 }

@@ -14,12 +14,12 @@ set -e
 [ -e "${CLICKHOUSE_TMP}"/example.com. ] && rm "${CLICKHOUSE_TMP}"/example.com.
 [ -e "${CLICKHOUSE_TMP}"/museum...protobuf ] && rm "${CLICKHOUSE_TMP}"/museum...protobuf
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS 02165_out_tb;"
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE 02165_out_tb (id UInt64, name String) Engine=Memory;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS 02165_out_tb;"
+${CLICKHOUSE_CLIENT} --query "create stream 02165_out_tb (id uint64, name string) Engine=Memory;"
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO 02165_out_tb Values(1, 'one'), (2, 'tow');"
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS 02165_in_tb;"
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE 02165_in_tb (id UInt64, name String) Engine=Memory;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS 02165_in_tb;"
+${CLICKHOUSE_CLIENT} --query "create stream 02165_in_tb (id uint64, name string) Engine=Memory;"
 
 
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM 02165_out_tb INTO OUTFILE '${CLICKHOUSE_TMP}/hello.csv';"
@@ -60,8 +60,8 @@ ${CLICKHOUSE_CLIENT} --query "TRUNCATE TABLE 02165_in_tb;"
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM 02165_out_tb INTO OUTFILE '${CLICKHOUSE_TMP}/.htaccess.json';"
 head -n 26 ${CLICKHOUSE_TMP}/.htaccess.json
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS 02165_out_tb;"
-${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS 02165_in_tb;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS 02165_out_tb;"
+${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS 02165_in_tb;"
 
 rm "${CLICKHOUSE_TMP}"/hello.csv
 rm "${CLICKHOUSE_TMP}"/world.csv.gz

@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS csv";
-$CLICKHOUSE_CLIENT --query="CREATE TABLE csv (s String, n UInt64 DEFAULT 1, d Date DEFAULT '2019-06-19') ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS csv";
+$CLICKHOUSE_CLIENT --query="create stream csv (s string, n uint64 DEFAULT 1, d date DEFAULT '2019-06-19') ";
 
 printf '"Hello, world", 123, "2016-01-01"
 "Hello, ""world""", "456", 2016-01-02,
@@ -16,9 +16,9 @@ Hello "world", 789 ,2016-01-03
  default-eof,,' | $CLICKHOUSE_CLIENT --input_format_defaults_for_omitted_fields=1 --input_format_csv_empty_as_default=1 --query="INSERT INTO csv FORMAT CSV";
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY d";
-$CLICKHOUSE_CLIENT --query="DROP TABLE csv";
+$CLICKHOUSE_CLIENT --query="DROP STREAM csv";
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE csv (t DateTime('Europe/Moscow'), s String) ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query="create stream csv (t datetime('Europe/Moscow'), s string) ";
 
 echo '"2016-01-01 01:02:03","1"
 2016-01-02 01:02:03, "2"
@@ -26,14 +26,14 @@ echo '"2016-01-01 01:02:03","1"
 99999,"4"' | $CLICKHOUSE_CLIENT --query="INSERT INTO csv FORMAT CSV";
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY s";
-$CLICKHOUSE_CLIENT --query="DROP TABLE csv";
+$CLICKHOUSE_CLIENT --query="DROP STREAM csv";
 
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE csv (t Nullable(DateTime('Europe/Moscow')), s Nullable(String)) ENGINE = Memory";
+$CLICKHOUSE_CLIENT --query="create stream csv (t Nullable(datetime('Europe/Moscow')), s Nullable(string)) ";
 
 echo 'NULL, NULL
 "2016-01-01 01:02:03",NUL
 "2016-01-02 01:02:03",Nhello' | $CLICKHOUSE_CLIENT --format_csv_null_representation='NULL' --input_format_csv_empty_as_default=1 --query="INSERT INTO csv FORMAT CSV";
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY s NULLS LAST";
-$CLICKHOUSE_CLIENT --query="DROP TABLE csv";
+$CLICKHOUSE_CLIENT --query="DROP STREAM csv";

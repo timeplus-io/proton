@@ -1,9 +1,9 @@
-SELECT fuzzBits(toString('string'), 1); -- { serverError 43 }
+SELECT fuzzBits(to_string('string'), 1); -- { serverError 43 }
 SELECT fuzzBits('string', -1.0); -- { serverError 69 }
 SELECT fuzzBits('', 0.3);
 SELECT length(fuzzBits(randomString(100), 0.5));
-SELECT toTypeName(fuzzBits(randomString(100), 0.5));
-SELECT toTypeName(fuzzBits(toFixedString('abacaba', 10), 0.9));
+SELECT to_type_name(fuzzBits(randomString(100), 0.5));
+SELECT to_type_name(fuzzBits(to_fixed_string('abacaba', 10), 0.9));
 
 SELECT
   (
@@ -15,10 +15,10 @@ FROM
     SELECT
       arraySum(
         id -> bitCount(
-          reinterpretAsUInt8(
+          reinterpret_as_uint8(
             substring(
               fuzzBits(
-                arrayStringConcat(arrayMap(x -> toString('\0'), range(10000))),
+                arrayStringConcat(array_map(x -> to_string('\0'), range(10000))),
                 0.3
               ),
               id + 1,

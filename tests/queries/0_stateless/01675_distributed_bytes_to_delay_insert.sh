@@ -9,8 +9,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 function drop_tables()
 {
-    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"drop table if exists dist_01675"
-    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"drop table if exists data_01675"
+    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"drop stream if exists dist_01675"
+    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"drop stream if exists data_01675"
 }
 
 #
@@ -21,8 +21,8 @@ function test_max_delay_to_insert_will_throw()
     echo "max_delay_to_insert will throw"
 
     local max_delay_to_insert=2
-    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create table data_01675 (key Int) engine=Null()"
-    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create table dist_01675 (key Int) engine=Distributed(test_shard_localhost, currentDatabase(), data_01675) settings bytes_to_delay_insert=1, max_delay_to_insert=$max_delay_to_insert"
+    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create stream data_01675 (key int) engine=Null()"
+    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create stream dist_01675 (key int) engine=Distributed(test_shard_localhost, currentDatabase(), data_01675) settings bytes_to_delay_insert=1, max_delay_to_insert=$max_delay_to_insert"
     ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"system stop distributed sends dist_01675"
 
     local start_seconds=$SECONDS
@@ -51,8 +51,8 @@ function test_max_delay_to_insert_will_succeed_once()
 
     drop_tables
 
-    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create table data_01675 (key Int) engine=Null()"
-    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create table dist_01675 (key Int) engine=Distributed(test_shard_localhost, currentDatabase(), data_01675) settings bytes_to_delay_insert=1, max_delay_to_insert=$max_delay_to_insert"
+    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create stream data_01675 (key int) engine=Null()"
+    ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"create stream dist_01675 (key int) engine=Distributed(test_shard_localhost, currentDatabase(), data_01675) settings bytes_to_delay_insert=1, max_delay_to_insert=$max_delay_to_insert"
     ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" -d @- <<<"system stop distributed sends dist_01675"
 
     function flush_distributed_worker()

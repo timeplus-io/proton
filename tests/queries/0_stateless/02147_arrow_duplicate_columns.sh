@@ -23,9 +23,9 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 GZDATA="H4sIAHTzuWEAA9VTuw3CMBB9+RCsyIULhFIwAC0SJQWZACkNi1CAxCCMwCCMQMEIKdkgPJ8PJbIIEiVPujuf73yfp6Rumt1+BXTEA4CDRwmLAhMYnogkpw96hjpXDWSUA2Wt/pU1mJz6GjO9k+eUI+UicSRbqvuX3BPlNsh1zDCcZypTOJ0xvF186GOYZ5ht9NrX8Pu12svDYq4bWqmKLEdFU+GNkmcr23oOzspNgh4FxmEiO3bvoriL4jJa1Bc/+OmghkcXeJU+lmwUwoALHHDbDfUSgVNfo9V3T7U9Pz3++bswDNbyD7wAxr434AoDAAA="
 
-${CLICKHOUSE_CLIENT} --query="DROP TABLE IF EXISTS t1"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE t1 ( x Int64, y Int64, z Int64 ) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS t1"
+${CLICKHOUSE_CLIENT} --query="create stream t1 ( x int64, y int64, z int64 ) "
 
 echo ${GZDATA} | base64 --decode | gunzip | ${CLICKHOUSE_CLIENT} -q "INSERT INTO t1 FORMAT Arrow settings input_format_arrow_allow_missing_columns = true" 2>&1 | grep -qF "DUPLICATE_COLUMN" && echo 'OK' || echo 'FAIL' ||:
 
-${CLICKHOUSE_CLIENT} -q "DROP TABLE IF EXISTS t1"
+${CLICKHOUSE_CLIENT} -q "DROP STREAM IF EXISTS t1"

@@ -29,20 +29,20 @@ TEST_WITH_CASTING=True
 GENERATE_TEST_FILES=False
 
 TYPES = {
-    "UInt8"    : { "bits" : 8, "sign" : False, "float" : False },
-    "Int8"     : { "bits" : 8, "sign" : True, "float" : False },
+    "uint8"    : { "bits" : 8, "sign" : False, "float" : False },
+    "int8"     : { "bits" : 8, "sign" : True, "float" : False },
 
-    "UInt16": { "bits" : 16, "sign" : False, "float" : False },
+    "uint16": { "bits" : 16, "sign" : False, "float" : False },
     "Int16" : { "bits" : 16, "sign" : True, "float" : False },
 
-    "UInt32": { "bits" : 32, "sign" : False, "float" : False },
-    "Int32" : { "bits" : 32, "sign" : True, "float" : False },
+    "uint32": { "bits" : 32, "sign" : False, "float" : False },
+    "int32" : { "bits" : 32, "sign" : True, "float" : False },
 
-    "UInt64": { "bits" : 64, "sign" : False, "float" : False },
-    "Int64" : { "bits" : 64, "sign" : True, "float" : False }
+    "uint64": { "bits" : 64, "sign" : False, "float" : False },
+    "int64" : { "bits" : 64, "sign" : True, "float" : False }
 
     #"Float32" : { "bits" : 32, "sign" : True, "float" : True },
-    #"Float64" : { "bits" : 64, "sign" : True, "float" : True }
+    #"float64" : { "bits" : 64, "sign" : True, "float" : True }
 }
 
 

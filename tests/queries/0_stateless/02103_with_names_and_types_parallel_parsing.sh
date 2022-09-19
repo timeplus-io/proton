@@ -13,8 +13,8 @@ FORMATS=('TSVWithNames' 'TSVWithNamesAndTypes' 'TSVRawWithNames' 'TSVRawWithName
 
 for format in "${FORMATS[@]}"
 do
-    $CLICKHOUSE_CLIENT -q "SELECT number, range(number + 10) AS array, toString(number) AS string FROM numbers(10) FORMAT $format" > $DATA_FILE
-    $CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103.data', '$format', 'number UInt64, array Array(UInt64), string String') SETTINGS input_format_parallel_parsing=1, min_chunk_bytes_for_parallel_parsing=40"
+    $CLICKHOUSE_CLIENT -q "SELECT number, range(number + 10) AS array, to_string(number) AS string FROM numbers(10) FORMAT $format" > $DATA_FILE
+    $CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103.data', '$format', 'number uint64, array array(uint64), string string') SETTINGS input_format_parallel_parsing=1, min_chunk_bytes_for_parallel_parsing=40"
 done
 
 rm $DATA_FILE

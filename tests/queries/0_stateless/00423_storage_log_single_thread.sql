@@ -1,7 +1,7 @@
 -- Tags: no-parallel
 
-DROP TABLE IF EXISTS log;
-CREATE TABLE log (s String) ENGINE = Log;
+DROP STREAM IF EXISTS log;
+create stream log (s string)  ;
 
 SELECT * FROM log LIMIT 1;
 SELECT * FROM log;
@@ -28,4 +28,4 @@ ATTACH TABLE log;
 SELECT * FROM log;
 SELECT * FROM log LIMIT 1;
 
-DROP TABLE log;
+DROP STREAM log;

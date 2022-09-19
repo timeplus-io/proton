@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS unicode;
+DROP STREAM IF EXISTS unicode;
 
-CREATE TABLE unicode(c1 String, c2 String) ENGINE = Memory;
+create stream unicode(c1 string, c2 string) ;
 INSERT INTO unicode VALUES ('Здравствуйте', 'Этот код можно отредактировать и запустить!');
 INSERT INTO unicode VALUES ('你好', '这段代码是可以编辑并且能够运行的！');
 INSERT INTO unicode VALUES ('Hola', '¡Este código es editable y ejecutable!');
@@ -25,4 +25,4 @@ SELECT 'Tabs \t Tabs', 'Non-first \t Tabs' FORMAT Vertical;
 SELECT 'Control characters \x1f\x1f\x1f\x1f with zero width', 'Invalid UTF-8 which eats pending characters \xf0, and invalid by itself \x80 with zero width' FORMAT Vertical;
 SELECT 'Russian ё and ё', 'Zero bytes \0 \0 in middle' FORMAT Vertical;
 
-DROP TABLE IF EXISTS unicode;
+DROP STREAM IF EXISTS unicode;

@@ -46,12 +46,12 @@ SELECT
     0 AND x AND 1 AND x
 FROM (SELECT number % 2 ? number % 3 : NULL AS x FROM system.numbers LIMIT 10);
 
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;
 
-CREATE TABLE test
+create stream test
 (
-    x Nullable(Int32)
-) ENGINE = Log;
+    x Nullable(int32)
+)  ;
 
 INSERT INTO test VALUES(1), (0), (null);
 
@@ -60,4 +60,4 @@ SELECT x FROM test WHERE x != 0;
 SELECT x FROM test WHERE x != 0 OR isNull(x);
 SELECT x FROM test WHERE x != 1;
 
-DROP TABLE test;
+DROP STREAM test;

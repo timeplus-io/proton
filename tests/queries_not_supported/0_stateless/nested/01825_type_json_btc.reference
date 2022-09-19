@@ -1,0 +1,5 @@
+100
+data	tuple(double_spend uint64, fee int32, hash string, inputs nested(index int8, prev_out tuple(addr string, n Int16, script string, spending_outpoints nested(n int8, tx_index Int64), spent uint64, tx_index Int64, type int8, value Int64), script string, sequence Int64, witness string), lock_time int32, out nested(addr string, n int8, script string, spending_outpoints nested(n int8, tx_index Int64), spent uint64, tx_index Int64, type int8, value Int64), rbf uint64, relayed_by string, size Int16, time int32, tx_index Int64, ver int8, vin_sz int8, vout_sz int8, weight Int16)					
+8174.56	2680
+2.32	1
+[[],[(0,359661801933760)]]

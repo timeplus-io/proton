@@ -21,7 +21,7 @@ function try_sync_replicas()
         for p in "${empty_partitions_arr[@]}"
         do
             # Avoid "Empty part ... is not created instead of lost part because there are no parts in partition"
-            $CLICKHOUSE_CLIENT -q "ALTER TABLE $t DROP PARTITION ID '$p'" 2>/dev/null
+            $CLICKHOUSE_CLIENT -q "ALTER STREAM $t DROP PARTITION ID '$p'" 2>/dev/null
         done
     done
 

@@ -1,12 +1,12 @@
-CREATE TABLE default.tuple
+create stream default.tuple
 (
-    `j` Tuple(a Int8, b String)
+    `j` tuple(a int8, b string)
 )
-ENGINE = Memory
-j	Tuple(a Int8, b String)					
-CREATE TABLE default.tuple
+
+j	tuple(a int8, b string)					
+create stream default.tuple
 (
-    `j` Tuple(a Int8, b String)
+    `j` tuple(a int8, b string)
 )
-ENGINE = Memory
-j	Tuple(a Int8, b String)					
+
+j	tuple(a int8, b string)					

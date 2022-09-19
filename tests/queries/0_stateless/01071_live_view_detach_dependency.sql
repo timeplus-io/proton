@@ -1,12 +1,12 @@
 -- Tags: no-replicated-database, no-parallel, no-fasttest
 
 SET allow_experimental_live_view = 1;
-DROP TABLE IF EXISTS test;
-DROP TABLE IF EXISTS lv;
-CREATE TABLE test (n Int8) ENGINE = Memory;
+DROP STREAM IF EXISTS test;
+DROP STREAM IF EXISTS lv;
+create stream test (n int8) ;
 CREATE LIVE VIEW lv AS SELECT * FROM test;
 DETACH TABLE lv;
 INSERT INTO test VALUES (42);
-DROP TABLE test;
+DROP STREAM test;
 ATTACH TABLE lv;
-DROP TABLE lv;
+DROP STREAM lv;

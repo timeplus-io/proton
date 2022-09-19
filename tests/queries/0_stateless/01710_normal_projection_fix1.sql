@@ -1,10 +1,11 @@
-drop table if exists t;
+SET query_mode = 'table';
+drop stream if exists t;
 
-create table t (i int, j int) engine MergeTree order by i;
+create stream t (i int, j int) engine MergeTree order by i;
 
 insert into t values (1, 2);
 
-alter table t add projection x (select * order by j);
+alter stream t add projection x (select * order by j);
 
 insert into t values (1, 4);
 
@@ -14,4 +15,4 @@ select i from t prewhere j = 4;
 
 SELECT j = 2, i FROM t PREWHERE j = 2;
 
-drop table t;
+drop stream t;

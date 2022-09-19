@@ -1,9 +1,9 @@
 -- This test checks, that common SQL operations work
 -- with mixed columns (sparse and full) in table.
 
-DROP TABLE IF EXISTS t_sparse_full;
+DROP STREAM IF EXISTS t_sparse_full;
 
-CREATE TABLE t_sparse_full (id UInt64, u UInt64, s String)
+create stream t_sparse_full (id uint64, u uint64, s string)
 ENGINE = MergeTree ORDER BY id
 SETTINGS index_granularity = 32,
 ratio_of_defaults_for_sparse_serialization = 0.1;
@@ -14,14 +14,14 @@ INSERT INTO t_sparse_full
 SELECT
     number,
     if (number % 10 = 0, number, 0),
-    if (number % 7 = 0, toString(number), '')
+    if (number % 7 = 0, to_string(number), '')
 FROM numbers(1000);
 
 INSERT INTO t_sparse_full
 SELECT
     number,
     number,
-    toString(number)
+    to_string(number)
 FROM numbers(500);
 
 SELECT name, column, serialization_kind
@@ -40,7 +40,7 @@ SELECT id % 3 AS k, sum(u) FROM t_sparse_full WHERE u != 0 GROUP BY k ORDER BY k
 SELECT '======';
 SELECT uniqExact(u) FROM t_sparse_full WHERE s != '';
 SELECT '======';
-SELECT toUInt32(s) % 5 AS k, groupUniqArray(u % 4) FROM t_sparse_full WHERE s != '' GROUP BY k ORDER BY k;
+SELECT to_uint32(s) % 5 AS k, groupUniqArray(u % 4) FROM t_sparse_full WHERE s != '' GROUP BY k ORDER BY k;
 SELECT max(range(id % 10)[u]) FROM t_sparse_full;
 SELECT '======';
 SELECT id, u, s FROM remote('127.0.0.{1,2}', currentDatabase(), t_sparse_full) ORDER BY id LIMIT 5;
@@ -90,7 +90,7 @@ FULL JOIN t_sparse_full USING(u) ORDER BY id, u, s LIMIT 5;
 
 SYSTEM START MERGES t_sparse_full;
 
-OPTIMIZE TABLE t_sparse_full FINAL;
+OPTIMIZE STREAM t_sparse_full FINAL;
 
 SELECT '======';
 
@@ -102,4 +102,4 @@ SELECT '======';
 
 SELECT id, u, s FROM t_sparse_full ORDER BY u DESC LIMIT 3;
 
-DROP TABLE t_sparse_full;
+DROP STREAM t_sparse_full;

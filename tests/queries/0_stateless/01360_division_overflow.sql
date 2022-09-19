@@ -1,5 +1,5 @@
-select intDiv(materialize(toInt32(1)), 0x100000000);
-select intDiv(materialize(toInt32(1)), -0x100000000);
-select intDiv(materialize(toInt32(1)), -9223372036854775808);
-select materialize(toInt32(1)) % -9223372036854775808;
-select value % -9223372036854775808 from (select toInt32(arrayJoin([3, 5])) value);
+select int_div(materialize(to_int32(1)), 0x100000000);
+select int_div(materialize(to_int32(1)), -0x100000000);
+select int_div(materialize(to_int32(1)), -9223372036854775808);
+select materialize(to_int32(1)) % -9223372036854775808;
+select value % -9223372036854775808 from (select to_int32(array_join([3, 5])) value);

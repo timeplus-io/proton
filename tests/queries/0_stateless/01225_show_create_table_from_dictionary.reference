@@ -1,6 +1,6 @@
-CREATE TABLE dict_db_01225_dictionary.`dict_db_01225.dict`
+create stream dict_db_01225_dictionary.`dict_db_01225.dict`
 (
-    `key` UInt64,
-    `val` UInt64
+    `key` uint64,
+    `val` uint64
 )
 ENGINE = Dictionary(`dict_db_01225.dict`)

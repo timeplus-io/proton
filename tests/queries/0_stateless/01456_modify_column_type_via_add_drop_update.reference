@@ -1,5 +1,5 @@
 a	b	c	d	e
-Int64	String	UInt8	Float64	UInt32
+int64	string	uint8	float64	uint32
 0	0	0	0	0
 1	2	3	4	5
 2	4	6	8	10
@@ -11,7 +11,7 @@ Int64	String	UInt8	Float64	UInt32
 8	16	24	32	40
 9	18	27	36	45
 a	b	c	d	e
-Int64	String	UInt8	Float64	UInt32
+int64	string	uint8	float64	uint32
 0	0	0	0	0
 1	2	3	4	5
 2	4	6	8	10

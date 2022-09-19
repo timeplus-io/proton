@@ -13,7 +13,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tmp_file=$(mktemp "$CURDIR/clickhouse.XXXXXX.csv")
 trap 'rm $tmp_file' EXIT
 
-$CLICKHOUSE_CLIENT -q "SELECT toString(number) FROM numbers(1e6) FORMAT TSV" > "$tmp_file"
+$CLICKHOUSE_CLIENT -q "SELECT to_string(number) FROM numbers(1e6) FORMAT TSV" > "$tmp_file"
 
 function run_and_check()
 {
@@ -23,13 +23,13 @@ function run_and_check()
     echo "Checking $*"
 
     # Run query with external table (implicit StorageMemory user)
-    $CLICKHOUSE_CURL -sS -F "s=@$tmp_file;" "$CLICKHOUSE_URL&s_structure=key+Int&query=SELECT+count()+FROM+s&memory_profiler_sample_probability=1&query_id=$query_id&$*" -o /dev/null
+    $CLICKHOUSE_CURL -sS -F "s=@$tmp_file;" "$CLICKHOUSE_URL&s_structure=key+int&query=SELECT+count()+FROM+s&memory_profiler_sample_probability=1&query_id=$query_id&$*" -o /dev/null
 
     ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}" --data-binary @- <<<'SYSTEM FLUSH LOGS'
 
     # Check that temporary table had been destroyed.
     ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}&allow_introspection_functions=1" --data-binary @- <<<"
-    WITH arrayStringConcat(arrayMap(x -> demangle(addressToSymbol(x)), trace), '\n') AS sym
+    WITH arrayStringConcat(array_map(x -> demangle(addressToSymbol(x)), trace), '\n') AS sym
     SELECT count()>0 FROM system.trace_log
     WHERE
         sym LIKE '%DB::StorageMemory::drop%\n%TemporaryTableHolder::~TemporaryTableHolder%' AND

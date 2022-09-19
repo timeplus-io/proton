@@ -6,10 +6,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT --query="create database if not exists test_01054;"
-$CLICKHOUSE_CLIENT --query="drop table if exists test_01054.ints;"
+$CLICKHOUSE_CLIENT --query="drop stream if exists test_01054.ints;"
 
-$CLICKHOUSE_CLIENT --query="create table test_01054.ints
-                            (key UInt64, i8 Int8, i16 Int16, i32 Int32, i64 Int64, u8 UInt8, u16 UInt16, u32 UInt32, u64 UInt64)
+$CLICKHOUSE_CLIENT --query="create stream test_01054.ints
+                            (key uint64, i8 int8, i16 Int16, i32 int32, i64 int64, u8 uint8, u16 uint16, u32 uint32, u64 uint64)
                             Engine = Memory;"
 
 $CLICKHOUSE_CLIENT --query="insert into test_01054.ints values (1, 1, 1, 1, 1, 1, 1, 1, 1);"
@@ -21,7 +21,7 @@ function thread1()
   for _ in {1..100}
   do
     RAND_NUMBER_THREAD1=$($CLICKHOUSE_CLIENT --query="SELECT rand() % 100;")
-    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', toUInt64($RAND_NUMBER_THREAD1));"
+    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', to_uint64($RAND_NUMBER_THREAD1));"
   done
 }
 
@@ -31,7 +31,7 @@ function thread2()
   for _ in {1..100}
   do
     RAND_NUMBER_THREAD2=$($CLICKHOUSE_CLIENT --query="SELECT rand() % 100;")
-    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', toUInt64($RAND_NUMBER_THREAD2));"
+    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', to_uint64($RAND_NUMBER_THREAD2));"
   done
 }
 
@@ -41,7 +41,7 @@ function thread3()
   for _ in {1..100}
   do
     RAND_NUMBER_THREAD3=$($CLICKHOUSE_CLIENT --query="SELECT rand() % 100;")
-    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', toUInt64($RAND_NUMBER_THREAD3));"
+    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', to_uint64($RAND_NUMBER_THREAD3));"
   done
 }
 
@@ -51,7 +51,7 @@ function thread4()
   for _ in {1..100}
   do
     RAND_NUMBER_THREAD4=$($CLICKHOUSE_CLIENT --query="SELECT rand() % 100;")
-    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', toUInt64($RAND_NUMBER_THREAD4));"
+    $CLICKHOUSE_CLIENT --query="select dictGet('one_cell_cache_ints', 'i8', to_uint64($RAND_NUMBER_THREAD4));"
   done
 }
 
@@ -73,5 +73,5 @@ wait
 
 echo OK
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE if exists test_01054.ints"
+$CLICKHOUSE_CLIENT --query "DROP STREAM if exists test_01054.ints"
 $CLICKHOUSE_CLIENT -q "DROP DATABASE test_01054"

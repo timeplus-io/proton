@@ -1,13 +1,13 @@
 set joined_subquery_requires_alias = 0;
 
-DROP TABLE IF EXISTS left_table;
-DROP TABLE IF EXISTS right_table;
+DROP STREAM IF EXISTS left_table;
+DROP STREAM IF EXISTS right_table;
 
-CREATE TABLE left_table(APIKey Int32, SomeColumn String) ENGINE = MergeTree ORDER BY tuple();
+create stream left_table(APIKey int32, SomeColumn string) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO left_table VALUES(1, 'somestr');
 
-CREATE TABLE right_table(APIKey Int32, EventValueForPostback String) ENGINE = MergeTree ORDER BY tuple();
+create stream right_table(APIKey int32, EventValueForPostback string) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO right_table VALUES(1, 'hello'), (2, 'WORLD');
 
@@ -38,5 +38,5 @@ ALL INNER JOIN
             ) USING (APIKey)
     ) USING (APIKey);
 
-DROP TABLE IF EXISTS left_table;
-DROP TABLE IF EXISTS right_table;
+DROP STREAM IF EXISTS left_table;
+DROP STREAM IF EXISTS right_table;

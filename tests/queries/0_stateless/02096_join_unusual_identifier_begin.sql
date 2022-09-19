@@ -1,14 +1,14 @@
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
-DROP TABLE IF EXISTS t3;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;
+DROP STREAM IF EXISTS t3;
 
-CREATE TABLE t1 ( `a1` Int64, `1a1` Int64 ) ENGINE = Memory;
+create stream t1 ( `a1` int64, `1a1` int64 ) ;
 INSERT INTO t1 VALUES (1, 1);
 
-CREATE TABLE t2 ( `b1` Int64, `1b1` Int64 ) ENGINE = Memory;
+create stream t2 ( `b1` int64, `1b1` int64 ) ;
 INSERT INTO t2 VALUES (1, 1);
 
-CREATE TABLE t3 ( `c1` Int64, `1c1` Int64 ) ENGINE = Memory;
+create stream t3 ( `c1` int64, `1c1` int64 ) ;
 INSERT INTO t3 VALUES (1, 1);
 
 SELECT
@@ -22,6 +22,6 @@ SELECT t2.`1b1` FROM t1 JOIN t2 ON a1 = b1;
 -- Without quialification it doesn't work:
 -- SELECT `1b1` FROM t1 JOIN t2 ON a1 = b1;
 
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
-DROP TABLE IF EXISTS t3;
+DROP STREAM IF EXISTS t1;
+DROP STREAM IF EXISTS t2;
+DROP STREAM IF EXISTS t3;

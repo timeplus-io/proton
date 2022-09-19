@@ -1,11 +1,12 @@
-DROP TABLE IF EXISTS testv;
+SET query_mode = 'table';
+drop stream IF EXISTS testv;
 
-create view testv(a UInt32) as select number a from numbers(10);
-select groupArray(a) from testv;
+create view testv(a uint32) as select number a from numbers(10);
+select group_array(a) from testv;
 
-DROP TABLE testv;
+drop stream testv;
 
-create view testv(a String) as select number a from numbers(10);
-select groupArray(a) from testv;
+create view testv(a string) as select number a from numbers(10);
+select group_array(a) from testv;
 
-DROP TABLE testv;
+drop stream testv;

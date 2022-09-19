@@ -12,10 +12,10 @@ SELECT
     and(x1 and x2, x3 and x4) AS and2
 FROM (
     SELECT
-        toUInt8(number % 2) AS x1,
-        toUInt8(number / 2 % 2) AS x2,
-        toUInt8(number / 4 % 2) AS x3,
-        toUInt8(number / 8 % 2) AS x4
+        to_uint8(number % 2) AS x1,
+        to_uint8(number / 2 % 2) AS x2,
+        to_uint8(number / 4 % 2) AS x3,
+        to_uint8(number / 8 % 2) AS x4
     FROM numbers(16)
 )
 WHERE
@@ -35,17 +35,17 @@ SELECT
     and(x1, and((x2 and x3) and (x4 and x5), (x6 and x7) and (x8 and (x9 and (x10 and x11))))) AS and2
 FROM (
     SELECT
-        toUInt8(number % 2) AS x1,
-        toUInt8(number / 2 % 2) AS x2,
-        toUInt8(number / 4 % 2) AS x3,
-        toUInt8(number / 8 % 2) AS x4,
-        toUInt8(number / 16 % 2) AS x5,
-        toUInt8(number / 32 % 2) AS x6,
-        toUInt8(number / 64 % 2) AS x7,
-        toUInt8(number / 128 % 2) AS x8,
-        toUInt8(number / 256 % 2) AS x9,
-        toUInt8(number / 512 % 2) AS x10,
-        toUInt8(number / 1024 % 2) AS x11
+        to_uint8(number % 2) AS x1,
+        to_uint8(number / 2 % 2) AS x2,
+        to_uint8(number / 4 % 2) AS x3,
+        to_uint8(number / 8 % 2) AS x4,
+        to_uint8(number / 16 % 2) AS x5,
+        to_uint8(number / 32 % 2) AS x6,
+        to_uint8(number / 64 % 2) AS x7,
+        to_uint8(number / 128 % 2) AS x8,
+        to_uint8(number / 256 % 2) AS x9,
+        to_uint8(number / 512 % 2) AS x10,
+        to_uint8(number / 1024 % 2) AS x11
     FROM numbers(2048)
 )
 WHERE

@@ -1,0 +1,12 @@
+id	string					
+products.产品	array(array(string))					
+products.销量	array(array(int32))					
+id	string					
+products.产品	array(array(string))					
+products.销量	array(array(int32))					
+id	string					
+products.产品	array(string)					
+products.销量	array(int32)					
+p.产品	array(string)					
+p.销量	array(int32)					
+0

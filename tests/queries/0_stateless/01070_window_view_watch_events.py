@@ -27,12 +27,12 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
 
     client1.send('CREATE DATABASE IF NOT EXISTS 01070_window_view_watch_events')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS 01070_window_view_watch_events.mt NO DELAY')
+    client1.send('DROP STREAM IF EXISTS 01070_window_view_watch_events.mt NO DELAY')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS 01070_window_view_watch_events.wv NO DELAY')
+    client1.send('DROP STREAM IF EXISTS 01070_window_view_watch_events.wv NO DELAY')
     client1.expect(prompt)
 
-    client1.send("CREATE TABLE 01070_window_view_watch_events.mt(a Int32, timestamp DateTime('US/Samoa')) ENGINE=MergeTree ORDER BY tuple()")
+    client1.send("create stream 01070_window_view_watch_events.mt(a int32, timestamp datetime('US/Samoa')) ENGINE=MergeTree ORDER BY tuple()")
     client1.expect(prompt)
     client1.send("CREATE WINDOW VIEW 01070_window_view_watch_events.wv WATERMARK=ASCENDING AS SELECT count(a) AS count, tumbleEnd(wid) AS w_end FROM 01070_window_view_watch_events.mt GROUP BY tumble(timestamp, INTERVAL '5' SECOND, 'US/Samoa') AS wid")
     client1.expect(prompt)
@@ -52,9 +52,9 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     if match.groups()[1]:
         client1.send(client1.command)
         client1.expect(prompt)
-    client1.send('DROP TABLE 01070_window_view_watch_events.wv NO DELAY;')
+    client1.send('DROP STREAM 01070_window_view_watch_events.wv NO DELAY;')
     client1.expect(prompt)
-    client1.send('DROP TABLE 01070_window_view_watch_events.mt;')
+    client1.send('DROP STREAM 01070_window_view_watch_events.mt;')
     client1.expect(prompt)
     client1.send('DROP DATABASE IF EXISTS 01070_window_view_watch_events;')
     client1.expect(prompt)

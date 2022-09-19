@@ -1,10 +1,10 @@
-DROP TABLE IF EXISTS decimal;
+DROP STREAM IF EXISTS decimal;
 
-CREATE TABLE IF NOT EXISTS decimal (x DECIMAL(10, -2)) ENGINE = Memory; -- { serverError 69 }
-CREATE TABLE IF NOT EXISTS decimal (x DECIMAL(10, 15)) ENGINE = Memory; -- { serverError 69 }
-CREATE TABLE IF NOT EXISTS decimal (x DECIMAL(0, 0)) ENGINE = Memory; -- { serverError 69 }
+create stream IF NOT EXISTS decimal (x DECIMAL(10, -2)) ; -- { serverError 69 }
+create stream IF NOT EXISTS decimal (x DECIMAL(10, 15)) ; -- { serverError 69 }
+create stream IF NOT EXISTS decimal (x DECIMAL(0, 0)) ; -- { serverError 69 }
 
-CREATE TABLE IF NOT EXISTS decimal
+create stream IF NOT EXISTS decimal
 (
     a DECIMAL(9,0),
     b DECIMAL(18,0),
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS decimal
     h decimal(18, 9),
     i deciMAL(38, 18),
     j DECIMAL(1,0)
-) ENGINE = Memory;
+) ;
 
 INSERT INTO decimal (a) VALUES (1000000000); -- { clientError 69 }
 INSERT INTO decimal (a) VALUES (-1000000000); -- { clientError 69 }
@@ -94,4 +94,4 @@ INSERT INTO decimal (a, b, c, d, e, f) VALUES ('1e9', '1e18', '1e38', '1e-10', '
 INSERT INTO decimal (a, b, c, d, e, f) VALUES ('-1e9', '-1e18', '-1e38', '-1e-10', '-1e-19', '-1e-39'); -- { clientError 69 }
 
 SELECT * FROM decimal ORDER BY a, b, c, d, e, f, g, h, i, j;
-DROP TABLE IF EXISTS decimal;
+DROP STREAM IF EXISTS decimal;

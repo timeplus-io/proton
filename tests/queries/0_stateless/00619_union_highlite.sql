@@ -1,6 +1,6 @@
 -- Tags: no-parallel
-
-DROP TABLE IF EXISTS union;
+SET query_mode = 'table';
+drop stream IF EXISTS union;
 
 create view union as select 1 as test union all select 2;
 
@@ -11,4 +11,4 @@ ATTACH TABLE union;
 
 SELECT * FROM union ORDER BY test;
 
-DROP TABLE union;
+drop stream union;

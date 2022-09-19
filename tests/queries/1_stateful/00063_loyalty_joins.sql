@@ -10,7 +10,7 @@ FROM test.hits ANY LEFT JOIN
         UserID, 
         sum(SearchEngineID = 2) AS yandex, 
         sum(SearchEngineID = 3) AS google, 
-        toInt8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
+        to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
     FROM test.hits
     WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
     GROUP BY UserID
@@ -33,7 +33,7 @@ FROM
         UserID, 
         sum(SearchEngineID = 2) AS yandex, 
         sum(SearchEngineID = 3) AS google, 
-        toInt8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
+        to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
     FROM test.hits
     WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
     GROUP BY UserID
@@ -61,7 +61,7 @@ FROM
             UserID, 
             sum(SearchEngineID = 2) AS yandex, 
             sum(SearchEngineID = 3) AS google, 
-            toInt8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
+            to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
         FROM test.hits
         WHERE (SearchEngineID = 2) OR (SearchEngineID = 3)
         GROUP BY UserID
@@ -80,7 +80,7 @@ FROM test.hits ANY INNER JOIN
 (
     SELECT
         UserID, 
-        toInt8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
+        to_int8(if(yandex > google, yandex / (yandex + google), -google / (yandex + google)) * 10) AS loyalty
     FROM
     (
         SELECT

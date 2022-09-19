@@ -10,11 +10,11 @@ set -eo pipefail
 
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<EOF
-DROP TABLE IF EXISTS array_3dim_protobuf_00825;
+DROP STREAM IF EXISTS array_3dim_protobuf_00825;
 
-CREATE TABLE array_3dim_protobuf_00825
+create stream array_3dim_protobuf_00825
 (
-    a_b_c Array(Array(Array(Int32)))
+    a_b_c array(array(array(int32)))
 ) ENGINE = MergeTree ORDER BY tuple();
 
 INSERT INTO array_3dim_protobuf_00825 VALUES ([[], [[]], [[1]], [[2,3],[4]]]), ([[[5, 6, 7]], [[8, 9, 10]]]);
@@ -35,4 +35,4 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO array_3dim_protobuf_00825 FORMAT Protobu
 $CLICKHOUSE_CLIENT --query "SELECT * FROM array_3dim_protobuf_00825"
 
 rm "$BINARY_FILE_PATH"
-$CLICKHOUSE_CLIENT --query "DROP TABLE array_3dim_protobuf_00825"
+$CLICKHOUSE_CLIENT --query "DROP STREAM array_3dim_protobuf_00825"

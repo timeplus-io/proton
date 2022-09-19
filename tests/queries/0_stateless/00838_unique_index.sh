@@ -5,21 +5,21 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS set_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS set_idx;"
 
 $CLICKHOUSE_CLIENT -n --query="
-CREATE TABLE set_idx
+create stream set_idx
 (
-    u64 UInt64,
-    i32 Int32,
-    f64 Float64,
+    u64 uint64,
+    i32 int32,
+    f64 float64,
     d Decimal(10, 2),
-    s String,
+    s string,
     e Enum8('a' = 1, 'b' = 2, 'c' = 3),
-    dt Date,
+    dt date,
     INDEX idx_all (i32, i32 + f64, d, s, e, dt) TYPE set(2) GRANULARITY 1,
     INDEX idx_all2 (i32, i32 + f64, d, s, e, dt) TYPE set(4) GRANULARITY 2,
-    INDEX idx_2 (u64 + toYear(dt), substring(s, 2, 4)) TYPE set(6) GRANULARITY 3
+    INDEX idx_2 (u64 + to_year(dt), substring(s, 2, 4)) TYPE set(6) GRANULARITY 3
 ) ENGINE = MergeTree()
 ORDER BY u64
 SETTINGS index_granularity = 2;"
@@ -53,4 +53,4 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE (u64 < 2 OR NOT u64 > 10
 $CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE (u64 < 2 OR NOT u64 > 10) AND NOT (s = 'cba') ORDER BY dt FORMAT JSON" | grep "rows_read"
 
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE set_idx;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM set_idx;"

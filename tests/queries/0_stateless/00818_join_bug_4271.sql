@@ -1,8 +1,9 @@
-drop table if exists t_00818;
-drop table if exists s_00818;
+SET query_mode = 'table';
+drop stream if exists t_00818;
+drop stream if exists s_00818;
 
-create table t_00818(a Nullable(Int64), b Nullable(Int64), c Nullable(String)) engine = Memory;
-create table s_00818(a Nullable(Int64), b Nullable(Int64), c Nullable(String)) engine = Memory;
+create stream t_00818(a Nullable(int64), b Nullable(int64), c Nullable(string)) engine = Memory;
+create stream s_00818(a Nullable(int64), b Nullable(int64), c Nullable(string)) engine = Memory;
 
 insert into t_00818 values(1,1,'a'), (2,2,'b');
 insert into s_00818 values(1,1,'a');
@@ -13,5 +14,5 @@ select * from t_00818 left join s_00818 on t_00818.a = s_00818.a where s_00818.a
 select * from t_00818 left join s_00818 on t_00818.a = s_00818.a and t_00818.a = s_00818.a;
 select * from t_00818 left join s_00818 on t_00818.a = s_00818.a and t_00818.b = s_00818.a;
 
-drop table t_00818;
-drop table s_00818;
+drop stream t_00818;
+drop stream s_00818;

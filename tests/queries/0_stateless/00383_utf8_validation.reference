@@ -3,7 +3,7 @@
 	[
 		{
 			"name": "s",
-			"type": "String"
+			"type": "string"
 		}
 	],
 

@@ -4,11 +4,11 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS a;"
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS b;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS a;"
+$CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS b;"
 
-$CLICKHOUSE_CLIENT --query="CREATE TABLE a (x UInt64) ENGINE = Memory;"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE b (x UInt64) ENGINE = Memory;"
+$CLICKHOUSE_CLIENT --query="create stream a (x uint64) ;"
+$CLICKHOUSE_CLIENT --query="create stream b (x uint64) ;"
 
 function thread1()
 {
@@ -47,5 +47,5 @@ bash -c thread2 > /dev/null 2>&1 &
 wait
 echo OK
 
-$CLICKHOUSE_CLIENT --query "DROP TABLE a"
-$CLICKHOUSE_CLIENT --query "DROP TABLE b"
+$CLICKHOUSE_CLIENT --query "DROP STREAM a"
+$CLICKHOUSE_CLIENT --query "DROP STREAM b"

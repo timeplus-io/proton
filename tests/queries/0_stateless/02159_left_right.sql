@@ -32,8 +32,8 @@ SELECT leftUTF8('Привет', number) FROM numbers(10);
 SELECT left('Hello', -number) FROM numbers(10);
 SELECT leftUTF8('Привет', -number) FROM numbers(10);
 
-SELECT leftUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? toInt64(number) : -number)) FROM numbers(10);
-SELECT leftUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : (number % 2 ? toInt64(number) : -number)) FROM numbers(10);
+SELECT leftUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
+SELECT leftUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
 
 SELECT right('Hello', 3);
 SELECT right('Hello', -3);
@@ -67,5 +67,5 @@ SELECT rightUTF8('Привет', number) FROM numbers(10);
 SELECT right('Hello', -number) FROM numbers(10);
 SELECT rightUTF8('Привет', -number) FROM numbers(10);
 
-SELECT rightUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? toInt64(number) : -number)) FROM numbers(10);
-SELECT rightUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : (number % 2 ? toInt64(number) : -number)) FROM numbers(10);
+SELECT rightUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
+SELECT rightUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);

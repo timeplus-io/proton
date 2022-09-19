@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS t;
+DROP STREAM IF EXISTS t;
 
-CREATE TABLE t
+create stream t
 (
-  number UInt64
+  number uint64
 )
 ENGINE = MergeTree
 ORDER BY number
@@ -12,6 +12,6 @@ SET min_insert_block_size_rows = 0, min_insert_block_size_bytes = 0;
 INSERT INTO t SELECT number FROM numbers(10000000);
 
 SET max_threads = 1, max_block_size = 12345;
-SELECT arrayDistinct(arrayPopFront(arrayDifference(groupArray(number)))) FROM t;
+SELECT  array_distinct(arrayPopFront(arrayDifference(group_array(number)))) FROM t;
 
-DROP TABLE t;
+DROP STREAM t;

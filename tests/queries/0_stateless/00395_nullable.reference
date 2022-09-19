@@ -102,27 +102,27 @@
 \N
 \N
 ----- if -----
-a	1	UInt8
-b	1	UInt8
-c	0	UInt8
-\N	0	UInt8
-a	\N	Nullable(UInt8)
-b	\N	Nullable(UInt8)
-c	0	Nullable(UInt8)
-\N	0	Nullable(UInt8)
+a	1	uint8
+b	1	uint8
+c	0	uint8
+\N	0	uint8
+a	\N	Nullable(uint8)
+b	\N	Nullable(uint8)
+c	0	Nullable(uint8)
+\N	0	Nullable(uint8)
 ----- case when -----
-a	1	UInt8
-b	1	UInt8
-c	0	UInt8
-\N	0	UInt8
-a	\N	Nullable(UInt8)
-b	\N	Nullable(UInt8)
-c	0	Nullable(UInt8)
-\N	0	Nullable(UInt8)
-a	1	Nullable(UInt8)
-b	1	Nullable(UInt8)
-c	\N	Nullable(UInt8)
-\N	\N	Nullable(UInt8)
+a	1	uint8
+b	1	uint8
+c	0	uint8
+\N	0	uint8
+a	\N	Nullable(uint8)
+b	\N	Nullable(uint8)
+c	0	Nullable(uint8)
+\N	0	Nullable(uint8)
+a	1	Nullable(uint8)
+b	1	Nullable(uint8)
+c	\N	Nullable(uint8)
+\N	\N	Nullable(uint8)
 ----- multiIf -----
 \N
 2
@@ -138,7 +138,7 @@ A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
 1
 99
 99
------ Array functions -----
+----- array functions -----
 [NULL]
 [NULL,NULL,NULL]
 [NULL,2,3]

@@ -23,16 +23,16 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
     client2.send('SET allow_experimental_live_view = 1')
     client2.expect(prompt)
 
-    client1.send('DROP TABLE IF EXISTS test.lv')
+    client1.send('DROP STREAM IF EXISTS test.lv')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS test.mt')
+    client1.send('DROP STREAM IF EXISTS test.mt')
     client1.expect(prompt)
     client1.send('DROP DICTIONARY IF EXITS test.dict')
     client1.expect(prompt)
     
-    client1.send("CREATE TABLE test.mt (a Int32, b Int32) Engine=MergeTree order by tuple()")
+    client1.send("create stream test.mt (a int32, b int32) Engine=MergeTree order by tuple()")
     client1.expect(prompt)
-    client1.send("CREATE DICTIONARY test.dict(a Int32, b Int32) PRIMARY KEY a LAYOUT(FLAT()) " + \
+    client1.send("CREATE DICTIONARY test.dict(a int32, b int32) PRIMARY KEY a LAYOUT(FLAT()) " + \
                  "SOURCE(CLICKHOUSE(db 'test' table 'mt')) LIFETIME(1)")
     client1.expect(prompt)   
     client1.send("CREATE LIVE VIEW test.lv WITH REFRESH 1 AS SELECT * FROM test.dict")
@@ -59,11 +59,11 @@ with client(name='client1>', log=log) as client1, client(name='client2>', log=lo
         client1.send(client1.command)
         client1.expect(prompt)
 
-    client1.send('DROP TABLE IF EXISTS test.lv')
+    client1.send('DROP STREAM IF EXISTS test.lv')
     client1.expect(prompt)
     client1.send('DROP DICTIONARY IF EXISTS test.dict')
     client1.expect(prompt)
-    client1.send('DROP TABLE IF EXISTS test.mt')
+    client1.send('DROP STREAM IF EXISTS test.mt')
     client1.expect(prompt)
     
     

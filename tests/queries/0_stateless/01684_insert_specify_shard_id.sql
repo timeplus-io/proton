@@ -1,15 +1,15 @@
 -- Tags: shard
 
-DROP TABLE IF EXISTS x;
-DROP TABLE IF EXISTS x_dist;
-DROP TABLE IF EXISTS y;
-DROP TABLE IF EXISTS y_dist;
+DROP STREAM IF EXISTS x;
+DROP STREAM IF EXISTS x_dist;
+DROP STREAM IF EXISTS y;
+DROP STREAM IF EXISTS y_dist;
 
-CREATE TABLE x AS system.numbers ENGINE = MergeTree ORDER BY number;
-CREATE TABLE y AS system.numbers ENGINE = MergeTree ORDER BY number;
+create stream x AS system.numbers ENGINE = MergeTree ORDER BY number;
+create stream y AS system.numbers ENGINE = MergeTree ORDER BY number;
 
-CREATE TABLE x_dist as x ENGINE = Distributed('test_cluster_two_shards', currentDatabase(), x);
-CREATE TABLE y_dist as y ENGINE = Distributed('test_cluster_two_shards_localhost', currentDatabase(), y);
+create stream x_dist as x ENGINE = Distributed('test_cluster_two_shards', currentDatabase(), x);
+create stream y_dist as y ENGINE = Distributed('test_cluster_two_shards_localhost', currentDatabase(), y);
 
 -- insert into first shard
 INSERT INTO x_dist SELECT * FROM numbers(10) settings insert_shard_id = 1;
@@ -33,7 +33,7 @@ INSERT INTO y_dist SELECT * FROM numbers(10); -- { serverError 55 }
 INSERT INTO x_dist SELECT * FROM numbers(10) settings insert_shard_id = 3; -- { serverError 577 }
 INSERT INTO y_dist SELECT * FROM numbers(10) settings insert_shard_id = 3; -- { serverError 577 }
 
-DROP TABLE x;
-DROP TABLE x_dist;
-DROP TABLE y;
-DROP TABLE y_dist;
+DROP STREAM x;
+DROP STREAM x_dist;
+DROP STREAM y;
+DROP STREAM y_dist;

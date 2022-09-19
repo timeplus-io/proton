@@ -1,0 +1,15 @@
+DROP TEMPORARY STREAM IF EXISTS test_00707;
+CREATE TEMPORARY STREAM test_00707 (x Float32, y float64, z uint64, s string);
+
+INSERT INTO test_00707 FORMAT CSV 123.456,789.012,345678,Hello
+
+SET format_csv_delimiter = ';';
+INSERT INTO test_00707 FORMAT CSV 123.456;789.012;345678;Hello
+
+SET format_csv_delimiter = ':';
+INSERT INTO test_00707 FORMAT CSV 123.456:789.012:345678:Hello
+
+SET format_csv_delimiter = '|';
+INSERT INTO test_00707 FORMAT CSV 123.456|789.012|345678|Hello
+
+SELECT * FROM test_00707;

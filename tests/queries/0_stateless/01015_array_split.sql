@@ -12,8 +12,8 @@ SELECT arraySplit(x -> 0, []);
 SELECT arrayReverseSplit(x -> 0, []);
 SELECT arraySplit(x -> 1, []);
 SELECT arrayReverseSplit(x -> 1, []);
-SELECT arraySplit(x -> x, emptyArrayUInt8());
-SELECT arrayReverseSplit(x -> x, emptyArrayUInt8());
+SELECT arraySplit(x -> x, empty_array_uint8());
+SELECT arrayReverseSplit(x -> x, empty_array_uint8());
 
 SELECT arraySplit(x -> x % 2 = 1, [1]);
 SELECT arrayReverseSplit(x -> x % 2 = 1, [1]);

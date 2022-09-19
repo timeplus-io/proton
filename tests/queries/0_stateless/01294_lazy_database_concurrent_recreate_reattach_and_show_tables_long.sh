@@ -11,7 +11,7 @@ export CURR_DATABASE="test_lazy_01294_concurrent_${CLICKHOUSE_DATABASE}"
 function recreate_lazy_func1()
 {
     $CLICKHOUSE_CLIENT -q "
-        CREATE TABLE $CURR_DATABASE.log (a UInt64, b UInt64) ENGINE = Log;
+        create stream $CURR_DATABASE.log (a uint64, b uint64)  ;
     ";
 
     while true; do
@@ -29,11 +29,11 @@ function recreate_lazy_func2()
 {
     while true; do
         $CLICKHOUSE_CLIENT -q "
-            CREATE TABLE $CURR_DATABASE.tlog (a UInt64, b UInt64) ENGINE = TinyLog;
+            create stream $CURR_DATABASE.tlog (a uint64, b uint64) ;
         ";
 
         $CLICKHOUSE_CLIENT -q "
-            DROP TABLE $CURR_DATABASE.tlog;
+            DROP STREAM $CURR_DATABASE.tlog;
         ";
         done
 }
@@ -41,7 +41,7 @@ function recreate_lazy_func2()
 function recreate_lazy_func3()
 {
     $CLICKHOUSE_CLIENT -q "
-        CREATE TABLE $CURR_DATABASE.slog (a UInt64, b UInt64) ENGINE = StripeLog;
+        create stream $CURR_DATABASE.slog (a uint64, b uint64) ENGINE = StripeLog;
     ";
 
     while true; do
@@ -59,11 +59,11 @@ function recreate_lazy_func4()
 {
     while true; do
         $CLICKHOUSE_CLIENT -q "
-            CREATE TABLE $CURR_DATABASE.tlog2 (a UInt64, b UInt64) ENGINE = TinyLog;
+            create stream $CURR_DATABASE.tlog2 (a uint64, b uint64) ;
         ";
 
         $CLICKHOUSE_CLIENT -q "
-            DROP TABLE $CURR_DATABASE.tlog2;
+            DROP STREAM $CURR_DATABASE.tlog2;
         ";
         done
 }

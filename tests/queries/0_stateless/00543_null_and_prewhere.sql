@@ -1,8 +1,8 @@
-CREATE TABLE test
+create stream test
 (
-    dt Date,
-    id UInt32,
-    val Nullable(UInt32)
+    dt date,
+    id uint32,
+    val Nullable(uint32)
 )
 ENGINE = MergeTree(dt, id, 8192);
 
@@ -14,4 +14,4 @@ SELECT count()
 FROM test
 WHERE val = 0;
 
-DROP TABLE IF EXISTS test;
+DROP STREAM IF EXISTS test;

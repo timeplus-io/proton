@@ -3,17 +3,17 @@
  * In this test we fill data structure with specific pattern that reproduces this behaviour.
  */
 
-DROP TABLE IF EXISTS part_a;
-DROP TABLE IF EXISTS part_b;
-DROP TABLE IF EXISTS part_c;
-DROP TABLE IF EXISTS part_d;
+DROP STREAM IF EXISTS part_a;
+DROP STREAM IF EXISTS part_b;
+DROP STREAM IF EXISTS part_c;
+DROP STREAM IF EXISTS part_d;
 
 /* Create values that will resize hash table to the maximum (131072 cells) and fill it with less than max_fill (65536 cells)
  * and occupy cells near the end except last 10 cells:
  * [               -----------  ]
  * Pick values that will vanish if table will be rehashed.
  */
-CREATE TABLE part_a ENGINE = TinyLog AS SELECT * FROM
+create stream part_a  AS SELECT * FROM
 (
 WITH
     number AS k1,
@@ -33,7 +33,7 @@ SELECT hash, number, place FROM system.numbers WHERE place >= 90000 AND place < 
  * [      -----------           ]
  * Pick values that will remain after rehash.
  */
-CREATE TABLE part_b ENGINE = TinyLog AS SELECT * FROM
+create stream part_b  AS SELECT * FROM
 (
 WITH
     number AS k1,
@@ -54,7 +54,7 @@ SELECT hash, number, place FROM system.numbers WHERE place >= 50000 AND place < 
  * If we insert "a" then "c", these values will be placed at the end of hash table due to collision resolution:
  * a + c: [               aaaaaaaaaaacc]
  */
-CREATE TABLE part_c ENGINE = TinyLog AS SELECT * FROM
+create stream part_c  AS SELECT * FROM
 (
 WITH
     number AS k1,
@@ -76,7 +76,7 @@ SELECT hash, number, place FROM system.numbers WHERE place >= 131052 AND place <
  * But if we insert "a" then "c" then "d", these values will be placed at the beginning of the hash table due to collision resolution:
  * a+c+d: [dd             aaaaaaaaaaacc]
   */
-CREATE TABLE part_d ENGINE = TinyLog AS SELECT * FROM
+create stream part_d  AS SELECT * FROM
 (
 WITH
     number AS k1,
@@ -127,7 +127,7 @@ UNION ALL SELECT * FROM part_b
 UNION ALL SELECT * FROM part_d);
 
 
-DROP TABLE part_a;
-DROP TABLE part_b;
-DROP TABLE part_c;
-DROP TABLE part_d;
+DROP STREAM part_a;
+DROP STREAM part_b;
+DROP STREAM part_c;
+DROP STREAM part_d;

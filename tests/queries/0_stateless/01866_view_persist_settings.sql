@@ -1,7 +1,8 @@
-DROP TABLE IF EXISTS view_no_nulls;
-DROP TABLE IF EXISTS view_no_nulls_set;
-DROP TABLE IF EXISTS view_nulls_set;
-DROP TABLE IF EXISTS view_nulls;
+SET query_mode = 'table';
+drop stream IF EXISTS view_no_nulls;
+drop stream IF EXISTS view_no_nulls_set;
+drop stream IF EXISTS view_nulls_set;
+drop stream IF EXISTS view_nulls;
 
 SET join_use_nulls = 0;
 
@@ -91,7 +92,7 @@ SELECT * FROM view_nulls_set;
 SELECT '-';
 SELECT * FROM view_nulls;
 
-DROP TABLE IF EXISTS view_no_nulls;
-DROP TABLE IF EXISTS view_no_nulls_set;
-DROP TABLE IF EXISTS view_nulls_set;
-DROP TABLE IF EXISTS view_nulls;
+drop stream IF EXISTS view_no_nulls;
+drop stream IF EXISTS view_no_nulls_set;
+drop stream IF EXISTS view_nulls_set;
+drop stream IF EXISTS view_nulls;

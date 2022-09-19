@@ -1,0 +1,14 @@
+DROP STREAM IF EXISTS part_info;
+create stream part_info (t DateTime) ENGINE = MergeTree PARTITION BY to_date(t) ORDER BY (t);
+INSERT INTO part_info VALUES (to_datetime('1970-10-01 00:00:01')), (to_datetime('1970-10-02 00:00:01')), (to_datetime('1970-10-03 00:00:01'));
+SELECT name, is_frozen FROM system.parts WHERE `database` = currentDatabase() AND `table` = 'part_info';
+SELECT 'freeze one';
+ALTER STREAM part_info FREEZE PARTITION '1970-10-02';
+SELECT name, is_frozen FROM system.parts WHERE `database` = currentDatabase() AND `table` = 'part_info';
+SELECT 'freeze all';
+ALTER STREAM part_info FREEZE;
+SELECT name, is_frozen FROM system.parts WHERE `database` = currentDatabase() AND `table` = 'part_info';
+INSERT INTO part_info VALUES (to_datetime('1970-10-02 00:00:02'));
+select * from part_info order by t;
+SELECT name, is_frozen FROM system.parts WHERE `database` = currentDatabase() AND `table` = 'part_info';
+DROP STREAM part_info;

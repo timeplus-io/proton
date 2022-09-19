@@ -9,11 +9,11 @@ DROP DATABASE IF EXISTS database_for_dict_01018;
 CREATE DATABASE database_for_dict_01018;
 
 
-CREATE TABLE database_for_dict_01018.table_for_dict
+create stream database_for_dict_01018.table_for_dict
 (
-  key_column UInt64,
-  second_column UInt8,
-  third_column String
+  key_column uint64,
+  second_column uint8,
+  third_column string
 )
 ENGINE = MergeTree()
 ORDER BY key_column;
@@ -28,9 +28,9 @@ SELECT '=DICTIONARY in Ordinary DB';
 
 CREATE DICTIONARY db_01018.dict1
 (
-  key_column UInt64 DEFAULT 0,
-  second_column UInt8 DEFAULT 1,
-  third_column String DEFAULT 'qqq'
+  key_column uint64 DEFAULT 0,
+  second_column uint8 DEFAULT 1,
+  third_column string DEFAULT 'qqq'
 )
 PRIMARY KEY key_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB 'database_for_dict_01018'))
@@ -77,15 +77,15 @@ DROP DATABASE IF EXISTS db_01018;
 
 DROP DATABASE IF EXISTS memory_db;
 
-CREATE DATABASE memory_db ENGINE = Memory;
+CREATE DATABASE memory_db ;
 
 SELECT '=DICTIONARY in Memory DB';
 
 CREATE DICTIONARY memory_db.dict2
 (
-  key_column UInt64 DEFAULT 0 INJECTIVE,
-  second_column UInt8 DEFAULT 1 EXPRESSION rand() % 222,
-  third_column String DEFAULT 'qqq'
+  key_column uint64 DEFAULT 0 INJECTIVE,
+  second_column uint8 DEFAULT 1 EXPRESSION rand() % 222,
+  third_column string DEFAULT 'qqq'
 )
 PRIMARY KEY key_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB 'database_for_dict_01018'))
@@ -108,9 +108,9 @@ CREATE DATABASE lazy_db ENGINE = Lazy(1);
 
 CREATE DICTIONARY lazy_db.dict3
 (
-  key_column UInt64 DEFAULT 0 INJECTIVE,
-  second_column UInt8 DEFAULT 1 EXPRESSION rand() % 222,
-  third_column String DEFAULT 'qqq'
+  key_column uint64 DEFAULT 0 INJECTIVE,
+  second_column uint8 DEFAULT 1 EXPRESSION rand() % 222,
+  third_column string DEFAULT 'qqq'
 )
 PRIMARY KEY key_column, second_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB 'database_for_dict_01018'))
@@ -127,9 +127,9 @@ CREATE DATABASE db_01018;
 
 CREATE DICTIONARY db_01018.dict4
 (
-  key_column UInt64 DEFAULT 0,
-  second_column UInt8 DEFAULT 1,
-  third_column String DEFAULT 'qqq'
+  key_column uint64 DEFAULT 0,
+  second_column uint8 DEFAULT 1,
+  third_column string DEFAULT 'qqq'
 )
 PRIMARY KEY key_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB 'database_for_dict_01018'))
@@ -146,9 +146,9 @@ SHOW DICTIONARIES FROM db_01018;
 
 CREATE DICTIONARY db_01018.dict4
 (
-  key_column UInt64 DEFAULT 0,
-  second_column UInt8 DEFAULT 1,
-  third_column String DEFAULT 'qqq'
+  key_column uint64 DEFAULT 0,
+  second_column uint8 DEFAULT 1,
+  third_column string DEFAULT 'qqq'
 )
 PRIMARY KEY key_column
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'table_for_dict' PASSWORD '' DB 'database_for_dict_01018'))
@@ -160,7 +160,7 @@ SHOW DICTIONARIES FROM db_01018;
 DROP DATABASE IF EXISTS db_01018;
 
 DROP DICTIONARY memory_db.dict2;
-DROP TABLE IF EXISTS database_for_dict_01018.table_for_dict;
+DROP STREAM IF EXISTS database_for_dict_01018.table_for_dict;
 
 DROP DATABASE IF EXISTS database_for_dict_01018;
 DROP DATABASE IF EXISTS memory_db;

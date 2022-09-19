@@ -1,0 +1,18 @@
+CounterID	uint32					
+dummy	string					
+StartDate	date					
+Sign	int8					
+VisitID	uint64					
+UserID	uint64					
+StartTime	DateTime					
+ClickLogID	uint64					
+create stream default.merge_distributed\n(\n    `CounterID` uint32,\n    `dummy` string,\n    `StartDate` date,\n    `Sign` int8,\n    `VisitID` uint64,\n    `UserID` uint64,\n    `StartTime` DateTime,\n    `ClickLogID` uint64\n)\nENGINE = Distributed(\'test_shard_localhost\', \'default\', \'merge_distributed1\')
+1	Hello, Alter Table!
+CounterID	uint32					
+StartDate	date					
+Sign	int8					
+VisitID	uint64					
+UserID	uint64					
+StartTime	DateTime					
+ClickLogID	uint64					
+create stream default.merge_distributed\n(\n    `CounterID` uint32,\n    `StartDate` date,\n    `Sign` int8,\n    `VisitID` uint64,\n    `UserID` uint64,\n    `StartTime` DateTime,\n    `ClickLogID` uint64\n)\nENGINE = Distributed(\'test_shard_localhost\', \'default\', \'merge_distributed1\')

@@ -1725,26 +1725,26 @@
 2
 18
 2
-String
-String
-String
-String
-String
-String
-String
-String
-String
-String
-Int64
-Int64
-Int64
-Int64
-Int64
-Int64
-Int64
-Int64
-Int64
-Int64
+string
+string
+string
+string
+string
+string
+string
+string
+string
+string
+int64
+int64
+int64
+int64
+int64
+int64
+int64
+int64
+int64
+int64
 Decimal(9, 5)
 Decimal(9, 5)
 Decimal(9, 5)

@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS agg_over_nullable;
-CREATE TABLE agg_over_nullable (
-	partition Date,
+DROP STREAM IF EXISTS agg_over_nullable;
+create stream agg_over_nullable (
+	partition date,
 	timestamp DateTime,
-	user_id Nullable(UInt32),
-	description Nullable(String)
+	user_id Nullable(uint32),
+	description Nullable(string)
 ) ENGINE = MergeTree(partition, timestamp, 8192);
 
 INSERT INTO agg_over_nullable(partition, timestamp, user_id, description) VALUES(now(), now(), 1, 'ss');
@@ -13,4 +13,4 @@ INSERT INTO agg_over_nullable(partition, timestamp, user_id, description) VALUES
 SELECT arraySort(groupUniqArray(description)) FROM agg_over_nullable;
 SELECT arraySort(topK(3)(description)) FROM agg_over_nullable;
 
-DROP TABLE agg_over_nullable;
+DROP STREAM agg_over_nullable;

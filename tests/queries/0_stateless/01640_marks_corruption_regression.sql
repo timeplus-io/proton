@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS adaptive_table;
+DROP STREAM IF EXISTS adaptive_table;
 
-CREATE TABLE adaptive_table(
-    key UInt64,
-    value String
+create stream adaptive_table(
+    key uint64,
+    value string
 ) ENGINE MergeTree()
 ORDER BY key
 SETTINGS
@@ -24,7 +24,7 @@ INSERT INTO adaptive_table SELECT number, randomPrintableASCII(if(number BETWEEN
 --     Mark 4, points to 36441, 14560, has rows after 1820, decompressed size 43704.
 --     Mark 5, points to 36441, 29120, has rows after 8192, decompressed size 29144.
 --     Mark 6, points to 36441, 58264, has rows after 0, decompressed size 0.
-OPTIMIZE TABLE adaptive_table FINAL;
+OPTIMIZE STREAM adaptive_table FINAL;
 
 SELECT 'marks', marks FROM system.parts WHERE table = 'adaptive_table' AND database = currentDatabase() AND active FORMAT CSV;
 
@@ -54,4 +54,4 @@ SELECT 'max_threads=100', count() FROM adaptive_table SETTINGS
     max_threads=100
 FORMAT CSV;
 
-DROP TABLE adaptive_table;
+DROP STREAM adaptive_table;

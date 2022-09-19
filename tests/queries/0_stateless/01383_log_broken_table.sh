@@ -13,8 +13,8 @@ function test_func()
 
     echo "Testing $ENGINE"
 
-    $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS log";
-    $CLICKHOUSE_CLIENT --query "CREATE TABLE log (x UInt64, y UInt64, z UInt64) ENGINE = $ENGINE";
+    $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS log";
+    $CLICKHOUSE_CLIENT --query "create stream log (x uint64, y uint64, z uint64) ENGINE = $ENGINE";
 
     while true; do
         MAX_MEM=$((2 * $MAX_MEM))
@@ -30,7 +30,7 @@ function test_func()
         [[ $MAX_MEM -gt 200000000 ]] && break;
     done
 
-    $CLICKHOUSE_CLIENT --query "DROP TABLE log";
+    $CLICKHOUSE_CLIENT --query "DROP STREAM log";
 }
 
 test_func TinyLog | grep -v -P '^(Memory limit|0\t0|[1-9]000000\t)'

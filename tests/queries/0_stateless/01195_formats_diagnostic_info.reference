@@ -34,7 +34,7 @@ Column 0,   name: t, type: DateTime,        parsed text: "<DOUBLE QUOTE>2020-04-
 ERROR: garbage after DateTime: "7, <DOUBLE QUOTE>Hello<DOUBLE QUOTE>"
 ERROR: DateTime must be in YYYY-MM-DD hh:mm:ss or NNNNNNNNNN (unix timestamp, exactly 10 digits) format.
 ERROR: There is no closing parenthesis (']') at the end of the row. "," found instead.
-Column 1,   name: s, type: String,          parsed text: <EMPTY>ERROR
+Column 1,   name: s, type: string,          parsed text: <EMPTY>ERROR
 ERROR: There is no '[' before the row.
 ERROR: garbage after Decimal(18, 10): ";<LINE FEED>"
 ERROR: There is no comma. ";" found instead.

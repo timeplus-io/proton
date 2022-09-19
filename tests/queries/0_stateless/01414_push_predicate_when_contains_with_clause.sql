@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS numbers_indexed;
-DROP TABLE IF EXISTS squares;
+DROP STREAM IF EXISTS numbers_indexed;
+DROP STREAM IF EXISTS squares;
 
-CREATE TABLE numbers_indexed Engine=MergeTree ORDER BY number PARTITION BY bitShiftRight(number,8) SETTINGS index_granularity=8 AS SELECT * FROM numbers(16384);
+create stream numbers_indexed Engine=MergeTree ORDER BY number PARTITION BY bitShiftRight(number,8) SETTINGS index_granularity=8 AS SELECT * FROM numbers(16384);
 
 CREATE VIEW squares AS WITH number*2 AS square_number SELECT number, square_number FROM numbers_indexed;
 
@@ -13,5 +13,5 @@ SELECT * FROM squares WHERE number = 999;
 
 EXPLAIN SYNTAX SELECT number, square_number FROM ( WITH number * 2 AS square_number SELECT number, square_number FROM numbers_indexed) AS squares WHERE number = 999;
 
-DROP TABLE IF EXISTS squares;
-DROP TABLE IF EXISTS numbers_indexed;
+DROP STREAM IF EXISTS squares;
+DROP STREAM IF EXISTS numbers_indexed;

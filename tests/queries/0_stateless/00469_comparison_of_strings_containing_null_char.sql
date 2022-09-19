@@ -4,8 +4,8 @@ SELECT 'ab\0c' < 'ab\0d', 'ab\0c' > 'ab\0d';
 SELECT 'a' < 'a\0b', 'a' > 'a\0b';
 SELECT 'a\0\0\0\0' < 'a\0\0\0', 'a\0\0\0\0' > 'a\0\0\0';
 
-DROP TABLE IF EXISTS strings_00469;
-CREATE TABLE strings_00469(x String, y String) ENGINE = TinyLog;
+DROP STREAM IF EXISTS strings_00469;
+create stream strings_00469(x string, y string) ;
 
 INSERT INTO strings_00469 VALUES ('abcde\0', 'abcde'), ('aa\0a', 'aa\0b'), ('aa', 'aa\0'), ('a\0\0\0\0', 'a\0\0\0'), ('a\0\0', 'a\0'), ('a', 'a');
 
@@ -29,4 +29,4 @@ SELECT '**** multi-column sort ****'; -- Uses ColumnString::compareAt()
 
 SELECT * FROM strings_00469 ORDER BY x, y;
 
-DROP TABLE strings_00469;
+DROP STREAM strings_00469;

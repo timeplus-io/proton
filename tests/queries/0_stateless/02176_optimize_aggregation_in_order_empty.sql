@@ -1,5 +1,6 @@
-drop table if exists data_02176;
-create table data_02176 (key Int) Engine=MergeTree() order by key;
+SET query_mode = 'table';
+drop stream if exists data_02176;
+create stream data_02176 (key int) Engine=MergeTree() order by key;
 
 -- { echoOn }
 
@@ -11,4 +12,4 @@ create table data_02176 (key Int) Engine=MergeTree() order by key;
 select count() from remote('127.{1,2}', currentDatabase(), data_02176) where key = 0 group by key settings optimize_aggregation_in_order=1;
 
 -- { echoOff }
-drop table data_02176;
+drop stream data_02176;

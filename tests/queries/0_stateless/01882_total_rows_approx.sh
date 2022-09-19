@@ -12,8 +12,8 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT -q "drop table if exists data_01882"
-$CLICKHOUSE_CLIENT -q "create table data_01882 (key Int) Engine=MergeTree() partition by key order by key as select * from numbers(10)"
+$CLICKHOUSE_CLIENT -q "drop stream if exists data_01882"
+$CLICKHOUSE_CLIENT -q "create stream data_01882 (key int) Engine=MergeTree() partition by key order by key as select * from numbers(10)"
 # send_progress_in_http_headers will periodically send the progress
 # but this is not stable, i.e. it can be dumped on query end,
 # thus check few times to be sure that this is not coincidence.

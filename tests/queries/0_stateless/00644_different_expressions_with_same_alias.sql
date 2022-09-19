@@ -13,5 +13,5 @@ FROM
     ORDER BY
         dummy ASC,
         SumDum ASC,
-        CAST(ifNull(ProblemField, -inf) AS Float64) ASC
+        CAST(ifNull(ProblemField, -inf) AS float64) ASC
 );

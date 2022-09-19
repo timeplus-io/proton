@@ -11,8 +11,8 @@ set -o errexit
 set -o pipefail
 
 echo "
-	DROP TABLE IF EXISTS storage_join_race;
-	CREATE TABLE storage_join_race (x UInt64, y UInt64) Engine = Join(ALL, FULL, x);
+	DROP STREAM IF EXISTS storage_join_race;
+	create stream storage_join_race (x uint64, y uint64) Engine = Join(ALL, FULL, x);
 " | $CLICKHOUSE_CLIENT -n
 
 function read_thread_big()
@@ -59,4 +59,4 @@ echo "
 
 wait
 
-$CLICKHOUSE_CLIENT -q "DROP TABLE storage_join_race"
+$CLICKHOUSE_CLIENT -q "DROP STREAM storage_join_race"

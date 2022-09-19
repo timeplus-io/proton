@@ -1,11 +1,11 @@
-SELECT toTypeName((1,)), (1,);
+SELECT to_type_name((1,)), (1,);
 
 EXPLAIN SYNTAX SELECT (1,);
 
-DROP TABLE IF EXISTS tuple_values;
+DROP STREAM IF EXISTS tuple_values;
 
-CREATE TABLE tuple_values (t Tuple(int)) ENGINE = Memory;
+create stream tuple_values (t tuple(int)) ;
 
 INSERT INTO tuple_values VALUES ((1)), ((2,));
 
-DROP TABLE tuple_values;
+DROP STREAM tuple_values;

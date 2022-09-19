@@ -12,8 +12,8 @@ SELECT [materialize(1)][-0x8000000000000000];
 
 SELECT '---';
 
-SELECT [number][arrayJoin([-0x8000000000000000, -10000000000, 0, -1])] FROM numbers(2);
+SELECT [number][array_join([-0x8000000000000000, -10000000000, 0, -1])] FROM numbers(2);
 
 SELECT '---';
 
-SELECT [number][arrayJoin([0xFFFFFFFFFFFFFFFF, 10000000000, 0, 1])] FROM numbers(2);
+SELECT [number][array_join([0xFFFFFFFFFFFFFFFF, 10000000000, 0, 1])] FROM numbers(2);

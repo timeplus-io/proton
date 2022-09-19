@@ -1,6 +1,6 @@
 SELECT reverse([NULL, '\0']);
 SELECT reverse([NULL, 123, NULL]);
-SELECT reverse([toFixedString('Hello', 5), NULL]);
+SELECT reverse([to_fixed_string('Hello', 5), NULL]);
 SELECT reverse(['Hello', 'world']);
 SELECT reverse(['Hello', NULL, 'world']);
 SELECT reverse([NULL, NULL, NULL]);

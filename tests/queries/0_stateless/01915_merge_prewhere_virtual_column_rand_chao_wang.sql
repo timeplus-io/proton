@@ -1,9 +1,9 @@
-DROP TABLE IF EXISTS abc;
+DROP STREAM IF EXISTS abc;
 
-CREATE TABLE abc
+create stream abc
 (
-    `f1` String,
-    `f2` String
+    `f1` string,
+    `f2` string
 )
 ENGINE = MergeTree()
 ORDER BY f1;
@@ -12,4 +12,4 @@ ORDER BY f1;
 SELECT f2 FROM merge(currentDatabase(), '^abc$') PREWHERE _table = 'abc' AND f1 = 'a' AND rand() % 100 < 20;
 SELECT f2 FROM merge(currentDatabase(), '^abc$') PREWHERE _table = 'abc' AND f1 = 'a';
 
-DROP TABLE abc;
+DROP STREAM abc;

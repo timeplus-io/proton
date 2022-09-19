@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS t;
+DROP STREAM IF EXISTS t;
 
-CREATE TABLE t (x UInt8) ENGINE = MergeTree ORDER BY x;
+create stream t (x uint8) ENGINE = MergeTree ORDER BY x;
 INSERT INTO t VALUES (1), (2), (3);
 
 SELECT count() FROM t;
@@ -10,4 +10,4 @@ SELECT count() FROM t;
 DROP ROW POLICY filter ON t;
 SELECT count() FROM t;
 
-DROP TABLE t;
+DROP STREAM t;

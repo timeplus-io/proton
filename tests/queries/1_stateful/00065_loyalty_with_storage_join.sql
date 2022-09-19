@@ -1,12 +1,12 @@
 USE test;
 
-DROP TABLE IF EXISTS join;
-CREATE TABLE join (UserID UInt64, loyalty Int8) ENGINE = Join(SEMI, LEFT, UserID);
+DROP STREAM IF EXISTS join;
+CREATE TABLE join (UserID uint64, loyalty int8) ENGINE = Join(SEMI, LEFT, UserID);
 
 INSERT INTO join
 SELECT
     UserID,
-    toInt8(if((sum(SearchEngineID = 2) AS yandex) > (sum(SearchEngineID = 3) AS google),
+    to_int8(if((sum(SearchEngineID = 2) AS yandex) > (sum(SearchEngineID = 3) AS google),
     yandex / (yandex + google), 
     -google / (yandex + google)) * 10) AS loyalty
 FROM hits
@@ -31,4 +31,4 @@ FROM hits SEMI LEFT JOIN join USING UserID
 GROUP BY loyalty
 ORDER BY loyalty ASC;
 
-DROP TABLE join;
+DROP STREAM join;

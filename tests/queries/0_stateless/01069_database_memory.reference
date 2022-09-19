@@ -5,4 +5,4 @@ CREATE DATABASE memory_01069\nENGINE = Memory()
 4
 3
 4
-CREATE TABLE memory_01069.file\n(\n    `n` UInt8\n)\nENGINE = File(\'CSV\')
+create stream memory_01069.file\n(\n    `n` uint8\n)\nENGINE = File(\'CSV\')

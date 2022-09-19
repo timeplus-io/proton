@@ -1,0 +1,16 @@
+CounterID	uint32					
+dummy	string					
+StartDate	date					
+Sign	int8					
+VisitID	uint64					
+UserID	uint64					
+StartTime	DateTime					
+ClickLogID	uint64					
+1	Hello, Alter Table!
+CounterID	uint32					
+StartDate	date					
+Sign	int8					
+VisitID	uint64					
+UserID	uint64					
+StartTime	DateTime					
+ClickLogID	uint64					

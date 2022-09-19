@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS l;
-DROP TABLE IF EXISTS r;
+DROP STREAM IF EXISTS l;
+DROP STREAM IF EXISTS r;
 
-CREATE TABLE l (a String, b Tuple(String, String)) ENGINE = Memory();
-CREATE TABLE r (a String, c Tuple(String, String)) ENGINE = Memory();
+create stream l (a string, b tuple(string, string)) ();
+create stream r (a string, c tuple(string, string)) ();
 
 INSERT INTO l (a, b) VALUES ('a', ('b', 'c')), ('d', ('e', 'f'));
 INSERT INTO r (a, c) VALUES ('a', ('b', 'c')), ('x', ('y', 'z'));
@@ -18,11 +18,11 @@ SELECT a from l RIGHT JOIN r USING a ORDER BY a;
 SELECT * from l LEFT JOIN r USING a ORDER BY a;
 SELECT * from l RIGHT JOIN r USING a ORDER BY a;
 
-DROP TABLE l;
-DROP TABLE r;
+DROP STREAM l;
+DROP STREAM r;
 
-CREATE TABLE l (a String, b String) ENGINE = Memory();
-CREATE TABLE r (a String, c Array(String)) ENGINE = Memory();
+create stream l (a string, b string) ();
+create stream r (a string, c array(string)) ();
 
 INSERT INTO l (a, b) VALUES ('a', 'b'), ('d', 'e');
 INSERT INTO r (a, c) VALUES ('a', ['b', 'c']), ('x', ['y', 'z']);
@@ -37,5 +37,5 @@ SELECT a from l RIGHT JOIN r USING a ORDER BY a;
 SELECT * from l LEFT JOIN r USING a ORDER BY a;
 SELECT * from l RIGHT JOIN r USING a ORDER BY a;
 
-DROP TABLE l;
-DROP TABLE r;
+DROP STREAM l;
+DROP STREAM r;

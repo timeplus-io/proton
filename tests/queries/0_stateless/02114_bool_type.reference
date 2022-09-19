@@ -1,4 +1,4 @@
-CREATE TABLE default.bool_test\n(\n    `value` Bool,\n    `f` String\n)\nENGINE = Memory
+create stream default.bool_test\n(\n    `value` Bool,\n    `f` string\n)\nENGINE = Memory
 false	test
 true	test
 false	test

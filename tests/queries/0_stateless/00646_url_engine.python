@@ -135,7 +135,7 @@ def start_server(requests_amount):
 
 # test section
 
-def test_select(table_name="", schema="str String,numuint UInt32,numint Int32,double Float64", requests=[], answers=[], test_data=""):
+def test_select(table_name="", schema="str string,numuint uint32,numint int32,double float64", requests=[], answers=[], test_data=""):
     with open(CSV_DATA, 'w') as f: # clear file
         f.write('')
 
@@ -144,8 +144,8 @@ def test_select(table_name="", schema="str String,numuint UInt32,numint Int32,do
             f.write(test_data + "\n")
 
     if table_name:
-        get_ch_answer("drop table if exists {}".format(table_name))
-        get_ch_answer("create table {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
+        get_ch_answer("drop stream if exists {}".format(table_name))
+        get_ch_answer("create stream {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
 
     for i in range(len(requests)):
         tbl = table_name
@@ -154,16 +154,16 @@ def test_select(table_name="", schema="str String,numuint UInt32,numint Int32,do
         check_answers(requests[i].format(tbl=tbl), answers[i])
 
     if table_name:
-        get_ch_answer("drop table if exists {}".format(table_name))
+        get_ch_answer("drop stream if exists {}".format(table_name))
 
 
-def test_insert(table_name="", schema="str String,numuint UInt32,numint Int32,double Float64", requests_insert=[], requests_select=[], answers=[]):
+def test_insert(table_name="", schema="str string,numuint uint32,numint int32,double float64", requests_insert=[], requests_select=[], answers=[]):
     with open(CSV_DATA, 'w') as f: # flush test file
         f.write('')
 
     if table_name:
-        get_ch_answer("drop table if exists {}".format(table_name))
-        get_ch_answer("create table {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
+        get_ch_answer("drop stream if exists {}".format(table_name))
+        get_ch_answer("create stream {} ({}) engine=URL('{}', 'CSV')".format(table_name, schema, HTTP_SERVER_URL_STR))
 
     for req in requests_insert:
         tbl = table_name
@@ -179,7 +179,7 @@ def test_insert(table_name="", schema="str String,numuint UInt32,numint Int32,do
         check_answers(requests_select[i].format(tbl=tbl), answers[i])
 
     if table_name:
-        get_ch_answer("drop table if exists {}".format(table_name))
+        get_ch_answer("drop stream if exists {}".format(table_name))
 
 
 def main():

@@ -1,11 +1,11 @@
 -- insert data duplicates by providing deduplication token on insert
 
-DROP TABLE IF EXISTS insert_dedup_token1 SYNC;
-DROP TABLE IF EXISTS insert_dedup_token2 SYNC;
+DROP STREAM IF EXISTS insert_dedup_token1 SYNC;
+DROP STREAM IF EXISTS insert_dedup_token2 SYNC;
 
 select 'create replica 1 and check deduplication';
-CREATE TABLE insert_dedup_token1 (
-    id Int32, val UInt32
+create stream insert_dedup_token1 (
+    id int32, val uint32
 ) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{database}/insert_dedup_token', 'r1') ORDER BY id;
 
 select 'two inserts with exact data, one inserted, one deduplicated by data digest';
@@ -25,8 +25,8 @@ INSERT INTO insert_dedup_token1 VALUES(2, 1002);
 SELECT * FROM insert_dedup_token1 ORDER BY id;
 
 select 'create replica 2 and check deduplication';
-CREATE TABLE insert_dedup_token2 (
-    id Int32, val UInt32
+create stream insert_dedup_token2 (
+    id int32, val uint32
 ) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{database}/insert_dedup_token', 'r2') ORDER BY id;
 SYSTEM SYNC REPLICA insert_dedup_token2;
 
@@ -45,5 +45,5 @@ set insert_deduplication_token = '2';
 INSERT INTO insert_dedup_token2  VALUES(2, 1002); -- inserted
 SELECT * FROM insert_dedup_token2 ORDER BY id;
 
-DROP TABLE insert_dedup_token1 SYNC;
-DROP TABLE insert_dedup_token2 SYNC;
+DROP STREAM insert_dedup_token1 SYNC;
+DROP STREAM insert_dedup_token2 SYNC;

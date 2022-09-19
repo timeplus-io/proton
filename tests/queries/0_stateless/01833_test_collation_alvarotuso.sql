@@ -1,11 +1,11 @@
 -- Tags: no-fasttest
 
-DROP TABLE IF EXISTS test_collation;
+DROP STREAM IF EXISTS test_collation;
 
-CREATE TABLE test_collation
+create stream test_collation
 (
-    `v` String,
-    `v2` String
+    `v` string,
+    `v2` string
 )
 ENGINE = MergeTree
 ORDER BY v
@@ -20,4 +20,4 @@ insert into test_collation values ('c', 'c');
 
 SELECT * FROM test_collation ORDER BY v ASC COLLATE 'en';
 
-DROP TABLE test_collation;
+DROP STREAM test_collation;

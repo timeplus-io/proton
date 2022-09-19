@@ -14,8 +14,8 @@ cp $CUR_DIR/data_zstd/test_01946.zstd ${user_files_path}/
 ${CLICKHOUSE_CLIENT} --multiline --multiquery --query "
 set max_read_buffer_size = 65536;
 set input_format_parallel_parsing = 0;
-select * from file('test_01946.zstd', 'JSONEachRow', 'foo String') limit 30 format Null;
+select * from file('test_01946.zstd', 'JSONEachRow', 'foo string') limit 30 format Null;
 set input_format_parallel_parsing = 1;
-select * from file('test_01946.zstd', 'JSONEachRow', 'foo String') limit 30 format Null;
+select * from file('test_01946.zstd', 'JSONEachRow', 'foo string') limit 30 format Null;
 "
 

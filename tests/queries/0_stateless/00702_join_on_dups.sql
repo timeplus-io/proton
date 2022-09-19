@@ -1,8 +1,9 @@
-drop table if exists X;
-drop table if exists Y;
+SET query_mode = 'table';
+drop stream if exists X;
+drop stream if exists Y;
 
-create table X (id Int32, x_a String, x_b Nullable(Int32)) engine Memory;
-create table Y (id Int32, y_a String, y_b Nullable(String)) engine Memory;
+create stream X (id int32, x_a string, x_b Nullable(int32)) engine Memory;
+create stream Y (id int32, y_a string, y_b Nullable(string)) engine Memory;
 
 insert into X (id, x_a, x_b) values (1, 'l1', 1), (2, 'l2', 2), (2, 'l3', 3), (3, 'l4', 4);
 insert into X (id, x_a) values      (4, 'l5'), (4, 'l6'), (5, 'l7'), (8, 'l8'), (9, 'l9');
@@ -75,5 +76,5 @@ select X.*, s.* from X full join (select * from X) as s on X.id = s.x_b order by
 --select 'self full nullable vs not nullable 2';
 --select Y.*, s.* from Y full join (select * from Y) as s on concat('n', Y.y_a) = s.y_b order by id;
 
-drop table X;
-drop table Y;
+drop stream X;
+drop stream Y;
