@@ -52,7 +52,7 @@ public:
     bool isCreated() const { return is_created; }
 
     /** For columns of 'block', check belonging of corresponding rows to the set.
-      * Return UInt8 column with the result.
+      * Return Bool column with the result.
       */
     ColumnPtr execute(const ColumnsWithTypeAndName & columns, bool negative) const;
 
@@ -116,7 +116,7 @@ private:
     /// If in the left part columns contains the same types as the elements of the set.
     void executeOrdinary(
         const ColumnRawPtrs & key_columns,
-        ColumnUInt8::Container & vec_res,
+        ColumnBool::Container & vec_res,
         bool negative,
         const PaddedPODArray<UInt8> * null_map) const;
 
@@ -136,7 +136,7 @@ private:
         size_t rows,
         SetVariants & variants,
         ConstNullMapPtr null_map,
-        ColumnUInt8::Container * out_filter);
+        ColumnBool::Container * out_filter);
 
     template <typename Method, bool has_null_map, bool build_filter>
     void insertFromBlockImplCase(
@@ -145,13 +145,13 @@ private:
         size_t rows,
         SetVariants & variants,
         ConstNullMapPtr null_map,
-        ColumnUInt8::Container * out_filter);
+        ColumnBool::Container * out_filter);
 
     template <typename Method>
     void executeImpl(
         Method & method,
         const ColumnRawPtrs & key_columns,
-        ColumnUInt8::Container & vec_res,
+        ColumnBool::Container & vec_res,
         bool negative,
         size_t rows,
         ConstNullMapPtr null_map) const;
@@ -160,7 +160,7 @@ private:
     void executeImplCase(
         Method & method,
         const ColumnRawPtrs & key_columns,
-        ColumnUInt8::Container & vec_res,
+        ColumnBool::Container & vec_res,
         bool negative,
         size_t rows,
         ConstNullMapPtr null_map) const;

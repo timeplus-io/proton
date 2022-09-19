@@ -48,7 +48,7 @@ void NO_INLINE Set::insertFromBlockImpl(
     size_t rows,
     SetVariants & variants,
     ConstNullMapPtr null_map,
-    ColumnUInt8::Container * out_filter)
+    ColumnBool::Container * out_filter)
 {
     if (null_map)
     {
@@ -74,7 +74,7 @@ void NO_INLINE Set::insertFromBlockImplCase(
     size_t rows,
     SetVariants & variants,
     [[maybe_unused]] ConstNullMapPtr null_map,
-    [[maybe_unused]] ColumnUInt8::Container * out_filter)
+    [[maybe_unused]] ColumnBool::Container * out_filter)
 {
     typename Method::State state(key_columns, key_sizes, nullptr);
 
@@ -192,9 +192,9 @@ bool Set::insertFromBlock(const ColumnsWithTypeAndName & columns)
         null_map_holder = extractNestedColumnsAndNullMap(key_columns, null_map);
 
     /// Filter to extract distinct values from the block.
-    ColumnUInt8::MutablePtr filter;
+    ColumnBool::MutablePtr filter;
     if (fill_set_elements)
-        filter = ColumnUInt8::create(rows);
+        filter = ColumnBool::create(rows);
 
     switch (data.type)
     {
@@ -233,8 +233,8 @@ ColumnPtr Set::execute(const ColumnsWithTypeAndName & columns, bool negative) co
     if (0 == num_key_columns)
         throw Exception("Logical error: no columns passed to Set::execute method.", ErrorCodes::LOGICAL_ERROR);
 
-    auto res = ColumnUInt8::create();
-    ColumnUInt8::Container & vec_res = res->getData();
+    auto res = ColumnBool::create();
+    ColumnBool::Container & vec_res = res->getData();
     vec_res.resize(columns.at(0).column->size());
 
     if (vec_res.empty())
@@ -318,7 +318,7 @@ template <typename Method>
 void NO_INLINE Set::executeImpl(
     Method & method,
     const ColumnRawPtrs & key_columns,
-    ColumnUInt8::Container & vec_res,
+    ColumnBool::Container & vec_res,
     bool negative,
     size_t rows,
     ConstNullMapPtr null_map) const
@@ -334,7 +334,7 @@ template <typename Method, bool has_null_map>
 void NO_INLINE Set::executeImplCase(
     Method & method,
     const ColumnRawPtrs & key_columns,
-    ColumnUInt8::Container & vec_res,
+    ColumnBool::Container & vec_res,
     bool negative,
     size_t rows,
     ConstNullMapPtr null_map) const
@@ -362,7 +362,7 @@ void NO_INLINE Set::executeImplCase(
 
 void Set::executeOrdinary(
     const ColumnRawPtrs & key_columns,
-    ColumnUInt8::Container & vec_res,
+    ColumnBool::Container & vec_res,
     bool negative,
     ConstNullMapPtr null_map) const
 {

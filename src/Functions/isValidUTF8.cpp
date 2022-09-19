@@ -230,7 +230,7 @@ SOFTWARE.
         }
     }
 
-    static void vectorFixedToConstant(const ColumnString::Chars & /*data*/, size_t /*n*/, UInt8 & /*res*/) {}
+    static void vectorFixedToConstant(const ColumnString::Chars & /*data*/, size_t /*n*/, Bool & /*res*/) {}
 
     static void vectorFixedToVector(const ColumnString::Chars & data, size_t n, PaddedPODArray<UInt8> & res)
     {
@@ -254,7 +254,7 @@ struct NameIsValidUTF8
 {
     static constexpr auto name = "is_valid_utf8";
 };
-using FunctionValidUTF8 = FunctionStringOrArrayToT<ValidUTF8Impl, NameIsValidUTF8, UInt8>;
+using FunctionValidUTF8 = FunctionStringOrArrayToT<ValidUTF8Impl, NameIsValidUTF8, Bool>;
 
 void registerFunctionIsValidUTF8(FunctionFactory & factory)
 {

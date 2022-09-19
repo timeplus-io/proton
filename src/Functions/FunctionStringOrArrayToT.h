@@ -54,7 +54,10 @@ public:
             && !isUUID(arguments[0]))
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeNumber<ResultType>>();
+        if constexpr (std::is_same_v<ResultType, Bool>)
+            return std::make_shared<DataTypeBool>();
+        else
+            return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }

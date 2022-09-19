@@ -391,7 +391,7 @@ void MergeTreeRangeReader::ReadResult::optimize(bool can_read_incomplete_granule
         }
         else
         {
-            auto new_filter = ColumnUInt8::create(filter->size() - total_zero_rows_in_tails);
+            auto new_filter = ColumnBool::create(filter->size() - total_zero_rows_in_tails);
             IColumn::Filter & new_data = new_filter->getData();
 
             collapseZeroTails(filter->getData(), new_data);
@@ -513,9 +513,9 @@ void MergeTreeRangeReader::ReadResult::setFilter(const ColumnPtr & new_filter)
     {
         FilterDescription filter_description(*new_filter);
         filter_holder = filter_description.data_holder ? filter_description.data_holder : new_filter;
-        filter = typeid_cast<const ColumnUInt8 *>(filter_holder.get());
+        filter = typeid_cast<const ColumnBool *>(filter_holder.get());
         if (!filter)
-            throw Exception("setFilter function expected ColumnUInt8.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("setFilter function expected ColumnBool.", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -899,7 +899,7 @@ static ColumnPtr combineFilters(ColumnPtr first, ColumnPtr second)
     else
         mut_first = IColumn::mutate(std::move(first));
 
-    auto & first_data = typeid_cast<ColumnUInt8 *>(mut_first.get())->getData();
+    auto & first_data = typeid_cast<ColumnBool *>(mut_first.get())->getData();
     const auto * second_data = second_descr.data->data();
 
     for (auto & val : first_data)
