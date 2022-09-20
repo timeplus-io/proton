@@ -119,11 +119,11 @@ DataTypePtr checkAndGetReturnType(const DataTypes & arguments, const String & fu
             func_name);
 
     for (const auto & arg_type : arguments)
-        if (!isColumnedAsNumber(arg_type) && !isStringOrFixedString(arg_type) && !isColumnedAsDecimal(arg_type))
+        if (!isColumnedAsNumber(arg_type) && !isStringOrFixedString(arg_type) && !isColumnedAsDecimal(arg_type) && !isInterval(arg_type))
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "The types of deduplication keys of function '{}' shall be integer, float, datetime, decimal or string",
-                func_name);
+                "The types of deduplication keys of function '{}' shall be integer, float, datetime, decimal or string but got={}",
+                func_name, arg_type->getName());
 
     return std::make_shared<DB::DataTypeBool>();
 }

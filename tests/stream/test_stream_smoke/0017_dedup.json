@@ -1,0 +1,108 @@
+{
+  "test_suite_name": "dedup",
+  "tag": "smoke",
+  "test_suite_config":{
+    "setup": {
+      "statements": [
+        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists dedup_stream"},
+        {"client":"python", "query_type": "table", "wait":2, "query":"create stream if not exists dedup_stream(i int, s string)"}
+      ]
+    },
+    "tests_2_run": {"ids_2_run": ["all"], "tags_2_run":[], "tags_2_skip":{"default":["todo", "to_support", "change", "bug", "sample"],"cluster": ["view", "cluster_table_bug"]}}
+  },
+  "comments": "Tests covering dedup smoke test cases",
+  "tests": [
+    {
+      "id": 0,
+      "tags": ["dedup"],
+      "name": "dedup-default-args",
+      "description": "dedup with default timeout and key limits",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1800", "depends_on_stream":"dedup_stream","query_end_timer":4, "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s)"},
+            {"client":"python", "query_type": "table","depends_on":1800,"depends_on_stream":"dedup_stream", "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1800,"depends_on_stream":"dedup_stream", "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1800",
+          "expected_results":[
+            [1, "s1"], [2, "s2"], [3, "s3"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "tags": ["dedup"],
+      "name": "dedup-explicit-ttl",
+      "description": "dedup with explicit ttl but with default key limits",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1801", "depends_on_stream":"dedup_stream","query_end_timer":4, "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s, 1s)"},
+            {"client":"python", "query_type": "table","depends_on":1801,"depends_on_stream":"dedup_stream", "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1801,"depends_on_stream":"dedup_stream", "wait":2, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1801",
+          "expected_results":[
+            [1, "s1"], [2, "s2"], [3, "s3"], [1, "s1"], [2, "s2"], [3, "s3"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "tags": ["dedup"],
+      "name": "dedup-explicit-key-count",
+      "description": "dedup with explicit key limits but with default TTL",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1802", "depends_on_stream":"dedup_stream","query_end_timer":4, "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s, 0s, 2)"},
+            {"client":"python", "query_type": "table","depends_on":1802,"depends_on_stream":"dedup_stream", "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1802,"depends_on_stream":"dedup_stream", "wait":1, "query": "insert into dedup_stream(i, s) values (2, 's2'), (3, 's3'), (1, 's1')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1802",
+          "expected_results":[
+            [1, "s1"], [2, "s2"], [3, "s3"], [1, "s1"]
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "tags": ["dedup"],
+      "name": "dedup-explicit-ttl-and-key-limits",
+      "description": "dedup with explicit ttl and key limits",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python","query_id":"1803", "depends_on_stream":"dedup_stream","query_end_timer":4, "query_type": "stream", "query":"select i, s from dedup(dedup_stream, s, 1s, 2)"},
+            {"client":"python", "query_type": "table","depends_on":1803,"depends_on_stream":"dedup_stream", "wait":1, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"},
+            {"client":"python", "query_type": "table","depends_on":1803,"depends_on_stream":"dedup_stream", "wait":2, "query": "insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+          "query_id":"1803",
+          "expected_results":[
+            [1, "s1"], [2, "s2"], [3, "s3"], [1, "s1"], [2, "s2"], [3, "s3"]
+          ]
+        }
+      ]
+    }
+  ]
+}
