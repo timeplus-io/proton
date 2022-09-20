@@ -12,6 +12,11 @@
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Interpreters/Context.h>
 
+/// proton: starts.
+#include <Storages/StorageMergeTree.h>
+#include <Storages/Streaming/StorageStream.h>
+#include <Storages/Streaming/StreamShard.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -45,20 +50,45 @@ bool StorageSystemPartsBase::hasStateColumn(const Names & column_names, const St
 MergeTreeData::DataPartsVector
 StoragesInfo::getParts(MergeTreeData::DataPartStateVector & state, bool has_state_column, bool require_projection_parts) const
 {
-    if (require_projection_parts && data->getInMemoryMetadataPtr()->projections.empty())
-        return {};
+    /// proton: starts.
+    auto get_parts = [&](const MergeTreeData * data_, MergeTreeData::DataPartStateVector & state_) -> MergeTreeData::DataPartsVector {
+        assert(data_);
+        if (require_projection_parts && data_->getInMemoryMetadataPtr()->projections.empty())
+            return {};
 
-    using State = MergeTreeData::DataPartState;
-    if (need_inactive_parts)
+        using State = MergeTreeData::DataPartState;
+        if (need_inactive_parts)
+        {
+            /// If has_state_column is requested, return all states.
+            if (!has_state_column)
+                return data_->getDataPartsVector({State::Active, State::Outdated}, &state_, require_projection_parts);
+
+            return data_->getAllDataPartsVector(&state_, require_projection_parts);
+        }
+
+        return data_->getDataPartsVector({State::Active}, &state_, require_projection_parts);
+    };
+
+    /// Specialization for multi-shards of stream
+    if (auto * stream = storage->as<StorageStream>())
     {
-        /// If has_state_column is requested, return all states.
-        if (!has_state_column)
-            return data->getDataPartsVector({State::Active, State::Outdated}, &state, require_projection_parts);
-
-        return data->getAllDataPartsVector(&state, require_projection_parts);
+        MergeTreeData::DataPartsVector parts;
+        for (auto stream_shard : stream->getStreamShards())
+        {
+            assert(stream_shard);
+            if (stream_shard->getStorage())
+            {
+                MergeTreeData::DataPartStateVector shard_state;
+                auto shard_parts = get_parts(stream_shard->getStorage(), shard_state);
+                parts.insert(parts.end(), shard_parts.begin(), shard_parts.end());
+                state.insert(state.end(), shard_state.begin(), shard_state.end());
+            }
+        }
+        return parts;
     }
-
-    return data->getDataPartsVector({State::Active}, &state, require_projection_parts);
+    else
+        return get_parts(data, state);
+    /// proton: ends.
 }
 
 StoragesInfoStream::StoragesInfoStream(const SelectQueryInfo & query_info, ContextPtr context)
