@@ -146,8 +146,8 @@ TTL ttl + to_interval_day(1)
 		"type": "datetime"
 	}],
 	"name": "tests",
-	"order_by_granularity": "H",
-	"partition_by_granularity": "D",
+	"order_by_expression": "ttl",
+	"partition_by_expression": "ttl",
 	"replication_factor": 1,
 	"shard_by_expression": "rand()",
 	"shards": 2,
@@ -229,7 +229,7 @@ TEST(DDLHelper, getAlterTableParamOpCode)
         DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), nlog::OpCode::DELETE_COLUMN);
 }
 
-TEST(DDLHelper, prepareCreateQueryForStream)
+TEST(DDLHelper, checkAndPrepareCreateQueryForStream)
 {
     /// add _tp_time and _tp_index_time
     DB::ASTPtr ast = queryToAST(R"###(
@@ -243,7 +243,7 @@ CREATE STREAM default.tests
 ) ENGINE = Stream(1, 1, rand())
 )###");
     auto * create = ast->as<DB::ASTCreateQuery>();
-    DB::Streaming::prepareCreateQueryForStream(*create);
+    DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
     EXPECT_EQ(create->columns_list->columns->children.size(), 7);
 
     DB::ASTFunction * order_by = create->storage->order_by->as<DB::ASTFunction>();
@@ -262,7 +262,7 @@ CREATE STREAM default.tests
     `ttl`            datetime DEFAULT now()
 ) ENGINE = Stream(2, 1, rand()))###");
     create = ast->as<DB::ASTCreateQuery>();
-    EXPECT_THROW(DB::Streaming::prepareCreateQueryForStream(*create), DB::Exception);
+    EXPECT_THROW(DB::Streaming::checkAndPrepareCreateQueryForStream(*create), DB::Exception);
 
     /// ignore input 'order_by' and 'partition_by'
     ast = queryToAST(R"###(
@@ -275,7 +275,7 @@ ORDER BY ttl
 TTL ttl + to_interval_day(1)
 )###");
     create = ast->as<DB::ASTCreateQuery>();
-    DB::Streaming::prepareCreateQueryForStream(*create);
+    DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
     order_by = create->storage->order_by->as<DB::ASTFunction>();
     EXPECT_EQ(order_by->name, "to_start_of_hour");
 
@@ -293,7 +293,7 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
     create = ast->as<DB::ASTCreateQuery>();
 
-    DB::Streaming::prepareCreateQueryForStream(*create);
+    DB::Streaming::checkAndPrepareCreateQueryForStream(*create);
     EXPECT_EQ(ignoreEmptyChars(queryToString(*create)), ignoreEmptyChars(R"###(
 CREATE STREAM default.tests (
   `timestamp` datetime64(3) DEFAULT now64(3),

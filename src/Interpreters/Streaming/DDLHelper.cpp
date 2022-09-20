@@ -146,7 +146,7 @@ void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
     ctx->setQueryParameter("url_parameters", uri.getRawQuery());
 }
 
-void prepareColumns(ASTCreateQuery & create)
+void checkAndPrepareColumns(ASTCreateQuery & create)
 {
     /// columns_list should contains valid column definition
     if (!create.columns_list || !create.columns_list->columns || create.columns_list->columns->children.empty())
@@ -337,9 +337,9 @@ void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
     }
 }
 
-void prepareCreateQueryForStream(ASTCreateQuery & create)
+void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create)
 {
-    prepareColumns(create);
+    checkAndPrepareColumns(create);
     prepareOrderByAndPartitionBy(create);
 }
 

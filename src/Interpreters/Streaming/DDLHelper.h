@@ -21,9 +21,9 @@ void getAndValidateStorageSetting(
 void prepareEngine(ASTCreateQuery & create, ContextPtr ctx);
 /// prepare engine settings for REST API call
 void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx);
-void prepareColumns(ASTCreateQuery & create);
+void checkAndPrepareColumns(ASTCreateQuery & create);
 void prepareOrderByAndPartitionBy(ASTCreateQuery & create);
-void prepareCreateQueryForStream(ASTCreateQuery & create);
+void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create);
 void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list);
 TTLSettings parseTTLSettings(const String & payload);
 nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams);

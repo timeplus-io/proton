@@ -869,27 +869,23 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
         /// We only support `Stream` table engine for now
         return false;
 
+    Streaming::checkAndPrepareCreateQueryForStream(create);
+
     if (!ctx->isDistributedEnv())
     {
-        if (create.storage->engine->name == "Stream")
+        if (nlog::NativeLog::instance(ctx).enabled())
         {
-            if (nlog::NativeLog::instance(ctx).enabled())
+            if (ctx->isLocalQueryFromTCP())
             {
-                if (ctx->isLocalQueryFromTCP())
-                {
-                    /// it comes from TCPHandler, therefore update column definitions if required
-                    /// First prepare settings, and then create query since the latter depends on the settings
-                    Streaming::prepareEngineSettings(create, ctx);
-                    Streaming::prepareCreateQueryForStream(create);
-                }
-                return false;
+                /// it comes from TCPHandler, therefore update column definitions if required
+                /// First prepare settings, and then create query since the latter depends on the settings
+                Streaming::prepareEngineSettings(create, ctx);
             }
-
-            throw Exception(
-                "Distributed environment is not setup. Unable to create stream", ErrorCodes::CONFIG_ERROR);
+            return false;
         }
 
-        return false;
+        throw Exception(
+            "Distributed environment is not setup. Unable to create stream", ErrorCodes::CONFIG_ERROR);
     }
 
     assert(!ctx->getCurrentQueryId().empty());
@@ -900,7 +896,6 @@ bool InterpreterCreateQuery::createStreamDistributed(const String & current_data
     if (ctx->isLocalQueryFromTCP())
     {
         /// it comes from TCPHandler, therefore update column definitions if required
-        Streaming::prepareCreateQueryForStream(create);
         Streaming::prepareEngineSettings(create, ctx);
 
         /// Build json payload here from SQL statement
