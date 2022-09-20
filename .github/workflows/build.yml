@@ -20,9 +20,6 @@ jobs:
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
         
-        # update version
-        ./release --version patch
-        
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
@@ -42,11 +39,11 @@ jobs:
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
-        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage-amd64
 
         # push docker image
         docker push timeplus/proton:$GITHUB_SHA
-        docker push timeplus/proton:prestage
+        docker push timeplus/proton:prestage-amd64
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -85,15 +82,45 @@ jobs:
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$GITHUB_SHA
-        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage
+        docker tag timeplus/proton:$GITHUB_SHA timeplus/proton:prestage-arm64v8
 
         # push docker image
         docker push timeplus/proton:$GITHUB_SHA
-        docker push timeplus/proton:prestage
+        docker push timeplus/proton:prestage-arm64v8
 
         # upload build cache
         tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
         aws s3 cp --no-progress ./cache-arm.tar.gz s3://tp-internal/proton/
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  CommitTag:
+    needs: [Build, BuildArm]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.4xlarge
+      ec2-image-id: ami-045a86d6d301ab637
+      submodules: 'recursive'
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+        
+        docker manifest create timeplus/proton:prestage \
+          timeplus/proton:prestage-amd64 \
+          timeplus/proton:prestage-arm64v8
+
+        docker manifest push timeplus/proton:prestage
+
+        # update version
+        ./release --version patch
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
