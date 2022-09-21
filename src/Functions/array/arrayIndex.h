@@ -36,9 +36,10 @@ using NullMap = PaddedPODArray<UInt8>;
 
 struct HasAction
 {
-    using ResultType = UInt8;
+    using ResultType = Bool;
     static constexpr const bool resume_execution = false;
-    static constexpr void apply(ResultType& current, size_t) noexcept { current = 1; }
+    static constexpr void apply(ResultType& current, size_t) noexcept { current = true; }
+    static constexpr void apply(UInt8& current, size_t) noexcept { current = 1; }
 };
 
 /// The index is returned starting from 1.
@@ -71,7 +72,7 @@ private:
     using Result = typename ColumnVector<IntegralResult>::ValueType;
 
     using ResultType = typename ConcreteAction::ResultType;
-    using ResultArr = PaddedPODArray<ResultType>;
+    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
 
     using ArrOffset = ColumnArray::Offset;
     using ArrOffsets = ColumnArray::Offsets;
@@ -195,11 +196,13 @@ public:
 template <typename ConcreteAction>
 struct Null
 {
-    using ResultType = typename ConcreteAction::ResultType;
+    using ResultType
+        = std::conditional_t<std::is_same_v<typename ConcreteAction::ResultType, Bool>, UInt8, typename ConcreteAction::ResultType>;
+    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
 
     static void process(
         const ColumnArray::Offsets & offsets,
-        PaddedPODArray<ResultType> & result,
+        ResultArr & result,
         [[maybe_unused]] const NullMap * null_map_data)
     {
         const size_t size = offsets.size();
@@ -244,6 +247,7 @@ private:
     template <bool IsConst> using OffsetT = std::conditional_t<IsConst, Offset, const ColumnString::Offsets &>;
     using ArrayOffset = ColumnArray::Offset;
     using ResultType = typename ConcreteAction::ResultType;
+    using ResultArr = PaddedPODArray<std::conditional_t<std::is_same_v<ResultType, Bool>, UInt8, ResultType>>;
 
     template <bool IsConst, bool HasNullMapData, bool HasNullMapItem>
     static void processImpl(
@@ -252,7 +256,7 @@ private:
         const ColumnString::Offsets & string_offsets,
         const ColumnString::Chars & item_values,
         OffsetT<IsConst> item_offsets,
-        PaddedPODArray<ResultType> & result,
+        ResultArr & result,
         [[maybe_unused]] const NullMap * data_map,
         [[maybe_unused]] const NullMap * item_map)
     {
@@ -326,7 +330,7 @@ private:
         const ColumnString::Chars & data, const ColumnArray::Offsets & offsets,
         const ColumnString::Offsets & str_offsets, const ColumnString::Chars & values,
         OffsetT<IsConst> item_offsets,
-        PaddedPODArray<ResultType> & result, const NullMap * data_map, const NullMap * item_map)
+        ResultArr & result, const NullMap * data_map, const NullMap * item_map)
     {
         if (data_map && item_map)
             processImpl<IsConst, true, true>(data, offsets, str_offsets, values, item_offsets, result, data_map, item_map);
@@ -342,7 +346,7 @@ public:
     static inline void process(
         const ColumnString::Chars & data, const ColumnArray::Offsets & offsets,
         const ColumnString::Offsets & string_offsets, const ColumnString::Chars & item_values,
-        Offset item_offsets, PaddedPODArray<ResultType> & result,
+        Offset item_offsets, ResultArr & result,
         const NullMap * data_map, const NullMap * item_map)
     {
         invokeCheckNullMaps<true>(data, offsets, string_offsets, item_values, item_offsets, result, data_map, item_map);
@@ -351,7 +355,7 @@ public:
     static inline void process(
         const ColumnString::Chars & data, const ColumnArray::Offsets & offsets,
         const ColumnString::Offsets & string_offsets, const ColumnString::Chars & item_values,
-        const ColumnString::Offsets & item_offsets, PaddedPODArray<ResultType> & result,
+        const ColumnString::Offsets & item_offsets, ResultArr & result,
         const NullMap * data_map, const NullMap * item_map)
     {
         invokeCheckNullMaps<false>(data, offsets, string_offsets, item_values, item_offsets, result, data_map, item_map);
@@ -417,7 +421,10 @@ public:
                 second_argument_type->getName());
         }
 
-        return std::make_shared<DataTypeNumber<ResultType>>();
+        if constexpr (std::is_same_v<ResultType, Bool>)
+            return std::make_shared<DataTypeBool>();
+        else
+            return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
@@ -621,10 +628,10 @@ private:
         const NullMap * null_map_item = nullptr;
 
         if (const auto & data_map = arguments[2].column; data_map)
-            null_map_data = &assert_cast<const ColumnUInt8 &>(*data_map).getData();
+            null_map_data = &assert_cast<const ColumnBool &>(*data_map).getData();
 
         if (const auto & item_map = arguments[3].column; item_map)
-            null_map_item = &assert_cast<const ColumnUInt8 &>(*item_map).getData();
+            null_map_item = &assert_cast<const ColumnBool &>(*item_map).getData();
 
         return {null_map_data, null_map_item};
     }
@@ -998,7 +1005,7 @@ private:
 
             if (arguments.size() > 2)
                 if (const auto & col = arguments[3].column; col)
-                    null_map = &assert_cast<const ColumnUInt8 &>(*col).getData();
+                    null_map = &assert_cast<const ColumnBool &>(*col).getData();
 
             const size_t size = item_arg->size();
             auto col_res = ResultColumnType::create(size);

@@ -43,11 +43,11 @@ namespace DB
             data_to.resize(input_rows_count * strlen("YYYY-MM-DD") + 1);
             offsets_to.resize(input_rows_count);
 
-            ColumnUInt8::MutablePtr col_null_map_to;
-            ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+            ColumnBool::MutablePtr col_null_map_to;
+            ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
             if constexpr (nullOnErrors)
             {
-                col_null_map_to = ColumnUInt8::create(input_rows_count);
+                col_null_map_to = ColumnBool::create(input_rows_count);
                 vec_null_map_to = &col_null_map_to->getData();
             }
 

@@ -45,8 +45,8 @@ String deriveTempName(const String & name)
 ColumnWithTypeAndName condtitionColumnToJoinable(const Block & block, const String & src_column_name)
 {
     size_t res_size = block.rows();
-    auto data_col = ColumnUInt8::create(res_size, 0);
-    auto null_map = ColumnUInt8::create(res_size, 0);
+    auto data_col = ColumnBool::create(res_size, 0);
+    auto null_map = ColumnBool::create(res_size, 0);
 
     if (!src_column_name.empty())
     {
@@ -59,7 +59,7 @@ ColumnWithTypeAndName condtitionColumnToJoinable(const Block & block, const Stri
     }
 
     ColumnPtr res_col = ColumnNullable::create(std::move(data_col), std::move(null_map));
-    DataTypePtr res_col_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeUInt8>());
+    DataTypePtr res_col_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeBool>());
     String res_name = deriveTempName(src_column_name);
 
     if (block.has(res_name))

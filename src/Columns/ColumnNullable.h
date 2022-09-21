@@ -11,14 +11,14 @@ class Collator;
 namespace DB
 {
 
-using NullMap = ColumnUInt8::Container;
+using NullMap = ColumnBool::Container;
 using ConstNullMapPtr = const NullMap *;
 
 /// Class that specifies nullable columns. A nullable column represents
 /// a column, which may have any type, provided with the possibility of
 /// storing NULL values. For this purpose, a ColumNullable object stores
 /// an ordinary column along with a special column, namely a byte map,
-/// whose type is ColumnUInt8. The latter column indicates whether the
+/// whose type is ColumnBool. The latter column indicates whether the
 /// value of a given row is a NULL or not. Such a design is preferred
 /// over a bitmap because columns are usually stored on disk as compressed
 /// files. In this regard, using a bitmap instead of a byte map would
@@ -49,7 +49,7 @@ public:
     TypeIndex getDataType() const override { return TypeIndex::Nullable; }
     MutableColumnPtr cloneResized(size_t size) const override;
     size_t size() const override { return nested_column->size(); }
-    bool isNullAt(size_t n) const override { return assert_cast<const ColumnUInt8 &>(*null_map).getData()[n] != 0;}
+    bool isNullAt(size_t n) const override { return assert_cast<const ColumnBool &>(*null_map).getData()[n] != 0;}
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
     bool getBool(size_t n) const override { return isNullAt(n) ? false : nested_column->getBool(n); }
@@ -169,8 +169,8 @@ public:
     const ColumnPtr & getNullMapColumnPtr() const { return null_map; }
     ColumnPtr & getNullMapColumnPtr() { return null_map; }
 
-    ColumnUInt8 & getNullMapColumn() { return assert_cast<ColumnUInt8 &>(*null_map); }
-    const ColumnUInt8 & getNullMapColumn() const { return assert_cast<const ColumnUInt8 &>(*null_map); }
+    ColumnBool & getNullMapColumn() { return assert_cast<ColumnBool &>(*null_map); }
+    const ColumnBool & getNullMapColumn() const { return assert_cast<const ColumnBool &>(*null_map); }
 
     NullMap & getNullMapData() { return getNullMapColumn().getData(); }
     const NullMap & getNullMapData() const { return getNullMapColumn().getData(); }
@@ -181,9 +181,6 @@ public:
     /// map of the result column of a function taking one or more nullable
     /// columns.
     void applyNullMap(const ColumnNullable & other);
-    void applyNullMap(const ColumnUInt8 & map);
-    void applyNegatedNullMap(const ColumnUInt8 & map);
-
     /// proton: starts.
     void applyNullMap(const ColumnBool & map);
     void applyNegatedNullMap(const ColumnBool & map);
@@ -195,9 +192,6 @@ public:
 private:
     WrappedPtr nested_column;
     WrappedPtr null_map;
-
-    template <bool negative>
-    void applyNullMapImpl(const ColumnUInt8 & map);
 
     /// proton: starts.
     template <bool negative>

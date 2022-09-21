@@ -783,7 +783,7 @@ private:
         if (isColumnNullable(*materialized))
             return materialized;
 
-        return ColumnNullable::create(materialized, ColumnUInt8::create(column->size(), 0));
+        return ColumnNullable::create(materialized, ColumnBool::create(column->size(), 0));
     }
 
     /// Return nested column recursively removing Nullable, examples:
@@ -941,7 +941,7 @@ private:
                     size_t size = input_rows_count;
                     const auto & null_map_data = cond_col->getData();
 
-                    auto negated_null_map = ColumnUInt8::create();
+                    auto negated_null_map = ColumnBool::create();
                     auto & negated_null_map_data = negated_null_map->getData();
                     negated_null_map_data.resize(size);
 

@@ -109,11 +109,11 @@ ColumnPtr RangeHashedDictionary<dictionary_key_type>::getColumn(
     size_t keys_size = key_columns.front()->size();
     bool is_attribute_nullable = attribute.is_value_nullable.has_value();
 
-    ColumnUInt8::MutablePtr col_null_map_to;
-    ColumnUInt8::Container * vec_null_map_to = nullptr;
+    ColumnBool::MutablePtr col_null_map_to;
+    ColumnBool::Container * vec_null_map_to = nullptr;
     if (is_attribute_nullable)
     {
-        col_null_map_to = ColumnUInt8::create(keys_size, false);
+        col_null_map_to = ColumnBool::create(keys_size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 
@@ -216,11 +216,11 @@ ColumnPtr RangeHashedDictionary<dictionary_key_type>::getColumnInternal(
     size_t keys_size = key_to_index.size();
     bool is_attribute_nullable = attribute.is_value_nullable.has_value();
 
-    ColumnUInt8::MutablePtr col_null_map_to;
-    ColumnUInt8::Container * vec_null_map_to = nullptr;
+    ColumnBool::MutablePtr col_null_map_to;
+    ColumnBool::Container * vec_null_map_to = nullptr;
     if (is_attribute_nullable)
     {
-        col_null_map_to = ColumnUInt8::create(keys_size, false);
+        col_null_map_to = ColumnBool::create(keys_size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 

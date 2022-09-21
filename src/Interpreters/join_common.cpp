@@ -529,10 +529,10 @@ JoinMask getColumnAsMask(const Block & block, const String & column_name)
             return JoinMask(false);
 
         /// Return nested column with NULL set to false
-        const auto & nest_col = assert_cast<const ColumnUInt8 &>(nullable_col->getNestedColumn());
+        const auto & nest_col = assert_cast<const ColumnBool &>(nullable_col->getNestedColumn());
         const auto & null_map = nullable_col->getNullMapColumn();
 
-        auto res = ColumnUInt8::create(nullable_col->size(), 0);
+        auto res = ColumnBool::create(nullable_col->size(), 0);
         for (size_t i = 0, sz = nullable_col->size(); i < sz; ++i)
             res->getData()[i] = !null_map.getData()[i] && nest_col.getData()[i];
         return JoinMask(std::move(res));

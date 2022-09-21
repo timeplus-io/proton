@@ -209,7 +209,7 @@ ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool n
     return std::move(column);
 }
 
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnBool & negative_null_map)
 {
     if (nullable)
     {
@@ -635,7 +635,7 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
     size_t NO_INLINE insertFromBlockImplTypeCase(
         HashJoin & join, Map & map, size_t rows, const ColumnRawPtrs & key_columns,
-        const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, UInt8ColumnDataPtr join_mask, Arena & pool)
+        const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
     {
         [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, RowRef>;
         constexpr bool is_asof_join = (STRICTNESS == ASTTableJoin::Strictness::Asof);
@@ -669,7 +669,7 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
     size_t insertFromBlockImplType(
         HashJoin & join, Map & map, size_t rows, const ColumnRawPtrs & key_columns,
-        const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, UInt8ColumnDataPtr join_mask, Arena & pool)
+        const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
     {
         if (null_map)
             return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(
@@ -683,7 +683,7 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
     size_t insertFromBlockImpl(
         HashJoin & join, HashJoin::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
-        const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, UInt8ColumnDataPtr join_mask, Arena & pool)
+        const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, BoolColumnDataPtr join_mask, Arena & pool)
     {
         switch (type)
         {
@@ -803,12 +803,12 @@ bool HashJoin::addJoinedBlock(const Block & source_block, bool check_limits)
 
             auto join_mask_col = JoinCommon::getColumnAsMask(block, onexprs[onexpr_idx].condColumnNames().second);
             /// Save blocks that do not hold conditions in ON section
-            ColumnUInt8::MutablePtr not_joined_map = nullptr;
+            ColumnBool::MutablePtr not_joined_map = nullptr;
             if (!multiple_disjuncts && isRightOrFull(kind) && !join_mask_col.isConstant())
             {
                 const auto & join_mask = join_mask_col.getData();
                 /// Save rows that do not hold conditions
-                not_joined_map = ColumnUInt8::create(block.rows(), 0);
+                not_joined_map = ColumnBool::create(block.rows(), 0);
                 for (size_t i = 0, sz = join_mask->size(); i < sz; ++i)
                 {
                     /// Condition hold, do not save row
@@ -1548,9 +1548,9 @@ void HashJoin::joinBlockImpl(
     }
     else if (has_required_right_keys)
     {
-        /// Some trash to represent IColumn::Filter as ColumnUInt8 needed for ColumnNullable::applyNullMap()
-        auto null_map_filter_ptr = ColumnUInt8::create();
-        ColumnUInt8 & null_map_filter = assert_cast<ColumnUInt8 &>(*null_map_filter_ptr);
+        /// Some trash to represent IColumn::Filter as ColumnBool needed for ColumnNullable::applyNullMap()
+        auto null_map_filter_ptr = ColumnBool::create();
+        ColumnBool & null_map_filter = assert_cast<ColumnBool &>(*null_map_filter_ptr);
         null_map_filter.getData().swap(row_filter);
         const IColumn::Filter & filter = null_map_filter.getData();
 
@@ -2037,7 +2037,7 @@ private:
             const auto * block = it->first;
             ConstNullMapPtr nullmap = nullptr;
             if (it->second)
-                nullmap = &assert_cast<const ColumnUInt8 &>(*it->second).getData();
+                nullmap = &assert_cast<const ColumnBool &>(*it->second).getData();
 
             for (size_t row = 0; row < block->rows(); ++row)
             {

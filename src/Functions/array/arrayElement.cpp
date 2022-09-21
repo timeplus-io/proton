@@ -149,7 +149,7 @@ public:
 
     void initSink(size_t size)
     {
-        auto sink = ColumnUInt8::create(size);
+        auto sink = ColumnBool::create(size);
         sink_null_map = sink->getData().data();
         sink_null_map_holder = std::move(sink);
     }
@@ -1214,7 +1214,7 @@ ColumnPtr FunctionArrayElement::executeImpl(const ColumnsWithTypeAndName & argum
         auto res = perform(source_columns, tmp_ret_type, builder, input_rows_count);
 
         /// Store the result.
-        return ColumnNullable::create(res, builder ? std::move(builder).getNullMapColumnPtr() : ColumnUInt8::create());
+        return ColumnNullable::create(res, builder ? std::move(builder).getNullMapColumnPtr() : ColumnBool::create());
     }
 }
 

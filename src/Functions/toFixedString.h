@@ -71,11 +71,11 @@ public:
     {
         const auto & column = arguments[0].column;
 
-        ColumnUInt8::MutablePtr col_null_map_to;
-        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+        ColumnBool::MutablePtr col_null_map_to;
+        ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (exception_mode == ConvertToFixedStringExceptionMode::Null)
         {
-            col_null_map_to = ColumnUInt8::create(column->size(), false);
+            col_null_map_to = ColumnBool::create(column->size(), false);
             vec_null_map_to = &col_null_map_to->getData();
         }
 

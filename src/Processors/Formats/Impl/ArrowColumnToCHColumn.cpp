@@ -280,8 +280,8 @@ static ColumnWithTypeAndName readColumnWithDecimalData(std::shared_ptr<arrow::Ch
 /// Creates a null bytemap from arrow's null bitmap
 static ColumnPtr readByteMapFromArrowColumn(std::shared_ptr<arrow::ChunkedArray> & arrow_column)
 {
-    auto nullmap_column = ColumnUInt8::create();
-    PaddedPODArray<UInt8> & bytemap_data = assert_cast<ColumnVector<UInt8> &>(*nullmap_column).getData();
+    auto nullmap_column = ColumnBool::create();
+    PaddedPODArray<UInt8> & bytemap_data = assert_cast<ColumnBool &>(*nullmap_column).getData();
     bytemap_data.reserve(arrow_column->length());
 
     for (size_t chunk_i = 0; chunk_i != static_cast<size_t>(arrow_column->num_chunks()); ++chunk_i)

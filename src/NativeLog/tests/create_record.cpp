@@ -71,6 +71,7 @@ void insertColumnDateTime64(DB::Block & block, size_t rows)
     insertColumnNumber<DB::DataTypeInt128, DB::ColumnInt128, Int128>(block, rows);
     insertColumnNumber<DB::DataTypeInt256, DB::ColumnInt256, Int256>(block, rows);
 
+    insertColumnNumber<DB::DataTypeBool, DB::ColumnBool, UInt8>(block, rows);
     insertColumnNumber<DB::DataTypeUInt8, DB::ColumnUInt8, UInt8>(block, rows);
     insertColumnNumber<DB::DataTypeUInt16, DB::ColumnUInt16, UInt16>(block, rows);
     insertColumnNumber<DB::DataTypeUInt32, DB::ColumnUInt32, UInt32>(block, rows);

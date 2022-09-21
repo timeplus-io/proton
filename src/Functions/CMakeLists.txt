@@ -98,7 +98,7 @@ if (NOT ENABLE_MISC_FUNCS)
             lowCardinalityKeys.cpp
             filesystem.cpp
             evalMLMethod.cpp
-            transform.cpp
+            # transform.cpp
             getMacro.cpp
             getScalar.cpp
             getSetting.cpp

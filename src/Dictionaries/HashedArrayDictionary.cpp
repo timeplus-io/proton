@@ -499,11 +499,11 @@ ColumnPtr HashedArrayDictionary<dictionary_key_type>::getAttributeColumn(
 
     bool is_attribute_nullable = attribute.is_index_null.has_value();
 
-    ColumnUInt8::MutablePtr col_null_map_to;
-    ColumnUInt8::Container * vec_null_map_to = nullptr;
+    ColumnBool::MutablePtr col_null_map_to;
+    ColumnBool::Container * vec_null_map_to = nullptr;
     if (attribute.is_index_null)
     {
-        col_null_map_to = ColumnUInt8::create(keys_size, false);
+        col_null_map_to = ColumnBool::create(keys_size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 

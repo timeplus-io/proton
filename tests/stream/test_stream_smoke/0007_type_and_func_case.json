@@ -691,7 +691,8 @@
                     {"client":"python", "query_type": "table","wait":1, "query":"select * from system.asynchronous_metric_log where metric='AsynchronousMetricsCalculationTimeSpent'"},
                     {"client":"python", "query_type": "table","wait":1,"query_id": "804", "query":"SELECT to_uint64(1) IN (SELECT * FROM system.numbers LIMIT 1100000)"},
                     {"client":"python", "query_type": "table","wait":1,"query_id": "805", "query":"SELECT -1 IN (-1), -1 IN (1, -1, 2), 1. IN (1), 1.1 IN (1, -1), 1. IN (3, 1., -1), 1 IN (3, 2, 1), to_int16(-1) IN (255), materialize(-1) IN (-1), materialize(-1) IN (1, -1, 2), materialize(1.) IN (1), materialize(1.1) IN (1, -1), materialize(1.) IN (3, 1., -1), materialize(1) IN (3, 2, 1), materialize(to_int16(-1)) IN (255)"},
-                    {"client":"python", "query_type": "table","wait":1,"query_id": "806", "query":"SELECT DISTINCT array_filter(x -> not_empty(x), array_join([[''], ['is_registred'], ['registration_month','user_login','is_registred'], ['is_registred'], ['is_registred'], ['']]))"}
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "806", "query":"SELECT DISTINCT array_filter(x -> not_empty(x), array_join([[''], ['is_registred'], ['registration_month','user_login','is_registred'], ['is_registred'], ['is_registred'], ['']]))"},
+                    {"client":"python", "query_type": "table","wait":1,"query_id": "807", "query":"SELECT has([0, 0, 1], 1), has([0, 0, 0], 1), not 1, not false, true where true"}
                 ]}
             ],
 
@@ -701,7 +702,8 @@
                 {"query_id":"803", "expected_results":[["False", "True", "False", "True"]]},
                 {"query_id":"804", "expected_results":[["True"]]},
                 {"query_id":"805", "expected_results":[["True", "True", "True", "False", "True", "True", "False", "True", "True", "True", "False", "True", "True", "False"]]},
-                {"query_id":"806", "expected_results":[["[]"], ["['is_registred']"], ["['registration_month', 'user_login', 'is_registred']"]]}
+                {"query_id":"806", "expected_results":[["[]"], ["['is_registred']"], ["['registration_month', 'user_login', 'is_registred']"]]},
+                {"query_id":"807", "expected_results":[["True", "False", "False", "True", "True"]]}
             ]
         }
     ]

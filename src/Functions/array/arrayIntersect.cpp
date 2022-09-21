@@ -346,7 +346,7 @@ FunctionArrayIntersect::UnpackedArrays FunctionArrayIntersect::prepareArrays(
                             {initial_column->getPtr(), nested_cast_type, ""},
                             context);
 
-                    arg.overflow_mask = &typeid_cast<const ColumnUInt8 *>(overflow_mask.get())->getData();
+                    arg.overflow_mask = &typeid_cast<const ColumnBool *>(overflow_mask.get())->getData();
                     arrays.column_holders.emplace_back(std::move(overflow_mask));
                 }
             }
@@ -492,8 +492,8 @@ ColumnPtr FunctionArrayIntersect::execute(const UnpackedArrays & arrays, Mutable
     auto & result_data = static_cast<ColumnType &>(*result_data_ptr);
     auto result_offsets_ptr = ColumnArray::ColumnOffsets::create(rows);
     auto & result_offsets = assert_cast<ColumnArray::ColumnOffsets &>(*result_offsets_ptr);
-    auto null_map_column = ColumnUInt8::create();
-    NullMap & null_map = assert_cast<ColumnUInt8 &>(*null_map_column).getData();
+    auto null_map_column = ColumnBool::create();
+    NullMap & null_map = assert_cast<ColumnBool &>(*null_map_column).getData();
 
     Arena arena;
 

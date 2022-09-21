@@ -72,7 +72,7 @@ public:
 /// proton : starts
 ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter = false);
 ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable);
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map);
+ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnBool & negative_null_map);
 /// proton : ends
 }
 

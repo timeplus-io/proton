@@ -321,7 +321,7 @@ void NO_INLINE sliceDynamicOffsetUnbounded(Source && src, Sink && sink, const IC
 {
     const bool is_null = offset_column.onlyNull();
     const auto * nullable = typeid_cast<const ColumnNullable *>(&offset_column);
-    const ColumnUInt8::Container * null_map = nullable ? &nullable->getNullMapData() : nullptr;
+    const ColumnBool::Container * null_map = nullable ? &nullable->getNullMapData() : nullptr;
     const IColumn * nested_column = nullable ? &nullable->getNestedColumn() : &offset_column;
 
     while (!src.isEnd())
@@ -352,7 +352,7 @@ template <bool inverse, typename Source, typename Sink>
 static void sliceDynamicOffsetBoundedImpl(Source && src, Sink && sink, const IColumn * offset_column, const IColumn * length_column)
 {
     const bool is_offset_null = !offset_column || offset_column->onlyNull();
-    const ColumnUInt8::Container * offset_null_map = nullptr;
+    const ColumnBool::Container * offset_null_map = nullptr;
     const IColumn * offset_nested_column = nullptr;
 
     if (!is_offset_null)
@@ -363,7 +363,7 @@ static void sliceDynamicOffsetBoundedImpl(Source && src, Sink && sink, const ICo
     }
 
     const bool is_length_null = !length_column || length_column->onlyNull();
-    const ColumnUInt8::Container * length_null_map = nullptr;
+    const ColumnBool::Container * length_null_map = nullptr;
     const IColumn * length_nested_column = nullptr;
 
     if (!is_length_null)

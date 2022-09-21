@@ -73,7 +73,7 @@ void ColumnNullable::updateHashFast(SipHash & hash) const
 MutableColumnPtr ColumnNullable::cloneResized(size_t new_size) const
 {
     MutableColumnPtr new_nested_col = getNestedColumn().cloneResized(new_size);
-    auto new_null_map = ColumnUInt8::create();
+    auto new_null_map = ColumnBool::create();
 
     if (new_size > 0)
     {
@@ -610,20 +610,6 @@ ColumnPtr ColumnNullable::replicate(const Offsets & offsets) const
     return ColumnNullable::create(replicated_data, replicated_null_map);
 }
 
-
-template <bool negative>
-void ColumnNullable::applyNullMapImpl(const ColumnUInt8 & map)
-{
-    NullMap & arr1 = getNullMapData();
-    const NullMap & arr2 = map.getData();
-
-    if (arr1.size() != arr2.size())
-        throw Exception{"Inconsistent sizes of ColumnNullable objects", ErrorCodes::LOGICAL_ERROR};
-
-    for (size_t i = 0, size = arr1.size(); i < size; ++i)
-        arr1[i] |= negative ^ arr2[i];
-}
-
 /// proton: starts.
 template <bool negative>
 void ColumnNullable::applyNullMapImpl(const ColumnBool & map)
@@ -648,17 +634,6 @@ void ColumnNullable::applyNegatedNullMap(const ColumnBool & map)
     applyNullMapImpl<true>(map);
 }
 // proton: ends.
-
-void ColumnNullable::applyNullMap(const ColumnUInt8 & map)
-{
-    applyNullMapImpl<false>(map);
-}
-
-void ColumnNullable::applyNegatedNullMap(const ColumnUInt8 & map)
-{
-    applyNullMapImpl<true>(map);
-}
-
 
 void ColumnNullable::applyNullMap(const ColumnNullable & other)
 {
@@ -703,7 +678,7 @@ ColumnPtr makeNullable(const ColumnPtr & column)
     if (isColumnConst(*column))
         return ColumnConst::create(makeNullable(assert_cast<const ColumnConst &>(*column).getDataColumnPtr()), column->size());
 
-    return ColumnNullable::create(column, ColumnUInt8::create(column->size(), 0));
+    return ColumnNullable::create(column, ColumnBool::create(column->size(), 0));
 }
 
 }

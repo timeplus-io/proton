@@ -106,6 +106,11 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
 
     switch (data_type->getTypeId())
     {
+        case TypeIndex::Bool:
+            return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                encoder.encodeInt(assert_cast<const ColumnBool &>(column).getElement(row_num));
+            }};
         case TypeIndex::UInt8:
             return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {

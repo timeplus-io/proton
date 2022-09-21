@@ -847,9 +847,11 @@ auto & Field::safeGet()
 {
     const Types::Which requested = TypeToEnum<NearestFieldType<std::decay_t<T>>>::value;
 
-    if (which != requested)
+    /// proton: starts. the storage type of Bool is also UInt64
+    if (which != requested && !(which == Types::Bool && requested == Types::UInt64))
         throw Exception(ErrorCodes::BAD_GET,
             "Bad get: has {}, requested {}", getTypeName(), requested);
+    /// proton: ends.
 
     return get<T>();
 }

@@ -44,7 +44,6 @@ void registerFunctionLowCardinalityKeys(FunctionFactory &);
 void registerFunctionFilesystem(FunctionFactory &);
 void registerFunctionEvalMLMethod(FunctionFactory &);
 void registerFunctionBasename(FunctionFactory &);
-void registerFunctionTransform(FunctionFactory &);
 void registerFunctionGetMacro(FunctionFactory &);
 void registerFunctionGetScalar(FunctionFactory &);
 void registerFunctionGetSetting(FunctionFactory &);
@@ -99,6 +98,7 @@ void registerFunctionIsInfinite(FunctionFactory &);
 void registerFunctionIsNaN(FunctionFactory &);
 void registerFunctionIfNotFinite(FunctionFactory &);
 void registerFunctionRowNumberInAllBlocks(FunctionFactory &);
+void registerFunctionTransform(FunctionFactory &);
 /// proton: ends.
 
 #ifdef FUZZING_MODE
@@ -145,7 +145,6 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionFilesystem(factory);
     registerFunctionEvalMLMethod(factory);
     registerFunctionBasename(factory);
-    registerFunctionTransform(factory);
     registerFunctionGetMacro(factory);
     registerFunctionGetScalar(factory);
     registerFunctionGetSetting(factory);
@@ -204,6 +203,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionIsNaN(factory);
     registerFunctionIfNotFinite(factory);
     registerFunctionRowNumberInAllBlocks(factory);
+    registerFunctionTransform(factory);
     /// proton: ends.
 }
 

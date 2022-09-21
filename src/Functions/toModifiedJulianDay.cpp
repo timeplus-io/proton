@@ -61,11 +61,11 @@ namespace DB
             typename ColVecTo::MutablePtr col_to = ColVecTo::create(input_rows_count);
             typename ColVecTo::Container & vec_to = col_to->getData();
 
-            ColumnUInt8::MutablePtr col_null_map_to;
+            ColumnBool::MutablePtr col_null_map_to;
             UInt8 * vec_null_map_to [[maybe_unused]] = nullptr;
             if constexpr (nullOnErrors)
             {
-                col_null_map_to = ColumnUInt8::create(input_rows_count);
+                col_null_map_to = ColumnBool::create(input_rows_count);
                 vec_null_map_to = col_null_map_to->getData().data();
             }
 

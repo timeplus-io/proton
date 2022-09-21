@@ -179,11 +179,11 @@ struct ConvertImpl
             auto & vec_to = col_to->getData();
             vec_to.resize(input_rows_count);
 
-            ColumnUInt8::MutablePtr col_null_map_to;
-            ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+            ColumnBool::MutablePtr col_null_map_to;
+            ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
             if constexpr (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
             {
-                col_null_map_to = ColumnUInt8::create(input_rows_count, false);
+                col_null_map_to = ColumnBool::create(input_rows_count, false);
                 vec_null_map_to = &col_null_map_to->getData();
             }
 
@@ -773,12 +773,12 @@ struct ConvertImpl<DataTypeEnum<FieldType>, DataTypeNumber<FieldType>, Name, Con
     }
 };
 
-static ColumnUInt8::MutablePtr copyNullMap(ColumnPtr col)
+static ColumnBool::MutablePtr copyNullMap(ColumnPtr col)
 {
-    ColumnUInt8::MutablePtr null_map = nullptr;
+    ColumnBool::MutablePtr null_map = nullptr;
     if (const auto * col_null = checkAndGetColumn<ColumnNullable>(col.get()))
     {
-        null_map = ColumnUInt8::create();
+        null_map = ColumnBool::create();
         null_map->insertRangeFrom(col_null->getNullMapColumn(), 0, col_null->size());
     }
     return null_map;
@@ -792,7 +792,7 @@ struct ConvertImpl<FromDataType, std::enable_if_t<!std::is_same_v<FromDataType, 
 
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/)
     {
-        ColumnUInt8::MutablePtr null_map = copyNullMap(arguments[0].column);
+        ColumnBool::MutablePtr null_map = copyNullMap(arguments[0].column);
 
         const auto & col_with_type_and_name =  columnGetNested(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
@@ -872,7 +872,7 @@ struct ConvertImplGenericToString
         static_assert(std::is_same_v<StringColumnType, ColumnString> || std::is_same_v<StringColumnType, ColumnFixedString>,
                 "Can be used only to serialize to ColumnString or ColumnFixedString");
 
-        ColumnUInt8::MutablePtr null_map = copyNullMap(arguments[0].column);
+        ColumnBool::MutablePtr null_map = copyNullMap(arguments[0].column);
 
         const auto & col_with_type_and_name = columnGetNested(arguments[0]);
         const IDataType & type = *col_with_type_and_name.type;
@@ -1148,11 +1148,11 @@ struct ConvertThroughParsing
 
         typename ColVecTo::Container & vec_to = col_to->getData();
 
-        ColumnUInt8::MutablePtr col_null_map_to;
-        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+        ColumnBool::MutablePtr col_null_map_to;
+        ColumnBool::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
         {
-            col_null_map_to = ColumnUInt8::create(size);
+            col_null_map_to = ColumnBool::create(size);
             vec_null_map_to = &col_null_map_to->getData();
         }
 
@@ -2706,7 +2706,7 @@ private:
         return [] (ColumnsWithTypeAndName &, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count)
         {
             ColumnPtr res = result_type->createColumn();
-            ColumnUInt8::Ptr col_null_map_to = ColumnUInt8::create(input_rows_count, true);
+            ColumnBool::Ptr col_null_map_to = ColumnBool::create(input_rows_count, true);
             return ColumnNullable::create(res->cloneResized(input_rows_count), std::move(col_null_map_to));
         };
     }

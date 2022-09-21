@@ -35,7 +35,7 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
             const ColumnNullable * column_nested_nullable = checkAndGetColumn<ColumnNullable>(*column_nested);
             if (!column_nested_nullable || !typeid_cast<const ColumnBool *>(&column_nested_nullable->getNestedColumn()))
             {
-                throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be uint8 or nullable(uint8).",
+                throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be bool or nullable(bool).",
                                 ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
             }
         }

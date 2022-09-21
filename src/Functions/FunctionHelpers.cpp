@@ -278,8 +278,8 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & a
             {
                 MutableColumnPtr mutable_result_null_map_column = IColumn::mutate(std::move(result_null_map_column));
 
-                NullMap & result_null_map = assert_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
-                const NullMap & src_null_map = assert_cast<const ColumnUInt8 &>(*null_map_column).getData();
+                NullMap & result_null_map = assert_cast<ColumnBool &>(*mutable_result_null_map_column).getData();
+                const NullMap & src_null_map = assert_cast<const ColumnBool &>(*null_map_column).getData();
 
                 for (size_t i = 0, size = result_null_map.size(); i < size; ++i)
                     result_null_map[i] |= src_null_map[i];

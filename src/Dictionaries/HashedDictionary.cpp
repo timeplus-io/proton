@@ -80,11 +80,11 @@ ColumnPtr HashedDictionary<dictionary_key_type, sparse>::getColumn(
 
     bool is_attribute_nullable = attribute.is_nullable_set.has_value();
 
-    ColumnUInt8::MutablePtr col_null_map_to;
-    ColumnUInt8::Container * vec_null_map_to = nullptr;
+    ColumnBool::MutablePtr col_null_map_to;
+    ColumnBool::Container * vec_null_map_to = nullptr;
     if (attribute.is_nullable_set)
     {
-        col_null_map_to = ColumnUInt8::create(size, false);
+        col_null_map_to = ColumnBool::create(size, false);
         vec_null_map_to = &col_null_map_to->getData();
     }
 

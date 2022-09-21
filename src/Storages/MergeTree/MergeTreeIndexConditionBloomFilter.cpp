@@ -385,7 +385,7 @@ bool MergeTreeIndexConditionBloomFilter::traverseASTIn(
             ColumnWithTypeAndName default_column_with_type_to_check { default_column_to_check, type, "" };
             ColumnsWithTypeAndName default_columns_with_type_to_check = {default_column_with_type_to_check};
             auto set_contains_default_value_predicate_column = prepared_set->execute(default_columns_with_type_to_check, false /*negative*/);
-            const auto & set_contains_default_value_predicate_column_typed = assert_cast<const ColumnUInt8 &>(*set_contains_default_value_predicate_column);
+            const auto & set_contains_default_value_predicate_column_typed = assert_cast<const ColumnBool &>(*set_contains_default_value_predicate_column);
             bool set_contain_default_value = set_contains_default_value_predicate_column_typed.getData()[0];
             if (set_contain_default_value)
                 return false;

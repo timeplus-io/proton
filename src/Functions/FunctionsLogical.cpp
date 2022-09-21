@@ -432,7 +432,7 @@ static ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_cou
     {
         if (!arguments.empty())
             const_val = Op::apply(const_val, 0);
-        return DataTypeUInt8().createColumnConst(input_rows_count, toField(const_val));
+        return DataTypeBool().createColumnConst(input_rows_count, toField(const_val));
     }
 
     /// If the constant value is a neutral element, let's forget about it.
@@ -485,13 +485,9 @@ DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTyp
             ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
 
     bool has_nullable_arguments = false;
-    bool has_bool_arguments = false;
     for (size_t i = 0; i < arguments.size(); ++i)
     {
         const auto & arg_type = arguments[i];
-
-        if (isBool(arg_type))
-            has_bool_arguments = true;
 
         if (!has_nullable_arguments)
         {
@@ -509,7 +505,7 @@ DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTyp
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    auto result_type = has_bool_arguments ? DataTypeFactory::instance().get("bool") : std::make_shared<DataTypeUInt8>();
+    auto result_type = std::make_shared<DataTypeBool>();
     return has_nullable_arguments
             ? makeNullable(result_type)
             : result_type;
@@ -717,7 +713,7 @@ DataTypePtr FunctionUnaryLogical<Impl, Name>::getReturnTypeImpl(const DataTypes 
             + ") of argument of function " + getName(),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    return isBool(arguments[0]) ? DataTypeFactory::instance().get("bool") : std::make_shared<DataTypeUInt8>();
+    return std::make_shared<DataTypeBool>();
 }
 
 template <template <typename> class Impl, typename T>

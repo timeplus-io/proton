@@ -714,7 +714,7 @@ ColumnPtr ColumnArray::filterNullable(const Filter & filt, ssize_t result_size_h
     const auto & filtered_array_of_nested = assert_cast<const ColumnArray &>(*filtered_array_of_nested_owner);
     const auto & filtered_offsets = filtered_array_of_nested.getOffsetsPtr();
 
-    auto res_null_map = ColumnUInt8::create();
+    auto res_null_map = ColumnBool::create();
 
     filterArraysImplOnlyData(nullable_elems.getNullMapData(), getOffsets(), res_null_map->getData(), filt, result_size_hint);
 
