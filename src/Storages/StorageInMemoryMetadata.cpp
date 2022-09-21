@@ -449,7 +449,7 @@ const SelectQueryDescription & StorageInMemoryMetadata::getSelectQuery() const
 
 bool StorageInMemoryMetadata::hasSelectQuery() const
 {
-    return select.select_query != nullptr;
+    return select.inner_query != nullptr;
 }
 
 namespace

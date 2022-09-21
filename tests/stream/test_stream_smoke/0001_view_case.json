@@ -483,6 +483,45 @@
                 ["dev8", 1]
                 ]}
             ]
+        },
+        {
+            "id": 74,
+            "tags": ["materialized view"],
+            "name": "materialized view with union selects",
+            "description": "create materialized view with union selects",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_type": "table", "query":"drop view if exists test_mv_union"},
+                    {"client":"python","query_id":"300", "wait":3, "query_type": "table", "query":"create materialized view test_mv_union as (select id, sum(value) as sum_value from test_mv group by id limit 4 union select id, sum(value) as sum_value from test_mv group by id limit 4)"},
+                    {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test_mv_union","wait":2,"query_end_timer":5, "query":"select id, sum_value from test_mv_union settings seek_to='earliest'"}
+
+                    ]},
+                {"inputs": [
+                    {"table_name":"test_mv","depends_on_stream":"test_mv_union", "wait":1, "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                    ["dev2", "ca", 58.3, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
+                    ["dev2", "ca", 59, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"],
+                    ["dev3", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
+                    ["dev3", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
+                    ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
+                    ["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
+                    ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
+                ]}
+            ],
+
+            "expected_results": [{"query_id":"301", "expected_results":[
+                ["dev2", "273.3"],
+                ["dev8", "288"],
+                ["dev1", "123.3"],
+                ["dev3", "123.3"],
+                ["dev2", "273.3"],
+                ["dev8", "288"],
+                ["dev1", "123.3"],
+                ["dev3", "123.3"]]}
+            ]
         }
     ]
 }

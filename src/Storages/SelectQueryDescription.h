@@ -10,10 +10,8 @@ namespace DB
 struct SelectQueryDescription
 {
     /// Table id for select query
-    StorageID select_table_id = StorageID::createEmpty();
+    std::vector<StorageID> select_table_ids;
     /// Select query itself (ASTSelectWithUnionQuery)
-    ASTPtr select_query;
-    /// First query from select_query list
     ASTPtr inner_query;
 
     /// Parse description from select query for materialized view. Also

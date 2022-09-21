@@ -9,6 +9,7 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/getColumnFromBlock.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -138,9 +139,6 @@ StorageMaterializedView::StorageMaterializedView(
     if (!query.select)
         throw Exception("SELECT query is not specified for " + getName(), ErrorCodes::INCORRECT_QUERY);
 
-    if (query.select->list_of_selects->children.size() != 1)
-        throw Exception("UNION is not supported for Streaming View", ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);
-
     auto select = SelectQueryDescription::getSelectQueryFromASTForMatView(query.select->clone(), local_context);
     storage_metadata.setSelectQuery(select);
     setInMemoryMetadata(storage_metadata);
@@ -202,7 +200,7 @@ void StorageMaterializedView::startup()
 
         try
         {
-            InterpreterSelectQuery select_interpreter(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
+            InterpreterSelectWithUnionQuery select_interpreter(metadata_snapshot->getSelectQuery().inner_query, local_context, SelectQueryOptions());
             if (!select_interpreter.isStreaming())
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "Streaming View doesn't support historical query");
 
@@ -382,7 +380,8 @@ void StorageMaterializedView::renameInMemory(const StorageID & new_table_id)
 
     const auto & select_query = metadata_snapshot->getSelectQuery();
     // TODO Actually we don't need to update dependency if MV has UUID, but then db and table name will be outdated
-    DatabaseCatalog::instance().updateDependency(select_query.select_table_id, old_table_id, select_query.select_table_id, getStorageID());
+    for (const auto & select_table_id : select_query.select_table_ids)
+        DatabaseCatalog::instance().updateDependency(select_table_id, old_table_id, select_table_id, getStorageID());
 }
 
 StoragePtr StorageMaterializedView::getTargetTable()
@@ -453,7 +452,7 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
 }
 
 void StorageMaterializedView::buildBackgroundPipeline(
-    InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
+    InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr local_context)
 {
     /// [Pipeline]: `Source` -> `Converting` -> `PushingToMaterializedViewMemorySink` -> `Materializing const` -> `target_table`
     background_pipeline = inner_interpreter.buildQueryPipeline();

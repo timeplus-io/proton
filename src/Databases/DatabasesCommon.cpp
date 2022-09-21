@@ -56,9 +56,9 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
         ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->projections, new_projections);
     }
 
-    if (metadata.select.select_query)
+    if (metadata.select.inner_query)
     {
-        query->replace(ast_create_query.select, metadata.select.select_query);
+        query->replace(ast_create_query.select, metadata.select.inner_query);
     }
 
     /// MaterializedView, Dictionary are types of CREATE query without storage.

@@ -33,4 +33,8 @@ inline bool tryGetIdentifierNameInto(const ASTPtr & ast, String & name)
     return tryGetIdentifierNameInto(ast.get(), name);
 }
 
+/// proton: starts.
+struct StorageID;
+std::optional<StorageID> tryGetStorageID(const ASTPtr & ast);
+/// proton: ends.
 }

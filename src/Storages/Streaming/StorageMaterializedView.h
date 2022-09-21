@@ -12,7 +12,7 @@
 namespace DB
 {
 class CompletedPipelineExecutor;
-class InterpreterSelectQuery;
+class InterpreterSelectWithUnionQuery;
 struct ExtraBlock;
 
 class StorageMaterializedView final : public shared_ptr_helper<StorageMaterializedView>, public IStorage, WithMutableContext
@@ -72,7 +72,7 @@ public:
 
 private:
     void initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
-    void buildBackgroundPipeline(InterpreterSelectQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
+    void buildBackgroundPipeline(InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void executeBackgroundPipeline();
     void cancelBackgroundPipeline();
 

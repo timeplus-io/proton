@@ -307,4 +307,19 @@ void setIdentifierSpecial(ASTPtr & ast)
             id->semantic->special = true;
 }
 
+/// proton: starts.
+std::optional<StorageID> tryGetStorageID(const ASTPtr & ast)
+{
+    if (ast)
+    {
+        if (const auto * table_identifier = ast->as<ASTTableIdentifier>())
+            return table_identifier->getTableId();
+        
+        if (const auto * identifier = ast->as<ASTIdentifier>())
+            if (auto table_identifier = identifier->createTable())
+                return table_identifier->getTableId();
+    }
+    return {};
+}
+/// proton: ends.
 }

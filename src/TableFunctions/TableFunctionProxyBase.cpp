@@ -41,22 +41,9 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
         }
         storage_id = function_storage->getStorageID();
     }
-    else if (auto * table_identifier = arg->as<ASTTableIdentifier>())
+    else if (auto storage_id_opt = tryGetStorageID(arg))
     {
-        storage_id = table_identifier->getTableId();
-        if (storage_id.database_name.empty())
-            storage_id.database_name = context->getCurrentDatabase();
-
-        /// return the storage ID with UUID
-        storage_id.uuid = DatabaseCatalog::instance().getTable(storage_id, context)->getStorageID().uuid;
-    }
-    else if (auto * identifier = arg->as<ASTIdentifier>())
-    {
-        auto table_ast = identifier->createTable();
-        if (!table_ast)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "First argument '{}' must be stream name", identifier->name());
-
-        storage_id = table_ast->getTableId();
+        storage_id = *storage_id_opt;
         if (storage_id.database_name.empty())
             storage_id.database_name = context->getCurrentDatabase();
 
