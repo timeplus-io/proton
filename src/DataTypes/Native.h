@@ -43,7 +43,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDa
     }
 
     /// LLVM doesn't have unsigned types, it has unsigned instructions.
-    if (data_type.isInt8() || data_type.isUInt8())
+    if (data_type.isInt8() || data_type.isUInt8() || data_type.isBool())
         return builder.getInt8Ty();
     else if (data_type.isInt16() || data_type.isUInt16() || data_type.isDate())
         return builder.getInt16Ty();
@@ -66,7 +66,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder, const IDa
 template <typename ToType>
 static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder)
 {
-    if constexpr (std::is_same_v<ToType, Int8> || std::is_same_v<ToType, UInt8>)
+    if constexpr (std::is_same_v<ToType, Int8> || std::is_same_v<ToType, UInt8> || std::is_same_v<ToType, Bool>)
         return builder.getInt8Ty();
     else if constexpr (std::is_same_v<ToType, Int16> || std::is_same_v<ToType, UInt16>)
         return builder.getInt16Ty();
@@ -85,7 +85,7 @@ static inline llvm::Type * toNativeType(llvm::IRBuilderBase & builder)
 template <typename Type>
 static inline bool canBeNativeType()
 {
-    if constexpr (std::is_same_v<Type, Int8> || std::is_same_v<Type, UInt8>)
+    if constexpr (std::is_same_v<Type, Int8> || std::is_same_v<Type, UInt8> || std::is_same_v<Type, Bool>)
         return true;
     else if constexpr (std::is_same_v<Type, Int16> || std::is_same_v<Type, UInt16>)
         return true;
