@@ -125,7 +125,7 @@ function gen_revision_author {
                     then
                         git tag -d "$tag"
                         echo "Fail to create tag"
-                        exit 1
+                        # exit 1
                     fi
                 fi
             fi
