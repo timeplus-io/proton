@@ -43,6 +43,9 @@ jobs:
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
+        
+        # git pull
+        git pull
 
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
@@ -93,6 +96,9 @@ jobs:
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
+
+        # git pull
+        git pull
 
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache-arm.tar.gz .
