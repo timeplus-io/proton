@@ -7,7 +7,7 @@ on: # yamllint disable-line rule:truthy
     - cron:  '30 0 * * MON'
 
 jobs:
-  UpdateVerision:
+  UpdateVersion:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
