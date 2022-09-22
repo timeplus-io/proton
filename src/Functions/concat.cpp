@@ -205,7 +205,7 @@ public:
     {
         if (isArray(arguments.at(0).type))
         {
-            return FunctionFactory::instance().getImpl("arrayConcat", context)->build(arguments);
+            return FunctionFactory::instance().getImpl("array_concat", context)->build(arguments);
         }
         else
             return std::make_unique<FunctionToFunctionBaseAdaptor>(

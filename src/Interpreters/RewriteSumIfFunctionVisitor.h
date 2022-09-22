@@ -10,10 +10,10 @@ namespace DB
 
 class ASTFunction;
 
-/// Rewrite 'sum(if())' and 'sumIf' functions to counIf.
-/// sumIf(1, cond) -> countIf(1, cond)
-/// sum(if(cond, 1, 0)) -> countIf(cond)
-/// sum(if(cond, 0, 1)) -> countIf(not(cond))
+/// Rewrite 'sum(if())' and 'sum_if' functions to coun_if.
+/// sum_if(1, cond) -> count_if(1, cond)
+/// sum(if(cond, 1, 0)) -> count_if(cond)
+/// sum(if(cond, 0, 1)) -> count_if(not(cond))
 class RewriteSumIfFunctionMatcher
 {
 public:

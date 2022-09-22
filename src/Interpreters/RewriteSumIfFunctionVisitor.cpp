@@ -25,22 +25,22 @@ void RewriteSumIfFunctionMatcher::visit(const ASTFunction & func, ASTPtr & ast, 
 
     auto lower_name = Poco::toLower(func.name);
 
-    /// sumIf, SumIf or sUMIf are valid function names, but sumIF or sumiF are not
-    if (lower_name != "sum" && (lower_name != "sumif" || !endsWith(func.name, "If")))
+    /// sum or sum_if are valid function names
+    if (lower_name != "sum" && lower_name != "sum_if")
         return;
 
     const auto & func_arguments = func.arguments->children;
 
-    if (lower_name == "sumif")
+    if (lower_name == "sum_if")
     {
-        /// sumIf(1, cond) -> countIf(cond)
+        /// sum_if(1, cond) -> count_if(cond)
         const auto * literal = func_arguments[0]->as<ASTLiteral>();
         if (!literal || !DB::isInt64OrUInt64FieldType(literal->value.getType()))
             return;
 
         if (func_arguments.size() == 2 && literal->value.get<UInt64>() == 1)
         {
-            auto new_func = makeASTFunction("countIf", func_arguments[1]);
+            auto new_func = makeASTFunction("count_if", func_arguments[1]);
             new_func->setAlias(func.alias);
             ast = std::move(new_func);
             return;
@@ -65,19 +65,19 @@ void RewriteSumIfFunctionMatcher::visit(const ASTFunction & func, ASTPtr & ast, 
 
             auto first_value = first_literal->value.get<UInt64>();
             auto second_value = second_literal->value.get<UInt64>();
-            /// sum(if(cond, 1, 0)) -> countIf(cond)
+            /// sum(if(cond, 1, 0)) -> count_if(cond)
             if (first_value == 1 && second_value == 0)
             {
-                auto new_func = makeASTFunction("countIf", if_arguments[0]);
+                auto new_func = makeASTFunction("count_if", if_arguments[0]);
                 new_func->setAlias(func.alias);
                 ast = std::move(new_func);
                 return;
             }
-            /// sum(if(cond, 0, 1)) -> countIf(not(cond))
+            /// sum(if(cond, 0, 1)) -> count_if(not(cond))
             if (first_value == 0 && second_value == 1)
             {
                 auto not_func = makeASTFunction("not", if_arguments[0]);
-                auto new_func = makeASTFunction("countIf", not_func);
+                auto new_func = makeASTFunction("count_if", not_func);
                 new_func->setAlias(func.alias);
                 ast = std::move(new_func);
                 return;
