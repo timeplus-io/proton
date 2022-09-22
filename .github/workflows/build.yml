@@ -7,7 +7,7 @@ on: # yamllint disable-line rule:truthy
     - cron:  '30 0 * * MON'
 
 jobs:
-  Build:
+  UpdateVerision:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
@@ -20,6 +20,22 @@ jobs:
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
         
+        # update version
+        ./release --version patch
+  Build:
+    needs: [UpdateVersion]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.4xlarge
+      ec2-image-id: ami-045a86d6d301ab637
+      submodules: 'recursive'
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
@@ -57,6 +73,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   BuildArm:
+    needs: [UpdateVersion]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
@@ -68,7 +85,7 @@ jobs:
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
-        
+
         # prepare build cache
         aws s3 cp --no-progress s3://tp-internal/proton/cache-arm.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
@@ -118,9 +135,6 @@ jobs:
           timeplus/proton:prestage-arm64v8
 
         docker manifest push timeplus/proton:prestage
-
-        # update version
-        ./release --version patch
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
