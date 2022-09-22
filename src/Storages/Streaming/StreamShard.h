@@ -116,7 +116,7 @@ private:
 
     MergeTreeData * storage_stream;
 
-    IngestMode default_ingest_mode;
+    IngestMode default_ingest_mode{};
 
     /// Cached ctx for reuse
     std::unique_ptr<KafkaLogContext> kafka;
