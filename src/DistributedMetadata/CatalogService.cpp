@@ -758,7 +758,16 @@ CatalogService::Table::Table(const String & node_identity_, const String & host_
             }
             else if (col.name == "uuid")
             {
-                *static_cast<UUID *>(it->second) = static_cast<const ColumnUInt128 *>(col.column.get())->getElement(row);
+                auto type_id = col.type->getTypeId();
+                if (type_id == TypeIndex::UUID)
+                    *static_cast<UUID *>(it->second) = static_cast<const ColumnUUID *>(col.column.get())->getElement(row);
+                else if (type_id == TypeIndex::UInt128)
+                {
+                    static_assert(sizeof(UInt128) == sizeof(UUID));
+                    *static_cast<UUID *>(it->second) = static_cast<const ColumnUInt128 *>(col.column.get())->getElement(row);
+                }
+                else
+                    assert(false && "Invalid type of uuid column.");
             }
             else
             {
