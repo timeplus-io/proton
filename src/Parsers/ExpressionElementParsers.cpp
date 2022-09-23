@@ -755,25 +755,29 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[
     /// e.g. for 'date_add(now(), 1s)', we don't show 'now() + 1s'.
     if (parsed_special_function.has_value())
     {
-        if (auto parsed_special_func = node->as<ASTFunction>())
+        if (parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos))
         {
-            WriteBufferFromOwnString ostr;
-            writeString(function_name_lowercase, ostr);
-            writeChar('(', ostr);
-            if (parsed_special_func->arguments)
+            if (auto parsed_special_func = node->as<ASTFunction>())
             {
-                for (auto it = parsed_special_func->arguments->children.begin(); it != parsed_special_func->arguments->children.end(); ++it)
+                WriteBufferFromOwnString ostr;
+                writeString(function_name_lowercase, ostr);
+                writeChar('(', ostr);
+                if (parsed_special_func->arguments)
                 {
-                    if (it != parsed_special_func->arguments->children.begin())
-                        writeCString(", ", ostr);
+                    for (auto it = parsed_special_func->arguments->children.begin(); it != parsed_special_func->arguments->children.end(); ++it)
+                    {
+                        if (it != parsed_special_func->arguments->children.begin())
+                            writeCString(", ", ostr);
 
-                    (*it)->appendColumnName(ostr);
+                        (*it)->appendColumnName(ostr);
+                    }
                 }
+                writeChar(')', ostr);
+                parsed_special_func->code_name = ostr.str();
             }
-            writeChar(')', ostr);
-            parsed_special_func->code_name = ostr.str();
+            return true;
         }
-        return parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos);
+        return false;
     }
     /// proton: ends
 
