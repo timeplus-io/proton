@@ -1,8 +1,8 @@
 SET query_mode = 'table';
 drop stream if exists t1_00816;
 drop stream if exists t2_00816;
-create stream t1_00816 (a int8, val Float32) engine=Memory();
-create stream t2_00816 (a int8, val Float32) engine=Memory();
+create stream t1_00816 (a int8, val float32) engine=Memory();
+create stream t2_00816 (a int8, val float32) engine=Memory();
 
 INSERT INTO t1_00816 VALUES (1, 123);
 INSERT INTO t2_00816 VALUES (1, 456);

@@ -78,8 +78,8 @@ SELECT to_decimal32(0, 0) / to_int8(0); -- { serverError 153 }
 SELECT to_decimal64(0, 1) / to_int32(0); -- { serverError 153 }
 SELECT toDecimal128(0, 2) / to_int64(0); -- { serverError 153 }
 
-SELECT to_decimal32(0, 4) AS x, multiIf(x = 0, NULL, int_div_or_zero(1, x)), multiIf(x = 0, NULL, int_div_or_zero(x, 0));
-SELECT to_decimal64(0, 8) AS x, multiIf(x = 0, NULL, int_div_or_zero(1, x)), multiIf(x = 0, NULL, int_div_or_zero(x, 0));
-SELECT to_decimal64(0, 18) AS x, multiIf(x = 0, NULL, int_div_or_zero(1, x)), multiIf(x = 0, NULL, int_div_or_zero(x, 0));
+SELECT to_decimal32(0, 4) AS x, multi_if(x = 0, NULL, int_div_or_zero(1, x)), multi_if(x = 0, NULL, int_div_or_zero(x, 0));
+SELECT to_decimal64(0, 8) AS x, multi_if(x = 0, NULL, int_div_or_zero(1, x)), multi_if(x = 0, NULL, int_div_or_zero(x, 0));
+SELECT to_decimal64(0, 18) AS x, multi_if(x = 0, NULL, int_div_or_zero(1, x)), multi_if(x = 0, NULL, int_div_or_zero(x, 0));
 
 DROP STREAM IF EXISTS decimal;

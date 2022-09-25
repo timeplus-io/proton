@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS testView;
 DROP STREAM IF EXISTS testTable;
 
 create stream IF NOT EXISTS testTable (
- A LowCardinality(string), -- like voter
+ A low_cardinality(string), -- like voter
  B int64
 ) ENGINE MergeTree()
 ORDER BY (A);

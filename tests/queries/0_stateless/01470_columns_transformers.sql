@@ -1,7 +1,7 @@
 SET query_mode = 'table';
 drop stream IF EXISTS columns_transformers;
 
-create stream columns_transformers (i int64, j Int16, k int64) Engine=TinyLog;
+create stream columns_transformers (i int64, j int16, k int64) Engine=TinyLog;
 INSERT INTO columns_transformers VALUES (100, 10, 324), (120, 8, 23);
 
 SELECT * APPLY(sum) from columns_transformers;
@@ -47,8 +47,8 @@ SELECT COLUMNS(i, j, k) APPLY(sum) from columns_transformers;
 EXPLAIN SYNTAX SELECT COLUMNS(i, j, k) APPLY(sum) from columns_transformers;
 
 -- Multiple column matchers and transformers
-SELECT i, j, COLUMNS(i, j, k) APPLY(toFloat64), COLUMNS(i, j) EXCEPT (i) from columns_transformers;
-EXPLAIN SYNTAX SELECT i, j, COLUMNS(i, j, k) APPLY(toFloat64), COLUMNS(i, j) EXCEPT (i) from columns_transformers;
+SELECT i, j, COLUMNS(i, j, k) APPLY(to_float64), COLUMNS(i, j) EXCEPT (i) from columns_transformers;
+EXPLAIN SYNTAX SELECT i, j, COLUMNS(i, j, k) APPLY(to_float64), COLUMNS(i, j) EXCEPT (i) from columns_transformers;
 
 -- APPLY with parameterized function
 SELECT COLUMNS(i, j, k) APPLY(quantiles(0.5)) from columns_transformers;

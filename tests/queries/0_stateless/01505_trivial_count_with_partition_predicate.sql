@@ -3,7 +3,7 @@ drop stream if exists test1;
 drop stream if exists test_tuple;
 drop stream if exists test_two_args;
 
-create stream test1(p DateTime, k int) engine MergeTree partition by to_date(p) order by k settings index_granularity = 1;
+create stream test1(p datetime, k int) engine MergeTree partition by to_date(p) order by k settings index_granularity = 1;
 insert into test1 values ('2020-09-01 00:01:02', 1), ('2020-09-01 20:01:03', 2), ('2020-09-02 00:01:03', 3);
 
 set max_rows_to_read = 1;
@@ -11,7 +11,7 @@ set max_rows_to_read = 1;
 select count() from test1 settings max_parallel_replicas = 3; -- { serverError 158; }
 -- optimized (to_year is monotonic and we provide the partition expr as is)
 select count() from test1 where to_year(to_date(p)) = 1999;
--- non-optimized (to_date(DateTime) is always monotonic, but we cannot relaxing the predicates to do trivial count())
+-- non-optimized (to_date(datetime) is always monotonic, but we cannot relaxing the predicates to do trivial count())
 select count() from test1 where p > to_datetime('2020-09-01 10:00:00'); -- { serverError 158; }
 -- optimized (partition expr wrapped with non-monotonic functions)
 select count() FROM test1 where to_date(p) = '2020-09-01' and sipHash64(to_string(to_date(p))) % 2 = 1;
@@ -23,7 +23,7 @@ select count() from test1 where to_date(p) > '2020-09-01';
 -- non-optimized
 select count() from test1 where to_date(p) >= '2020-09-01' and p <= '2020-09-01 00:00:00';
 
-create stream test_tuple(p DateTime, i int, j int) engine MergeTree partition by (to_date(p), i) order by j settings index_granularity = 1;
+create stream test_tuple(p datetime, i int, j int) engine MergeTree partition by (to_date(p), i) order by j settings index_granularity = 1;
 
 insert into test_tuple values ('2020-09-01 00:01:02', 1, 2), ('2020-09-01 00:01:03', 2, 3), ('2020-09-02 00:01:03', 3, 4);
 

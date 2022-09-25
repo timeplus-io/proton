@@ -1,5 +1,5 @@
 5	uint8
--177	Int16
+-177	int16
 98.11	float64
 abc def	string
 custom_a	UInt64_5
@@ -8,7 +8,7 @@ custom_c	Float64_98.11
 custom_d	\'abc def\'
 
 changed	string
-\N	Nullable(Nothing)
+\N	nullable(nothing)
 50000	uint16
 1.11	float64
 custom_a	\'changed\'

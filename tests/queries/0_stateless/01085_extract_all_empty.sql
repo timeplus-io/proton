@@ -1,1 +1,1 @@
-SELECT extractAll('\0', '');
+SELECT extract_all('\0', '');

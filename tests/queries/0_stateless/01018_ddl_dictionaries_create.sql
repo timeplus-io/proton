@@ -1,6 +1,6 @@
 -- Tags: no-parallel, no-fasttest
 
-SET send_logs_level = 'fatal';
+ 
 
 DROP DATABASE IF EXISTS memory_db;
 DROP DATABASE IF EXISTS db_01018;

@@ -9,7 +9,7 @@ create stream test_table
     id uint64,
 
     value uint8,
-    value_nullable Nullable(uint8)
+    value_nullable nullable(uint8)
 ) ;
 
 INSERT INTO test_table SELECT number % 3, number, if (number % 2 == 0, number, NULL) FROM system.numbers LIMIT 120;

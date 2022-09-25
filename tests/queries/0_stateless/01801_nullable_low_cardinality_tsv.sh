@@ -8,9 +8,9 @@ $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS nullable_low_cardinality_tsv_t
 $CLICKHOUSE_CLIENT --multiquery --query="create stream nullable_low_cardinality_tsv_test
 (
     A date,
-    S LowCardinality(Nullable(string)),
+    S low_cardinality(nullable(string)),
     X int32,
-    S1 LowCardinality(Nullable(string)),
+    S1 low_cardinality(nullable(string)),
     S2 array(string)
 ) ";
 

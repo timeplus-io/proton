@@ -1,0 +1,1 @@
+create stream if not exists person(id int64, name string, state string, city string, creditCard string, dateTime datetime64(3), emailAddress string, extra string)

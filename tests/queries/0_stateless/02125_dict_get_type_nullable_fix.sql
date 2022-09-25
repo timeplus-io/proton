@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS 02125_test_table;
 create stream 02125_test_table
 (
     id uint64,
-    value Nullable(string)
+    value nullable(string)
 )
 ;
 
@@ -12,7 +12,7 @@ DROP DICTIONARY IF EXISTS 02125_test_dictionary;
 CREATE DICTIONARY 02125_test_dictionary
 (
     id uint64,
-    value Nullable(string)
+    value nullable(string)
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(TABLE '02125_test_table'))

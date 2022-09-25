@@ -1,8 +1,8 @@
 DROP STREAM IF EXISTS foo;
 DROP STREAM IF EXISTS bar;
 
-create stream foo (server_date date, server_time Datetime('Europe/Moscow'), dimension_1 string) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
-create stream bar (server_date date, dimension_1 string) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
+create stream foo (server_date date, server_time Datetime('Europe/Moscow'), dimension_1 string) ENGINE = MergeTree() PARTITION BY to_YYYYMM(server_date) ORDER BY (server_date);
+create stream bar (server_date date, dimension_1 string) ENGINE = MergeTree() PARTITION BY to_YYYYMM(server_date) ORDER BY (server_date);
 
 INSERT INTO foo VALUES ('2020-01-01', '2020-01-01 12:00:00', 'test1'), ('2020-01-01', '2020-01-01 13:00:00', 'test2');
 INSERT INTO bar VALUES ('2020-01-01', 'test2'), ('2020-01-01', 'test3');

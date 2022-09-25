@@ -1,0 +1,1 @@
+SELECT exp2(number) AS e2d, int_exp2(number) AS e2i, to_uint64(e2d) = e2i AS e2eq, exp10(number) AS e10d, int_exp10(number) AS e10i, to_string(e10d) = to_string(e10i) AS e10eq FROM system.numbers LIMIT 64;

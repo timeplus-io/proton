@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS t;
 
-create stream t (`key` uint32, `created_at` date, `value` uint32, PROJECTION xxx (SELECT key, created_at, sum(value) GROUP BY key, created_at)) ENGINE = MergeTree PARTITION BY toYYYYMM(created_at) ORDER BY key;
+create stream t (`key` uint32, `created_at` date, `value` uint32, PROJECTION xxx (SELECT key, created_at, sum(value) GROUP BY key, created_at)) ENGINE = MergeTree PARTITION BY to_YYYYMM(created_at) ORDER BY key;
 
 INSERT INTO t SELECT 1 AS key, today() + (number % 30), number FROM numbers(1000);
 

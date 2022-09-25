@@ -1,5 +1,5 @@
 DROP STREAM IF EXISTS pk_func;
-create stream pk_func(d DateTime, ui uint32) ENGINE = MergeTree ORDER BY to_date(d);
+create stream pk_func(d datetime, ui uint32) ENGINE = MergeTree ORDER BY to_date(d);
 
 INSERT INTO pk_func SELECT '2020-05-05 01:00:00', number FROM numbers(1000000);
 INSERT INTO pk_func SELECT '2020-05-06 01:00:00', number FROM numbers(1000000);

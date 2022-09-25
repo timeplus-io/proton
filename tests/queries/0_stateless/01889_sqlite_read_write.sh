@@ -58,8 +58,8 @@ ${CLICKHOUSE_CLIENT} --query="SHOW create stream ${CURR_DATABASE}.table1;" | sed
 ${CLICKHOUSE_CLIENT} --query="SHOW create stream ${CURR_DATABASE}.table2;" | sed -r 's/(.*SQLite)(.*)/\1/'
 
 ${CLICKHOUSE_CLIENT} --query="select 'describe table:'";
-${CLICKHOUSE_CLIENT} --query="DESCRIBE TABLE ${CURR_DATABASE}.table1;"
-${CLICKHOUSE_CLIENT} --query="DESCRIBE TABLE ${CURR_DATABASE}.table2;"
+${CLICKHOUSE_CLIENT} --query="DESCRIBE stream ${CURR_DATABASE}.table1;"
+${CLICKHOUSE_CLIENT} --query="DESCRIBE stream ${CURR_DATABASE}.table2;"
 
 ${CLICKHOUSE_CLIENT} --query="select 'select *:'";
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM ${CURR_DATABASE}.table1 ORDER BY col2"

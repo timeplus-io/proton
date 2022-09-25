@@ -41,6 +41,6 @@ ALTER STREAM table_with_version MODIFY COLUMN version int64; --{serverError 524}
 ALTER STREAM table_with_version MODIFY COLUMN version uint16; --{serverError 524}
 ALTER STREAM table_with_version MODIFY COLUMN version float64; --{serverError 524}
 ALTER STREAM table_with_version MODIFY COLUMN version date; --{serverError 524}
-ALTER STREAM table_with_version MODIFY COLUMN version DateTime; --{serverError 524}
+ALTER STREAM table_with_version MODIFY COLUMN version datetime; --{serverError 524}
 
 DROP STREAM IF EXISTS table_with_version;

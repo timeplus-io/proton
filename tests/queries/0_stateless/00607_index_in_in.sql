@@ -1,6 +1,10 @@
+SET query_mode = 'table';
+SET asterisk_include_reserved_columns=false;
+
 DROP STREAM IF EXISTS merge_tree;
 create stream merge_tree (x uint32) ENGINE = MergeTree ORDER BY x SETTINGS index_granularity = 1;
-INSERT INTO merge_tree VALUES (0), (1);
+INSERT INTO merge_tree(x) VALUES (0), (1);
+SELECT sleep(3);
 
 SET force_primary_key = 1;
 SET max_rows_to_read = 1;

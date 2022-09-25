@@ -49,7 +49,7 @@ create stream 01681_database_for_flat_dictionary.simple_key_complex_attributes_s
 (
    id uint64,
    value_first string,
-   value_second Nullable(string)
+   value_second nullable(string)
 )
 ;
 
@@ -61,7 +61,7 @@ CREATE DICTIONARY 01681_database_for_flat_dictionary.flat_dictionary_simple_key_
 (
    id uint64,
    value_first string DEFAULT 'value_first_default',
-   value_second Nullable(string) DEFAULT 'value_second_default'
+   value_second nullable(string) DEFAULT 'value_second_default'
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_complex_attributes_source_table'))

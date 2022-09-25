@@ -1,7 +1,7 @@
 SET query_mode = 'table';
 drop stream if exists test_join;
 
-create stream test_join (date date, id int32, name Nullable(string)) engine = MergeTree partition by date order by id;
+create stream test_join (date date, id int32, name nullable(string)) engine = MergeTree partition by date order by id;
 
 insert into test_join values ('2019-01-01', 1, 'a');
 insert into test_join values ('2019-01-01', 2, 'b');

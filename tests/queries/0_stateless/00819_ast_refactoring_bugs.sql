@@ -24,7 +24,7 @@ DROP STREAM visits1;
 select u, cumSum from (
    select u, min(d) mn, max(d) mx, group_array(d) dg, group_array(v) vg,
        array_map(x -> x + mn, range(to_uint32(mx - mn + 1))) days,
-       to_string(arrayCumSum(array_map( x -> vg[indexOf(dg, x)] , days))) cumSum
+       to_string(array_cum_sum(array_map( x -> vg[index_of(dg, x)] , days))) cumSum
    from (select 1 u, today()-1 d, 1 v)
    group by u
 );

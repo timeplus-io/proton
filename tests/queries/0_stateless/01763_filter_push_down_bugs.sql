@@ -20,7 +20,7 @@ FROM numbers(1);
 SELECT *
 FROM
   (
-   SELECT String1,String2,String3,String4,COUNT(*)
+   SELECT String1,String2,String3,String4,count(*)
    FROM Test
    GROUP by String1,String2,String3,String4
   ) AS expr_qry;
@@ -28,7 +28,7 @@ FROM
 SELECT *
 FROM
   (
-    SELECT String1,String2,String3,String4,COUNT(*)
+    SELECT String1,String2,String3,String4,count(*)
     FROM Test
     GROUP by String1,String2,String3,String4
   ) AS expr_qry

@@ -13,7 +13,7 @@ SELECT greatest(1, inf, nan);
 SELECT greatest(1, inf);
 
 SELECT least(0., -0.);
-SELECT least(toNullable(123), 456);
+SELECT least(to_nullable(123), 456);
 
 SELECT LEAST(-1, 18446744073709551615) x, to_type_name(x);
 -- This can be improved

@@ -15,7 +15,7 @@ $CLICKHOUSE_CLIENT --query "create stream test2 (x uint8) ENGINE = MergeTree ORD
 function thread1()
 {
     while true; do 
-        $CLICKHOUSE_CLIENT --query "RENAME TABLE test1 TO test_tmp, test2 TO test1, test_tmp TO test2"
+        $CLICKHOUSE_CLIENT --query "RENAME STREAM test1 TO test_tmp, test2 TO test1, test_tmp TO test2"
     done
 }
 

@@ -3,7 +3,7 @@
 DROP STREAM IF EXISTS current_failed_query_metrics;
 DROP STREAM IF EXISTS to_insert;
 
-create stream current_failed_query_metrics (event LowCardinality(string), value uint64) ();
+create stream current_failed_query_metrics (event low_cardinality(string), value uint64) ();
 
 
 INSERT INTO current_failed_query_metrics 

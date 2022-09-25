@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 
 DROP STREAM IF EXISTS mergetree_00698;
 create stream mergetree_00698 (k uint32, `n.x` array(uint64), `n.y` array(uint64)) ENGINE = MergeTree ORDER BY k;

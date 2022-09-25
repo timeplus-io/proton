@@ -4,7 +4,7 @@ DROP STREAM IF EXISTS data_01269;
 create stream data_01269
 (
     key     int32,
-    value   Nullable(int32),
+    value   nullable(int32),
     alias   uint8 ALIAS value>0
 )
 ENGINE = MergeTree()

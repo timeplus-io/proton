@@ -89,18 +89,18 @@ set optimize_injective_functions_inside_uniq = 1;
 EXPLAIN SYNTAX select uniqTheta(x) from (select number % 2 as x from numbers(10));
 EXPLAIN SYNTAX select uniqTheta(x + y) from (select number % 2 as x, number % 3 y from numbers(10));
 EXPLAIN SYNTAX select uniqTheta(-x) from (select number % 2 as x from numbers(10));
-EXPLAIN SYNTAX select uniqTheta(bitNot(x)) from (select number % 2 as x from numbers(10));
-EXPLAIN SYNTAX select uniqTheta(bitNot(-x)) from (select number % 2 as x from numbers(10));
-EXPLAIN SYNTAX select uniqTheta(-bitNot(-x)) from (select number % 2 as x from numbers(10));
+EXPLAIN SYNTAX select uniqTheta(bit_not(x)) from (select number % 2 as x from numbers(10));
+EXPLAIN SYNTAX select uniqTheta(bit_not(-x)) from (select number % 2 as x from numbers(10));
+EXPLAIN SYNTAX select uniqTheta(-bit_not(-x)) from (select number % 2 as x from numbers(10));
 
 set optimize_injective_functions_inside_uniq = 0;
 
 EXPLAIN SYNTAX select uniqTheta(x) from (select number % 2 as x from numbers(10));
 EXPLAIN SYNTAX select uniqTheta(x + y) from (select number % 2 as x, number % 3 y from numbers(10));
 EXPLAIN SYNTAX select uniqTheta(-x) from (select number % 2 as x from numbers(10));
-EXPLAIN SYNTAX select uniqTheta(bitNot(x)) from (select number % 2 as x from numbers(10));
-EXPLAIN SYNTAX select uniqTheta(bitNot(-x)) from (select number % 2 as x from numbers(10));
-EXPLAIN SYNTAX select uniqTheta(-bitNot(-x)) from (select number % 2 as x from numbers(10));
+EXPLAIN SYNTAX select uniqTheta(bit_not(x)) from (select number % 2 as x from numbers(10));
+EXPLAIN SYNTAX select uniqTheta(bit_not(-x)) from (select number % 2 as x from numbers(10));
+EXPLAIN SYNTAX select uniqTheta(-bit_not(-x)) from (select number % 2 as x from numbers(10));
 
 
 DROP STREAM IF EXISTS stored_aggregates;

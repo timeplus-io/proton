@@ -7,7 +7,7 @@ DROP STREAM IF EXISTS test;
 create stream test(
 	n1 int32,
 	n2 uint32,
-	n3 Float32,
+	n3 float32,
 	n4 float64,
 	n5 Decimal32(5)
 ) ;
@@ -20,7 +20,7 @@ SELECT sign(n1) FROM test;
 SELECT 'sign(uint32)';
 SELECT sign(n2) FROM test;
 
-SELECT 'sign(Float32)';
+SELECT 'sign(float32)';
 SELECT sign(n3) FROM test;
 
 SELECT 'sign(float64)';

@@ -18,6 +18,6 @@ ORDER BY id SETTINGS index_granularity_bytes = 2024, min_index_granularity_bytes
 
 INSERT INTO valid_min_index_granularity_bytes_setting SELECT number, concat('xxxxxxxxxx', to_string(number)) FROM numbers(1000,1000);
 
-SELECT COUNT(*) from valid_min_index_granularity_bytes_setting WHERE value = 'xxxxxxxxxx1015';
+SELECT count(*) from valid_min_index_granularity_bytes_setting WHERE value = 'xxxxxxxxxx1015';
 
 DROP STREAM IF EXISTS valid_min_index_granularity_bytes_setting;

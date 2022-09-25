@@ -1,0 +1,2 @@
+1	[1,2]	array(uint8)	1.5	nullable(float64)
+2	[]	array(uint8)	\N	nullable(float64)

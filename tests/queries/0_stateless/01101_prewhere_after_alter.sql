@@ -5,7 +5,7 @@ create stream test_a
 (
     OldColumn string DEFAULT '',
     EventDate date DEFAULT to_date(EventTime),
-    EventTime DateTime
+    EventTime datetime
 ) ENGINE = MergeTree(EventDate, EventTime, 8192);
 
 create stream test_b
@@ -13,7 +13,7 @@ create stream test_b
     OldColumn string DEFAULT '',
     NewColumn string DEFAULT '',
     EventDate date DEFAULT to_date(EventTime),
-    EventTime DateTime
+    EventTime datetime
 ) ENGINE = MergeTree(EventDate, EventTime, 8192);
 
 INSERT INTO test_a (OldColumn, EventTime) VALUES('1', now());

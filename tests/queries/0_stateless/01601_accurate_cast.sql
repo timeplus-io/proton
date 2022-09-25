@@ -20,5 +20,5 @@ SELECT accurateCast(10, 'Decimal32(9)'); -- { serverError 407 }
 SELECT accurateCast(1, 'Decimal32(9)');
 SELECT accurateCast(-10, 'Decimal32(9)'); -- { serverError 407 }
 
-SELECT accurateCast('123', 'FixedString(2)'); -- { serverError 131 }
-SELECT accurateCast('12', 'FixedString(2)');
+SELECT accurateCast('123', 'fixed_string(2)'); -- { serverError 131 }
+SELECT accurateCast('12', 'fixed_string(2)');

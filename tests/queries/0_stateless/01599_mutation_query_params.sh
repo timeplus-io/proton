@@ -10,12 +10,12 @@ DROP STREAM IF EXISTS test;
 
 create stream test
 (
-  id UUID,
-  date_time DateTime,
+  id uuid,
+  date_time datetime,
   x uint32,
   y uint32
 ) ENGINE = MergeTree()
-PARTITION BY toYYYYMMDD(date_time)
+PARTITION BY to_YYYYMMDD(date_time)
 ORDER BY (date_time);
 
 INSERT INTO test (x, y) VALUES (2, 1);

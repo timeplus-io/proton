@@ -11,12 +11,12 @@ $CLICKHOUSE_CLIENT --query "drop stream if exists test_table"
 $CLICKHOUSE_CLIENT --query "create stream test_table
 (
     a      uint16 DEFAULT 0,
-    c      LowCardinality(string) DEFAULT '',
-    t_date LowCardinality(string) DEFAULT '',
-    ex     LowCardinality(string) DEFAULT '',
-    team   LowCardinality(string) DEFAULT '',
-    g      LowCardinality(string) DEFAULT '',
-    mt     FixedString(1) DEFAULT ' ',
+    c      low_cardinality(string) DEFAULT '',
+    t_date low_cardinality(string) DEFAULT '',
+    ex     low_cardinality(string) DEFAULT '',
+    team   low_cardinality(string) DEFAULT '',
+    g      low_cardinality(string) DEFAULT '',
+    mt     fixed_string(1) DEFAULT ' ',
     rw_ts  int64 DEFAULT 0,
     exr_t  int64 DEFAULT 0,
     en     uint16 DEFAULT 0,

@@ -1,7 +1,7 @@
 create stream t
 (
     `d` date,
-    `s` LowCardinality(FixedString(3)),
+    `s` low_cardinality(FixedString(3)),
     `c` uint32
 )
 ENGINE = SummingMergeTree()

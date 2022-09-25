@@ -37,10 +37,10 @@ SELECT countMerge(cnt) FROM without_deduplication_mv;
 -- Explicit insert is deduplicated
 ALTER STREAM `.inner_id.00000510-1000-4000-8000-000000000001` DROP PARTITION ID 'all';
 ALTER STREAM `.inner_id.00000510-1000-4000-8000-000000000002` DROP PARTITION ID 'all';
-INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000001` SELECT 0 AS dummy, arrayReduce('countState', [to_uint32(42)]) AS cnt;
-INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000001` SELECT 0 AS dummy, arrayReduce('countState', [to_uint32(42)]) AS cnt;
-INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000002` SELECT 0 AS dummy, arrayReduce('countState', [to_uint32(42)]) AS cnt;
-INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000002` SELECT 0 AS dummy, arrayReduce('countState', [to_uint32(42)]) AS cnt;
+INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000001` SELECT 0 AS dummy, array_reduce('countState', [to_uint32(42)]) AS cnt;
+INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000001` SELECT 0 AS dummy, array_reduce('countState', [to_uint32(42)]) AS cnt;
+INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000002` SELECT 0 AS dummy, array_reduce('countState', [to_uint32(42)]) AS cnt;
+INSERT INTO `.inner_id.00000510-1000-4000-8000-000000000002` SELECT 0 AS dummy, array_reduce('countState', [to_uint32(42)]) AS cnt;
 
 SELECT '';
 SELECT countMerge(cnt) FROM with_deduplication_mv;

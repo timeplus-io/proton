@@ -12,10 +12,10 @@ SETTINGS vertical_merge_algorithm_min_rows_to_activate = 1, vertical_merge_algor
 
 INSERT INTO test_vertical_merge SELECT number, number + 5, number * 12 from numbers(1000);
 
-SELECT COUNT() from test_vertical_merge WHERE val2 <= 2400;
+SELECT count() from test_vertical_merge WHERE val2 <= 2400;
 
-OPTIMIZE STREAM test_vertical_merge FINAL;
+OPTIMIZE TABLE test_vertical_merge FINAL;
 
-SELECT COUNT() from test_vertical_merge WHERE val2 <= 2400;
+SELECT count() from test_vertical_merge WHERE val2 <= 2400;
 
 DROP STREAM IF EXISTS test_vertical_merge;

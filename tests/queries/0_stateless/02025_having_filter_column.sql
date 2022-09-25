@@ -4,7 +4,7 @@ drop stream if exists test;
 -- #29010
 create stream test
 (
-    d DateTime,
+    d datetime,
     a string,
     b uint64
 )

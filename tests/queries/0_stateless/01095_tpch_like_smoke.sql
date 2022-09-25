@@ -11,11 +11,11 @@ create stream part
 (
     p_partkey       int32,  -- PK
     p_name          string, -- variable text, size 55
-    p_mfgr          FixedString(25),
-    p_brand         FixedString(10),
+    p_mfgr          fixed_string(25),
+    p_brand         fixed_string(10),
     p_type          string, -- variable text, size 25
     p_size          int32,  -- integer
-    p_container     FixedString(10),
+    p_container     fixed_string(10),
     p_retailprice   Decimal(18,2),
     p_comment       string, -- variable text, size 23
     CONSTRAINT pk CHECK p_partkey >= 0,
@@ -25,10 +25,10 @@ create stream part
 create stream supplier
 (
     s_suppkey       int32,  -- PK
-    s_name          FixedString(25),
+    s_name          fixed_string(25),
     s_address       string, -- variable text, size 40
     s_nationkey     int32,  -- FK n_nationkey
-    s_phone         FixedString(15),
+    s_phone         fixed_string(15),
     s_acctbal       Decimal(18,2),
     s_comment       string, -- variable text, size 101
     CONSTRAINT pk CHECK s_suppkey >= 0
@@ -51,9 +51,9 @@ create stream customer
     c_name          string, -- variable text, size 25
     c_address       string, -- variable text, size 40
     c_nationkey     int32,  -- FK n_nationkey
-    c_phone         FixedString(15),
+    c_phone         fixed_string(15),
     c_acctbal       Decimal(18,2),
-    c_mktsegment    FixedString(10),
+    c_mktsegment    fixed_string(10),
     c_comment       string, -- variable text, size 117
     CONSTRAINT pk CHECK c_custkey >= 0
 ) engine = MergeTree ORDER BY (c_custkey);
@@ -62,11 +62,11 @@ create stream orders
 (
     o_orderkey      int32,  -- PK
     o_custkey       int32,  -- FK c_custkey
-    o_orderstatus   FixedString(1),
+    o_orderstatus   fixed_string(1),
     o_totalprice    Decimal(18,2),
     o_orderdate     date,
-    o_orderpriority FixedString(15),
-    o_clerk         FixedString(15),
+    o_orderpriority fixed_string(15),
+    o_clerk         fixed_string(15),
     o_shippriority  int32,  -- integer
     o_comment       string, -- variable text, size 79
     CONSTRAINT c1 CHECK o_totalprice >= 0
@@ -82,13 +82,13 @@ create stream lineitem
     l_extendedprice Decimal(18,2),
     l_discount      Decimal(18,2),
     l_tax           Decimal(18,2),
-    l_returnflag    FixedString(1),
-    l_linestatus    FixedString(1),
+    l_returnflag    fixed_string(1),
+    l_linestatus    fixed_string(1),
     l_shipdate      date,
     l_commitdate    date,
     l_receiptdate   date,
-    l_shipinstruct  FixedString(25),
-    l_shipmode      FixedString(10),
+    l_shipinstruct  fixed_string(25),
+    l_shipmode      fixed_string(10),
     l_comment       string, -- variable text size 44
     CONSTRAINT c1 CHECK (l_quantity >= 0 AND l_extendedprice >= 0 AND l_tax >= 0 AND l_shipdate <= l_receiptdate)
 --  CONSTRAINT c2 CHECK (l_discount >= 0 AND l_discount <= 1)
@@ -97,7 +97,7 @@ create stream lineitem
 create stream nation
 (
     n_nationkey     int32,  -- PK
-    n_name          FixedString(25),
+    n_name          fixed_string(25),
     n_regionkey     int32,  -- FK r_regionkey
     n_comment       string, -- variable text, size 152
     CONSTRAINT pk CHECK n_nationkey >= 0
@@ -106,7 +106,7 @@ create stream nation
 create stream region
 (
     r_regionkey     int32,  -- PK
-    r_name          FixedString(25),
+    r_name          fixed_string(25),
     r_comment       string, -- variable text, size 152
     CONSTRAINT pk CHECK r_regionkey >= 0
 ) engine = MergeTree ORDER BY (r_regionkey);

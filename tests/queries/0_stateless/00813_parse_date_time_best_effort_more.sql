@@ -1,7 +1,7 @@
 SELECT
     s,
-    parseDateTimeBestEffortOrNull(s, 'UTC') AS a,
-    parseDateTimeBestEffortOrZero(s, 'UTC') AS b
+    parse_datetime_best_effort_or_null(s, 'UTC') AS a,
+    parse_datetime_best_effort_or_zero(s, 'UTC') AS b
 FROM
 (
     SELECT array_join([

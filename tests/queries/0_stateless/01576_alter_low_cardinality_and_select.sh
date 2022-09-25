@@ -18,12 +18,12 @@ ${CLICKHOUSE_CLIENT} --query "INSERT INTO alter_table SELECT number, to_string(n
 
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM alter_table WHERE value == '733'"
 
-${CLICKHOUSE_CLIENT} --query "ALTER STREAM alter_table MODIFY COLUMN value LowCardinality(string)" &
+${CLICKHOUSE_CLIENT} --query "ALTER STREAM alter_table MODIFY COLUMN value low_cardinality(string)" &
 
 # waiting until schema will change (but not data)
 show_query="SHOW create stream alter_table"
 create_query=""
-while [[ "$create_query" != *"LowCardinality"* ]]
+while [[ "$create_query" != *"low_cardinality"* ]]
 do
     sleep 0.1
     create_query=$($CLICKHOUSE_CLIENT --query "$show_query")

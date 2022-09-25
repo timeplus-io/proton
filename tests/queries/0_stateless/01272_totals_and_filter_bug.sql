@@ -2,8 +2,8 @@ select * from (select number, count() from numbers(2) group by number with total
 
 select '-';
 
-create stream foo (server_date date, dimension_1 string, metric_1 uint32) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
-create stream bar (server_date date, dimension_1 string, metric_2 uint32) ENGINE = MergeTree() PARTITION BY toYYYYMM(server_date) ORDER BY (server_date);
+create stream foo (server_date date, dimension_1 string, metric_1 uint32) ENGINE = MergeTree() PARTITION BY to_YYYYMM(server_date) ORDER BY (server_date);
+create stream bar (server_date date, dimension_1 string, metric_2 uint32) ENGINE = MergeTree() PARTITION BY to_YYYYMM(server_date) ORDER BY (server_date);
 
 INSERT INTO foo VALUES ('2020-01-01', 'test1', 10), ('2020-01-01', 'test2', 20);
 INSERT INTO bar VALUES ('2020-01-01', 'test2', 30), ('2020-01-01', 'test3', 40);

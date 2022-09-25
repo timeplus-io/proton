@@ -5,8 +5,8 @@ select * from system.one l cross join system.one r;
 DROP STREAM IF EXISTS t1_00826;
 DROP STREAM IF EXISTS t2_00826;
 
-create stream t1_00826 (a int8, b Nullable(int8)) ;
-create stream t2_00826 (a int8, b Nullable(int8)) ;
+create stream t1_00826 (a int8, b nullable(int8)) ;
+create stream t2_00826 (a int8, b nullable(int8)) ;
 
 INSERT INTO t1_00826 values (1,1), (2,2);
 INSERT INTO t2_00826 values (1,1), (1,2);

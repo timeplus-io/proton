@@ -24,7 +24,7 @@ FROM
         (
             SELECT
                 learnerHash,
-                argMax(eventTime, resultScoreRaw) AS passed
+                arg_max(eventTime, resultScoreRaw) AS passed
             FROM
             (
                 SELECT

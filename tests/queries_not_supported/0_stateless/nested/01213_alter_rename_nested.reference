@@ -1,10 +1,10 @@
 [8,9,10]
 ['a','b','c']
-create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.x` array(uint32),\n    `n.y` array(string),\n    `value1` array(array(LowCardinality(string)))\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
-create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.renamed_x` array(uint32),\n    `n.renamed_y` array(string),\n    `value1` array(array(LowCardinality(string)))\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.x` array(uint32),\n    `n.y` array(string),\n    `value1` array(array(low_cardinality(string)))\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.renamed_x` array(uint32),\n    `n.renamed_y` array(string),\n    `value1` array(array(low_cardinality(string)))\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
 7	[8,9,10]
 7	['a','b','c']
 [['7']]
-create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.renamed_x` array(uint32),\n    `n.renamed_y` array(string),\n    `renamed_value1` array(array(LowCardinality(string)))\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+create stream default.table_for_rename_nested\n(\n    `date` date,\n    `key` uint64,\n    `n.renamed_x` array(uint32),\n    `n.renamed_y` array(string),\n    `renamed_value1` array(array(low_cardinality(string)))\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
 date	key	n.renamed_x	n.renamed_y	renamed_value1
 2019-10-01	7	[8,9,10]	['a','b','c']	[['7']]

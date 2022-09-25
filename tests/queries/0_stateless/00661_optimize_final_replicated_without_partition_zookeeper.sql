@@ -11,12 +11,12 @@ INSERT INTO partitioned_by_tuple_replica1_00661 VALUES ('2000-01-02', 1, 'first'
 INSERT INTO partitioned_by_tuple_replica1_00661 VALUES ('2000-01-01', 2, 'first', 2);
 INSERT INTO partitioned_by_tuple_replica1_00661 VALUES ('2000-01-01', 1, 'first', 1), ('2000-01-01', 1, 'first', 2);
 
-OPTIMIZE STREAM partitioned_by_tuple_replica1_00661;
+OPTIMIZE TABLE partitioned_by_tuple_replica1_00661;
 
 SYSTEM SYNC REPLICA partitioned_by_tuple_replica2_00661;
 SELECT * FROM partitioned_by_tuple_replica2_00661 ORDER BY d, x, w, y;
 
-OPTIMIZE STREAM partitioned_by_tuple_replica1_00661 FINAL;
+OPTIMIZE TABLE partitioned_by_tuple_replica1_00661 FINAL;
 
 SYSTEM SYNC REPLICA partitioned_by_tuple_replica2_00661;
 SELECT * FROM partitioned_by_tuple_replica2_00661 ORDER BY d, x, w, y;

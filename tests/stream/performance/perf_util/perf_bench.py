@@ -108,7 +108,7 @@ def update_perf(df_perf_summary, perf_report_path, perf_report):
     df_perf_report = pd.read_csv(perf_report, index_col = False)
     df_metrics = metric_stats(df_perf_report,metric_type,metric_ver,metric_name_prefix) # read the report csv and calculated the metrics out based on the report name
     logger.debug(f"df_metrics = \n{df_metrics}")
-    cur_dir = cur_dir = os.path.dirname(os.path.abspath(__file__))
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
     perf_summary_file_template = cur_dir + "/" + NEUTRON_LATENCY_PERF_SUMMARY_FILE_TEMPLATE
 
     if df_perf_summary is None: # if df_perf_summary is None, create df_perf_summary DataFrame from a template csv

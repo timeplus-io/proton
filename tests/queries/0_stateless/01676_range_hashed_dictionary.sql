@@ -61,7 +61,7 @@ create stream database_for_range_dict.date_table
   CountryID uint64,
   StartDate date,
   EndDate date,
-  Tax Nullable(float64)
+  Tax nullable(float64)
 )
 ENGINE = MergeTree()
 ORDER BY CountryID;
@@ -75,7 +75,7 @@ CREATE DICTIONARY database_for_range_dict.range_dictionary_nullable
   CountryID uint64,
   StartDate date,
   EndDate date,
-  Tax Nullable(float64) DEFAULT 0.2
+  Tax nullable(float64) DEFAULT 0.2
 )
 PRIMARY KEY CountryID
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'date_table' DB 'database_for_range_dict'))

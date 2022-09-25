@@ -1,89 +1,89 @@
-SELECT 1 / CAST(NULL, 'Nullable(Decimal(7, 2))');
-SELECT materialize(1) / CAST(NULL, 'Nullable(Decimal(7, 2))');
-SELECT 1 / CAST(materialize(NULL), 'Nullable(Decimal(7, 2))');
-SELECT materialize(1) / CAST(materialize(NULL), 'Nullable(Decimal(7, 2))');
+SELECT 1 / CAST(NULL, 'nullable(Decimal(7, 2))');
+SELECT materialize(1) / CAST(NULL, 'nullable(Decimal(7, 2))');
+SELECT 1 / CAST(materialize(NULL), 'nullable(Decimal(7, 2))');
+SELECT materialize(1) / CAST(materialize(NULL), 'nullable(Decimal(7, 2))');
 
 
-SELECT 1 / CAST(1, 'Nullable(Decimal(7, 2))');
-SELECT materialize(1) / CAST(1, 'Nullable(Decimal(7, 2))');
-SELECT 1 / CAST(materialize(1), 'Nullable(Decimal(7, 2))');
-SELECT materialize(1) / CAST(materialize(1), 'Nullable(Decimal(7, 2))');
+SELECT 1 / CAST(1, 'nullable(Decimal(7, 2))');
+SELECT materialize(1) / CAST(1, 'nullable(Decimal(7, 2))');
+SELECT 1 / CAST(materialize(1), 'nullable(Decimal(7, 2))');
+SELECT materialize(1) / CAST(materialize(1), 'nullable(Decimal(7, 2))');
 
 
-SELECT int_div(1, CAST(NULL, 'Nullable(Decimal(7, 2))'));
-SELECT int_div(materialize(1), CAST(NULL, 'Nullable(Decimal(7, 2))'));
-SELECT int_div(1, CAST(materialize(NULL), 'Nullable(Decimal(7, 2))'));
-SELECT int_div(materialize(1), CAST(materialize(NULL), 'Nullable(Decimal(7, 2))'));
+SELECT int_div(1, CAST(NULL, 'nullable(Decimal(7, 2))'));
+SELECT int_div(materialize(1), CAST(NULL, 'nullable(Decimal(7, 2))'));
+SELECT int_div(1, CAST(materialize(NULL), 'nullable(Decimal(7, 2))'));
+SELECT int_div(materialize(1), CAST(materialize(NULL), 'nullable(Decimal(7, 2))'));
 
 
-SELECT int_div(1, CAST(1, 'Nullable(Decimal(7, 2))'));
-SELECT int_div(materialize(1), CAST(1, 'Nullable(Decimal(7, 2))'));
-SELECT int_div(1, CAST(materialize(1), 'Nullable(Decimal(7, 2))'));
-SELECT int_div(materialize(1), CAST(materialize(1), 'Nullable(Decimal(7, 2))'));
+SELECT int_div(1, CAST(1, 'nullable(Decimal(7, 2))'));
+SELECT int_div(materialize(1), CAST(1, 'nullable(Decimal(7, 2))'));
+SELECT int_div(1, CAST(materialize(1), 'nullable(Decimal(7, 2))'));
+SELECT int_div(materialize(1), CAST(materialize(1), 'nullable(Decimal(7, 2))'));
 
 
-SELECT to_decimal32(1, 2) / CAST(NULL, 'Nullable(uint32)');
-SELECT materialize(to_decimal32(1, 2)) / CAST(NULL, 'Nullable(uint32)');
-SELECT to_decimal32(1, 2) / CAST(materialize(NULL), 'Nullable(uint32)');
-SELECT materialize(to_decimal32(1, 2)) / CAST(materialize(NULL), 'Nullable(uint32)');
+SELECT to_decimal32(1, 2) / CAST(NULL, 'nullable(uint32)');
+SELECT materialize(to_decimal32(1, 2)) / CAST(NULL, 'nullable(uint32)');
+SELECT to_decimal32(1, 2) / CAST(materialize(NULL), 'nullable(uint32)');
+SELECT materialize(to_decimal32(1, 2)) / CAST(materialize(NULL), 'nullable(uint32)');
 
 
-SELECT to_decimal32(1, 2) / CAST(1, 'Nullable(uint32)');
-SELECT materialize(to_decimal32(1, 2)) / CAST(1, 'Nullable(uint32)');
-SELECT to_decimal32(1, 2) / CAST(materialize(1), 'Nullable(uint32)');
-SELECT materialize(to_decimal32(1, 2)) / CAST(materialize(1), 'Nullable(uint32)');
+SELECT to_decimal32(1, 2) / CAST(1, 'nullable(uint32)');
+SELECT materialize(to_decimal32(1, 2)) / CAST(1, 'nullable(uint32)');
+SELECT to_decimal32(1, 2) / CAST(materialize(1), 'nullable(uint32)');
+SELECT materialize(to_decimal32(1, 2)) / CAST(materialize(1), 'nullable(uint32)');
 
 
-SELECT int_div(1, CAST(NULL, 'Nullable(uint32)'));
-SELECT int_div(materialize(1), CAST(NULL, 'Nullable(uint32)'));
-SELECT int_div(1, CAST(materialize(NULL), 'Nullable(uint32)'));
-SELECT int_div(materialize(1), CAST(materialize(NULL), 'Nullable(uint32)'));
+SELECT int_div(1, CAST(NULL, 'nullable(uint32)'));
+SELECT int_div(materialize(1), CAST(NULL, 'nullable(uint32)'));
+SELECT int_div(1, CAST(materialize(NULL), 'nullable(uint32)'));
+SELECT int_div(materialize(1), CAST(materialize(NULL), 'nullable(uint32)'));
 
 
-SELECT int_div(1, CAST(1, 'Nullable(uint32)'));
-SELECT int_div(materialize(1), CAST(1, 'Nullable(uint32)'));
-SELECT int_div(1, CAST(materialize(1), 'Nullable(uint32)'));
-SELECT int_div(materialize(1), CAST(materialize(1), 'Nullable(uint32)'));
+SELECT int_div(1, CAST(1, 'nullable(uint32)'));
+SELECT int_div(materialize(1), CAST(1, 'nullable(uint32)'));
+SELECT int_div(1, CAST(materialize(1), 'nullable(uint32)'));
+SELECT int_div(materialize(1), CAST(materialize(1), 'nullable(uint32)'));
 
 
-SELECT 1 % CAST(NULL, 'Nullable(uint32)');
-SELECT materialize(1) % CAST(NULL, 'Nullable(uint32)');
-SELECT 1 % CAST(materialize(NULL), 'Nullable(uint32)');
-SELECT materialize(1) % CAST(materialize(NULL), 'Nullable(uint32)');
+SELECT 1 % CAST(NULL, 'nullable(uint32)');
+SELECT materialize(1) % CAST(NULL, 'nullable(uint32)');
+SELECT 1 % CAST(materialize(NULL), 'nullable(uint32)');
+SELECT materialize(1) % CAST(materialize(NULL), 'nullable(uint32)');
 
 
-SELECT 1 % CAST(1, 'Nullable(uint32)');
-SELECT materialize(1) % CAST(1, 'Nullable(uint32)');
-SELECT 1 % CAST(materialize(1), 'Nullable(uint32)');
-SELECT materialize(1) % CAST(materialize(1), 'Nullable(uint32)');
+SELECT 1 % CAST(1, 'nullable(uint32)');
+SELECT materialize(1) % CAST(1, 'nullable(uint32)');
+SELECT 1 % CAST(materialize(1), 'nullable(uint32)');
+SELECT materialize(1) % CAST(materialize(1), 'nullable(uint32)');
 
 
-SELECT int_div(1, CAST(NULL, 'Nullable(Float32)'));
-SELECT int_div(materialize(1), CAST(NULL, 'Nullable(Float32)'));
-SELECT int_div(1, CAST(materialize(NULL), 'Nullable(Float32)'));
-SELECT int_div(materialize(1), CAST(materialize(NULL), 'Nullable(Float32)'));
+SELECT int_div(1, CAST(NULL, 'nullable(float32)'));
+SELECT int_div(materialize(1), CAST(NULL, 'nullable(float32)'));
+SELECT int_div(1, CAST(materialize(NULL), 'nullable(float32)'));
+SELECT int_div(materialize(1), CAST(materialize(NULL), 'nullable(float32)'));
 
 
-SELECT int_div(1, CAST(1, 'Nullable(Float32)'));
-SELECT int_div(materialize(1), CAST(1, 'Nullable(Float32)'));
-SELECT int_div(1, CAST(materialize(1), 'Nullable(Float32)'));
-SELECT int_div(materialize(1), CAST(materialize(1), 'Nullable(Float32)'));
+SELECT int_div(1, CAST(1, 'nullable(float32)'));
+SELECT int_div(materialize(1), CAST(1, 'nullable(float32)'));
+SELECT int_div(1, CAST(materialize(1), 'nullable(float32)'));
+SELECT int_div(materialize(1), CAST(materialize(1), 'nullable(float32)'));
 
 
-SELECT 1 % CAST(NULL, 'Nullable(Float32)');
-SELECT materialize(1) % CAST(NULL, 'Nullable(Float32)');
-SELECT 1 % CAST(materialize(NULL), 'Nullable(Float32)');
-SELECT materialize(1) % CAST(materialize(NULL), 'Nullable(Float32)');
+SELECT 1 % CAST(NULL, 'nullable(float32)');
+SELECT materialize(1) % CAST(NULL, 'nullable(float32)');
+SELECT 1 % CAST(materialize(NULL), 'nullable(float32)');
+SELECT materialize(1) % CAST(materialize(NULL), 'nullable(float32)');
 
 
-SELECT 1 % CAST(1, 'Nullable(Float32)');
-SELECT materialize(1) % CAST(1, 'Nullable(Float32)');
-SELECT 1 % CAST(materialize(1), 'Nullable(Float32)');
-SELECT materialize(1) % CAST(materialize(1), 'Nullable(Float32)');
+SELECT 1 % CAST(1, 'nullable(float32)');
+SELECT materialize(1) % CAST(1, 'nullable(float32)');
+SELECT 1 % CAST(materialize(1), 'nullable(float32)');
+SELECT materialize(1) % CAST(materialize(1), 'nullable(float32)');
 
 
 DROP STREAM IF EXISTS nullable_division;
-create stream nullable_division (x uint32, y Nullable(uint32), a Decimal(7, 2), b Nullable(Decimal(7, 2))) ENGINE=MergeTree() order by x;
+create stream nullable_division (x uint32, y nullable(uint32), a Decimal(7, 2), b nullable(Decimal(7, 2))) ENGINE=MergeTree() order by x;
 INSERT INTO nullable_division VALUES (1, 1, 1, 1), (1, NULL, 1, NULL), (1, 0, 1, 0);
 
 SELECT if(y = 0, 0, int_div(x, y)) from nullable_division;

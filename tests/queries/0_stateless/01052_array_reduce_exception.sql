@@ -1,1 +1,1 @@
-SELECT arrayReduce('aggThrow(0.0001)', range(number % 10)) FROM system.numbers FORMAT Null; -- { serverError 503 }
+SELECT array_reduce('aggThrow(0.0001)', range(number % 10)) FROM system.numbers FORMAT Null; -- { serverError 503 }

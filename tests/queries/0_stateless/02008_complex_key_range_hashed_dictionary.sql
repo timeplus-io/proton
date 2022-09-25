@@ -62,7 +62,7 @@ create stream date_table
   CountryKey string,
   StartDate date,
   EndDate date,
-  Tax Nullable(float64)
+  Tax nullable(float64)
 )
 ENGINE = MergeTree()
 ORDER BY CountryID;
@@ -77,7 +77,7 @@ CREATE DICTIONARY range_dictionary_nullable
   CountryKey string,
   StartDate date,
   EndDate date,
-  Tax Nullable(float64) DEFAULT 0.2
+  Tax nullable(float64) DEFAULT 0.2
 )
 PRIMARY KEY CountryID, CountryKey
 SOURCE(CLICKHOUSE(TABLE 'date_table'))

@@ -35,16 +35,16 @@ Table array decimal avg
 0
 2
 Types of aggregation result array min
-int8	Int16	int32	int64
+int8	int16	int32	int64
 uint8	uint16	uint32	uint64
 Int128	Int256	UInt256
-Float32	float64
+float32	float64
 Decimal(9, 8)	Decimal(18, 8)	Decimal(38, 8)
 Types of aggregation result array max
-int8	Int16	int32	int64
+int8	int16	int32	int64
 uint8	uint16	uint32	uint64
 Int128	Int256	UInt256
-Float32	float64
+float32	float64
 Decimal(9, 8)	Decimal(18, 8)	Decimal(38, 8)
 Types of aggregation result array summ
 int64	int64	int64	int64

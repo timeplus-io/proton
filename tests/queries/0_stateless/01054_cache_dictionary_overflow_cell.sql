@@ -3,7 +3,7 @@ SET query_mode = 'table';
 create database if not exists test_01054_overflow;
 drop stream if exists test_01054_overflow.ints;
 
-create stream test_01054_overflow.ints (key uint64, i8 int8, i16 Int16, i32 int32, i64 int64, u8 uint8, u16 uint16, u32 uint32, u64 uint64) Engine = Memory;
+create stream test_01054_overflow.ints (key uint64, i8 int8, i16 int16, i32 int32, i64 int64, u8 uint8, u16 uint16, u32 uint32, u64 uint64) Engine = Memory;
 
 insert into test_01054_overflow.ints values (1, 1, 1, 1, 1, 1, 1, 1, 1);
 insert into test_01054_overflow.ints values (2, 2, 2, 2, 2, 2, 2, 2, 2);

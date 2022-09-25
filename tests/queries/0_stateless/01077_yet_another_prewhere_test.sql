@@ -5,7 +5,7 @@ create stream t50 (a int, b int, s string) engine = MergeTree order by a setting
 
 -- some magic to satisfy conditions to run optimizations in MergeTreeRangeReader
 insert into t50 select 0, 1, repeat('a', 10000);
-insert into t50 select number, multiIf(number < 5, 1, number < 50, 0, number < 55, 1, number < 100, 0, number < 105, 1, 0), '' from numbers(150);
+insert into t50 select number, multi_if(number < 5, 1, number < 50, 0, number < 55, 1, number < 100, 0, number < 105, 1, 0), '' from numbers(150);
 optimize table t50 final;
 
 select a, b from t50 prewhere b = 1 order by a;

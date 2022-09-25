@@ -2,7 +2,7 @@
 
 DROP STREAM IF EXISTS test_collate;
 
-create stream test_collate (x uint32, s Nullable(string)) ENGINE=Memory();
+create stream test_collate (x uint32, s nullable(string)) ENGINE=Memory();
 
 INSERT INTO test_collate VALUES (1, 'Ё'), (1, 'ё'), (1, 'а'), (1, null), (2, 'А'), (2, 'я'), (2, 'Я'), (2, null);
 

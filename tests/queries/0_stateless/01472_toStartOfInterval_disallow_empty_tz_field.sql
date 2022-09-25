@@ -13,8 +13,8 @@ SELECT to_start_of_year(to_datetime('2017-12-31 00:00:00', 'UTC'), 'UTC'); -- su
 SELECT to_start_of_ten_minute(to_datetime('2017-12-31 00:00:00', 'UTC'), ''); -- {serverError 43}
 SELECT to_start_of_ten_minute(to_datetime('2017-12-31 05:12:30', 'UTC'), 'UTC'); -- success
 
-SELECT to_start_of_fifteen_minute(to_datetime('2017-12-31 00:00:00', 'UTC'), ''); -- {serverError 43}
-SELECT to_start_of_fifteen_minute(to_datetime('2017-12-31 01:17:00', 'UTC'), 'UTC'); -- success
+SELECT to_start_of_fifteen_minutes(to_datetime('2017-12-31 00:00:00', 'UTC'), ''); -- {serverError 43}
+SELECT to_start_of_fifteen_minutes(to_datetime('2017-12-31 01:17:00', 'UTC'), 'UTC'); -- success
 
 SELECT to_start_of_hour(to_datetime('2017-12-31 00:00:00', 'UTC'), ''); -- {serverError 43}
 SELECT to_start_of_hour(to_datetime('2017-12-31 01:59:00', 'UTC'), 'UTC'); -- success

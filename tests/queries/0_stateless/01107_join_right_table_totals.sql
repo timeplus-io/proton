@@ -1,5 +1,5 @@
 DROP STREAM IF EXISTS t;
-create stream t (item_id uint64, price_sold Float32, date date) ENGINE MergeTree ORDER BY item_id;
+create stream t (item_id uint64, price_sold float32, date date) ENGINE MergeTree ORDER BY item_id;
 
 SELECT item_id
 FROM (SELECT item_id FROM t GROUP BY item_id WITH TOTALS) l

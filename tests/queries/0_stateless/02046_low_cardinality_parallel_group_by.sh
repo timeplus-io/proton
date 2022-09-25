@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-# This is the regression test for parallel usage of LowCardinality column
+# This is the regression test for parallel usage of low_cardinality column
 # via Buffer engine.
 #
 # See also:
@@ -13,7 +13,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # - https://github.com/ClickHouse/ClickHouse/pull/3138
 
 $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS low_card_buffer_test"
-$CLICKHOUSE_CLIENT -q "create stream low_card_buffer_test (test_text LowCardinality(string)) ENGINE=Buffer('', '', 16, 60, 360, 100, 1000, 10000, 100000)"
+$CLICKHOUSE_CLIENT -q "create stream low_card_buffer_test (test_text low_cardinality(string)) ENGINE=Buffer('', '', 16, 60, 360, 100, 1000, 10000, 100000)"
 
 $CLICKHOUSE_BENCHMARK -d 0 -i 1000 -c 5 <<<"SELECT count() FROM low_card_buffer_test GROUP BY test_text format Null" 2>/dev/null &
 $CLICKHOUSE_BENCHMARK -d 0 -i 1000 -c 2 <<<"INSERT INTO low_card_buffer_test values('TEST1')" 2>/dev/null &

@@ -5,7 +5,7 @@ set replication_alter_partitions_sync = 2;
 SET query_mode = 'table';
 drop stream if exists mt_compact;
 
-create stream mt_compact(a uint64, b uint64 DEFAULT a * a, s string, n nested(x uint32, y string), lc LowCardinality(string))
+create stream mt_compact(a uint64, b uint64 DEFAULT a * a, s string, n nested(x uint32, y string), lc low_cardinality(string))
 engine = ReplicatedMergeTree('/clickhouse/{database}/test_01201/mt_compact_replicated', '1')
 order by a partition by a % 10
 settings index_granularity = 8,

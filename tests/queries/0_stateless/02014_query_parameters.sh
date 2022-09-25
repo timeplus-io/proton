@@ -11,7 +11,7 @@ ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "CREATE D
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "create stream {db:Identifier}.{tbl:Identifier} (id uint64, col1 uint64) ENGINE = MergeTree() ORDER BY id";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "INSERT INTO {db:Identifier}.{tbl:Identifier} VALUES (1,2)";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "SELECT * FROM {db:Identifier}.{tbl:Identifier}";
-${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "OPTIMIZE STREAM {db:Identifier}.{tbl:Identifier}";
+${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "OPTIMIZE TABLE {db:Identifier}.{tbl:Identifier}";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "ALTER STREAM {db:Identifier}.{tbl:Identifier} RENAME COLUMN col1 to col2";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "EXISTS TABLE {db:Identifier}.{tbl:Identifier}";
 ${CLICKHOUSE_CLIENT} --param_db="test_db" --param_tbl="test_t" --query "INSERT INTO {db:Identifier}.{tbl:Identifier} VALUES (3,4)";

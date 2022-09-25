@@ -19,10 +19,10 @@ INSERT INTO zstd_1_24 SELECT * FROM words;
 INSERT INTO zstd_9_00 SELECT * FROM words;
 INSERT INTO zstd_9_24 SELECT * FROM words;
 
-SELECT COUNT(n) FROM zstd_1_00 LEFT JOIN words ON i == n WHERE b == word;
-SELECT COUNT(n) FROM zstd_1_24 LEFT JOIN words ON i == n WHERE b == word;
-SELECT COUNT(n) FROM zstd_9_00 LEFT JOIN words ON i == n WHERE b == word;
-SELECT COUNT(n) FROM zstd_9_24 LEFT JOIN words ON i == n WHERE b == word;
+SELECT count(n) FROM zstd_1_00 LEFT JOIN words ON i == n WHERE b == word;
+SELECT count(n) FROM zstd_1_24 LEFT JOIN words ON i == n WHERE b == word;
+SELECT count(n) FROM zstd_9_00 LEFT JOIN words ON i == n WHERE b == word;
+SELECT count(n) FROM zstd_9_24 LEFT JOIN words ON i == n WHERE b == word;
 
 DROP STREAM zstd_1_00;
 DROP STREAM zstd_1_24;

@@ -1,15 +1,15 @@
 select 'uint8', blockSerializedSize(0);
-select 'Nullable(uint8)', blockSerializedSize(toNullable(0));
+select 'nullable(uint8)', blockSerializedSize(to_nullable(0));
 select 'uint32', blockSerializedSize(0xdeadbeaf);
 select 'uint64', blockSerializedSize(0xdeadbeafdead);
-select 'Nullable(uint64)', blockSerializedSize(toNullable(0xdeadbeafdead));
+select 'nullable(uint64)', blockSerializedSize(to_nullable(0xdeadbeafdead));
 
 select '';
 select 'string', blockSerializedSize('foo');
-select 'FixedString(32)', blockSerializedSize(cast('foo', 'FixedString(32)'));
+select 'fixed_string(32)', blockSerializedSize(cast('foo', 'fixed_string(32)'));
 
 select '';
-select 'Enum8', blockSerializedSize(cast('a' as Enum8('a' = 1, 'b' = 2)));
+select 'enum8', blockSerializedSize(cast('a' as enum8('a' = 1, 'b' = 2)));
 
 select '';
 select 'array', blockSerializedSize(['foo']);

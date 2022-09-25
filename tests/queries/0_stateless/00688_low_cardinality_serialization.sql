@@ -22,8 +22,8 @@ detach table lc_big_dict;
 attach table lc_small_dict;
 attach table lc_big_dict;
 
-select sum(toUInt64OrZero(str)) from lc_small_dict;
-select sum(toUInt64OrZero(str)) from lc_big_dict;
+select sum(to_int64_or_zero(str)) from lc_small_dict;
+select sum(to_int64_or_zero(str)) from lc_big_dict;
 
 drop stream if exists lc_small_dict;
 drop stream if exists lc_big_dict;

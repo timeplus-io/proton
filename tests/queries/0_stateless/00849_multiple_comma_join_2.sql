@@ -5,10 +5,10 @@ DROP STREAM IF EXISTS t2;
 DROP STREAM IF EXISTS t3;
 DROP STREAM IF EXISTS t4;
 
-create stream t1 (a uint32, b Nullable(int32)) ;
-create stream t2 (a uint32, b Nullable(int32)) ;
-create stream t3 (a uint32, b Nullable(int32)) ;
-create stream t4 (a uint32, b Nullable(int32)) ;
+create stream t1 (a uint32, b nullable(int32)) ;
+create stream t2 (a uint32, b nullable(int32)) ;
+create stream t3 (a uint32, b nullable(int32)) ;
+create stream t4 (a uint32, b nullable(int32)) ;
 
 EXPLAIN SYNTAX SELECT t1.a FROM t1, t2;
 EXPLAIN SYNTAX SELECT t1.a FROM t1, t2 WHERE t1.a = t2.a;

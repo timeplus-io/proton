@@ -9,13 +9,13 @@ select group_array(s) from (select sum(n) s from (select toDecimal128(number, 10
 DROP STREAM IF EXISTS sensor_value;
 create stream sensor_value (
     received_at datetime('Europe/Moscow'),
-    device_id UUID,
-    sensor_id UUID,
-    value Nullable(Decimal(18, 4)),
-    low_warning Nullable(Decimal(18, 4)),
-    low_critical Nullable(Decimal(18, 4)),
-    high_warning Nullable(Decimal(18, 4)),
-    high_critical Nullable(Decimal(18, 4))
+    device_id uuid,
+    sensor_id uuid,
+    value nullable(Decimal(18, 4)),
+    low_warning nullable(Decimal(18, 4)),
+    low_critical nullable(Decimal(18, 4)),
+    high_warning nullable(Decimal(18, 4)),
+    high_critical nullable(Decimal(18, 4))
 ) ENGINE = MergeTree
 PARTITION BY to_date(received_at)
 ORDER BY (device_id, sensor_id);

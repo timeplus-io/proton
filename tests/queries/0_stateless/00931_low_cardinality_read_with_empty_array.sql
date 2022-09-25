@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS lc_00931;
 
 create stream lc_00931 (
     key uint64,
-    value array(LowCardinality(string)))
+    value array(low_cardinality(string)))
 ENGINE = MergeTree
 ORDER BY key;
 

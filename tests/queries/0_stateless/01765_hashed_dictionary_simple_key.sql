@@ -83,7 +83,7 @@ create stream 01765_db.simple_key_complex_attributes_source_table
 (
    id uint64,
    value_first string,
-   value_second Nullable(string)
+   value_second nullable(string)
 )
 ;
 
@@ -95,7 +95,7 @@ CREATE DICTIONARY 01765_db.hashed_dictionary_simple_key_complex_attributes
 (
    id uint64,
    value_first string DEFAULT 'value_first_default',
-   value_second Nullable(string) DEFAULT 'value_second_default'
+   value_second nullable(string) DEFAULT 'value_second_default'
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_complex_attributes_source_table'))
@@ -126,7 +126,7 @@ CREATE DICTIONARY 01765_db.sparse_hashed_dictionary_simple_key_complex_attribute
 (
    id uint64,
    value_first string DEFAULT 'value_first_default',
-   value_second Nullable(string) DEFAULT 'value_second_default'
+   value_second nullable(string) DEFAULT 'value_second_default'
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_complex_attributes_source_table'))

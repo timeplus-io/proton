@@ -9,8 +9,8 @@ select '-------to_year---------';
 select to_year(x1) from t1;
 select '-------to_month---------';
 select to_month(x1) from t1;
-select '-------toQuarter---------';
-select toQuarter(x1) from t1;
+select '-------to_quarter---------';
+select to_quarter(x1) from t1;
 select '-------to_day_of_month---------';
 select to_day_of_month(x1) from t1;
 select '-------to_day_of_week---------';
@@ -52,15 +52,15 @@ select to_start_of_five_minute(x1) from t1; -- { serverError 43 }
 select '-------to_start_of_ten_minute---------';
 select to_start_of_ten_minute(x1) from t1; -- { serverError 43 }
 select '-------to_start_of_fifteen_minute---------';
-select to_start_of_fifteen_minute(x1) from t1; -- { serverError 43 }
+select to_start_of_fifteen_minutes(x1) from t1; -- { serverError 43 }
 select '-------to_start_of_hour---------';
 select to_start_of_hour(x1) from t1; -- { serverError 43 }
 select '-------toStartOfISOYear---------';
 select toStartOfISOYear(x1) from t1;
 select '-------to_relative_year_num---------';
 select to_relative_year_num(x1, 'Europe/Moscow') from t1;
-select '-------toRelativeQuarterNum---------';
-select toRelativeQuarterNum(x1, 'Europe/Moscow') from t1;
+select '-------to_relative_quarter_num---------';
+select to_relative_quarter_num(x1, 'Europe/Moscow') from t1;
 select '-------to_relative_month_num---------';
 select to_relative_month_num(x1, 'Europe/Moscow') from t1;
 select '-------to_relative_week_num---------';
@@ -75,12 +75,12 @@ select '-------to_relative_second_num---------';
 select to_relative_second_num(x1, 'Europe/Moscow') from t1;
 select '-------to_time---------';
 select to_time(x1) from t1; -- { serverError 43 }
-select '-------toYYYYMM---------';
-select toYYYYMM(x1) from t1;
-select '-------toYYYYMMDD---------';
-select toYYYYMMDD(x1) from t1;
-select '-------toYYYYMMDDhhmmss---------';
-select toYYYYMMDDhhmmss(x1) from t1;
+select '-------to_YYYYMM---------';
+select to_YYYYMM(x1) from t1;
+select '-------to_YYYYMMDD---------';
+select to_YYYYMMDD(x1) from t1;
+select '-------to_YYYYMMDDhhmmss---------';
+select to_YYYYMMDDhhmmss(x1) from t1;
 select '-------addSeconds---------';
 select addSeconds(x1, 3600) from t1;
 select '-------addMinutes---------';
@@ -91,8 +91,8 @@ select '-------addDays---------';
 select addDays(x1, 7) from t1;
 select '-------addWeeks---------';
 select addWeeks(x1, 1) from t1;
-select '-------addMonths---------';
-select addMonths(x1, 1) from t1;
+select '-------add_months---------';
+select add_months(x1, 1) from t1;
 select '-------addQuarters---------';
 select addQuarters(x1, 1) from t1;
 select '-------addYears---------';

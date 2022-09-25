@@ -1,6 +1,6 @@
 SET query_mode = 'table';
 drop stream if exists t;
-create stream t (a int8, val Float32) engine = Memory();
+create stream t (a int8, val float32) engine = Memory();
 insert into t values (1,1.1), (1,1.2), (2,2.1);
 
 SET enable_optimize_predicate_expression = 0;

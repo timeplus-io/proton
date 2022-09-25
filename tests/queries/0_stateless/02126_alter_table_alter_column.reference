@@ -1,3 +1,3 @@
 create stream default.alter_column_02126\n(\n    `a` int32,\n    `x` int32,\n    `y` int32\n)\nENGINE = MergeTree\nORDER BY a\nSETTINGS index_granularity = 8192
-create stream default.alter_column_02126\n(\n    `a` int32,\n    `x` Float32,\n    `y` int32\n)\nENGINE = MergeTree\nORDER BY a\nSETTINGS index_granularity = 8192
-create stream default.alter_column_02126\n(\n    `a` int32,\n    `x` float64,\n    `y` Float32\n)\nENGINE = MergeTree\nORDER BY a\nSETTINGS index_granularity = 8192
+create stream default.alter_column_02126\n(\n    `a` int32,\n    `x` float32,\n    `y` int32\n)\nENGINE = MergeTree\nORDER BY a\nSETTINGS index_granularity = 8192
+create stream default.alter_column_02126\n(\n    `a` int32,\n    `x` float64,\n    `y` float32\n)\nENGINE = MergeTree\nORDER BY a\nSETTINGS index_granularity = 8192

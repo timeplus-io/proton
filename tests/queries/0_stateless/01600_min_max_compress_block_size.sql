@@ -4,6 +4,6 @@ create stream ms (n int32) ENGINE = MergeTree() ORDER BY n SETTINGS min_compress
 
 INSERT INTO ms SELECT * FROM numbers(1000);
 
-SELECT COUNT(*) FROM ms;
+SELECT count(*) FROM ms;
 
 DROP STREAM ms;

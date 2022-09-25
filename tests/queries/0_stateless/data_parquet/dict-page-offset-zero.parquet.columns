@@ -1,1 +1,1 @@
-`l_partkey` Nullable(int32)
+`l_partkey` nullable(int32)

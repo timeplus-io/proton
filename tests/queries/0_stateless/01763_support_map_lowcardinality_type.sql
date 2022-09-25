@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS map_lc;
 SET allow_experimental_map_type = 1;
 create stream map_lc
 (
-    `kv` Map(LowCardinality(string), LowCardinality(string))
+    `kv` Map(low_cardinality(string), low_cardinality(string))
 )
 ;
 

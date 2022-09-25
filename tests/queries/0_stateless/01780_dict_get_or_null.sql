@@ -3,7 +3,7 @@ create stream simple_key_dictionary_source_table
 (
     id uint64,
     value string,
-    value_nullable Nullable(string)
+    value_nullable nullable(string)
 ) ;
 
 INSERT INTO simple_key_dictionary_source_table VALUES (1, 'First', 'First');
@@ -15,7 +15,7 @@ CREATE DICTIONARY simple_key_dictionary
 (
     id uint64,
     value string,
-    value_nullable Nullable(string)
+    value_nullable nullable(string)
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'simple_key_dictionary_source_table'))
@@ -40,7 +40,7 @@ create stream complex_key_dictionary_source_table
     id uint64,
     id_key string,
     value string,
-    value_nullable Nullable(string)
+    value_nullable nullable(string)
 ) ;
 
 INSERT INTO complex_key_dictionary_source_table VALUES (1, 'key', 'First', 'First');
@@ -53,7 +53,7 @@ CREATE DICTIONARY complex_key_dictionary
     id uint64,
     id_key string,
     value string,
-    value_nullable Nullable(string)
+    value_nullable nullable(string)
 )
 PRIMARY KEY id, id_key
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'complex_key_dictionary_source_table'))
@@ -79,7 +79,7 @@ create stream range_key_dictionary_source_table
     start_date date,
     end_date date,
     value string,
-    value_nullable Nullable(string)
+    value_nullable nullable(string)
 )
 ();
 
@@ -94,7 +94,7 @@ CREATE DICTIONARY range_key_dictionary
     start_date date,
     end_date date,
     value string,
-    value_nullable Nullable(string)
+    value_nullable nullable(string)
 )
 PRIMARY KEY key
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'range_key_dictionary_source_table'))

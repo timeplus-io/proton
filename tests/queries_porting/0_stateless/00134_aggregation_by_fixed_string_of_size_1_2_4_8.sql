@@ -1,9 +1,0 @@
-SELECT materialize(to_fixed_string('', 1)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 2)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 3)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 4)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 5)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 6)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 7)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 8)) AS x FROM system.one GROUP BY x;
-SELECT materialize(to_fixed_string('', 9)) AS x FROM system.one GROUP BY x;

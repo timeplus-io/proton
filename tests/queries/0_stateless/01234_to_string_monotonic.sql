@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS test1;
 DROP STREAM IF EXISTS test2;
 
 create stream test1 (s string) ENGINE = MergeTree ORDER BY s SETTINGS index_granularity = 1;
-create stream test2 (s LowCardinality(string)) ENGINE = MergeTree ORDER BY s SETTINGS index_granularity = 1;
+create stream test2 (s low_cardinality(string)) ENGINE = MergeTree ORDER BY s SETTINGS index_granularity = 1;
 
 INSERT INTO test1 SELECT to_string(number) FROM numbers(10000);
 INSERT INTO test2 SELECT to_string(number) FROM numbers(10000);

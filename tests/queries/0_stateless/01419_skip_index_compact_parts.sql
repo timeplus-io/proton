@@ -7,7 +7,7 @@ create stream index_compact(a uint32, b uint32, index i1 b type minmax granulari
 INSERT INTO index_compact SELECT number, to_string(number) FROM numbers(100);
 INSERT INTO index_compact SELECT number, to_string(number) FROM numbers(30);
 
-OPTIMIZE STREAM index_compact FINAL;
+OPTIMIZE TABLE index_compact FINAL;
 
 SELECT count() FROM index_compact WHERE b < 10;
 

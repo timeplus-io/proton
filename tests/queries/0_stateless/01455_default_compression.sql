@@ -20,7 +20,7 @@ INSERT INTO compress_table VALUES(2, '2', '2', '2');
 
 SELECT * FROM compress_table ORDER BY key;
 
-DESCRIBE TABLE compress_table;
+DESCRIBE stream compress_table;
 
 SHOW create stream compress_table;
 

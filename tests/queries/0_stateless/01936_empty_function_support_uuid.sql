@@ -1,20 +1,20 @@
-SELECT empty(toUUID('00000000-0000-0000-0000-000000000000'));
-SELECT not_empty(toUUID('00000000-0000-0000-0000-000000000000'));
+SELECT empty(to_uuid('00000000-0000-0000-0000-000000000000'));
+SELECT not_empty(to_uuid('00000000-0000-0000-0000-000000000000'));
 SELECT uniqIf(uuid, empty(uuid)), uniqIf(uuid, not_empty(uuid))
 FROM
 (
-    SELECT toUUID('00000000-0000-0000-0000-000000000002') AS uuid
+    SELECT to_uuid('00000000-0000-0000-0000-000000000002') AS uuid
     UNION ALL
-    SELECT toUUID('00000000-0000-0000-0000-000000000000') AS uuid
+    SELECT to_uuid('00000000-0000-0000-0000-000000000000') AS uuid
     UNION ALL
-    SELECT toUUID('00000000-0000-0000-0000-000000000001') AS uuid
+    SELECT to_uuid('00000000-0000-0000-0000-000000000001') AS uuid
 );
 
 DROP STREAM IF EXISTS users;
 DROP STREAM IF EXISTS orders;
 
-create stream users (user_id UUID) ;
-create stream orders (order_id UUID, user_id UUID) ;
+create stream users (user_id uuid) ;
+create stream orders (order_id uuid, user_id uuid) ;
 
 INSERT INTO users VALUES ('00000000-0000-0000-0000-000000000001');
 INSERT INTO users VALUES ('00000000-0000-0000-0000-000000000002');

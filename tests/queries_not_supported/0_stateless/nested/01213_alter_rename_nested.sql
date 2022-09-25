@@ -4,7 +4,7 @@ create stream table_for_rename_nested
     date date,
     key uint64,
     n nested(x uint32, y string),
-    value1 array(array(LowCardinality(string))) -- column with several files
+    value1 array(array(low_cardinality(string))) -- column with several files
 )
 ENGINE = MergeTree()
 PARTITION BY date

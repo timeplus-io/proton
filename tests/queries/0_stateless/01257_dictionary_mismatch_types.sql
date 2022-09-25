@@ -8,25 +8,25 @@ set check_table_dependencies=0;
 create stream test_dict_db.table1
 (
     `col1` string,
-    `col2` Int16,
+    `col2` int16,
     `col3` string,
     `col4` int32,
     `col5` string,
-    `col6` Nullable(float64),
-    `col7` Nullable(float64),
-    `col8` Nullable(datetime('UTC')),
-    `col9` Nullable(string),
-    `col10` Nullable(string),
-    `col11` Nullable(string),
-    `col12` Nullable(string),
-    `col13` Nullable(int32),
-    `col14` Nullable(datetime('UTC')),
-    `col15` Nullable(datetime('UTC')),
-    `col16` Nullable(datetime('UTC')),
-    `col17` Nullable(datetime('UTC')),
-    `col18` Nullable(datetime('UTC')),
-    `col19` Nullable(datetime('UTC')),
-    `col20` Nullable(string)
+    `col6` nullable(float64),
+    `col7` nullable(float64),
+    `col8` nullable(datetime('UTC')),
+    `col9` nullable(string),
+    `col10` nullable(string),
+    `col11` nullable(string),
+    `col12` nullable(string),
+    `col13` nullable(int32),
+    `col14` nullable(datetime('UTC')),
+    `col15` nullable(datetime('UTC')),
+    `col16` nullable(datetime('UTC')),
+    `col17` nullable(datetime('UTC')),
+    `col18` nullable(datetime('UTC')),
+    `col19` nullable(datetime('UTC')),
+    `col20` nullable(string)
 )
 ENGINE = MergeTree
 ORDER BY (col1, col2, col3, col4, col5);
@@ -36,7 +36,7 @@ INSERT INTO test_dict_db.table1 VALUES ('id1',1,'20200127-1',701,'20200127-1-01'
 CREATE DICTIONARY test_dict_db.table1_dict
 (
  col1 string,
- col2 Int16,
+ col2 int16,
  col3 string,
  col4 int32,
  col5 string,
@@ -72,7 +72,7 @@ DROP STREAM test_dict_db.table1;
 create stream test_dict_db.table1
 (
     `col1` string,
-    `col2` Int16,
+    `col2` int16,
     `col3` string,
     `col4` int32,
     `col5` string,

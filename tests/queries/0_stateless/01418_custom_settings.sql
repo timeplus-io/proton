@@ -35,7 +35,7 @@ SELECT name, value FROM system.settings WHERE name = 'custom_e';
 SELECT getSetting('custom_f') as v, to_type_name(v) SETTINGS custom_f = 'word';
 SELECT name, value FROM system.settings WHERE name = 'custom_f' SETTINGS custom_f = 'word';
 SELECT getSetting('custom_f') as v, to_type_name(v); -- { serverError 115 } -- Setting not found.
-SELECT COUNT() FROM system.settings WHERE name = 'custom_f';
+SELECT count() FROM system.settings WHERE name = 'custom_f';
 
 SELECT '';
 SET custom_compound.identifier.v1 = 'test';

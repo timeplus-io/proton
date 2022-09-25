@@ -46,12 +46,12 @@ ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_types1"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_types2"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_types3"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_types4"
-${CLICKHOUSE_CLIENT} --query="create stream parquet_types1       (int8 int8, uint8 uint8, int16 Int16, uint16 uint16, int32 int32, uint32 uint32, int64 int64, uint64 uint64, float32 Float32, float64 float64, string string, fixedstring FixedString(15), date date, datetime DateTime) "
-${CLICKHOUSE_CLIENT} --query="create stream parquet_types2       (int8 int8, uint8 uint8, int16 Int16, uint16 uint16, int32 int32, uint32 uint32, int64 int64, uint64 uint64, float32 Float32, float64 float64, string string, fixedstring FixedString(15), date date, datetime DateTime) "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_types1       (int8 int8, uint8 uint8, int16 int16, uint16 uint16, int32 int32, uint32 uint32, int64 int64, uint64 uint64, float32 float32, float64 float64, string string, fixedstring fixed_string(15), date date, datetime datetime) "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_types2       (int8 int8, uint8 uint8, int16 int16, uint16 uint16, int32 int32, uint32 uint32, int64 int64, uint64 uint64, float32 float32, float64 float64, string string, fixedstring fixed_string(15), date date, datetime datetime) "
 # convert min type
-${CLICKHOUSE_CLIENT} --query="create stream parquet_types3       (int8 int8,  uint8 int8,  int16 int8,   uint16 int8,  int32 int8,   uint32 int8,  int64 int8,   uint64 int8,    float32 int8,    float64 int8, string FixedString(15), fixedstring FixedString(15), date date,    datetime date) "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_types3       (int8 int8,  uint8 int8,  int16 int8,   uint16 int8,  int32 int8,   uint32 int8,  int64 int8,   uint64 int8,    float32 int8,    float64 int8, string fixed_string(15), fixedstring fixed_string(15), date date,    datetime date) "
 # convert max type
-${CLICKHOUSE_CLIENT} --query="create stream parquet_types4       (int8 int64, uint8 int64, int16 int64, uint16 int64, int32 int64,  uint32 int64, int64 int64,  uint64 int64,   float32 int64,   float64 int64, string string,          fixedstring string, date DateTime, datetime DateTime) "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_types4       (int8 int64, uint8 int64, int16 int64, uint16 int64, int32 int64,  uint32 int64, int64 int64,  uint64 int64,   float32 int64,   float64 int64, string string,          fixedstring string, date datetime, datetime datetime) "
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_types1 values (     -108,         108,       -1016,          1116,       -1032,          1132,       -1064,          1164,          -1.032,          -1.064,    'string-0',               'fixedstring', '2001-02-03', '2002-02-03 04:05:06')"
 
@@ -92,8 +92,8 @@ ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_types4 ORDER BY int8"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_types5"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_types6"
 ${CLICKHOUSE_CLIENT} --query="TRUNCATE TABLE parquet_types2"
-${CLICKHOUSE_CLIENT} --query="create stream parquet_types5       (int8 Nullable(int8), uint8 Nullable(uint8), int16 Nullable(Int16), uint16 Nullable(uint16), int32 Nullable(int32), uint32 Nullable(uint32), int64 Nullable(int64), uint64 Nullable(uint64), float32 Nullable(Float32), float64 Nullable(float64), string Nullable(string), fixedstring Nullable(FixedString(15)), date Nullable(date), datetime Nullable(DateTime)) "
-${CLICKHOUSE_CLIENT} --query="create stream parquet_types6       (int8 Nullable(int8), uint8 Nullable(uint8), int16 Nullable(Int16), uint16 Nullable(uint16), int32 Nullable(int32), uint32 Nullable(uint32), int64 Nullable(int64), uint64 Nullable(uint64), float32 Nullable(Float32), float64 Nullable(float64), string Nullable(string), fixedstring Nullable(FixedString(15)), date Nullable(date), datetime Nullable(DateTime)) "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_types5       (int8 nullable(int8), uint8 nullable(uint8), int16 nullable(int16), uint16 nullable(uint16), int32 nullable(int32), uint32 nullable(uint32), int64 nullable(int64), uint64 nullable(uint64), float32 nullable(float32), float64 nullable(float64), string nullable(string), fixedstring nullable(fixed_string(15)), date nullable(date), datetime nullable(datetime)) "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_types6       (int8 nullable(int8), uint8 nullable(uint8), int16 nullable(int16), uint16 nullable(uint16), int32 nullable(int32), uint32 nullable(uint32), int64 nullable(int64), uint64 nullable(uint64), float32 nullable(float32), float64 nullable(float64), string nullable(string), fixedstring nullable(fixed_string(15)), date nullable(date), datetime nullable(datetime)) "
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_types5 values (               NULL,                  NULL,                  NULL,                    NULL,                  NULL,                    NULL,                  NULL,                    NULL,                      NULL,                      NULL,                    NULL,                                  NULL,                NULL,                        NULL)"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_types5 ORDER BY int8 FORMAT Parquet" > "${CLICKHOUSE_TMP}"/parquet_all_types_5.parquet
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_types5 ORDER BY int8 FORMAT Parquet" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_types6 FORMAT Parquet"
@@ -114,7 +114,7 @@ ${CLICKHOUSE_CLIENT} --query="DROP STREAM parquet_types4"
 
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_arrays"
 
-${CLICKHOUSE_CLIENT} --query="create stream parquet_arrays (id uint32, a1 array(int8), a2 array(uint8), a3 array(Int16), a4 array(uint16), a5 array(int32), a6 array(uint32), a7 array(int64), a8 array(uint64), a9 array(string), a10 array(FixedString(4)), a11 array(Float32), a12 array(float64), a13 array(date), a14 array(DateTime), a15 array(Decimal(4, 2)), a16 array(Decimal(10, 2)), a17 array(Decimal(25, 2))) engine=Memory()"
+${CLICKHOUSE_CLIENT} --query="create stream parquet_arrays (id uint32, a1 array(int8), a2 array(uint8), a3 array(int16), a4 array(uint16), a5 array(int32), a6 array(uint32), a7 array(int64), a8 array(uint64), a9 array(string), a10 array(fixed_string(4)), a11 array(float32), a12 array(float64), a13 array(date), a14 array(datetime), a15 array(Decimal(4, 2)), a16 array(Decimal(10, 2)), a17 array(Decimal(25, 2))) engine=Memory()"
 
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_arrays VALUES (1, [1,-2,3], [1,2,3], [100, -200, 300], [100, 200, 300], [10000000, -20000000, 30000000], [10000000, 2000000, 3000000], [100000000000000, -200000000000, 3000000000000], [100000000000000, 20000000000000, 3000000000000], ['Some string', 'Some string', 'Some string'], ['0000', '1111', '2222'], [42.42, 424.2, 0.4242], [424242.424242, 4242042420.242424, 42], ['2000-01-01', '2001-01-01', '2002-01-01'], ['2000-01-01', '2001-01-01', '2002-01-01'], [0.2, 10.003, 4.002], [4.000000001, 10000.10000, 10000.100001], [1000000000.000000001123, 90.0000000010010101, 0101001.0112341001])"
 
@@ -127,7 +127,7 @@ ${CLICKHOUSE_CLIENT} --query="DROP STREAM parquet_arrays"
 
 
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_nullable_arrays"
-${CLICKHOUSE_CLIENT} --query="create stream parquet_nullable_arrays (id uint32, a1 array(Nullable(uint32)), a2 array(Nullable(string)), a3 array(Nullable(Decimal(4, 2)))) engine=Memory()"
+${CLICKHOUSE_CLIENT} --query="create stream parquet_nullable_arrays (id uint32, a1 array(nullable(uint32)), a2 array(nullable(string)), a3 array(nullable(Decimal(4, 2)))) engine=Memory()"
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_nullable_arrays VALUES (1, [1, Null, 2], [Null, 'Some string', Null], [0.001, Null, 42.42]), (2, [Null], [Null], [Null]), (3, [], [], [])"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_nullable_arrays FORMAT Parquet" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_nullable_arrays FORMAT Parquet"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_nullable_arrays ORDER BY id"
@@ -135,7 +135,7 @@ ${CLICKHOUSE_CLIENT} --query="DROP STREAM parquet_nullable_arrays"
 
 
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS parquet_nested_arrays"
-${CLICKHOUSE_CLIENT} --query="create stream parquet_nested_arrays (a1 array(array(array(uint32))), a2 array(array(array(string))), a3 array(array(Nullable(uint32))), a4 array(array(Nullable(string)))) engine=Memory() "
+${CLICKHOUSE_CLIENT} --query="create stream parquet_nested_arrays (a1 array(array(array(uint32))), a2 array(array(array(string))), a3 array(array(nullable(uint32))), a4 array(array(nullable(string)))) engine=Memory() "
 ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_nested_arrays VALUES ([[[1,2,3], [1,2,3]], [[1,2,3]], [[], [1,2,3]]], [[['Some string', 'Some string'], []], [['Some string']], [[]]], [[Null, 1, 2], [Null], [1, 2], []], [['Some string', Null, 'Some string'], [Null], []])"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_nested_arrays FORMAT Parquet" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO parquet_nested_arrays FORMAT Parquet"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM parquet_nested_arrays"

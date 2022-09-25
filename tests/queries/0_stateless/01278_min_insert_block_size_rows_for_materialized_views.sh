@@ -41,14 +41,14 @@ cat <<EOL
 create stream data_01278 (
     key uint64,
     // create bunch of fields to increase memory usage for the query
-    s1 Nullable(string),
-    s2 Nullable(string),
-    s3 Nullable(string),
-    s4 Nullable(string),
-    s5 Nullable(string),
-    s6 Nullable(string),
-    s7 Nullable(string),
-    s8 Nullable(string)
+    s1 nullable(string),
+    s2 nullable(string),
+    s3 nullable(string),
+    s4 nullable(string),
+    s5 nullable(string),
+    s6 nullable(string),
+    s7 nullable(string),
+    s8 nullable(string)
 ) Engine=Null()
 EOL
 } | execute

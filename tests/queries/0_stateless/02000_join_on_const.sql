@@ -10,11 +10,11 @@ INSERT INTO t2 VALUES (2), (3);
 SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 JOIN t2 ON 1 = 1;
 SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 JOIN t2 ON 1;
 SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 JOIN t2 ON 2 = 2 AND 3 = 3;
-SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 INNER ANY JOIN t2 ON toNullable(1);
+SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 INNER ANY JOIN t2 ON to_nullable(1);
 SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 INNER ANY JOIN t2 ON toLowCardinality(1);
-SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 INNER ANY JOIN t2 ON toLowCardinality(toNullable(1));
+SELECT 70 = 10 * sum(t1.id) + sum(t2.id) AND count() == 4 FROM t1 INNER ANY JOIN t2 ON toLowCardinality(to_nullable(1));
 
-SELECT * FROM t1 INNER ANY JOIN t2 ON toNullable(toLowCardinality(1)); -- { serverError 403 }
+SELECT * FROM t1 INNER ANY JOIN t2 ON to_nullable(toLowCardinality(1)); -- { serverError 403 }
 SELECT * FROM t1 INNER ANY JOIN t2 ON to_uint16(1); -- { serverError 403 }
 SELECT * FROM t1 INNER ANY JOIN t2 ON to_int8(1); -- { serverError 403 }
 SELECT * FROM t1 INNER ANY JOIN t2 ON 256; -- { serverError 403 }

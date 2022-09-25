@@ -3,8 +3,8 @@ SET join_algorithm = 'partial_merge';
 DROP STREAM IF EXISTS t;
 DROP STREAM IF EXISTS nr;
 
-create stream t (`x` uint32, `lc` LowCardinality(string)) ;
-create stream nr (`x` Nullable(uint32), `lc` Nullable(string)) ;
+create stream t (`x` uint32, `lc` low_cardinality(string)) ;
+create stream nr (`x` nullable(uint32), `lc` nullable(string)) ;
 
 INSERT INTO t VALUES (1, 'l');
 INSERT INTO nr VALUES (2, NULL);

@@ -62,7 +62,7 @@ SETTINGS min_bytes_for_wide_part = 0;
 INSERT INTO nested SELECT number, array_map(x -> (x, array_map(y -> (to_string(y * x), y + x), range(number % 17))), range(number % 19)) FROM numbers(100000);
 SELECT id % 10, sum(length(col1)), sumArray(array_map(x -> length(x), col1.n.b)) FROM nested GROUP BY id % 10;
 
-SELECT arraySum(col1.a), array_map(x -> x * x * 2, col1.a) FROM nested ORDER BY id LIMIT 5;
+SELECT array_sum(col1.a), array_map(x -> x * x * 2, col1.a) FROM nested ORDER BY id LIMIT 5;
 SELECT untuple(array_join(array_join(col1.n))) FROM nested ORDER BY id LIMIT 10 OFFSET 10;
 
 DROP STREAM nested;

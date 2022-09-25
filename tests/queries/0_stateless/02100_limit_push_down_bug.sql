@@ -2,7 +2,7 @@ SET query_mode = 'table';
 drop stream if exists tbl_repr;
 
 create stream tbl_repr(
-ts DateTime,
+ts datetime,
 x  string)
 ENGINE=MergeTree ORDER BY ts;
 

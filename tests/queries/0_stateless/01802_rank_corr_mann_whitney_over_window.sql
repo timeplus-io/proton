@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS 01802_empsalary;
 
 create stream 01802_empsalary
 (
-    `depname` LowCardinality(string),
+    `depname` low_cardinality(string),
     `empno` uint64,
     `salary` int32,
     `enroll_date` date

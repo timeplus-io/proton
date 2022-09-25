@@ -11,11 +11,11 @@ create stream t2 (id string, name string, value uint32)
 ENGINE = Join(ANY, LEFT, id)
 SETTINGS join_use_nulls = 0;
 
-create stream t3 (id Nullable(string), name string, value uint32)
+create stream t3 (id nullable(string), name string, value uint32)
 ENGINE = Join(ANY, LEFT, id)
 SETTINGS join_use_nulls = 1;
 
-create stream t4 (id string, name Nullable(string), value uint32)
+create stream t4 (id string, name nullable(string), value uint32)
 ENGINE = Join(ANY, LEFT, id)
 SETTINGS join_use_nulls = 0;
 

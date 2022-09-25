@@ -19,7 +19,7 @@ SELECT accurateCastOrDefault(10, 'Decimal32(9)'), accurateCastOrDefault(10, 'Dec
 SELECT accurateCastOrDefault(1, 'Decimal32(9)');
 SELECT accurateCastOrDefault(-10, 'Decimal32(9)'), accurateCastOrDefault(-10, 'Decimal32(9)', to_decimal32(2, 9));
 
-SELECT accurateCastOrDefault('123', 'FixedString(2)'), accurateCastOrDefault('123', 'FixedString(2)', cast('12', 'FixedString(2)'));
+SELECT accurateCastOrDefault('123', 'fixed_string(2)'), accurateCastOrDefault('123', 'fixed_string(2)', cast('12', 'fixed_string(2)'));
 
 SELECT accurateCastOrDefault(inf, 'int64'), accurateCastOrDefault(inf, 'int64', to_int64(5));
 SELECT accurateCastOrDefault(inf, 'Int128'), accurateCastOrDefault(inf, 'Int128', to_int128(5));

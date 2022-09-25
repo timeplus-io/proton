@@ -41,7 +41,7 @@ SELECT 'abct\n\ndef' ILIKE '%abc%def%';
 SELECT 'ab\ndef'     ILIKE '%Abc%def%';
 SELECT 'aBc\nef'     ILIKE '%ABC%DEF%';
 
-SELECT CAST('hello' AS FixedString(5)) ILIKE '%he%o%';
+SELECT CAST('hello' AS fixed_string(5)) ILIKE '%he%o%';
 
 SELECT 'ёЁё' ILIKE 'Ё%Ё';
 SELECT 'ощщЁё' ILIKE 'Щ%Ё';

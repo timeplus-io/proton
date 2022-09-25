@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ${CLICKHOUSE_CLIENT} -n --query "
 DROP STREAM IF EXISTS t;
-create stream t (a LowCardinality(Nullable(string))) ;
+create stream t (a low_cardinality(nullable(string))) ;
 "
 
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO t FORMAT RawBLOB" < ${BASH_SOURCE[0]}

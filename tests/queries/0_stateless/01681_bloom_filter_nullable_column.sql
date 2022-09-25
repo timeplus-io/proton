@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS bloom_filter_nullable_index;
 create stream bloom_filter_nullable_index
     (
         order_key uint64,
-        str Nullable(string),
+        str nullable(string),
 
         INDEX idx (str) TYPE bloom_filter GRANULARITY 1
     )
@@ -29,14 +29,14 @@ SELECT * FROM bloom_filter_nullable_index WHERE str IN
 
 SELECT 'NullableColumnFromCast with transform_null_in=0';
 SELECT * FROM bloom_filter_nullable_index WHERE str IN
-    (SELECT cast('test', 'Nullable(string)')) SETTINGS transform_null_in = 0;
+    (SELECT cast('test', 'nullable(string)')) SETTINGS transform_null_in = 0;
 
 SELECT 'NullableColumnFromCast with transform_null_in=1';
 SELECT * FROM bloom_filter_nullable_index WHERE str IN
-    (SELECT cast('test', 'Nullable(string)')) SETTINGS transform_null_in = 1;
+    (SELECT cast('test', 'nullable(string)')) SETTINGS transform_null_in = 1;
 
 DROP STREAM IF EXISTS nullable_string_value;
-create stream nullable_string_value (value Nullable(string)) ;
+create stream nullable_string_value (value nullable(string)) ;
 INSERT INTO nullable_string_value VALUES ('test');
 
 SELECT 'NullableColumnFromTable with transform_null_in=0';

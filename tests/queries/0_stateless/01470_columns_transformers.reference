@@ -79,9 +79,9 @@ FROM columns_transformers
 SELECT
     i,
     j,
-    toFloat64(i),
-    toFloat64(j),
-    toFloat64(k),
+    to_float64(i),
+    to_float64(j),
+    to_float64(k),
     j
 FROM columns_transformers
 [110]	[9]	[173.5]

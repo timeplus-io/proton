@@ -18,8 +18,8 @@ def test_and_check(name, a, b, t_stat, p_value):
     client.query("INSERT INTO mann_whitney VALUES {};".format(", ".join(['({},{}), ({},{})'.format(i, 0, j, 1) for i,j in zip(a, b)])))
 
     real = client.query_return_df(
-        "SELECT roundBankers({}(left, right).1, 16) as t_stat, ".format(name) +
-               "roundBankers({}(left, right).2, 16) as p_value ".format(name) + 
+        "SELECT round_bankers({}(left, right).1, 16) as t_stat, ".format(name) +
+               "round_bankers({}(left, right).2, 16) as p_value ".format(name) + 
         "FROM mann_whitney FORMAT TabSeparatedWithNames;")
     real_t_stat = real['t_stat'][0]
     real_p_value = real['p_value'][0]

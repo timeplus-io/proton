@@ -7,7 +7,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS values_floats"
 
-${CLICKHOUSE_CLIENT} --query="create stream values_floats (a Float32, b float64) "
+${CLICKHOUSE_CLIENT} --query="create stream values_floats (a float32, b float64) "
 
 ${CLICKHOUSE_CLIENT} --query="SELECT '(-160.32605134916085,37.70584056842162),' FROM numbers(1000000)" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO values_floats FORMAT Values"
 

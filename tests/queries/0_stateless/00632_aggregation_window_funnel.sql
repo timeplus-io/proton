@@ -17,7 +17,7 @@ select 5 = windowFunnel(4)(timestamp, event = 1003, event = 1004, event = 1005, 
 
 
 drop stream if exists funnel_test2;
-create stream funnel_test2 (uid uint32 default 1,timestamp DateTime, event uint32) engine=Memory;
+create stream funnel_test2 (uid uint32 default 1,timestamp datetime, event uint32) engine=Memory;
 insert into funnel_test2(timestamp, event) values  ('2018-01-01 01:01:01',1001),('2018-01-01 01:01:02',1002),('2018-01-01 01:01:03',1003),('2018-01-01 01:01:04',1004),('2018-01-01 01:01:05',1005),('2018-01-01 01:01:06',1006),('2018-01-01 01:01:07',1007),('2018-01-01 01:01:08',1008);
 
 
@@ -54,7 +54,7 @@ drop stream funnel_test_u64;
 drop stream funnel_test_strict;
 
 drop stream if exists funnel_test_strict_order;
-create stream funnel_test_strict_order (dt DateTime, user int, event string) engine = MergeTree() partition by dt order by user;
+create stream funnel_test_strict_order (dt datetime, user int, event string) engine = MergeTree() partition by dt order by user;
 insert into funnel_test_strict_order values (1, 1, 'a') (2, 1, 'b') (3, 1, 'c');
 insert into funnel_test_strict_order values (1, 2, 'a') (2, 2, 'd') (3, 2, 'b') (4, 2, 'c');
 insert into funnel_test_strict_order values (1, 3, 'a') (2, 3, 'a') (3, 3, 'b') (4, 3, 'b') (5, 3, 'c') (6, 3, 'c');
@@ -76,7 +76,7 @@ select 3 = windowFunnel(86400, 'strict_deduplication')(ts, event='a', event='b',
 drop stream strict_BiteTheDDDD;
 
 drop stream if exists funnel_test_non_null;
-create stream funnel_test_non_null (`dt` DateTime, `u` int, `a` Nullable(string), `b` Nullable(string)) engine = MergeTree() partition by dt order by u;
+create stream funnel_test_non_null (`dt` datetime, `u` int, `a` nullable(string), `b` nullable(string)) engine = MergeTree() partition by dt order by u;
 insert into funnel_test_non_null values (1, 1, 'a1', 'b1') (2, 1, 'a2', 'b2');
 insert into funnel_test_non_null values (1, 2, 'a1', null) (2, 2, 'a2', null);
 insert into funnel_test_non_null values (1, 3, null, null);

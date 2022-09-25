@@ -10,11 +10,11 @@ $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS string;"
 $CLICKHOUSE_CLIENT -n --query="
 create stream lowString
 (
-a LowCardinality(string),
+a low_cardinality(string),
 b date
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(b)
+PARTITION BY to_YYYYMM(b)
 ORDER BY (a)"
 
 $CLICKHOUSE_CLIENT -n --query="
@@ -24,7 +24,7 @@ a string,
 b date
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(b)
+PARTITION BY to_YYYYMM(b)
 ORDER BY (a)"
 
 $CLICKHOUSE_CLIENT --query="insert into lowString (a, b) select top 100000 to_string(number), today() from system.numbers"

@@ -36,4 +36,4 @@ SELECT roundToExp2(number) AS k, length(group_array(1)([hex(number)] AS i)), len
 DROP STREAM numbers_mt;
 
 -- Check binary compatibility:
--- clickhouse-client -h old -q "SELECT arrayReduce('groupArrayState', [['1'], ['22'], ['333']]) FORMAT RowBinary" | clickhouse-local -s --input-format RowBinary --structure "d aggregate_function(groupArray2, array(string))" -q "SELECT groupArray2Merge(d) FROM table"
+-- clickhouse-client -h old -q "SELECT array_reduce('groupArrayState', [['1'], ['22'], ['333']]) FORMAT RowBinary" | clickhouse-local -s --input-format RowBinary --structure "d aggregate_function(groupArray2, array(string))" -q "SELECT groupArray2Merge(d) FROM table"

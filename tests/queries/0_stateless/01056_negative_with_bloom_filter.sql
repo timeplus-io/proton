@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS test;
 
-create stream test (`int8` int8, `int16` Int16, `int32` int32, `int64` int64, INDEX idx (`int8`, `int16`, `int32`, `int64`) TYPE bloom_filter(0.01) GRANULARITY 8192 ) ENGINE = MergeTree() ORDER BY `int8`;
+create stream test (`int8` int8, `int16` int16, `int32` int32, `int64` int64, INDEX idx (`int8`, `int16`, `int32`, `int64`) TYPE bloom_filter(0.01) GRANULARITY 8192 ) ENGINE = MergeTree() ORDER BY `int8`;
 
 INSERT INTO test VALUES (-1, -1, -1, -1);
 

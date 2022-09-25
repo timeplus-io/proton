@@ -1,0 +1,90 @@
+aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaa	true	false	false	false	true	true	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaa	true	false	false	false	true	true
+aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	aaaaaaaabaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	aaaaaaaabaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	aaaaaaabaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	aaaaaaabaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	aaaaaaacaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	aaaaaaacaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaaaaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaaaaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaab	true	false	false	false	true	true	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaab	true	false	false	false	true	true
+aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	aaaaaaaabaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaab	aaaaaaaabaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	aaaaaaabaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaab	aaaaaaabaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	aaaaaaacaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaab	aaaaaaacaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	baaaaaaaaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaab	baaaaaaaaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	baaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaaaaaaaaaab	baaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	baaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaaaaaaaaaab	baaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaab	false	true	false	true	false	true	aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaac	true	false	false	false	true	true	aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaac	true	false	false	false	true	true
+aaaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	aaaaaaabaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaac	aaaaaaabaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	aaaaaaacaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaac	aaaaaaacaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	false	true	true	false	true	false	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	baaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	baaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true	aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true	aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true
+aaaaaaaabaaaaaaa	aaaaaaaabaaaaaaa	true	false	false	false	true	true	aaaaaaaabaaaaaaa	aaaaaaaabaaaaaaa	true	false	false	false	true	true
+aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	false	true	true	false	true	false	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	false	true	true	false	true	false
+aaaaaaaabaaaaaaa	aaaaaaacaaaaaaaa	false	true	true	false	true	false	aaaaaaaabaaaaaaa	aaaaaaacaaaaaaaa	false	true	true	false	true	false
+aaaaaaaabaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false	aaaaaaaabaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false
+aaaaaaaabaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaaabaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaaabaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaaabaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true	aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true	aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true
+aaaaaaabaaaaaaaa	aaaaaaaabaaaaaaa	false	true	false	true	false	true	aaaaaaabaaaaaaaa	aaaaaaaabaaaaaaa	false	true	false	true	false	true
+aaaaaaabaaaaaaaa	aaaaaaabaaaaaaaa	true	false	false	false	true	true	aaaaaaabaaaaaaaa	aaaaaaabaaaaaaaa	true	false	false	false	true	true
+aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	true	false	true	false	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	true	false	true	false
+aaaaaaabaaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false	aaaaaaabaaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false
+aaaaaaabaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaabaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaabaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaabaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false
+aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true	aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true	aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true
+aaaaaaacaaaaaaaa	aaaaaaaabaaaaaaa	false	true	false	true	false	true	aaaaaaacaaaaaaaa	aaaaaaaabaaaaaaa	false	true	false	true	false	true
+aaaaaaacaaaaaaaa	aaaaaaabaaaaaaaa	false	true	false	true	false	true	aaaaaaacaaaaaaaa	aaaaaaabaaaaaaaa	false	true	false	true	false	true
+aaaaaaacaaaaaaaa	aaaaaaacaaaaaaaa	true	false	false	false	true	true	aaaaaaacaaaaaaaa	aaaaaaacaaaaaaaa	true	false	false	false	true	true
+aaaaaaacaaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false	aaaaaaacaaaaaaaa	baaaaaaaaaaaaaaa	false	true	true	false	true	false
+aaaaaaacaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false	aaaaaaacaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false
+aaaaaaacaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false	aaaaaaacaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false
+baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true	baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true	baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaac	false	true	false	true	false	true
+baaaaaaaaaaaaaaa	aaaaaaaabaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaaa	aaaaaaaabaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaaa	aaaaaaabaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaaa	aaaaaaabaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaaa	baaaaaaaaaaaaaaa	true	false	false	false	true	true	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaaa	true	false	false	false	true	true
+baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	false	true	true	false	true	false
+baaaaaaaaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaac	false	true	true	false	true	false
+baaaaaaaaaaaaaab	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaab	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaab	aaaaaaaaaaaaaaab	false	true	false	true	false	true	baaaaaaaaaaaaaab	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+baaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	false	true	false	true	false	true	baaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	false	true	false	true	false	true
+baaaaaaaaaaaaaab	aaaaaaaabaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaab	aaaaaaaabaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaab	aaaaaaabaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaab	aaaaaaabaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaab	aaaaaaacaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaab	aaaaaaacaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaab	baaaaaaaaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaab	baaaaaaaaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaab	baaaaaaaaaaaaaab	true	false	false	false	true	true	baaaaaaaaaaaaaab	baaaaaaaaaaaaaab	true	false	false	false	true	true
+baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	false	true	true	false	true	false	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	false	true	true	false	true	false
+baaaaaaaaaaaaaac	aaaaaaaaaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaac	aaaaaaaaaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaac	aaaaaaaaaaaaaaab	false	true	false	true	false	true	baaaaaaaaaaaaaac	aaaaaaaaaaaaaaab	false	true	false	true	false	true
+baaaaaaaaaaaaaac	aaaaaaaaaaaaaaac	false	true	false	true	false	true	baaaaaaaaaaaaaac	aaaaaaaaaaaaaaac	false	true	false	true	false	true
+baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaac	aaaaaaabaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaac	aaaaaaabaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaac	aaaaaaacaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaac	aaaaaaacaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	false	true	false	true	false	true	baaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	false	true	false	true	false	true
+baaaaaaaaaaaaaac	baaaaaaaaaaaaaab	false	true	false	true	false	true	baaaaaaaaaaaaaac	baaaaaaaaaaaaaab	false	true	false	true	false	true
+baaaaaaaaaaaaaac	baaaaaaaaaaaaaac	true	false	false	false	true	true	baaaaaaaaaaaaaac	baaaaaaaaaaaaaac	true	false	false	false	true	true
+aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	true	false	false	false	true	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false
+aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	true	false	false	false	true	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false
+aaaaaaaaaaaaaaac	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	true	false	false	false	true	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false
+aaaaaaaabaaaaaaa	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	true	false	false	false	true	true	false	true	true	false	true	false	false	true	true	false	true	false
+aaaaaaabaaaaaaaa	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	false	true	false	true	true	false	false	false	true	true	false	true	true	false	true	false
+aaaaaaacaaaaaaaa	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	true	false	true	false	false	true	false	true	false	true	false	true	false	true	false	true	true	false	false	false	true	true
+baaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	true	false	false	false	true	true	false	true	true	false	true	false	false	true	true	false	true	false	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true
+baaaaaaaaaaaaaab	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	true	false	false	false	true	true	false	true	true	false	true	false	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true
+baaaaaaaaaaaaaac	aaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaab	aaaaaaaaaaaaaaac	baaaaaaaaaaaaaaa	baaaaaaaaaaaaaab	baaaaaaaaaaaaaac	aaaaaaaabaaaaaaa	aaaaaaabaaaaaaaa	aaaaaaacaaaaaaaa	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	true	false	false	false	true	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true	false	true

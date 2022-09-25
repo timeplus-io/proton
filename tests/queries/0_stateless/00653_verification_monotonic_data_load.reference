@@ -1,26 +1,26 @@
 no monotonic int case: string -> uint64
-no monotonic int case: FixedString -> uint64
+no monotonic int case: fixed_string -> uint64
 monotonic int case: int32 -> int64
 monotonic int case: int32 -> uint64
 monotonic int case: int32 -> int32
 monotonic int case: int32 -> uint32
-monotonic int case: int32 -> Int16
+monotonic int case: int32 -> int16
 monotonic int case: int32 -> uint16
 monotonic int case: uint32 -> int64
 monotonic int case: uint32 -> uint64
 monotonic int case: uint32 -> int32
 monotonic int case: uint32 -> uint32
-monotonic int case: uint32 -> Int16
+monotonic int case: uint32 -> int16
 monotonic int case: uint32 -> uint16
 monotonic int case: Enum16 -> int32
 monotonic int case: Enum16 -> uint32
-monotonic int case: Enum16 -> Int16
+monotonic int case: Enum16 -> int16
 monotonic int case: Enum16 -> uint16
 monotonic int case: Enum16 -> int8
 monotonic int case: Enum16 -> uint8
 monotonic int case: date -> int32
 monotonic int case: date -> uint32
-monotonic int case: date -> Int16
+monotonic int case: date -> int16
 monotonic int case: date -> uint16
 monotonic int case: date -> int8
 monotonic int case: date -> uint8

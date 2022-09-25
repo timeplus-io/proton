@@ -1,6 +1,6 @@
 -- Tags: no-parallel, no-fasttest
 
-SET send_logs_level = 'fatal';
+ 
 
 DROP DATABASE IF EXISTS database_for_dict;
 
@@ -45,8 +45,8 @@ SELECT '***datetime dict***';
 create stream database_for_dict.datetime_table
 (
   CountryID uint64,
-  StartDate DateTime,
-  EndDate DateTime,
+  StartDate datetime,
+  EndDate datetime,
   Tax float64
 )
 ENGINE = MergeTree()
@@ -59,8 +59,8 @@ INSERT INTO database_for_dict.datetime_table VALUES(2, to_datetime('2019-05-21 0
 CREATE DICTIONARY database_for_dict.dict2
 (
   CountryID uint64,
-  StartDate DateTime,
-  EndDate DateTime,
+  StartDate datetime,
+  EndDate datetime,
   Tax float64
 )
 PRIMARY KEY CountryID

@@ -12,9 +12,9 @@ SELECT sumIf(1, 1);
 SELECT sumIfOrNull(1, 0);
 SELECT sumOrNullIf(1, 0);
 
-SELECT nullIf(1, 0);
+SELECT null_if(1, 0);
 
-SELECT nullIf(1, 1);
+SELECT null_if(1, 1);
 
 SET aggregate_functions_null_for_empty=1;
 
@@ -31,6 +31,6 @@ SELECT sumIf(1, 1);
 SELECT sumIfOrNull(1, 0);
 SELECT sumOrNullIf(1, 0);
 
-SELECT nullIf(1, 0);
+SELECT null_if(1, 0);
 
-SELECT nullIf(1, 1);
+SELECT null_if(1, 1);

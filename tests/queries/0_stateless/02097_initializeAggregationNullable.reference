@@ -1,6 +1,6 @@
 1
-aggregate_function(uniqExact, Nullable(string))
+aggregate_function(uniq_exact, nullable(string))
 1
-aggregate_function(uniqExact, Nullable(uint8))
+aggregate_function(uniq_exact, nullable(uint8))
 1
 1

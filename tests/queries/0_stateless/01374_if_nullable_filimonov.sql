@@ -2,7 +2,7 @@ SELECT
     UserID,
     UserID = 0,
     if(UserID = 0, 'delete', 'leave')
-FROM VALUES('UserID Nullable(uint8)', (2), (0), (NULL));
+FROM VALUES('UserID nullable(uint8)', (2), (0), (NULL));
 
 SELECT '---';
 

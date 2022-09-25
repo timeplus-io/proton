@@ -15,7 +15,7 @@ $CLICKHOUSE_CLIENT --query "create stream test1 (x uint64) ";
 function thread1()
 {
     while true; do
-        seq 1 1000 | sed -r -e 's/.+/RENAME TABLE test1 TO test2; RENAME TABLE test2 TO test1;/' | $CLICKHOUSE_CLIENT -n
+        seq 1 1000 | sed -r -e 's/.+/RENAME STREAM test1 TO test2; RENAME STREAM test2 TO test1;/' | $CLICKHOUSE_CLIENT -n
     done
 }
 

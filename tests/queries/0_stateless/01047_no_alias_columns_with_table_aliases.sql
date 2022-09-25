@@ -1,8 +1,8 @@
 DROP STREAM IF EXISTS requests;
 create stream requests (
-    event_time DateTime,
+    event_time datetime,
     event_date date MATERIALIZED to_date(event_time),
-    event_tm DateTime ALIAS event_time
+    event_tm datetime ALIAS event_time
 ) ENGINE = MergeTree ORDER BY (event_time);
 
 INSERT INTO requests (event_time) VALUES ('2010-01-01 00:00:00');

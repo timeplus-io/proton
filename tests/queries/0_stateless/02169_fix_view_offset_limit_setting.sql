@@ -1,5 +1,5 @@
 DROP STREAM IF EXISTS counter;
-create stream counter (id uint64, createdAt DateTime) ENGINE = MergeTree() ORDER BY id;
+create stream counter (id uint64, createdAt datetime) ENGINE = MergeTree() ORDER BY id;
 INSERT INTO counter SELECT number, now() FROM numbers(500);
 
 DROP STREAM IF EXISTS vcounter;

@@ -12,7 +12,7 @@ select number, neighbor(number, 1, -10) from numbers(3); -- { serverError 386 }
 select number, if(number > 1, number, null) as offset, neighbor(number, offset) from numbers(3); -- { serverError 43 }
 select 'Zero offset';
 select number, neighbor(number, 0) from numbers(3);
-select 'Nullable values';
+select 'nullable values';
 select  if(number > 1, number, null) as value, number as offset, neighbor(value, offset) as neighbor from numbers(3);
 select 'Result with different type';
 select to_int32(number) as n, neighbor(n, 1, -10) from numbers(3);

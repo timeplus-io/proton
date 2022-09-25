@@ -17,7 +17,7 @@ create stream IF NOT EXISTS decimal
 INSERT INTO decimal (a, b, c, d, e, f, g, h, i, j) VALUES (42, 42, 42, 0.42, 0.42, 0.42, 42.42, 42.42, 42.42, 42.42);
 INSERT INTO decimal (a, b, c, d, e, f, g, h, i, j) VALUES (-42, -42, -42, -0.42, -0.42, -0.42, -42.42, -42.42, -42.42, -42.42);
 
-SELECT a > toFloat64(0) FROM decimal ORDER BY a;
+SELECT a > to_float64(0) FROM decimal ORDER BY a;
 SELECT g > to_float32(0) FROM decimal ORDER BY g;
 SELECT a > '0.0' FROM decimal ORDER BY a;
 
@@ -37,7 +37,7 @@ SELECT a, b, c FROM decimal WHERE a = to_int16(42) AND b = to_int16(42) AND c = 
 SELECT a, b, c FROM decimal WHERE a = to_int32(42) AND b = to_int32(42) AND c = to_int32(42);
 SELECT a, b, c FROM decimal WHERE a = to_int64(42) AND b = to_int64(42) AND c = to_int64(42);
 SELECT a, b, c FROM decimal WHERE a = to_float32(42);
-SELECT a, b, c FROM decimal WHERE a = toFloat64(42);
+SELECT a, b, c FROM decimal WHERE a = to_float64(42);
 
 SELECT least(a, b), least(a, g), greatest(a, b), greatest(a, g) FROM decimal ORDER BY a;
 SELECT least(a, 0), least(b, 0), least(g, 0) FROM decimal ORDER BY a;

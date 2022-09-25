@@ -13,12 +13,12 @@ SELECT
 FROM
   (
     SELECT
-      arraySum(
+      array_sum(
         id -> bitCount(
           reinterpret_as_uint8(
             substring(
               fuzzBits(
-                arrayStringConcat(array_map(x -> to_string('\0'), range(10000))),
+                array_string_concat(array_map(x -> to_string('\0'), range(10000))),
                 0.3
               ),
               id + 1,

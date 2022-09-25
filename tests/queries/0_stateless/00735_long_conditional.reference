@@ -1,42 +1,42 @@
 value vs value
 0	1	1	int8	int8	int8
-0	1	1	int8	Int16	Int16
+0	1	1	int8	int16	int16
 0	1	1	int8	int32	int32
 0	1	1	int8	int64	int64
-0	1	1	int8	uint8	Int16
+0	1	1	int8	uint8	int16
 0	1	1	int8	uint16	int32
 0	1	1	int8	uint32	int64
-0	1	1	int8	Float32	Float32
+0	1	1	int8	float32	float32
 0	1	1	int8	float64	float64
 0	1	1	int8	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	int8	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	int8	Decimal(38, 0)	Decimal(38, 0)
-0	1	1	Int16	int8	Int16
-0	1	1	Int16	Int16	Int16
-0	1	1	Int16	int32	int32
-0	1	1	Int16	int64	int64
-0	1	1	Int16	uint8	Int16
-0	1	1	Int16	uint16	int32
-0	1	1	Int16	uint32	int64
-0	1	1	Int16	Float32	Float32
-0	1	1	Int16	float64	float64
-0	1	1	Int16	Decimal(9, 0)	Decimal(9, 0)
-0	1	1	Int16	Decimal(18, 0)	Decimal(18, 0)
-0	1	1	Int16	Decimal(38, 0)	Decimal(38, 0)
+0	1	1	int16	int8	int16
+0	1	1	int16	int16	int16
+0	1	1	int16	int32	int32
+0	1	1	int16	int64	int64
+0	1	1	int16	uint8	int16
+0	1	1	int16	uint16	int32
+0	1	1	int16	uint32	int64
+0	1	1	int16	float32	float32
+0	1	1	int16	float64	float64
+0	1	1	int16	Decimal(9, 0)	Decimal(9, 0)
+0	1	1	int16	Decimal(18, 0)	Decimal(18, 0)
+0	1	1	int16	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	int32	int8	int32
-0	1	1	int32	Int16	int32
+0	1	1	int32	int16	int32
 0	1	1	int32	int32	int32
 0	1	1	int32	int64	int64
 0	1	1	int32	uint8	int32
 0	1	1	int32	uint16	int32
 0	1	1	int32	uint32	int64
-0	1	1	int32	Float32	float64
+0	1	1	int32	float32	float64
 0	1	1	int32	float64	float64
 0	1	1	int32	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	int32	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	int32	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	int64	int8	int64
-0	1	1	int64	Int16	int64
+0	1	1	int64	int16	int64
 0	1	1	int64	int32	int64
 0	1	1	int64	int64	int64
 0	1	1	int64	uint8	int64
@@ -45,41 +45,41 @@ value vs value
 0	1	1	int64	Decimal(9, 0)	Decimal(18, 0)
 0	1	1	int64	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	int64	Decimal(38, 0)	Decimal(38, 0)
-0	1	1	uint8	int8	Int16
-0	1	1	uint8	Int16	Int16
+0	1	1	uint8	int8	int16
+0	1	1	uint8	int16	int16
 0	1	1	uint8	int32	int32
 0	1	1	uint8	int64	int64
 0	1	1	uint8	uint8	uint8
 0	1	1	uint8	uint16	uint16
 0	1	1	uint8	uint32	uint32
 0	1	1	uint8	uint64	uint64
-0	1	1	uint8	Float32	Float32
+0	1	1	uint8	float32	float32
 0	1	1	uint8	float64	float64
 0	1	1	uint8	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	uint8	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	uint8	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	uint16	int8	int32
-0	1	1	uint16	Int16	int32
+0	1	1	uint16	int16	int32
 0	1	1	uint16	int32	int32
 0	1	1	uint16	int64	int64
 0	1	1	uint16	uint8	uint16
 0	1	1	uint16	uint16	uint16
 0	1	1	uint16	uint32	uint32
 0	1	1	uint16	uint64	uint64
-0	1	1	uint16	Float32	Float32
+0	1	1	uint16	float32	float32
 0	1	1	uint16	float64	float64
 0	1	1	uint16	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	uint16	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	uint16	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	uint32	int8	int64
-0	1	1	uint32	Int16	int64
+0	1	1	uint32	int16	int64
 0	1	1	uint32	int32	int64
 0	1	1	uint32	int64	int64
 0	1	1	uint32	uint8	uint32
 0	1	1	uint32	uint16	uint32
 0	1	1	uint32	uint32	uint32
 0	1	1	uint32	uint64	uint64
-0	1	1	uint32	Float32	float64
+0	1	1	uint32	float32	float64
 0	1	1	uint32	float64	float64
 0	1	1	uint32	Decimal(9, 0)	Decimal(18, 0)
 0	1	1	uint32	Decimal(18, 0)	Decimal(18, 0)
@@ -97,43 +97,43 @@ value vs value
 1970-01-01 03:00:00	1970-01-01 03:00:01	1970-01-01 03:00:01	datetime(\'Europe/Moscow\')	datetime(\'Europe/Moscow\')	datetime(\'Europe/Moscow\')
 column vs value
 0	1	1	int8	int8	int8
-0	1	1	int8	Int16	Int16
+0	1	1	int8	int16	int16
 0	1	1	int8	int32	int32
 0	1	1	int8	int64	int64
-0	1	1	int8	uint8	Int16
+0	1	1	int8	uint8	int16
 0	1	1	int8	uint16	int32
 0	1	1	int8	uint32	int64
-0	1	1	int8	Float32	Float32
+0	1	1	int8	float32	float32
 0	1	1	int8	float64	float64
 0	1	1	int8	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	int8	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	int8	Decimal(38, 0)	Decimal(38, 0)
-0	1	1	Int16	int8	Int16
-0	1	1	Int16	Int16	Int16
-0	1	1	Int16	int32	int32
-0	1	1	Int16	int64	int64
-0	1	1	Int16	uint8	Int16
-0	1	1	Int16	uint16	int32
-0	1	1	Int16	uint32	int64
-0	1	1	Int16	Float32	Float32
-0	1	1	Int16	float64	float64
-0	1	1	Int16	Decimal(9, 0)	Decimal(9, 0)
-0	1	1	Int16	Decimal(18, 0)	Decimal(18, 0)
-0	1	1	Int16	Decimal(38, 0)	Decimal(38, 0)
+0	1	1	int16	int8	int16
+0	1	1	int16	int16	int16
+0	1	1	int16	int32	int32
+0	1	1	int16	int64	int64
+0	1	1	int16	uint8	int16
+0	1	1	int16	uint16	int32
+0	1	1	int16	uint32	int64
+0	1	1	int16	float32	float32
+0	1	1	int16	float64	float64
+0	1	1	int16	Decimal(9, 0)	Decimal(9, 0)
+0	1	1	int16	Decimal(18, 0)	Decimal(18, 0)
+0	1	1	int16	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	int32	int8	int32
-0	1	1	int32	Int16	int32
+0	1	1	int32	int16	int32
 0	1	1	int32	int32	int32
 0	1	1	int32	int64	int64
 0	1	1	int32	uint8	int32
 0	1	1	int32	uint16	int32
 0	1	1	int32	uint32	int64
-0	1	1	int32	Float32	float64
+0	1	1	int32	float32	float64
 0	1	1	int32	float64	float64
 0	1	1	int32	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	int32	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	int32	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	int64	int8	int64
-0	1	1	int64	Int16	int64
+0	1	1	int64	int16	int64
 0	1	1	int64	int32	int64
 0	1	1	int64	int64	int64
 0	1	1	int64	uint8	int64
@@ -142,41 +142,41 @@ column vs value
 0	1	1	int64	Decimal(9, 0)	Decimal(18, 0)
 0	1	1	int64	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	int64	Decimal(38, 0)	Decimal(38, 0)
-0	1	1	uint8	int8	Int16
-0	1	1	uint8	Int16	Int16
+0	1	1	uint8	int8	int16
+0	1	1	uint8	int16	int16
 0	1	1	uint8	int32	int32
 0	1	1	uint8	int64	int64
 0	1	1	uint8	uint8	uint8
 0	1	1	uint8	uint16	uint16
 0	1	1	uint8	uint32	uint32
 0	1	1	uint8	uint64	uint64
-0	1	1	uint8	Float32	Float32
+0	1	1	uint8	float32	float32
 0	1	1	uint8	float64	float64
 0	1	1	uint8	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	uint8	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	uint8	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	uint16	int8	int32
-0	1	1	uint16	Int16	int32
+0	1	1	uint16	int16	int32
 0	1	1	uint16	int32	int32
 0	1	1	uint16	int64	int64
 0	1	1	uint16	uint8	uint16
 0	1	1	uint16	uint16	uint16
 0	1	1	uint16	uint32	uint32
 0	1	1	uint16	uint64	uint64
-0	1	1	uint16	Float32	Float32
+0	1	1	uint16	float32	float32
 0	1	1	uint16	float64	float64
 0	1	1	uint16	Decimal(9, 0)	Decimal(9, 0)
 0	1	1	uint16	Decimal(18, 0)	Decimal(18, 0)
 0	1	1	uint16	Decimal(38, 0)	Decimal(38, 0)
 0	1	1	uint32	int8	int64
-0	1	1	uint32	Int16	int64
+0	1	1	uint32	int16	int64
 0	1	1	uint32	int32	int64
 0	1	1	uint32	int64	int64
 0	1	1	uint32	uint8	uint32
 0	1	1	uint32	uint16	uint32
 0	1	1	uint32	uint32	uint32
 0	1	1	uint32	uint64	uint64
-0	1	1	uint32	Float32	float64
+0	1	1	uint32	float32	float64
 0	1	1	uint32	float64	float64
 0	1	1	uint32	Decimal(9, 0)	Decimal(18, 0)
 0	1	1	uint32	Decimal(18, 0)	Decimal(18, 0)

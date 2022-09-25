@@ -1,0 +1,1 @@
+create stream if not exists bid (auction int64, bidder int64, channel string, price int64, url string, dateTime datetime64(3), extra string)

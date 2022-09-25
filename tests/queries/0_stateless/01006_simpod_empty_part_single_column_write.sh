@@ -28,12 +28,12 @@ ${CLICKHOUSE_CLIENT} --query="INSERT INTO table_with_empty_part VALUES (2, 2)"
 
 ${CLICKHOUSE_CLIENT} --mutations_sync=2 --query="ALTER STREAM table_with_empty_part DELETE WHERE id % 2 == 0"
 
-${CLICKHOUSE_CLIENT} --query="SELECT COUNT(DISTINCT value) FROM table_with_empty_part"
+${CLICKHOUSE_CLIENT} --query="SELECT count(DISTINCT value) FROM table_with_empty_part"
 
-${CLICKHOUSE_CLIENT} --query="ALTER STREAM table_with_empty_part MODIFY COLUMN value Nullable(uint64)"
+${CLICKHOUSE_CLIENT} --query="ALTER STREAM table_with_empty_part MODIFY COLUMN value nullable(uint64)"
 
-${CLICKHOUSE_CLIENT} --query="SELECT COUNT(distinct value) FROM table_with_empty_part"
+${CLICKHOUSE_CLIENT} --query="SELECT count(distinct value) FROM table_with_empty_part"
 
-${CLICKHOUSE_CLIENT} --query="OPTIMIZE STREAM table_with_empty_part FINAL"
+${CLICKHOUSE_CLIENT} --query="OPTIMIZE TABLE table_with_empty_part FINAL"
 
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS table_with_empty_part"

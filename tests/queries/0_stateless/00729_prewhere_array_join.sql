@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 SET query_mode = 'table';
 drop stream if exists t1_00729;
 create stream t1_00729 (id uint64, val array(string),nid uint64, eDate date)ENGINE = MergeTree(eDate, (id, eDate), 8192);

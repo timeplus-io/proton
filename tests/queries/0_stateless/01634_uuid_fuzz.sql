@@ -1,1 +1,1 @@
-SELECT toUUID(-1.1); -- { serverError 48 }
+SELECT to_uuid(-1.1); -- { serverError 48 }

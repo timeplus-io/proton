@@ -26,7 +26,7 @@ $CLICKHOUSE_CLIENT -n --query="
 create stream bloom_filter_idx2
 (
     k uint64,
-    s FixedString(15),
+    s fixed_string(15),
     INDEX bf (s, lower(s)) TYPE ngrambf_v1(3, 512, 2, 0) GRANULARITY 1
 ) ENGINE = MergeTree()
 ORDER BY k

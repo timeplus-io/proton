@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS test;
 create stream test (i uint64) Engine = MergeTree() order by i;
 INSERT INTO test SELECT number FROM numbers(100);
 INSERT INTO test SELECT number FROM numbers(10,100);
-OPTIMIZE STREAM test FINAL;
+OPTIMIZE TABLE test FINAL;
 
 -- Only set limit
 SET limit = 5;

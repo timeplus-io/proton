@@ -12,7 +12,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 function thread_create {
     while true; do
-        $CLICKHOUSE_CLIENT --query "create stream IF NOT EXISTS $1 (x uint64, s array(Nullable(string))) ENGINE = $2" 2>&1 | grep -v -F 'Received exception from server' | grep -v -P 'Code: (60|57)'
+        $CLICKHOUSE_CLIENT --query "create stream IF NOT EXISTS $1 (x uint64, s array(nullable(string))) ENGINE = $2" 2>&1 | grep -v -F 'Received exception from server' | grep -v -P 'Code: (60|57)'
         sleep 0.0$RANDOM
     done
 }
@@ -26,7 +26,7 @@ function thread_drop {
 
 function thread_rename {
     while true; do
-        $CLICKHOUSE_CLIENT --query "RENAME TABLE $1 TO $2" 2>&1 | grep -v -e 'Received exception from server' -e '^(query: ' | grep -v -P 'Code: (60|57)'
+        $CLICKHOUSE_CLIENT --query "RENAME STREAM $1 TO $2" 2>&1 | grep -v -e 'Received exception from server' -e '^(query: ' | grep -v -P 'Code: (60|57)'
         sleep 0.0$RANDOM
     done
 }

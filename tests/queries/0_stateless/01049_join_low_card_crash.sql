@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS Alpha;
 DROP STREAM IF EXISTS Beta;
 
 create stream Alpha (foo string, bar uint64) ;
-create stream Beta (foo LowCardinality(string), baz uint64) ;
+create stream Beta (foo low_cardinality(string), baz uint64) ;
 
 INSERT INTO Alpha VALUES ('a', 1);
 INSERT INTO Beta VALUES ('a', 2), ('b', 3);

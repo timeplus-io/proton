@@ -71,42 +71,42 @@ ClickHouse supports asynchronous multi-master replication and can be deployed ac
 ClickHouse is simple and works out of the box. It simplifies all processing of your data: it loads all structured data into the system and immediately becomes available for building reports. The SQL dialect allows you to express the desired result without resorting to any of the non-standard APIs found in some alternative systems.'
 ));
 
-SELECT 'uniqExact', uniqExact(s) FROM defaults;
+SELECT 'uniq_exact', uniq_exact(s) FROM defaults;
 
 
 SELECT 'ngramSimHash';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramSimHash(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramSimHash(s) as h FROM defaults GROUP BY h;
 SELECT 'ngramSimHashCaseInsensitive';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramSimHashCaseInsensitive(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramSimHashCaseInsensitive(s) as h FROM defaults GROUP BY h;
 SELECT 'ngramSimHashUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramSimHashUTF8(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramSimHashUTF8(s) as h FROM defaults GROUP BY h;
 SELECT 'ngramSimHashCaseInsensitiveUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramSimHashCaseInsensitiveUTF8(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramSimHashCaseInsensitiveUTF8(s) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleSimHash';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHash(s, 2) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHash(s, 2) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleSimHashCaseInsensitive';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHashCaseInsensitive(s, 2) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHashCaseInsensitive(s, 2) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleSimHashUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHashUTF8(s, 2) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHashUTF8(s, 2) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleSimHashCaseInsensitiveUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHashCaseInsensitiveUTF8(s, 2) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleSimHashCaseInsensitiveUTF8(s, 2) as h FROM defaults GROUP BY h;
 
 SELECT 'ngramMinHash';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramMinHash(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramMinHash(s) as h FROM defaults GROUP BY h;
 SELECT 'ngramMinHashCaseInsensitive';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramMinHashCaseInsensitive(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramMinHashCaseInsensitive(s) as h FROM defaults GROUP BY h;
 SELECT 'ngramMinHashUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramMinHashUTF8(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramMinHashUTF8(s) as h FROM defaults GROUP BY h;
 SELECT 'ngramMinHashCaseInsensitiveUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), ngramMinHashCaseInsensitiveUTF8(s) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), ngramMinHashCaseInsensitiveUTF8(s) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleMinHash';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHash(s, 2, 3) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHash(s, 2, 3) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleMinHashCaseInsensitive';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHashCaseInsensitive(s, 2, 3) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHashCaseInsensitive(s, 2, 3) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleMinHashUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHashUTF8(s, 2, 3) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHashUTF8(s, 2, 3) as h FROM defaults GROUP BY h;
 SELECT 'wordShingleMinHashCaseInsensitiveUTF8';
-SELECT arrayStringConcat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHashCaseInsensitiveUTF8(s, 2, 3) as h FROM defaults GROUP BY h;
+SELECT array_string_concat(group_array(s), '\n:::::::\n'), count(), wordShingleMinHashCaseInsensitiveUTF8(s, 2, 3) as h FROM defaults GROUP BY h;
 
 SELECT wordShingleSimHash('foobar', 9223372036854775807); -- { serverError 69 }
 SELECT wordShingleSimHash('foobar', 1001); -- { serverError 69 }

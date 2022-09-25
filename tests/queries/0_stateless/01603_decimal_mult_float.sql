@@ -6,7 +6,7 @@ SELECT 30.033 * to_decimal32(5, 1);
 create stream IF NOT EXISTS test01603 (
     f64 float64,
     d Decimal64(3) DEFAULT to_decimal32(f64, 3),
-    f32 Float32 DEFAULT f64
+    f32 float32 DEFAULT f64
 ) ENGINE=MergeTree() ORDER BY f32;
 
 INSERT INTO test01603(f64) SELECT 1 / (number + 1) FROM system.numbers LIMIT 1000;

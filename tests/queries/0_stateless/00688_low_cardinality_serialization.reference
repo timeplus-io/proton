@@ -1,25 +1,25 @@
 NativeBlockInputStream
-LowCardinality(string)	123_a	2	
-LowCardinality(string)	123_bb	3	123_
-LowCardinality(string)	123_	1	123_a
-LowCardinality(string)	123_a	2	123_bb
-LowCardinality(string)	123_ccc	4	123_ccc
-LowCardinality(string)	123_a	2	123_dddd
-LowCardinality(string)	123_bb	3	
-LowCardinality(string)	123_	1	
-LowCardinality(string)	123_dddd	5	
+low_cardinality(string)	123_a	2	
+low_cardinality(string)	123_bb	3	123_
+low_cardinality(string)	123_	1	123_a
+low_cardinality(string)	123_a	2	123_bb
+low_cardinality(string)	123_ccc	4	123_ccc
+low_cardinality(string)	123_a	2	123_dddd
+low_cardinality(string)	123_bb	3	
+low_cardinality(string)	123_	1	
+low_cardinality(string)	123_dddd	5	
 -
-LowCardinality(Nullable(string))	123_a	3	\N
-LowCardinality(Nullable(string))	\N	0	
-LowCardinality(Nullable(string))	123_bb	4	123_
-LowCardinality(Nullable(string))	123_	2	123_a
-LowCardinality(Nullable(string))	123_a	3	123_bb
-LowCardinality(Nullable(string))	\N	0	123_ccc
-LowCardinality(Nullable(string))	123_ccc	5	123_dddd
-LowCardinality(Nullable(string))	123_a	3	\N
-LowCardinality(Nullable(string))	123_bb	4	\N
-LowCardinality(Nullable(string))	123_	2	\N
-LowCardinality(Nullable(string))	123_dddd	6	\N
+low_cardinality(nullable(string))	123_a	3	\N
+low_cardinality(nullable(string))	\N	0	
+low_cardinality(nullable(string))	123_bb	4	123_
+low_cardinality(nullable(string))	123_	2	123_a
+low_cardinality(nullable(string))	123_a	3	123_bb
+low_cardinality(nullable(string))	\N	0	123_ccc
+low_cardinality(nullable(string))	123_ccc	5	123_dddd
+low_cardinality(nullable(string))	123_a	3	\N
+low_cardinality(nullable(string))	123_bb	4	\N
+low_cardinality(nullable(string))	123_	2	\N
+low_cardinality(nullable(string))	123_dddd	6	\N
 MergeTree
 499500000
 499999500000

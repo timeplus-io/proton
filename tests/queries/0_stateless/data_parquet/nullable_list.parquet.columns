@@ -1,1 +1,1 @@
-`a1` array(Nullable(uint32)), `a2` array(Nullable(string)), `a3` array(Nullable(Decimal(4, 2)))
+`a1` array(nullable(uint32)), `a2` array(nullable(string)), `a3` array(nullable(Decimal(4, 2)))

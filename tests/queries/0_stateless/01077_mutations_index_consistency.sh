@@ -11,7 +11,7 @@ $CLICKHOUSE_CLIENT -n --query "create stream movement (date datetime('Europe/Mos
 
 $CLICKHOUSE_CLIENT --query "insert into movement select to_datetime('2020-01-22 00:00:00', 'Europe/Moscow') + number%(23*3600) from numbers(1000000);"
 
-$CLICKHOUSE_CLIENT --query "OPTIMIZE STREAM movement FINAL"
+$CLICKHOUSE_CLIENT --query "OPTIMIZE TABLE movement FINAL"
 
 $CLICKHOUSE_CLIENT -n --query "
 SELECT

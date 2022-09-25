@@ -3,7 +3,7 @@ DROP STREAM IF EXISTS indexed_table;
 
 create stream indexed_table
 (
-    `tm` DateTime,
+    `tm` datetime,
     `log_message` string,
     INDEX log_message log_message TYPE tokenbf_v1(4096, 2, 0) GRANULARITY 1
 )
@@ -19,9 +19,9 @@ SELECT
     concat('hhhhhhhhhhhhhhhhhhhhhhhhh', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'yyyyyyyyyyyyyyyyyyyyyyyyyy', to_string(rand()))
 FROM numbers(1000);
 
-OPTIMIZE STREAM indexed_table FINAL;
+OPTIMIZE TABLE indexed_table FINAL;
 
-SELECT COUNT() FROM indexed_table WHERE log_message like '%x%';
+SELECT count() FROM indexed_table WHERE log_message like '%x%';
 
 DROP STREAM IF EXISTS indexed_table;
 
@@ -29,7 +29,7 @@ DROP STREAM IF EXISTS another_indexed_table;
 
 create stream another_indexed_table
 (
-  `tm` DateTime,
+  `tm` datetime,
   `log_message` string,
   INDEX log_message log_message TYPE tokenbf_v1(4096, 2, 0) GRANULARITY 1
 )
@@ -49,8 +49,8 @@ SELECT
   concat('hhhhhhhhhhhhhhhhhhhhhhhhh', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'yyyyyyyyyyyyyyyyyyyyyyyyyy', to_string(rand()))
   FROM numbers(1000);
 
-OPTIMIZE STREAM another_indexed_table FINAL;
+OPTIMIZE TABLE another_indexed_table FINAL;
 
-SELECT COUNT() FROM another_indexed_table WHERE log_message like '%x%';
+SELECT count() FROM another_indexed_table WHERE log_message like '%x%';
 
 DROP STREAM IF EXISTS another_indexed_table;

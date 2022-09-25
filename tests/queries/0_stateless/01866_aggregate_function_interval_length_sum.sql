@@ -9,7 +9,7 @@ INSERT INTO interval VALUES ('a', 1, 3), ('a', 1, 3), ('a', 2, 4), ('a', 1, 1), 
 create stream fl_interval ( `id` string, `start` Float, `end` Float ) ENGINE = MergeTree ORDER BY start;
 INSERT INTO fl_interval VALUES ('a', 1.1, 3.2), ('a', 1.5, 3.6), ('a', 4.0, 5.0);
 
-create stream dt_interval ( `id` string, `start` DateTime, `end` DateTime ) ENGINE = MergeTree ORDER BY start;
+create stream dt_interval ( `id` string, `start` datetime, `end` datetime ) ENGINE = MergeTree ORDER BY start;
 INSERT INTO dt_interval VALUES ('a', '2020-01-01 02:11:22', '2020-01-01 03:12:31'), ('a', '2020-01-01 01:12:30', '2020-01-01 02:50:11');
 
 create stream date_interval ( `id` string, `start` date, `end` date ) ENGINE = MergeTree ORDER BY start;

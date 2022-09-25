@@ -6,8 +6,8 @@ select
     from
     (
         select
-            array_map( x ->  x % 3 ? toNullable(number%5 + x) : null, range(3)) as k,
-            number % 4 ? toNullable( rand() ) : Null  as cnt
+            array_map( x ->  x % 3 ? to_nullable(number%5 + x) : null, range(3)) as k,
+            number % 4 ? to_nullable( rand() ) : Null  as cnt
         from system.numbers_mt
         where number < 1000000
         limit 1000000

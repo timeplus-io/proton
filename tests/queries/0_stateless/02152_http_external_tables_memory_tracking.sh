@@ -29,7 +29,7 @@ function run_and_check()
 
     # Check that temporary table had been destroyed.
     ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}&allow_introspection_functions=1" --data-binary @- <<<"
-    WITH arrayStringConcat(array_map(x -> demangle(addressToSymbol(x)), trace), '\n') AS sym
+    WITH array_string_concat(array_map(x -> demangle(addressToSymbol(x)), trace), '\n') AS sym
     SELECT count()>0 FROM system.trace_log
     WHERE
         sym LIKE '%DB::StorageMemory::drop%\n%TemporaryTableHolder::~TemporaryTableHolder%' AND

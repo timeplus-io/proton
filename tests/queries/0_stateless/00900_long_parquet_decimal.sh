@@ -76,7 +76,7 @@ ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS decimal;"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS decimal2;"
 
 
-${CLICKHOUSE_CLIENT} --query="create stream IF NOT EXISTS decimal  (a Nullable(DECIMAL(9,0)), b Nullable(DECIMAL(18,0)), c Nullable(DECIMAL(38,0)), d Nullable(DECIMAL(9,0))) ;"
+${CLICKHOUSE_CLIENT} --query="create stream IF NOT EXISTS decimal  (a nullable(DECIMAL(9,0)), b nullable(DECIMAL(18,0)), c nullable(DECIMAL(38,0)), d nullable(DECIMAL(9,0))) ;"
 ${CLICKHOUSE_CLIENT} --query="create stream IF NOT EXISTS decimal2 AS decimal ;"
 # Empty table test
 # throws No data to insert

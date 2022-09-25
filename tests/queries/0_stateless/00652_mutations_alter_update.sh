@@ -8,7 +8,7 @@ ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS alter_update"
 
 ${CLICKHOUSE_CLIENT} --query="create stream alter_update \
     (d date, key uint32, value1 string, value2 uint64, materialized_value string MATERIALIZED concat('materialized_', to_string(value2 + 7))) \
-    ENGINE MergeTree ORDER BY key PARTITION BY toYYYYMM(d)"
+    ENGINE MergeTree ORDER BY key PARTITION BY to_YYYYMM(d)"
 
 
 ${CLICKHOUSE_CLIENT} --query="SELECT '*** Test expected failures ***'"

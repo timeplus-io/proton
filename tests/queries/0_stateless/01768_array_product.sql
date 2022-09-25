@@ -22,5 +22,5 @@ SELECT 'Types of aggregation result array product';
 SELECT to_type_name(arrayProduct([to_int8(0)])), to_type_name(arrayProduct([to_int16(0)])), to_type_name(arrayProduct([to_int32(0)])), to_type_name(arrayProduct([to_int64(0)]));
 SELECT to_type_name(arrayProduct([to_uint8(0)])), to_type_name(arrayProduct([to_uint16(0)])), to_type_name(arrayProduct([to_uint32(0)])), to_type_name(arrayProduct([to_uint64(0)]));
 SELECT to_type_name(arrayProduct([to_int128(0)])), to_type_name(arrayProduct([toInt256(0)])), to_type_name(arrayProduct([toUInt256(0)]));
-SELECT to_type_name(arrayProduct([to_float32(0)])), to_type_name(arrayProduct([toFloat64(0)]));
+SELECT to_type_name(arrayProduct([to_float32(0)])), to_type_name(arrayProduct([to_float64(0)]));
 SELECT to_type_name(arrayProduct([to_decimal32(0, 8)])), to_type_name(arrayProduct([to_decimal64(0, 8)])), to_type_name(arrayProduct([toDecimal128(0, 8)]));

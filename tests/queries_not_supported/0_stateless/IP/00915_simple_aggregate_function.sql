@@ -25,7 +25,7 @@ drop stream if exists simple;
 create stream simple (
     id uint64,
     nullable_str SimpleAggregateFunction(anyLast,Nullable(string)),
-    low_str SimpleAggregateFunction(anyLast,LowCardinality(Nullable(string))),
+    low_str SimpleAggregateFunction(anyLast,low_cardinality(Nullable(string))),
     ip SimpleAggregateFunction(anyLast,IPv4),
     status SimpleAggregateFunction(groupBitOr, uint32),
     tup SimpleAggregateFunction(sumMap, tuple(array(int32), array(int64))),

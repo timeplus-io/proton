@@ -2,7 +2,7 @@ SET allow_experimental_bigint_types=1;
 
 create stream IF NOT EXISTS test_01035_avg (
     i8 int8         DEFAULT i64,
-    i16 Int16       DEFAULT i64,
+    i16 int16       DEFAULT i64,
     i32 int32       DEFAULT i64,
     i64 int64       DEFAULT if(u64 % 2 = 0, to_int64(u64), to_int64(-u64)),
     i128 Int128     DEFAULT i64,
@@ -15,7 +15,7 @@ create stream IF NOT EXISTS test_01035_avg (
     u128 UInt128    DEFAULT u64,
     u256 UInt256    DEFAULT u64,
 
-    f32 Float32     DEFAULT u64,
+    f32 float32     DEFAULT u64,
     f64 float64     DEFAULT u64,
 
     d32 Decimal32(4)    DEFAULT to_decimal32(i32 / 1000, 4),
@@ -46,6 +46,6 @@ DROP STREAM IF EXISTS test_01035_avg;
 SELECT avg(key), avgIf(key, key > 0), avg(key2), avgIf(key2, key2 > 0), avg(key3), avgIf(key3, key3 > 0)
 FROM
 (
-     SELECT 1::int8 as key, Null::Nullable(int8) AS key2, 1::Nullable(int8) as key3
+     SELECT 1::int8 as key, Null::nullable(int8) AS key2, 1::nullable(int8) as key3
      FROM numbers(100000)
 )

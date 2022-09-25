@@ -9,10 +9,10 @@ DROP STREAM IF EXISTS r_lc;
 
 create stream l (x uint32, lc string) ;
 create stream r (x uint32, lc string) ;
-create stream nl (x Nullable(uint32), lc Nullable(string)) ;
-create stream nr (x Nullable(uint32), lc Nullable(string)) ;
-create stream l_lc (x uint32, lc LowCardinality(string)) ;
-create stream r_lc (x uint32, lc LowCardinality(string)) ;
+create stream nl (x nullable(uint32), lc nullable(string)) ;
+create stream nr (x nullable(uint32), lc nullable(string)) ;
+create stream l_lc (x uint32, lc low_cardinality(string)) ;
+create stream r_lc (x uint32, lc low_cardinality(string)) ;
 
 INSERT INTO r VALUES (0, 'str'),  (1, 'str_r');
 INSERT INTO nr VALUES (0, 'str'),  (1, 'str_r');

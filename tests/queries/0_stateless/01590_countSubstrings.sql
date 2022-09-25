@@ -119,7 +119,7 @@ select '';
 select 'CountSubstringsImpl::vectorVector';
 -- can't use any char, since this will not make valid UTF8
 -- for the haystack we use number as-is, for needle we just add dependency from number to go to vectorVector code
-select countSubstringsCaseInsensitiveUTF8(upperUTF8(concat(char(number), 'я')), lower_utf8(concat(substringUTF8(char(number), 2), 'Я'))) from numbers(100) where number = 0x41; -- A
+select countSubstringsCaseInsensitiveUTF8(upper_utf8(concat(char(number), 'я')), lower_utf8(concat(substringUTF8(char(number), 2), 'Я'))) from numbers(100) where number = 0x41; -- A
 select countSubstringsCaseInsensitiveUTF8(concat(to_string(number), 'ЯЯЯ111'), concat(substringUTF8(char(number), 2), 'я')) from numbers(100) where number = 0x41; -- A
 select countSubstringsCaseInsensitiveUTF8(concat(to_string(number), 'яяя111яя1'), concat(substringUTF8(char(number), 2), 'Я')) from numbers(100) where number = 0x41; -- A
 select 'intersect', countSubstringsCaseInsensitiveUTF8(concat(to_string(number), 'яяяяяяяя'), concat(substringUTF8(char(number), 2), 'Яя')) from numbers(100) where number = 0x41 format CSV; -- A

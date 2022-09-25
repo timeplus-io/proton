@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS test_02100"
-$CLICKHOUSE_CLIENT -q "create stream test_02100 (x LowCardinality(Nullable(string)) DEFAULT 'default') ENGINE=Memory()"
+$CLICKHOUSE_CLIENT -q "create stream test_02100 (x low_cardinality(nullable(string)) DEFAULT 'default') ENGINE=Memory()"
 
 FORMATS=('CSV' 'TSV' 'TSVRaw' 'TSKV' 'JSONCompactEachRow' 'JSONEachRow' 'Values')
 

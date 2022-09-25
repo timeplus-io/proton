@@ -18,7 +18,7 @@ INSERT INTO collapsing_table SELECT if(number == 8192, 8191, number), 1, if(numb
 
 SELECT sum(Sign), count() from collapsing_table;
 
-OPTIMIZE STREAM collapsing_table FINAL;
+OPTIMIZE TABLE collapsing_table FINAL;
 
 SELECT sum(Sign), count() from collapsing_table;
 
@@ -45,7 +45,7 @@ INSERT INTO collapsing_suspicious_granularity VALUES (1, 1, -1) (1, 1, 1);
 
 SELECT sum(Sign), count() from collapsing_suspicious_granularity;
 
-OPTIMIZE STREAM collapsing_suspicious_granularity FINAL;
+OPTIMIZE TABLE collapsing_suspicious_granularity FINAL;
 
 SELECT sum(Sign), count() from collapsing_suspicious_granularity;
 

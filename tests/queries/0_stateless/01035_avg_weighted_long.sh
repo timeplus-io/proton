@@ -10,7 +10,7 @@ ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, weight) FROM (SELECT t.1 AS 
 ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select toDecimal256(1, 0) x, toDecimal256(1, 1) y);"
 ${CLICKHOUSE_CLIENT} --query="SELECT avgWeighted(x, y) FROM (select to_decimal32(1, 0) x, toDecimal256(1, 1) y);"
 
-types=("int8" "Int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64" "Float32" "float64")
+types=("int8" "int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64" "float32" "float64")
 
 for left in "${types[@]}"
 do
@@ -42,5 +42,5 @@ do
     done
 done
 
-echo "$(${CLICKHOUSE_CLIENT} --server_logs_file=/dev/null --query="SELECT avgWeighted(['string'], toFloat64(0))" 2>&1)" \
+echo "$(${CLICKHOUSE_CLIENT} --server_logs_file=/dev/null --query="SELECT avgWeighted(['string'], to_float64(0))" 2>&1)" \
   | grep -c 'Code: 43. DB::Exception: .* DB::Exception:.* Types .* are non-conforming as arguments for aggregate function avgWeighted'

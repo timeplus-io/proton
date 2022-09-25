@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS date_datetime_key_condition;
 
-create stream date_datetime_key_condition (dt DateTime) ENGINE = MergeTree() ORDER BY dt;
+create stream date_datetime_key_condition (dt datetime) ENGINE = MergeTree() ORDER BY dt;
 INSERT INTO date_datetime_key_condition VALUES ('2020-01-01 00:00:00'), ('2020-01-01 10:00:00'), ('2020-01-02 00:00:00');
 
 -- partial

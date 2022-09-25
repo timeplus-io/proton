@@ -3,8 +3,8 @@
 DROP STREAM IF EXISTS test_collate;
 DROP STREAM IF EXISTS test_collate_null;
 
-create stream test_collate (x uint32, s LowCardinality(string)) ENGINE=Memory();
-create stream test_collate_null (x uint32, s LowCardinality(Nullable(string))) ENGINE=Memory();
+create stream test_collate (x uint32, s low_cardinality(string)) ENGINE=Memory();
+create stream test_collate_null (x uint32, s low_cardinality(nullable(string))) ENGINE=Memory();
 
 INSERT INTO test_collate VALUES (1, 'Ё'), (1, 'ё'), (1, 'а'), (2, 'А'), (2, 'я'), (2, 'Я');
 INSERT INTO test_collate_null VALUES (1, 'Ё'), (1, 'ё'), (1, 'а'), (2, 'А'), (2, 'я'), (2, 'Я'), (1, null), (2, null);

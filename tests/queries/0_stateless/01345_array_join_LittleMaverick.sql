@@ -2,9 +2,9 @@ DROP STREAM IF EXISTS test;
 
 create stream test
 (
-  `id` Nullable(string),
-  `status` Nullable(Enum8('NEW' = 0, 'CANCEL' = 1)),
-  `nested.nestedType` array(Nullable(string)),
+  `id` nullable(string),
+  `status` nullable(enum8('NEW' = 0, 'CANCEL' = 1)),
+  `nested.nestedType` array(nullable(string)),
   `partition` date
 ) ENGINE = MergeTree() PARTITION BY partition
 ORDER BY

@@ -1,0 +1,1 @@
+SELECT (to_date('2017-01-01') AS base) + INTERVAL number MONTH AS d, to_datetime(d, 'UTC') AS t, to_quarter(d) AS qd, to_quarter(t) AS qt, to_start_of_quarter(d) AS sqd, to_start_of_quarter(t) AS sqt, to_relative_quarter_num(d) - to_relative_quarter_num(base) AS qdiff_d, to_relative_quarter_num(t) - to_relative_quarter_num(base) as qdiff_t FROM system.numbers LIMIT 24;

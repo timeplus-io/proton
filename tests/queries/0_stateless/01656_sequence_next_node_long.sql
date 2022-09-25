@@ -4,7 +4,7 @@ SET allow_experimental_funnel_functions = 1;
 
 DROP STREAM IF EXISTS test_sequenceNextNode_Nullable;
 
-create stream IF NOT EXISTS test_sequenceNextNode_Nullable (dt DateTime, id int, action Nullable(string)) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
+create stream IF NOT EXISTS test_sequenceNextNode_Nullable (dt datetime, id int, action nullable(string)) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
 
 INSERT INTO test_sequenceNextNode_Nullable values ('2000-01-02 09:00:01',1,'A');
 INSERT INTO test_sequenceNextNode_Nullable values ('2000-01-02 09:00:02',1,'B');
@@ -100,7 +100,7 @@ DROP STREAM IF EXISTS test_sequenceNextNode_Nullable;
 
 DROP STREAM IF EXISTS test_sequenceNextNode;
 
-create stream IF NOT EXISTS test_sequenceNextNode (dt DateTime, id int, action string) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
+create stream IF NOT EXISTS test_sequenceNextNode (dt datetime, id int, action string) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
 
 INSERT INTO test_sequenceNextNode values ('2000-01-02 09:00:01',1,'A');
 INSERT INTO test_sequenceNextNode values ('2000-01-02 09:00:02',1,'B');
@@ -200,7 +200,7 @@ DROP STREAM IF EXISTS test_sequenceNextNode;
 
 DROP STREAM IF EXISTS test_base_condition;
 
-create stream IF NOT EXISTS test_base_condition (dt DateTime, id int, action string, referrer string) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
+create stream IF NOT EXISTS test_base_condition (dt datetime, id int, action string, referrer string) ENGINE = MergeTree() PARTITION BY dt ORDER BY id;
 
 INSERT INTO test_base_condition values ('2000-01-02 09:00:01',1,'A','1');
 INSERT INTO test_base_condition values ('2000-01-02 09:00:02',1,'B','2');

@@ -1,1 +1,1 @@
-`c0` Nullable(int64), `c1` Nullable(string), `v11` Nullable(float64)
+`c0` nullable(int64), `c1` nullable(string), `v11` nullable(float64)

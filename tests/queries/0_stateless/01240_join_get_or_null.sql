@@ -5,7 +5,7 @@ create stream join_test (id uint16, num uint16) engine = Join(ANY, LEFT, id);
 SELECT joinGetOrNull('join_test', 'num', 500);
 DROP STREAM join_test;
 
-create stream join_test (id uint16, num Nullable(uint16)) engine = Join(ANY, LEFT, id);
+create stream join_test (id uint16, num nullable(uint16)) engine = Join(ANY, LEFT, id);
 SELECT joinGetOrNull('join_test', 'num', 500);
 DROP STREAM join_test;
 

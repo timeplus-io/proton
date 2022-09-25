@@ -3,7 +3,7 @@ SET allow_suspicious_low_cardinality_types = 1;
 DROP STREAM IF EXISTS constraint_on_nullable_type;
 create stream constraint_on_nullable_type
 (
-    `id` Nullable(uint64),
+    `id` nullable(uint64),
     CONSTRAINT `c0` CHECK `id` = 1
 )
 ();
@@ -18,7 +18,7 @@ DROP STREAM constraint_on_nullable_type;
 DROP STREAM IF EXISTS constraint_on_low_cardinality_type;
 create stream constraint_on_low_cardinality_type
 (
-    `id` LowCardinality(uint64),
+    `id` low_cardinality(uint64),
     CONSTRAINT `c0` CHECK `id` = 2
 )
 ;
@@ -34,7 +34,7 @@ DROP STREAM IF EXISTS constraint_on_low_cardinality_nullable_type;
 
 create stream constraint_on_low_cardinality_nullable_type
 (
-    `id` LowCardinality(Nullable(uint64)),
+    `id` low_cardinality(nullable(uint64)),
     CONSTRAINT `c0` CHECK `id` = 3
 )
 ;

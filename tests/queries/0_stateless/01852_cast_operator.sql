@@ -4,8 +4,8 @@ EXPLAIN SYNTAX SELECT 0.1::Decimal(38, 38) AS c;
 SELECT [1, 2, 3]::array(uint32) AS c;
 EXPLAIN SYNTAX SELECT [1, 2, 3]::array(uint32) AS c;
 
-SELECT 'abc'::FixedString(3) AS c;
-EXPLAIN SYNTAX SELECT 'abc'::FixedString(3) AS c;
+SELECT 'abc'::fixed_string(3) AS c;
+EXPLAIN SYNTAX SELECT 'abc'::fixed_string(3) AS c;
 
 SELECT 123::string AS c;
 EXPLAIN SYNTAX SELECT 123::string AS c;

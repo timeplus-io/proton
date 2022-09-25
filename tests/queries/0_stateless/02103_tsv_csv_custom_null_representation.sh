@@ -12,122 +12,122 @@ DATA_FILE=$USER_FILES_PATH/test_02103_null.data
 echo "TSV"
 
 echo 'Custom NULL representation' > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS format_tsv_null_representation='Custom NULL representation'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS format_tsv_null_representation='Custom NULL representation'"
 
 echo -e 'N\tU\tL\tL' > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS format_tsv_null_representation='N\tU\tL\tL'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS format_tsv_null_representation='N\tU\tL\tL'"
 
 echo -e "\\NSome text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)')"
 
 echo -e "\\N" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)')"
 
 echo -e "\\NSome text\n\\N\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)')"
 
 echo -e "\\N\n\\N\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)')"
 
 echo -e "1\t\\NSome text\t1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s Nullable(string), y int32')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s nullable(string), y int32')"
 
 echo -e "1\t\\N\t1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s Nullable(string), y int32')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s nullable(string), y int32')"
 
 echo -e "CustomNullSome text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS format_tsv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS format_tsv_null_representation='CustomNull'"
 
 echo -e "CustomNullSome text\nCustomNull\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS format_tsv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS format_tsv_null_representation='CustomNull'"
 
 echo -e "CustomNull\nCustomNull\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS format_tsv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS format_tsv_null_representation='CustomNull'"
 
 echo -e "1\tCustomNull\t1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s Nullable(string), y int32') SETTINGS format_tsv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s nullable(string), y int32') SETTINGS format_tsv_null_representation='CustomNull'"
 
 echo -e "1\tCustomNull\t1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s Nullable(string), y int32') SETTINGS format_tsv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 'x int32, s nullable(string), y int32') SETTINGS format_tsv_null_representation='CustomNull'"
 
 
 echo "CSV"
 
 echo 'Custom NULL representation' > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)') SETTINGS format_csv_null_representation='Custom NULL representation'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)') SETTINGS format_csv_null_representation='Custom NULL representation'"
 
 echo -e 'N,U,L,L' > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)') SETTINGS format_csv_null_representation='N,U,L,L'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)') SETTINGS format_csv_null_representation='N,U,L,L'"
 
 echo -e "\\NSome text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)')"
 
 echo -e "\\N" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)')"
 
 echo -e "\\NSome text\n\\N\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)')"
 
 echo -e "\\N\n\\N\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)')"
 
 echo -e "1,\\NSome text,1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s Nullable(string), y int32')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s nullable(string), y int32')"
 
 echo -e "1,\\N,1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s Nullable(string), y int32')"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s nullable(string), y int32')"
 
 echo -e "CustomNullSome text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)') SETTINGS format_csv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)') SETTINGS format_csv_null_representation='CustomNull'"
 
 echo -e "CustomNullSome text\nCustomNull\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)') SETTINGS format_csv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)') SETTINGS format_csv_null_representation='CustomNull'"
 
 echo -e "CustomNull\nCustomNull\nSome more text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's Nullable(string)') SETTINGS format_csv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's nullable(string)') SETTINGS format_csv_null_representation='CustomNull'"
 
 echo -e "1,CustomNull,1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s Nullable(string), y int32') SETTINGS format_csv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s nullable(string), y int32') SETTINGS format_csv_null_representation='CustomNull'"
 
 echo -e "1,CustomNull,1" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s Nullable(string), y int32') SETTINGS format_csv_null_representation='CustomNull'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 'x int32, s nullable(string), y int32') SETTINGS format_csv_null_representation='CustomNull'"
 
 
 echo 'Corner cases'
 echo 'TSV'
 
 echo -e "Some text\tCustomNull" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n Nullable(string)') settings max_read_buffer_size=15, format_tsv_null_representation='CustomNull', input_format_parallel_parsing=0"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n nullable(string)') settings max_read_buffer_size=15, format_tsv_null_representation='CustomNull', input_format_parallel_parsing=0"
 
 echo -e "Some text\tCustomNull Some text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n Nullable(string)') settings max_read_buffer_size=15, format_tsv_null_representation='CustomNull', input_format_parallel_parsing=0"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n nullable(string)') settings max_read_buffer_size=15, format_tsv_null_representation='CustomNull', input_format_parallel_parsing=0"
 
 echo -e "Some text\t123NNN" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n Nullable(int32)') settings max_read_buffer_size=14, format_tsv_null_representation='123NN', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n nullable(int32)') settings max_read_buffer_size=14, format_tsv_null_representation='123NN', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
 
 echo -e "Some text\tNU\tLL" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n Nullable(string)') settings max_read_buffer_size=13, format_tsv_null_representation='NU\tL', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's string, n nullable(string)') settings max_read_buffer_size=13, format_tsv_null_representation='NU\tL', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
 
 echo 'CSV'
 
 echo -e "Some text,CustomNull" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n Nullable(string)') settings max_read_buffer_size=15, format_csv_null_representation='CustomNull', input_format_parallel_parsing=0"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n nullable(string)') settings max_read_buffer_size=15, format_csv_null_representation='CustomNull', input_format_parallel_parsing=0"
 
 echo -e "Some text,CustomNull Some text" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n Nullable(string)') settings max_read_buffer_size=15, format_csv_null_representation='CustomNull', input_format_parallel_parsing=0"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n nullable(string)') settings max_read_buffer_size=15, format_csv_null_representation='CustomNull', input_format_parallel_parsing=0"
 
 echo -e "Some text,123NNN" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n Nullable(int32)') settings max_read_buffer_size=14, format_csv_null_representation='123NN', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n nullable(int32)') settings max_read_buffer_size=14, format_csv_null_representation='123NN', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
 
 echo -e "Some text,NU,LL" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n Nullable(string)') settings max_read_buffer_size=13, format_csv_null_representation='NU,L', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'CSV', 's string, n nullable(string)') settings max_read_buffer_size=13, format_csv_null_representation='NU,L', input_format_parallel_parsing=0" 2>&1 | grep -F -q "CANNOT_READ_ALL_DATA" && echo 'OK' || echo 'FAIL'
 
 
 echo 'Large custom NULL'
 
 $CLICKHOUSE_CLIENT -q "select '0000000000Custom NULL representation0000000000' FROM numbers(10)" > $DATA_FILE
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS max_read_buffer_size=5, input_format_parallel_parsing=0, format_tsv_null_representation='0000000000Custom NULL representation0000000000'"
-$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's Nullable(string)') SETTINGS max_read_buffer_size=5, input_format_parallel_parsing=0, format_tsv_null_representation='0000000000Custom NULL representation000000000'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS max_read_buffer_size=5, input_format_parallel_parsing=0, format_tsv_null_representation='0000000000Custom NULL representation0000000000'"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM file('test_02103_null.data', 'TSV', 's nullable(string)') SETTINGS max_read_buffer_size=5, input_format_parallel_parsing=0, format_tsv_null_representation='0000000000Custom NULL representation000000000'"
 
 rm $DATA_FILE
 

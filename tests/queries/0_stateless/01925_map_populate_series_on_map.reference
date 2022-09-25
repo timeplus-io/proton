@@ -41,9 +41,9 @@ select mapPopulateSeries(map(toUInt128(1), toUInt128(1), 2, 1)) as res, to_type_
 select mapPopulateSeries(map(toUInt256(1), toUInt256(1), 2, 1)) as res, to_type_name(res);
 {1:1,2:1}	Map(UInt256, UInt256)
 select mapPopulateSeries(map(to_int8(1), to_int8(1), 2, 1)) as res, to_type_name(res);
-{1:1,2:1}	Map(Int16, Int16)
+{1:1,2:1}	Map(int16, int16)
 select mapPopulateSeries(map(to_int16(1), to_int16(1), 2, 1)) as res, to_type_name(res);
-{1:1,2:1}	Map(Int16, Int16)
+{1:1,2:1}	Map(int16, int16)
 select mapPopulateSeries(map(to_int32(1), to_int32(1), 2, 1)) as res, to_type_name(res);
 {1:1,2:1}	Map(int32, int32)
 select mapPopulateSeries(map(to_int64(1), to_int64(1), 2, 1)) as res, to_type_name(res);
@@ -53,9 +53,9 @@ select mapPopulateSeries(map(to_int128(1), to_int128(1), 2, 1)) as res, to_type_
 select mapPopulateSeries(map(toInt256(1), toInt256(1), 2, 1)) as res, to_type_name(res);
 {1:1,2:1}	Map(Int256, Int256)
 select mapPopulateSeries(map(to_int8(-10), to_int8(1), 2, 1)) as res, to_type_name(res);
-{-10:1,-9:0,-8:0,-7:0,-6:0,-5:0,-4:0,-3:0,-2:0,-1:0,0:0,1:0,2:1}	Map(Int16, Int16)
+{-10:1,-9:0,-8:0,-7:0,-6:0,-5:0,-4:0,-3:0,-2:0,-1:0,0:0,1:0,2:1}	Map(int16, int16)
 select mapPopulateSeries(map(to_int16(-10), to_int16(1), 2, 1)) as res, to_type_name(res);
-{-10:1,-9:0,-8:0,-7:0,-6:0,-5:0,-4:0,-3:0,-2:0,-1:0,0:0,1:0,2:1}	Map(Int16, Int16)
+{-10:1,-9:0,-8:0,-7:0,-6:0,-5:0,-4:0,-3:0,-2:0,-1:0,0:0,1:0,2:1}	Map(int16, int16)
 select mapPopulateSeries(map(to_int32(-10), to_int32(1), 2, 1)) as res, to_type_name(res);
 {-10:1,-9:0,-8:0,-7:0,-6:0,-5:0,-4:0,-3:0,-2:0,-1:0,0:0,1:0,2:1}	Map(int32, int32)
 select mapPopulateSeries(map(to_int64(-10), to_int64(1), 2, 1)) as res, to_type_name(res);

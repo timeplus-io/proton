@@ -1,6 +1,6 @@
 SET query_mode = 'table';
 drop stream if exists test;
-create stream test (name string, uuid UUID) engine=Memory();
+create stream test (name string, uuid uuid) engine=Memory();
 insert into test select '1', '00000000-0000-0000-0000-000000000000';
 insert into test select '2', '00000000-0000-0000-0000-000000000000';
 insert into test select '3', '00000000-0000-0000-0000-000000000000';

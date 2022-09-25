@@ -1,0 +1,13 @@
+metrics,diff_t+_materialize_percent,diff_t+_splunk_percent,materialize,splunk,timeplus
+small_min,,,,,
+small_max,,,,,
+small_mean,,,,,
+small_p90,,,,,
+medium_min,,,,,
+medium_max,,,,,
+medium_mean,,,,,
+medium_p90,,,,,
+large_min,,,,,
+large_max,,,,,
+large_mean,,,,,
+large_p90,,,,,

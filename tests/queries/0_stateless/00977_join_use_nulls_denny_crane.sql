@@ -16,8 +16,8 @@ select t.*, s.a, s.b, s.c from t right join s on (s.a = t.a and s.b = t.b) SETTI
 drop stream t;
 drop stream s;
 
-create stream t(a int64, b int64, c Nullable(string)) engine = Memory;
-create stream s(a int64, b int64, c Nullable(string)) engine = Memory;
+create stream t(a int64, b int64, c nullable(string)) engine = Memory;
+create stream s(a int64, b int64, c nullable(string)) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -30,8 +30,8 @@ select t.*, s.* from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_u
 drop stream t;
 drop stream s;
 
-create stream t(a int64, b Nullable(int64), c string) engine = Memory;
-create stream s(a int64, b Nullable(int64), c string) engine = Memory;
+create stream t(a int64, b nullable(int64), c string) engine = Memory;
+create stream s(a int64, b nullable(int64), c string) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -44,8 +44,8 @@ select * from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_null
 drop stream t;
 drop stream s;
 
-create stream t(a int64, b Nullable(int64), c Nullable(string)) engine = Memory;
-create stream s(a int64, b Nullable(int64), c Nullable(string)) engine = Memory;
+create stream t(a int64, b nullable(int64), c nullable(string)) engine = Memory;
+create stream s(a int64, b nullable(int64), c nullable(string)) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');
@@ -58,8 +58,8 @@ select * from t right join s on (s.a = t.a and s.b = t.b) SETTINGS join_use_null
 drop stream t;
 drop stream s;
 
-create stream t(a Nullable(int64), b Nullable(int64), c Nullable(string)) engine = Memory;
-create stream s(a Nullable(int64), b Nullable(int64), c Nullable(string)) engine = Memory;
+create stream t(a nullable(int64), b nullable(int64), c nullable(string)) engine = Memory;
+create stream s(a nullable(int64), b nullable(int64), c nullable(string)) engine = Memory;
 
 insert into t values(1,1,'a');
 insert into s values(2,2,'a');

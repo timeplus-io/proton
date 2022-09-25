@@ -13,18 +13,18 @@ DATA_DIR=$CUR_DIR/data_avro
 echo '===' input
 echo '=' primitive
 
-cat "$DATA_DIR"/primitive.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'a_bool uint8, b_int int32, c_long int64, d_float Float32, e_double float64, f_bytes string, g_string string' -q 'select * from table'
+cat "$DATA_DIR"/primitive.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'a_bool uint8, b_int int32, c_long int64, d_float float32, e_double float64, f_bytes string, g_string string' -q 'select * from table'
 cat "$DATA_DIR"/primitive.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'a_bool uint8, c_long int64, g_string string' -q 'select * from table'
 cat "$DATA_DIR"/primitive.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'g_string string, c_long int64, a_bool uint8' -q 'select * from table'
 cat "$DATA_DIR"/primitive.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'g_string string' -q 'select * from table'
 
 echo '=' complex
-cat "$DATA_DIR"/complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "a_enum_to_string string, b_enum_to_enum Enum('t' = 1, 'f' = 0), c_array_string array(string), d_array_array_string array(array(string)), e_union_null_string Nullable(string), f_union_long_null Nullable(int64), g_fixed FixedString(32)" -q 'select * from table'
-cat "$DATA_DIR"/complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "g_fixed FixedString(32)" -q 'select * from table'
+cat "$DATA_DIR"/complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "a_enum_to_string string, b_enum_to_enum Enum('t' = 1, 'f' = 0), c_array_string array(string), d_array_array_string array(array(string)), e_union_null_string nullable(string), f_union_long_null nullable(int64), g_fixed fixed_string(32)" -q 'select * from table'
+cat "$DATA_DIR"/complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "g_fixed fixed_string(32)" -q 'select * from table'
 
 echo '=' logical_types
-cat "$DATA_DIR"/logical_types.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "a_date date, b_timestamp_millis DateTime64(3, 'UTC'), c_timestamp_micros DateTime64(6, 'UTC'), d_uuid UUID" -q 'select * from table'
-cat "$DATA_DIR"/logical_types.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'a_date int32, b_timestamp_millis int64, c_timestamp_micros int64, d_uuid UUID' -q 'select * from table'
+cat "$DATA_DIR"/logical_types.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "a_date date, b_timestamp_millis DateTime64(3, 'UTC'), c_timestamp_micros DateTime64(6, 'UTC'), d_uuid uuid" -q 'select * from table'
+cat "$DATA_DIR"/logical_types.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'a_date int32, b_timestamp_millis int64, c_timestamp_micros int64, d_uuid uuid' -q 'select * from table'
 
 echo '=' references
 cat "$DATA_DIR"/references.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "a string, c string" -q 'select * from table'
@@ -36,15 +36,15 @@ cat "$DATA_DIR"/nested.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-f
 
 echo '=' nested_complex
 # special case union(null, T)
-cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S '"b.b2_null_str" Nullable(string)' -q 'select * from table'
+cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S '"b.b2_null_str" nullable(string)' -q 'select * from table'
 # union branch to non-null with default
 cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b2_null_str.string\" string default 'default'"    -q 'select * from table'
 # union branch to nullable
-cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b2_null_str.string\" Nullable(string)"    -q 'select * from table'
+cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b2_null_str.string\" nullable(string)"    -q 'select * from table'
 # multiple union branches simultaneously
-cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b3_null_str_double.string\" Nullable(string), \"b.b3_null_str_double.double\" Nullable(Double)"    -q 'select * from table'
+cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b3_null_str_double.string\" nullable(string), \"b.b3_null_str_double.double\" nullable(Double)"    -q 'select * from table'
 # and even nested recursive structures!
-cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b4_null_sub1.sub1.b2_null_str\" Nullable(string)"    -q 'select * from table'
+cat "$DATA_DIR"/nested_complex.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "\"b.b4_null_sub1.sub1.b2_null_str\" nullable(string)"    -q 'select * from table'
 
 echo '=' compression
 cat "$DATA_DIR"/simple.null.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S 'a int64' -q 'select count() from table'
@@ -72,15 +72,15 @@ cat "$DATA_DIR"/simple.null.avro | ${CLICKHOUSE_LOCAL} --input-format Avro --out
 echo '===' output
 
 echo '=' primitive
-S1="a_bool uint8, b_int int32, c_long int64, d_float Float32, e_double float64, f_bytes string, g_string string"
+S1="a_bool uint8, b_int int32, c_long int64, d_float float32, e_double float64, f_bytes string, g_string string"
 echo '1,1,2,3.4,5.6,"b1","s1"' | ${CLICKHOUSE_LOCAL} --input-format CSV -S "$S1" -q "select * from table  format Avro" | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "$S1" -q 'select * from table'
 
 echo '=' complex
-S2="a_enum_to_string string, b_enum_to_enum Enum('t' = 1, 'f' = 0), c_array_string array(string), d_array_array_string array(array(string)), e_union_null_string Nullable(string), f_union_long_null Nullable(int64), g_fixed FixedString(32)"
+S2="a_enum_to_string string, b_enum_to_enum Enum('t' = 1, 'f' = 0), c_array_string array(string), d_array_array_string array(array(string)), e_union_null_string nullable(string), f_union_long_null nullable(int64), g_fixed fixed_string(32)"
 echo "\"A\",\"t\",\"['s1','s2']\",\"[['a1'],['a2']]\",\"s1\",\N,\"79cd909892d7e7ade1987cc7422628ba\"" | ${CLICKHOUSE_LOCAL} --input-format CSV -S "$S2" -q "select * from table  format Avro" | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "$S2" -q 'select * from table'
 
 echo '=' logical_types
-S3="a_date date, b_timestamp_millis DateTime64(3, 'UTC'), c_timestamp_micros DateTime64(6, 'UTC'), d_uuid UUID"
+S3="a_date date, b_timestamp_millis DateTime64(3, 'UTC'), c_timestamp_micros DateTime64(6, 'UTC'), d_uuid uuid"
 echo '"2019-12-20","2020-01-10 07:31:56.227","2020-01-10 07:31:56.227000","7c856fd6-005f-46c7-a7b5-3a082ef6c659"' | ${CLICKHOUSE_LOCAL} --input-format CSV -S "$S3" -q "select * from table  format Avro" | ${CLICKHOUSE_LOCAL} --input-format Avro --output-format CSV -S "$S3" -q 'select * from table'
 
 echo '=' other

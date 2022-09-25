@@ -34,10 +34,10 @@ def test_and_check(name, a, b, t_stat, p_value, ci_low, ci_high, precision=1e-2)
     client.query("INSERT INTO ztest VALUES {};".format(", ".join(['({},{})'.format(i, 0) for i in a])))
     client.query("INSERT INTO ztest VALUES {};".format(", ".join(['({},{})'.format(j, 1) for j in b])))
     real = client.query_return_df(
-        "SELECT roundBankers({}(left, right).1, 16) as t_stat, ".format(name) +
-               "roundBankers({}(left, right).2, 16) as p_value, ".format(name) + 
-               "roundBankers({}(left, right).3, 16) as ci_low, ".format(name) + 
-               "roundBankers({}(left, right).4, 16) as ci_high ".format(name) + 
+        "SELECT round_bankers({}(left, right).1, 16) as t_stat, ".format(name) +
+               "round_bankers({}(left, right).2, 16) as p_value, ".format(name) + 
+               "round_bankers({}(left, right).3, 16) as ci_low, ".format(name) + 
+               "round_bankers({}(left, right).4, 16) as ci_high ".format(name) + 
         "FROM ztest FORMAT TabSeparatedWithNames;")
     real_t_stat = real['t_stat'][0]
     real_p_value = real['p_value'][0]

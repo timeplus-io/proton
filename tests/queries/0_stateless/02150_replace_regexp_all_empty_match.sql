@@ -1,1 +1,1 @@
-select replaceRegexpAll('Hello, World!', '^', 'here: ');
+select  replace_regex('Hello, World!', '^', 'here: ');

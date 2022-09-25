@@ -1,0 +1,5 @@
+create stream default.multiword_types\n(\n    `a` float64,\n    `b` float64,\n    `c` string DEFAULT \'str\',\n    `d` string,\n    `e` string COMMENT \'comment\',\n    `f` string,\n    `g` string,\n    `h` string DEFAULT to_string(a) COMMENT \'comment\',\n    `i` string,\n    `j` string,\n    `k` string,\n    `l` string,\n    `m` string,\n    `n` string,\n    `o` string,\n    `p` string\n)\nENGINE = Memory
+tuple(float64, float64, string, string, string, string, string, string, string, string, string, string, string, string, string, string)
+create stream default.unsigned_types\n(\n    `a` int8,\n    `b` int8,\n    `c` int16,\n    `d` int32,\n    `e` int32,\n    `f` int64,\n    `g` uint8,\n    `h` uint8,\n    `i` uint16,\n    `j` uint32,\n    `k` uint32,\n    `l` uint64\n)\nENGINE = Memory
+tuple(int8, int8, int16, int32, int32, int64, uint8, uint8, uint16, uint32, uint32, uint64)
+42	42	255	-1

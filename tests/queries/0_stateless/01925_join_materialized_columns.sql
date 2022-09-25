@@ -2,24 +2,24 @@ DROP STREAM IF EXISTS t1;
 DROP STREAM IF EXISTS t2;
 
 create stream t1 (
-    time DateTime,
+    time datetime,
     foo string,
     dimension_1 string,
     dt date MATERIALIZED to_date(time),
     dt1 date MATERIALIZED toDayOfYear(time),
     aliascol1 ALIAS foo || dimension_1,
-    time_alias DateTime ALIAS time
-) ENGINE = MergeTree() PARTITION BY toYYYYMM(dt) ORDER BY (dt, foo);
+    time_alias datetime ALIAS time
+) ENGINE = MergeTree() PARTITION BY to_YYYYMM(dt) ORDER BY (dt, foo);
 
 create stream t2 (
-    time DateTime,
+    time datetime,
     bar string,
     dimension_2 string,
     dt date MATERIALIZED to_date(time),
     dt2 date MATERIALIZED toDayOfYear(time),
     aliascol2 ALIAS bar || dimension_2,
-    time_alias DateTime ALIAS time
-) ENGINE = MergeTree() PARTITION BY toYYYYMM(dt) ORDER BY (dt, bar);
+    time_alias datetime ALIAS time
+) ENGINE = MergeTree() PARTITION BY to_YYYYMM(dt) ORDER BY (dt, bar);
 
 INSERT INTO t1 VALUES ('2020-01-01 12:00:00', 'fact1', 't1_val1'), ('2020-02-02 13:00:00', 'fact2', 't1_val2'), ('2020-01-01 13:00:00', 'fact3', 't1_val3');
 INSERT INTO t2 VALUES ('2020-01-01 12:00:00', 'fact1', 't2_val2'), ('2020-02-05 13:00:00', 'fact2', 't1_val2'), ('2019-01-01 12:00:00', 'fact4', 't2_val2');

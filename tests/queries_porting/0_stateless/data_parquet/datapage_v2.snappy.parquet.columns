@@ -1,1 +1,1 @@
-`a` Nullable(string), `b` array(Nullable(int32)), `c` Nullable(float64), `d` Nullable(uint8), `e` array(Nullable(int32))
+`a` nullable(string), `b` array(nullable(int32)), `c` nullable(float64), `d` nullable(uint8), `e` array(nullable(int32))

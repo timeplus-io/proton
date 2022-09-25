@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS test_01778;
 
 create stream test_01778
 (
-    `key` LowCardinality(FixedString(3)),
+    `key` low_cardinality(fixed_string(3)),
     `d` date
 )
 ENGINE = MergeTree(d, key, 8192);

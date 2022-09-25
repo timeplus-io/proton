@@ -4,8 +4,8 @@ DROP STREAM IF EXISTS t1_00848;
 DROP STREAM IF EXISTS t2_00848;
 DROP STREAM IF EXISTS t3_00848;
 create stream t1_00848 ( id string ) ;
-create stream t2_00848 ( id Nullable(string) ) ;
-create stream t3_00848 ( id Nullable(string), not_id Nullable(string) ) ;
+create stream t2_00848 ( id nullable(string) ) ;
+create stream t3_00848 ( id nullable(string), not_id nullable(string) ) ;
 
 insert into t1_00848 values ('l');
 insert into t3_00848 (id) values ('r');

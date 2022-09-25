@@ -1,24 +1,24 @@
 DROP STREAM IF EXISTS lc_nullable;
 
 create stream lc_nullable (
-    order_key   array(LowCardinality(Nullable(uint64))),
+    order_key   array(low_cardinality(nullable(uint64))),
 
-    i8  array(LowCardinality(Nullable(int8))),
-    i16 array(LowCardinality(Nullable(Int16))),
-    i32 array(LowCardinality(Nullable(int32))),
-    i64 array(LowCardinality(Nullable(int64))),
-    u8  array(LowCardinality(Nullable(uint8))),
-    u16 array(LowCardinality(Nullable(uint16))),
-    u32 array(LowCardinality(Nullable(uint32))),
-    u64 array(LowCardinality(Nullable(uint64))),
-    f32 array(LowCardinality(Nullable(Float32))),
-    f64 array(LowCardinality(Nullable(float64))),
+    i8  array(low_cardinality(nullable(int8))),
+    i16 array(low_cardinality(nullable(int16))),
+    i32 array(low_cardinality(nullable(int32))),
+    i64 array(low_cardinality(nullable(int64))),
+    u8  array(low_cardinality(nullable(uint8))),
+    u16 array(low_cardinality(nullable(uint16))),
+    u32 array(low_cardinality(nullable(uint32))),
+    u64 array(low_cardinality(nullable(uint64))),
+    f32 array(low_cardinality(nullable(float32))),
+    f64 array(low_cardinality(nullable(float64))),
 
-    date array(LowCardinality(Nullable(date))),
-    date_time array(LowCardinality(Nullable(datetime('Europe/Moscow')))),
+    date array(low_cardinality(nullable(date))),
+    date_time array(low_cardinality(nullable(datetime('Europe/Moscow')))),
 
-    str array(LowCardinality(Nullable(string))),
-    fixed_string array(LowCardinality(Nullable(FixedString(5))))
+    str array(low_cardinality(nullable(string))),
+    fixed_string array(low_cardinality(nullable(fixed_string(5))))
 ) ENGINE = MergeTree() ORDER BY order_key SETTINGS allow_nullable_key = 1;
 
 INSERT INTO lc_nullable SELECT
@@ -32,7 +32,7 @@ INSERT INTO lc_nullable SELECT
     group_array(to_uint32(number)) AS u32,
     group_array(to_uint64(number)) AS u64,
     group_array(to_float32(number)) AS f32,
-    group_array(toFloat64(number)) AS f64,
+    group_array(to_float64(number)) AS f64,
     group_array(to_date(number, 'Europe/Moscow')) AS date,
     group_array(to_datetime(number, 'Europe/Moscow')) AS date_time,
     group_array(to_string(number)) AS str,
@@ -50,7 +50,7 @@ INSERT INTO lc_nullable SELECT
     group_array(to_uint32(num)) AS u32,
     group_array(to_uint64(num)) AS u64,
     group_array(to_float32(num)) AS f32,
-    group_array(toFloat64(num)) AS f64,
+    group_array(to_float64(num)) AS f64,
     group_array(to_date(num, 'Europe/Moscow')) AS date,
     group_array(to_datetime(num, 'Europe/Moscow')) AS date_time,
     group_array(to_string(num)) AS str,
@@ -68,7 +68,7 @@ INSERT INTO lc_nullable SELECT
     group_array(to_uint32(number)) AS u32,
     group_array(to_uint64(number)) AS u64,
     group_array(to_float32(number)) AS f32,
-    group_array(toFloat64(number)) AS f64,
+    group_array(to_float64(number)) AS f64,
     group_array(to_date(number, 'Europe/Moscow')) AS date,
     group_array(to_datetime(number, 'Europe/Moscow')) AS date_time,
     group_array(to_string(number)) AS str,
@@ -86,7 +86,7 @@ INSERT INTO lc_nullable SELECT
     group_array(to_uint32(number)) AS u32,
     group_array(to_uint64(number)) AS u64,
     group_array(to_float32(number)) AS f32,
-    group_array(toFloat64(number)) AS f64,
+    group_array(to_float64(number)) AS f64,
     group_array(to_date(number, 'Europe/Moscow')) AS date,
     group_array(to_datetime(number, 'Europe/Moscow')) AS date_time,
     group_array(to_string(number)) AS str,
@@ -122,7 +122,7 @@ INSERT INTO lc_nullable SELECT
     [NULL, to_uint32(n)] AS u32,
     [NULL, to_uint64(n)] AS u64,
     [NULL, to_float32(n)] AS f32,
-    [NULL, toFloat64(n)] AS f64,
+    [NULL, to_float64(n)] AS f64,
     [NULL, to_date(n, 'Europe/Moscow')] AS date,
     [NULL, to_datetime(n, 'Europe/Moscow')] AS date_time,
     [NULL, to_string(n)] AS str,

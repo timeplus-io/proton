@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS t_comp_subcolumns;
 
-create stream t_comp_subcolumns (id uint32, n Nullable(string), arr array(array(uint32)))
+create stream t_comp_subcolumns (id uint32, n nullable(string), arr array(array(uint32)))
 ENGINE = MergeTree ORDER BY id;
 
 INSERT INTO t_comp_subcolumns SELECT number, 'a', [range(number % 11), range(number % 13)] FROM numbers(20000);

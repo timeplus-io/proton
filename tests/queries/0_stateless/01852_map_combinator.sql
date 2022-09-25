@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 SET allow_experimental_map_type = 1;
 
 DROP STREAM IF EXISTS map_comb;
@@ -19,15 +19,15 @@ SELECT a, sumMap(statusMap) FROM map_comb GROUP BY a ORDER BY a;
 DROP STREAM map_comb;
 
 -- check different types
-select minMap(val) from values ('val Map(UUID, int32)',
+select minMap(val) from values ('val Map(uuid, int32)',
 	(map('01234567-89ab-cdef-0123-456789abcdef', 1)),
 	(map('01234567-89ab-cdef-0123-456789abcdef', 2)));
 select minMap(val) from values ('val Map(string, string)',  (map('1', '1')), (map('1', '2')));
-select minMap(val) from values ('val Map(FixedString(1), FixedString(1))',  (map('1', '1')), (map('1', '2')));
+select minMap(val) from values ('val Map(fixed_string(1), fixed_string(1))',  (map('1', '1')), (map('1', '2')));
 select minMap(val) from values ('val Map(uint64, uint64)',  (map(1, 1)), (map(1, 2)));
-select minMap(val) from values ('val Map(date, Int16)',  (map(1, 1)), (map(1, 2)));
+select minMap(val) from values ('val Map(date, int16)',  (map(1, 1)), (map(1, 2)));
 select minMap(val) from values ('val Map(datetime(\'Europe/Moscow\'), int32)',  (map(1, 1)), (map(1, 2)));
-select minMap(val) from values ('val Map(Enum16(\'a\'=1), Int16)',  (map('a', 1)), (map('a', 2)));
+select minMap(val) from values ('val Map(Enum16(\'a\'=1), int16)',  (map('a', 1)), (map('a', 2)));
 select maxMap(val) from values ('val Map(string, string)',  (map('1', '1')), (map('1', '2')));
 select minMap(val) from values ('val Map(Int128, Int128)',  (map(1, 1)), (map(1, 2)));
 select minMap(val) from values ('val Map(Int256, Int256)',  (map(1, 1)), (map(1, 2)));

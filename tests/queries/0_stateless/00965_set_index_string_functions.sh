@@ -47,7 +47,7 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE startsWith(s, 'abra') AN
 $CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE startsWith(s, 'abra') AND endsWith(s, 'abra') FORMAT JSON" | grep "rows_read"
 
 # MULTY_SEARCH_ANY
-$CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE multiSearchAny(s, ['data', 'base'])"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE multiSearchAny(s, ['data', 'base']) FORMAT JSON" | grep "rows_read"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE multi_search_any(s, ['data', 'base'])"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM set_idx WHERE multi_search_any(s, ['data', 'base']) FORMAT JSON" | grep "rows_read"
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM set_idx;"

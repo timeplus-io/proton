@@ -8,7 +8,7 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DATA_FILE=$CUR_DIR/data_orc/test_null_array.orc
 
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM IF EXISTS test_null_array_orc"
-${CLICKHOUSE_CLIENT} --query="create stream test_null_array_orc(col0 array(Nullable(int64)),col1 array(Nullable(string))) "
+${CLICKHOUSE_CLIENT} --query="create stream test_null_array_orc(col0 array(nullable(int64)),col1 array(nullable(string))) "
 cat "$DATA_FILE"  | ${CLICKHOUSE_CLIENT} -q "insert into test_null_array_orc format ORC"
 ${CLICKHOUSE_CLIENT} --query="select * from test_null_array_orc"
 

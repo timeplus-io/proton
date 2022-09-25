@@ -5,7 +5,7 @@ SELECT to_int8(-1), bitPositionsToArray(to_int8(-1));
 SELECT to_int8(127), bitPositionsToArray(to_int8(127));
 SELECT to_int8(128), bitPositionsToArray(to_int8(128));
 
-SELECT 'Int16';
+SELECT 'int16';
 SELECT to_int16(0), bitPositionsToArray(to_int16(0));
 SELECT to_int16(1), bitPositionsToArray(to_int16(1));
 SELECT to_int16(-1), bitPositionsToArray(to_int16(-1));

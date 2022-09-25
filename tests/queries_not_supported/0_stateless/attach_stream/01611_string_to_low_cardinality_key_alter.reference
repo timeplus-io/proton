@@ -1,0 +1,8 @@
+create stream default.table_with_lc_key\n(\n    `enum_key` Enum8(\'y\' = 1, \'x\' = 2),\n    `lc_key` string,\n    `value` string\n)\nENGINE = MergeTree\nORDER BY (enum_key, lc_key)\nSETTINGS index_granularity = 8192
+y	hello	world
+create stream default.table_with_lc_key\n(\n    `enum_key` Enum8(\'y\' = 1, \'x\' = 2, \'z\' = 3),\n    `lc_key` string,\n    `value` string\n)\nENGINE = MergeTree\nORDER BY (enum_key, lc_key)\nSETTINGS index_granularity = 8192
+y	hello	world
+create stream default.table_with_lc_key\n(\n    `enum_key` int8,\n    `lc_key` string,\n    `value` string\n)\nENGINE = MergeTree\nORDER BY (enum_key, lc_key)\nSETTINGS index_granularity = 8192
+1	hello	world
+create stream default.table_with_string_key\n(\n    `int_key` int8,\n    `str_key` low_cardinality(string),\n    `value` string\n)\nENGINE = MergeTree\nORDER BY (int_key, str_key)\nSETTINGS index_granularity = 8192
+1	hello	world

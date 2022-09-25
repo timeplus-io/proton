@@ -3,8 +3,8 @@ drop stream if exists count_lc_test;
 
 create stream count_lc_test
 (
-    `s` LowCardinality(string),
-    `arr` array(LowCardinality(string)),
+    `s` low_cardinality(string),
+    `arr` array(low_cardinality(string)),
     `num` uint64
 )
 ENGINE = MergeTree
@@ -37,7 +37,7 @@ drop stream if exists count_lc_test;
 
 create stream count_lc_test
 (
-    `s` LowCardinality(string),
+    `s` low_cardinality(string),
     `arr` array(string),
     `num` uint64
 )

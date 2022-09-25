@@ -1,6 +1,6 @@
 -- Tags: no-fasttest
 
-SET send_logs_level = 'fatal';
+ 
 SELECT base64Encode(val) FROM (select array_join(['', 'f', 'fo', 'foo', 'foob', 'fooba', 'foobar']) val);
 SELECT base64Decode(val) FROM (select array_join(['', 'Zg==', 'Zm8=', 'Zm9v', 'Zm9vYg==', 'Zm9vYmE=', 'Zm9vYmFy']) val);
 SELECT base64Decode(base64Encode('foo')) = 'foo', base64Encode(base64Decode('Zm9v')) == 'Zm9v';

@@ -1,9 +1,9 @@
 SELECT uniq(number >= 10 ? number : NULL) FROM numbers(10);
-SELECT uniqExact(number >= 10 ? number : NULL) FROM numbers(10);
+SELECT uniq_exact(number >= 10 ? number : NULL) FROM numbers(10);
 SELECT count(DISTINCT number >= 10 ? number : NULL) FROM numbers(10);
 
 SELECT uniq(number >= 5 ? number : NULL) FROM numbers(10);
-SELECT uniqExact(number >= 5 ? number : NULL) FROM numbers(10);
+SELECT uniq_exact(number >= 5 ? number : NULL) FROM numbers(10);
 SELECT count(DISTINCT number >= 5 ? number : NULL) FROM numbers(10);
 
 SELECT '---';

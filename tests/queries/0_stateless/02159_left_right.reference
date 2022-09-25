@@ -20,11 +20,11 @@ SELECT left(materialize('Привет'), 4);
 Пр
 SELECT LEFT('Привет', -4);
 Прив
-SELECT left(toNullable('Привет'), 12);
+SELECT left(to_nullable('Привет'), 12);
 Привет
 SELECT lEFT('Привет', -12);
 
-SELECT left(materialize(toNullable('Привет')), 13);
+SELECT left(materialize(to_nullable('Привет')), 13);
 Привет
 SELECT left('Привет', -13);
 
@@ -92,7 +92,7 @@ SELECT leftUTF8('Привет', -number) FROM numbers(10);
 
 
 
-SELECT leftUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
+SELECT leftUTF8('Привет', number % 3 = 0 ? NULL : ((number % 2 <> 0) ? to_int64(number) : -number)) FROM numbers(10);
 \N
 П
 Прив
@@ -103,7 +103,7 @@ SELECT leftUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(n
 Привет
 
 \N
-SELECT leftUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
+SELECT leftUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : ((number % 2 <> 0) ? to_int64(number) : -number)) FROM numbers(10);
 \N
 H
 Hel
@@ -134,11 +134,11 @@ SELECT RIGHT(materialize('Привет'), 4);
 ет
 SELECT right('Привет', -4);
 ивет
-SELECT Right(toNullable('Привет'), 12);
+SELECT Right(to_nullable('Привет'), 12);
 Привет
 SELECT right('Привет', -12);
 
-SELECT rIGHT(materialize(toNullable('Привет')), 13);
+SELECT rIGHT(materialize(to_nullable('Привет')), 13);
 Привет
 SELECT right('Привет', -13);
 
@@ -206,7 +206,7 @@ SELECT rightUTF8('Привет', -number) FROM numbers(10);
 
 
 
-SELECT rightUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
+SELECT rightUTF8('Привет', number % 3 = 0 ? NULL : ((number % 2 <> 0) ? to_int64(number) : -number)) FROM numbers(10);
 \N
 т
 ивет
@@ -217,7 +217,7 @@ SELECT rightUTF8('Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(
 Привет
 
 \N
-SELECT rightUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : (number % 2 ? to_int64(number) : -number)) FROM numbers(10);
+SELECT rightUTF8(number < 5 ? 'Hello' : 'Привет', number % 3 = 0 ? NULL : ((number % 2 <> 0) ? to_int64(number) : -number)) FROM numbers(10);
 \N
 o
 llo

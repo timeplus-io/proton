@@ -9,7 +9,7 @@ show tables;
 show create stream t1;
 
 insert into t1 values (1, 'test');
-create or replace table t1 (n uint64, s Nullable(string)) engine=MergeTree order by n;
+create or replace table t1 (n uint64, s nullable(string)) engine=MergeTree order by n;
 insert into t1 values (2, null);
 show tables;
 show create stream t1;

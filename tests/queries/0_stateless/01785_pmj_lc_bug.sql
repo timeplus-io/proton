@@ -1,7 +1,7 @@
 SET join_algorithm = 'partial_merge';
 SET max_bytes_in_join = '100';
 
-create stream foo_lc (n LowCardinality(string)) ;
+create stream foo_lc (n low_cardinality(string)) ;
 create stream foo (n string) ;
 
 INSERT INTO foo SELECT to_string(number) AS n FROM system.numbers LIMIT 1025;

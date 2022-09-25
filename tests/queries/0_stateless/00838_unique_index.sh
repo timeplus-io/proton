@@ -15,7 +15,7 @@ create stream set_idx
     f64 float64,
     d Decimal(10, 2),
     s string,
-    e Enum8('a' = 1, 'b' = 2, 'c' = 3),
+    e enum8('a' = 1, 'b' = 2, 'c' = 3),
     dt date,
     INDEX idx_all (i32, i32 + f64, d, s, e, dt) TYPE set(2) GRANULARITY 1,
     INDEX idx_all2 (i32, i32 + f64, d, s, e, dt) TYPE set(4) GRANULARITY 2,

@@ -1,7 +1,7 @@
 SET query_mode = 'table';
 drop stream if exists test_index;
 
-create stream test_index(date date) engine MergeTree partition by toYYYYMM(date) order by date;
+create stream test_index(date date) engine MergeTree partition by to_YYYYMM(date) order by date;
 
 insert into test_index values('2020-10-30');
 

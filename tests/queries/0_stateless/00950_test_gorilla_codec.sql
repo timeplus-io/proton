@@ -4,9 +4,9 @@ create stream codecTest (
     key      uint64,
     name     string,
     ref_valueF64 float64,
-    ref_valueF32 Float32,
+    ref_valueF32 float32,
     valueF64 float64  CODEC(Gorilla),
-    valueF32 Float32  CODEC(Gorilla)
+    valueF32 float32  CODEC(Gorilla)
 ) Engine = MergeTree ORDER BY key;
 
 -- best case - same value

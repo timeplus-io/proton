@@ -3,8 +3,8 @@
 DROP DATABASE IF EXISTS test_01392;
 CREATE DATABASE test_01392;
 
-create stream test_01392.tableConversion (conversionId string, value Nullable(Double))  ();
-create stream test_01392.tableClick (clickId string, conversionId string, value Nullable(Double))  ();
+create stream test_01392.tableConversion (conversionId string, value nullable(Double))  ();
+create stream test_01392.tableClick (clickId string, conversionId string, value nullable(Double))  ();
 create stream test_01392.leftjoin (id string)  ();
 
 INSERT INTO test_01392.tableConversion(conversionId, value) VALUES ('Conversion 1', 1);

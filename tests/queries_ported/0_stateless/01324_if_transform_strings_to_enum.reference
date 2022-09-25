@@ -1,0 +1,60 @@
+other
+other
+google
+other
+yandex
+other
+yahoo
+other
+other
+other
+SELECT
+  transform(number, [2, 4, 6], [\'google\', \'yandex\', \'yahoo\'], \'other\')
+FROM
+ system.numbers
+LIMIT 10
+google
+google
+google
+google
+google
+google
+yandex
+yandex
+yandex
+yandex
+SELECT
+  if(number > 5, \'yandex\', \'google\')
+FROM
+ system.numbers
+LIMIT 10
+other
+other
+google
+other
+yandex
+other
+yahoo
+other
+other
+other
+SELECT
+  transform(number, [2, 4, 6], [\'google\', \'yandex\', \'yahoo\'], \'other\')
+FROM
+ system.numbers
+LIMIT 10
+google
+google
+google
+google
+google
+google
+yandex
+yandex
+yandex
+yandex
+SELECT
+  if(number > 5, \'yandex\', \'google\')
+FROM
+ system.numbers
+LIMIT 10

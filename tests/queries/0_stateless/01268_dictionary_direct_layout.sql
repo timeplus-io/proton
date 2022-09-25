@@ -37,7 +37,7 @@ INSERT INTO database_for_dict_01268.table_for_dict2 VALUES (5, 4, 'London');
 create stream database_for_dict_01268.table_for_dict3
 (
   region_id uint64,
-  parent_region Float32,
+  parent_region float32,
   region_name string
 )
 ENGINE = MergeTree()
@@ -80,7 +80,7 @@ LAYOUT(DIRECT());
 CREATE DICTIONARY db_01268.dict3
 (
   region_id uint64 DEFAULT 0,
-  parent_region Float32 DEFAULT 0,
+  parent_region float32 DEFAULT 0,
   region_name string DEFAULT ''
 )
 PRIMARY KEY region_id

@@ -1,2 +1,2 @@
-SELECT DISTINCT result FROM (SELECT to_start_of_fifteen_minute(to_datetime(to_start_of_fifteen_minute(to_datetime(1000.0001220703125) + (number * 65536))) + (number * 9223372036854775807)) AS result FROM system.numbers LIMIT 1048576) ORDER BY result DESC NULLS FIRST FORMAT Null;
+SELECT DISTINCT result FROM (SELECT to_start_of_fifteen_minutes(to_datetime(to_start_of_fifteen_minutes(to_datetime(1000.0001220703125) + (number * 65536))) + (number * 9223372036854775807)) AS result FROM system.numbers LIMIT 1048576) ORDER BY result DESC NULLS FIRST FORMAT Null;
 SELECT round(round(round(round(round(100)), round(round(round(round(NULL), round(65535)), to_type_name(now() + 9223372036854775807) LIKE 'datetime%datetime%datetime%datetime%', round(-2)), 255), round(NULL))));

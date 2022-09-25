@@ -20,7 +20,7 @@ function thread1()
 function thread2()
 {
     while true; do
-        $CLICKHOUSE_CLIENT -n --query "ALTER STREAM test MODIFY COLUMN x Nullable(uint8);";
+        $CLICKHOUSE_CLIENT -n --query "ALTER STREAM test MODIFY COLUMN x nullable(uint8);";
         sleep 0.0$RANDOM
         $CLICKHOUSE_CLIENT -n --query "ALTER STREAM test MODIFY COLUMN x uint8;";
         sleep 0.0$RANDOM
@@ -37,7 +37,7 @@ function thread3()
 function thread4()
 {
     while true; do
-        $CLICKHOUSE_CLIENT -n --query "OPTIMIZE STREAM test FINAL";
+        $CLICKHOUSE_CLIENT -n --query "OPTIMIZE TABLE test FINAL";
         sleep 0.1$RANDOM
     done
 }

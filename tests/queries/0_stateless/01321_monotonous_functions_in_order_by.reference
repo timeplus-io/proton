@@ -52,7 +52,7 @@ ORDER BY number DESC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) ASC
-SELECT roundToExp2(number) AS x
+SELECT round_to_exp2(number) AS x
 FROM numbers(3)
 ORDER BY number ASC
 SELECT number AS x
@@ -73,7 +73,7 @@ ORDER BY number ASC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) DESC
-SELECT roundToExp2(number) AS x
+SELECT round_to_exp2(number) AS x
 FROM numbers(3)
 ORDER BY number DESC
 0
@@ -117,7 +117,7 @@ ORDER BY number DESC
 0
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(toFloat64(number)) ASC
+ORDER BY to_float32(to_float64(number)) ASC
 SELECT number
 FROM numbers(3)
 ORDER BY abs(to_float32(number)) ASC
@@ -130,7 +130,7 @@ ORDER BY -number ASC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) ASC
-SELECT roundToExp2(number) AS x
+SELECT round_to_exp2(number) AS x
 FROM numbers(3)
 ORDER BY
     x ASC,
@@ -139,10 +139,10 @@ SELECT number AS x
 FROM numbers(3)
 ORDER BY
     to_float32(x) AS k ASC,
-    toFloat64(k) ASC
+    to_float64(k) ASC
 SELECT number
 FROM numbers(3)
-ORDER BY to_float32(toFloat64(number)) DESC
+ORDER BY to_float32(to_float64(number)) DESC
 SELECT number
 FROM numbers(3)
 ORDER BY abs(to_float32(number)) DESC
@@ -155,7 +155,7 @@ ORDER BY -number DESC
 SELECT number
 FROM numbers(3)
 ORDER BY exp(number) DESC
-SELECT roundToExp2(number) AS x
+SELECT round_to_exp2(number) AS x
 FROM numbers(3)
 ORDER BY
     x DESC,

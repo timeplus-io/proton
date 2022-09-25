@@ -3,7 +3,7 @@ set mutations_sync = 2;
 SET query_mode = 'table';
 drop stream if exists mt_compact;
 
-create stream mt_compact(a uint64, b uint64 DEFAULT a * a, s string, n nested(x uint32, y string), lc LowCardinality(string))
+create stream mt_compact(a uint64, b uint64 DEFAULT a * a, s string, n nested(x uint32, y string), lc low_cardinality(string))
 engine = MergeTree
 order by a partition by a % 10
 settings index_granularity = 8,

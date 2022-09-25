@@ -1,18 +1,18 @@
-\N	test	0	1	Nullable(string)	string
-bar	bar	1	2	Nullable(string)	string
-\N		0	1	Nullable(string)	string
-foo		2	0	Nullable(string)	string
-\N	test	0	1	Nullable(string)	string
-bar	bar	1	2	Nullable(string)	string
-\N		0	1	Nullable(string)	string
-foo		2	0	Nullable(string)	string
-foo	\N	2	0	string	Nullable(string)
-bar	bar	1	2	string	Nullable(string)
-	test	0	1	string	Nullable(string)
-	\N	0	1	string	Nullable(string)
-bar	bar	1	2	string	Nullable(string)
-	test	0	1	string	Nullable(string)
-	\N	0	1	string	Nullable(string)
+\N	test	0	1	nullable(string)	string
+bar	bar	1	2	nullable(string)	string
+\N		0	1	nullable(string)	string
+foo		2	0	nullable(string)	string
+\N	test	0	1	nullable(string)	string
+bar	bar	1	2	nullable(string)	string
+\N		0	1	nullable(string)	string
+foo		2	0	nullable(string)	string
+foo	\N	2	0	string	nullable(string)
+bar	bar	1	2	string	nullable(string)
+	test	0	1	string	nullable(string)
+	\N	0	1	string	nullable(string)
+bar	bar	1	2	string	nullable(string)
+	test	0	1	string	nullable(string)
+	\N	0	1	string	nullable(string)
 foo	2	0	string
 bar	1	2	string
 test	0	1	string

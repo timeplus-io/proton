@@ -29,14 +29,14 @@ select mapAdd(map(to_int128(1), to_int128(1), 2, 1), map(to_int128(1), to_int128
 select mapAdd(map(toInt256(1), toInt256(1), 2, 1), map(toInt256(1), toInt256(1), 2, 1)) as res, to_type_name(res);
 
 select mapAdd(map(1, to_float32(1.1), 2, 1), map(1, 2.2, 2, 1)) as res, to_type_name(res);
-select mapAdd(map(1, toFloat64(1.1), 2, 1), map(1, 2.2, 2, 1)) as res, to_type_name(res);
-select mapAdd(map(1, toFloat64(1.1), 2, 1), map(1, 1, 2, 1)) as res, to_type_name(res); -- { serverError 43 }
+select mapAdd(map(1, to_float64(1.1), 2, 1), map(1, 2.2, 2, 1)) as res, to_type_name(res);
+select mapAdd(map(1, to_float64(1.1), 2, 1), map(1, 1, 2, 1)) as res, to_type_name(res); -- { serverError 43 }
 select mapAdd(map('a', 1, 'b', 1), map(key, 1)) from values('key string', ('b'), ('c'), ('d'));
-select mapAdd(map(cast('a', 'FixedString(1)'), 1, 'b', 1), map(key, 1)) as res, to_type_name(res) from values('key string', ('b'), ('c'), ('d'));
-select mapAdd(map(cast('a', 'LowCardinality(string)'), 1, 'b', 1), map(key, 1)) from values('key string', ('b'), ('c'), ('d'));
-select mapAdd(map(key, val), map(key, val)) as res, to_type_name(res) from values ('key Enum16(\'a\'=1, \'b\'=2), val Int16',  ('a', 1), ('b', 1));
-select mapAdd(map(key, val), map(key, val)) as res, to_type_name(res) from values ('key Enum8(\'a\'=1, \'b\'=2), val Int16',  ('a', 1), ('b', 1));
-select mapAdd(map(key, val), map(key, val)) as res, to_type_name(res) from values ('key UUID, val int32', ('00000000-89ab-cdef-0123-456789abcdef', 1), ('11111111-89ab-cdef-0123-456789abcdef', 2));
+select mapAdd(map(cast('a', 'fixed_string(1)'), 1, 'b', 1), map(key, 1)) as res, to_type_name(res) from values('key string', ('b'), ('c'), ('d'));
+select mapAdd(map(cast('a', 'low_cardinality(string)'), 1, 'b', 1), map(key, 1)) from values('key string', ('b'), ('c'), ('d'));
+select mapAdd(map(key, val), map(key, val)) as res, to_type_name(res) from values ('key Enum16(\'a\'=1, \'b\'=2), val int16',  ('a', 1), ('b', 1));
+select mapAdd(map(key, val), map(key, val)) as res, to_type_name(res) from values ('key enum8(\'a\'=1, \'b\'=2), val int16',  ('a', 1), ('b', 1));
+select mapAdd(map(key, val), map(key, val)) as res, to_type_name(res) from values ('key uuid, val int32', ('00000000-89ab-cdef-0123-456789abcdef', 1), ('11111111-89ab-cdef-0123-456789abcdef', 2));
 
 -- mapSubtract, same rules as mapAdd
 select mapSubtract(map(to_uint8(1), 1, 2, 1), map(to_uint8(1), 1, 2, 1)) as res, to_type_name(res);

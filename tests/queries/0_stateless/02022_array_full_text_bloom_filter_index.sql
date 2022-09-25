@@ -5,7 +5,7 @@ create stream bf_tokenbf_array_test
 (
     row_id uint32,
     array array(string),
-    array_fixed array(FixedString(2)),
+    array_fixed array(fixed_string(2)),
     INDEX array_bf_tokenbf array TYPE tokenbf_v1(256,2,0) GRANULARITY 1,
     INDEX array_fixed_bf_tokenbf array_fixed TYPE tokenbf_v1(256,2,0) GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;
@@ -14,7 +14,7 @@ create stream bf_ngram_array_test
 (
     row_id uint32,
     array array(string),
-    array_fixed array(FixedString(2)),
+    array_fixed array(fixed_string(2)),
     INDEX array_ngram array TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1,
     INDEX array_fixed_ngram array_fixed TYPE ngrambf_v1(4,256,2,0) GRANULARITY 1
 ) Engine=MergeTree() ORDER BY row_id SETTINGS index_granularity = 1;

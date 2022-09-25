@@ -1,12 +1,12 @@
 DROP STREAM IF EXISTS mytable_local;
 
 create stream mytable_local (
-    created          DateTime,
+    created          datetime,
     eventday         date,
     user_id          uint32
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(eventday)
+PARTITION BY to_YYYYMM(eventday)
 ORDER BY (eventday, user_id);
 
 INSERT INTO mytable_local SELECT
@@ -19,7 +19,7 @@ SELECT
     eventday,
     count(*)
 FROM mytable_local
-WHERE (toYYYYMM(eventday) = 202007) AND (user_id = 742522) AND (eventday >= '2020-07-03') AND (eventday <= '2020-07-25')
+WHERE (to_YYYYMM(eventday) = 202007) AND (user_id = 742522) AND (eventday >= '2020-07-03') AND (eventday <= '2020-07-25')
 GROUP BY eventday
 ORDER BY eventday;
 

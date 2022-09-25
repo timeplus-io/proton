@@ -4,7 +4,7 @@
 export ASAN_OPTIONS=detect_odr_violation=0
 
 export CLICKHOUSE_DATABASE=${CLICKHOUSE_DATABASE:="test"}
-echo "CLICKHOUSE_DATABASE = $CLICKHOUSE_DATABASE"
+#echo "CLICKHOUSE_DATABASE = $CLICKHOUSE_DATABASE"
 export CLICKHOUSE_CLIENT_SERVER_LOGS_LEVEL=${CLICKHOUSE_CLIENT_SERVER_LOGS_LEVEL:="warning"}
 
 # Unique zookeeper path (based on test name and current database) to avoid overlaps

@@ -10,10 +10,10 @@ SELECT runningConcurrency(begin, end) FROM runningConcurrency_test;
 DROP STREAM runningConcurrency_test;
 
 --
-SELECT 'Invocation with DateTime';
+SELECT 'Invocation with datetime';
 
 DROP STREAM IF EXISTS runningConcurrency_test;
-create stream runningConcurrency_test(begin DateTime, end DateTime) ;
+create stream runningConcurrency_test(begin datetime, end datetime) ;
 
 INSERT INTO runningConcurrency_test VALUES ('2020-12-01 00:00:00', '2020-12-01 00:59:59'), ('2020-12-01 00:30:00', '2020-12-01 00:59:59'), ('2020-12-01 00:40:00', '2020-12-01 01:30:30'), ('2020-12-01 01:10:00', '2020-12-01 01:30:30'), ('2020-12-01 01:50:00', '2020-12-01 01:59:59');
 SELECT runningConcurrency(begin, end) FROM runningConcurrency_test;
@@ -40,7 +40,7 @@ SELECT runningConcurrency(to_date(array_join([1, 2])), to_date('2000-01-01')); -
 -- Unsupported data types
 SELECT runningConcurrency('strings are', 'not supported'); -- { serverError 43 }
 SELECT runningConcurrency(NULL, NULL); -- { serverError 43 }
-SELECT runningConcurrency(CAST(NULL, 'Nullable(DateTime)'), CAST(NULL, 'Nullable(DateTime)')); -- { serverError 43 }
+SELECT runningConcurrency(CAST(NULL, 'nullable(datetime)'), CAST(NULL, 'nullable(datetime)')); -- { serverError 43 }
 
 -- Mismatching data types
 SELECT runningConcurrency(to_date('2000-01-01'), to_datetime('2000-01-01 00:00:00')); -- { serverError 43 }

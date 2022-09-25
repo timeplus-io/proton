@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS null_issue_3767;
 
-create stream null_issue_3767 (value Nullable(string)) ENGINE=Memory;
+create stream null_issue_3767 (value nullable(string)) ENGINE=Memory;
 
 INSERT INTO null_issue_3767 (value) VALUES ('A string'), (NULL);
 

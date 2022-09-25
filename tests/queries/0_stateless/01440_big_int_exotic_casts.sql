@@ -6,7 +6,7 @@ SELECT to_int64(number * number) * number   y, to_decimal32(y, 1), to_decimal64(
 SELECT to_int128(number * number) * number  y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 SELECT toInt256(number * number) * number  y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 SELECT to_float32(number * number) * number y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
-SELECT toFloat64(number * number) * number y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
+SELECT to_float64(number * number) * number y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 
 SELECT to_uint32(number * number) * -1  y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 SELECT to_uint64(number * number) * -1  y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
@@ -16,7 +16,7 @@ SELECT to_int64(number * number) * -1   y, to_decimal32(y, 1), to_decimal64(y, 2
 SELECT to_int128(number * number) * -1  y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 SELECT toInt256(number * number) * -1  y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 SELECT to_float32(number * number) * -1 y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
-SELECT toFloat64(number * number) * -1 y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
+SELECT to_float64(number * number) * -1 y, to_decimal32(y, 1), to_decimal64(y, 2), toDecimal128(y, 6), toDecimal256(y, 7) FROM numbers_mt(10) ORDER BY number;
 
 SELECT to_uint32(number * -1) * number  y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
 SELECT to_uint64(number * -1) * number  y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
@@ -26,7 +26,7 @@ SELECT to_int64(number * -1) * number   y, to_int128(y), toInt256(y), toUInt256(
 SELECT to_int128(number * -1) * number  y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
 SELECT toInt256(number * -1) * number  y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
 SELECT to_float32(number * -1) * number y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
-SELECT toFloat64(number * -1) * number y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
+SELECT to_float64(number * -1) * number y, to_int128(y), toInt256(y), toUInt256(y) FROM numbers_mt(10) ORDER BY number;
 
 SELECT number y, to_int128(number) - y, toInt256(number) - y, toUInt256(number) - y FROM numbers_mt(10) ORDER BY number;
 SELECT -number y, to_int128(number) + y, toInt256(number) + y, toUInt256(number) + y FROM numbers_mt(10) ORDER BY number;

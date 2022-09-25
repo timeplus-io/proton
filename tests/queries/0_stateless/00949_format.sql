@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 
 select format('Hello {1} World {0}', materialize('first'), materialize('second')) from system.numbers limit 1;
 select format('Hello {0} World {1}', materialize('first'), materialize('second')) from system.numbers limit 2;
@@ -10,8 +10,8 @@ select format('Hellooooooooooooooooooooooooooooooooooo {0} Woooooooooooooooooooo
 select format('{}', 'first');
 select format('{}{}', 'first', to_fixed_string('second', 6));
 select format('{{}}', materialize('first'), 'second');
-select 50 = length(format((select arrayStringConcat(array_map(x ->'{', range(100)))), ''));
-select 100 = length(format(concat((select arrayStringConcat(array_map(x ->'}', range(100)))), (select arrayStringConcat(array_map(x ->'{', range(100))))), ''));
+select 50 = length(format((select array_string_concat(array_map(x ->'{', range(100)))), ''));
+select 100 = length(format(concat((select array_string_concat(array_map(x ->'}', range(100)))), (select array_string_concat(array_map(x ->'{', range(100))))), ''));
 
 select format('', 'first');
 select concat('third', 'first', 'second')=format('{2}{0}{1}', 'first', 'second', 'third');
@@ -34,7 +34,7 @@ select format('{0} {}', '', ''); -- { serverError 36 }
 select format('Hello {} World {} {}{}', 'first', 'second', 'third') from system.numbers limit 2; -- { serverError 36 }
 select format('Hello {0} World {1} {2}{3}', 'first', 'second', 'third') from system.numbers limit 2; -- { serverError 36 }
 
-select 50 = length(format((select arrayStringConcat(array_map(x ->'{', range(101)))), ''));  -- { serverError 36 }
+select 50 = length(format((select array_string_concat(array_map(x ->'{', range(101)))), ''));  -- { serverError 36 }
 
 select format('{}{}{}', materialize(to_fixed_string('a', 1)), materialize(to_fixed_string('b', 1)), materialize(to_fixed_string('c', 1))) == 'abc';
 select format('{}{}{}', materialize(to_fixed_string('a', 1)), materialize('b'), materialize(to_fixed_string('c', 1))) == 'abc';

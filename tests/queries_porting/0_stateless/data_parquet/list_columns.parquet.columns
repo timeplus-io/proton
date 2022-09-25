@@ -1,1 +1,1 @@
-`int64_list` array(Nullable(int64)), `utf8_list` array(Nullable(string))
+`int64_list` array(nullable(int64)), `utf8_list` array(nullable(string))

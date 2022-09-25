@@ -59,7 +59,7 @@ $CLICKHOUSE_CLIENT -n --query="
     (
     id uint64,
     value_first string,
-    value_second Nullable(string)
+    value_second nullable(string)
     )
     ;
 
@@ -71,7 +71,7 @@ $CLICKHOUSE_CLIENT -n --query="
     (
     id uint64,
     value_first string DEFAULT 'value_first_default',
-    value_second Nullable(string) DEFAULT 'value_second_default'
+    value_second nullable(string) DEFAULT 'value_second_default'
     )
     PRIMARY KEY id
     SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'simple_key_complex_attributes_source_table'))

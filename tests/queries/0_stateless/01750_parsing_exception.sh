@@ -5,4 +5,4 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 # if it will not match, the exit code of grep will be non-zero and the test will fail
-$CLICKHOUSE_CLIENT -q "SELECT to_datetime(format('{}-{}-01 00:00:00', '2021', '1'))" |& grep -F -q 'Cannot parse datetime 2021-1-01 00:00:00: Cannot parse DateTime from string:'
+$CLICKHOUSE_CLIENT -q "SELECT to_datetime(format('{}-{}-01 00:00:00', '2021', '1'))" |& grep -F -q 'Cannot parse datetime 2021-1-01 00:00:00: Cannot parse datetime from string:'

@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS tsv_custom_null";
-$CLICKHOUSE_CLIENT --query="create stream tsv_custom_null (id Nullable(uint32)) ";
+$CLICKHOUSE_CLIENT --query="create stream tsv_custom_null (id nullable(uint32)) ";
 
 $CLICKHOUSE_CLIENT --query="INSERT INTO tsv_custom_null VALUES (NULL)";
 

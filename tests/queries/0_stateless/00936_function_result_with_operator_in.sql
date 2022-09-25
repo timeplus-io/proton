@@ -8,14 +8,14 @@ INSERT INTO samples VALUES (1, 1)(2, 2)(3, 3)(4, 4)(5, 5);
 SELECT count() FROM samples WHERE key IN range(10);
 
 -- some entries:
-SELECT count() FROM samples WHERE key IN arraySlice(range(100), 5, 10);
+SELECT count() FROM samples WHERE key IN array_slice(range(100), 5, 10);
 
 -- different type
 SELECT count() FROM samples WHERE to_uint64(key) IN range(100);
 
 SELECT 'empty:';
 -- should be empty
-SELECT count() FROM samples WHERE key IN arraySlice(range(100), 10, 10);
+SELECT count() FROM samples WHERE key IN array_slice(range(100), 10, 10);
 
 -- not only ints:
 SELECT 'a' IN splitByChar('c', 'abcdef');

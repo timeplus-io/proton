@@ -11,7 +11,7 @@ SET max_block_size = 65536;
 SELECT count(), sum(x) FROM mt;
 
 SYSTEM START MERGES mt;
-OPTIMIZE STREAM mt FINAL;
+OPTIMIZE TABLE mt FINAL;
 
 SELECT count(), sum(x) FROM mt;
 

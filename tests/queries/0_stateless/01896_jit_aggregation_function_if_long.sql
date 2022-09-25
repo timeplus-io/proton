@@ -36,7 +36,7 @@ create stream test_table_signed_values
     id uint64,
 
     value1 int8,
-    value2 Int16,
+    value2 int16,
     value3 int32,
     value4 int64,
 
@@ -60,7 +60,7 @@ create stream test_table_float_values
 (
     id uint64,
 
-    value1 Float32,
+    value1 float32,
     value2 float64,
 
     predicate_value uint8
@@ -81,10 +81,10 @@ create stream test_table_nullable_unsigned_values
 (
     id uint64,
 
-    value1 Nullable(uint8),
-    value2 Nullable(uint16),
-    value3 Nullable(uint32),
-    value4 Nullable(uint64),
+    value1 nullable(uint8),
+    value2 nullable(uint16),
+    value3 nullable(uint32),
+    value4 nullable(uint64),
 
     predicate_value uint8
 ) ;
@@ -106,10 +106,10 @@ create stream test_table_nullable_signed_values
 (
     id uint64,
 
-    value1 Nullable(int8),
-    value2 Nullable(Int16),
-    value3 Nullable(int32),
-    value4 Nullable(int64),
+    value1 nullable(int8),
+    value2 nullable(int16),
+    value3 nullable(int32),
+    value4 nullable(int64),
 
     predicate_value uint8
 ) ;
@@ -131,8 +131,8 @@ create stream test_table_nullable_float_values
 (
     id uint64,
 
-    value1 Nullable(Float32),
-    value2 Nullable(float64),
+    value1 nullable(float32),
+    value2 nullable(float64),
 
     predicate_value uint8
 ) ;
@@ -152,9 +152,9 @@ create stream test_table_null_specifics
 (
     id uint64,
 
-    value1 Nullable(uint64),
-    value2 Nullable(uint64),
-    value3 Nullable(uint64),
+    value1 nullable(uint64),
+    value2 nullable(uint64),
+    value3 nullable(uint64),
 
     predicate_value uint8
 ) ;
@@ -178,9 +178,9 @@ create stream test_table_null_specifics
 (
     id uint64,
 
-    value1 Nullable(uint64),
-    value2 Nullable(uint64),
-    value3 Nullable(uint64),
+    value1 nullable(uint64),
+    value2 nullable(uint64),
+    value3 nullable(uint64),
 
     predicate_value uint8,
     weight uint64

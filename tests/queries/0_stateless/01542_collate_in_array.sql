@@ -5,7 +5,7 @@ DROP STREAM IF EXISTS collate_test2;
 DROP STREAM IF EXISTS collate_test3;
 
 create stream collate_test1 (x uint32, s array(string)) ENGINE=Memory();
-create stream collate_test2 (x uint32, s array(LowCardinality(Nullable(string)))) ENGINE=Memory();
+create stream collate_test2 (x uint32, s array(low_cardinality(nullable(string)))) ENGINE=Memory();
 create stream collate_test3 (x uint32, s array(array(string))) ENGINE=Memory();
 
 INSERT INTO collate_test1 VALUES (1, ['Ё']), (1, ['ё']), (1, ['а']), (2, ['А']), (2, ['я', 'а']), (2, ['Я']), (1, ['ё','а']), (1, ['ё', 'я']), (2, ['ё', 'а', 'а']);

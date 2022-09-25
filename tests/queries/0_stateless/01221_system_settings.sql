@@ -21,7 +21,7 @@ with [
     'OverflowModeGroupBy',
     'DateTimeInputFormat',
     'DistributedProductMode'
-] as types select hasAll( array_distinct(group_array(type)), types) from system.settings;
+] as types select has_all( array_distinct(group_array(type)), types) from system.settings;
 
 with [
     'Seconds',
@@ -31,4 +31,4 @@ with [
     'Float',
     'uint64',
     'MaxThreads'
-] as types select hasAll( array_distinct(group_array(type)), types) from system.merge_tree_settings;
+] as types select has_all( array_distinct(group_array(type)), types) from system.merge_tree_settings;

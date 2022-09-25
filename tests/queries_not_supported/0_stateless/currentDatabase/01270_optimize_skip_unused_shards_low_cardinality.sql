@@ -8,7 +8,7 @@ SET query_mode = 'table';
 drop stream if exists data_01270;
 drop stream if exists dist_01270;
 
-create stream data_01270 (key LowCardinality(int)) Engine=Null();
+create stream data_01270 (key low_cardinality(int)) Engine=Null();
 create stream dist_01270 as data_01270 Engine=Distributed(test_cluster_two_shards, currentDatabase(), data_01270, key);
 select * from dist_01270 where key = 1;
 

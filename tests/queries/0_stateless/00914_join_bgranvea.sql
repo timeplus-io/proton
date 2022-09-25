@@ -1,8 +1,8 @@
 DROP STREAM IF EXISTS table1;
 DROP STREAM IF EXISTS table2;
 
-create stream table1 (A string, B string, ts DateTime) ENGINE = MergeTree PARTITION BY to_start_of_day(ts)  ORDER BY (ts, A, B);
-create stream table2 (B string, ts DateTime) ENGINE = MergeTree PARTITION BY to_start_of_day(ts) ORDER BY (ts, B);
+create stream table1 (A string, B string, ts datetime) ENGINE = MergeTree PARTITION BY to_start_of_day(ts)  ORDER BY (ts, A, B);
+create stream table2 (B string, ts datetime) ENGINE = MergeTree PARTITION BY to_start_of_day(ts) ORDER BY (ts, B);
 
 insert into table1 values('a1','b1','2019-02-05 16:50:00'),('a1','b1','2019-02-05 16:55:00');
 insert into table2 values('b1','2019-02-05 16:50:00'),('b1','2019-02-05 16:55:00');

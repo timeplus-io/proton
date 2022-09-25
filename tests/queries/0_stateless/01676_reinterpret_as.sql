@@ -1,17 +1,17 @@
 SELECT 'Into string';
 SELECT reinterpret(49, 'string');
-SELECT 'Into FixedString';
-SELECT reinterpret(49, 'FixedString(1)');
-SELECT reinterpret(49, 'FixedString(2)');
-SELECT reinterpret(49, 'FixedString(3)');
-SELECT reinterpret(49, 'FixedString(4)');
+SELECT 'Into fixed_string';
+SELECT reinterpret(49, 'fixed_string(1)');
+SELECT reinterpret(49, 'fixed_string(2)');
+SELECT reinterpret(49, 'fixed_string(3)');
+SELECT reinterpret(49, 'fixed_string(4)');
 SELECT reinterpretAsFixedString(49);
 SELECT 'Into Numeric Representable';
 SELECT 'Integer and Integer types';
 SELECT reinterpret(257, 'uint8'), reinterpret_as_uint8(257);
 SELECT reinterpret(257, 'int8'), reinterpretAsInt8(257);
 SELECT reinterpret(257, 'uint16'), reinterpretAsUInt16(257);
-SELECT reinterpret(257, 'Int16'), reinterpretAsInt16(257);
+SELECT reinterpret(257, 'int16'), reinterpretAsInt16(257);
 SELECT reinterpret(257, 'uint32'), reinterpretAsUInt32(257);
 SELECT reinterpret(257, 'int32'), reinterpretAsInt32(257);
 SELECT reinterpret(257, 'uint64'), reinterpretAsUInt64(257);
@@ -21,9 +21,9 @@ SELECT reinterpret(257, 'UInt256'), reinterpretAsUInt256(257);
 SELECT reinterpret(257, 'Int256'), reinterpretAsInt256(257);
 SELECT 'Integer and Float types';
 SELECT reinterpret(to_float32(0.2), 'uint32'), reinterpretAsUInt32(to_float32(0.2));
-SELECT reinterpret(toFloat64(0.2), 'uint64'), reinterpretAsUInt64(toFloat64(0.2));
+SELECT reinterpret(to_float64(0.2), 'uint64'), reinterpretAsUInt64(to_float64(0.2));
 SELECT reinterpretAsFloat32(a), reinterpretAsUInt32(to_float32(0.2)) as a;
-SELECT reinterpretAsFloat64(a), reinterpretAsUInt64(toFloat64(0.2)) as a;
+SELECT reinterpret_as_float64(a), reinterpretAsUInt64(to_float64(0.2)) as a;
 SELECT 'Integer and string types';
 SELECT reinterpret(a, 'string'), reinterpret_as_string(a), reinterpret_as_uint8('1') as a;
 SELECT reinterpret(a, 'string'), reinterpret_as_string(a), reinterpret_as_uint8('11') as a;
@@ -39,4 +39,4 @@ SELECT reinterpret(toDecimal128(5, 2), 'Decimal128(2)'), reinterpret('1', 'Decim
 SELECT reinterpret(toDecimal256(5, 2), 'Decimal256(2)'), reinterpret('1', 'Decimal256(2)');
 SELECT reinterpret(toDateTime64(0, 0), 'Decimal64(2)');
 SELECT 'ReinterpretErrors';
-SELECT reinterpret('123', 'FixedString(1)'); -- {serverError 43}
+SELECT reinterpret('123', 'fixed_string(1)'); -- {serverError 43}

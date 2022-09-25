@@ -6,7 +6,7 @@ create stream smta
 (
     `k` int64,
     `a` aggregate_function(max, int64),
-    `city` SimpleAggregateFunction(max, LowCardinality(string))
+    `city` SimpleAggregateFunction(max, low_cardinality(string))
 )
 ENGINE = SummingMergeTree
 ORDER BY k;

@@ -1,0 +1,1 @@
+SELECT k, group_array(x) AS res1, to_type_name(res1), avg(x) AS res2, to_type_name(res2) FROM (SELECT 1 AS k, array_join([1, NULL, 2]) AS x UNION ALL SELECT 2 AS k, CAST(array_join([NULL, NULL]) AS nullable(uint8)) AS x) GROUP BY k ORDER BY k;

@@ -4,7 +4,7 @@ create stream LOG_T
 (
     `fingerprint` uint64, 
     `fields` nested(
-    name LowCardinality(string), 
+    name low_cardinality(string), 
     value string)
 )
 ENGINE = MergeTree

@@ -1,7 +1,7 @@
 DROP STREAM IF EXISTS foo;
 
-create stream foo (ts DateTime, x uint64)
-ENGINE = MergeTree PARTITION BY toYYYYMMDD(ts)
+create stream foo (ts datetime, x uint64)
+ENGINE = MergeTree PARTITION BY to_YYYYMMDD(ts)
 ORDER BY (ts);
 
 INSERT INTO foo (ts, x) SELECT to_datetime('2020-01-01 00:05:00'), number from system.numbers_mt LIMIT 10;
@@ -18,7 +18,7 @@ SELECT sum(x) == 9 FROM foo;
 
 DROP STREAM IF EXISTS bar;
 
-create stream bar (ts DateTime, x uint64)
+create stream bar (ts datetime, x uint64)
 ;
 
 INSERT INTO bar (ts, x) SELECT to_datetime('2020-01-01 00:05:00'), number from system.numbers_mt LIMIT 10;

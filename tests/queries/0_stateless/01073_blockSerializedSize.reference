@@ -1,13 +1,13 @@
 uint8	1
-Nullable(uint8)	2
+nullable(uint8)	2
 uint32	4
 uint64	8
-Nullable(uint64)	9
+nullable(uint64)	9
 
 string	4
-FixedString(32)	32
+fixed_string(32)	32
 
-Enum8	1
+enum8	1
 
 array	12
 

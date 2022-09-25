@@ -1,7 +1,7 @@
 SET check_query_single_value_result = 0;
 DROP STREAM IF EXISTS mt_table;
 
-create stream mt_table (d date, key uint64, data string) ENGINE = MergeTree() PARTITION BY toYYYYMM(d) ORDER BY key;
+create stream mt_table (d date, key uint64, data string) ENGINE = MergeTree() PARTITION BY to_YYYYMM(d) ORDER BY key;
 
 CHECK TABLE mt_table;
 
@@ -15,7 +15,7 @@ SELECT '========';
 
 CHECK TABLE mt_table;
 
-OPTIMIZE STREAM mt_table FINAL;
+OPTIMIZE TABLE mt_table FINAL;
 
 SELECT '========';
 
@@ -31,7 +31,7 @@ SELECT '========';
 
 INSERT INTO mt_table VALUES (to_date('2019-02-03'), 7, 'jump'), (to_date('2019-02-03'), 8, 'around');
 
-OPTIMIZE STREAM mt_table FINAL;
+OPTIMIZE TABLE mt_table FINAL;
 
 CHECK TABLE mt_table PARTITION 201902;
 

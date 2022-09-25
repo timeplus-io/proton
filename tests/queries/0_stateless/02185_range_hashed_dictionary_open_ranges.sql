@@ -2,8 +2,8 @@ DROP STREAM IF EXISTS 02185_range_dictionary_source_table;
 create stream 02185_range_dictionary_source_table
 (
     id uint64,
-    start Nullable(uint64),
-    end Nullable(uint64),
+    start nullable(uint64),
+    end nullable(uint64),
     value string
 )
 ;

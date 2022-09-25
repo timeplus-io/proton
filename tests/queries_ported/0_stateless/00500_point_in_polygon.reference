@@ -1,0 +1,48 @@
+inner
+true
+outer
+false
+single line
+false
+true
+shifted grid
+false
+true
+pair of lines, single polygon
+true
+false
+false
+true
+false
+false
+pair of lines, different polygons
+complex polygon
+false
+true
+false
+true
+false
+true
+polygon with holes
+false
+true
+false
+true
+false
+true
+false
+true
+false
+true
+false
+true
+polygons with reversed direction
+false
+true
+false
+true
+false
+true
+false
+eps for complex polygon in grid
+true

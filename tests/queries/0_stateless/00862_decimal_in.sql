@@ -2,7 +2,7 @@ DROP STREAM IF EXISTS temp;
 create stream temp
 (
     x Decimal(38,2),
-    y Nullable(Decimal(38,2))
+    y nullable(Decimal(38,2))
 ) ;
 
 INSERT INTO temp VALUES (32, 32), (64, 64), (128, 128);

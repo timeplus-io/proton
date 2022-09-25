@@ -2,10 +2,10 @@ SET query_mode = 'table';
 drop stream if exists lc_left_aj;
 create stream lc_left_aj
 (
-    str array(LowCardinality(string)), 
-    null_str array(LowCardinality(Nullable(string))), 
-    val array(LowCardinality(float64)), 
-    null_val array(LowCardinality(Nullable(float64)))
+    str array(low_cardinality(string)), 
+    null_str array(low_cardinality(nullable(string))), 
+    val array(low_cardinality(float64)), 
+    null_val array(low_cardinality(nullable(float64)))
 )
 ;
 

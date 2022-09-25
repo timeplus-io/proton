@@ -25,42 +25,42 @@ PARTITION BY (partition_key + 1) -- ensure that column in expression is properly
 ORDER BY (pk, to_string(sk * 10)); -- silly order key to ensure that key column is checked even when it is a part of expression. See [1] below.
 
 -- ERROR cases
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY pk, sk, val, mat, alias; -- { serverError 16 } -- alias column is present
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY sk, val; -- { serverError 8 } -- primary key column is missing
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY * EXCEPT(pk, sk, val, mat, alias, partition_key); -- { serverError 51 } -- list is empty
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY * EXCEPT(pk); -- { serverError 8 } -- primary key column is missing [1]
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY * EXCEPT(sk); -- { serverError 8 } -- sorting key column is missing [1]
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY * EXCEPT(partition_key); -- { serverError 8 } -- partitioning column is missing [1]
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY pk, sk, val, mat, alias; -- { serverError 16 } -- alias column is present
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY sk, val; -- { serverError 8 } -- primary key column is missing
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY * EXCEPT(pk, sk, val, mat, alias, partition_key); -- { serverError 51 } -- list is empty
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY * EXCEPT(pk); -- { serverError 8 } -- primary key column is missing [1]
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY * EXCEPT(sk); -- { serverError 8 } -- sorting key column is missing [1]
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY * EXCEPT(partition_key); -- { serverError 8 } -- partitioning column is missing [1]
 
-OPTIMIZE STREAM full_duplicates DEDUPLICATE BY; -- { clientError 62 } -- empty list is a syntax error
-OPTIMIZE STREAM partial_duplicates DEDUPLICATE BY pk,sk,val,mat EXCEPT mat; -- { clientError 62 } -- invalid syntax
-OPTIMIZE STREAM partial_duplicates DEDUPLICATE BY pk APPLY(pk + 1); -- { clientError 62 } -- APPLY column transformer is not supported
-OPTIMIZE STREAM partial_duplicates DEDUPLICATE BY pk REPLACE(pk + 1); -- { clientError 62 } -- REPLACE column transformer is not supported
+OPTIMIZE TABLE full_duplicates DEDUPLICATE BY; -- { clientError 62 } -- empty list is a syntax error
+OPTIMIZE TABLE partial_duplicates DEDUPLICATE BY pk,sk,val,mat EXCEPT mat; -- { clientError 62 } -- invalid syntax
+OPTIMIZE TABLE partial_duplicates DEDUPLICATE BY pk APPLY(pk + 1); -- { clientError 62 } -- APPLY column transformer is not supported
+OPTIMIZE TABLE partial_duplicates DEDUPLICATE BY pk REPLACE(pk + 1); -- { clientError 62 } -- REPLACE column transformer is not supported
 
 -- Valid cases
 -- NOTE: here and below we need FINAL to force deduplication in such a small set of data in only 1 part.
 
 SELECT 'OLD DEDUPLICATE';
 INSERT INTO full_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM full_duplicates FINAL DEDUPLICATE;
+OPTIMIZE TABLE full_duplicates FINAL DEDUPLICATE;
 SELECT * FROM full_duplicates;
 TRUNCATE full_duplicates;
 
 SELECT 'DEDUPLICATE BY *';
 INSERT INTO full_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM full_duplicates FINAL DEDUPLICATE BY *;
+OPTIMIZE TABLE full_duplicates FINAL DEDUPLICATE BY *;
 SELECT * FROM full_duplicates;
 TRUNCATE full_duplicates;
 
 SELECT 'DEDUPLICATE BY * EXCEPT mat';
 INSERT INTO full_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM full_duplicates FINAL DEDUPLICATE BY * EXCEPT mat;
+OPTIMIZE TABLE full_duplicates FINAL DEDUPLICATE BY * EXCEPT mat;
 SELECT * FROM full_duplicates;
 TRUNCATE full_duplicates;
 
 SELECT 'DEDUPLICATE BY pk,sk,val,mat,partition_key';
 INSERT INTO full_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM full_duplicates FINAL DEDUPLICATE BY pk,sk,val,mat,partition_key;
+OPTIMIZE TABLE full_duplicates FINAL DEDUPLICATE BY pk,sk,val,mat,partition_key;
 SELECT * FROM full_duplicates;
 TRUNCATE full_duplicates;
 
@@ -79,13 +79,13 @@ SELECT 'Can not remove full duplicates';
 -- should not remove anything
 SELECT 'OLD DEDUPLICATE';
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE;
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE;
 SELECT count() FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 
 SELECT 'DEDUPLICATE BY pk,sk,val,mat';
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE BY pk,sk,val,mat;
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE BY pk,sk,val,mat;
 SELECT count() FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 
@@ -93,31 +93,31 @@ SELECT 'Remove partial duplicates';
 
 SELECT 'DEDUPLICATE BY *'; -- all except MATERIALIZED columns, hence will reduce number of rows.
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE BY *;
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE BY *;
 SELECT count() FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 
 SELECT 'DEDUPLICATE BY * EXCEPT mat';
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE BY * EXCEPT mat;
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE BY * EXCEPT mat;
 SELECT * FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 
 SELECT 'DEDUPLICATE BY COLUMNS("*") EXCEPT mat';
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE BY COLUMNS('.*') EXCEPT mat;
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE BY COLUMNS('.*') EXCEPT mat;
 SELECT * FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 
 SELECT 'DEDUPLICATE BY pk,sk';
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE BY pk,sk;
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE BY pk,sk;
 SELECT * FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 
 SELECT 'DEDUPLICATE BY COLUMNS(".*k")';
 INSERT INTO partial_duplicates SELECT * FROM source_data;
-OPTIMIZE STREAM partial_duplicates FINAL DEDUPLICATE BY COLUMNS('.*k');
+OPTIMIZE TABLE partial_duplicates FINAL DEDUPLICATE BY COLUMNS('.*k');
 SELECT * FROM partial_duplicates;
 TRUNCATE partial_duplicates;
 

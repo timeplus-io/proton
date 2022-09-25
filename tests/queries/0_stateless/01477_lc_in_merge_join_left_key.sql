@@ -4,8 +4,8 @@ SET max_bytes_in_join = 100;
 DROP STREAM IF EXISTS t;
 DROP STREAM IF EXISTS nr;
 
-create stream t (`x` uint32, `s` LowCardinality(string)) ;
-create stream nr (`x` Nullable(uint32), `s` Nullable(string)) ;
+create stream t (`x` uint32, `s` low_cardinality(string)) ;
+create stream nr (`x` nullable(uint32), `s` nullable(string)) ;
 
 INSERT INTO t VALUES (1, 'l');
 INSERT INTO nr VALUES (2, NULL);

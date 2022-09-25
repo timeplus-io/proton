@@ -7,7 +7,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 
-$CLICKHOUSE_CLIENT --multiquery --query "DROP STREAM IF EXISTS test; create stream IF NOT EXISTS test (x uint64, s array(Nullable(string))) ;"
+$CLICKHOUSE_CLIENT --multiquery --query "DROP STREAM IF EXISTS test; create stream IF NOT EXISTS test (x uint64, s array(nullable(string))) ;"
 
 function thread_select {
     while true; do

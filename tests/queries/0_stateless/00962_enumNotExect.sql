@@ -8,7 +8,7 @@ DROP STREAM IF EXISTS t_enum16;
 create stream t_enum16( x Enum('hello' = 1, 'world' = 128) ) ;
 INSERT INTO t_enum16 Values('hello'),('world'),('hello');
 SELECT * FROM t_enum16;
-SELECT CAST(x, 'Int16') FROM t_enum16;
+SELECT CAST(x, 'int16') FROM t_enum16;
 DROP STREAM t_enum16;
 SELECT to_type_name(CAST('a', 'Enum(\'a\' = 2, \'b\' = 128)'));
 SELECT to_type_name(CAST('a', 'Enum(\'a\' = 2, \'b\' = 127)'));

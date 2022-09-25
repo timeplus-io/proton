@@ -7,7 +7,7 @@ drop stream if exists t;
 create stream t (x uint64, s string) engine = MergeTree order by x;
 INSERT INTO t SELECT
     number,
-    if(number < (8129 * 1024), arrayStringConcat(array_map(x -> to_string(x), range(number % 128)), ' '), '')
+    if(number < (8129 * 1024), array_string_concat(array_map(x -> to_string(x), range(number % 128)), ' '), '')
 FROM numbers_mt((8129 * 1024) * 3) settings max_insert_threads=8;
 
 -- optimize table t final;

@@ -89,19 +89,19 @@ FROM
     SELECT number % 2 AS x
     FROM numbers(10)
 )
-SELECT uniqTheta(bitNot(x))
+SELECT uniqTheta(bit_not(x))
 FROM
 (
     SELECT number % 2 AS x
     FROM numbers(10)
 )
-SELECT uniqTheta(bitNot(-x))
+SELECT uniqTheta(bit_not(-x))
 FROM
 (
     SELECT number % 2 AS x
     FROM numbers(10)
 )
-SELECT uniqTheta(-bitNot(-x))
+SELECT uniqTheta(-bit_not(-x))
 FROM
 (
     SELECT number % 2 AS x

@@ -9,7 +9,7 @@ $CLICKHOUSE_CLIENT --query="create database if not exists test_01054;"
 $CLICKHOUSE_CLIENT --query="drop stream if exists test_01054.ints;"
 
 $CLICKHOUSE_CLIENT --query="create stream test_01054.ints
-                            (key uint64, i8 int8, i16 Int16, i32 int32, i64 int64, u8 uint8, u16 uint16, u32 uint32, u64 uint64)
+                            (key uint64, i8 int8, i16 int16, i32 int32, i64 int64, u8 uint8, u16 uint16, u32 uint32, u64 uint64)
                             Engine = Memory;"
 
 $CLICKHOUSE_CLIENT --query="insert into test_01054.ints values (1, 1, 1, 1, 1, 1, 1, 1, 1);"

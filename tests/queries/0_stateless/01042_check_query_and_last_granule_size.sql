@@ -9,7 +9,7 @@ INSERT INTO check_query_test SELECT number, to_string(number) FROM system.number
 
 CHECK TABLE check_query_test;
 
-OPTIMIZE STREAM check_query_test;
+OPTIMIZE TABLE check_query_test;
 
 CHECK TABLE check_query_test;
 
@@ -23,7 +23,7 @@ INSERT INTO check_query_test_non_adaptive SELECT number, to_string(number) FROM 
 
 CHECK TABLE check_query_test_non_adaptive;
 
-OPTIMIZE STREAM check_query_test_non_adaptive;
+OPTIMIZE TABLE check_query_test_non_adaptive;
 
 CHECK TABLE check_query_test_non_adaptive;
 
@@ -31,7 +31,7 @@ INSERT INTO check_query_test_non_adaptive SELECT number, to_string(number) FROM 
 
 CHECK TABLE check_query_test_non_adaptive;
 
-OPTIMIZE STREAM check_query_test_non_adaptive;
+OPTIMIZE TABLE check_query_test_non_adaptive;
 
 CHECK TABLE check_query_test_non_adaptive;
 

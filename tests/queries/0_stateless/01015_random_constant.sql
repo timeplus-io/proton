@@ -1,3 +1,3 @@
 select randConstant() >= 0;
 select randConstant() % 10 < 10;
-select uniqExact(x) from (select randConstant() as x);
+select uniq_exact(x) from (select randConstant() as x);

@@ -733,7 +733,7 @@ def data_prep_csv_2_list(
         random_field_list = random_fields.split(",")
     if random_ranges is not None:
         random_range_list = random_ranges.split(",")
-    print(
+    logger.debug(
         f"data_prep_csv_2_list: copies = {copies}, random_fields={random_fields}, random_ranges = {random_ranges}"
     )
     _data_sets_list = (
@@ -743,7 +743,7 @@ def data_prep_csv_2_list(
         []
     )  # list of input_info to link the unique perf_row_id to input_record and query_resutl and etc. for perf analytics.
 
-    print(f"data_prep_csv_2_list: data_file_path = {data_file_path}")
+    logger.debug(f"data_prep_csv_2_list: data_file_path = {data_file_path}")
     perf_event_time = datetime.datetime.fromisoformat(perf_event_time_start)
 
     if data_set_file_format == "json":
@@ -826,7 +826,7 @@ def data_prep_csv_2_list(
                                     field_random_range
                                 )
                     row_count += 1
-                print(
+                logger.debug(
                     f"data_prep_csv_2_list: random_field_setting_list = {random_field_setting_list}"
                 )
             else:
@@ -1354,12 +1354,15 @@ def input_walk_through(
             data_set_abspath = (
                 test_suite_path + "configs/data/data_sets" + "/" + data_set_path
             )
-        logger.debug(f"input_walk_through: data_set_path = {data_set_path}")
+        cwd = os.getcwd()
+        logger.debug(f"input_walk_through: data_set_path = {data_set_path}, Current working directory: = {cwd}")
         data_set_file = source.get("data_set_file")
         logger.debug(f"input_walk_through: data_set_abspath = {data_set_abspath}")
         if data_set_file != None:
             data_set_file_abspath = data_set_abspath + "/" + data_set_file
-
+        logger.debug(
+            f"input_walk_through: data_set_file_abspath = {data_set_file_abspath}."
+        )
         assert os.path.exists(data_set_file_abspath)
         logger.debug(
             f"input_walk_through: data_set_file_abspath = {data_set_file_abspath} is found."

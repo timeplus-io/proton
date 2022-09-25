@@ -42,6 +42,6 @@ SELECT 'ORDER BY w/ ALIAS';
 SELECT n FROM remote('127.0.0.{2,3}', currentDatabase(), data_00184) ORDER BY number AS n LIMIT 1 SETTINGS distributed_group_by_no_merge=2;
 
 SELECT 'func(aggregate function) GROUP BY';
-SELECT assumeNotNull(argMax(dummy, 1)) FROM remote('127.1', system.one) SETTINGS distributed_group_by_no_merge=2;
+SELECT assumeNotNull(arg_max(dummy, 1)) FROM remote('127.1', system.one) SETTINGS distributed_group_by_no_merge=2;
 
 drop stream data_00184;

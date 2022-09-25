@@ -55,7 +55,7 @@ create stream 01766_db.complex_key_complex_attributes_source_table
    id uint64,
    id_key string,
    value_first string,
-   value_second Nullable(string)
+   value_second nullable(string)
 )
 ;
 
@@ -69,7 +69,7 @@ CREATE DICTIONARY 01766_db.hashed_dictionary_complex_key_complex_attributes
     id_key string,
 
     value_first string DEFAULT 'value_first_default',
-    value_second Nullable(string) DEFAULT 'value_second_default'
+    value_second nullable(string) DEFAULT 'value_second_default'
 )
 PRIMARY KEY id, id_key
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'complex_key_complex_attributes_source_table' DB '01766_db'))

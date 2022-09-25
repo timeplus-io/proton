@@ -5,7 +5,7 @@ create stream table1
 (
 dt date,
 id int32,
-arr array(LowCardinality(string))
+arr array(low_cardinality(string))
 ) ENGINE = MergeTree PARTITION BY to_monday(dt)
 ORDER BY (dt, id) SETTINGS index_granularity = 8192;
 
@@ -13,7 +13,7 @@ create stream table2
 (
 dt date,
 id int32,
-arr array(LowCardinality(string))
+arr array(low_cardinality(string))
 ) ENGINE = MergeTree PARTITION BY to_monday(dt)
 ORDER BY (dt, id) SETTINGS index_granularity = 8192;
 

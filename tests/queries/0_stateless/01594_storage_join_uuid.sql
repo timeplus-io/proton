@@ -5,15 +5,15 @@ DROP STREAM IF EXISTS t;
 
 create stream IF NOT EXISTS joint
 (
-    id    UUID,
-    value LowCardinality(string)
+    id    uuid,
+    value low_cardinality(string)
 )
 ENGINE = Join (ANY, LEFT, id);
 
 create stream IF NOT EXISTS t
 (
-    id    UUID,
-    d     DateTime
+    id    uuid,
+    d     datetime
 )
 ENGINE = MergeTree
 PARTITION BY to_date(d)

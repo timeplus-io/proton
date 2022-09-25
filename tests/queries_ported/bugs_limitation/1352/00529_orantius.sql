@@ -1,0 +1,17 @@
+SELECT to_nullable(NULL);
+SELECT [to_nullable(NULL)];
+SELECT CAST(1 AS nullable(uint8));
+SELECT CAST(materialize(1) AS nullable(uint8));
+SELECT [[1], [-1]];
+SELECT group_array(NULL);
+SELECT [1, 2, 3][to_int8(1)];
+select array_reduce('sumMerge', [sumState(y)]), finalize_aggregation(sumState(y)) from (select to_nullable(42) as y);
+SELECT array_concat([NULL, ''], [''], [NULL]);
+SELECT CAST(NULL AS nullable(uuid));
+SELECT array_map(x -> substring('abc', x), [1, 2, 3]);
+select 1 as x where 1 as x;
+select 1 from (select 1) having count() > 0 as x;
+select a.1-1 FROM (SELECT (1, 2) AS a);
+select a.1-1,a.1+1 FROM (SELECT (1, 2) AS a);
+SELECT defaultValueOfArgumentType([1])[1];
+SELECT groupArrayInsertAt([2, 2], 10)([1, 1], 2);

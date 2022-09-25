@@ -4,7 +4,7 @@ SELECT
     categoricalInformationValue(x.1, x.2)
 FROM (
     SELECT
-        array_join(arrayPopBack([(1, 0)])) as x
+        array_join(array_pop_back([(1, 0)])) as x
 );
 
 SELECT

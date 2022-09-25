@@ -3,13 +3,13 @@ SELECT
     *
 FROM
 (
-    SELECT toLowCardinality(toNullable(number)) AS l
+    SELECT toLowCardinality(to_nullable(number)) AS l
     FROM system.numbers
     LIMIT 10
 ) AS s1
 ANY LEFT JOIN
 (
-    SELECT toLowCardinality(toNullable(number)) AS r
+    SELECT toLowCardinality(to_nullable(number)) AS r
     FROM system.numbers
     LIMIT 7
 ) AS s2 ON (l + 1023) = (r * 3)

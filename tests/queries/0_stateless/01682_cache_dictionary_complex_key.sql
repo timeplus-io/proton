@@ -54,7 +54,7 @@ create stream 01682_database_for_cache_dictionary.complex_key_complex_attributes
    id uint64,
    id_key string,
    value_first string,
-   value_second Nullable(string)
+   value_second nullable(string)
 )
 ;
 
@@ -68,7 +68,7 @@ CREATE DICTIONARY 01682_database_for_cache_dictionary.cache_dictionary_complex_k
     id_key string,
 
     value_first string DEFAULT 'value_first_default',
-    value_second Nullable(string) DEFAULT 'value_second_default'
+    value_second nullable(string) DEFAULT 'value_second_default'
 )
 PRIMARY KEY id, id_key
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'complex_key_complex_attributes_source_table' DB '01682_database_for_cache_dictionary'))

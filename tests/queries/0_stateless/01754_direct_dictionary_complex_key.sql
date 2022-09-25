@@ -53,7 +53,7 @@ create stream 01754_dictionary_db.complex_key_complex_attributes_source_table
    id uint64,
    id_key string,
    value_first string,
-   value_second Nullable(string)
+   value_second nullable(string)
 )
 ;
 
@@ -67,7 +67,7 @@ CREATE DICTIONARY 01754_dictionary_db.direct_dictionary_complex_key_complex_attr
     id_key string,
 
     value_first string DEFAULT 'value_first_default',
-    value_second Nullable(string) DEFAULT 'value_second_default'
+    value_second nullable(string) DEFAULT 'value_second_default'
 )
 PRIMARY KEY id, id_key
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'complex_key_complex_attributes_source_table'))

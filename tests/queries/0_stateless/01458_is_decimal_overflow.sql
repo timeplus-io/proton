@@ -92,9 +92,9 @@ SELECT isDecimalOverflow(materialize(toDecimal128('99999999999999999999999999999
        isDecimalOverflow(materialize(toDecimal128('-10', 0)), 1),
        isDecimalOverflow(materialize(toDecimal128('-1', 0)), 0);
 
-SELECT isDecimalOverflow(toNullable(to_decimal32(42, 0)), 1),
-       isDecimalOverflow(materialize(toNullable(to_decimal32(42, 0))), 2),
-       isDecimalOverflow(toNullable(to_decimal64(42, 0)), 1),
-       isDecimalOverflow(materialize(toNullable(to_decimal64(42, 0))), 2),
-       isDecimalOverflow(toNullable(toDecimal128(42, 0)), 1),
-       isDecimalOverflow(materialize(toNullable(toDecimal128(42, 0))), 2);
+SELECT isDecimalOverflow(to_nullable(to_decimal32(42, 0)), 1),
+       isDecimalOverflow(materialize(to_nullable(to_decimal32(42, 0))), 2),
+       isDecimalOverflow(to_nullable(to_decimal64(42, 0)), 1),
+       isDecimalOverflow(materialize(to_nullable(to_decimal64(42, 0))), 2),
+       isDecimalOverflow(to_nullable(toDecimal128(42, 0)), 1),
+       isDecimalOverflow(materialize(to_nullable(toDecimal128(42, 0))), 2);

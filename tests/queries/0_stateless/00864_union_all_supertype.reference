@@ -1,7 +1,7 @@
-uint64	Nullable(string)
-uint64	Nullable(string)
-Decimal(18, 8)	Nullable(string)
-Decimal(18, 8)	Nullable(string)
+uint64	nullable(string)
+uint64	nullable(string)
+Decimal(18, 8)	nullable(string)
+Decimal(18, 8)	nullable(string)
 v1	w1
 v1	\N
 v2	

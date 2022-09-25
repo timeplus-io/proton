@@ -9,7 +9,7 @@ sign(uint32)
 1
 0
 1
-sign(Float32)
+sign(float32)
 -1
 1
 1

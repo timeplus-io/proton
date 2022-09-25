@@ -1,0 +1,4 @@
+before DETACH STREAM
+500
+after DETACH STREAM
+500

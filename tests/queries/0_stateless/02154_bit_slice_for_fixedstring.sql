@@ -37,7 +37,7 @@ SELECT 'Const Truncate Offset';
 select 49 as offset, to_fixed_string('Hello', 6) as s, subString(bin(s), offset), bin(bitSlice(s, offset));
 select -49 as offset, to_fixed_string('Hello', 6) as s, subString(bin(s), offset), bin(bitSlice(s, offset));
 
-SELECT 'Const Nullable Offset';
+SELECT 'Const nullable Offset';
 select 1 as offset, null as s,          subString(bin(s), offset), bin(bitSlice(s, offset));
 select null as offset, to_fixed_string('Hello', 6) as s,    subString(bin(s), offset), bin(bitSlice(s, offset));
 select null as offset, null as s,       subString(bin(s), offset), bin(bitSlice(s, offset));
@@ -118,7 +118,7 @@ select -52 as offset, -44 as length, to_fixed_string('Hello', 6) as s,  subStrin
 select -49 as offset, -48 as length, to_fixed_string('Hello', 6) as s,  subString(bin(s), offset, length), bin(bitSlice(s, offset, length));
 select -49 as offset,  49 as length, to_fixed_string('Hello', 6) as s,  subString(bin(s), offset, length), bin(bitSlice(s, offset, length));
 
-select 'Const Nullable Offset, Const Nullable Length';
+select 'Const nullable Offset, Const nullable Length';
 select 1 as offset, 1 as length, null as s,         subString(bin(s), offset , length), bin(bitSlice(s, offset, length));
 select null as offset, 1 as length, to_fixed_string('Hello', 6) as s,   subString(bin(s), offset, length), bin(bitSlice(s, offset, length));
 select 1 as offset, null as length, to_fixed_string('Hello', 6) as s,   subString(bin(s), offset , length), bin(bitSlice(s, offset, length));
@@ -137,7 +137,7 @@ select -44-number as offset, 8 as length, to_fixed_string('Hello', 6) as s,     
 select -52 as offset, number as length, to_fixed_string('Hello', 6) as s,       subString(bin(s), offset , length), bin(bitSlice(s, offset, length)) from numbers(9);
 select -52 as offset, number + 48 as length, to_fixed_string('Hello', 6) as s,       subString(bin(s), offset , length), bin(bitSlice(s, offset, length)) from numbers(9);
 
-select 'Dynamic Nullable Offset, Dynamic Nullable Length';
+select 'Dynamic nullable Offset, Dynamic nullable Length';
 select if(number%4 ==1 or number%8==7, null, number) as offset, if(number%4==2 or number%8==7, null, number) as length,if(number%4 ==3, null, to_fixed_string('Hello', 6)) as s,
        subString(bin(s), offset, length), bin(bitSlice(s, offset , length))
 from numbers(16);

@@ -85,8 +85,8 @@ $CLICKHOUSE_CLIENT -q "drop stream if exists null_status;"
 $CLICKHOUSE_CLIENT -q "drop stream if exists never_throw;"
 
 $CLICKHOUSE_CLIENT -q "select 'distributed_ddl_queue'"
-$CLICKHOUSE_CLIENT -q "select entry_version, initiator_host, initiator_port, cluster, replaceRegexpOne(query, 'UUID \'[0-9a-f\-]{36}\' ', ''), abs(query_create_time - now()) < 600,
-    host, port, status, exception_code, replace(replaceRegexpOne(exception_text, ' \(version.*', ''), 'Exception', 'Error'), abs(query_finish_time - query_create_time - query_duration_ms/1000) <= 1 , query_duration_ms < 600000
+$CLICKHOUSE_CLIENT -q "select entry_version, initiator_host, initiator_port, cluster,  replace_regexp_one(query, 'uuid \'[0-9a-f\-]{36}\' ', ''), abs(query_create_time - now()) < 600,
+    host, port, status, exception_code, replace( replace_regexp_one(exception_text, ' \(version.*', ''), 'Exception', 'Error'), abs(query_finish_time - query_create_time - query_duration_ms/1000) <= 1 , query_duration_ms < 600000
     from system.distributed_ddl_queue
     where array_exists((key, val) -> key='log_comment' and val like '%$RAND_COMMENT%', mapKeys(settings), mapValues(settings))
     and array_exists((key, val) -> key='distributed_ddl_task_timeout' and val in ('$TIMEOUT', '$MIN_TIMEOUT'), mapKeys(settings), mapValues(settings))

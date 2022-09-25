@@ -8,8 +8,8 @@ drop stream if exists mutation_delete_null_rows;
 create stream mutation_delete_null_rows
 (
     `EventDate` date,
-    `CounterID` Nullable(string),
-    `UserID` Nullable(uint32)
+    `CounterID` nullable(string),
+    `UserID` nullable(uint32)
 )
 ENGINE = MergeTree()
 ORDER BY EventDate;

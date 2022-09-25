@@ -13,18 +13,18 @@ drop stream if exists lc_fix_str_1;
 drop stream if exists lc_null_fix_str_0;
 drop stream if exists lc_null_fix_str_1;
 
-create stream lc_str_0 (str LowCardinality(string)) engine = Memory;
+create stream lc_str_0 (str low_cardinality(string)) engine = Memory;
 create stream lc_str_1 (str StringWithDictionary) engine = Memory;
-create stream lc_null_str_0 (str LowCardinality(Nullable(string))) engine = Memory;
+create stream lc_null_str_0 (str low_cardinality(nullable(string))) engine = Memory;
 create stream lc_null_str_1 (str NullableWithDictionary(string)) engine = Memory;
-create stream lc_int8_0 (val LowCardinality(int8)) engine = Memory;
+create stream lc_int8_0 (val low_cardinality(int8)) engine = Memory;
 create stream lc_int8_1 (val Int8WithDictionary) engine = Memory;
-create stream lc_null_int8_0 (val LowCardinality(Nullable(int8))) engine = Memory;
+create stream lc_null_int8_0 (val low_cardinality(nullable(int8))) engine = Memory;
 create stream lc_null_int8_1 (val NullableWithDictionary(int8)) engine = Memory;
-create stream lc_fix_str_0 (str LowCardinality(FixedString(2))) engine = Memory;
+create stream lc_fix_str_0 (str low_cardinality(fixed_string(2))) engine = Memory;
 create stream lc_fix_str_1 (str FixedStringWithDictionary(2)) engine = Memory;
-create stream lc_null_fix_str_0 (str LowCardinality(Nullable(FixedString(2)))) engine = Memory;
-create stream lc_null_fix_str_1 (str NullableWithDictionary(FixedString(2))) engine = Memory;
+create stream lc_null_fix_str_0 (str low_cardinality(nullable(fixed_string(2)))) engine = Memory;
+create stream lc_null_fix_str_1 (str NullableWithDictionary(fixed_string(2))) engine = Memory;
 
 insert into lc_str_0 select 'a';
 insert into lc_str_1 select 'a';
@@ -74,10 +74,10 @@ select (toLowCardinality(z) as val) || 'b'  from (select array_join(['c', 'd']) 
 
 select '-';
 drop stream if exists lc_str_uuid;
-create stream lc_str_uuid(str1 string, str2 LowCardinality(string), str3 StringWithDictionary) ENGINE=Memory;
-select toUUID(str1), toUUID(str2), toUUID(str3) from lc_str_uuid;
-select toUUID(str1, '', NULL), toUUID(str2, '', NULL), toUUID(str3, '', NULL) from lc_str_uuid;
+create stream lc_str_uuid(str1 string, str2 low_cardinality(string), str3 StringWithDictionary) ENGINE=Memory;
+select to_uuid(str1), to_uuid(str2), to_uuid(str3) from lc_str_uuid;
+select to_uuid(str1, '', NULL), to_uuid(str2, '', NULL), to_uuid(str3, '', NULL) from lc_str_uuid;
 insert into lc_str_uuid values ('61f0c404-5cb3-11e7-907b-a6006ad3dba0', '61f0c404-5cb3-11e7-907b-a6006ad3dba0', '61f0c404-5cb3-11e7-907b-a6006ad3dba0');
-select toUUID(str1), toUUID(str2), toUUID(str3) from lc_str_uuid;
-select toUUID(str1, '', NULL), toUUID(str2, '', NULL), toUUID(str3, '', NULL) from lc_str_uuid;
+select to_uuid(str1), to_uuid(str2), to_uuid(str3) from lc_str_uuid;
+select to_uuid(str1, '', NULL), to_uuid(str2, '', NULL), to_uuid(str3, '', NULL) from lc_str_uuid;
 drop stream if exists lc_str_uuid;

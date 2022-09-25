@@ -1,7 +1,7 @@
 DROP STREAM IF EXISTS a1;
 DROP STREAM IF EXISTS a2;
 
-SET send_logs_level = 'fatal';
+ 
 
 create stream a1(a uint8, b uint8) ENGINE=Memory;
 create stream a2(a uint8, b uint8) ENGINE=Memory;

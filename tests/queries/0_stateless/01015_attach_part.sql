@@ -11,14 +11,14 @@ ORDER BY date;
 
 INSERT INTO table_01 SELECT to_date('2019-10-01'), number FROM system.numbers LIMIT 1000;
 
-SELECT COUNT() FROM table_01;
+SELECT count() FROM table_01;
 
 ALTER STREAM table_01 DETACH PARTITION ID '20191001';
 
-SELECT COUNT() FROM table_01;
+SELECT count() FROM table_01;
 
 ALTER STREAM table_01 ATTACH PART '20191001_1_1_0';
 
-SELECT COUNT() FROM table_01;
+SELECT count() FROM table_01;
 
 DROP STREAM IF EXISTS table_01;

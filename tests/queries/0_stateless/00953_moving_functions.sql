@@ -3,7 +3,7 @@ DROP STREAM IF EXISTS moving_sum_dec;
 
 create stream moving_sum_num (
   k string,
-  dt DateTime,
+  dt datetime,
   v uint64
 )
 ENGINE = MergeTree ORDER BY (k, dt);

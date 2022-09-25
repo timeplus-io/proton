@@ -1,7 +1,7 @@
 DROP STREAM IF EXISTS rollup_having;
 create stream rollup_having (
-  a Nullable(string),
-  b Nullable(string)
+  a nullable(string),
+  b nullable(string)
 ) ;
 
 INSERT INTO rollup_having VALUES (NULL, NULL);

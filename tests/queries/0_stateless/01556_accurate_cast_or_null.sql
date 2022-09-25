@@ -20,7 +20,7 @@ SELECT accurateCastOrNull(10, 'Decimal32(9)');
 SELECT accurateCastOrNull(1, 'Decimal32(9)');
 SELECT accurateCastOrNull(-10, 'Decimal32(9)');
 
-SELECT accurateCastOrNull('123', 'FixedString(2)');
+SELECT accurateCastOrNull('123', 'fixed_string(2)');
 
 SELECT accurateCastOrNull(inf, 'int64');
 SELECT accurateCastOrNull(inf, 'Int128');

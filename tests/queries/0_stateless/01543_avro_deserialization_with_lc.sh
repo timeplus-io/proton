@@ -9,7 +9,7 @@ USER_FILES_PATH=$(clickhouse-client --query "select _path,_file from file('nonex
 
 $CLICKHOUSE_CLIENT --multiquery --query "
 SET allow_suspicious_low_cardinality_types=1;
-create stream IF NOT EXISTS test_01543 (value LowCardinality(string), value2 LowCardinality(uint64)) ENGINE=Memory();
+create stream IF NOT EXISTS test_01543 (value low_cardinality(string), value2 low_cardinality(uint64)) ENGINE=Memory();
 "
 
 $CLICKHOUSE_CLIENT --query "INSERT INTO test_01543 SELECT to_string(number), number FROM numbers(10)"
@@ -21,8 +21,8 @@ $CLICKHOUSE_CLIENT -q "SELECT * FROM test_01543";
 
 $CLICKHOUSE_CLIENT --query "DROP STREAM IF EXISTS test_01543"
 
-$CLICKHOUSE_CLIENT --query "SELECT number % 2 ? number: NULL as x from numbers(10) FORMAT Avro" > $USER_FILES_PATH/test_01543.avro
+$CLICKHOUSE_CLIENT --query "SELECT (number % 2 <> 0) ? number: NULL as x from numbers(10) FORMAT Avro" > $USER_FILES_PATH/test_01543.avro
 
-$CLICKHOUSE_CLIENT --query "SELECT * FROM file('test_01543.avro', 'Avro', 'x LowCardinality(Nullable(uint64))')"
+$CLICKHOUSE_CLIENT --query "SELECT * FROM file('test_01543.avro', 'Avro', 'x low_cardinality(nullable(uint64))')"
 
 rm $USER_FILES_PATH/test_01543.avro

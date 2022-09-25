@@ -1,6 +1,6 @@
 create stream low_card
 (
-    `lc` LowCardinality(string)
+    `lc` low_cardinality(string)
 )
 ENGINE = Join(ANY, LEFT, lc);
 

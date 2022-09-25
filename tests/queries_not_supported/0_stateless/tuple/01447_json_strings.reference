@@ -1,0 +1,43 @@
+{
+	"meta":
+	[
+		{
+			"name": "1",
+			"type": "uint8"
+		},
+		{
+			"name": "'a'",
+			"type": "string"
+		},
+		{
+			"name": "[1, 2, 3]",
+			"type": "array(uint8)"
+		},
+		{
+			"name": "(1, 'a')",
+			"type": "tuple(uint8, string)"
+		},
+		{
+			"name": "NULL",
+			"type": "Nullable(nothing)"
+		},
+		{
+			"name": "nan",
+			"type": "float64"
+		}
+	],
+
+	"data":
+	[
+		{
+			"1": "1",
+			"'a'": "a",
+			"[1, 2, 3]": "[1,2,3]",
+			"(1, 'a')": "(1,'a')",
+			"NULL": "ᴺᵁᴸᴸ",
+			"nan": "nan"
+		}
+	],
+
+	"rows": 1
+}

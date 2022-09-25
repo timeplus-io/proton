@@ -1,27 +1,27 @@
-SELECT CAST(1 AS Enum8('hello' = 1, 'world' = 2));
-SELECT cast(1 AS Enum8('hello' = 1, 'world' = 2));
+SELECT CAST(1 AS enum8('hello' = 1, 'world' = 2));
+SELECT cast(1 AS enum8('hello' = 1, 'world' = 2));
 
-SELECT CAST(1, 'Enum8(\'hello\' = 1, \'world\' = 2)');
-SELECT cast(1, 'Enum8(\'hello\' = 1, \'world\' = 2)');
+SELECT CAST(1, 'enum8(\'hello\' = 1, \'world\' = 2)');
+SELECT cast(1, 'enum8(\'hello\' = 1, \'world\' = 2)');
 
-SELECT CAST(1 AS Enum8(
+SELECT CAST(1 AS enum8(
     'hello' = 1,
     'world' = 2));
 
-SELECT cast(1 AS Enum8(
+SELECT cast(1 AS enum8(
     'hello' = 1,
     'world' = 2));
 
-SELECT CAST(1, 'Enum8(\'hello\' = 1,\n\t\'world\' = 2)');
-SELECT cast(1, 'Enum8(\'hello\' = 1,\n\t\'world\' = 2)');
+SELECT CAST(1, 'enum8(\'hello\' = 1,\n\t\'world\' = 2)');
+SELECT cast(1, 'enum8(\'hello\' = 1,\n\t\'world\' = 2)');
 
-SELECT toTimeZone(CAST(1 AS TIMESTAMP), 'UTC');
+SELECT to_timezone(CAST(1 AS TIMESTAMP), 'UTC');
 
 DROP STREAM IF EXISTS cast;
 create stream cast
 (
     x uint8,
-    e Enum8
+    e enum8
     (
         'hello' = 1,
         'world' = 2
@@ -31,7 +31,7 @@ create stream cast
     (
         x
         AS
-        Enum8
+        enum8
         (
             'hello' = 1,
             'world' = 2

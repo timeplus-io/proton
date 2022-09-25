@@ -1,7 +1,7 @@
 t1
 create stream default.t1\n(\n    `n` uint64,\n    `s` string\n)\nENGINE = MergeTree\nORDER BY n\nSETTINGS index_granularity = 8192
 t1
-create stream default.t1\n(\n    `n` uint64,\n    `s` Nullable(string)\n)\nENGINE = MergeTree\nORDER BY n\nSETTINGS index_granularity = 8192
+create stream default.t1\n(\n    `n` uint64,\n    `s` nullable(string)\n)\nENGINE = MergeTree\nORDER BY n\nSETTINGS index_granularity = 8192
 2	\N
 t1
 create stream default.t1\n(\n    `n` uint64\n)\nENGINE = MergeTree\nORDER BY n\nSETTINGS index_granularity = 8192

@@ -1,0 +1,40 @@
+**** constant-constant comparisons ****
+true	false
+true	false
+false	true
+0
+**** vector-vector comparisons ****
+false	true
+true	false
+true	false
+false	true
+false	true
+false	false
+**** vector-constant comparisons ****
+false	true
+false	true
+false	false
+true	false
+true	false
+true	false
+****
+false	true
+false	true
+false	true
+false	true
+false	true
+true	false
+**** single-column sort ****
+a	a
+a\0\0	a\0
+a\0\0\0\0	a\0\0\0
+aa	aa\0
+aa\0a	aa\0b
+abcde\0	abcde
+**** multi-column sort ****
+a	a
+a\0\0	a\0
+a\0\0\0\0	a\0\0\0
+aa	aa\0
+aa\0a	aa\0b
+abcde\0	abcde

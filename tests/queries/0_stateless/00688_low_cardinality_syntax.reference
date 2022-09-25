@@ -11,7 +11,7 @@ ab
 ab
 ab
 -
-a	LowCardinality(string)	LowCardinality(uint64)
+a	low_cardinality(string)	low_cardinality(uint64)
 a
 ab
 c

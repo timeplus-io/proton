@@ -1,1 +1,1 @@
-`carat` Nullable(float64), `cut` Nullable(string), `color` Nullable(string), `clarity` Nullable(string), `depth` Nullable(float64), `table` Nullable(float64), `price` Nullable(int64), `x` Nullable(float64), `y` Nullable(float64), `z` Nullable(float64), `__index_level_0__` Nullable(int64)
+`carat` nullable(float64), `cut` nullable(string), `color` nullable(string), `clarity` nullable(string), `depth` nullable(float64), `table` nullable(float64), `price` nullable(int64), `x` nullable(float64), `y` nullable(float64), `z` nullable(float64), `__index_level_0__` nullable(int64)

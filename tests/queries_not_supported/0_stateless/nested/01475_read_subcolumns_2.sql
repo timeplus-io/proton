@@ -10,7 +10,7 @@ create stream subcolumns
     ),
     arr array(Nullable(string)),
     arr2 array(array(Nullable(string))),
-    lc LowCardinality(string),
+    lc low_cardinality(string),
     nested nested(col1 string, col2 Nullable(uint32))
 )
 ENGINE = MergeTree order by tuple() SETTINGS min_bytes_for_wide_part = '10M';
@@ -35,7 +35,7 @@ create stream subcolumns
     ),
     arr array(Nullable(string)),
     arr2 array(array(Nullable(string))),
-    lc LowCardinality(string),
+    lc low_cardinality(string),
     nested nested(col1 string, col2 Nullable(uint32))
 )
 ENGINE = MergeTree order by tuple() SETTINGS min_bytes_for_wide_part = 0;

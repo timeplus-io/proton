@@ -5,8 +5,8 @@ select to_int8OrDefault('-1xx', cast(-2 as int8));
 
 select toUInt16OrDefault('1', cast(2 as uint16));
 select toUInt16OrDefault('1xx', cast(2 as uint16));
-select to_int16OrDefault('-1', cast(-2 as Int16));
-select to_int16OrDefault('-1xx', cast(-2 as Int16));
+select to_int16OrDefault('-1', cast(-2 as int16));
+select to_int16OrDefault('-1xx', cast(-2 as int16));
 
 select toUInt32OrDefault('1', cast(2 as uint32));
 select toUInt32OrDefault('1xx', cast(2 as uint32));
@@ -26,5 +26,5 @@ select toUInt256OrDefault('1xx', cast(2 as UInt256));
 select toInt256OrDefault('-1', cast(-2 as Int256));
 select toInt256OrDefault('-1xx', cast(-2 as Int256));
 
-SELECT toUUIDOrDefault('61f0c404-5cb3-11e7-907b-a6006ad3dba0', cast('59f0c404-5cb3-11e7-907b-a6006ad3dba0' as UUID));
-SELECT toUUIDOrDefault('-----61f0c404-5cb3-11e7-907b-a6006ad3dba0', cast('59f0c404-5cb3-11e7-907b-a6006ad3dba0' as UUID));
+SELECT toUUIDOrDefault('61f0c404-5cb3-11e7-907b-a6006ad3dba0', cast('59f0c404-5cb3-11e7-907b-a6006ad3dba0' as uuid));
+SELECT toUUIDOrDefault('-----61f0c404-5cb3-11e7-907b-a6006ad3dba0', cast('59f0c404-5cb3-11e7-907b-a6006ad3dba0' as uuid));

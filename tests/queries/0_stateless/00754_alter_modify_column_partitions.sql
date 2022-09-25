@@ -2,7 +2,7 @@
 
 -- check ALTER MODIFY COLUMN with partitions
 
-SET send_logs_level = 'fatal';
+ 
 
 DROP STREAM IF EXISTS alter_column;
 

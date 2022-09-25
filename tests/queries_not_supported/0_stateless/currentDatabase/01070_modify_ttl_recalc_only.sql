@@ -99,7 +99,7 @@ select '=============';
 
 drop stream if exists ttl;
 
--- Nothing changed, don't run mutation
+--nothing changed, don't run mutation
 create stream ttl (i int, s string ttl to_date('2000-01-02')) engine = MergeTree order by i
 SETTINGS max_number_of_merges_with_ttl_in_pool=0,materialize_ttl_recalculate_only=true;
 

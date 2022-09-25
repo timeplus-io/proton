@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 
 DROP DICTIONARY IF EXISTS dict_flat;
 DROP DICTIONARY IF EXISTS dict_hashed;

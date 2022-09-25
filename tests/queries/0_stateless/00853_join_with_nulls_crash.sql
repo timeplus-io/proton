@@ -4,12 +4,12 @@ DROP STREAM IF EXISTS table_b;
 create stream table_a (
     event_id uint64,
     something string,
-    other Nullable(string)
+    other nullable(string)
 ) ENGINE = MergeTree ORDER BY (event_id);
 
 create stream table_b (
     event_id uint64,
-    something Nullable(string),
+    something nullable(string),
     other string
 ) ENGINE = MergeTree ORDER BY (event_id);
 

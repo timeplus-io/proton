@@ -2,7 +2,7 @@ SET joined_subquery_requires_alias = 0;
 
 DROP STREAM IF EXISTS ANIMAL;
 
-create stream ANIMAL ( ANIMAL Nullable(string) ) engine = TinyLog;
+create stream ANIMAL ( ANIMAL nullable(string) ) engine = TinyLog;
 INSERT INTO ANIMAL (ANIMAL) VALUES ('CAT'), ('FISH'), ('DOG'), ('HORSE'), ('BIRD');
 
 select * from (

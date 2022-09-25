@@ -11,7 +11,7 @@ DATA_FILE=$CUR_DIR/data_zlib/02013_zlib_read_after_eof_data
 $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS graphite;"
 
 $CLICKHOUSE_CLIENT -q "create stream graphite(\`Path\` string, \`Value\` float64, \`Time\` uint32, \`date\` date, \`Timestamp\` uint32) \
-    ENGINE = MergeTree PARTITION BY toYYYYMM(date) ORDER BY (Path, Time) SETTINGS index_granularity = 8192;"
+    ENGINE = MergeTree PARTITION BY to_YYYYMM(date) ORDER BY (Path, Time) SETTINGS index_granularity = 8192;"
 
 cat "$DATA_FILE" | go run $CUR_DIR/02013_zlib_read_after_eof.go
 

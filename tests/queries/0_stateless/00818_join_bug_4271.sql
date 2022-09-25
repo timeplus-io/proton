@@ -2,8 +2,8 @@ SET query_mode = 'table';
 drop stream if exists t_00818;
 drop stream if exists s_00818;
 
-create stream t_00818(a Nullable(int64), b Nullable(int64), c Nullable(string)) engine = Memory;
-create stream s_00818(a Nullable(int64), b Nullable(int64), c Nullable(string)) engine = Memory;
+create stream t_00818(a nullable(int64), b nullable(int64), c nullable(string)) engine = Memory;
+create stream s_00818(a nullable(int64), b nullable(int64), c nullable(string)) engine = Memory;
 
 insert into t_00818 values(1,1,'a'), (2,2,'b');
 insert into s_00818 values(1,1,'a');

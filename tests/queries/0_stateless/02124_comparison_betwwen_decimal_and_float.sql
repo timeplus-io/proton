@@ -6,14 +6,14 @@ select CAST(1.0, 'Decimal(15,2)') > CAST(-1, 'float64');
 select CAST(1.0, 'Decimal(15,2)') = CAST(-1, 'float64');
 select CAST(1.0, 'Decimal(15,2)') < CAST(-1, 'float64');
 select CAST(1.0, 'Decimal(15,2)') != CAST(-1, 'float64');
-select CAST(1.0, 'Decimal(15,2)') > CAST(1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') = CAST(1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') < CAST(1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') != CAST(1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') > CAST(-1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') = CAST(-1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') < CAST(-1, 'Float32');
-select CAST(1.0, 'Decimal(15,2)') != CAST(-1, 'Float32');
+select CAST(1.0, 'Decimal(15,2)') > CAST(1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') = CAST(1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') < CAST(1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') != CAST(1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') > CAST(-1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') = CAST(-1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') < CAST(-1, 'float32');
+select CAST(1.0, 'Decimal(15,2)') != CAST(-1, 'float32');
 
 SELECT to_decimal32('11.00', 2) > 1.;
 
@@ -27,8 +27,8 @@ create stream t
 	d2 Decimal64(10),
 	d3 Decimal128(30),
 	d4 Decimal256(50),
-	f1 Float32,
-	f2 Float32
+	f1 float32,
+	f2 float32
 );
 
 INSERT INTO t values (-1.5, -1.5, -1.5, -1.5, 1.5, 1.5);

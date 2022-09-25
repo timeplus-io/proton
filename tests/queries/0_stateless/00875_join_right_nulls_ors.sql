@@ -3,8 +3,8 @@ DROP STREAM IF EXISTS nt;
 DROP STREAM IF EXISTS ntxy;
 
 create stream t (x string)  ();
-create stream nt (x Nullable(string))  ();
-create stream ntxy (x Nullable(string), y Nullable(string))  ();
+create stream nt (x nullable(string))  ();
+create stream ntxy (x nullable(string), y nullable(string))  ();
 
 INSERT INTO t (x) VALUES ('id'), ('1');
 INSERT INTO nt (x) VALUES ('id'), (NULL), ('1');

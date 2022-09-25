@@ -3,7 +3,7 @@ create stream data_01515
 (
     key int,
     d1 int,
-    d1_null Nullable(int),
+    d1_null nullable(int),
     INDEX d1_idx d1 TYPE minmax GRANULARITY 1,
     INDEX d1_null_idx assumeNotNull(d1_null) TYPE minmax GRANULARITY 1
 )

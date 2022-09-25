@@ -33,7 +33,7 @@ verify
 $CLICKHOUSE_CLIENT --query="INSERT INTO test_table VALUES ('1992-01-02')"
 verify
 
-$CLICKHOUSE_CLIENT --query="OPTIMIZE STREAM test_table FINAL"
+$CLICKHOUSE_CLIENT --query="OPTIMIZE TABLE test_table FINAL"
 verify
 
 $CLICKHOUSE_CLIENT --database_atomic_wait_for_drop_and_detach_synchronously=1 --query="DROP STREAM test_table"

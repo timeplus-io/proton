@@ -1,2 +1,0 @@
-SELECT x, is_finite(x), isInfinite(x), isNaN(x) FROM (SELECT array_join([0, 1, -1, inf, -inf, nan, -nan, 0 / 0, 1 / 0, -1 / 0, 0 / -0., -0. / 0, 1 / -0., -1 / -0.]) AS x);
-SELECT x, is_finite(x), isInfinite(x), isNaN(x) FROM (SELECT to_float32(array_join([0, 1, -1, inf, -inf, nan, -nan, 0 / 0, 1 / 0, -1 / 0, 0 / -0., -0. / 0, 1 / -0., -1 / -0.])) AS x);

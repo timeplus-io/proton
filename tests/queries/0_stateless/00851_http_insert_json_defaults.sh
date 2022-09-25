@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS defaults"
-$CLICKHOUSE_CLIENT --query="create stream defaults (x uint32, y uint32, a DEFAULT x + y, b Float32 DEFAULT round(log(1 + x + y), 5), c uint32 DEFAULT 42, e MATERIALIZED x + y, f ALIAS x + y) "
+$CLICKHOUSE_CLIENT --query="create stream defaults (x uint32, y uint32, a DEFAULT x + y, b float32 DEFAULT round(log(1 + x + y), 5), c uint32 DEFAULT 42, e MATERIALIZED x + y, f ALIAS x + y) "
 
 echo -ne '{"x":1, "y":1}\n' | ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}&query=INSERT%20INTO%20defaults%20FORMAT%20JSONEachRow%20SETTINGS%20input_format_defaults_for_omitted_fields=1" --data-binary @-
 echo -ne '{"x":2, "y":2, "c":2}\n' | ${CLICKHOUSE_CURL} -sS "${CLICKHOUSE_URL}&query=INSERT+INTO+defaults+FORMAT+JSONEachRow+SETTINGS+input_format_defaults_for_omitted_fields=1" --data-binary @-

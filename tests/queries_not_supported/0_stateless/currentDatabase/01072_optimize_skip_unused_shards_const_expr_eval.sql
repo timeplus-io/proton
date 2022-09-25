@@ -32,7 +32,7 @@ select * from dist_01072 where key=to_int32(value) settings force_optimize_skip_
 set allow_suspicious_low_cardinality_types=1;
 
 drop stream dist_01072;
-create stream dist_01072 (key int, value LowCardinality(int), str string) Engine=Distributed(test_cluster_two_shards, currentDatabase(), data_01072, key%2);
+create stream dist_01072 (key int, value low_cardinality(int), str string) Engine=Distributed(test_cluster_two_shards, currentDatabase(), data_01072, key%2);
 select * from dist_01072 where key=to_int32(xxHash32(0));
 select * from dist_01072 where key=value; -- { serverError 507; }
 select * from dist_01072 where key=to_int32(value); -- { serverError 507; }
@@ -40,7 +40,7 @@ select * from dist_01072 where key=value settings force_optimize_skip_unused_sha
 select * from dist_01072 where key=to_int32(value) settings force_optimize_skip_unused_shards=0;
 
 drop stream dist_01072;
-create stream dist_01072 (key int, value LowCardinality(Nullable(int)), str string) Engine=Distributed(test_cluster_two_shards, currentDatabase(), data_01072, key%2);
+create stream dist_01072 (key int, value low_cardinality(Nullable(int)), str string) Engine=Distributed(test_cluster_two_shards, currentDatabase(), data_01072, key%2);
 select * from dist_01072 where key=to_int32(xxHash32(0));
 select * from dist_01072 where key=value; -- { serverError 507; }
 select * from dist_01072 where key=to_int32(value); -- { serverError 507; }

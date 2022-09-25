@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 DROP STREAM IF EXISTS add_aggregate;
 create stream add_aggregate(a uint32, b uint32) ;
 
@@ -12,7 +12,7 @@ SELECT sumMerge(x) FROM (SELECT sumState(a) + sumState(to_int32(b)) as x FROM ad
 
 SELECT minMerge(x) FROM (SELECT minState(a) + minState(b) as x FROM add_aggregate); 
 
-SELECT uniqMerge(x + y) FROM (SELECT uniqState(a) as x, uniqState(b) as y FROM add_aggregate);
+SELECT uniqMerge(x + y) FROM (SELECT uniq_state(a) as x, uniq_state(b) as y FROM add_aggregate);
 
 SELECT arraySort(groupArrayMerge(x + y)) FROM (SELECT groupArrayState(a) AS x, groupArrayState(b) as y FROM add_aggregate);
 SELECT arraySort(groupUniqArrayMerge(x + y)) FROM (SELECT groupUniqArrayState(a) AS x, groupUniqArrayState(b) as y FROM add_aggregate);

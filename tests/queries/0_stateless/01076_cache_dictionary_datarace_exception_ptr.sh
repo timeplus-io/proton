@@ -13,7 +13,7 @@ $CLICKHOUSE_CLIENT --query="CREATE DATABASE dictdb_01076;"
 $CLICKHOUSE_CLIENT --query="
 create stream dictdb_01076.table_datarace
 (
-  key_column UUID,
+  key_column uuid,
   value float64
 )
 ENGINE = MergeTree()
@@ -40,7 +40,7 @@ function thread1()
 {
     for _ in {1..50}
     do
-        # This query will be ended with exception, because source dictionary has UUID as a key type.
+        # This query will be ended with exception, because source dictionary has uuid as a key type.
         $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat64('dictdb_01076.dict_datarace', 'value', to_uint64(1));"
     done
 }
@@ -50,7 +50,7 @@ function thread2()
 {
     for _ in {1..50}
     do
-        # This query will be ended with exception, because source dictionary has UUID as a key type.
+        # This query will be ended with exception, because source dictionary has uuid as a key type.
         $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat64('dictdb_01076.dict_datarace', 'value', to_uint64(2));"
     done
 }

@@ -24,7 +24,7 @@ create_tables() {
           ['Memory', 'File(CSV)', 'Log', 'StripeLog', 'MergeTree ORDER BY i'] AS engines,
           'INSERT INTO $db.table_$1_' AS insert1,
           ' VALUES (0, ''2020-06-25'', ''hello'', [1, 2], [3, 4]), (1, ''2020-06-26'', ''word'', [10, 20], [30, 40])' AS insert2
-      SELECT arrayStringConcat(
+      SELECT array_string_concat(
           group_array(
               create1 || to_string(number) || create2 || engines[1 + number % length(engines)] || ';\n' ||
               insert1 ||  to_string(number) || insert2

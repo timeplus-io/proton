@@ -14,10 +14,10 @@ create stream main_table_01818
     `status` string,
     `modify_time` string,
     `campaign_type` string,
-    `campaign_create_time` DateTime,
-    `campaign_modify_time` DateTime,
-    `create_time` DateTime,
-    `update_time` DateTime
+    `campaign_create_time` datetime,
+    `campaign_modify_time` datetime,
+    `create_time` datetime,
+    `update_time` datetime
 )
 ENGINE = MergeTree
 PARTITION BY advertiser_id
@@ -36,10 +36,10 @@ create stream tmp_table_01818
     `status` string,
     `modify_time` string,
     `campaign_type` string,
-    `campaign_create_time` DateTime,
-    `campaign_modify_time` DateTime,
-    `create_time` DateTime,
-    `update_time` DateTime
+    `campaign_create_time` datetime,
+    `campaign_modify_time` datetime,
+    `create_time` datetime,
+    `update_time` datetime
 )
 ENGINE = MergeTree
 PARTITION BY advertiser_id
@@ -59,10 +59,10 @@ FROM generateRandom(
     `status` string,
     `modify_time` string,
     `campaign_type` string,
-    `campaign_create_time` DateTime,
-    `campaign_modify_time` DateTime,
-    `create_time` DateTime,
-    `update_time` DateTime', 10, 10, 10) 
+    `campaign_create_time` datetime,
+    `campaign_modify_time` datetime,
+    `create_time` datetime,
+    `update_time` datetime', 10, 10, 10) 
 LIMIT 100;
 
 SELECT 'INSERT INTO tmp_table_01818';
@@ -78,10 +78,10 @@ FROM generateRandom(
     `status` string,
     `modify_time` string,
     `campaign_type` string,
-    `campaign_create_time` DateTime,
-    `campaign_modify_time` DateTime,
-    `create_time` DateTime,
-    `update_time` DateTime', 10, 10, 10) 
+    `campaign_create_time` datetime,
+    `campaign_modify_time` datetime,
+    `create_time` datetime,
+    `update_time` datetime', 10, 10, 10) 
 LIMIT 100;
 
 SELECT 'INSERT INTO tmp_table_01818';
@@ -97,10 +97,10 @@ FROM generateRandom(
     `status` string,
     `modify_time` string,
     `campaign_type` string,
-    `campaign_create_time` DateTime,
-    `campaign_modify_time` DateTime,
-    `create_time` DateTime,
-    `update_time` DateTime', 10, 10, 10) 
+    `campaign_create_time` datetime,
+    `campaign_modify_time` datetime,
+    `create_time` datetime,
+    `update_time` datetime', 10, 10, 10) 
 LIMIT 100;
 
 SELECT 'ALL tmp_table_01818', count() FROM tmp_table_01818;

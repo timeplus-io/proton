@@ -14,7 +14,7 @@ done
 
 ${CLICKHOUSE_CLIENT} --query "select count() > 1 as ok from (select * from odbc('DSN={ClickHouse DSN (Unicode)}','system','tables'))"
 
-${CLICKHOUSE_CLIENT} --query "create stream t (x uint8, y Float32, z string) "
+${CLICKHOUSE_CLIENT} --query "create stream t (x uint8, y float32, z string) "
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO t VALUES (1,0.1,'a я'),(2,0.2,'b ą'),(3,0.3,'c d')"
 
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM odbc('DSN={ClickHouse DSN (ANSI)}','$CLICKHOUSE_DATABASE','t') ORDER BY x"

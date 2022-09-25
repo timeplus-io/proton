@@ -27,10 +27,10 @@ SELECT toModifiedJulianDay(d) FROM toModifiedJulianDay_test;
 DROP STREAM toModifiedJulianDay_test;
 
 --
-SELECT 'Invocation with FixedString column';
+SELECT 'Invocation with fixed_string column';
 
 DROP STREAM IF EXISTS toModifiedJulianDay_test;
-create stream toModifiedJulianDay_test (d FixedString(10)) ;
+create stream toModifiedJulianDay_test (d fixed_string(10)) ;
 
 INSERT INTO toModifiedJulianDay_test VALUES ('1858-11-16'), ('1858-11-17'), ('2020-11-01');
 SELECT toModifiedJulianDay(d) FROM toModifiedJulianDay_test;

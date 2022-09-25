@@ -40,8 +40,8 @@ insert into values_01564 values (1); select 1;
 
 -- syntax error, where the last token we can parse is long before the semicolon.
 select this is too many words for an alias; -- { clientError 62 }
-OPTIMIZE STREAM values_01564 DEDUPLICATE BY; -- { clientError 62 }
-OPTIMIZE STREAM values_01564 DEDUPLICATE BY a EXCEPT a; -- { clientError 62 }
+OPTIMIZE TABLE values_01564 DEDUPLICATE BY; -- { clientError 62 }
+OPTIMIZE TABLE values_01564 DEDUPLICATE BY a EXCEPT a; -- { clientError 62 }
 select 'a' || distinct one || 'c' from system.one; -- { clientError 62 }
 
 -- a failing insert and then a normal insert (#https://github.com/ClickHouse/ClickHouse/issues/19353)

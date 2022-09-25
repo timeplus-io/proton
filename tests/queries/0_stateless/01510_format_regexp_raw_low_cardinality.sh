@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ${CLICKHOUSE_CLIENT} -n --query "
 DROP STREAM IF EXISTS t;
-create stream t (a string, b LowCardinality(Nullable(string))) ;
+create stream t (a string, b low_cardinality(nullable(string))) ;
 "
 
 ${CLICKHOUSE_CLIENT} --format_regexp_escaping_rule 'Raw' --format_regexp '^(.+?) separator (.+?)$' --query '

@@ -1,7 +1,10 @@
 SET query_mode = 'table';
+SET asterisk_include_reserved_columns=false;
+
 drop stream if exists test54378;
 create stream test54378 (part_date date, pk_date date, date date) Engine=MergeTree(part_date, pk_date, 8192);
-insert into test54378 values ('2018-04-19', '2018-04-19', '2018-04-19');
+insert into(part_date, pk_date,date) test54378 values ('2018-04-19', '2018-04-19', '2018-04-19');
+select sleep(3);
 
 select 111 from test54378 where part_date = '2018-04-19';
 select 112 from test54378 where part_date in ('2018-04-19');

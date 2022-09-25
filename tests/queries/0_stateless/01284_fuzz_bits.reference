@@ -1,5 +1,5 @@
 
 100
 string
-FixedString(10)
+fixed_string(10)
 1

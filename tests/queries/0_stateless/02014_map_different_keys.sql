@@ -18,15 +18,15 @@ SELECT m1[i2], m2[i2], m3[i2] FROM t_map_02014;
 
 DROP STREAM IF EXISTS t_map_02014;
 
-create stream t_map_02014(s string, fs FixedString(3), m1 Map(string, string), m2 Map(FixedString(3), string)) ;
+create stream t_map_02014(s string, fs fixed_string(3), m1 Map(string, string), m2 Map(fixed_string(3), string)) ;
 INSERT INTO t_map_02014 VALUES ('aaa', 'bbb', map('aaa', 'foo', 'bbb', 'bar'), map('aaa', 'foo', 'bbb', 'bar'));
 
 SELECT '...string keys...';
 
 SELECT m1['aaa'], m2['aaa'] FROM t_map_02014;
-SELECT m1['aaa'::FixedString(3)], m2['aaa'::FixedString(3)] FROM t_map_02014;
+SELECT m1['aaa'::fixed_string(3)], m2['aaa'::fixed_string(3)] FROM t_map_02014;
 SELECT m1[s], m2[s] FROM t_map_02014;
 SELECT m1[fs], m2[fs] FROM t_map_02014;
-SELECT length(m2['aaa'::FixedString(4)]) FROM t_map_02014;
+SELECT length(m2['aaa'::fixed_string(4)]) FROM t_map_02014;
 
 DROP STREAM IF EXISTS t_map_02014;

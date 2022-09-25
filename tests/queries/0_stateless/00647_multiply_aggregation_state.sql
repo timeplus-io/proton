@@ -1,4 +1,4 @@
-SET send_logs_level = 'fatal';
+ 
 
 SELECT countMerge(x) AS y FROM ( SELECT countState() * 2 AS x FROM ( SELECT 1 ));
 SELECT countMerge(x) AS y FROM ( SELECT countState() * 0 AS x FROM ( SELECT 1 UNION ALL SELECT 2));
@@ -13,7 +13,7 @@ INSERT INTO mult_aggregation VALUES(1, 1);
 INSERT INTO mult_aggregation VALUES(1, 3);
 
 SELECT sumMerge(x * 5), sumMerge(x) FROM (SELECT sumState(b) AS x FROM mult_aggregation);
-SELECT uniqMerge(x * 10) FROM (SELECT uniqState(b) AS x FROM mult_aggregation);
+SELECT uniqMerge(x * 10) FROM (SELECT uniq_state(b) AS x FROM mult_aggregation);
 SELECT maxMerge(x * 10) FROM (SELECT maxState(b) AS x FROM mult_aggregation);
 SELECT avgMerge(x * 10) FROM (SELECT avgState(b) AS x FROM mult_aggregation);
 

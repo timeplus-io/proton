@@ -76,7 +76,7 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM file('data.capnp', 'CapnProto', 'value
 $CLICKHOUSE_CLIENT --query="SELECT * FROM file('data.capnp', 'CapnProto', 'value Enum(\'first\' = 1, \'two\' = 2, \'three\' = 3)') SETTINGS format_schema='$SERVER_SCHEMADIR/02030_capnp_enum:Message', format_capn_proto_enum_comparising_mode='by_names_case_insensitive'" 2>&1 | grep -F -q "CAPN_PROTO_BAD_CAST" && echo 'OK' || echo 'FAIL';
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS capnp_low_cardinality"
-$CLICKHOUSE_CLIENT --query="create stream capnp_low_cardinality (lc1 LowCardinality(string), lc2 LowCardinality(Nullable(string)), lc3 array(LowCardinality(Nullable(string)))) ENGINE=Memory"
+$CLICKHOUSE_CLIENT --query="create stream capnp_low_cardinality (lc1 low_cardinality(string), lc2 low_cardinality(Nullable(string)), lc3 array(low_cardinality(Nullable(string)))) ENGINE=Memory"
 $CLICKHOUSE_CLIENT --query="INSERT INTO capnp_low_cardinality VALUES ('one', 'two', ['one', Null, 'two', Null]), ('two', Null, [Null])"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM capnp_low_cardinality FORMAT CapnProto SETTINGS format_schema='$CLIENT_SCHEMADIR/02030_capnp_low_cardinality:Message'" |  $CLICKHOUSE_CLIENT --query="INSERT INTO capnp_low_cardinality FORMAT CapnProto SETTINGS format_schema='$CLIENT_SCHEMADIR/02030_capnp_low_cardinality:Message'"
 $CLICKHOUSE_CLIENT --query="SELECT * FROM capnp_low_cardinality"

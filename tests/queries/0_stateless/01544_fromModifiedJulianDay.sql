@@ -5,7 +5,7 @@ SELECT fromModifiedJulianDay(-1);
 SELECT fromModifiedJulianDay(0);
 SELECT fromModifiedJulianDay(59154);
 SELECT fromModifiedJulianDay(NULL);
-SELECT fromModifiedJulianDay(CAST(NULL, 'Nullable(int64)'));
+SELECT fromModifiedJulianDay(CAST(NULL, 'nullable(int64)'));
 SELECT fromModifiedJulianDay(-678942); -- { serverError 490 }
 SELECT fromModifiedJulianDay(2973484); -- { serverError 490 }
 

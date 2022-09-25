@@ -6,7 +6,7 @@ create stream table2
         Value int32
 )
 Engine = MergeTree()
-PARTITION BY toYYYYMM(EventDate)
+PARTITION BY to_YYYYMM(EventDate)
 ORDER BY Id;
 
 ALTER STREAM table2 MODIFY COLUMN `Value` DEFAULT 'some_string'; --{serverError 6}

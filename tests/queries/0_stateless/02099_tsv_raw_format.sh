@@ -24,7 +24,7 @@ done
 $CLICKHOUSE_CLIENT -q "DROP STREAM test_02099"
 
 $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS test_nullable_02099"
-$CLICKHOUSE_CLIENT -q "create stream test_nullable_02099 ENGINE=Memory() AS SELECT number % 2 ? NULL : number from numbers(4)";
+$CLICKHOUSE_CLIENT -q "create stream test_nullable_02099 ENGINE=Memory() AS SELECT (number % 2 <> 0) ? NULL : number from numbers(4)";
 
 $CLICKHOUSE_CLIENT -q "SELECT * FROM test_nullable_02099 FORMAT TSVRaw"
 $CLICKHOUSE_CLIENT -q "SELECT * FROM test_nullable_02099 FORMAT TSVRaw" | $CLICKHOUSE_CLIENT -q "INSERT INTO test_nullable_02099 FORMAT TSVRaw"
@@ -39,7 +39,7 @@ $CLICKHOUSE_CLIENT -q "DROP STREAM test_nullable_02099"
 
 
 $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS test_nullable_string_02099"
-$CLICKHOUSE_CLIENT -q "create stream test_nullable_string_02099 (s Nullable(string)) ENGINE=Memory()";
+$CLICKHOUSE_CLIENT -q "create stream test_nullable_string_02099 (s nullable(string)) ENGINE=Memory()";
 
 echo 'nSome text' | $CLICKHOUSE_CLIENT -q "INSERT INTO test_nullable_string_02099 FORMAT TSVRaw"
 

@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS join_tbl;
 
-create stream join_tbl (`id` string, `name` string, lcname LowCardinality(string)) ENGINE = Join(any, left, id);
+create stream join_tbl (`id` string, `name` string, lcname low_cardinality(string)) ENGINE = Join(any, left, id);
 
 INSERT INTO join_tbl VALUES ('xxx', 'yyy', 'yyy');
 

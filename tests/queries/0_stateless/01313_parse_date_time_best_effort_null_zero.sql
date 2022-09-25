@@ -1,6 +1,6 @@
 SELECT parseDateTimeBestEffort('<Empty>'); -- { serverError 41 }
-SELECT parseDateTimeBestEffortOrNull('<Empty>');
-SELECT parseDateTimeBestEffortOrZero('<Empty>', 'UTC');
+SELECT parse_datetime_best_effort_or_null('<Empty>');
+SELECT parse_datetime_best_effort_or_zero('<Empty>', 'UTC');
 
 SELECT parseDateTime64BestEffort('<Empty>'); -- { serverError 41 }
 SELECT parseDateTime64BestEffortOrNull('<Empty>');

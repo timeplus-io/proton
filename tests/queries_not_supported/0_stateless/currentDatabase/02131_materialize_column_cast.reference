@@ -1,0 +1,14 @@
+1_1_1_0_2	i	int32
+1_1_1_0_2	s	low_cardinality(string)
+===========
+1_1_1_0_2	i	int32
+1_1_1_0_2	s	low_cardinality(string)
+2_3_3_0	i	int32
+2_3_3_0	s	low_cardinality(string)
+===========
+1_1_1_0_4	i	int32
+1_1_1_0_4	s	low_cardinality(string)
+2_3_3_0_4	i	int32
+2_3_3_0_4	s	low_cardinality(string)
+1	1
+2	2

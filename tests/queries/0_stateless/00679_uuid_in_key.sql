@@ -1,7 +1,7 @@
 create stream IF NOT EXISTS uuid
 (
-    created_at DateTime,
-    id UUID
+    created_at datetime,
+    id uuid
 )
 ENGINE = MergeTree
 PARTITION BY to_date(created_at)
