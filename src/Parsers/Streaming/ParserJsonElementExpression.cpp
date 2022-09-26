@@ -16,6 +16,13 @@ const char * ParserJsonElementExpression::operators[] = {":", "json_value", null
 bool ParserJsonElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     auto pos_begin = pos;
+
+    /// This is a bugfix #1353, when parsing element of json string such as `raw:a`, we need to except this case `cond ? raw : a`
+    --pos_begin;
+    if (pos_begin->type == TokenType::QuestionMark)
+        return false;
+    ++pos_begin;
+
     bool is_json_elem = false;
     bool parsed
         = ParserLeftAssociativeBinaryOperatorList{operators, std::make_unique<ParserExpressionElement>(), std::make_unique<ParserJsonElementName>(is_json_elem)}
@@ -36,6 +43,7 @@ bool ParserJsonElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 bool ParserJsonElementName::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     ASTPtr elem_list;
+    /// Except: to_int(1)
     if (!ParserList(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Dot), false)
              .parse(pos, elem_list, expected))
     {
