@@ -185,7 +185,7 @@ Checkpoints::readSequences(rocksdb::ColumnFamilyHandle * cf_handle) const
         int32_t shard = 0;
         ::memcpy(&shard, start_pos, sizeof(int32_t));
 
-        results[ns].emplace(StreamShard{"", stream_id, shard}, *reinterpret_cast<const int64_t *>(value.data()));
+        results[ns].emplace(StreamShard{"", stream_id, shard}, unalignedLoad<int64_t>(value.data()));
     }
     return results;
 }
