@@ -452,7 +452,7 @@ void buildConfigurationFromFunctionWithKeyValueArguments(
         }
         else if (const auto * func = pair->second->as<ASTFunction>())
         {
-            auto builder = FunctionFactory::instance().tryGet(func->name, context);
+            auto builder = FunctionFactory::instance().get(func->name, context);
             auto function = builder->build({});
             function->prepare({});
 
