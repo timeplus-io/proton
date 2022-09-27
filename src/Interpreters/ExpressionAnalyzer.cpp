@@ -193,9 +193,9 @@ void replaceForPositionalArguments(ASTPtr & argument, const ASTSelectQuery * sel
 
 /// proton: starts.
 void tryTranslateToParametricAggregateFunction(
-    const ASTFunction * node, DataTypes & types, AggregateDescription & aggregate, ContextPtr context)
+    const ASTFunction * node, DataTypes & types, Array & parameters, Names & argument_names, ContextPtr context)
 {
-    if (!aggregate.parameters.empty() || aggregate.argument_names.empty())
+    if (!parameters.empty() || argument_names.empty())
         return;
 
     assert(node->arguments);
@@ -211,9 +211,9 @@ void tryTranslateToParametricAggregateFunction(
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.push_back(arguments[1]);
-        aggregate.parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
 
-        aggregate.argument_names.erase(aggregate.argument_names.begin() + 1);
+        argument_names.erase(argument_names.begin() + 1);
         types.erase(types.begin() + 1);
     }
     else if (lower_name == "top_k")
@@ -226,9 +226,9 @@ void tryTranslateToParametricAggregateFunction(
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.assign(arguments.begin() + 1, arguments.end());
-        aggregate.parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
 
-        aggregate.argument_names = {aggregate.argument_names[0]};
+        argument_names = {argument_names[0]};
         types = {types[0]};
     }
     else if (lower_name == "quantile")
@@ -239,10 +239,32 @@ void tryTranslateToParametricAggregateFunction(
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.push_back(arguments[1]);
-        aggregate.parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
 
-        aggregate.argument_names = {aggregate.argument_names[0]};
+        argument_names = {argument_names[0]};
         types = {types[0]};
+    }
+}
+
+AggregateFunctionPtr getAggregateFunction(
+    const ASTFunction * node, DataTypes & types, Array & parameters, Names & argument_names, AggregateFunctionProperties & properties, ContextPtr context, bool is_streaming, bool throw_if_empty = true)
+{
+    /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_streaming' in streaming query.
+    if (is_streaming && endsWith(node->name, "_distinct"))
+    {
+        if (throw_if_empty)
+            return AggregateFunctionFactory::instance().get(node->name + "_streaming", types, parameters, properties);
+        else
+            return AggregateFunctionFactory::instance().tryGet(node->name + "_streaming", types, parameters, properties);
+    }
+    else
+    {
+        /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`
+        tryTranslateToParametricAggregateFunction(node, types, parameters, argument_names, context);
+        if (throw_if_empty)
+            return AggregateFunctionFactory::instance().get(node->name, types, parameters, properties);
+        else
+            return AggregateFunctionFactory::instance().tryGet(node->name, types, parameters, properties);
     }
 }
 /// proton: ends.
@@ -640,15 +662,7 @@ void ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions, Aggr
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters, "", getContext()) : Array();
 
         /// proton: starts.
-        /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_treaming' in streaming query.
-        if (syntax->streaming && endsWith(node->name, "_distinct"))
-            aggregate.function = AggregateFunctionFactory::instance().get(node->name + "_streaming", types, aggregate.parameters, properties);
-        else
-        {
-            /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`
-            tryTranslateToParametricAggregateFunction(node, types, aggregate, getContext());
-            aggregate.function = AggregateFunctionFactory::instance().get(node->name, types, aggregate.parameters, properties);
-        }
+        aggregate.function = getAggregateFunction(node, types, aggregate.parameters, aggregate.argument_names, properties, getContext(), syntax->streaming);
         /// proton: ends.
 
         descriptions.push_back(aggregate);
@@ -854,16 +868,19 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
         AggregateFunctionProperties properties;
         if (syntax->streaming)
         {
-            window_function.aggregate_function
-                = AggregateFunctionFactory::instance().tryGet(
-                    window_function.function_node->name,
-                    window_function.argument_types,
-                    window_function.function_parameters, properties);
-
+            window_function.aggregate_function = getAggregateFunction(
+                window_function.function_node,
+                window_function.argument_types,
+                window_function.function_parameters,
+                window_function.argument_names,
+                properties,
+                getContext(),
+                true,
+                /* throw_if_empty */ false);
             if (!window_function.aggregate_function)
             {
                 FunctionOverloadResolverPtr func;
-                try 
+                try
                 {
                     func = FunctionFactory::instance().get(window_function.function_node->name, getContext());
                 }
@@ -871,7 +888,9 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
                 {
                     auto hints = AggregateFunctionFactory::instance().getHints(window_function.function_node->name);
                     if (!hints.empty())
-                        e.addMessage("Or unknown aggregate function " + window_function.function_node->name + ". Maybe you meant: " + toString(hints));
+                        e.addMessage(
+                            "Or unknown aggregate function " + window_function.function_node->name
+                            + ". Maybe you meant: " + toString(hints));
                     throw;
                 }
 
@@ -884,11 +903,15 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
             }
         }
         else
-            window_function.aggregate_function
-                = AggregateFunctionFactory::instance().get(
-                    window_function.function_node->name,
-                    window_function.argument_types,
-                    window_function.function_parameters, properties);
+            window_function.aggregate_function = getAggregateFunction(
+                window_function.function_node,
+                window_function.argument_types,
+                window_function.function_parameters,
+                window_function.argument_names,
+                properties,
+                getContext(),
+                false,
+                /* throw_if_empty */ true);
         /// proton: ends.
 
         // Find the window corresponding to this function. It may be either
