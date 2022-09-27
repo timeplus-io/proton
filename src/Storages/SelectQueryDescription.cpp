@@ -8,6 +8,8 @@
 #include <Interpreters/Context.h>
 
 /// proton: starts.
+#include <Interpreters/ApplyWithAliasVisitor.h>
+#include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 /// proton: ends.
 
@@ -129,6 +131,12 @@ SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForMatView(c
 {
     SelectQueryDescription result;
     result.inner_query = select->clone();
+
+    /// Propagate WITH elements to inner query
+    if (context->getSettingsRef().enable_global_with_statement)
+        ApplyWithAliasVisitor().visit(result.inner_query);
+    ApplyWithSubqueryVisitor().visit(result.inner_query);
+
     auto & select_query = result.inner_query->as<ASTSelectWithUnionQuery &>();
     checkAllowedQueries(select_query);
     extractDependentTableFromSelectQuery(result.select_table_ids, select_query, context);
