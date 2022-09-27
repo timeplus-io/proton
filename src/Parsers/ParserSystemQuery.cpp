@@ -158,6 +158,30 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
             break;
         }
+        /// proton: starts
+        case Type::REPLACE_REPLICA:
+        {
+            parseQueryWithOnCluster(res, pos, expected);
+
+            ASTPtr ast;
+            if (!ParserStringLiteral{}.parse(pos, ast, expected))
+                return false;
+            res->replica = ast->as<ASTLiteral &>().value.safeGet<String>();
+            if (!ParserKeyword{"FOR"}.ignore(pos, expected))
+                return false;
+
+            ASTPtr old_ast;
+            if (!ParserStringLiteral{}.parse(pos, old_ast, expected))
+                return false;
+            res->old_replica = old_ast->as<ASTLiteral &>().value.safeGet<String>();
+            res->is_drop_whole_replica = true;
+            break;
+        }
+        case Type::STOP_MAINTAIN:
+        case Type::START_MAINTAIN:
+        case Type::ADD_REPLICA:
+        case Type::RESTART_REPLICA:
+        /// proton: ends
         case Type::DROP_REPLICA:
         {
             parseQueryWithOnCluster(res, pos, expected);
@@ -180,6 +204,17 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 else if (ParserKeyword{"TABLE"}.ignore(pos, expected))
                 {
                     parseDatabaseAndTableAsAST(pos, expected, res->database, res->table);
+                    /// proton: starts
+                    /// support 'SYSTEM ADD REPLICA FROM TABLE <table> SHARD <shard>
+                    if(ParserKeyword("SHARD").ignore(pos, expected))
+                    {
+                        ASTPtr shard_ast;
+                        if (!ParserLiteral{}.parse(pos, shard_ast, expected))
+                            return false;
+
+                        res->shard = shard_ast->as<ASTLiteral &>().value.safeGet<UInt64>();
+                    }
+                    /// proton: ends
                 }
                 else if (ParserKeyword{"ZKPATH"}.ignore(pos, expected))
                 {
@@ -199,8 +234,9 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
             break;
         }
-
-        case Type::RESTART_REPLICA:
+        /// proton: starts
+        /// case Type::RESTART_REPLICA:
+        /// proton: ends
         case Type::SYNC_REPLICA:
         {
             parseQueryWithOnCluster(res, pos, expected);

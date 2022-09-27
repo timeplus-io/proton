@@ -74,19 +74,36 @@ std::vector<klog::KafkaWALClusterPtr> MetadataService::clusters()
     return klog::KafkaWALPool::instance(global_context).clusters(dwal_append_ctx);
 }
 
-void MetadataService::setupRecordHeaders(nlog::Record & record, const String & version) const
+void MetadataService::setupRecordHeaders(nlog::Record & record, const String & version, const ConstNodePtr & node) const
 {
-    record.addHeader("_https_port", std::to_string(https_port));
-    record.addHeader("_http_port", std::to_string(http_port));
-    record.addHeader("_tcp_port", std::to_string(tcp_port));
-    record.addHeader("_tcp_port_secure", std::to_string(tcp_port_secure));
+    if (node)
+    {
+        record.addHeader("_https_port", std::to_string(node->https_port));
+        record.addHeader("_http_port", std::to_string(node->http_port));
+        record.addHeader("_tcp_port", std::to_string(node->tcp_port));
+        record.addHeader("_tcp_port_secure", std::to_string(node->tcp_port_secure));
 
-    record.addHeader("_node_roles", node_roles);
-    record.addHeader("_host", global_context->getHostFQDN());
-    record.addHeader("_channel", global_context->getChannel());
+        record.addHeader("_node_roles", node->roles);
+        record.addHeader("_host", node->host);
+        record.addHeader("_channel", node->channel);
 
-    record.setIdempotentKey(global_context->getNodeIdentity());
-    record.addHeader("_version", version);
+        record.setIdempotentKey(node->identity);
+        record.addHeader("_version", version);
+    }
+    else
+    {
+        record.addHeader("_https_port", std::to_string(https_port));
+        record.addHeader("_http_port", std::to_string(http_port));
+        record.addHeader("_tcp_port", std::to_string(tcp_port));
+        record.addHeader("_tcp_port_secure", std::to_string(tcp_port_secure));
+
+        record.addHeader("_node_roles", node_roles);
+        record.addHeader("_host", global_context->getHostFQDN());
+        record.addHeader("_channel", global_context->getChannel());
+
+        record.setIdempotentKey(global_context->getNodeIdentity());
+        record.addHeader("_version", version);
+    }
 }
 
 void MetadataService::initPorts()
@@ -124,7 +141,7 @@ void MetadataService::doDeleteDWal(const klog::KafkaWALContext & ctx) const
 
 void MetadataService::waitUntilDWalReady(const klog::KafkaWALContext & ctx) const
 {
-    while (1)
+    while (true)
     {
         if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
         {

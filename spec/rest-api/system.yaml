@@ -1,0 +1,179 @@
+openapi: 3.0.0
+
+servers:
+  - url: http://{host}:{port}/proton/v1/system
+info:
+  title: system
+  version: '1.0'
+paths:
+  '/':
+    post:
+      summary: Execute system command
+      responses:
+        '200':
+          $ref: '#/components/responses/insertResp'
+        '400':
+          description: Bad Request or Insert Error
+          content:
+            application/json:
+              schema:
+                description: ''
+                type: object
+                properties:
+                  code:
+                    type: number
+                  error_msg:
+                    type: string
+                    minLength: 1
+                  request_id:
+                    type: string
+                    minLength: 1
+                required:
+                  - code
+                  - error_msg
+                  - request_id
+              examples:
+                stream_not_exist:
+                  value:
+                    code: 60
+                    error_msg: 'Stream default.devices does not exist'
+                    request_id: 439edf29-7347-4a75-858c-3a9894f70011
+                replica_not_exist:
+                  value:
+                    code: 117
+                    error_msg: 'Replica node4.macpro.local does not exists.'
+                    request_id: e1f3c35a-9182-4cc6-ac42-7c653445f6e3
+                missing_stream_name:
+                  value:
+                    code: 117
+                    error_msg: 'Missing stream name for command type ADD_REPLICA'
+                    request_id: 35d04828-4f52-4f54-8b63-e7e41b157d55
+      parameters:
+        - name: x-proton-request-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: x-proton-query-id
+          in: header
+          required: false
+          description: the unique id to identify a ddl request
+          schema:
+            type: string
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-user
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: quota_key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: x-proton-quota
+          in: header
+          required: false
+          schema:
+            type: string
+      description: Execute system command, to enable/disable maintenance mode, add new replica or remove/replcace failed replica
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: ''
+              type: object
+              properties:
+                type:
+                  description: 'system command type, only 6 types are supported for now: ADD_REPLICA: add a new replica for given stream; DROP_REPLICA: drop failed replica for all its hosted streams or a given stream;, REPLACE_REPLICA: replace all hosted streams of a failed replica with a new replica;START_MAINTAIN: set a stream to maintenance mode, disable all operations on disk data parts; STOP_MAINTAIN: disable maintenance mode for a stream; RESTART_REPLICA: reload all data parts and disable maintenance mode in a recovered replica for all streams or a given stream'
+                  type: string
+                name:
+                  type: string
+                  description: 'identity of the replica to execute commands against, for example the new replica identity for ADD_REPLICA or REPLACE_REPLICA command'
+                database:
+                  type: string
+                  description: 'optional, the database name of the target stream'
+                stream:
+                  type: string
+                  description: 'optional, the stream name of the target stream'
+                old_replica:
+                  type: string
+                  description: 'only valid for REPLACE_REPLICA command, the failed replica identity to be replaced'
+                shard:
+                  type: number
+                  description: 'only valid for ADD_REPLICA command, the shard number of failed replica to be replaced'
+              required:
+                - type
+                - name
+            examples:
+              add_replica_req:
+                value:
+                  type: "add_replica"
+                  name: "node4.macpro.local"
+                  database: "default"
+                  stream: "devices"
+                  shard: 0
+              drop_replica_req:
+                value:
+                  type: "drop_replica"
+                  name: "node3.macpro.local"
+              replace_replica_req:
+                value:
+                  type: "replace_replica"
+                  name: "node4.macpro.local"
+                  old_replica: "node3.macpro.local"
+              restart_replica_req:
+                value:
+                  type: "restart_replica"
+                  name: "node4.macpro.local"
+                  database: "default"
+                  stream: "devices"
+              start_maintain_req:
+                value:
+                  type: "start_maintain"
+                  name: "node2.macpro.local"
+                  database: "default"
+                  stream: "devices"
+              stop_maintain_req:
+                value:
+                  type: "stop_maintain"
+                  name: "node2.macpro.local"
+                  database: "default"
+                  stream: "devices"
+        description: 'Execute system command'
+
+components:
+  schemas: {}
+  responses:
+    insertResp:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            description: ''
+            type: object
+            properties:
+              request_id:
+                type: string
+                minLength: 1
+            required:
+              - request_id
+          examples:
+            success-1:
+              value:
+                request_id: 1870aafa-5f6e-46aa-8e9b-77b7f286406f

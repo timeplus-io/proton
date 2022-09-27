@@ -5,6 +5,7 @@
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTSystemQuery.h>
 #include <Common/ProtonCommon.h>
 
 #include <Poco/JSON/Parser.h>
@@ -31,6 +32,7 @@ nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter);
 
 String getJSONFromCreateQuery(const ASTCreateQuery & create);
 String getJSONFromAlterQuery(const ASTAlterQuery & alter);
+String getJSONFromSystemQuery(const ASTSystemQuery & system);
 
 void waitForDDLOps(
     Poco::Logger * log, const ContextMutablePtr & ctx, bool force_sync, UInt64 timeout = ProtonConsts::DEFAULT_DDL_TIMEOUT_MS);

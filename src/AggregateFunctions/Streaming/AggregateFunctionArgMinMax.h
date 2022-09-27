@@ -62,7 +62,7 @@ public:
                 type_val->getName(), getName());
     }
 
-    void create(AggregateDataPtr place) const override { new (place) Data(max_size); }
+    void create(AggregateDataPtr place) const override { new (place) Data(static_cast<int64_t>(max_size)); }
 
     String getName() const override { return Data::name(); }
 

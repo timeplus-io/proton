@@ -106,6 +106,22 @@ StorageMergeTree::StorageMergeTree(
     /// proton: ends
 }
 
+/// proton: starts. Reinitialize storage after restore data directory
+void StorageMergeTree::reInit()
+{
+    loadDataParts(false);
+
+    increment.set(getMaxBlockNumber());
+
+    loadMutations();
+
+    loadDeduplicationLog();
+
+    setCommittedSN(loadSN());
+    setInMemoryCommittedSN(committedSN());
+    populateCommittedSNFromParts();
+}
+/// proton: ends
 
 void StorageMergeTree::startup()
 {

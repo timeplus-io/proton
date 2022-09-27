@@ -53,6 +53,12 @@ public:
         START_FETCHES,
         STOP_MOVES,
         START_MOVES,
+        /// proton: starts. For failed node recovery
+        START_MAINTAIN,
+        STOP_MAINTAIN,
+        REPLACE_REPLICA,
+        ADD_REPLICA,
+        /// proton: ends
         STOP_REPLICATED_SENDS,
         START_REPLICATED_SENDS,
         STOP_REPLICATION_QUEUES,
@@ -67,6 +73,10 @@ public:
     };
 
     static const char * typeToString(Type type);
+
+    /// proton: starts.
+    static Type stringToType(const String & type);
+    /// proton: ends
 
     Type type = Type::UNKNOWN;
 
@@ -83,6 +93,11 @@ public:
     String target_function;
     String replica;
     String replica_zk_path;
+    /// proton: starts. shard number for 'ADD REPLICA' command
+    Int8 shard = -1;
+    /// old replica identity fro 'REPLACE REPLICA' command
+    String old_replica;
+    /// proton: ends
     bool is_drop_whole_replica{};
     String storage_policy;
     String volume;

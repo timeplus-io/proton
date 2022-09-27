@@ -84,6 +84,7 @@ public:
     TablePtrs findTableByDB(const String & database) const;
 
     bool tableExists(const String & database, const String & table) const;
+    bool tableExists(const String & Identity, const String & database, const String & table) const;
     std::pair<bool, bool> columnExists(const String & database, const String & table, const String & column) const;
     String getColumnType(const String & database, const String & table, const String & column) const;
 
@@ -94,6 +95,9 @@ public:
     ClusterPtr tableCluster(const String & database, const String & table, Int32 replication_factor, Int32 shards);
 
     void deleteCatalogForNode(const NodePtr & node);
+    /// delete replica of a table hosted by specified node or all tables hosted by this node in cluster when database
+    /// and table is empty
+    bool deleteReplicaInCluster(const String & identity, const String & database, const String & table);
     std::pair<Int32, Int32> shardAndReplicationFactor(const String & database, const String & table) const;
 
     std::vector<NodePtr> nodes(const String & role = "") const;
@@ -127,6 +131,9 @@ private:
 
     TableContainer buildCatalog(const NodePtr & node, const Block & bock);
     void mergeCatalog(const NodePtr & node, TableContainer snapshot);
+    void removeCatalogForNode(const NodePtr & node, const Block & block);
+
+    void deleteReplicaForNode(const String & identity, const DatabaseTable & storage_id);
 
 private:
     using TableContainerByNode = std::unordered_map<String, TablePtr>;

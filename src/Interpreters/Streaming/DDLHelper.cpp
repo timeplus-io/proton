@@ -28,6 +28,8 @@ extern const int INVALID_SETTING_VALUE;
 extern const int UNKNOWN_EXCEPTION;
 extern const int TIMEOUT_EXCEEDED;
 extern const int SYNTAX_ERROR;
+extern const int NO_REPLICA_NAME_GIVEN;
+extern const int UNKNOWN_TYPE;
 }
 
 namespace Streaming
@@ -520,6 +522,50 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
         payload = jsonToString(payload_json);
 
     return payload;
+}
+
+String getJSONFromSystemQuery(const ASTSystemQuery & system)
+{
+    Poco::JSON::Object json;
+    String type_name = ASTSystemQuery::typeToString(system.type);
+
+    if (system.replica.empty())
+        throw Exception(ErrorCodes::NO_REPLICA_NAME_GIVEN, "replica name should be provided for {} command", type_name);
+
+    if (system.type == ASTSystemQuery::Type::UNKNOWN)
+        throw Exception(ErrorCodes::UNKNOWN_TYPE, "{} command type is not supported", type_name);
+
+    json.set("name", system.replica);
+    json.set("type", type_name);
+
+    if (!system.is_drop_whole_replica)
+    {
+        const String & database = system.getDatabase();
+        const String & table = system.getTable();
+        if (!database.empty())
+            json.set("database", database);
+
+        if (!table.empty())
+            json.set("stream", table);
+
+        if (system.type == ASTSystemQuery::Type::ADD_REPLICA)
+        {
+            if (system.shard < 0)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Missing or invalid shard number {} for {} command", system.shard, type_name);
+
+            json.set("shard", std::to_string(system.shard));
+        }
+    }
+
+    if (system.type == ASTSystemQuery::Type::REPLACE_REPLICA)
+    {
+        if (system.old_replica.empty())
+            throw Exception(ErrorCodes::NO_REPLICA_NAME_GIVEN, "old replica name should be provided for {} command", type_name);
+
+        json.set("old_replica", system.old_replica);
+    }
+
+    return jsonToString(json);
 }
 
 TTLSettings parseTTLSettings(const String & payload)

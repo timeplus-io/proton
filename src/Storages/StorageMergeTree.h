@@ -263,6 +263,16 @@ private:
     const std::deque<std::shared_ptr<String>> & lastIdempotentKeys() const { return last_idempotent_keys; }
     Int64 maxCommittedSN() const { return max_committed_sn; }
 
+    /// return true, if the table is in maintenance mode which disable all ops on disk parts.
+    bool isMaintain() const
+    {
+        return merger_mutator.merges_blocker.isCancelled() && merger_mutator.ttl_merges_blocker.isCancelled()
+            && parts_mover.moves_blocker.isCancelled();
+    }
+
+    /// Reinitialize storage after restore data directory
+    void reInit();
+
 private:
     void locateSNFile();
     void populateCommittedSNFromParts();

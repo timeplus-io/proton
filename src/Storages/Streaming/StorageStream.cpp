@@ -50,6 +50,11 @@ extern const int INTERNAL_ERROR;
 extern const int UNSUPPORTED_PARAMETER;
 }
 
+namespace ActionLocks
+{
+    extern const StorageActionBlockType StreamConsume;
+}
+
 namespace
 {
 const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
@@ -921,15 +926,23 @@ CancellationCode StorageStream::killMutation(const String & mutation_id)
 
 ActionLock StorageStream::getActionLock(StorageActionBlockType action_type)
 {
-    /// Grap the first shard's action lock as the whole storage stream action lock
-    return stream_shards.back()->storage->getActionLock(action_type);
+    /// FIXME: Grap the first shard's action lock as the whole storage stream action lock.
+    /// It is OK for now as for kafka log store, each stream only has one shard, therefore only lock the first shard
+    ActionLock lock;
+    if (action_type != ActionLocks::StreamConsume)
+        return stream_shards.back()->storage->getActionLock(action_type);
+    else
+        return stream_shards.back()->consume_blocker.cancel();
 }
 
 void StorageStream::onActionLockRemove(StorageActionBlockType action_type)
 {
-    for (auto & stream_shard : stream_shards)
-        if (stream_shard->storage)
-            stream_shard->storage->onActionLockRemove(action_type);
+    if (action_type != ActionLocks::StreamConsume)
+    {
+        for (auto & stream_shard : stream_shards)
+            if (stream_shard->storage)
+                stream_shard->storage->onActionLockRemove(action_type);
+    }
 }
 
 CheckResults StorageStream::checkData(const ASTPtr & query, ContextPtr context_)
@@ -1462,6 +1475,23 @@ IngestMode StorageStream::ingestMode() const
 {
     assert(!stream_shards.empty());
     return stream_shards.back()->ingestMode();
+}
+
+bool StorageStream::isMaintain() const
+{
+    assert(!stream_shards.empty());
+    return stream_shards.back()->isMaintain();
+}
+
+void StorageStream::reInit()
+{
+    assert(!stream_shards.empty());
+    if (!isMaintain())
+        return;
+
+    for(auto & shard : stream_shards)
+        if (shard->storage)
+            shard->storage->reInit();
 }
 
 void StorageStream::getIngestionStatuses(const std::vector<UInt64> & block_ids, std::vector<IngestingBlocks::IngestStatus> & statuses) const

@@ -100,4 +100,5 @@ struct Node
 };
 
 using NodePtr = std::shared_ptr<Node>;
+using ConstNodePtr = std::shared_ptr<const Node>;
 }

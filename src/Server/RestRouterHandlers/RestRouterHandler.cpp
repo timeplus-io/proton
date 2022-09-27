@@ -87,14 +87,14 @@ void RestRouterHandler::setupDistributedQueryParameters(
         query_context->setQueryParameter("_payload", "{}");
     }
 
+    for (const auto & kv : parameters)
+        query_context->setQueryParameter(kv.first, kv.second);
+
     if (!isDistributedDDL())
     {
         query_context->setDistributedDDLOperation(false);
         return;
     }
-
-    for (const auto & kv : parameters)
-        query_context->setQueryParameter(kv.first, kv.second);
 
     query_context->setDistributedDDLOperation(true);
 }

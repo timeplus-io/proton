@@ -316,6 +316,10 @@ void StreamShard::backgroundPollKafka()
 
     while (!stopped.test())
     {
+        /// stop consume stream store records, if consume_blocker is set.
+        if (consume_blocker.isCancelled())
+            continue;
+
         try
         {
             auto err = kafka->log->consume(&StreamShard::consumeCallback, callback_data.get(), kafka->consume_ctx);
@@ -1002,6 +1006,11 @@ nlog::RecordSN StreamShard::lastSN() const
 {
     std::lock_guard lock(sns_mutex);
     return last_sn;
+}
+
+bool StreamShard::isMaintain() const
+{
+    return storage ? consume_blocker.isCancelled() && storage->isMaintain() : false;
 }
 
 void StreamShard::updateNativeLog()

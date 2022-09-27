@@ -584,6 +584,8 @@ public:
     bool isDistributedEnv() const;
     bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
     bool isLocalQueryFromTCP() const { return !isDistributedDDLOperation() && !getQueryParameters().contains("_payload"); }
+    /// true, means to create the table but suspend all operations on disk parts. It is used when adding a replica
+    bool isStartSuspend() const { return getQueryParameters().contains("_suspend"); }
     ThreadPool & getPartCommitPool() const;
     /// proton: ends
 

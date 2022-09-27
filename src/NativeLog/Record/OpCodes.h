@@ -28,6 +28,9 @@ enum class OpCode : uint16_t
     CREATE_DICTIONARY,
     DELETE_DICTIONARY,
 
+    /// System Command
+    SYSTEM_CMD,
+
     MAX_OPS_CODE,
 };
 }

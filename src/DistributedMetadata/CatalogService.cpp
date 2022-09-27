@@ -107,7 +107,6 @@ void CatalogService::doBroadcast()
     LOG_INFO(log, "broadcast metadata of streams of {}", global_context->getNodeIdentity());
     queryStreams(query_context, [this](Block && block) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         append(std::move(block));
-        assert(!block);
     });
 }
 
@@ -351,6 +350,17 @@ bool CatalogService::tableExists(const String & database, const String & table) 
     return indexed_by_name.find(std::make_pair(database, table)) != indexed_by_name.end();
 }
 
+bool CatalogService::tableExists(const String & identity, const String & database, const String & table) const
+{
+    std::shared_lock guard{catalog_rwlock};
+
+    auto iter_by_name = indexed_by_name.find({database, table});
+    if (iter_by_name != indexed_by_name.end())
+        return iter_by_name->second.count(identity);
+
+    return false;
+}
+
 std::pair<bool, bool> CatalogService::columnExists(const String & database, const String & table, const String & column) const
 {
     const auto & tables = findTableByName(database, table);
@@ -398,28 +408,75 @@ void CatalogService::deleteCatalogForNode(const NodePtr & node)
         return;
 
     for (const auto & p : iter->second)
-    {
-        auto iter_by_name = indexed_by_name.find(p.first);
-        assert(iter_by_name != indexed_by_name.end());
-
-        deleteTableStorageByName(p.first);
-
-        /// Deleted table, remove t from `indexed_by_name` and `indexed_by_id`
-        [[maybe_unused]] auto removed = iter_by_name->second.erase(p.second->node_identity);
-        assert(removed == 1);
-
-        if (iter_by_name->second.empty())
-            indexed_by_name.erase(iter_by_name);
-
-        {
-            std::unique_lock storage_guard{storage_rwlock};
-            removed = indexed_by_id.erase(p.second->uuid);
-            assert(removed == 1);
-        }
-    }
+        deleteReplicaForNode(p.second->node_identity, p.first);
 
     /// After clear, we don't remove this `node` from `indexed_by_node` map
     iter->second.clear();
+}
+
+void CatalogService::deleteReplicaForNode(const String & identity, const DatabaseTable & storage_id)
+{
+    /// no such table
+    auto iter_by_name = indexed_by_name.find(storage_id);
+    if (iter_by_name == indexed_by_name.end())
+        return;
+
+    /// no such replica
+    auto it = iter_by_name->second.find(identity);
+    if (it == iter_by_name->second.end())
+        return;
+
+    /// Deleted table, remove t from `indexed_by_name` and `indexed_by_id`
+    auto uuid = it->second->uuid;
+    iter_by_name->second.erase(it);
+
+    if (iter_by_name->second.empty())
+    {
+        indexed_by_name.erase(iter_by_name);
+        deleteTableStorageByName(storage_id);
+        {
+            std::unique_lock storage_guard{storage_rwlock};
+            indexed_by_id.erase(uuid);
+        }
+    }
+}
+
+bool CatalogService::deleteReplicaInCluster(const String & identity, const String & database, const String & table)
+{
+    bool only_one_table = !table.empty();
+
+    if (!indexed_by_node.count(identity))
+        return false;
+
+    Block block;
+    const auto & node = nodeByIdentity(identity);
+
+    /// remove records of the replica
+    if (only_one_table)
+    {
+        if (!tableExists(identity, database, table))
+            return false;
+
+        /// Deleted table, remove t from `indexed_by_name` and `indexed_by_id`
+        deleteReplicaForNode(identity, {database, table});
+    }
+    else
+        deleteCatalogForNode(node);
+
+    nlog::Record record{nlog::OpCode::ALTER_DATA_BLOCK, std::move(block), nlog::NO_SCHEMA};
+    record.setShard(0);
+    /// on behave of the target replica
+    setupRecordHeaders(record, "1", node);
+
+    const auto & result = appendRecord(record);
+    if (result.err != ErrorCodes::OK)
+    {
+        LOG_ERROR(log, "Failed to append remove replica record for '{}.{}' to DWAL", database, table);
+        return false;
+    }
+
+    LOG_INFO(log, "Appended remove replica record  for '{}.{}'", database, table);
+    return true;
 }
 
 std::vector<NodePtr> CatalogService::nodes(const String & role) const
@@ -677,12 +734,29 @@ void CatalogService::mergeCatalog(const NodePtr & node, TableContainer snapshot)
     indexed_by_node[node->identity].swap(snapshot);
 }
 
+/// Remove catalogs for node
+void CatalogService::removeCatalogForNode(const NodePtr & node, const Block & block)
+{
+    if(!block.rows())
+        /// remove all streams of node
+        deleteCatalogForNode(node);
+    else
+    {
+        String database = block.getByName("database").column->getDataAt(0).toString();
+        String table = block.getByName("table").column->getDataAt(0).toString();
+        if (!database.empty() && !table.empty())
+            /// remove the given replica for node
+            deleteReplicaForNode(node->identity, {database, table});
+        else
+            LOG_WARNING(log, "Remove replica of '{}.{}' for node {}, but the stream name is invalid.", database, table, node->identity);
+    }
+}
+
 void CatalogService::processRecords(const nlog::RecordPtrs & records)
 {
     for (const auto & record : records)
     {
         assert(!record->hasSchema());
-        assert(record->opcode() == nlog::OpCode::ADD_DATA_BLOCK);
 
         if (!record->hasIdempotentKey())
         {
@@ -709,7 +783,10 @@ void CatalogService::processRecords(const nlog::RecordPtrs & records)
             continue;
         }
 
-        mergeCatalog(node, buildCatalog(node, record->getBlock()));
+        if (record->opcode() == nlog::OpCode::ADD_DATA_BLOCK)
+            mergeCatalog(node, buildCatalog(node, record->getBlock()));
+        else
+            removeCatalogForNode(node, record->getBlock());
     }
 }
 

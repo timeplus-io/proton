@@ -43,6 +43,14 @@ private:
     StorageID table_id = StorageID::createEmpty();      /// Will be set up if query contains table name
     VolumePtr volume_ptr;
 
+    /// proton: starts
+    bool executeDistributed(ASTSystemQuery & query);
+    /// start/stop maintenance mode for stream
+    void startStopMaintain(bool start);
+    /// exit maintenance mode and reload all data parts
+    void reloadStream();
+    /// proton: ends
+
     void flushDistributed(ASTSystemQuery & query);
     void restartDisk(String & name);
 

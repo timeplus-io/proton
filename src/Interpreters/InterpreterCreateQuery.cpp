@@ -70,6 +70,7 @@
 
 /// proton: starts.
 #include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/ActionLocksManager.h>
 #include <Interpreters/Streaming/ColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <NativeLog/Server/NativeLog.h>
@@ -104,6 +105,16 @@ namespace ErrorCodes
     extern const int UNKNOWN_EXCEPTION;
     /// proton: ends
 }
+
+/// proton: starts
+namespace ActionLocks
+{
+    extern StorageActionBlockType PartsMerge;
+    extern StorageActionBlockType PartsTTLMerge;
+    extern StorageActionBlockType PartsMove;
+    extern StorageActionBlockType StreamConsume;
+}
+/// proton: ends
 
 namespace fs = std::filesystem;
 
@@ -1314,6 +1325,16 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     /// proton: starts.
     try
     {
+        if (getContext()->isStartSuspend() && res->getName() == "Stream")
+        {
+            LOG_INFO(&Poco::Logger::get("InterpreterCreateQuery"), "start stream '{}.{}' as maintenance mode", create.getDatabase(), create.getTable());
+            /// Suspend all operations on disk parts. It is used when adding a replica
+            auto manager = getContext()->getActionLocksManager();
+            manager->add(res, ActionLocks::PartsMerge);
+            manager->add(res, ActionLocks::PartsTTLMerge);
+            manager->add(res, ActionLocks::PartsMove);
+            manager->add(res, ActionLocks::StreamConsume);
+        }
         res->startup();
     }
     catch (...)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Node.h"
+
 #include <KafkaLog/KafkaWAL.h>
 #include <Common/ThreadPool.h>
 
@@ -45,7 +47,7 @@ private:
     void waitUntilDWalReady(const klog::KafkaWALContext & ctx) const;
 
 protected:
-    void setupRecordHeaders(nlog::Record & record, const String & version) const;
+    void setupRecordHeaders(nlog::Record & record, const String & version, const ConstNodePtr & node = nullptr) const;
 
     void doCreateDWal(const klog::KafkaWALContext & ctx) const;
     void doDeleteDWal(const klog::KafkaWALContext & ctx) const;

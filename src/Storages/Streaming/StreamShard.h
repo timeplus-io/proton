@@ -59,6 +59,8 @@ public:
 
     IngestMode ingestMode() const { return default_ingest_mode; }
 
+    bool isMaintain() const;
+
     bool isLogStoreKafka() const { return kafka != nullptr; }
 
     void updateNativeLog();
@@ -152,6 +154,9 @@ private:
     Poco::Logger * log;
 
     std::atomic_flag stopped;
+
+    /// ActionBlocker for consuming stream store records
+    ActionBlocker consume_blocker;
 };
 
 struct KafkaLogContext

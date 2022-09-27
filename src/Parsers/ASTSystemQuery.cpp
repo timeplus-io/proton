@@ -4,6 +4,9 @@
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
 
+/// proton: starts
+#include <boost/algorithm/string.hpp>
+/// proton: ends
 #include <magic_enum.hpp>
 
 namespace DB
@@ -39,6 +42,19 @@ const char * ASTSystemQuery::typeToString(Type type)
     const auto & type_name = type_index_to_type_name[static_cast<UInt64>(type)];
     return type_name.data();
 }
+
+/// proton: starts
+ASTSystemQuery::Type ASTSystemQuery::stringToType(const String & type)
+{
+    String upper = boost::to_upper_copy<String>(type);
+    std::replace(upper.begin(), upper.end(), ' ', '_');
+    auto enum_type = magic_enum::enum_cast<ASTSystemQuery::Type>(upper);
+    if (enum_type.has_value())
+        return enum_type.value();
+
+    return ASTSystemQuery::Type::UNKNOWN;
+}
+/// proton: ends
 
 String ASTSystemQuery::getDatabase() const
 {

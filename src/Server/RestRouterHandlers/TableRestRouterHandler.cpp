@@ -22,37 +22,33 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int STREAM_ALREADY_EXISTS;
-    extern const int UNKNOWN_DATABASE;
-    extern const int UNKNOWN_STREAM;
+extern const int STREAM_ALREADY_EXISTS;
+extern const int UNKNOWN_DATABASE;
+extern const int UNKNOWN_STREAM;
 }
 
 namespace
 {
-    enum class DeleteMode
-    {
-        TRUNCATE,
-        DROP,
-        INVALID,
-    };
+enum class DeleteMode
+{
+    TRUNCATE,
+    DROP,
+    INVALID,
+};
 
-    inline DeleteMode toDeleteMode(const std::string & mode)
-    {
-        if (mode == "truncate")
-            return DeleteMode::TRUNCATE;
-        else if (mode == "drop")
-            return DeleteMode::DROP;
-        else
-            return DeleteMode::INVALID;
-    }
+inline DeleteMode toDeleteMode(const std::string & mode)
+{
+    if (mode == "truncate")
+        return DeleteMode::TRUNCATE;
+    else if (mode == "drop")
+        return DeleteMode::DROP;
+    else
+        return DeleteMode::INVALID;
+}
 }
 
-std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema
-    = {{"required", {}},
-       {"optional",
-        {{"ttl_expression", "string"},
-         {"logstore_retention_bytes", "int"},
-         {"logstore_retention_ms", "int"}}}};
+std::map<String, std::map<String, String>> TableRestRouterHandler::update_schema = {
+    {"required", {}}, {"optional", {{"ttl_expression", "string"}, {"logstore_retention_bytes", "int"}, {"logstore_retention_ms", "int"}}}};
 
 std::map<String, String> TableRestRouterHandler::granularity_func_mapping
     = {{"M", "to_YYYYMM(`" + ProtonConsts::RESERVED_EVENT_TIME + "`)"},
@@ -151,6 +147,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
     const auto & host_shards = getQueryParameter("host_shards");
     const auto & uuid = getQueryParameter("uuid");
     const auto & synchronous_ddl = getQueryParameter("synchronous_ddl", "1");
+    const auto & suspend = getQueryParameter("_suspend", "false");
     const auto & query = getCreationSQL(payload, host_shards, uuid);
 
     if (synchronous_ddl == "1")
@@ -161,7 +158,11 @@ std::pair<String, Int32> TableRestRouterHandler::executePost(const Poco::JSON::O
     if (query.empty())
         return {"", HTTPResponse::HTTP_BAD_REQUEST};
 
-    setupDistributedQueryParameters({}, payload);
+    if (suspend == "true")
+        /// suspend the stream after creation
+        setupDistributedQueryParameters({{"_suspend", suspend}}, payload);
+    else
+        setupDistributedQueryParameters({}, payload);
 
     return {processQuery(query), HTTPResponse::HTTP_OK};
 }
@@ -198,8 +199,7 @@ std::pair<String, Int32> TableRestRouterHandler::executePatch(const Poco::JSON::
 
     if (!settings.empty())
     {
-        const auto query
-            = fmt::format("ALTER STREAM {}.`{}` MODIFY SETTING {}", database, table, boost::algorithm::join(settings, ","));
+        const auto query = fmt::format("ALTER STREAM {}.`{}` MODIFY SETTING {}", database, table, boost::algorithm::join(settings, ","));
         resp = processQuery(query);
     }
 

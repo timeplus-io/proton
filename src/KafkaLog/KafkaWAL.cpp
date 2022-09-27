@@ -399,7 +399,6 @@ void KafkaWAL::initProducerHandle()
 
 AppendResult KafkaWAL::append(nlog::Record & record, const KafkaWALContext & ctx) const
 {
-    assert(!record.empty());
     assert(ctx.topic_handle);
 
     std::unique_ptr<DeliveryReport> dr{new DeliveryReport};

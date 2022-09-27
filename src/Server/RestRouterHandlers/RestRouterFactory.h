@@ -20,6 +20,7 @@
 #include "TabularTableRestRouterHandler.h"
 #include "TaskRestRouterHandler.h"
 #include "UDFHandler.h"
+#include "SystemCommandHandler.h"
 
 #include <re2/re2.h>
 #include <Common/escapeForFileName.h>
@@ -204,6 +205,14 @@ public:
             "GET",
             [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                 return std::make_shared<DB::StorageInfoHandler>(query_context);
+            });
+
+        /// POST /proton/v1/system?<params>
+        factory.registerRouterHandler(
+            "/proton/v1/system(\\?[\\w\\-=&#]+){0,1}",
+            "POST",
+            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                return std::make_shared<DB::SystemCommandHandler>(query_context);
             });
 
         factory.registerRouterHandler(

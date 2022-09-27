@@ -9,6 +9,8 @@
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <KafkaLog/KafkaWAL.h>
 #include <KafkaLog/KafkaWALCommon.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/parseQuery.h>
 #include <Common/ErrorCodes.h>
 #include <Common/escapeForFileName.h>
 #include <Common/sendRequest.h>
@@ -45,6 +47,8 @@ namespace
     constexpr auto * DDL_COLUMN_DELETE_API_PATH_FMT = "/proton/v1/ddl/{}/columns/{}";
     constexpr auto * DDL_DATABSE_POST_API_PATH_FMT = "/proton/v1/ddl/databases";
     constexpr auto * DDL_DATABSE_DELETE_API_PATH_FMT = "/proton/v1/ddl/databases/{}";
+
+    constexpr auto * SYSTEM_API_PATH_FMT = "/proton/v1/system";
 
     constexpr Int32 MAX_RETRIES = 3;
 
@@ -179,6 +183,33 @@ namespace
                 actual_size);
         }
         return true;
+    }
+
+    String getPayloadFromQuery(const String & query, int max_parser_depth, Poco::Logger * log)
+    {
+        ParserCreateQuery parser;
+        const char * pos = query.data();
+        String error_message;
+
+        auto ast = tryParseQuery(
+            parser,
+            pos,
+            pos + query.size(),
+            error_message,
+            /* hilite = */ false,
+            "from catalog_service",
+            /* allow_multi_statements = */ false,
+            0,
+            max_parser_depth);
+
+        if (!ast)
+        {
+            LOG_ERROR(log, "Failed to parse stream creation query={} error={}", query, error_message);
+            return "";
+        }
+
+        auto & create = ast->as<ASTCreateQuery &>();
+        return Streaming::getJSONFromCreateQuery(create);
     }
 }
 
@@ -613,6 +644,213 @@ void DDLService::mutateDatabase(nlog::Record & record, const String & method) co
     doDDLOnHosts(target_hosts, payload, method, query_id, user);
 }
 
+void DDLService::executeSystemCommand(nlog::Record & record, const String & method) const
+{
+    Block & block = record.getBlock();
+    assert(block.has("query_id"));
+
+    if (!validateSchema(block, {"payload", "database", "table", "type", "replica", "old_replica", "shard", "timestamp", "query_id", "user"}))
+        return;
+
+    String database = block.getByName("database").column->getDataAt(0).toString();
+    String table = block.getByName("table").column->getDataAt(0).toString();
+    ASTSystemQuery::Type type{block.getByName("type").column->getUInt(0)};
+    String replica = block.getByName("replica").column->getDataAt(0).toString();
+    String old_replica = block.getByName("old_replica").column->getDataAt(0).toString();
+    Int32 shard = block.getByName("shard").column->getInt(0);
+    String query_id = block.getByName("query_id").column->getDataAt(0).toString();
+    String user = block.getByName("user").column->getDataAt(0).toString();
+    String payload = block.getByName("payload").column->getDataAt(0).toString();
+
+    if (payload.empty())
+    {
+        LOG_ERROR(log, "payload is empty, query_id={} user={}", payload, query_id, user);
+        failDDL(query_id, user, payload, "payload is empty");
+        return;
+    }
+
+    if (type == ASTSystemQuery::Type::DROP_REPLICA)
+    {
+        if (catalog.deleteReplicaInCluster(replica, database, table))
+        {
+            succeedDDL(query_id, user, payload);
+            LOG_INFO(log, "Drop replica {} for '{}.{}' succeed, query_id={} user={}", replica, database, table, query_id, user);
+        }
+        else
+            failDDL(query_id, user, payload, "DDLService drop replica fail");
+        return;
+    }
+    else if (type == ASTSystemQuery::Type::ADD_REPLICA)
+    {
+        if (shard <0)
+        {
+            LOG_ERROR(log, "Add replica {} for '{}.{}', invalid shard, query_id={} user={}", replica, database, table, query_id, user);
+            failDDL(query_id, user, payload, "invalid shard");
+            return;
+        }
+        auto tables = catalog.findTableByName(database, table);
+        if (tables.empty())
+        {
+            LOG_ERROR(log, "Add replica {} for '{}.{}', stream not found, query_id={} user={}", replica, database, table, query_id, user);
+            failDDL(query_id, user, payload, "stream not found");
+            return;
+        }
+        String create = getPayloadFromQuery(tables[0]->create_table_query, global_context->getSettingsRef().max_parser_depth, log);
+        if (create.empty())
+        {
+            LOG_ERROR(
+                log,
+                "Add replica {} for '{}.{}', invalid query={}, query_id={} user={}",
+                replica,
+                database,
+                table,
+                tables[0]->create_table_query,
+                query_id,
+                user);
+            failDDL(query_id, user, payload, "invalid create query");
+            return;
+        }
+        auto target_hosts = getSystemCommandURIs(static_cast<UInt64>(type), replica, database, table, shard);
+        if (target_hosts.empty())
+        {
+            LOG_ERROR(log, "Replica {} not found, query_id={} user={}", replica, query_id, user);
+            failDDL(query_id, user, payload, "replica not found");
+            return;
+        }
+        doDDLOnHosts(target_hosts, create, method, query_id, user, toString(tables[0]->uuid));
+    }
+    else if (type == ASTSystemQuery::Type::REPLACE_REPLICA)
+    {
+        String err;
+        if (!replaceReplica(replica, old_replica, query_id, user, err))
+        {
+            LOG_ERROR(log, "{}", err);
+            failDDL(query_id, user, payload, err);
+            return;
+        }
+        succeedDDL(query_id, user, payload);
+    }
+    else if (
+        type == ASTSystemQuery::Type::START_MAINTAIN || type == ASTSystemQuery::Type::STOP_MAINTAIN
+        || type == ASTSystemQuery::Type::RESTART_REPLICA)
+    {
+        auto target_hosts = getSystemCommandURIs(static_cast<UInt64>(type), replica, database, table, shard);
+        if (target_hosts.empty())
+        {
+            LOG_ERROR(log, "Replica {} not found, query_id={} user={}", replica, query_id, user);
+            failDDL(query_id, user, payload, "replica not found");
+            return;
+        }
+        doDDLOnHosts(target_hosts, payload, method, query_id, user, "");
+    }
+}
+
+bool DDLService::replaceReplica(const String & replica, const String & target, const String & query_id, const String & user, String & err) const
+{
+    if (target.empty())
+    {
+        err = fmt::format("target replica {} for 'REPLACE REPLICA' is empty", target);
+        return false;
+    }
+
+    /// Get tables to be replaced
+    auto tables = catalog.findTableByNode(target);
+    if (tables.empty())
+    {
+        err = fmt::format("Target replica {} for 'REPLACE REPLICA' is not found", target);
+        return false;
+    }
+
+    bool delete_old_replica = true;
+    if (replica == target)
+    {
+        /// When replica has the same identity with failed replica, first delete all information of old replica,
+        /// then create the streams in new replica. otherwise, the new created streams will be deleted from other
+        /// nodes in the end.
+        if (!catalog.deleteReplicaInCluster(target, "", ""))
+        {
+            err = fmt::format("Drop old replica {} failed", target);
+            return false;
+        }
+        delete_old_replica = false;
+    }
+
+    /// Create new tables in replica node
+    std::vector<String> failed_tables;
+    for (const auto & storage : tables)
+    {
+        if (storage->engine != "Stream")
+            continue;
+
+        /// Check if exists in replica
+        auto existing_tables = catalog.findTableByName(storage->database, storage->name);
+        bool exist = false;
+        for (const auto & t : existing_tables)
+        {
+            if (t->node_identity == replica)
+            {
+                exist = true;
+                break;
+            }
+        }
+        if (exist)
+        {
+            LOG_WARNING(log, "'{}.{}' already exists in replica {}, skip creating it", storage->database, storage->name, replica);
+            continue;
+        }
+
+        String create = getPayloadFromQuery(storage->create_table_query, global_context->getSettingsRef().max_parser_depth, log);
+        if (create.empty())
+        {
+            err = fmt::format(
+                "Add replica {} for '{}.{}', invalid query={}", replica, storage->database, storage->name, storage->create_table_query);
+            return false;
+        }
+        auto target_hosts
+            = getSystemCommandURIs(static_cast<UInt64>(ASTSystemQuery::Type::REPLACE_REPLICA), replica, storage->database, storage->name, storage->host_shards[0]);
+        assert(!target_hosts.empty());
+
+        auto & uri = target_hosts[0];
+        uri.addQueryParameter("distributed_ddl", "false");
+        uri.addQueryParameter("uuid", toString(storage->uuid));
+
+        try
+        {
+            auto err_code = doDDL(create, uri, Poco::Net::HTTPRequest::HTTP_POST, query_id, user);
+            if (err_code != ErrorCodes::OK)
+                failed_tables.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), err, ErrorCodes::getName(err_code)));
+        }
+        catch (const Exception & e)
+        {
+            failed_tables.push_back(fmt::format("{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), e.code(), e.what()));
+        }
+        catch (...)
+        {
+            failed_tables.push_back(fmt::format(
+                "{}:{} (Code: {}, {})", uri.getHost(), uri.getPort(), getCurrentExceptionCode(), getCurrentExceptionMessage(false)));
+        }
+    }
+
+    if (!failed_tables.empty())
+    {
+        err = fmt::format("Failed to create streams on replica {} : {}", replica,  boost::algorithm::join(failed_tables, ","));
+        return false;
+    }
+
+    /// Delete all streams from old replica
+    if (delete_old_replica)
+    {
+        if (!catalog.deleteReplicaInCluster(target, "", ""))
+        {
+            err = fmt::format("Drop old replica {} failed", target);
+            return false;
+        }
+    }
+
+    LOG_INFO(log, "Replace replica {} for '{}' succeed, query_id={} user={}", replica, target, query_id, user);
+    return true;
+}
+
 void DDLService::commit(Int64 last_sn)
 {
     for (auto i = 0; i < MAX_RETRIES; ++i)
@@ -706,6 +944,10 @@ void DDLService::processRecords(const nlog::RecordPtrs & records)
                 mutateDatabase(*record, Poco::Net::HTTPRequest::HTTP_DELETE);
                 break;
             }
+            case nlog::OpCode::SYSTEM_CMD: {
+                executeSystemCommand(*record, Poco::Net::HTTPRequest::HTTP_POST);
+                break;
+            }
             default: {
                 assert(0);
                 LOG_ERROR(log, "Unknown operation={}", static_cast<Int32>(record->opcode()));
@@ -727,6 +969,22 @@ DDLService::getTargetURIs(nlog::Record & record, const String & database, const 
         /// Column DDL request
         return toURIs(placement.placed(database, table), getColumnApiPath(record.getHeader("column"), table, method));
     }
+    else if (opcode == nlog::OpCode::SYSTEM_CMD)
+    {
+        Block & block = record.getBlock();
+        String replica = block.getByName("replica").column->getDataAt(0).toString();
+        ASTSystemQuery::Type type{block.getByName("type").column->getUInt(0)};
+        Int32 shard = block.getByName("shard").column->getInt(0);
+        auto node = catalog.nodeByIdentity(replica);
+        if (node->host.empty())
+            return {};
+        String path = SYSTEM_API_PATH_FMT;
+        if (type == ASTSystemQuery::Type::ADD_REPLICA || type == ASTSystemQuery::Type::REPLACE_REPLICA)
+        {
+            path = fmt::format("{}?_suspend=true&&host_shards={}", getTableApiPath(record, table, Poco::Net::HTTPRequest::HTTP_POST), shard);
+        }
+        return toURIs({fmt::format("{}:{}", node->host, node->http_port)}, path);
+    }
     else
     {
         /// Table DDL request
@@ -734,6 +992,21 @@ DDLService::getTargetURIs(nlog::Record & record, const String & database, const 
             record.addHeader("mode", "truncate");
         return toURIs(placement.placed(database, table), getTableApiPath(record, table, method));
     }
+}
+
+std::vector<Poco::URI> DDLService::getSystemCommandURIs(UInt64 type_, const String & replica, const String & /*database*/, const String & table, Int32 shard) const
+{
+    ASTSystemQuery::Type type{type_};
+    nlog::Record record{nlog::OpCode::SYSTEM_CMD, Block{}, nlog::NO_SCHEMA};
+    auto node = catalog.nodeByIdentity(replica);
+    if (node->host.empty())
+        return {};
+    String path = SYSTEM_API_PATH_FMT;
+    if (type == ASTSystemQuery::Type::ADD_REPLICA || type == ASTSystemQuery::Type::REPLACE_REPLICA)
+    {
+        path = fmt::format("{}?_suspend=true&&host_shards={}", getTableApiPath(record, table, Poco::Net::HTTPRequest::HTTP_POST), shard);
+    }
+    return toURIs({fmt::format("{}:{}", node->host, node->http_port)}, path);
 }
 
 void DDLService::createDWAL(const String & uuid, Int32 shards, Int32 replication_factor, const String * url_parameters) const

@@ -1427,7 +1427,10 @@ if (ThreadFuzzer::instance().isEffective())
     /// proton: start.
     if (global_context->isDistributedEnv())
     {
-        DB::CatalogService::instance(global_context).broadcast();
+        if (!config().getBool("recovery_start", false))
+            DB::CatalogService::instance(global_context).broadcast();
+        else
+            LOG_INFO(log, "Started in Recovery mode, does not broadcast catalogs");
         DB::PlacementService::instance(global_context).scheduleBroadcast();
     }
     /// proton: end.

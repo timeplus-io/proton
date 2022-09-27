@@ -37,6 +37,12 @@
 #include <Common/ThreadFuzzer.h>
 #include <csignal>
 
+/// proton: starts
+#include <DistributedMetadata/CatalogService.h>
+#include <Interpreters/Streaming/BlockUtils.h>
+#include <Interpreters/Streaming/DDLHelper.h>
+#include <Storages/Streaming/StorageStream.h>
+/// proton: ends
 #include "config_core.h"
 
 namespace DB
@@ -49,6 +55,11 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int TIMEOUT_EXCEEDED;
     extern const int STREAM_WAS_NOT_DROPPED;
+    /// proton: starts
+    extern const int NO_SUCH_REPLICA;
+    extern const int UNKNOWN_STREAM;
+    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    /// proton: ends
 }
 
 
@@ -61,6 +72,9 @@ namespace ActionLocks
     extern StorageActionBlockType DistributedSend;
     extern StorageActionBlockType PartsTTLMerge;
     extern StorageActionBlockType PartsMove;
+    /// proton: starts
+    extern StorageActionBlockType StreamConsume;
+    /// proton: ends
 }
 
 
@@ -120,9 +134,29 @@ AccessType getRequiredAccessType(StorageActionBlockType action_type)
         return AccessType::SYSTEM_TTL_MERGES;
     else if (action_type == ActionLocks::PartsMove)
         return AccessType::SYSTEM_MOVES;
+    /// proton: starts
+    if (action_type == ActionLocks::StreamConsume)
+        return AccessType::SYSTEM_MERGES;
+    /// proton: ends
     else
         throw Exception("Unknown action type: " + std::to_string(action_type), ErrorCodes::LOGICAL_ERROR);
 }
+
+/// proton: starts.
+bool shouldBeDistributed(ASTSystemQuery & system, ContextMutablePtr & ctx)
+{
+    if (system.replica != ctx->getNodeIdentity())
+        return true;
+    else
+    {
+        if (system.type == ASTSystemQuery::Type::STOP_MAINTAIN || system.type == ASTSystemQuery::Type::START_MAINTAIN
+            || system.type == ASTSystemQuery::Type::RESTART_REPLICA)
+            return false;
+
+        return true;
+    }
+}
+/// proton: ends.
 }
 
 /// Implements SYSTEM [START|STOP] <something action from ActionLocks>
@@ -149,9 +183,17 @@ void InterpreterSystemQuery::startStopAction(StorageActionBlockType action_type,
             {
                 manager->remove(table, action_type);
                 table->onActionLockRemove(action_type);
+                /// proton: starts
+                LOG_INFO(log, "remove type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
+                /// proton: ends
             }
             else
+            {
                 manager->add(table, action_type);
+                /// proton: starts
+                LOG_INFO(log, "add type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
+                /// proton: ends
+            }
         }
     }
     else
@@ -174,14 +216,77 @@ void InterpreterSystemQuery::startStopAction(StorageActionBlockType action_type,
                 {
                     manager->remove(table, action_type);
                     table->onActionLockRemove(action_type);
+                    /// proton: starts
+                    LOG_INFO(log, "remove type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
                 }
                 else
+                {
                     manager->add(table, action_type);
+                    /// proton: starts
+                    LOG_INFO(log, "add type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
+                    /// proton: ends
+                }
             }
         }
     }
 }
 
+/// proton: starts
+void InterpreterSystemQuery::startStopMaintain(bool start)
+{
+    getContext()->checkAccess(getRequiredAccessForDDLOnCluster());
+    /// In maintain mode, no operation on parts are allowed
+    executeCommandsAndThrowIfError(
+        [&] { startStopAction(ActionLocks::PartsMerge, !start); },
+        [&] { startStopAction(ActionLocks::PartsTTLMerge, !start); },
+        [&] { startStopAction(ActionLocks::PartsMove, !start); },
+        [&] { startStopAction(ActionLocks::StreamConsume, !start); });
+}
+
+void InterpreterSystemQuery::reloadStream()
+{
+    auto manager = getContext()->getActionLocksManager();
+
+    auto reload = [&](StoragePtr & table) {
+        if (table && table->getName() == "Stream")
+        {
+            if (auto * stream = table->as<StorageStream>())
+            {
+                stream->reInit();
+
+                manager->remove(table, ActionLocks::PartsMerge);
+                stream->onActionLockRemove(ActionLocks::PartsMerge);
+
+                manager->remove(table, ActionLocks::PartsTTLMerge);
+                stream->onActionLockRemove(ActionLocks::PartsTTLMerge);
+
+                manager->remove(table, ActionLocks::PartsMove);
+                stream->onActionLockRemove(ActionLocks::PartsMove);
+
+                manager->remove(table, ActionLocks::StreamConsume);
+                stream->onActionLockRemove(ActionLocks::StreamConsume);
+            }
+        }
+    };
+
+    if (table_id)
+    {
+        auto table = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
+        reload(table);
+    }
+    else
+    {
+        for (auto & elem : DatabaseCatalog::instance().getDatabases())
+        {
+            for (auto iterator = elem.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
+            {
+                StoragePtr table = iterator->table();
+                reload(table);
+            }
+        }
+    }
+}
+/// proton: ends
 
 InterpreterSystemQuery::InterpreterSystemQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
         : WithMutableContext(context_), query_ptr(query_ptr_->clone()), log(&Poco::Logger::get("InterpreterSystemQuery"))
@@ -430,12 +535,141 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_THREAD_FUZZER);
             ThreadFuzzer::start();
             break;
+        /// proton: starts
+        case Type::START_MAINTAIN:
+        {
+            if (executeDistributed(query))
+                return {};
+
+            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
+            startStopMaintain(true);
+            break;
+        }
+        case Type::STOP_MAINTAIN: {
+            if (executeDistributed(query))
+                return {};
+
+            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
+            startStopMaintain(false);
+            break;
+        }
+        case Type::RESTART_REPLICA:
+        {
+            if (executeDistributed(query))
+                return {};
+
+            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
+            reloadStream();
+            break;
+        }
+        case Type::DROP_REPLICA:
+        case Type::REPLACE_REPLICA:
+        case Type::ADD_REPLICA:
+        {
+            if (executeDistributed(query))
+                return {};
+
+            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
+            break;
+        }
+        /// proton: ends
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
     }
 
     return BlockIO();
 }
+
+/// proton: starts
+bool InterpreterSystemQuery::executeDistributed(ASTSystemQuery & system)
+{
+    auto ctx = getContext();
+
+    assert(!ctx->getCurrentQueryId().empty());
+
+    const String & replica = system.replica;
+    if (replica.empty())
+        return false;
+
+    const auto & catalog_service = CatalogService::instance(ctx->getGlobalContext());
+    auto node = catalog_service.nodeByIdentity(replica);
+    if (!node)
+        throw Exception(ErrorCodes::NO_SUCH_REPLICA, "Replica {} does not exist.", replica);
+
+    if (ctx->isLocalQueryFromTCP())
+    {
+        if (shouldBeDistributed(system, ctx))
+            ctx->setDistributedDDLOperation(true);
+    }
+    auto payload = Streaming::getJSONFromSystemQuery(system);
+
+    if (payload.empty() || !ctx->isDistributedDDLOperation())
+        return false;
+
+    const auto & table = system.getTable();
+    if (!table.empty() && system.getDatabase().empty())
+        system.setDatabase(ctx->getCurrentDatabase());
+    const auto & database = system.getDatabase();
+
+    /// make sure table exists if provided in query
+    if (!table.empty())
+    {
+        auto tables = catalog_service.findTableByName(database, table);
+        bool found = false;
+        if (system.type != ASTSystemQuery::Type::ADD_REPLICA)
+        {
+            for (const auto & stream : tables)
+                if (stream->node_identity == replica)
+                {
+                    found = true;
+                    break;
+                }
+        }
+        else
+            found = true;
+
+        if (!found)
+            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist in replica {}", database, table, replica);
+    }
+
+    if (system.type == ASTSystemQuery::Type::ADD_REPLICA && system.shard < 0)
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Missing shard of Stream '{}.{}' for 'ADD REPLICA' command", database, table);
+
+    if (system.type == ASTSystemQuery::Type::REPLACE_REPLICA
+        && (system.old_replica.empty() || !catalog_service.nodeByIdentity(system.old_replica)))
+        throw Exception(
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Missing target replica or target replica cannot be found' for 'REPLACE REPLICA' command");
+
+    auto query = queryToString(system);
+    LOG_INFO(log, "[Distributed] Execute system command query={} query_id={}", query, ctx->getCurrentQueryId());
+
+    std::vector<std::pair<String, String>> string_cols
+        = {{"payload", payload},
+           {"database", database},
+           {"table", table},
+           {"replica", replica},
+           {"old_replica", system.old_replica},
+           {"query_id", ctx->getCurrentQueryId()},
+           {"user", ctx->getUserName()}};
+
+    std::vector<std::pair<String, Int32>> int32_cols = {{"shard", static_cast<UInt64>(system.shard)}};
+
+    std::vector<std::pair<String, UInt64>> uint64_cols
+        = {{"timestamp", MonotonicMilliseconds::now()}, {"type", static_cast<UInt64>(system.type)}};
+
+    /// Schema: (payload, database, table, timestamp, query_id, user, type)
+    Block block = Streaming::buildBlock(string_cols, int32_cols, uint64_cols);
+
+    Streaming::appendDDLBlock(std::move(block), ctx, {}, nlog::OpCode::SYSTEM_CMD, log);
+
+    LOG_INFO(log, "Request of executing system command query={} query_id={} has been accepted", query, ctx->getCurrentQueryId());
+
+    Streaming::waitForDDLOps(log, ctx, true);
+
+    return true;
+}
+/// proton: ends
 
 void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
 {
@@ -546,6 +780,23 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
                 required_access.emplace_back(AccessType::SYSTEM_MOVES, query.getDatabase(), query.getTable());
             break;
         }
+        /// proton: starts.Maintain requires access rights of 'SYSTEM_MERGES', 'SYSTEM_TTL_MERGES'
+        case Type::STOP_MAINTAIN: [[fallthrough]];
+        case Type::START_MAINTAIN:
+        {
+            if (!query.table)
+            {
+                required_access.emplace_back(AccessType::SYSTEM_MERGES);
+                required_access.emplace_back(AccessType::SYSTEM_TTL_MERGES);
+            }
+            else
+            {
+                required_access.emplace_back(AccessType::SYSTEM_MERGES, query.getDatabase(), query.getTable());
+                required_access.emplace_back(AccessType::SYSTEM_TTL_MERGES, query.getDatabase(), query.getTable());
+            }
+            break;
+        }
+        /// proton: ends.
         case Type::STOP_FETCHES: [[fallthrough]];
         case Type::START_FETCHES:
         {
@@ -592,6 +843,14 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_RESTORE_REPLICA, query.getDatabase(), query.getTable());
             break;
         }
+        /// proton: starts.
+        case Type::REPLACE_REPLICA: [[fallthrough]];
+        case Type::ADD_REPLICA:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_DROP_REPLICA);
+            break;
+        }
+        /// proton: ends
         case Type::SYNC_REPLICA:
         {
             required_access.emplace_back(AccessType::SYSTEM_SYNC_REPLICA, query.getDatabase(), query.getTable());

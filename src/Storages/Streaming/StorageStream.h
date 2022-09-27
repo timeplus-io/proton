@@ -221,6 +221,11 @@ public:
 
     IngestMode ingestMode() const;
 
+    /// return true, if stream is in maintenance mode
+    bool isMaintain() const;
+
+    void reInit();
+
     /// Return (shard_id, committed_sn) pairs
     std::vector<std::pair<Int32, Int64>> lastCommittedSequences() const;
 

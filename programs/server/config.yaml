@@ -917,6 +917,9 @@ max_concurrent_insert_queries: 100
 # Maximum number of concurrent select queries.
 max_concurrent_select_queries: 100
 
+# With 'true', It means proton starts in recovery mode, which does not broadcast stream catalogs
+recovery_start: false
+
 settings:
     global:
         query_mode: streaming               # Default query mode. table or streaming
