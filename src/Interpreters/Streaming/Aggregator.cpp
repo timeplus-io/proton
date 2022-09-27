@@ -1055,8 +1055,9 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         }
     }
 
-    /// proton: starts
-    setupAggregatesPoolTimestamps(num_rows, key_columns, result);
+    /// proton: starts. session window does not use timestamp with chunk of Arena, to improve performance, no need to set it.
+    if (params.group_by != Params::GroupBy::SESSION)
+        setupAggregatesPoolTimestamps(num_rows, key_columns, result);
     /// proton: ends
 
     NestedColumnsHolder nested_columns_holder;
@@ -3128,9 +3129,6 @@ void Aggregator::removeBucketsOfSession(AggregatedDataVariants & result, size_t 
     }
 
     Arena::Stats stats;
-
-    if (removed)
-        stats = result.aggregates_pool->free(last_removed_watermark);
 
     LOG_INFO(
         log,
