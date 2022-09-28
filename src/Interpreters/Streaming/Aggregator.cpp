@@ -1837,7 +1837,29 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
 
     /// proton: starts
     if (final && !params.keep_state)
+    {
+        /// for nested global aggregation, the outer aggregation does not need to keep state. Therefore after
+        /// emit aggregating result, reinitialize state 'without_key' for next round aggregation.
+        /// Example:
+        /// SELECT
+        //    count_distinct(lpn)
+        //  FROM
+        //  (
+        //    SELECT
+        //      lpn, max(_tp_time) AS lastSeen
+        //    FROM
+        //      ttp_0
+        //    GROUP BY
+        //      lpn
+        //    HAVING
+        //      lastSeen > date_sub(now(), 10s)
+        //    EMIT PERIODIC 5s
+        //    SETTINGS
+        //      seek_to = '-24h'
+        //  )
         destroyWithoutKey(data_variants);
+        initStatesWithoutKey(data_variants);
+    }
     /// proton: ends
 
     return block;
