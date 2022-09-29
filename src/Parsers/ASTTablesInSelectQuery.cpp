@@ -126,6 +126,7 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
     else if (subquery)
     {
         /// proton: starts
+        settings.ostr << " ";
         subquery->formatImpl(settings, state, frame);
         /// proton: ends
     }
