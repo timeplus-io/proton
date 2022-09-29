@@ -24,11 +24,19 @@ class MetaStoreServer : public IMetaStoreServer
 private:
     const int server_id;
 
+    std::atomic_flag shutdown_called;
+
     CoordinationSettingsPtr coordination_settings;
 
     nuraft::ptr<MetaStateMachine> state_machine;
 
     nuraft::ptr<MetaStateManager> state_manager;
+
+    /// Size depends on coordination settings
+    MetaSnapshotsQueue snapshots_queue{1};
+
+    // Dumping new snapshots to disk
+    ThreadFromGlobalPool snapshot_thread;
 
     nuraft::ptr<nuraft::raft_server> raft_instance;
     nuraft::ptr<nuraft::asio_service> asio_service;
@@ -53,13 +61,15 @@ private:
 
     void shutdownRaftServer();
 
+    /// separate thread to do metastore snapshot & log compaction to improve performance
+    void snapshotThread();
+
 
 public:
     MetaStoreServer(
         int server_id_,
         const CoordinationSettingsPtr & coordination_settings_,
         const Poco::Util::AbstractConfiguration & config,
-        MetaSnapshotsQueue & snapshots_queue_,
         bool standalone_metastore);
 
     ~MetaStoreServer() override = default;

@@ -25,9 +25,6 @@ class MetaStoreDispatcher
 private:
     CoordinationSettingsPtr coordination_settings;
 
-    /// Size depends on coordination settings
-    MetaSnapshotsQueue snapshots_queue{1};
-
     std::atomic_flag shutdown_called;
 
     /// RAFT wrapper. Most important class.

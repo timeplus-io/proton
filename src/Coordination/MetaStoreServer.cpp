@@ -9,6 +9,8 @@
 #   include "config_core.h"
 #endif
 
+#include <Common/setThreadName.h>
+
 #include <Poco/Util/Application.h>
 
 #include <chrono>
@@ -121,12 +123,11 @@ MetaStoreServer::MetaStoreServer(
     int server_id_,
     const CoordinationSettingsPtr & coordination_settings_,
     const Poco::Util::AbstractConfiguration & config,
-    MetaSnapshotsQueue & snapshots_queue_,
     bool standalone_metastore)
     : server_id(server_id_)
     , coordination_settings(coordination_settings_)
     , state_machine(nuraft::cs_new<MetaStateMachine>(
-                        snapshots_queue_,
+                        snapshots_queue,
                         getSnapshotsPathFromConfig(config, standalone_metastore),
                         getStoragePathFromConfig(config, standalone_metastore),
                         coordination_settings))
@@ -140,6 +141,8 @@ MetaStoreServer::MetaStoreServer(
 
 void MetaStoreServer::startup()
 {
+    snapshot_thread = ThreadFromGlobalPool([this] { snapshotThread(); });
+
     state_machine->init();
 
     state_manager->loadLogStore(state_machine->last_commit_index() + 1, coordination_settings->reserved_log_items);
@@ -260,9 +263,39 @@ void MetaStoreServer::shutdownRaftServer()
         LOG_WARNING(log, "Failed to shutdown RAFT server in {} seconds", timeout);
 }
 
+void MetaStoreServer::snapshotThread()
+{
+    setThreadName("MetaSnpT");
+    while (!shutdown_called.test())
+    {
+        CreateMetaSnapshotTask task;
+        if (!snapshots_queue.pop(task))
+            break;
+
+        if (shutdown_called.test())
+            break;
+
+        try
+        {
+            task.create_snapshot(std::move(task.snapshot));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+}
 
 void MetaStoreServer::shutdown()
 {
+    if (shutdown_called.test_and_set())
+        /// Already shutdown
+        return;
+
+    snapshots_queue.finish();
+    if (snapshot_thread.joinable())
+        snapshot_thread.join();
+
     state_machine->shutdownStorage();
     state_manager->flushLogStore();
     shutdownRaftServer();

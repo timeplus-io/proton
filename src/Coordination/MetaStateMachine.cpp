@@ -293,7 +293,9 @@ void MetaStateMachine::create_snapshot(nuraft::snapshot & s, nuraft::async_resul
     };
 
     LOG_DEBUG(log, "In memory snapshot {} created, queueing task to flash to disk", s.get_last_log_idx());
-    (void)snapshots_queue.push(std::move(snapshot_task));
+    /// Flush snapshot to disk in a separate thread.
+    if (!snapshots_queue.push(std::move(snapshot_task)))
+        LOG_WARNING(log, "Cannot push snapshot task into queue");
 }
 
 void MetaStateMachine::save_logical_snp_obj(

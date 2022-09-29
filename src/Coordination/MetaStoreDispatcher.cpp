@@ -37,7 +37,7 @@ void MetaStoreDispatcher::initialize(const Poco::Util::AbstractConfiguration & c
         enable_raft = false;
 
     if (enable_raft)
-        server = std::make_unique<MetaStoreServer>(my_id, coordination_settings, config, snapshots_queue, standalone_metastore);
+        server = std::make_unique<MetaStoreServer>(my_id, coordination_settings, config, standalone_metastore);
     else
         server = std::make_unique<MetaStoreConnection>(config);
     try
