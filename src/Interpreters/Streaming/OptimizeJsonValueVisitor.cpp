@@ -107,6 +107,9 @@ void OptimizeJsonValueMatcher::finalizeJsonValues(Data & data)
             for (size_t i = 1; i < info.nodes.size(); ++i)
             {
                 auto & node = *info.nodes[i];
+                /// We don't need create ref node for the same node
+                if (node.get() == current_path_first_node.get())
+                    continue;
                 node = createReferenceNode(current_path_first_node_alias, node->getAliasOrColumnName());
             }
         }
@@ -144,6 +147,9 @@ void OptimizeJsonValueMatcher::finalizeJsonValues(Data & data)
                 for (size_t i = 1; i < info.nodes.size(); ++i)
                 {
                     auto & node = *info.nodes[i];
+                    /// We don't need create ref node for the same node
+                    if (node.get() == current_path_first_node.get())
+                        continue;
                     node = createReferenceNode(current_path_first_node_alias, node->getAliasOrColumnName());
                 }
             }
