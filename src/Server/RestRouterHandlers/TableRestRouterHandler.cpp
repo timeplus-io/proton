@@ -245,10 +245,10 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
             if (auto * stream = storage->as<StorageStream>())
             {
                 const auto settings = stream->getSettings();
-                resp_table.set("logstore_flush_messages", settings->logstore_flush_messages);
-                resp_table.set("logstore_flush_ms", settings->logstore_flush_ms);
-                resp_table.set("logstore_retention_bytes", settings->logstore_retention_bytes);
-                resp_table.set("logstore_retention_ms", settings->logstore_retention_ms);
+                resp_table.set("logstore_flush_messages", static_cast<Int64>(settings->logstore_flush_messages));
+                resp_table.set("logstore_flush_ms", static_cast<Int64>(settings->logstore_flush_ms));
+                resp_table.set("logstore_retention_bytes", static_cast<Int64>(settings->logstore_retention_bytes));
+                resp_table.set("logstore_retention_ms", static_cast<Int64>(settings->logstore_retention_ms));
             }
         }
     }
