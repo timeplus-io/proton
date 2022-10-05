@@ -14,13 +14,14 @@ CREATE TABLE discard_sink (
 
 -- TODO: this query is not supported yet in Flink SQL, because the OVER WINDOW operator doesn't
 --  support to consume retractions.
+-- Timeplus: 
 INSERT INTO discard_sink
 SELECT
     Q.seller,
-    AVG(Q.final) OVER
-        (PARTITION BY Q.seller ORDER BY Q.dateTime ROWS BETWEEN 10 PRECEDING AND CURRENT ROW)
+    array_avg([Q.final] || lags(Q.final, 1, 9, 0)) OVER
+        (PARTITION BY Q.seller)
 FROM (
-    SELECT MAX(B.price) AS final, A.seller, B.dateTime
+    SELECT max(B.price) AS final, A.seller, B.dateTime
     FROM auction as A join bid as B
     on A.id = B.auction where B.dateTime between A.dateTime and A.expires
     GROUP BY A.id, A.seller, B.dateTime settings seek_to='earliest'

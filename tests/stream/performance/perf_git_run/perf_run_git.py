@@ -1,7 +1,6 @@
 import os, json, time, sys, logging, getopt
 import requests
 from timeplus import (Env,Stream,StreamColumn, Query)
-from rx import operators as ops
 from github import (Github,enable_console_debug_logging,GithubException,RateLimitExceededException)
 from requests.exceptions import ReadTimeout
 import multiprocessing as mp
@@ -26,9 +25,12 @@ query_list = [
 ]
 
 
-tp_schema = 'http'
-tp_host = 'localhost'#172.31.51.184
-tp_port = "8000"
+tp_schema = 'https'
+tp_host = 'beta.timeplus.cloud'#172.31.51.184
+tp_port = "443"
+tp_tenant = "itq6addw"
+api_key = 'EY8WM-9ZXvZS2WB8WUqHRWsLMYXpYe2_r2oAuH_4NUDGagikIV6VV5SfIuGA'
+
 
 WORKERS = 1
 
@@ -71,10 +73,11 @@ def catch_events(github_token):
     return events_cached 
 
 
-def create_stream(stream_name, tp_schema, tp_host, tp_port, client_id,client_secret):
+def create_stream(stream_name, tp_schema, tp_host, tp_port, tp_tenant, api_key, client_id,client_secret):
+    logger.debug(f"stream_name = {stream_name}, tp_schema = {tp_schema}, tp_host = {tp_host}, tp_port = {tp_port}, tp_tenant = {tp_tenant}, api_key={api_key}")
     env = (
         Env()
-        .schema(tp_schema).host(tp_host).port(tp_port)
+        .schema(tp_schema).host(tp_host).port(tp_port).tenant(tp_tenant).api_key(api_key)
         #.login(client_id=client_id, client_secret=client_secret)
     )
     Env.setCurrent(env)
@@ -93,22 +96,23 @@ def create_stream(stream_name, tp_schema, tp_host, tp_port, client_id,client_sec
         )
         if(s.get() is None):
             s.create()
-            print(f"Created a new stream {s.name()}")
+            logger.debug(f"Created a new stream {s.name()}")
         return stream_name
     except Exception as e:
         sys.exit(f"Failed to list or create data streams from {tp_schema}://{tp_host}:{tp_port}. Please make sure you are connecting to the right server.")    
 
 
-def git_event_load(stream_name,tp_schema, tp_host, tp_port, client_id,client_secret, events):
+def git_event_load(stream_name,tp_schema, tp_host, tp_port, tp_tenant, api_key, client_id,client_secret, events):
     logger = mp.get_logger()     
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)   
     logger.setLevel(logging.DEBUG)     
-    logger.debug(f"stream_name = {stream_name}, input starts...")
+    logger.debug(f"stream_name = {stream_name}, tp_schema = {tp_schema}, tp_host = {tp_host}, tp_port = {tp_port}, tp_tenant = {tp_tenant} starts...")
     env = (
         Env()
-        .schema(tp_schema).host(tp_host).port(tp_port)
+        .schema(tp_schema).host(tp_host).port(tp_port).tenant(tp_tenant).api_key(api_key)
+        # Env().schema("https").host("beta.timeplus.cloud").port("443").tenant("itq6addw").api_key(api_key)
         #.login(client_id=client_id, client_secret=client_secret)
     )
     Env.setCurrent(env)
@@ -129,7 +133,7 @@ def git_event_load(stream_name,tp_schema, tp_host, tp_port, client_id,client_sec
         )
         if(s.get() is None):
             s.create()
-            print(f"Created a new stream {s.name()}")
+            logger.debug(f"Created a new stream {s.name()}")
     except Exception as e:
         sys.exit(f"Failed to list or create data streams from {tp_schema}://{tp_host}:{tp_port}. Please make sure you are connecting to the right server.")       
 
@@ -171,18 +175,18 @@ def update_emit_count(emit_counter_array, emit_count,emit_stats_base, msg): #emi
     except Exception as error:
         logger.debug(f"Exception, {error}")
 
-def event_query(tp_schema, tp_host, tp_port, client_id, client_secret, query_str, rx_mode='ops_take', emit_stats_base=10):
+def event_query(tp_schema, tp_host, tp_port, tp_tenant, api_key, client_id, client_secret, query_str, rx_mode='ops_take', emit_stats_base=10):
     total_emit_count = [0]
     logger = mp.get_logger()     
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.formatter = formatter
     logger.addHandler(console_handler)   
     logger.setLevel(logging.DEBUG)     
-    logger.debug(f"tp_host = {tp_host}, tp_port = {tp_port}, rx_mode = {rx_mode}, emit_stats_base = {emit_stats_base}, start running with query_str = {query_str}")
+    logger.debug(f"tp_host = {tp_host}, tp_port = {tp_port}, tp_tenant = {tp_tenant}, rx_mode = {rx_mode}, emit_stats_base = {emit_stats_base}, start running with query_str = {query_str}")
     try:
         env = (
             Env()
-            .schema(tp_schema).host(tp_host).port(tp_port)
+            .schema(tp_schema).host(tp_host).port(tp_port).tenant(tp_tenant).api_key(api_key)
             #.login(client_id=client_id, client_secret=client_secret)
         )
         Env.setCurrent(env)
@@ -239,6 +243,7 @@ if __name__ == "__main__":
     stream_name_prefix = 'github_event'
     stream_number = 2
     rx_mode = "ops_take" #by default rx_mode = ops_take: take 1000 lines and then, could be set rx_mode=no_pipe means just keep receiving data but no pipe.
+    logger.debug(f"tp_schema = {tp_schema}, tp_host = {tp_host}")
     try:
         opts, args = getopt.getopt(sys.argv[1:], '', ["tp_host=", "tp_port=","tp_schema=", "rx_mode=", "input_workers=", "query_workers=", "emit_stats_base=", "stream_name_prefix=", "stream_number="])
     except(getopt.GetoptError) as error:
@@ -259,7 +264,7 @@ if __name__ == "__main__":
 
         if name in ('--tp_port'):
             tp_port = value
-        if name in ('tp_schema'):
+        if name in ('--tp_schema'):
             tp_schema = value 
         if name in ('--input_workers'):
             input_workers = value
@@ -288,7 +293,8 @@ if __name__ == "__main__":
     streams = []
     for i in range(stream_number):
         stream_name = f"{stream_name_prefix}_{i}"
-        s_name = create_stream(stream_name, tp_schema, tp_host, tp_port, client_id,client_secret)
+        logger.debug(f"stream_name = {stream_name}, tp_schema = {tp_schema}, tp_host = {tp_host}, tp_tenant = {tp_tenant}")
+        s_name = create_stream(stream_name, tp_schema, tp_host, tp_port, tp_tenant, api_key, client_id,client_secret)
         streams.append(s_name)
 
     stream_number = len(streams)
@@ -301,6 +307,8 @@ if __name__ == "__main__":
             tp_schema,
             tp_host,
             tp_port,
+            tp_tenant,
+            api_key,
             client_id,
             client_secret,
             events
@@ -326,7 +334,9 @@ if __name__ == "__main__":
         args = ( 
             tp_schema,
             tp_host, 
-            tp_port, 
+            tp_port,
+            tp_tenant,
+            api_key, 
             client_id, 
             client_secret, 
             query_str,

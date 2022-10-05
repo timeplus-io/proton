@@ -26,7 +26,7 @@ CREATE stream discard_sink (
   bid_extra  string
 );
 
-
+-- Timeplus: not support
 INSERT INTO discard_sink
 SELECT
     id, itemName, description, initialBid, reserve, dateTime, expires, seller, category, extra,

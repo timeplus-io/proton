@@ -13,9 +13,10 @@ Hello "world", 789 ,2016-01-03
 "Hello
  world", 100, 2016-01-04,
  default,,
- default-eof,,' | $CLICKHOUSE_CLIENT --input_format_defaults_for_omitted_fields=1 --input_format_csv_empty_as_default=1 --query="INSERT INTO csv FORMAT CSV";
+ default-eof,,' | $CLICKHOUSE_CLIENT --input_format_defaults_for_omitted_fields=1 --input_format_csv_empty_as_default=1 --query="INSERT INTO csv(s,n,d) FORMAT CSV";
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY d";
+sleep 2
+$CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY d settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";
 
 $CLICKHOUSE_CLIENT --query="create stream csv (t datetime('Europe/Moscow'), s string) ";
@@ -23,9 +24,11 @@ $CLICKHOUSE_CLIENT --query="create stream csv (t datetime('Europe/Moscow'), s st
 echo '"2016-01-01 01:02:03","1"
 2016-01-02 01:02:03, "2"
 1502792101,"3"
-99999,"4"' | $CLICKHOUSE_CLIENT --query="INSERT INTO csv FORMAT CSV";
+99999,"4"' | $CLICKHOUSE_CLIENT --query="INSERT INTO csv(t,s) FORMAT CSV";
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY s";
+sleep 2s
+
+$CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY s settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";
 
 
@@ -33,7 +36,8 @@ $CLICKHOUSE_CLIENT --query="create stream csv (t nullable(datetime('Europe/Mosco
 
 echo 'NULL, NULL
 "2016-01-01 01:02:03",NUL
-"2016-01-02 01:02:03",Nhello' | $CLICKHOUSE_CLIENT --format_csv_null_representation='NULL' --input_format_csv_empty_as_default=1 --query="INSERT INTO csv FORMAT CSV";
+"2016-01-02 01:02:03",Nhello' | $CLICKHOUSE_CLIENT --format_csv_null_representation='NULL' --input_format_csv_empty_as_default=1 --query="INSERT INTO csv(t,s) FORMAT CSV";
+sleep 2s
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY s NULLS LAST";
+$CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY s NULLS LAST settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";

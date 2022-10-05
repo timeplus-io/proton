@@ -7,7 +7,7 @@ services:
      - ../clickhouse-server/datas:/var/lib/clickhouse
      - ../clickhouse-server/log:/var/log/clickhouse-server
     ports:
-      - "8123:8123" #  HTTP
+      - "18123:18123" #  HTTP
       - "9000:9000" # TCP
       - "9009:9009" # Postgres
     deploy:

@@ -12,9 +12,11 @@ ${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS test_view_00595;"
 ${CLICKHOUSE_CLIENT} --query "create stream test_00595 (s string)  ;"
 ${CLICKHOUSE_CLIENT} --query "CREATE VIEW test_view_00595 AS SELECT * FROM test_00595;"
 
-(( $(${CLICKHOUSE_CLIENT} --query "INSERT INTO test_view_00595 VALUES('test_string');" 2>&1 | grep -c "$exception_pattern") >= 1 )) && echo 1 || echo "NO MATCH"
-${CLICKHOUSE_CLIENT} --query "INSERT INTO test_00595 VALUES('test_string');"
-${CLICKHOUSE_CLIENT} --query "SELECT * FROM test_00595;"
+(( $(${CLICKHOUSE_CLIENT} --query "INSERT INTO test_view_00595(s) VALUES('test_string');" 2>&1 | grep -c "$exception_pattern") >= 1 )) && echo 1 || echo "NO MATCH"
+${CLICKHOUSE_CLIENT} --query "INSERT INTO test_00595(s) VALUES('test_string');"
+sleep 3
+
+${CLICKHOUSE_CLIENT} --query "SELECT * FROM table(test_00595) settings asterisk_include_reserved_columns=false;"
 
 ${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS test_00595;"
 ${CLICKHOUSE_CLIENT} --query "DROP STREAM IF EXISTS test_view_00595;"

@@ -58,7 +58,6 @@
                         "type": "string"
                     }
                 ],
-                "event_time_column":"timestamp",
                 "ttl_expression": "to_datetime(_tp_time) + INTERVAL 1 HOUR"
             }                       
 
@@ -67,7 +66,7 @@
         "setup": {
 
         },
-        "tests_2_run": {"ids_2_run": [9], "tags_2_run":[], "tags_2_skip":["bug", "todo", "to_support"]} 
+        "tests_2_run": {"ids_2_run": [8], "tags_2_run":[], "tags_2_skip":["bug", "todo", "to_support"]} 
     },
 
     "tests": [
@@ -82,60 +81,26 @@
             "input_info_table": "input_info",
             "steps":[
                 {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists ttp_session_substream_v$"},                    
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop stream if exists ttp_$"},
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"CREATE STREAM if not exists ttp_$(`lpn` string, `vno` string, `drc` string, `drcCode` int32, `wgs84Lat` float32, `wgs84Lon` float32, `gcj02Lat` float32, `gcj02Lon` float32, `province` nullable(string), `city` nullable(string), `country` nullable(string), `spd` float32, `mil` float32, `time` string, `adr` string, perf_event_time datetime64(3) default now64(3,'Asia/Shanghai'), _perf_row_id string, _perf_ingest_time string, `_tp_time` datetime64(3, 'Asia/Shanghai') DEFAULT now64(3,'Asia/Shanghai') CODEC(DoubleDelta, LZ4), `_tp_index_time` datetime64(3, 'UTC') CODEC(DoubleDelta, LZ4)) TTL to_datetime(_tp_time) + INTERVAL 24 HOUR SETTINGS logstore_retention_bytes = '21474836480', logstore_retention_ms = '00000'"}
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists ttp_state_v$"},                    
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop stream if exists ttp_state_$"},
+                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"CREATE STREAM if not exists ttp_state_$(`lpn` string, `windowStart` datetime64(3, 'UTC'), `windowEnd` datetime64(3, 'UTC'), `state` string, `avg_speed` float64, `last_speed` float32, `lat` float32, `lon` float32, perf_event_time datetime64(3) default now64(3,'Asia/Shanghai'), _perf_row_id string, _perf_ingest_time string) TTL to_datetime(_tp_time) + INTERVAL 24 HOUR SETTINGS logstore_retention_bytes = '21474836480', logstore_retention_ms = '00000'"},                    
+                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 302, "run_mode":"process", "loop_times": 1, "workers": 5, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"SELECT window_start,window_end, count_if(state='OFF') as off FROM tumble(ttp_state_0,10s) group by window_start, window_end EMIT timeout 10s", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
+                    {"client":"python","config_set": "setting_1","workers": 1,"query_id": 304, "interval":1, "loop_times": -1, "query_type": "table", "query":"select count_if(state='OFF') as off from table(ttp_state_0)"}
+
                 ]},
                     
 
                 {"inputs": [
-                    {"table_name": "ttp_state_$","input_id": 210,"table_schema_ref":"ttp_state", "workers":2, "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "random_fields": "lpn", "random_ranges":"2000", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 3000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "ttp_state_$","input_id": 211,"table_schema_ref":"ttp_state", "client":"rest", "workers":2, "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "ttp_state_$","input_id": 212,"table_schema_ref":"ttp_state", "$start_from": 0,"$end_at":1, "client":"rest", "workers":2,"worker_mode":"round_robin", "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "table_schema_file":"table_schema.json -todo", 
+                    {"table_name": "ttp_state_$","input_id": 311,"table_schema_ref":"ttp_state", "client":"rest", "workers":2, "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "random_fields": "lpn","table_schema_file":"table_schema.json -todo", 
                         "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
 
                 ]}
 
             ]               
         },        
-
+ 
         {
             "id": 8,
-            "tags": ["debug"],
-            "name": "longevity - proton, with query time easy json volume, 80 streams",
-            "description": "tail query latency w/single source",
-            "db_engine":"proton",
-            "input_info_table": "input_info",
-            "steps":[
-                {"statements": [
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop view if exists ttp_session_substream_v$"},                    
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"drop stream if exists ttp_$"},
-                    {"client":"python","config_set": "setting_1","workers": 2, "interval":1, "query_type": "table", "query":"CREATE STREAM if not exists ttp_$(`lpn` string, `vno` string, `drc` string, `drcCode` int32, `wgs84Lat` float32, `wgs84Lon` float32, `gcj02Lat` float32, `gcj02Lon` float32, `province` nullable(string), `city` nullable(string), `country` nullable(string), `spd` float32, `mil` float32, `time` string, `adr` string, perf_event_time datetime64(3) default now64(3,'Asia/Shanghai'), _perf_row_id string, _perf_ingest_time string, `_tp_time` datetime64(3, 'Asia/Shanghai') DEFAULT now64(3,'Asia/Shanghai') CODEC(DoubleDelta, LZ4), `_tp_index_time` datetime64(3, 'UTC') CODEC(DoubleDelta, LZ4)) TTL to_datetime(_tp_time) + INTERVAL 24 HOUR SETTINGS logstore_retention_bytes = '21474836480', logstore_retention_ms = '00000'"},                    
-                    {"client":"python","config_set": "setting_1", "wait":20, "interval":2, "workers": 2, "query_type": "table", "query":"create view if not exists ttp_session_substream_v$ as (WITH duration AS(SELECT lpn, window_start AS ds, window_end AS de, date_diff('second', ds, de) AS du FROM session(ttp_$, _tp_time, 1s, 40s, spd > 0, spd = 0, lpn) GROUP BY lpn, window_start, window_end  SETTINGS seek_to = 'earliest') SELECT lpn, window_start, window_end, sum(du) FROM hop(duration, de, 10s, 40s) PARTITION BY lpn GROUP BY lpn, window_start, window_end HAVING  sum(du) > 1s)"},
-                    {"client":"python","config_set": "setting_1", "wait": 10, "interval":1, "depends_on_stream":"ttp_session_substream_v$", "query_id":201, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto","query_end_timer": 30, "query":"select * from ttp_session_substream_v$", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 202, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select * from ttp_$ where spd >0", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python", "config_set": "setting_1", "wait": 10, "query_id": 203, "run_mode":"process", "loop_times": 1, "workers": 1, "query_type": "stream", "terminate":"auto", "query_end_timer": 30, "query":"select count_distinct(lpn) FROM (SELECT lpn, max(_tp_time) as lastSeen FROM ttp_$ group by lpn having lastSeen>date_sub(now(),10s) emit periodic 5s settings seek_to='-24h')", "result_keep":"False", "query_result_table":"query_result_03", "query_record_table":"query_record_01"},
-                    {"client":"python","config_set": "setting_1","workers": 1,"query_id": 204, "interval":1, "loop_times": -1, "query_type": "table", "query":"select * from table(ttp_$) where spd >0"}
-
-                ]},
-                    
-
-                {"inputs": [
-                    {"table_name": "ttp_state_$","input_id": 210,"table_schema_ref":"ttp_state", "workers":2, "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "random_fields": "lpn", "random_ranges":"2000", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 3000, "batch_size":5, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "ttp_state_$","input_id": 211,"table_schema_ref":"ttp_state", "client":"rest", "workers":2, "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"},
-                    {"table_name": "ttp_state_$","input_id": 212,"table_schema_ref":"ttp_state", "$start_from": 0,"$end_at":1, "client":"rest", "workers":2,"worker_mode":"round_robin", "data_source":"file", "data_set_path":"ttp_state", "data_set_file": "ttp_state.csv", "table_schema_file":"table_schema.json -todo", 
-                        "ingest_interval":1,"interval_model":"random - todo", "time_incre_interval":0.5, "data_set_play_mode":"sequence", "rows_2_play": 100, "batch_size":1, "loop_times":-1, "result_keep":"False","input_record_table":"input_record"}
-
-                ]}
-
-            ]               
-        }, 
-        {
-            "id": 9,
             "tags": ["debug"],
             "name": "longevity - proton, with query time easy json volume, 80 streams",
             "description": "tail query latency w/single source",

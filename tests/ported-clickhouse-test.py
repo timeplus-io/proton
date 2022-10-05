@@ -411,6 +411,7 @@ class TestCase:
             })
 
             os.environ["CLICKHOUSE_DATABASE"] = database
+            print(f"configure_test_case_args, CLICKHOUSE_DATABASE={database}")
             # Set temporary directory to match the randomly generated database,
             # because .sh tests also use it for temporary files and we want to avoid
             # collisions.
@@ -589,6 +590,7 @@ class TestCase:
         args = self.testcase_args
         #print(f"run_single_test, args={args}")
         client = args.testcase_client
+        #print(f"test.run_single_test: client = {client}")
         start_time = args.testcase_start_time
         database = args.testcase_database
 
@@ -618,9 +620,9 @@ class TestCase:
             # proton: starts. remove '--send_logs_level={logs_level}'
             pattern = "{client} --testmode --multiquery {options} < " + pattern
             # proton: ends.
-
+        #print(f"run_single_test, pattern = {pattern}")
         command = pattern.format(**params)
-        print(f"run_single_test, command = {command}, ")
+        print(f"test.run_single_test, command = {command}, ")
         clickhouse_database_env = os.getenv("CLICKHOUSE_DATABASE")
         #print(f"run_single_test, CLICKHOUSE_DATABASE = {clickhouse_database_env}")
 
@@ -671,6 +673,7 @@ class TestCase:
         return proc, stdout, stderr, total_time
 
     def run(self, args, suite, client_options, server_logs_level):
+        #print(f"test.run, client_options = {client_options}")
         try:
             skip_reason = self.should_skip_test(suite)
             if skip_reason is not None:
@@ -686,7 +689,7 @@ class TestCase:
             self.runs_count += 1
             self.testcase_args = self.configure_testcase_args(args, self.case_file, suite.suite_tmp_path)
             clickhouse_database_env = os.getenv("CLICKHOUSE_DATABASE")
-            #print(f"TestCase.run, after configure_testcase_args, CLICKHOUSE_DATABASE = {clickhouse_database_env}, self.testcase_args = {self.testcase_args}")
+            #print(f"TestCase.run, after configure_testcase_args, CLICKHOUSE_DATABASE = {clickhouse_database_env}, self.testcase_args = {self.testcase_args}, client_options = {client_options}")
             proc, stdout, stderr, total_time = self.run_single_test(server_logs_level, client_options)
 
             result = self.process_result_impl(proc, stdout, stderr, total_time)

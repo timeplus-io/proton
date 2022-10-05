@@ -20,6 +20,7 @@ echo
 ($CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE -1" 2>/dev/null && echo "Expected failure") || true;
 ($CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE CAST(256 AS nullable(uint16))" 2>/dev/null && echo "Expected failure") || true;
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE CAST(NULL AS nullable(uint8))"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE 255"
-$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE CAST(255 AS nullable(uint8))"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE to_bool(CAST(NULL AS nullable(uint8)))"
+#$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE 255"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE to_bool(255)"
+$CLICKHOUSE_CLIENT --query="SELECT * FROM system.one WHERE to_bool(CAST(255 AS nullable(uint8)))"

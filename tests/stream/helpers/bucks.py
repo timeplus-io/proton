@@ -1075,6 +1075,8 @@ def batch_input_from_data_set_rest(
         j = 0  # as batch counter
         data_set = data_set_with_header
         for row in data_set:
+            print(f"batch_input_from_data_set_rest, row = {row}")
+
             row_list = []
             if i == 0:
                 i += 1
@@ -1083,7 +1085,9 @@ def batch_input_from_data_set_rest(
                     if isinstance(field, str):
                         field = field.replace("\\", "\\\\").replace("'", "\\'")
                         # field = field.replace('"', '//"')  # proton does
-                        row_list.append(field)
+                    else:
+                        field = str(field)
+                    row_list.append(field)
                 _perf_row_id = str(uuid.uuid4())
                 row_list.append(_perf_row_id)
                 _perf_ingest_time = str(datetime.datetime.now())

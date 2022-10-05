@@ -3,6 +3,8 @@
 import os, itertools, urllib.request, urllib.parse, urllib.error, urllib.request, urllib.error, urllib.parse, sys
 
 def get_ch_answer(query):
+
+
     return urllib.request.urlopen(os.environ.get('CLICKHOUSE_URL', 'http://localhost:' + os.environ.get('CLICKHOUSE_PORT_HTTP', '8123') ), data=query.encode()).read().decode()
 
 def check_answers(query, answer):
@@ -67,7 +69,14 @@ def test_operators(v1, v2, v1_passed, v2_passed):
     answers = [v1 == v2, v1 != v2, v1 < v2, v1 <= v2, v1 > v2, v1 >= v2]
     answers += [v2 == v1, v2 != v1, v2 < v1, v2 <= v1, v2 > v1, v2 >= v1]
 
-    answers_str = "\t".join([str(int(x)) for x in answers])
+    answers_copy = []
+    for item in answers:
+        if item:
+            answers_copy.append('true')
+        else:
+            answers_copy.append('false')
+
+    answers_str = "\t".join([x for x in answers_copy])
 
     return (query_str, answers_str)
 
@@ -87,7 +96,7 @@ def test_pair(v1, v2):
             if inside_range(v1, t1):
                 for t2 in TYPES.keys():
                     if inside_range(v2, t2):
-                        q, a = test_operators(v1, v2, 'to{}({})'.format(t1, v1), 'to{}({})'.format(t2, v2))
+                        q, a = test_operators(v1, v2, 'to_{}({})'.format(t1, v1), 'to_{}({})'.format(t2, v2))
                         query += ', ' + q
                         answers += "\t" + a
 
@@ -110,7 +119,7 @@ def test_float_pair(i, f):
     if TEST_WITH_CASTING:
         for t1 in TYPES.keys():
             if inside_range(i, t1):
-                q, a = test_operators(i, f, 'to{}({})'.format(t1, i), f_str)
+                q, a = test_operators(i, f, 'to_{}({})'.format(t1, i), f_str)
                 query += ', ' + q
                 answers += "\t" + a
 

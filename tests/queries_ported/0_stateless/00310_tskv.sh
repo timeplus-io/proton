@@ -14,6 +14,7 @@ binary_data=def	text=
 tskv
 
 ' | $CLICKHOUSE_CLIENT --query="INSERT INTO tskv FORMAT TSKV";
+sleep 2s
 
-$CLICKHOUSE_CLIENT --query="SELECT * FROM tskv ORDER BY binary_data";
+$CLICKHOUSE_CLIENT --query="SELECT * FROM table(tskv) ORDER BY binary_data settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM tskv";
