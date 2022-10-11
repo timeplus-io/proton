@@ -164,7 +164,7 @@ namespace
 
         bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
-        bool useDefaultImplementationForNulls() const override { return false; }
+        bool useDefaultImplementationForNulls() const override { return true; }
 
         bool useDefaultImplementationForConstants() const override { return true; }
 
