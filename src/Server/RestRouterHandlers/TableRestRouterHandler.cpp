@@ -261,7 +261,7 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
             const auto & params = klog->get(toString(table_id.uuid));
             for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
                 if (params.count(v))
-                    resp_table.set(k, params.at(v));
+                    resp_table.set(k, std::stoll(params.at(v)));
         }
     }
 }

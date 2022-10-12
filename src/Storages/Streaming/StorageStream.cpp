@@ -848,6 +848,7 @@ void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, A
         if (stream_shard->storage)
         {
             stream_shard->storage->alter(commands, context_, alter_lock_holder);
+            changeSettings(stream_shard->storage->getInMemoryMetadata().settings_changes, alter_lock_holder);
             setInMemoryMetadata(stream_shard->storage->getInMemoryMetadata());
         }
     }
