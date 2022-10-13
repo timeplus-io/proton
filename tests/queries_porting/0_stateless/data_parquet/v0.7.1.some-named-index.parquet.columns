@@ -1,1 +1,0 @@
-`carat` nullable(float64), `depth` nullable(float64), `table` nullable(float64), `price` nullable(int64), `x` nullable(float64), `y` nullable(float64), `z` nullable(float64), `cut` nullable(string), `__index_level_1__` nullable(string), `clarity` nullable(string)

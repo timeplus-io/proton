@@ -1,0 +1,1 @@
+`a` nullable(int64), `b` nullable(float64), `c` nullable(datetime('Europe/Moscow')), `index` nullable(string), `__index_level_1__` nullable(datetime('Europe/Moscow'))

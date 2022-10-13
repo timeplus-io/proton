@@ -1262,9 +1262,10 @@ def main(args):
     total_tests_run = 0
 
     queries = os.listdir(base_dir)
-    #print(f"os.listdir(base_dir) = {queries}")
+    print(f"os.listdir(base_dir) = {queries}")
 
     for suite in sorted(os.listdir(base_dir), key=suite_key_func):
+        print(f"main, suite = {suite}")
         if server_died.is_set():
             break
 

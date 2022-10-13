@@ -1,6 +1,6 @@
 SELECT empty(to_uuid('00000000-0000-0000-0000-000000000000'));
 SELECT not_empty(to_uuid('00000000-0000-0000-0000-000000000000'));
-SELECT uniqIf(uuid, empty(uuid)), uniqIf(uuid, not_empty(uuid))
+SELECT uniq_if(uuid, empty(uuid)), uniq_if(uuid, not_empty(uuid))
 FROM
 (
     SELECT to_uuid('00000000-0000-0000-0000-000000000002') AS uuid
@@ -22,7 +22,7 @@ INSERT INTO orders VALUES ('00000000-0000-0000-0000-000000000003', '00000000-000
 
 SELECT
     uniq(user_id) AS users,
-    uniqIf(order_id, not_empty(order_id)) AS orders
+    uniq_if(order_id, not_empty(order_id)) AS orders
 FROM
 (
     SELECT * FROM users

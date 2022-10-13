@@ -1,0 +1,1 @@
+`a1` array(nullable(uint32)), `a2` array(nullable(string)), `a3` array(nullable(Decimal(4, 2)))

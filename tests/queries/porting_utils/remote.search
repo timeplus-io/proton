@@ -1,0 +1,115 @@
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00009_uniq_distributed.sql
+  3,95: SELECT uniq(UserID), uniq_if(UserID, CounterID = 800784), uniq_if(FUniqID, RegionID = 213) FROM remote('127.0.0.{1,2}', test, hits)
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00010_quantiles_segfault.sql
+  1,209: SELECT URL AS `ym:ah:URL`, sum((NOT DontCountHits AND NOT Refresh)), quantilesTimingIf(0.1, 0.5, 0.9)((DOMCompleteTiming + LoadEventEndTiming), DOMCompleteTiming != -1 AND LoadEventEndTiming != -1) as t FROM remote('127.0.0.{1,2}', test, hits) WHERE (CounterID = 800784) AND (((DontCountHits = 0) OR (IsNotBounce = 1)) AND (URL != ''))  GROUP BY `ym:ah:URL` WITH TOTALS   HAVING (sum((NOT DontCountHits AND NOT Refresh)) > 0) AND (count() > 0)  ORDER BY sum((NOT DontCountHits AND NOT Refresh)) DESC, URL  LIMIT 0, 1
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00012_sorting_distributed.sql
+  3,50: SELECT EventTime::DateTime('Europe/Moscow') FROM remote('127.0.0.{1,2}', test, hits) ORDER BY EventTime DESC LIMIT 10
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00016_any_if_distributed_cond_always_false.sql
+  3,49: SELECT anyIf(SearchPhrase, CounterID = -1) FROM remote('127.0.0.{1,2}:9000', test, hits)
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00020_distinct_order_by_distributed.sql
+  4,62: SELECT count() FROM (SELECT DISTINCT PredLastVisit AS x FROM remote('127.0.0.{1,2}', test, visits) ORDER BY VisitID);
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00021_3_select_with_in.sql
+  3,21: SELECT count() FROM remote('localhost', test, hits) WHERE CounterID IN (598875);
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00046_uniq_upto_distributed.sql
+  3,75: SELECT RegionID, uniqExact(UserID) AS u1, uniqUpTo(10)(UserID) AS u2 FROM remote('127.0.0.{1,2}', test, visits) GROUP BY RegionID HAVING u1 <= 11 AND u1 != u2
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00066_sorting_distributed_many_replicas.sql
+  4,50: SELECT EventTime::DateTime('Europe/Moscow') FROM remote('127.0.0.{1|2}', test, hits) ORDER BY EventTime DESC LIMIT 10
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00067_union_all.sql
+  4,7: 	FROM remote('127.0.0.{1,2}', test, hits)
+  9,7: 	FROM remote('127.0.0.{1,2}', test, hits)
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00082_quantiles.sql
+  8,65: SELECT CounterID AS k, quantileExact(0.5)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  9,89: SELECT CounterID AS k, quantilesExact(0.1, 0.5, 0.9, 0.99, 0.999)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  11,66: SELECT CounterID AS k, quantileTiming(0.5)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  12,90: SELECT CounterID AS k, quantilesTiming(0.1, 0.5, 0.9, 0.99, 0.999)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00088_global_in_one_shard_and_rows_before_limit.sql
+  4,32: SELECT EventDate, count() FROM remote('127.0.0.1', test.hits) WHERE UserID GLOBAL IN (SELECT UserID FROM test.hits) GROUP BY EventDate ORDER BY EventDate LIMIT 5 FORMAT JSONCompact;
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00090_thread_pool_deadlock.sh
+  9,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  11,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  13,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  15,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  17,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  19,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  21,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7,8}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  23,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7,8,9}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  25,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7,8,9,10}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00146_aggregate_function_uniq.sql
+  1,47: SELECT RegionID, uniqHLL12(WatchID) AS X FROM remote('127.0.0.{1,2}', test, hits) GROUP BY RegionID HAVING X > 100000 ORDER BY RegionID ASC;
+  2,50: SELECT RegionID, uniqCombined(WatchID) AS X FROM remote('127.0.0.{1,2}', test, hits) GROUP BY RegionID HAVING X > 100000 ORDER BY RegionID ASC;
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00147_global_in_aggregate_function.sql
+  3,49: SELECT sum(UserID GLOBAL IN (SELECT UserID FROM remote('127.0.0.{1,2}', test.hits))) FROM remote('127.0.0.{1,2}', test.hits);
+  3,91: SELECT sum(UserID GLOBAL IN (SELECT UserID FROM remote('127.0.0.{1,2}', test.hits))) FROM remote('127.0.0.{1,2}', test.hits);
+  4,66: SELECT sum(UserID GLOBAL IN (SELECT UserID FROM test.hits)) FROM remote('127.0.0.{1,2}', test.hits);
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00149_quantiles_timing_distributed.sql
+  3,97: SELECT sum(cityHash64(*)) FROM (SELECT CounterID, quantileTiming(0.5)(SendTiming), count() FROM remote('127.0.0.{1,2,3,4,5,6,7,8,9,10}', test.hits) WHERE SendTiming != -1 GROUP BY CounterID);
+  4,97: SELECT sum(cityHash64(*)) FROM (SELECT CounterID, quantileTiming(0.5)(SendTiming), count() FROM remote('127.0.0.{1,2,3,4,5,6,7,8,9,10}', test.hits) WHERE SendTiming != -1 GROUP BY CounterID) SETTINGS optimize_aggregation_in_order = 1;
+
+/Users/jameshao/projects/proton/tests/queries/1_stateful/00164_quantileBfloat16.sql
+  5,68: SELECT CounterID AS k, quantileBFloat16(0.5)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  6,92: SELECT CounterID AS k, quantilesBFloat16(0.1, 0.5, 0.9, 0.99, 0.999)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+
+/Users/jameshao/projects/proton/tests/queries/bugs/01133_max_result_rows.sql
+  24,21: SELECT count() FROM remote('127.0.0.{1,2}', numbers(100));
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00009_uniq_distributed.sql
+  3,95: SELECT uniq(UserID), uniq_if(UserID, CounterID = 800784), uniq_if(FUniqID, RegionID = 213) FROM remote('127.0.0.{1,2}', test, hits)
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00010_quantiles_segfault.sql
+  1,209: SELECT URL AS `ym:ah:URL`, sum((NOT DontCountHits AND NOT Refresh)), quantilesTimingIf(0.1, 0.5, 0.9)((DOMCompleteTiming + LoadEventEndTiming), DOMCompleteTiming != -1 AND LoadEventEndTiming != -1) as t FROM remote('127.0.0.{1,2}', test, hits) WHERE (CounterID = 800784) AND (((DontCountHits = 0) OR (IsNotBounce = 1)) AND (URL != ''))  GROUP BY `ym:ah:URL` WITH TOTALS   HAVING (sum((NOT DontCountHits AND NOT Refresh)) > 0) AND (count() > 0)  ORDER BY sum((NOT DontCountHits AND NOT Refresh)) DESC, URL  LIMIT 0, 1
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00012_sorting_distributed.sql
+  3,50: SELECT EventTime::DateTime('Europe/Moscow') FROM remote('127.0.0.{1,2}', test, hits) ORDER BY EventTime DESC LIMIT 10
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00016_any_if_distributed_cond_always_false.sql
+  3,49: SELECT anyIf(SearchPhrase, CounterID = -1) FROM remote('127.0.0.{1,2}:9000', test, hits)
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00020_distinct_order_by_distributed.sql
+  4,62: SELECT count() FROM (SELECT DISTINCT PredLastVisit AS x FROM remote('127.0.0.{1,2}', test, visits) ORDER BY VisitID);
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00021_3_select_with_in.sql
+  3,21: SELECT count() FROM remote('localhost', test, hits) WHERE CounterID IN (598875);
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00046_uniq_upto_distributed.sql
+  3,75: SELECT RegionID, uniqExact(UserID) AS u1, uniqUpTo(10)(UserID) AS u2 FROM remote('127.0.0.{1,2}', test, visits) GROUP BY RegionID HAVING u1 <= 11 AND u1 != u2
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00066_sorting_distributed_many_replicas.sql
+  4,50: SELECT EventTime::DateTime('Europe/Moscow') FROM remote('127.0.0.{1|2}', test, hits) ORDER BY EventTime DESC LIMIT 10
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00067_union_all.sql
+  4,7: 	FROM remote('127.0.0.{1,2}', test, hits)
+  9,7: 	FROM remote('127.0.0.{1,2}', test, hits)
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00082_quantiles.sql
+  8,65: SELECT CounterID AS k, quantileExact(0.5)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  9,89: SELECT CounterID AS k, quantilesExact(0.1, 0.5, 0.9, 0.99, 0.999)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  11,66: SELECT CounterID AS k, quantileTiming(0.5)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+  12,90: SELECT CounterID AS k, quantilesTiming(0.1, 0.5, 0.9, 0.99, 0.999)(ResolutionWidth) FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY count() DESC, CounterID LIMIT 10;
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00088_global_in_one_shard_and_rows_before_limit.sql
+  4,32: SELECT EventDate, count() FROM remote('127.0.0.1', test.hits) WHERE UserID GLOBAL IN (SELECT UserID from table(test.hits)) GROUP BY EventDate ORDER BY EventDate LIMIT 5 FORMAT JSONCompact;
+
+/Users/jameshao/projects/proton/tests/queries_porting/1_stateful/00090_thread_pool_deadlock.sh
+  9,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  11,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  13,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  15,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  17,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  19,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  21,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7,8}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  23,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7,8,9}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;
+  25,174: $CLICKHOUSE_CLIENT --distributed_aggregation_memory_efficient=1 --group_by_two_level_threshold=1 --max_execution_time=1 --query="SELECT SearchPhrase AS k, count() AS c FROM remote('127.0.0.{1,2,3,4,5,6,7,8,9,10}', test.hits) GROUP BY k ORDER BY c DESC LIMIT 10" --format=Null 2>/dev/null;

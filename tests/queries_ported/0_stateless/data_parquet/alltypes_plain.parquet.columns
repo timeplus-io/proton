@@ -1,0 +1,1 @@
+`id` nullable(int32), `bool_col` nullable(uint8), `tinyint_col` nullable(int32), `smallint_col` nullable(int32), `int_col` nullable(int32), `bigint_col` nullable(int64), `float_col` nullable(float32), `double_col` nullable(float64), `date_string_col` nullable(string), `string_col` nullable(string), `timestamp_col` nullable(int64)

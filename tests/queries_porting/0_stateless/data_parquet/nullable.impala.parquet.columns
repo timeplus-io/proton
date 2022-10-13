@@ -1,1 +1,0 @@
-`id` nullable(int64), `int_array` array(nullable(int32)), `int_array_Array` array(array(nullable(int32))), `int_map` Map(string, nullable(int32)), `int_Map_Array` array(Map(string, nullable(int32))), `nested_struct` tuple(nullable(int32), array(nullable(int32)), tuple(array(array(tuple(nullable(int32), nullable(string))))), Map(string, tuple(tuple(array(nullable(float64))))))
