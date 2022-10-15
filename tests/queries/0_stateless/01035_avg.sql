@@ -43,7 +43,7 @@ SELECT avg(d128 - d64) FROM test_01035_avg;
 DROP STREAM IF EXISTS test_01035_avg;
 
 -- Checks that the internal SUM does not overflow int8
-SELECT avg(key), avgIf(key, key > 0), avg(key2), avgIf(key2, key2 > 0), avg(key3), avgIf(key3, key3 > 0)
+SELECT avg(key), avg_if(key, key > 0), avg(key2), avg_if(key2, key2 > 0), avg(key3), avg_if(key3, key3 > 0)
 FROM
 (
      SELECT 1::int8 as key, Null::nullable(int8) AS key2, 1::nullable(int8) as key3

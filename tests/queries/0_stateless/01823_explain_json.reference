@@ -59,7 +59,7 @@
               "Type": "float64"
             },
             {
-              "Name": "sumIf(number, greater(number, 0))",
+              "Name": "sum_if(number, greater(number, 0))",
               "Type": "uint64"
             }
           ],
@@ -77,9 +77,9 @@
               "Argument Positions": [0]
             },
             {
-              "Name": "sumIf(number, greater(number, 0))",
+              "Name": "sum_if(number, greater(number, 0))",
               "Function": {
-                "Name": "sumIf",
+                "Name": "sum_if",
                 "Argument Types": ["uint64", "uint8"],
                 "Result Type": "uint64"
               },

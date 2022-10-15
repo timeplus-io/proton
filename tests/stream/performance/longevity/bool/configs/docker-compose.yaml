@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   proton-server:
-    image: timeplus/proton:${PROTON_VERSION:-1.0.80-PoC}
+    image: timeplus/proton:${PROTON_VERSION:-prestage}
     pull_policy: always
     container_name: proton-server
     volumes:

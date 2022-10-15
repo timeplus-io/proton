@@ -21,10 +21,10 @@ create stream test_table_unsigned_values
 INSERT INTO test_table_unsigned_values SELECT number % 3, number, number, number, number, if(number % 2 == 0, 1, 0) FROM system.numbers LIMIT 120;
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value),
-    sumIf(value3, predicate_value),
-    sumIf(value4, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value),
+    sum_if(value3, predicate_value),
+    sum_if(value4, predicate_value)
 FROM test_table_unsigned_values GROUP BY id ORDER BY id;
 DROP STREAM test_table_unsigned_values;
 
@@ -46,10 +46,10 @@ create stream test_table_signed_values
 INSERT INTO test_table_signed_values SELECT number % 3, number, number, number, number, if(number % 2 == 0, 1, 0) FROM system.numbers LIMIT 120;
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value),
-    sumIf(value3, predicate_value),
-    sumIf(value4, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value),
+    sum_if(value3, predicate_value),
+    sum_if(value4, predicate_value)
 FROM test_table_signed_values GROUP BY id ORDER BY id;
 DROP STREAM test_table_signed_values;
 
@@ -69,8 +69,8 @@ create stream test_table_float_values
 INSERT INTO test_table_float_values SELECT number % 3, number, number, if(number % 2 == 0, 1, 0) FROM system.numbers LIMIT 120;
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value)
 FROM test_table_float_values GROUP BY id ORDER BY id;
 DROP STREAM test_table_float_values;
 
@@ -92,10 +92,10 @@ create stream test_table_nullable_unsigned_values
 INSERT INTO test_table_nullable_unsigned_values SELECT number % 3, number, number, number, number, if(number % 2 == 0, 1, 0)  FROM system.numbers LIMIT 120;
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value),
-    sumIf(value3, predicate_value),
-    sumIf(value4, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value),
+    sum_if(value3, predicate_value),
+    sum_if(value4, predicate_value)
 FROM test_table_nullable_unsigned_values GROUP BY id ORDER BY id;
 DROP STREAM test_table_nullable_unsigned_values;
 
@@ -117,10 +117,10 @@ create stream test_table_nullable_signed_values
 INSERT INTO test_table_nullable_signed_values SELECT number % 3, number, number, number, number, if(number % 2 == 0, 1, 0) FROM system.numbers LIMIT 120;
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value),
-    sumIf(value3, predicate_value),
-    sumIf(value4, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value),
+    sum_if(value3, predicate_value),
+    sum_if(value4, predicate_value)
 FROM test_table_nullable_signed_values GROUP BY id ORDER BY id;
 DROP STREAM test_table_nullable_signed_values;
 
@@ -140,8 +140,8 @@ create stream test_table_nullable_float_values
 INSERT INTO test_table_nullable_float_values SELECT number % 3, number, number, if(number % 2 == 0, 1, 0) FROM system.numbers LIMIT 120;
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value)
 FROM test_table_nullable_float_values GROUP BY id ORDER BY id;
 DROP STREAM test_table_nullable_float_values;
 
@@ -165,9 +165,9 @@ INSERT INTO test_table_null_specifics VALUES (0, 3, 3, NULL, 1);
 
 SELECT
     id,
-    sumIf(value1, predicate_value),
-    sumIf(value2, predicate_value),
-    sumIf(value3, predicate_value)
+    sum_if(value1, predicate_value),
+    sum_if(value2, predicate_value),
+    sum_if(value3, predicate_value)
 FROM test_table_null_specifics GROUP BY id ORDER BY id;
 DROP STREAM IF EXISTS test_table_null_specifics;
 
@@ -192,8 +192,8 @@ INSERT INTO test_table_null_specifics VALUES (0, 3, 3, NULL, 1, 3);
 
 SELECT
     id,
-    avgWeightedIf(value1, weight, predicate_value),
-    avgWeightedIf(value2, weight, predicate_value),
-    avgWeightedIf(value3, weight, predicate_value)
+    avg_weighted_if(value1, weight, predicate_value),
+    avg_weighted_if(value2, weight, predicate_value),
+    avg_weighted_if(value3, weight, predicate_value)
 FROM test_table_null_specifics GROUP BY id ORDER BY id;
 DROP STREAM IF EXISTS test_table_null_specifics;
