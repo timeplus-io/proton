@@ -128,6 +128,7 @@ namespace ErrorCodes
     extern const int INVALID_STREAMING_FUNC_DESC;
     extern const int MISSING_GROUP_BY;
     extern const int UNSUPPORTED;
+    extern const int FUNCTION_NOT_ALLOWED;
     /// proton: ends
 }
 
@@ -138,8 +139,7 @@ namespace
     {
         using TypeToVisit = ASTFunction;
 
-        StreamingFunctionData(bool streaming_, bool is_changelog_)
-            : streaming(streaming_), is_changelog(is_changelog_) { }
+        StreamingFunctionData(bool streaming_, bool is_changelog_) : streaming(streaming_), is_changelog(is_changelog_) { }
 
         void visit(ASTFunction & func, ASTPtr)
         {
@@ -166,12 +166,17 @@ namespace
                         if (!iter->second.empty())
                             func.name = iter->second;
                         else
-                            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", func.name);
+                            throw Exception(
+                                ErrorCodes::NOT_IMPLEMENTED,
+                                "{} aggregation function is not supported in changelog query processing",
+                                func.name);
 
                         return;
                     }
                 }
             }
+            else if (streaming_only_func.count(func.name))
+                throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} function can be used only in streaming query", func.name);
         }
 
         bool emit_version = false;
@@ -191,6 +196,8 @@ namespace
 
         static std::unordered_map<String, String> func_map;
         static std::unordered_map<String, String> changelog_func_map;
+        /// only streaming query can use these functions
+        static std::set<String> streaming_only_func;
     };
 
     std::unordered_map<String, String> StreamingFunctionData::func_map =  {
@@ -199,6 +206,22 @@ namespace
         {"now64", "__streaming_now64"},
         {"now", "__streaming_now"},
     };
+
+    std::set<String> StreamingFunctionData::streaming_only_func
+        = {"__streaming_neighbor",
+           "__streaming_row_number",
+           "__streaming_now64",
+           "__streaming_now",
+           /// changelog_only
+           "__count_retract",
+           "__sum_retract",
+           "__sum_kahan_retract",
+           "__sum_with_overflow_retract",
+           "__avg_retract",
+           "__max_retract",
+           "__min_retract",
+           "__arg_min_retract",
+           "__arg_max_retract"};
 
     std::unordered_map<String, String> StreamingFunctionData::changelog_func_map =  {
         {"count", "__count_retract"},
