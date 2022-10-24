@@ -72,7 +72,8 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version);
 
     /// For substream
-    if (!transform_params->params.substream_key_indices.empty())
+    if (!transform_params->params.substream_key_indices.empty()
+        || transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
     {
         transformPipelineWithSubstream(transform_params, pipeline, settings);
         aggregating = collector.detachProcessors(0);
@@ -94,9 +95,6 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
                 return std::make_shared<TumbleHopAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
-                return std::make_shared<SessionAggregatingTransform>(
-                    header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
             else
                 return std::make_shared<GlobalAggregatingTransform>(
                     header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
@@ -112,8 +110,6 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
             if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
                 || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
                 return std::make_shared<TumbleHopAggregatingTransform>(header, transform_params);
-            else if (transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION)
-                return std::make_shared<SessionAggregatingTransform>(header, transform_params);
             else
                 return std::make_shared<GlobalAggregatingTransform>(header, transform_params);
         });
@@ -142,7 +138,8 @@ void AggregatingStep::transformPipelineWithSubstream(
 {
     assert(
         transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-        || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+        || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END
+        || transform_params->params.group_by == Aggregator::Params::GroupBy::SESSION);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
@@ -155,8 +152,13 @@ void AggregatingStep::transformPipelineWithSubstream(
 
         size_t counter = 0;
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(
-                header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
+            if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+                || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
+                return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(
+                    header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
+            else
+                return std::make_shared<SessionAggregatingTransform>(
+                    header, transform_params, substream_many_data, counter++, merge_threads, temporary_data_merge_threads);
         });
 
         pipeline.resize(1);
@@ -166,7 +168,11 @@ void AggregatingStep::transformPipelineWithSubstream(
         pipeline.resize(1);
 
         pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
+            if (transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
+                || transform_params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END)
+                return std::make_shared<TumbleHopAggregatingTransformWithSubstream>(header, transform_params);
+            else
+                return std::make_shared<SessionAggregatingTransform>(header, transform_params);
         });
     }
 }

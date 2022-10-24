@@ -559,23 +559,6 @@ void AggregatingTransform::consume(Chunk chunk)
         finalize(chunk.getChunkInfo());
 }
 
-bool AggregatingTransform::executeOrMergeColumns(Columns & columns)
-{
-    size_t num_rows = columns[0]->size();
-    src_rows += num_rows;
-    for (const auto & column : columns)
-        src_bytes += column->byteSize();
-
-    if (params->only_merge)
-    {
-        auto block = getInputs().front().getHeader().cloneWithColumns(columns);
-        materializeBlockInplace(block);
-        return params->aggregator.mergeOnBlock(block, variants, no_more_keys);
-    }
-    else
-        return params->aggregator.executeOnBlock(columns, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
-}
-
 void AggregatingTransform::initGenerate()
 {
     if (is_generate_initialized)

@@ -13,7 +13,6 @@ const String STREAMING_WINDOW_START = "window_start";
 const String STREAMING_WINDOW_END = "window_end";
 const std::vector<String> STREAMING_WINDOW_COLUMN_NAMES = {STREAMING_WINDOW_START, STREAMING_WINDOW_END};
 const String STREAMING_TIMESTAMP_ALIAS = "__tp_ts";
-const String STREAMING_SESSION_ID = "__tp_session_id";
 const String STREAMING_SESSION_START = "__tp_session_start";
 const String STREAMING_SESSION_END = "__tp_session_end";
 

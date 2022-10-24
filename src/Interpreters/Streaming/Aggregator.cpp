@@ -299,11 +299,6 @@ Aggregator::Aggregator(const Params & params_) : params(params_)
 #if USE_EMBEDDED_COMPILER
     compileAggregateFunctionsIfNeeded();
 #endif
-
-    /// proton: starts
-    if (params.group_by == Params::GroupBy::SESSION)
-        session_map.init(SessionHashMap::Type::map64);
-    /// proton: ends
 }
 
 #if USE_EMBEDDED_COMPILER
@@ -564,8 +559,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodStreaming(
     bool has_low_cardinality, size_t num_fixed_contiguous_keys, size_t keys_bytes)
 {
     if (params.group_by != Params::GroupBy::WINDOW_END
-        && params.group_by != Params::GroupBy::WINDOW_START
-        && params.group_by != Params::GroupBy::SESSION)
+        && params.group_by != Params::GroupBy::WINDOW_START)
         return AggregatedDataVariants::Type::EMPTY;
 
     if (has_nullable_key)
@@ -3056,6 +3050,9 @@ void Aggregator::setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawP
 
 void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const
 {
+    if (result.empty())
+        return;
+
     auto watermark = watermark_bound.watermark;
     if (watermark <= 0)
         return;
@@ -3118,66 +3115,6 @@ void Aggregator::removeBucketsBefore(AggregatedDataVariants & result, const Wate
         stats.free_list_misses);
 }
 
-void Aggregator::removeBucketsOfSession(AggregatedDataVariants & result, size_t session_id) const
-{
-    if (session_id <= 0)
-        return;
-
-    auto destroy = [&](AggregateDataPtr & data)
-    {
-        if (nullptr == data)
-            return;
-
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->destroy(data + offsets_of_aggregate_states[i]);
-
-        data = nullptr;
-    };
-
-    size_t removed = 0;
-    UInt64 last_removed_watermark = 0;
-    size_t remaining = 0;
-
-    switch (result.type)
-    {
-#define M(NAME, IS_TWO_LEVEL) \
-            case AggregatedDataVariants::Type::NAME: \
-                std::tie(removed, last_removed_watermark, remaining) = result.NAME->data.removeBucketsOfSession(session_id, destroy); break;
-        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
-#undef M
-
-        default:
-            break;
-    }
-
-    Arena::Stats stats;
-
-    LOG_INFO(
-        log,
-        "Removed {} windows less or equal to watermark={}, keeping window_count={}, remaining_windows={}. "
-        "Arena: arena_chunks={}, arena_size={}, chunks_removed={}, bytes_removed={}. chunks_reused={}, bytes_reused={}, head_chunk_size={}, "
-        "free_list_hits={}, free_list_missed={}",
-        removed,
-        last_removed_watermark,
-        params.streaming_window_count,
-        remaining,
-        stats.chunks,
-        stats.bytes,
-        stats.chunks_removed,
-        stats.bytes_removed,
-        stats.chunks_reused,
-        stats.bytes_reused,
-        stats.head_chunk_size,
-        stats.free_list_hits,
-        stats.free_list_misses);
-}
-
-void Aggregator::clearInfoOfEmitSessions()
-{
-    session_map.removeSessionInfo(sessions_to_emit);
-    sessions_to_emit.clear();
-}
-
 std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const
 {
     auto watermark = watermark_bound.watermark;
@@ -3211,175 +3148,6 @@ std::vector<size_t> Aggregator::bucketsBefore(AggregatedDataVariants & result, c
 
     return get_defaults();
 }
-
-/// Get buckets of given session
-std::vector<size_t> Aggregator::bucketsOfSession(AggregatedDataVariants & result, size_t session_id)
-{
-    auto get_defaults = []() {
-        /// By default, we are using 256 buckets for 2 level hash table
-        /// and ConvertingAggregatedToChunksSource is using this default value / convention
-        /// This is a fallback to normal 2 level hashtable
-
-        std::vector<size_t> defaults(256);
-        std::iota(defaults.begin(), defaults.end(), 0);
-        return defaults;
-    };
-
-    if (session_id <= 0)
-        return get_defaults();
-
-    switch (result.type)
-    {
-#define M(NAME, IS_TWO_LEVEL) \
-    case AggregatedDataVariants::Type::NAME: \
-        return result.NAME->data.bucketsOfSession(session_id);
-        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING_TWO_LEVEL(M)
-#undef M
-
-        default:
-            break;
-    }
-
-    return get_defaults();
-}
-
-template <typename TargetColumnType>
-SessionStatus Aggregator::processSessionRow(
-    SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts)
-{
-    Block block;
-    const typename TargetColumnType::Container & time_vec = checkAndGetColumn<TargetColumnType>(time_column.get())->getData();
-    const typename ColumnUInt64::Container & session_id_vec = checkAndGetColumn<ColumnUInt64>(session_id_column.get())->getData();
-
-    /// session_start_column could be a ColumnConst object
-    const typename ColumnBool::Container & session_start_vec = checkAndGetColumn<ColumnBool>(session_start_column.get())->getData();
-    const typename ColumnBool::Container & session_end_vec = checkAndGetColumn<ColumnBool>(session_end_column.get())->getData();
-
-    Int64 ts_secs = time_vec[offset];
-    Int64 scale = params.time_scale;
-
-    UInt64 session_id = session_id_vec[offset];
-
-    Bool session_start = session_start_vec[offset];
-    Bool session_end = session_end_vec[offset];
-
-    /// step1. handle session info
-    SessionInfo & info = *(map.getSessionInfo(session_id));
-    bool has_session = info.win_end != 0;
-    if (!has_session)
-    {
-        /// Initial session window
-        info.win_start = ts_secs;
-        info.win_end = ts_secs + 1;
-        info.scale = scale;
-        info.interval = params.window_interval;
-        info.id = session_id;
-        info.cur_session_id = 0;
-        info.active = session_start;
-    }
-
-    if (ts_secs >= max_ts)
-    {
-        max_ts = ts_secs;
-        /// emit sessions if possible
-        emitSessionsIfPossible(max_ts, session_start, session_end, session_id);
-        if (!sessions_to_emit.empty())
-        {
-            if (session_end)
-            {
-                info.win_end = ts_secs;
-                return SessionStatus::EMIT_INCLUDED;
-            }
-            else
-                return SessionStatus::EMIT;
-        }
-    }
-
-    if (!has_session)
-    {
-        if (session_start)
-            return SessionStatus::KEEP;
-        else
-        {
-            info.win_start = 0;
-            info.win_end = 0;
-            return SessionStatus::IGNORE;
-        }
-    }
-
-    return handleSession(ts_secs, info);
-}
-
-void Aggregator::emitSessionsIfPossible(DateTime64 max_ts, bool session_start, bool session_end, UInt64 session_id)
-{
-    const DateLUTImpl & time_zone = DateLUT::instance("UTC");
-    for (const auto & it : session_map.map64)
-    {
-        Int64 low_bound = addTime(max_ts, params.interval_kind, -1 * params.window_interval, time_zone, params.time_scale);
-        Int64 max_bound = addTime(max_ts, params.timeout_kind, -1 * params.session_size, time_zone, params.time_scale);
-
-        if (it.first == session_id && session_start)
-            it.second->active = true;
-
-        if (!it.second->active)
-            continue;
-
-        if (max_bound > it.second->win_start || (it.first == session_id && (low_bound > it.second->win_end || session_end)))
-        {
-            it.second->active = false;
-            sessions_to_emit.push_back(it.first);
-            LOG_DEBUG(log, "emit session {}, watermark: <{}, {}>, info: {}", it.first, session_id, max_ts, it.second->toString());
-        }
-    }
-}
-
-SessionStatus Aggregator::handleSession(const DateTime64 & tp_time, SessionInfo & info) const
-{
-    assert(info.win_start <= info.win_end);
-
-    const DateLUTImpl & time_zone = DateLUT::instance("UTC");
-
-    if (!info.active)
-        return SessionStatus::IGNORE;
-
-    if (addTime(tp_time, params.timeout_kind, params.session_size, time_zone, info.scale) < info.win_start)
-    {
-        /// late session, ignore this event
-        return SessionStatus::IGNORE;
-    }
-
-    auto session_end = addTime(tp_time, params.interval_kind, params.window_interval, time_zone, info.scale);
-    if (session_end < info.win_start)
-    {
-        /// with session_size, possible late event in current session
-        /// TODO: append block into possible_session_end_list
-        return SessionStatus::KEEP;
-    }
-    else if (session_end >= info.win_start && tp_time < info.win_end)
-    {
-        //            session_data[offeset] = cur_session_id;
-        return SessionStatus::KEEP;
-    }
-    else if (addTime(tp_time, params.interval_kind, -1 * params.window_interval, time_zone, info.scale) <= info.win_end)
-    {
-        /// belongs to current session
-        //            session_data[offeset] = cur_session_id;
-        info.win_end = tp_time;
-        return SessionStatus::END_EXTENDED;
-    }
-    else
-    {
-        /// possible belongs to current session, cache it
-        return SessionStatus::KEEP;
-    }
-}
-
-
-template SessionStatus Aggregator::processSessionRow<ColumnDecimal<DateTime64>>(
-    SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
-
-template SessionStatus Aggregator::processSessionRow<ColumnVector<UInt32>>(
-    SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
 
 /// proton: ends
 }

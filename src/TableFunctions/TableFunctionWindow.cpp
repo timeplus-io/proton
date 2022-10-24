@@ -7,6 +7,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/Streaming/ASTSessionRangeComparision.h>
 #include <Storages/StorageView.h>
 #include <Common/ProtonCommon.h>
 
@@ -28,9 +29,10 @@ FunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
     WindowType type,
     const String & func_name_prefix,
     ExpressionActionsPtr streaming_start_expr,
-    ExpressionActionsPtr streaming_end_expr)
+    ExpressionActionsPtr streaming_end_expr,
+    bool start_with_boundary,
+    bool end_with_boundary)
 {
-    ColumnNumbers keys;
     const auto & actions = streaming_func_expr->getActions();
 
     for (const auto & action : actions)
@@ -43,18 +45,10 @@ FunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
             DataTypes argument_types;
             argument_types.reserve(action.node->children.size());
 
-            /// Skip the first six arguments in session function, session(stream, timestamp, session_interval, timeout, start, end, keys...)
-            /// The first argument `stream` is handled (and moved out) in method `doParseArguments`, so the keys size should be node size - 5.
-            keys.reserve(action.node->children.size() - 5);
-
-            size_t it = 0;
             for (const auto * node : action.node->children)
             {
                 argument_names.push_back(node->result_name);
                 argument_types.push_back(node->result_type);
-                if (it > 4)
-                    keys.push_back(it);
-                it++;
             }
             return std::make_shared<FunctionDescription>(
                 std::move(ast),
@@ -64,8 +58,9 @@ FunctionDescriptionPtr createStreamingFunctionDescriptionForSession(
                 std::move(streaming_func_expr),
                 std::move(streaming_start_expr),
                 std::move(streaming_end_expr),
-                std::move(required_columns),
-                std::move(keys));
+                start_with_boundary,
+                end_with_boundary,
+                std::move(required_columns));
         }
     }
     __builtin_unreachable();
@@ -93,7 +88,7 @@ FunctionDescriptionPtr createStreamingFunctionDescriptionForOther(
                 argument_types.push_back(node->result_type);
             }
             return std::make_shared<FunctionDescription>(
-                ast, type, argument_names, argument_types, streaming_func_expr, nullptr, nullptr, std::move(required_columns));
+                ast, type, argument_names, argument_types, streaming_func_expr, nullptr, nullptr, true, true, std::move(required_columns));
         }
     }
 
@@ -112,8 +107,9 @@ FunctionDescriptionPtr createStreamingFunctionDescriptionForOther(
         streaming_func_expr,
         nullptr,
         nullptr,
+        true,
+        true,
         std::move(required_columns),
-        ColumnNumbers{},
         true);
 }
 
@@ -127,13 +123,15 @@ FunctionDescriptionPtr createStreamingFunctionDescription(
 
     if (type == WindowType::SESSION)
     {
+        /// __session([timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision])
         auto * node = ast->as<ASTFunction>();
         const auto & args = node->arguments->children;
 
-        ExpressionAnalyzer streaming_start_analyzer(args[3], syntax_analyzer_result, context);
+        auto & range_predication = args[3]->as<ASTSessionRangeComparision&>();
+        assert(range_predication.children.size() == 2);
+        ExpressionAnalyzer streaming_start_analyzer(range_predication.children[0], syntax_analyzer_result, context);
         auto streaming_start_expr = streaming_start_analyzer.getActions(true, true);
-
-        ExpressionAnalyzer streaming_end_analyzer(args[4], syntax_analyzer_result, context);
+        ExpressionAnalyzer streaming_end_analyzer(range_predication.children[1], syntax_analyzer_result, context);
         auto streaming_end_expr = streaming_end_analyzer.getActions(true, true);
 
         return createStreamingFunctionDescriptionForSession(
@@ -143,7 +141,9 @@ FunctionDescriptionPtr createStreamingFunctionDescription(
             type,
             func_name_prefix,
             std::move(streaming_start_expr),
-            std::move(streaming_end_expr));
+            std::move(streaming_end_expr),
+            range_predication.start_with_boundary,
+            range_predication.end_with_boundary);
     }
     else
         return createStreamingFunctionDescriptionForOther(

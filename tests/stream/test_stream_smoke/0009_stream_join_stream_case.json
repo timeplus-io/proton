@@ -410,7 +410,7 @@
         {
           "statements": [
             {"client":"python","query_id":"1012", "terminate":"manuel","wait":1, "query_type": "stream", "depends_on_stream":"left_stream,right_stream","query":"select s, ss from left_stream inner join right_stream on i=ii and date_diff('second', tts, ts) > 0 and date_diff('second', tts, ts) <= 10"},
-            {"client":"python", "query_type": "table","depends_on":1012, "wait":2,
+            {"client":"python", "query_type": "table","depends_on":1012, "wait":3,
               "query": "insert into left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'), (2, 's', '2022-05-23 15:46:10')"},
             {"client":"python", "query_type": "table","depends_on":1012, "wait":1,
               "query": "insert into right_stream(ii, ss, tts) values
@@ -425,7 +425,7 @@
               (2, 's9', '2022-05-23 15:46:20'),
               (2, 's10', '2022-05-23 15:46:21')"
             },
-            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1012'"}             
+            {"client":"python", "wait": 5, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1012'"}             
           ]
         }
       ],
@@ -536,7 +536,7 @@
               (2, 's9', '2022-05-23 15:46:18'),
               (2, 's10', '2022-05-23 15:46:19')"
             },
-            {"client":"python", "wait": 3, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1015'"}  
+            {"client":"python", "wait": 4, "run_mode":"batch", "query_type": "table", "query":"kill query where query_id = '1015'"}  
           ]
         }
       ],

@@ -43,7 +43,10 @@
 
 
 /// proton: starts
+#include <Columns/ColumnNothing.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <Parsers/Streaming/ASTSessionRangeComparision.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
@@ -655,6 +658,15 @@ void ActionsMatcher::visit(const ASTPtr & ast, Data & data)
         visit(*literal, ast, data);
     else if (auto * expression_list = ast->as<ASTExpressionList>())
         visit(*expression_list, ast, data);
+    /// proton: starts. it's just a wrapper, so we only visit its children.
+    else if (ast->as<ASTSessionRangeComparision>())
+    {
+        for (auto & child : ast->children)
+            visit(child, data);
+
+        data.addColumn(ColumnWithTypeAndName{ColumnNothing::create(0), std::make_shared<DataTypeNothing>(), ast->getColumnName()});
+    }
+    /// proton: ends.
     else
     {
         for (auto & child : ast->children)

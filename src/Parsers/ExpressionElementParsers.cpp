@@ -40,6 +40,7 @@
 
 /// proton: starts.
 #include <Parsers/Streaming/ParserIntervalAliasExpression.h>
+#include <Parsers/Streaming/ParserSessionRangeComparisonExpressionIfPossible.h>
 /// proton: ends.
 
 namespace DB
@@ -814,8 +815,22 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[
     ParserExpressionList contents(false, is_table_function);
 
     const char * contents_begin = pos->begin;
-    if (!contents.parse(pos, expr_list_args, expected))
-        return false;
+    /// proton: starts. support session range comparision expression for table function `session`
+    if (is_table_function && function_name == "session")
+    {
+        if (!ParserList(
+                 std::make_unique<ParserSessionRangeComparisonExpressionIfPossible>(
+                     std::make_unique<ParserExpressionWithOptionalAlias>(false, true)),
+                 std::make_unique<ParserToken>(TokenType::Comma))
+                 .parse(pos, expr_list_args, expected))
+            return false;
+    }
+    else
+    {
+        if (!contents.parse(pos, expr_list_args, expected))
+            return false;
+    }
+    /// proton: ends.
     const char * contents_end = pos->begin;
 
     if (pos->type != TokenType::ClosingRoundBracket)

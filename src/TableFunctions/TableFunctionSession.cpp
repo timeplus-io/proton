@@ -26,13 +26,13 @@ TableFunctionSession::TableFunctionSession(const String & name_) : TableFunction
 
 void TableFunctionSession::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
-    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval, start_prediction, end_prediction], key_column1[, key_column2, ...])
+    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision])
     doParseArguments(func_ast, context, HOP_HELP_MESSAGE);
 }
 
 ASTs TableFunctionSession::checkAndExtractArguments(ASTFunction * node) const
 {
-    /// session(stream, [timestamp_column], timeout_interval, [key_column1, key_column2, ...])
+    /// session(stream, [timestamp_column], timeout_interval, [max_emit_interval], [range_comparision])
     return checkAndExtractSessionArguments(node);
 }
 
@@ -62,13 +62,6 @@ void TableFunctionSession::handleResultType(const ColumnWithTypeAndName & type_a
 
         ColumnDescription wend(ProtonConsts::STREAMING_WINDOW_END, element_type);
         columns.add(wend);
-    }
-
-    {
-        DataTypePtr element_type = std::make_shared<DataTypeUInt64>();
-
-        ColumnDescription session_id(ProtonConsts::STREAMING_SESSION_ID, std::move(element_type));
-        columns.add(session_id);
     }
 
     {

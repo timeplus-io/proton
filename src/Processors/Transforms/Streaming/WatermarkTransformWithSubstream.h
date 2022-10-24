@@ -39,6 +39,7 @@ private:
     void initWatermark(
         ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, FunctionDescriptionPtr desc, bool proc_time);
 
+    std::pair<Int64, Int64> calcMinMaxEventTime(const Block & block) const;
     Watermark & getOrCreateSubstreamWatermark(const SubstreamID & id);
 
     Poco::Logger * log;
@@ -52,6 +53,11 @@ private:
     String watermark_name;
     WatermarkPtr watermark_template;
     SubstreamHashMap<WatermarkPtr> substream_watermarks;
+
+    /// For SessionWatermark
+    bool emit_min_max_event_time = false;
+    bool time_col_is_datetime64 = true;
+    size_t time_col_pos = 0;
 };
 }
 }

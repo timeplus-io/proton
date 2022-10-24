@@ -801,9 +801,12 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             result_header.erase(ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
     };
 
-    /// proton: starts. Add timestamp column and '__tp_session_id' to group by
-    if (windowType() == Streaming::WindowType::SESSION && query.groupBy())
+    /// proton: starts. Add timestamp column to group by
+    if (windowType() == Streaming::WindowType::SESSION)
     {
+        if (!query.groupBy())
+            query.setExpression(ASTSelectQuery::Expression::GROUP_BY, std::make_shared<ASTExpressionList>());
+
         auto & group_exprs = query_ptr->as<ASTSelectQuery>()->groupBy()->children;
         auto desc = getStreamingFunctionDescription();
 
@@ -811,7 +814,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         {
             const auto time_col_name = desc->argument_names[0];
             group_exprs.emplace_back(std::make_shared<ASTIdentifier>(time_col_name));
-            group_exprs.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::STREAMING_SESSION_ID));
         }
     }
 
@@ -3077,18 +3079,13 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
         session_start_pos = header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_START);
         session_end_pos = header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_END);
-
-        /// add STREAMING_SESSION_ID key into group by keys at the beginning
-        keys.insert(keys.begin(), header_before_aggregation.getPositionByName(ProtonConsts::STREAMING_SESSION_ID));
     }
 
     for (const auto & key : query_analyzer->aggregationKeys())
     {
         /// Remove STREAMING_WINDOW_START, STREAMING_WINDOW_END for session window, because Aggregator automatically add three session related columns.
-        /// Also ignore STREAMING_SESSION_ID, as it has already been added in group by keys.
         if (window_type == Streaming::WindowType::SESSION
-            && (key.name == ProtonConsts::STREAMING_WINDOW_START || key.name == ProtonConsts::STREAMING_WINDOW_END || key.name == ProtonConsts::STREAMING_SESSION_ID
-                || key.name == time_col_name))
+            && (key.name == ProtonConsts::STREAMING_WINDOW_START || key.name == ProtonConsts::STREAMING_WINDOW_END || key.name == time_col_name))
             continue;
 
         if ((key.name == ProtonConsts::STREAMING_WINDOW_END) && (isDate(key.type) || isDateTime(key.type) || isDateTime64(key.type)))
@@ -3102,10 +3099,6 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         {
             keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
             streaming_group_by = Streaming::Aggregator::Params::GroupBy::WINDOW_START;
-        }
-        else if (window_type == Streaming::WindowType::SESSION && key.name == ProtonConsts::STREAMING_SESSION_ID)
-        {
-            keys.insert(keys.begin(), header_before_aggregation.getPositionByName(key.name));
         }
         else
             keys.push_back(header_before_aggregation.getPositionByName(key.name));
@@ -3145,13 +3138,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     if (query_info.has_aggregate_over)
     {
         if (streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_START
-            || streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_END)
+            || streaming_group_by == Streaming::Aggregator::Params::GroupBy::WINDOW_END
+            || streaming_group_by == Streaming::Aggregator::Params::GroupBy::SESSION)
         {
             substream_key_indices = keyIndecesForSubstreams(header_before_aggregation, query_info);
-        }
-        else if (streaming_group_by == Streaming::Aggregator::Params::GroupBy::SESSION)
-        {
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Doesn't support window over with session window");
         }
     }
 
@@ -3381,15 +3371,12 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlan(QueryPlan & query
         Block output_header = query_plan.getCurrentDataStream().header.cloneEmpty();
         if (windowType() == Streaming::WindowType::SESSION)
         {
-            /// insert _tp_session_id column for session window
-            auto data_type = std::make_shared<DataTypeUInt64>();
-            output_header.insert(0, {data_type, ProtonConsts::STREAMING_SESSION_ID});
-
+            size_t insert_pos = 0;
             auto session_start_type = std::make_shared<DataTypeBool>();
-            output_header.insert(1, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
+            output_header.insert(insert_pos++, {session_start_type, ProtonConsts::STREAMING_SESSION_START});
 
             auto session_end_type = std::make_shared<DataTypeBool>();
-            output_header.insert(2, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
+            output_header.insert(insert_pos++, {session_end_type, ProtonConsts::STREAMING_SESSION_END});
         }
 
         /// Prepare substream key indices for only tumble/hop

@@ -103,7 +103,6 @@ private:
 
 protected:
     void emitVersion(Block & block);
-    bool executeOrMergeColumns(Columns & columns);
     void setCurrentChunk(Chunk chunk, ChunkInfoPtr & chunk_info);
 
 protected:

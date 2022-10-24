@@ -68,8 +68,9 @@ void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr cont
         func_expr_analyzer.getActions(true),
         nullptr,
         nullptr,
+        true,
+        true,
         syntax_analyzer_result->requiredSourceColumns(),
-        ColumnNumbers{},
         false);
 }
 

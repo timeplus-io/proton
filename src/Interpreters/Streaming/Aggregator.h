@@ -36,8 +36,9 @@
 
 /// proton: starts
 #include <DataTypes/DataTypeDateTime64.h>
+#include <Interpreters/Aggregator.h>
 #include <Interpreters/Streaming/FunctionDescription.h>
-#include <Interpreters/Streaming/SessionMap.h>
+#include <Interpreters/Streaming/SessionInfo.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
@@ -840,10 +841,6 @@ private:
     friend class GlobalAggregatingTransform;
     friend class TumbleHopAggregatingTransform;
     friend class TumbleHopAggregatingTransformWithSubstream;
-
-    SessionHashMap session_map;
-    std::vector<size_t> sessions_to_emit;
-    Int64 max_event_ts = 0;
     /// proton: ends
 
     Params params;
@@ -1135,18 +1132,10 @@ private:
         MutableColumns & final_key_columns) const;
 
     /// proton: starts
-    inline void initStatesWithoutKey(AggregatedDataVariants & data_variants) const;
+    void initStatesWithoutKey(AggregatedDataVariants & data_variants) const;
     void setupAggregatesPoolTimestamps(UInt64 num_rows, const ColumnRawPtrs & key_columns, AggregatedDataVariants & result) const;
     void removeBucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
-    void removeBucketsOfSession(AggregatedDataVariants & result, size_t session_id) const;
-    void clearInfoOfEmitSessions();
     std::vector<size_t> bucketsBefore(AggregatedDataVariants & result, const WatermarkBound & watermark_bound) const;
-    static std::vector<size_t> bucketsOfSession(AggregatedDataVariants & result, size_t session_id);
-    template <typename TargetColumnType>
-    SessionStatus processSessionRow(
-        SessionHashMap & map, ColumnPtr & session_id_column, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t offset, Int64 & max_ts);
-    void emitSessionsIfPossible(DateTime64 max_ts, bool session_start, bool session_end, UInt64 session_id);
-    SessionStatus handleSession(const DateTime64 & tp_time, SessionInfo & info) const;
     /// proton: ends
 };
 

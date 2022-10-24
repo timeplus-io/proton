@@ -24,8 +24,8 @@ const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 param
                                    "<name of the table>, [timestamp column], <tumble window size>, [time zone]";
 const String HOP_HELP_MESSAGE = "Function 'hop' requires from 3 to 5 parameters: "
                                 "<name of the table>, [timestamp column], <hop interval size>, <hop window size>, [time zone]";
-const String SESSION_HELP_MESSAGE = "Function 'session' requires at least 3 parameters: "
-                                    "<name of the stream>, [timestamp column], <timeout interval>, <key column1> [, key column2, ...]";
+const String SESSION_HELP_MESSAGE = "Function 'session' requires at least 2 parameters: "
+                                    "<name of the stream>, [timestamp column], <timeout interval>, [max emit interval], [session range comparision] | [start_prediction, end_prediction]";
 
 
 bool isTableFunctionTumble(const ASTFunction * ast);

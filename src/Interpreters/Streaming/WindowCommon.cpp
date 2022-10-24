@@ -4,6 +4,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/Streaming/ASTSessionRangeComparision.h>
 #include <Common/ProtonCommon.h>
 #include <Common/intExp.h>
 
@@ -46,15 +47,15 @@ std::optional<IntervalKind> mapIntervalKind(const String & func_name)
         return {};
 }
 
-    ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
-    {
-        /// Assume it is a time or time_expr, we will check it later again
-        if (ast->as<ASTIdentifier>())
-            return true;
-        else if (auto * func = ast->as<ASTFunction>())
-            return !mapIntervalKind(func->name);
-        return false;
-    }
+ALWAYS_INLINE bool isTimeExprAST(const ASTPtr ast)
+{
+    /// Assume it is a time or time_expr, we will check it later again
+    if (ast->as<ASTIdentifier>())
+        return true;
+    else if (auto * func = ast->as<ASTFunction>())
+        return !mapIntervalKind(func->name);
+    return false;
+}
 
 ALWAYS_INLINE bool isIntervalAST(const ASTPtr ast)
 {
@@ -254,23 +255,23 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionSession(func_ast));
 
-    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval, start_prediction, end_prediction], key_column1[, key_column2, ...])
+    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision])
     if (func_ast->children.size() != 1)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const auto & args = func_ast->arguments->children;
-    if (args.size() < 3)
+    if (args.size() < 2)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+
+    if (args.size() > 5)
+        throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
     ASTs asts;
     ASTPtr table;
     ASTPtr time_expr;
     ASTPtr session_interval;
     ASTPtr max_emit_interval;
-    ASTPtr start_prediction;
-    ASTPtr end_prediction;
-    size_t keys_index = 2;
-    bool has_start_prediction = false;
+    ASTPtr range_predication;
 
     do
     {
@@ -282,7 +283,6 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         {
             /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
             time_expr = args[i++];
-            keys_index++;
         }
         else
         {
@@ -302,13 +302,12 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         }
 
         /// Handle optional max_emit_interval
-        if (isIntervalAST(args[i]))
+        if (i < args.size() && isIntervalAST(args[i]))
         {
             /// Case: session(stream, INTERVAL 5 SECOND, INTERVAL 4 HOUR)
             /// When the timestamp of the latest event is larger than session window_start + max_emit_interval,
             /// session will emit.
             max_emit_interval = args[i++];
-            keys_index++;
         }
         else
         {
@@ -317,46 +316,42 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         }
 
         /// Handle optional start_prediction/end_prediction, start_prediction do not accept a Bool column which will be considered as a key.
-        if (args[i]->as<ASTFunction>())
+        if (i < args.size())
         {
-            start_prediction = args[i++];
-            keys_index++;
-            has_start_prediction = true;
+            /// Handle range comparision
+            if (args[i]->as<ASTSessionRangeComparision>())
+            {
+                range_predication = args[i++];
+            }
+            /// Or handle start/end prediction
+            else if (args[i]->as<ASTFunction>())
+            {
+                range_predication = std::make_shared<ASTSessionRangeComparision>();
+                range_predication->children.emplace_back(args[i++]);  /// start_predication
+                if (i < args.size() && args[i]->as<ASTFunction>())
+                    range_predication->children.emplace_back(args[i++]);  /// end_predication
+                else
+                    throw Exception(
+                        "session window requires both start and end predictions or none, but only start or end prediction is specified",
+                        ErrorCodes::MISSING_SESSION_KEY);
+            }
         }
         else
         {
-            /// If start_prediction is not assigned, any incoming event should be able to start a session window.
-            start_prediction = makeASTFunction("to_bool", std::make_shared<ASTLiteral>(true));
+            /// If range_predication is not assigned, any incoming event should be able to start a session window.
+            range_predication = std::make_shared<ASTSessionRangeComparision>();
+            range_predication->children.emplace_back(makeASTFunction("to_bool", std::make_shared<ASTLiteral>(true)));  /// start_predication
+            range_predication->children.emplace_back(makeASTFunction("to_bool", std::make_shared<ASTLiteral>(false)));  /// end_predication
         }
 
-        if (args[i]->as<ASTFunction>())
-        {
-            end_prediction = args[i++];
-            keys_index++;
-        }
-        else
-        {
-            if (has_start_prediction)
-                throw Exception(
-                    "session window requires both start and end predictions or none, but only start or end prediction is specified",
-                    ErrorCodes::MISSING_SESSION_KEY);
-            /// If end_prediction is not assigned, only session_interval or max_emit_interval could close a session window.
-            end_prediction = makeASTFunction("to_bool", std::make_shared<ASTLiteral>(false));
-        }
+        if (i != args.size())
+            break;
 
-        if (args.size() == keys_index)
-            throw Exception(
-                "session(stream, ...) requires at least one session key column, provides zero",
-                ErrorCodes::MISSING_SESSION_KEY); /// throw error, missing session key
-
-        asts.emplace_back(table);
-        asts.emplace_back(time_expr);
-        asts.emplace_back(session_interval);
-        asts.emplace_back(max_emit_interval);
-        asts.emplace_back(start_prediction);
-        asts.emplace_back(end_prediction);
-
-        asts.insert(asts.end(), std::next(args.begin(), keys_index), args.end());
+        asts.emplace_back(std::move(table));
+        asts.emplace_back(std::move(time_expr));
+        asts.emplace_back(std::move(session_interval));
+        asts.emplace_back(std::move(max_emit_interval));
+        asts.emplace_back(std::move(range_predication));
         return asts;
 
     } while (false);

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "AggregatingTransform.h"
+#include "AggregatingTransformWithSubstream.h"
 
 namespace DB
 {
 namespace Streaming
 {
-class SessionAggregatingTransform final : public AggregatingTransform
+class SessionAggregatingTransform final : public AggregatingTransformWithSubstream
 {
 public:
     SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
@@ -15,21 +15,29 @@ public:
     SessionAggregatingTransform(
         Block header,
         AggregatingTransformParamsPtr params_,
-        ManyAggregatedDataPtr many_data,
-        size_t current_variant,
+        SubstraemManyAggregatedDataPtr substream_many_data,
+        size_t current_aggregating_index_,
         size_t max_threads,
         size_t temporary_data_merge_threads);
-
     ~SessionAggregatingTransform() override = default;
 
     String getName() const override { return "SessionAggregatingTransform"; }
 
 private:
     void consume(Chunk chunk) override;
-    void finalizeSession(std::vector<size_t> & sessions, Block & merged_block);
-    void mergeTwoLevel(ManyAggregatedDataVariantsPtr & data, const std::vector<size_t> & sessions, Block & merged_block);
-    void removeBuckets(std::vector<size_t> & sessions);
-};
+    void finalizeSession(const SessionInfo & info, Block & merged_block);
+    void mergeSingleLevel(ManyAggregatedDataVariantsPtr & data, const SessionInfo & info, Block & merged_block);
+    SessionInfo & getOrCreateSessionInfo(const SessionID & session_id);
+    SessionInfo & getSessionInfo(const SessionID & session_id);
+    void resetSessionInfo(SessionInfo & info);
 
+    template <typename TargetColumnType>
+    std::tuple<IColumn::Selector, UInt64, SessionInfos> prepareSession(
+        SessionInfo & info, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t num_rows);
+    void emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block);
+
+    SubstreamHashMap<SessionInfoPtr> & session_map;
+    Int64 max_event_ts = 0;
+};
 }
 }
