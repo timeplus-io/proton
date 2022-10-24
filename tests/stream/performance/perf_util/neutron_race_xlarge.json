@@ -17,26 +17,30 @@
             },
             {
                 "name": "time",
-                "type": "timestamp",
+                "type": "timestamp_int",
                 "timestamp_format": "2006-01-02 15:04:05.000000"
             }
         ]
     },
     "sinks": [
         {
-            "type": "neutron",
+            "type": "timeplus",
             "properties": {
-                "address": "http://localhost:8000"
+                "address": "http://localhost:8000",
+                "apikey": "OgTcKISs6PCK0isAKXMYlNRpI6RgCBvcQWcJbXapNzqMSO4WjoHU1DKbSZl-"
             }
         }
     ],
     "observer": {
-        "type": "neutron",
+        "type": "timeplus",
         "properties": {
             "address": "http://localhost:8000",
+            "apikey": "OgTcKISs6PCK0isAKXMYlNRpI6RgCBvcQWcJbXapNzqMSO4WjoHU1DKbSZl-",
             "query": "select * from test where value=9",
             "time_column": "time",
-            "metric": "latency"   
+            "metric": "latency",
+            "metric_store_address": "http://localhost:8000",
+            "metric_store_apikey": "OgTcKISs6PCK0isAKXMYlNRpI6RgCBvcQWcJbXapNzqMSO4WjoHU1DKbSZl-"
         }
     }
 }

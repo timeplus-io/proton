@@ -29,7 +29,7 @@ wait
 go run main.go -f ./samples/json/neutron_race_middle.json
 wait
 c=0
-for file in `ls neutron_*report*.csv`
+for file in `ls timeplus_*report*.csv`
 do
   echo "$file is generated"
   timestamp=$(date +%s)
@@ -44,7 +44,7 @@ wait
 go run main.go -f ./samples/json/neutron_race_large.json
 wait
 c=0
-for file1 in `ls neutron_*report*.csv`
+for file1 in `ls timeplus_*report*.csv`
 do
   echo "$file1 is generated and rename and upload..."
   timestamp=$(date +%s)
@@ -59,7 +59,7 @@ wait
 go run main.go -f ./samples/json/neutron_race_xlarge.json
 wait
 c=0
-for file2 in `ls neutron_*report*.csv`
+for file2 in `ls timeplus_*report*.csv`
 do
   echo "$file2 is generated and rename and upload..."
   timestamp=$(date +%s)
