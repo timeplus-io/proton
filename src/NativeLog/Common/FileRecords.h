@@ -88,7 +88,7 @@ public:
         std::optional<uint64_t> starting_position) const;
 
     /// Deserialize data until EOF or end_pos has been reached
-    RecordPtrs deserialize(std::vector<char> & read_buf, const SchemaContext & schema_ctx) const;
+    RecordPtrs deserialize(const SchemaContext & schema_ctx) const;
 
 private:
     size_t availableBytes(uint64_t start_pos_, uint64_t size_) const;

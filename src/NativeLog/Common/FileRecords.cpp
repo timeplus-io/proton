@@ -119,7 +119,7 @@ void FileRecords::applyRecordMetadata(std::function<bool(RecordPtr, uint64_t)> c
     }
 }
 
-RecordPtrs FileRecords::deserialize(std::vector<char> & read_buf, const SchemaContext & schema_ctx) const
+RecordPtrs FileRecords::deserialize(const SchemaContext & schema_ctx) const
 {
     auto start_offset = start_pos;
     auto end_offset = end_pos;
@@ -129,8 +129,8 @@ RecordPtrs FileRecords::deserialize(std::vector<char> & read_buf, const SchemaCo
     /// Note: it turns out it is important we need ensure the read range [start_pos, end_pos). If we read passed
     /// the `end_pos`, very weird data corruption will happen. It's like consumer tries to read ahead of producer
     /// or read something producer is producing but not finalizing. GITHUB issue-814
-    auto max_to_read = std::min<uint64_t>(end_offset - start_offset, read_buf.size());
-
+    uint64_t max_to_read = static_cast<uint64_t>(end_offset - start_offset);
+    std::vector<char> read_buf(max_to_read);
     /// Initial read
     auto n = file->read(read_buf.data(), max_to_read, start_offset);
     if (n <= 0)

@@ -51,8 +51,6 @@ private:
 
     String ns;
     nlog::FetchRequest fetch_request;
-    Int64 read_buf_size;
-    std::vector<char> read_buf;
     nlog::SchemaContext schema_ctx;
 
     std::vector<String> column_names;

@@ -30,8 +30,6 @@ StreamingBlockReaderNativeLog::StreamingBlockReaderNativeLog(
     , stream_shard(std::move(stream_shard_))
     , schema(stream_shard->storageStream()->getInMemoryMetadataPtr()->getSampleBlock())
     , fetch_request({})
-    , read_buf_size(read_buf_size_)
-    , read_buf(read_buf_size_, '\0')
     , schema_ctx(schema_provider == nullptr ? *this : *schema_provider, schema_version, std::move(column_positions_))
     , logger(logger_)
 {
@@ -86,12 +84,9 @@ nlog::RecordPtrs StreamingBlockReaderNativeLog::read()
                 //                    fetched_desc.data.records->startPosition(),
                 //                    fetched_desc.data.records->endPosition());
 
-                auto records{fetched_desc.data.records->deserialize(read_buf, schema_ctx)};
+                auto records{fetched_desc.data.records->deserialize(schema_ctx)};
                 if (unlikely(records.empty()))
                     return {};
-
-                if (unlikely(read_buf.size() > static_cast<UInt64>(read_buf_size)))
-                    read_buf.resize(read_buf_size);
 
                 /// Update next sn
                 fetch_desc.sn = records.back()->getSN() + 1;
