@@ -976,8 +976,9 @@ bool ParserFilterClause::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     {
         return false;
     }
-
-    function.name += "If";
+    /// proton: starts.
+    function.name += "_if";
+    /// proton: end.
     function.arguments->children.push_back(condition->children[0]);
     return true;
 }

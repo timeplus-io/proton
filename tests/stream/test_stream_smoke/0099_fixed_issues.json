@@ -87,6 +87,31 @@
           [2, "[1]", "[2]", "[(1, 2)]"]
         ]}
       ]
+    },
+    {
+      "id": 3,
+      "tags": ["rename"],
+      "name": "#1445",
+      "description": "[parser] fix rename function failure(example: maxIf to max_if)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_rename_fail_stream"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_rename_fail_stream(student_name string, subject string, score int)"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "insert into test_rename_fail_stream(student_name, subject, score) values ('Marc','Math', 60),('Marc','Science', 70),('Marcus', 'Math', 80),('Marcus', 'Science', 90)"},
+            {"client":"python", "query_type": "table", "query_id":"9900", "wait":2, "query":"select max(score) filter(where subject = 'Math')as  max_math_score, avg(score) filter (where subject = 'Science') as avg_science_score from table(test_rename_fail_stream)"},
+            {"client":"python", "query_type": "table", "query_id":"9901", "wait":2, "query":"select min(score) filter(where subject = 'Math')as  min_math_score, sum(score) filter (where subject = 'Science') as sum_science_score from table(test_rename_fail_stream)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          ["80", "80.0"]
+        ]},
+        {"query_id":"9901", "expected_results":[
+          ["60", "160"]
+        ]}
+      ]
     }
   ]
 }
