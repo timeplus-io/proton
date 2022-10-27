@@ -184,37 +184,39 @@ void SessionAggregatingTransform::mergeSingleLevel(ManyAggregatedDataVariantsPtr
     auto window_end_col = header.getByName(ProtonConsts::STREAMING_WINDOW_END);
     auto window_end_col_ptr = IColumn::mutate(window_end_col.column);
 
-    auto merged_block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
-    size_t session_rows = merged_block.rows();
+    Block merged_block;
+    if (first->without_key)
+        merged_block = params->aggregator.prepareBlockAndFillWithoutKey(
+            *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
+    else
+        merged_block = params->aggregator.prepareBlockAndFillSingleLevel(*first, params->final);
 
-    if (merged_block)
+    /// NOTE: In case no aggregate key and no aggregate function, the merged_block shall be empty.
+    /// e.g. `select window_start, window_end, date_diff('second', window_start, window_end) from session(test_session, 5s, [location='ca', location='sh')) group by window_start, window_end`
+    size_t session_rows = merged_block ? merged_block.rows() : 1;
+    assert(session_rows > 0);
+    for (size_t i = 0; i < session_rows; i++)
     {
-        /// fill session info columns, i.e. 'window_start', 'window_end'
-        for (size_t i = 0; i < session_rows; i++)
+        if (params->params.time_col_is_datetime64)
         {
-            if (params->params.time_col_is_datetime64)
-            {
-                window_start_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
-                    info.win_start / common::exp10_i64(info.scale), info.win_start % common::exp10_i64(info.scale), info.scale));
-                window_end_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
-                    info.win_end / common::exp10_i64(info.scale), info.win_end % common::exp10_i64(info.scale), info.scale));
-            }
-            else
-            {
-                window_start_col_ptr->insert(info.win_start);
-                window_end_col_ptr->insert(info.win_end);
-            }
+            window_start_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
+                info.win_start / common::exp10_i64(info.scale), info.win_start % common::exp10_i64(info.scale), info.scale));
+            window_end_col_ptr->insert(DecimalUtils::decimalFromComponents<DateTime64>(
+                info.win_end / common::exp10_i64(info.scale), info.win_end % common::exp10_i64(info.scale), info.scale));
         }
-
-        if (params->emit_version)
-            emitVersion(merged_block, info.id);
+        else
+        {
+            window_start_col_ptr->insert(info.win_start);
+            window_end_col_ptr->insert(info.win_end);
+        }
     }
 
-    if (merged_block && merged_block.rows() > 0)
-    {
-        merged_block.insert(1, {std::move(window_end_col_ptr), window_end_col.type, window_end_col.name});
-        merged_block.insert(1, {std::move(window_start_col_ptr), window_start_col.type, window_start_col.name});
-    }
+    /// fill session info columns, i.e. 'window_start', 'window_end'
+    merged_block.insert(0, {std::move(window_end_col_ptr), window_end_col.type, window_end_col.name});
+    merged_block.insert(0, {std::move(window_start_col_ptr), window_start_col.type, window_start_col.name});
+
+    if (params->emit_version)
+        emitVersion(merged_block, info.id);
 
     if (final_block.rows() > 0)
     {

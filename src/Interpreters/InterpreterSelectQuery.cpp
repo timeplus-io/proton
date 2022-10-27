@@ -3561,10 +3561,6 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
             auto & query = getSelectQuery();
             if (query.groupBy())
             {
-                if (!data.non_aggregate_overs.empty())
-                    throw Exception(
-                        ErrorCodes::NOT_IMPLEMENTED, "'GROUP BY' is not compatible with streaming window over non-aggregate function");
-
                 /// Append `PARTITION BY` keys to `GROUP BY` expression
                 auto & group_exprs = query.groupBy()->children;
                 for (const auto & column_ast : definition.partition_by->children)

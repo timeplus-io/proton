@@ -1826,6 +1826,10 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             /// proton : ends
         }
 
+        /// proton: starts.
+        bool has_streaming_aggregate_over = false;
+        bool has_streaming_non_aggregate_over = false;
+        /// proton: ends.
         if (need_aggregate)
         {
             /// TODO correct conditions
@@ -1837,8 +1841,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             query_analyzer.appendAggregateFunctionsArguments(chain, only_types || !first_stage);
 
             /// proton: starts.
-            bool has_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;
-            if (has_streaming_aggr_over)
+            bool may_have_streaming_aggr_over = query_analyzer.syntax->streaming && has_window;
+            if (may_have_streaming_aggr_over)
             {
                 query_analyzer.makeWindowDescriptions(chain.getLastActions());
                 query_analyzer.appendWindowFunctionsArguments(chain, only_types || !first_stage);
@@ -1850,10 +1854,16 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 {
                     for (const auto & f : w.window_functions)
                     {
-                        assert(f.aggregate_function);
-                        query_analyzer.aggregated_columns.push_back({f.column_name, f.aggregate_function->getReturnType()});
+                        if (f.aggregate_function)
+                        {
+                            has_streaming_aggregate_over = true;
+                            query_analyzer.aggregated_columns.push_back({f.column_name, f.aggregate_function->getReturnType()});
+                        }
+                        else
+                            has_streaming_non_aggregate_over = true;
                     }
                 }
+                assert(!(has_streaming_aggregate_over && has_streaming_non_aggregate_over));
             }
             /// proton: ends.
 
@@ -1906,7 +1916,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
         // Window functions are processed in a separate expression chain after
         // the main SELECT, similar to what we do for aggregate functions.
         /// proton: starts.
-        bool has_streaming_non_aggregate_over = query_analyzer.syntax->streaming && has_window && !need_aggregate;
+        if (!has_streaming_non_aggregate_over)
+            has_streaming_non_aggregate_over = query_analyzer.syntax->streaming && has_window && !has_streaming_aggregate_over;
         bool has_historical_window = !query_analyzer.syntax->streaming && has_window;
         if (has_historical_window || has_streaming_non_aggregate_over)
         /// proton: ends.

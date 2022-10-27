@@ -148,24 +148,24 @@ Block Aggregator::Params::getHeader(
         }
     }
 
-    /// insert 'window_start', 'window_end', "__tp_session_id" hidden key columns for session window
+    /// insert 'window_start', 'window_end' hidden key columns for session window
     if (is_session_window)
     {
         if (is_datetime64)
         {
             auto data_type_end = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
-            res.insert(1, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
+            res.insert(0, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
 
             auto data_type_start = std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, String{"UTC"});
-            res.insert(1, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
+            res.insert(0, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
         }
         else
         {
             auto data_type_end = std::make_shared<DataTypeDateTime>(String{"UTC"});
-            res.insert(1, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
+            res.insert(0, {data_type_end, ProtonConsts::STREAMING_WINDOW_END});
 
             auto data_type_start = std::make_shared<DataTypeDateTime>(String{"UTC"});
-            res.insert(1, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
+            res.insert(0, {data_type_start, ProtonConsts::STREAMING_WINDOW_START});
         }
     }
 
