@@ -1,0 +1,33 @@
+version: "3.7"
+services:
+  proton-server:
+    image: timeplus/proton:${PROTON_VERSION:-1.0.80-PoC}
+    pull_policy: always
+    container_name: proton-server
+    volumes:
+     - ../proton-server/datas:/var/lib/proton
+     - ../proton-server/log:/var/log/proton-server
+    ports:
+      - "3218:3218" #  HTTP
+      - "8463:8463" # TCP
+      - "5432:5432" # Postgres
+      - "9004:9004" # MySQL
+      - "7587:7587" # table mode
+    deploy:
+      replicas: 1
+      #restart_policy:
+      #  condition: on-failure
+    # `proton` depends on STREAM_STORAGE_BROKERS env variable
+    # to discover stream store
+    environment:
+      - STREAM_STORAGE_BROKERS=stream-store:9092
+      - MAX_CONCURRENT_QUERIES=1000        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=500     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=500     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=500   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.7 # Default: 0.0
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.2 # Default: 0.5      
+    command: >
+      /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
+
+
