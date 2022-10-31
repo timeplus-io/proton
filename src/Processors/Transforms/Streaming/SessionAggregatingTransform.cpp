@@ -60,40 +60,33 @@ void SessionAggregatingTransform::consume(Chunk chunk)
         SubstreamID substream_id = chunk.hasChunkInfo() ? chunk.getChunkInfo()->ctx.id : INVALID_SUBSTREAM_ID;
         SessionInfo & session_info = getOrCreateSessionInfo(substream_id);
 
-        /// 0 - ingored
-        /// 1 - keep in current session-1 (if not exists, open an new session)
-        /// 2 - keep in next session-2
-        /// ...
-        /// n - keep in next session-n
-        IColumn::Selector selector;
-        UInt64 session_count = 0;
+        /// Prepare sessions to emit / process
+        std::vector<IColumn::Filter> session_filters;
         SessionInfos sessions_info_to_emit;
         if (params->params.time_col_is_datetime64)
-            std::tie(selector, session_count, sessions_info_to_emit)
+            std::tie(session_filters, sessions_info_to_emit)
                 = prepareSession<ColumnDecimal<DateTime64>>(session_info, time_column, session_start_column, session_end_column, num_rows);
         else
-            std::tie(selector, session_count, sessions_info_to_emit)
+            std::tie(session_filters, sessions_info_to_emit)
                 = prepareSession<ColumnVector<UInt32>>(session_info, time_column, session_start_column, session_end_column, num_rows);
 
-        /// Prepare columns to precess for sessions
-        /// <Ingored session> + [To process and emit session(s) ...] + [To process session]
-        UInt64 columns_size = session_count + 1;
-        std::vector<Columns> columns_for_session(columns_size, Columns(columns.size()));
-        for (size_t col_idx = 0; auto & column : columns)
+        /// Prepare data in sessions
+        /// [To process and emit session(s) ...] + [To process session]
+        UInt64 session_count = session_filters.size();
+        std::vector<Columns> columns_for_session(session_count, Columns(columns.size()));
+        for (size_t session_idx = 0; session_idx < session_count; ++session_idx)
         {
-            auto splitted_cols = column->scatter(columns_size, selector);
-            for (size_t session_idx = 0; auto & col : splitted_cols)
+            const auto & filter = session_filters[session_idx];
+            for (size_t col_idx = 0; auto & column : columns)
             {
-                columns_for_session[session_idx][col_idx] = std::move(col);
-                ++session_idx;
+                columns_for_session[session_idx][col_idx] = column->filter(filter, -1);
+                ++col_idx;
             }
-            ++col_idx;
         }
 
-        auto session_begin_to_emit = std::next(columns_for_session.begin(), 1);
-        auto session_end_to_emit = std::next(session_begin_to_emit, sessions_info_to_emit.size());
-
         /// To process and emit session(s)
+        auto session_begin_to_emit = columns_for_session.begin();
+        auto session_end_to_emit = std::next(session_begin_to_emit, sessions_info_to_emit.size());
         size_t index_to_emit = 0;
         std::for_each(session_begin_to_emit, session_end_to_emit, [&](const auto & columns_to_process) {
             /// FIXME: handle the process error when return value is true
@@ -258,7 +251,7 @@ SessionInfo & SessionAggregatingTransform::getSessionInfo(const SessionID & sess
 }
 
 template <typename TargetColumnType>
-std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform::prepareSession(
+std::pair<std::vector<IColumn::Filter>, SessionInfos> SessionAggregatingTransform::prepareSession(
     SessionInfo & info, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t num_rows)
 {
     Block block;
@@ -268,9 +261,9 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
     const typename ColumnBool::Container & session_start_vec = checkAndGetColumn<ColumnBool>(session_start_column.get())->getData();
     const typename ColumnBool::Container & session_end_vec = checkAndGetColumn<ColumnBool>(session_end_column.get())->getData();
 
-    IColumn::Selector selector(num_rows, 0);
-    UInt64 session_count = info.active ? 1 : 0;
+    IColumn::Filter filter(num_rows, 0);
     SessionInfos sessions_info_to_emit;
+    std::vector<IColumn::Filter> session_filters;
     size_t offset = 0;
     Int64 ts_secs = time_vec[0];
     Bool session_start = session_start_vec[0];
@@ -278,9 +271,9 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
 
     const DateLUTImpl & time_zone = DateLUT::instance("UTC");
 
-    auto ignore_row = [&]() { selector[offset] = 0; };
+    auto ignore_row = [&]() { filter[offset] = 0; };
     auto keep_row = [&]() {
-        selector[offset] = session_count;
+        filter[offset] = 1;
         /// Extend session window end and timeout timestamp
         if (ts_secs > info.win_end)
         {
@@ -311,7 +304,6 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
     };
 
     auto open_session = [&]() {
-        ++session_count;
         info.win_start = ts_secs;
         info.win_end = ts_secs + 1;
         info.timeout_ts = addTime(info.win_end, params->params.interval_kind, params->params.window_interval, time_zone, info.scale);
@@ -323,6 +315,8 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
     auto close_session = [&]() {
         info.active = false;
         sessions_info_to_emit.emplace_back(info);
+        session_filters.emplace_back(num_rows, 0);
+        session_filters.back().swap(filter);
     };
 
     for (; offset < num_rows; ++offset)
@@ -333,8 +327,26 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
 
         if (info.active)
         {
-            /// Close session window
-            if (session_end)
+            /// Special handlings:
+            /// 1) if event_time < @ingore_ts, ingore event
+            /// 2) if event_time > @timeout_ts, close session
+            /// 3) if event_time > @max_session_ts, close session
+            /// 4) if session end condition is true, close session
+            assert(info.win_start <= info.win_end);
+            if (ts_secs < info.ingore_ts)
+                ignore_row();
+            else if (ts_secs > info.timeout_ts || ts_secs > info.max_session_ts)
+            {
+                /// Timeout not keep current row.
+                close_session();
+
+                if (session_start)
+                {
+                    open_session();
+                    keep_row_if_include_start();
+                }
+            }
+            else if (session_end)
             {
                 keep_row_if_include_end();
                 close_session();
@@ -346,27 +358,7 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
                 }
             }
             else
-            {
-                /// Special handling:
-                /// 1) if event_time < @ingore_ts, ingore event
-                /// 2) if event_time > @timeout_ts, close session
-                /// 3) if event_time > @max_session_ts, close session
-                assert(info.win_start <= info.win_end);
-                if (ts_secs < info.ingore_ts)
-                    ignore_row();
-                else if (ts_secs > info.timeout_ts || ts_secs > info.max_session_ts)
-                {
-                    close_session();
-
-                    if (session_start)
-                    {
-                        open_session();
-                        keep_row_if_include_start();
-                    }
-                }
-                else
-                    keep_row();
-            }
+                keep_row();
         }
         else
         {
@@ -381,8 +373,10 @@ std::tuple<IColumn::Selector, UInt64, SessionInfos> SessionAggregatingTransform:
         }
     }
 
-    assert(sessions_info_to_emit.size() == info.active ? session_count - 1 : session_count);
-    return {std::move(selector), session_count, std::move(sessions_info_to_emit)};
+    if (info.active)
+        session_filters.emplace_back(std::move(filter));
+
+    return {std::move(session_filters), std::move(sessions_info_to_emit)};
 }
 
 void SessionAggregatingTransform::emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block)

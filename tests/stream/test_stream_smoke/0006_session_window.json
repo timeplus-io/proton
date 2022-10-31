@@ -743,6 +743,37 @@
                     ["2020-02-02 20:00:10.263000+00:00", "2020-02-02 20:00:18.262000+00:00", 8]
                 ]}
             ]
+        },
+        {
+            "id": 22,
+            "tags": ["session window"],
+            "name": "start/end predictions",
+            "description": "insert event with tp_time in milliseconds",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_id": 701, "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select id, window_start, window_end, sum(value) over (partition by id)  from session(test_session, timestamp, 1s, [value>0, value<=50]) group by id, window_start, window_end"}
+                ]},
+                {"inputs": [
+                    {"table_name":"test_session","depends_on":"701", "wait":2, "data": [
+                        ["dev1", "sh", 100, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:01.262+00:00"],
+                        ["dev2", "ca", 100, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:02.262+00:00"],
+                        ["dev1", "ca", 100, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:02.262+00:00"],
+                        ["dev1", "sh", 100, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:01.262+00:00"],
+                        ["dev2", "ca", 100, "\"create_time\":\"2021-11-02 20:00:04\"", "2020-02-02 20:00:01.263+00:00"],
+                        ["dev1", "da", 50, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:03.262+00:00"],
+                        ["dev2", "ca", 50, "\"create_time\":\"2021-11-02 20:00:00\"", "2020-02-02 20:00:03.262+00:00"],
+                        ["dev2", "sh", 100, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:04.262+00:00"],
+                        ["dev1", "sh", 100, "\"create_time\":\"2021-11-02 20:00:11\"", "2020-02-02 20:00:04.262+00:00"]
+                    ]}
+                ]
+                }
+            ],
+            "expected_results": [{"query_id" : 701, "expected_results":
+                [
+                    ["dev1", "2020-02-02 20:00:01.262000+00:00", "2020-02-02 20:00:03.262000+00:00", 350],
+                    ["dev2", "2020-02-02 20:00:02.262000+00:00", "2020-02-02 20:00:03.262000+00:00", 250]
+                ]}
+            ]
         }
     ]
 }

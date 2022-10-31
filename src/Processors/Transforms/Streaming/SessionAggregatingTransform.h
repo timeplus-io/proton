@@ -32,7 +32,7 @@ private:
     void resetSessionInfo(SessionInfo & info);
 
     template <typename TargetColumnType>
-    std::tuple<IColumn::Selector, UInt64, SessionInfos> prepareSession(
+    std::pair<std::vector<IColumn::Filter>, SessionInfos> prepareSession(
         SessionInfo & info, ColumnPtr & time_column, ColumnPtr & session_start_column, ColumnPtr & session_end_column, size_t num_rows);
     void emitGlobalOversizeSessionsIfPossible(const Chunk & chunk, Block & merged_block);
 
