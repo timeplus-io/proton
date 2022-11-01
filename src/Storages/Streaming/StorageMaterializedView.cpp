@@ -302,7 +302,7 @@ void StorageMaterializedView::read(
     if (!column_names.empty())
         header = storage_snapshot->getSampleBlockForColumns(column_names);
     else
-        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_VIEW_VERSION});
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
     auto storage = getTargetTable();
     auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
