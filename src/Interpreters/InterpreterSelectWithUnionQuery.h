@@ -46,6 +46,7 @@ public:
     Streaming::HashSemantic getHashSemantic() const override;
 
     ColumnsDescriptionPtr getExtendedObjects() const override;
+    std::set<String> getGroupByColumns() const override;
     /// proton: ends
 
     virtual void ignoreWithTotals() override;

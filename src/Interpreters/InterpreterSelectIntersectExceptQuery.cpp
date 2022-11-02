@@ -229,6 +229,20 @@ ColumnsDescriptionPtr InterpreterSelectIntersectExceptQuery::getExtendedObjects(
         DB::updateObjectColumns(*merged_object_columns, object_columns_list[i]->getAllPhysical());
     return merged_object_columns;
 }
+
+std::set<String> InterpreterSelectIntersectExceptQuery::getGroupByColumns() const
+{
+    std::set<String> group_by_columns;
+    if (nested_interpreters.size() == 1)
+        return nested_interpreters.front()->getGroupByColumns();
+
+    for (const auto & interpreter : nested_interpreters)
+    {
+        auto nested_group_by = interpreter->getGroupByColumns();
+        group_by_columns.insert(nested_group_by.begin(), nested_group_by.end());
+    }
+    return group_by_columns;
+}
 /// proton: ends
 
 }

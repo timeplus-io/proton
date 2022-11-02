@@ -61,6 +61,7 @@ namespace
         const QueryProfileMatcher::Data & query_profile,
         const Block & sample_block,
         bool has_aggr,
+        std::set<String> group_by_columns,
         bool is_streaming,
         const std::set<std::tuple<String, String, bool, String, String>> & required_columns)
     {
@@ -73,6 +74,7 @@ namespace
         ///        {"column": column, "column_type": type},
         ///        ...
         ///    },
+        ///    "group_by_columns": ["id", "window_start"],
         ///    "rewritten_query": query,
         ///    "original_query": query,
         ///    "query_type": CREATE , SELECT , INSERT INTO , ...
@@ -107,6 +109,13 @@ namespace
             required_columns_obj->set(i++, column);
         }
         result->set("required_columns", required_columns_obj);
+
+    /// Group By columns
+        Poco::JSON::Array::Ptr group_by_obj = new Poco::JSON::Array();
+        for (auto & name : group_by_columns)
+            group_by_obj->add(name);
+
+        result->set("group_by_columns", group_by_obj);
 
         /// Result columns
         i = 0;
@@ -212,7 +221,7 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
     ParserQuery parser(query.c_str() + query.size());
 
     query_context->setCollectRequiredColumns(true);
-    auto & settings = query_context->getSettingsRef();
+    const auto & settings = query_context->getSettingsRef();
 
     String error_msg;
     auto res = rewriteQueryPipeAndParse(
@@ -234,7 +243,9 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
         /// FIXME: INSERT INTO STREAM ... SELECT ...
         bool has_aggr = false;
         bool is_streaming = true;
-        if (ast->as<ASTSelectWithUnionQuery>())
+        std::set<String> group_by_columns;
+
+        if (auto * const select = ast->as<ASTSelectWithUnionQuery>())
         {
             /// Interpreter will trigger ast analysis. One side effect is collecting
             /// required columns during the analysis process
@@ -242,11 +253,21 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
             has_aggr = interpreter.hasAggregation();
             block = interpreter.getSampleBlock();
             is_streaming = interpreter.isStreaming();
+            group_by_columns = interpreter.getGroupByColumns();
         }
 
         auto query_type = queryType(ast);
         return {
-            buildResponse(query, rewritten_query, query_type, profile, block, has_aggr, is_streaming, query_context->requiredColumns()),
+            buildResponse(
+                query,
+                rewritten_query,
+                query_type,
+                profile,
+                block,
+                has_aggr,
+                group_by_columns,
+                is_streaming,
+                query_context->requiredColumns()),
             HTTPResponse::HTTP_OK};
     }
     else

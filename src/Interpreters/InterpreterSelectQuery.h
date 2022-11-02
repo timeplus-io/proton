@@ -106,6 +106,7 @@ public:
     bool isStreaming() const override;
     bool isChangelog() const override;
     Streaming::HashSemantic getHashSemantic() const override;
+    std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
     Streaming::FunctionDescriptionPtr getStreamingFunctionDescription() const;

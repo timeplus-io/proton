@@ -3221,6 +3221,42 @@ Streaming::HashSemantic InterpreterSelectQuery::getHashSemantic() const
     return Streaming::HashSemantic::Append;
 }
 
+std::set<String> InterpreterSelectQuery::getGroupByColumns() const
+{
+    std::set<String> group_by_columns;
+    ASTSelectQuery & query = query_ptr->as<ASTSelectQuery &>();
+    if (query.groupBy())
+    {
+        for (const auto & elem : query.groupBy()->children)
+        {
+            auto col = elem->getColumnName();
+            /// skip the useless '_tp_time'
+            if (col == "_tp_time")
+                continue;
+
+            /// Insert the alias name
+            bool is_alias = false;
+            if (syntax_analyzer_result)
+            {
+                for (const auto & [alias, ast] : syntax_analyzer_result->aliases)
+                {
+                    if (ast->getColumnName() == col)
+                    {
+                        group_by_columns.insert(alias);
+                        is_alias = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!is_alias)
+                group_by_columns.insert(col);
+        }
+    }
+
+    return group_by_columns;
+}
+
 bool InterpreterSelectQuery::hasStreamingWindowFunc() const
 {
     if (!isStreaming())

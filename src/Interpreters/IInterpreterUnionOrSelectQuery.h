@@ -62,6 +62,8 @@ public:
     /// Return the object column descriptions of the current query to provide subcolumns information to downstream 
     /// pipeline. If the current query doesn't have any object columns, return empty but non-nullptr ColumnsDescription.
     virtual ColumnsDescriptionPtr getExtendedObjects() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "not implemented"); }
+
+    virtual std::set<String> getGroupByColumns() const =0;
     /// proton: ends
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override;
