@@ -112,6 +112,28 @@
           ["60", "160"]
         ]}
       ]
+    },
+    {
+      "id": 4,
+      "tags": ["count_if(*)"],
+      "name": "#1476",
+      "description": "fix count_if function with argument *",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists count_if_with_AsteriskArguement"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "create stream count_if_with_AsteriskArguement(age int,name string)"},
+            {"client":"python", "query_type": "table", "wait":2, "query": "insert into count_if_with_AsteriskArguement(age,name) values(20,'lrx'),(18,'yl')"},
+            {"client":"python", "query_type": "table", "query_id":"9900", "wait":2, "query":"select count(),count(*) filter(where name='lrx') from table(count_if_with_AsteriskArguement)"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9900", "expected_results":[
+          ["2", "1"]
+        ]}
+      ]
     }
+  
   ]
 }

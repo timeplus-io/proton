@@ -147,6 +147,13 @@ void TranslateQualifiedNamesMatcher::visit(ASTFunction & node, const ASTPtr &, D
         func_arguments->children.clear();
 
     /// proton : starts
+
+    /// treat count_if(*, <cond>) / count(*) filter(<cond>) as count_if(<cond>)
+    if (func_name_lowercase == "count_if" &&
+        func_arguments->children.size() == 2 &&
+        func_arguments->children[0]->as<ASTAsterisk>())
+        func_arguments->children.erase(func_arguments->children.begin());
+
     if (func_arguments->children.size() == 1 && func_name_lowercase == "date_diff_within")
     {
         if (data.tables.size() != 2)
