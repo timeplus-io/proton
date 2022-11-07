@@ -1,13 +1,12 @@
 #pragma once
 
-#include <base/shared_ptr_helper.h>
-
-#include <Common/MultiVersion.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/IAST_fwd.h>
-
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/StorageSnapshot.h>
+#include <base/shared_ptr_helper.h>
+#include <Common/MultiVersion.h>
 
 namespace DB
 {
@@ -33,7 +32,12 @@ public:
     void drop() override;
     void dropInnerTableIfAny(bool no_delay, ContextPtr local_context) override;
 
+    void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
+
     void checkTableCanBeRenamed() const override;
+    /// Use inner target storage to check Alter command
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
+
     void renameInMemory(const StorageID & new_table_id) override;
 
     void startup() override;
@@ -70,8 +74,12 @@ public:
     bool supportsDynamicSubcolumns() const override { return true; }
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot) const override;
 
+    /// Get constant pointer to storage settings.
+    MergeTreeSettingsPtr getSettings() const;
+
 private:
     void initInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
+    void updateStorageSettings();
     void buildBackgroundPipeline(InterpreterSelectWithUnionQuery & inner_interpreter, const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
     void executeBackgroundPipeline();
     void cancelBackgroundPipeline();

@@ -358,6 +358,16 @@ void StorageMaterializedView::dropInnerTableIfAny(bool no_delay, ContextPtr loca
     target_table_storage = nullptr;
 }
 
+void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
+{
+    auto target = getTargetTable();
+    if (!target)
+        return;
+
+    target->alter(commands, context_, alter_lock_holder);
+    updateStorageSettings();
+}
+
 void StorageMaterializedView::checkTableCanBeRenamed() const
 {
     auto dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
@@ -370,6 +380,16 @@ void StorageMaterializedView::checkTableCanBeRenamed() const
 
         throw Exception("Cannot rename, there are some dependencies: " + ss.str(), ErrorCodes::NOT_IMPLEMENTED);
     }
+}
+
+void StorageMaterializedView::checkAlterIsPossible(const AlterCommands & commands, ContextPtr ctx) const
+{
+    auto target = target_table_storage;
+    if (!target)
+        target = DatabaseCatalog::instance().getTable(target_table_id, getContext());
+
+    if (target)
+        target->checkAlterIsPossible(commands, ctx);
 }
 
 void StorageMaterializedView::renameInMemory(const StorageID & new_table_id)
@@ -387,8 +407,17 @@ void StorageMaterializedView::renameInMemory(const StorageID & new_table_id)
 StoragePtr StorageMaterializedView::getTargetTable()
 {
     /// Cache the target table storage
-    if (!target_table_storage)
-        target_table_storage = DatabaseCatalog::instance().getTable(target_table_id, getContext());
+    try
+    {
+        if (!target_table_storage)
+            target_table_storage = DatabaseCatalog::instance().getTable(target_table_id, getContext());
+    }
+    catch (Exception &)
+    {
+        /// sometimes during asynchronously deleting mv, the target might have be deleted already
+        LOG_ERROR(log, "inner table {} does not exists", target_table_id.getFullTableName());
+        return nullptr;
+    }
 
     return target_table_storage;
 }
@@ -447,8 +476,18 @@ void StorageMaterializedView::initInnerTable(const StorageMetadataPtr & metadata
         target_table_storage
             = DatabaseCatalog::instance().getTable({manual_create_query->getDatabase(), manual_create_query->getTable()}, local_context);
     }
-    else
-        getTargetTable();
+    updateStorageSettings();
+}
+
+void StorageMaterializedView::updateStorageSettings()
+{
+    auto target = getTargetTable();
+    if (target)
+    {
+        StorageInMemoryMetadata meta(*getInMemoryMetadataPtr());
+        meta.setSettingsChanges(target->getInMemoryMetadataPtr()->getSettingsChanges());
+        setInMemoryMetadata(meta);
+    }
 }
 
 void StorageMaterializedView::buildBackgroundPipeline(
@@ -543,6 +582,16 @@ StorageSnapshotPtr StorageMaterializedView::getStorageSnapshot(const StorageMeta
     else
         /// TODO: Update dynamic object description for InMemoryTable ?
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
+}
+
+MergeTreeSettingsPtr StorageMaterializedView::getSettings() const
+{
+    if (target_table_storage)
+    {
+        if (auto * stream = target_table_storage->as<StorageStream>())
+            return stream->getSettings();
+    }
+    return nullptr;
 }
 
 void registerStorageMaterializedView(StorageFactory & factory)

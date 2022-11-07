@@ -198,7 +198,7 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         /// 1）When a table successfully created but failed to startup, will not update it in CatalogService
         /// 2) When a table successfully created and startup, but fail to update it in CatalogService.
         auto table = DatabaseCatalog::instance().tryGetTable({database, query.getTable()}, ctx);
-        if (!table || table->getName() == "Stream")
+        if (!table || table->getName() == "Stream" || table->getName() == "MaterializedView")
         {
             /// Build json payload here from SQL statement
             payload = Streaming::getJSONFromAlterQuery(query);
@@ -221,8 +221,8 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
             throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} does not exist.", query.getDatabase(), query.getTable());
             /// proton: ends
 
-        if (tables[0]->engine != "Stream")
-            /// FIXME: We only support `Stream` table engine for now
+        if (tables[0]->engine != "Stream" && tables[0]->engine != "MaterializedView")
+            /// FIXME: We only support `Stream` and 'MaterializedView' for now
             return false;
 
         assert(!ctx->getCurrentQueryId().empty());
@@ -234,11 +234,27 @@ bool InterpreterAlterQuery::alterTableDistributed(const ASTAlterQuery & query)
         LOG_INFO(log, "Altering stream query={} query_id={}", query_str, ctx->getCurrentQueryId());
         /// proton: ends
 
+        String uuid = toString(tables[0]->uuid);
+        /// get inner table uuid for materialized view
+        if (tables[0]->engine == "MaterializedView")
+        {
+            auto targets = catalog_service.findTableByName(database, fmt::format(".inner.target-id.{}", uuid));
+            if (targets.empty())
+                /// proton: starts
+                throw Exception(
+                    ErrorCodes::UNKNOWN_STREAM,
+                    "Inner table of materialized view {}.{} does not exist.",
+                    query.getDatabase(),
+                    query.getTable());
+
+            uuid = toString(targets[0]->uuid);
+        }
+
         std::vector<std::pair<String, String>> string_cols
             = {{"payload", payload},
                {"database", query.getDatabase()},
                {"table", query.getTable()},
-               {"uuid", toString(tables[0]->uuid)},
+               {"uuid", uuid},
                {"query_id", ctx->getCurrentQueryId()},
                {"user", ctx->getUserName()}};
 

@@ -11,6 +11,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/Streaming/StorageMaterializedView.h>
 #include <Storages/Streaming/StorageStream.h>
 #include <Common/ProtonCommon.h>
 
@@ -242,9 +243,14 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
         auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(db, table), query_context);
         if (storage)
         {
+            MergeTreeSettingsPtr settings;
             if (auto * stream = storage->as<StorageStream>())
+                settings = stream->getSettings();
+            else if (auto * mv = storage->as<StorageMaterializedView>())
+                settings = mv->getSettings();
+
+            if (settings)
             {
-                const auto settings = stream->getSettings();
                 resp_table.set("logstore_flush_messages", static_cast<Int64>(settings->logstore_flush_messages));
                 resp_table.set("logstore_flush_ms", static_cast<Int64>(settings->logstore_flush_ms));
                 resp_table.set("logstore_retention_bytes", static_cast<Int64>(settings->logstore_retention_bytes));
@@ -254,11 +260,22 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
     }
     else
     {
+        UUID table_uuid = table_id.uuid;
+        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(db, table), query_context);
+        if (storage)
+        {
+            if (auto * mv = storage->as<StorageMaterializedView>())
+            {
+                if (auto target = mv->getTargetTable())
+                    table_uuid = target->getStorageID().uuid;
+            }
+        }
+
         /// Kafka log store
-        if (table_id.uuid != UUIDHelpers::Nil)
+        if (table_uuid != UUIDHelpers::Nil)
         {
             auto klog = klog::KafkaWALPool::instance(query_context).getMeta();
-            const auto & params = klog->get(toString(table_id.uuid));
+            const auto & params = klog->get(toString(table_uuid));
             for (const auto & [k, v] : ProtonConsts::LOG_STORE_SETTING_NAME_TO_KAFKA)
                 if (params.count(v))
                     resp_table.set(k, std::stoll(params.at(v)));
