@@ -868,7 +868,7 @@
             "description": "global stream aggregation join table",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":8, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "depends_on_stream":"test","query_end_timer":10, "query":"select a.id, b.type, max(value) from test as a join table(test_d) as b on a.id = b.id group by a.id, b.type limit 7 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test", "depends_on":"101","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],

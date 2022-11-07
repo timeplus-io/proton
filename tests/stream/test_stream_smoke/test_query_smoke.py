@@ -31,7 +31,8 @@ def pytest_generate_tests(metafunc):
         )
         res = rockets.rockets_run(rockets_context)
         test_run_list_len = res[0]
-        test_sets = res[1]
+        test_run_list_total = res[1]
+        test_sets = res[2]
         assert len(test_sets) ==  test_run_list_len
         test_ids = [
             #str(test["test_id"]) + "-" + test["test_name"] for test in test_sets

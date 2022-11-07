@@ -52,10 +52,10 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_id":"1700", "query_end_timer":4, "query_type": "stream", "query":"select id, sum(val_i) over (partition by id) from test_substream order by id emit periodic 6s"},
-            {"client":"python", "query_id":"1701", "query_end_timer":1, "query_type": "stream", "query":"select id, count(val_s) over (partition by id), sum(val_i) over (partition by id), max(val_i64) over (partition by id), min(val_f) over(partition by id) from test_substream order by id emit periodic 6s"},
-            {"client":"python", "query_id":"1702", "query_end_timer":1, "query_type": "stream", "query":"select id, count(val_s), sum(val_i), max(val_i64), min(val_f) from test_substream partition by id order by id emit periodic 6s"},
-            {"client":"python", "query_id":"1703", "query_end_timer":1, "query_type": "stream", "query":"select to_timezone(val_date, 'UTC'), id, sum(val_i) over (partition by val_date) from test_substream group by id order by val_date, id emit periodic 6s"}
+            {"client":"python", "query_id":"1700", "depends_on_stream":"test_substream","wait":1, "query_end_timer":6, "query_type": "stream", "query":"select id, sum(val_i) over (partition by id) from test_substream order by id emit periodic 10s"},
+            {"client":"python", "query_id":"1701","depends_on_stream":"test_substream","wait":1, "query_end_timer":2, "query_type": "stream", "query":"select id, count(val_s) over (partition by id), sum(val_i) over (partition by id), max(val_i64) over (partition by id), min(val_f) over(partition by id) from test_substream order by id emit periodic 10s"},
+            {"client":"python", "query_id":"1702","depends_on_stream":"test_substream","wait":1, "query_end_timer":2, "query_type": "stream", "query":"select id, count(val_s), sum(val_i), max(val_i64), min(val_f) from test_substream partition by id order by id emit periodic 10s"},
+            {"client":"python", "query_id":"1703","depends_on_stream":"test_substream","wait":1, "query_end_timer":2, "query_type": "stream", "query":"select to_timezone(val_date, 'UTC'), id, sum(val_i) over (partition by val_date) from test_substream group by id order by val_date, id emit periodic 10s"}
           ]
         },
         {"inputs": [
@@ -147,7 +147,7 @@
           ]
         },
         {"inputs": [
-          {"table_name":"test_substream", "wait": 2, "depends_on": "1703", "data": [
+          {"table_name":"test_substream", "wait": 2, "depends_on": "1703", "depends_on_stream":"test_substream", "data": [
             [1, 1, 10000, 5.6, "11", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:00+00:00"],
             [1, 2, 10010, 7.6, "12", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:01+00:00"],
             [1, 3, 10012, 12.6, "13", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:03+00:00"],
@@ -242,7 +242,7 @@
           ]
         },
         {"inputs": [
-          {"table_name":"test_substream", "wait": 2, "depends_on": "1703", "data": [
+          {"table_name":"test_substream", "wait": 2, "depends_on": "1703","depends_on_stream":"test_substream", "data": [
             [1, 1, 10000, 5.6, "11", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:00+00:00"],
             [1, 2, 10010, 7.6, "12", "2020-02-02 20:00:06+00:00", "2020-02-02 20:00:01+00:00"],
             [1, 3, 10012, 12.6, "13", "2020-02-02 20:00:00+00:00", "2020-02-02 20:00:03+00:00"],

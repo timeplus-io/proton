@@ -1282,6 +1282,8 @@ def query_run_py(
             message_2_send = json.dumps(query_results)
             query_results_queue.put(message_2_send)
 
+        logger.info(f"query_run_py: query_results_queue.put done.")
+
         if run_mode == "process" or query_type == "stream":
             # logger.debug(f"query_run_py: query_id = {query_id}, query={query}, query_results = {query_results}")
             query_run_complete = datetime.datetime.now()
@@ -1460,7 +1462,7 @@ def query_execute(config, child_conn, query_results_queue, alive, logging_level=
     settings = {"max_block_size": 100000}
     query_result_str = None
     tear_down = False
-    query_run_count = 1000  # limit the query run count to 1000,
+    query_run_count = 3000  # limit the query run count to 1000,
     query_result_list = []
     # max query_run_count, hard code right now, could be sent from query_walk_through (for example based on total statements no.)
     logger.debug(
@@ -2377,12 +2379,13 @@ def table_exist(table_ddl_url, table_name):
             # logger.debug("table_list is [] table_name = {table_name} does not exist.")
             # return False
     else:
-        logger.debug(
-            f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code},res_json = {res.json()}"
+        logger.info(
+            f"Error: table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code},res_json = {res.json()}"
         )
-        raise Exception(
-            f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code}, res_json = {res.json()}"
-        )
+        # raise Exception(
+        #    f"table list rest access failed, requests.get({table_ddl_url}), status code={res.status_code}, res_json = {res.json()}"
+        # )
+        return None
 
 
 def create_table_rest(config, table_schema, retry=3):
@@ -3083,7 +3086,7 @@ def test_suite_run(
                                     statements_results.append(element)
 
                             logger.info(
-                                f"rockets_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
+                                f"test_suite_run: {test_id_run}, test_suite_name = {test_suite_name},  test_id = {test_id}, step{step_id}.statements{statements_id}, done..."
                             )
 
                             statements_id += 1
@@ -3110,7 +3113,7 @@ def test_suite_run(
                     )  # wait the query_execute to send "case_result_done" to indicate all the statements in pipe are consumed.
 
                     logger.debug(
-                        f"rockets_run: mssage_recv from query_execute = {message_recv}"
+                        f"test_suite_run: mssage_recv from query_execute = {message_recv}"
                     )
                     assert message_recv == "case_result_done"
 
@@ -3120,7 +3123,7 @@ def test_suite_run(
                         time.sleep(0.2)
                         message_recv = query_results_queue.get()
                         logger.debug(
-                            f"rockets_run: message_recv of query_results_queue.get() = {message_recv}"
+                            f"test_suite_run: message_recv of query_results_queue.get() = {message_recv}"
                         )
                         query_results = json.loads(message_recv)
                         statements_results.append(query_results)
@@ -3146,13 +3149,12 @@ def test_suite_run(
                 test_suite_run_ctl_queue.get()
                 test_suite_run_ctl_queue.task_done()
 
-            logger.info(
-                f"test_suite_name = {test_suite_name} running ends, test_sets = {test_sets}......"
-            )
+            logger.info(f"test_suite_name = {test_suite_name} running ends")
         test_suite_result_summary = {
             "test_suite_name": test_suite_name,
             "test_run_list_len": test_run_list_len,
             "test_sets": test_sets,
+            "test_list": test_run_list,
         }
 
         test_suite_result_done_queue.put(test_suite_result_summary)
@@ -3230,6 +3232,7 @@ def rockets_run(test_context):
 
     test_suite_runners = []
     test_sets = []
+    test_run_list_total = []
     test_suite_count = 1
     for test_suite_set_dict in test_suites_selected_sets:
         test_suite_name = test_suite_set_dict.get("test_suite_name")
@@ -3264,12 +3267,14 @@ def rockets_run(test_context):
             test_suite_result_summary = test_suite_result_done_queue.get()
             test_suite_name_recvd = test_suite_result_summary.get("test_suite_name")
             test_run_list_len_recvd = test_suite_result_summary.get("test_run_list_len")
+            test_run_list_recvd = test_suite_result_summary.get("test_run_list")
             test_sets_recvd = test_suite_result_summary.get("test_sets")
 
             logger.debug(
                 f"test_suite: {test_suite_name_recvd}, test_suite_summary is received, len(test_sets_recvd)={len(test_sets_recvd)}, test_run_list_len_recvd = {test_run_list_len_recvd}"
             )
             test_run_list_len_total += test_run_list_len_recvd
+            test_run_list_total.append(test_run_list_recvd)
             test_sets.extend(test_sets_recvd)
             logger.debug(
                 f"test_suite: {test_suite_name} result received, len(test_sets) after test_sets.extend(test_sets_recvd) = {len(test_sets)}"
@@ -3277,6 +3282,12 @@ def rockets_run(test_context):
             test_suite_result_done_queue.task_done()
             test_suite_result_collect_done += 1
             time.sleep(random.random())
+            test_sets_recvd_len = len(test_sets_recvd)
+            print(f"test_suite_name_recvd: {test_suite_name_recvd}")
+            if test_sets_recvd_len != test_run_list_len_recvd:
+                print(
+                    f"test_suite_name_recvd = {test_suite_name_recvd}, test run list length mismatch with test sets,test_sets_recvd_len = {test_sets_recvd_len}, test_run_list_len_recvd = {test_run_list_len_recvd}, test_run_list_recvd = {test_run_list_recvd}, test_sets_recvd = {test_sets_recvd}"
+                )
 
     except (BaseException) as error:
         logger.debug(f"exception, error = {error}")
@@ -3286,7 +3297,7 @@ def rockets_run(test_context):
     logger.debug(
         f"test_run_list_len_total = {test_run_list_len_total}, len(test_sets) = {len(test_sets)}"
     )
-    return (test_run_list_len_total, test_sets)
+    return (test_run_list_len_total, test_run_list_total, test_sets)
 
 
 if __name__ == "__main__":

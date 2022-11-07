@@ -519,7 +519,7 @@
             "description": "global aggregation by max and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"601", "query_type": "stream", "query_end_timer":6, "query":"select id, max(value) from test_stream_only group by id limit 4 emit periodic 5s"}]},
+                    {"client":"python", "query_id":"601", "query_type": "stream", "query_end_timer":8, "query":"select id, max(value) from test_stream_only group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only","depends_on":"601", "wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -550,7 +550,7 @@
             "description": "global aggregation sum distinct and group by id, execute query, end query after 5 second",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":6, "query":"select id, sum(distinct value), count(distinct value) from test_stream_only group by id limit 4 emit periodic 5s"}]},
+                    {"client":"python","query_id":"601", "query_type": "stream", "query_end_timer":8, "query":"select id, sum(distinct value), count(distinct value) from test_stream_only group by id limit 4 emit periodic 5s"}]},
                 {"inputs": [
                     {"table_name":"test_stream_only", "depends_on":"601","wait":1,"data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
