@@ -595,8 +595,18 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     analyzeChangelogMode();
 
     /// Support snapshot query with seek_to, handling with streaming query before `TreeRewriter::analyzeSelect`
-    if (!isStreaming() && storage && supportStreamingQuery(storage))
-        handleSnapshotSeekTo();
+    if (!isStreaming() && storage)
+    {
+        if (supportStreamingQuery(storage))
+            handleSnapshotSeekTo();
+
+        if (options.use_extended_objects_for_hist)
+        {
+            auto snapshot = storage_snapshot->clone();
+            snapshot->force_use_extended_objects = true;
+            storage_snapshot = std::move(snapshot);
+        }
+    }
     /// proton: ends.
 
     joined_tables.rewriteDistributedInAndJoins(query_ptr);

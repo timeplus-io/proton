@@ -114,7 +114,6 @@ StoragePtr TableFunctionProxyBase::executeImpl(
     return ProxyStream::create(
         storage_id,
         columns,
-        underlying_storage_snapshot,
         context,
         streaming_func_desc,
         timestamp_func_desc,

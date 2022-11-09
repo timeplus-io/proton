@@ -97,7 +97,6 @@ private:
     ProxyStream(
         const StorageID & id_,
         const ColumnsDescription & columns_,
-        StorageSnapshotPtr underlying_storage_snapshot_,
         ContextPtr context_,
         FunctionDescriptionPtr streaming_func_desc_,
         FunctionDescriptionPtr timestamp_func_desc_,
@@ -106,7 +105,6 @@ private:
         ASTPtr subquery_ = nullptr,
         bool streaming_ = false);
 
-    StorageSnapshotPtr underlying_storage_snapshot;
     FunctionDescriptionPtr streaming_func_desc;
     FunctionDescriptionPtr timestamp_func_desc;
     /// ProxyStream can wrap a ProxyStream

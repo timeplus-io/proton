@@ -39,7 +39,6 @@ std::vector<size_t> keyIndecesForSubstreams(const Block & header, const SelectQu
 ProxyStream::ProxyStream(
     const StorageID & id_,
     const ColumnsDescription & columns_,
-    StorageSnapshotPtr underlying_storage_snapshot_,
     ContextPtr context_,
     FunctionDescriptionPtr streaming_func_desc_,
     FunctionDescriptionPtr timestamp_func_desc_,
@@ -49,7 +48,6 @@ ProxyStream::ProxyStream(
     bool streaming_)
     : IStorage(id_)
     , WithContext(context_->getGlobalContext())
-    , underlying_storage_snapshot(underlying_storage_snapshot_)
     , streaming_func_desc(std::move(streaming_func_desc_))
     , timestamp_func_desc(std::move(timestamp_func_desc_))
     , nested_proxy_storage(nested_proxy_storage_)
@@ -82,7 +80,7 @@ ProxyStream::ProxyStream(
             has_global_aggr = interpreter_subquery->hasGlobalAggregation();
     }
 
-    StorageInMemoryMetadata storage_metadata;
+    StorageInMemoryMetadata storage_metadata = storage ? storage->getInMemoryMetadata() : StorageInMemoryMetadata();
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
 }
@@ -102,7 +100,7 @@ QueryProcessingStage::Enum ProxyStream::getQueryProcessingStage(
 
 Pipe ProxyStream::read(
     const Names & column_names,
-    const StorageSnapshotPtr & /* storage_snapshot */,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -110,14 +108,14 @@ Pipe ProxyStream::read(
     unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, underlying_storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    read(plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context_), BuildQueryPipelineSettings::fromContext(context_));
 }
 
 void ProxyStream::read(
     QueryPlan & query_plan,
     const Names & column_names,
-    const StorageSnapshotPtr & /* storage_snapshot */,
+    const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr context_,
     QueryProcessingStage::Enum processed_stage,
@@ -166,7 +164,7 @@ void ProxyStream::read(
         return view->read(
             query_plan,
             updated_column_names,
-            underlying_storage_snapshot,
+            storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -176,7 +174,7 @@ void ProxyStream::read(
         return materialized_view->read(
             query_plan,
             updated_column_names,
-            underlying_storage_snapshot,
+            storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -186,7 +184,7 @@ void ProxyStream::read(
         return external_stream->read(
             query_plan,
             updated_column_names,
-            underlying_storage_snapshot,
+            storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -196,7 +194,7 @@ void ProxyStream::read(
         return nested_proxy_storage->read(
             query_plan,
             updated_column_names,
-            underlying_storage_snapshot,
+            storage_snapshot,
             query_info,
             context_,
             processed_stage,
@@ -207,12 +205,12 @@ void ProxyStream::read(
     assert(distributed);
 
     if (streaming && context_->getSettingsRef().query_mode.value != "table")
-        distributed->readStreaming(query_plan, query_info, updated_column_names, underlying_storage_snapshot, context_);
+        distributed->readStreaming(query_plan, query_info, updated_column_names, storage_snapshot, context_);
     else
         distributed->readHistory(
             query_plan,
             updated_column_names,
-            underlying_storage_snapshot,
+            storage_snapshot,
             query_info,
             context_,
             processed_stage,

@@ -56,6 +56,10 @@ struct SelectQueryOptions
     std::optional<UInt32> shard_num;
     std::optional<UInt32> shard_count;
 
+    /// proton: starts. only used for internal mutate/merge snapshot query
+    bool use_extended_objects_for_hist = false;
+    /// proton: ends.
+
     SelectQueryOptions(
         QueryProcessingStage::Enum stage = QueryProcessingStage::Complete,
         size_t depth = 0,
@@ -150,6 +154,14 @@ struct SelectQueryOptions
         shard_count = shard_count_;
         return *this;
     }
+
+    /// proton: starts.
+    SelectQueryOptions & useExtendedObjectsForHist()
+    {
+        use_extended_objects_for_hist = true;
+        return *this;
+    }
+    /// proton: ends.
 };
 
 }

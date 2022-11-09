@@ -26,7 +26,7 @@ NamesAndTypesList StorageSnapshot::getColumns(const GetColumnsOptions & options)
 {
     auto all_columns = getMetadataForQuery()->getColumns().get(options);
 
-    extendObjectColumns(all_columns, *object_columns.get(), options.with_extended_objects, options.with_subcolumns);
+    extendObjectColumns(all_columns, *object_columns.get(), options.with_extended_objects || force_use_extended_objects, options.with_subcolumns);
 
     if (options.with_virtuals)
     {
@@ -54,13 +54,13 @@ NamesAndTypesList StorageSnapshot::getColumnsByNames(const GetColumnsOptions & o
     for (const auto & name : names)
     {
         auto column = columns.tryGetColumn(options, name);
-        if (column && (!options.with_extended_objects || !isObject(column->type)))
+        if (column && (!(options.with_extended_objects || force_use_extended_objects) || !isObject(column->type)))
         {
             res.emplace_back(std::move(*column));
             continue;
         }
 
-        if (options.with_extended_objects || options.with_subcolumns)
+        if (options.with_extended_objects || force_use_extended_objects || options.with_subcolumns)
         {
             auto object_column = object_columns.get()->tryGetColumn(options, name);
             if (object_column)
@@ -98,7 +98,7 @@ Block StorageSnapshot::getSampleBlockForColumns(const Names & column_names, bool
         auto column = columns.tryGetColumnOrSubcolumn(GetColumnsOptions::All, name);
         auto object_column = object_columns.get()->tryGetColumnOrSubcolumn(GetColumnsOptions::All, name);
 
-        if (column && (!use_extended_objects || !object_column))
+        if (column && (!(use_extended_objects || force_use_extended_objects) || !object_column))
         {
             res.insert({column->type->createColumn(), column->type, column->name});
         }

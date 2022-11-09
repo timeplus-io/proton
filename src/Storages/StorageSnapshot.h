@@ -32,6 +32,8 @@ struct StorageSnapshot
 
     std::unordered_map<String, DataTypePtr> virtual_columns;
 
+    bool force_use_extended_objects = false;
+
     StorageSnapshot(
         const IStorage & storage_,
         const StorageMetadataPtr & metadata_)
